@@ -527,6 +527,16 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     artifactToolCalls?: { artifactId: string; tool: string; input: Record<string, unknown> }[];
     /**
+     * Durable memory writes from the agent's response. Each entry records a
+     * fact/preference that persists across runs as a provisional agent note.
+     * Processed inline (zero turn cost) alongside artifact tool calls; only
+     * honored when the agent has AllowMemoryWrite enabled.
+     * NOTE: structural duplicate of MemoryWriteRequest in @memberjunction/ai-agents
+     * (CorePlus sits below Agents and cannot import from it), mirroring how
+     * artifactToolCalls duplicates ArtifactToolCall above.
+     */
+    memoryWrites?: { note: string; type: 'Preference' | 'Context'; scopeHint?: 'user' | 'agent' }[];
+    /**
      * A tool pipeline from the agent's response. Chains tool invocations server-side so
      * intermediate outputs never enter the context window — only the final step's output is
      * returned to the agent. Processed inline (zero turn cost) alongside artifact tool calls.

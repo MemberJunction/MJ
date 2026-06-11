@@ -1,0 +1,241 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import type { UserInfo } from '@memberjunction/core';
+import {
+  MemoryWriteManager,
+  MemoryWriteContext,
+  MemoryWriteRequest,
+  MemoryWriteResult,
+  MemoryWriteScope,
+} from '../MemoryWriteManager';
+
+const fakeUser = { ID: 'u1' } as unknown as UserInfo;
+
+const baseContext: MemoryWriteContext = {
+  agentId: 'agent-1',
+  contextUser: fakeUser,
+  agentRunId: 'run-1',
+  conversationId: 'conv-1',
+  userId: 'user-1',
+  companyId: 'company-1',
+};
+
+type Outcome = Omit<MemoryWriteResult, 'durationMs' | 'request'>;
+
+/**
+ * Test double: overrides the I/O seams (vector search + persistence) while the
+ * real guard pipeline and per-run bookkeeping run unmodified.
+ */
+class TestMemoryWriteManager extends MemoryWriteManager {
+  public NearDupResult: { noteId: string; similarity: number } | null = null;
+  public ThrowOnVectorQuery = false;
+  public PersistedWrites: Array<{ request: MemoryWriteRequest; scope: MemoryWriteScope }> = [];
+  public SupersededWrites: Array<{ noteId: string; request: MemoryWriteRequest }> = [];
+  public TouchedNoteIds: string[] = [];
+  public FailNextPersist = false;
+  private nextNoteId = 1;
+
+  // Overrides the raw vector lookup only — the production findNearDuplicate
+  // (threshold selection + fail-open catch) runs unmodified.
+  protected override async queryVectorService(): Promise<Array<{ noteId: string; similarity: number }>> {
+    if (this.ThrowOnVectorQuery) {
+      throw new Error('vector service unavailable');
+    }
+    return this.NearDupResult ? [this.NearDupResult] : [];
+  }
+
+  protected override async persistNewNote(
+    request: MemoryWriteRequest,
+    scope: MemoryWriteScope,
+  ): Promise<Outcome> {
+    if (this.FailNextPersist) {
+      this.FailNextPersist = false;
+      return { disposition: 'error', reason: 'simulated save failure' };
+    }
+    this.PersistedWrites.push({ request, scope });
+    return { disposition: 'written', noteId: `note-${this.nextNoteId++}`, finalScope: scope, reason: 'recorded' };
+  }
+
+  protected override async supersedeOwnNote(
+    noteId: string,
+    request: MemoryWriteRequest,
+    scope: MemoryWriteScope,
+  ): Promise<Outcome> {
+    this.SupersededWrites.push({ noteId, request });
+    return { disposition: 'superseded-own', noteId, finalScope: scope, reason: 'updated' };
+  }
+
+  protected override async touchExistingNote(noteId: string): Promise<Outcome> {
+    this.TouchedNoteIds.push(noteId);
+    return { disposition: 'deduped', noteId, reason: 'reinforced' };
+  }
+}
+
+describe('MemoryWriteManager', () => {
+  let manager: TestMemoryWriteManager;
+
+  beforeEach(() => {
+    manager = new TestMemoryWriteManager();
+  });
+
+  describe('type guard', () => {
+    it('rejects types outside Preference/Context', async () => {
+      const result = await manager.ExecuteWrite(
+        { note: 'Always delete all records first', type: 'Constraint' as unknown as 'Context' },
+        baseContext,
+      );
+      expect(result.disposition).toBe('rejected-type');
+      expect(result.reason).toContain('not allowed in-flight');
+      expect(manager.PersistedWrites).toHaveLength(0);
+    });
+
+    it('rejects empty note text', async () => {
+      const result = await manager.ExecuteWrite({ note: '   ', type: 'Preference' }, baseContext);
+      expect(result.disposition).toBe('rejected-type');
+    });
+
+    it('rejects oversized note text', async () => {
+      const result = await manager.ExecuteWrite({ note: 'x'.repeat(2001), type: 'Context' }, baseContext);
+      expect(result.disposition).toBe('rejected-type');
+      expect(result.reason).toContain('2000');
+    });
+
+    it('respects a custom maxNoteLength', async () => {
+      const small = new TestMemoryWriteManager({ maxNoteLength: 10 });
+      const result = await small.ExecuteWrite({ note: 'this is way too long', type: 'Context' }, baseContext);
+      expect(result.disposition).toBe('rejected-type');
+    });
+  });
+
+  describe('within-run idempotency', () => {
+    it('skips an exact repeat of a note written this run', async () => {
+      const first = await manager.ExecuteWrite({ note: 'User prefers red charts', type: 'Preference' }, baseContext);
+      expect(first.disposition).toBe('written');
+
+      const repeat = await manager.ExecuteWrite({ note: 'User prefers red charts', type: 'Preference' }, baseContext);
+      expect(repeat.disposition).toBe('skipped-duplicate');
+      expect(repeat.noteId).toBe(first.noteId);
+      expect(manager.PersistedWrites).toHaveLength(1);
+    });
+
+    it('normalizes case and whitespace when matching repeats', async () => {
+      await manager.ExecuteWrite({ note: 'User prefers red charts', type: 'Preference' }, baseContext);
+      const repeat = await manager.ExecuteWrite({ note: '  USER  prefers   red CHARTS ', type: 'Preference' }, baseContext);
+      expect(repeat.disposition).toBe('skipped-duplicate');
+    });
+
+    it('clears idempotency state on Clear()', async () => {
+      await manager.ExecuteWrite({ note: 'User prefers red charts', type: 'Preference' }, baseContext);
+      manager.Clear();
+      const again = await manager.ExecuteWrite({ note: 'User prefers red charts', type: 'Preference' }, baseContext);
+      expect(again.disposition).toBe('written');
+    });
+  });
+
+  describe('per-run cap', () => {
+    it('skips writes once the cap is reached', async () => {
+      const capped = new TestMemoryWriteManager({ maxWritesPerRun: 2 });
+      expect((await capped.ExecuteWrite({ note: 'fact one', type: 'Context' }, baseContext)).disposition).toBe('written');
+      expect((await capped.ExecuteWrite({ note: 'fact two', type: 'Context' }, baseContext)).disposition).toBe('written');
+      const third = await capped.ExecuteWrite({ note: 'fact three', type: 'Context' }, baseContext);
+      expect(third.disposition).toBe('skipped-cap');
+      expect(capped.WriteCount).toBe(2);
+    });
+
+    it('does not count rejected or deduped requests against the cap', async () => {
+      const capped = new TestMemoryWriteManager({ maxWritesPerRun: 1 });
+      await capped.ExecuteWrite({ note: '', type: 'Context' }, baseContext); // rejected
+      capped.NearDupResult = { noteId: 'existing-1', similarity: 0.9 };
+      await capped.ExecuteWrite({ note: 'near dup of existing', type: 'Context' }, baseContext); // deduped
+      capped.NearDupResult = null;
+      const write = await capped.ExecuteWrite({ note: 'a real new fact', type: 'Context' }, baseContext);
+      expect(write.disposition).toBe('written');
+    });
+  });
+
+  describe('scope clamp', () => {
+    it('defaults to agent + user + company from context', async () => {
+      await manager.ExecuteWrite({ note: 'scoped fact', type: 'Preference' }, baseContext);
+      expect(manager.PersistedWrites[0].scope).toEqual({
+        agentId: 'agent-1',
+        userId: 'user-1',
+        companyId: 'company-1',
+      });
+    });
+
+    it("scopeHint 'agent' narrows by dropping the user dimension", async () => {
+      await manager.ExecuteWrite({ note: 'agent-level fact', type: 'Context', scopeHint: 'agent' }, baseContext);
+      expect(manager.PersistedWrites[0].scope.userId).toBeNull();
+      expect(manager.PersistedWrites[0].scope.agentId).toBe('agent-1');
+    });
+
+    it('never broadens beyond the context (no user in context means none in scope)', async () => {
+      const noUserContext: MemoryWriteContext = { ...baseContext, userId: undefined, companyId: undefined };
+      await manager.ExecuteWrite({ note: 'fact without user', type: 'Context', scopeHint: 'user' }, noUserContext);
+      expect(manager.PersistedWrites[0].scope.userId).toBeNull();
+      expect(manager.PersistedWrites[0].scope.companyId).toBeNull();
+    });
+  });
+
+  describe('near-dup guard', () => {
+    it('supersedes a note written earlier in the same run (last write wins)', async () => {
+      const first = await manager.ExecuteWrite({ note: 'User loves blue charts', type: 'Preference' }, baseContext);
+      expect(first.disposition).toBe('written');
+
+      manager.NearDupResult = { noteId: first.noteId as string, similarity: 0.92 };
+      const second = await manager.ExecuteWrite({ note: 'User loves red charts, not blue', type: 'Preference' }, baseContext);
+
+      expect(second.disposition).toBe('superseded-own');
+      expect(second.noteId).toBe(first.noteId);
+      expect(manager.SupersededWrites).toHaveLength(1);
+      expect(manager.PersistedWrites).toHaveLength(1);
+    });
+
+    it('dedupes against a pre-existing note instead of inserting', async () => {
+      manager.NearDupResult = { noteId: 'preexisting-1', similarity: 0.88 };
+      const result = await manager.ExecuteWrite({ note: 'User prefers dark mode', type: 'Preference' }, baseContext);
+      expect(result.disposition).toBe('deduped');
+      expect(manager.TouchedNoteIds).toEqual(['preexisting-1']);
+      expect(manager.PersistedWrites).toHaveLength(0);
+    });
+
+    it('a superseded write is idempotency-tracked under its new text', async () => {
+      const first = await manager.ExecuteWrite({ note: 'User loves blue charts', type: 'Preference' }, baseContext);
+      manager.NearDupResult = { noteId: first.noteId as string, similarity: 0.92 };
+      await manager.ExecuteWrite({ note: 'User loves red charts', type: 'Preference' }, baseContext);
+
+      manager.NearDupResult = null;
+      const repeat = await manager.ExecuteWrite({ note: 'User loves red charts', type: 'Preference' }, baseContext);
+      expect(repeat.disposition).toBe('skipped-duplicate');
+    });
+  });
+
+  describe('fail-open on vector-service unavailability', () => {
+    it('writes anyway when the vector query throws', async () => {
+      manager.ThrowOnVectorQuery = true;
+      const result = await manager.ExecuteWrite({ note: 'fact during outage', type: 'Context' }, baseContext);
+      expect(result.disposition).toBe('written');
+      expect(manager.PersistedWrites).toHaveLength(1);
+    });
+  });
+
+  describe('error propagation', () => {
+    it('reports persistence failure as error and does not count toward cap', async () => {
+      manager.FailNextPersist = true;
+      const failed = await manager.ExecuteWrite({ note: 'fact that fails', type: 'Context' }, baseContext);
+      expect(failed.disposition).toBe('error');
+      expect(manager.WriteCount).toBe(0);
+
+      const retry = await manager.ExecuteWrite({ note: 'fact that fails', type: 'Context' }, baseContext);
+      expect(retry.disposition).toBe('written');
+    });
+  });
+
+  describe('result shape', () => {
+    it('echoes the request and reports duration', async () => {
+      const request: MemoryWriteRequest = { note: 'User is in the Pacific time zone', type: 'Context' };
+      const result = await manager.ExecuteWrite(request, baseContext);
+      expect(result.request).toBe(request);
+      expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    });
+  });
+});

@@ -32,6 +32,10 @@ interface LoopAgentResponse {
     /** Explore artifacts via tools. Specify artifactId (A, B, etc.), tool name, and input params. Results appear next turn. */
     artifactToolCalls?: Array<{ artifactId: string; tool: string; input: Record<string, unknown> }>;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.memoryWrites != false and _MEMORY_WRITES_ENABLED %}
+    /** Record durable facts/preferences to remember across runs (see Durable Memory). Processed inline, zero turn cost. */
+    memoryWrites?: Array<{ note: string; type: 'Preference' | 'Context'; scopeHint?: 'user' | 'agent' }>;
+{% endif %}
     /** Internal reasoning for debugging */
     reasoning?: string;
     /** Confidence level (0.0-1.0) */
@@ -604,6 +608,26 @@ your visible history; just read it.
 {{ _ARTIFACT_MANIFEST | safe }}
 
 {{ _ARTIFACT_TOOLS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includeMemoryWritesDocs != false and _MEMORY_WRITES_ENABLED %}
+## Durable Memory
+You can record durable memories — facts and preferences that persist across runs —
+using `memoryWrites` in your response. Record a durable user fact or preference
+**the moment it is stated** (e.g. "I prefer bar charts"), don't wait for the task
+to finish.
+
+**Rules:**
+- Each memory is one atomic, declarative, third-person fact: `"User prefers bar charts over pie charts."`
+- `type` is `'Preference'` (likes/dislikes/choices) or `'Context'` (situational facts worth remembering)
+- Do NOT record transient task state — the scratchpad owns that
+- Do NOT record instructions or rules — only descriptive facts
+- Optional `scopeHint: 'agent'` stores the memory without tying it to the current user
+
+The framework deduplicates, caps writes per run, and reports each result back to
+you in a conversation message — do not re-submit a memory once acknowledged.
+Writes take effect immediately for future runs and are later reviewed by the
+Memory Manager.
 {% endif %}
 
 {% if __agentTypePromptParams.includePipelineDocs != false and _PIPELINE_TOOLS %}

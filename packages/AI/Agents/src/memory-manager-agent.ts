@@ -7,7 +7,8 @@ import {
     MJAIAgentNoteEntity,
     MJAIAgentExampleEntity,
     MJConversationDetailRatingEntity,
-    MJAIAgentRunStepEntity
+    MJAIAgentRunStepEntity,
+    InjectableNoteStatusSQLList
 } from '@memberjunction/core-entities';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -2868,7 +2869,10 @@ export class MemoryManagerAgent extends BaseAgent {
         const [notesResult, examplesResult] = await Promise.all([
             rv.RunView<{ ID: string; ExpiresAt: Date; ProtectionTier: string }>({
                 EntityName: 'MJ: AI Agent Notes',
-                ExtraFilter: `Status = 'Active' AND ExpiresAt IS NOT NULL AND ExpiresAt < '${nowISO}'`,
+                // Includes Provisional so the TTL safety net on in-flight agent writes is
+                // actually enforced — a provisional note the hardening pass never reaches
+                // must still expire.
+                ExtraFilter: `Status IN (${InjectableNoteStatusSQLList()}) AND ExpiresAt IS NOT NULL AND ExpiresAt < '${nowISO}'`,
                 Fields: ['ID', 'ExpiresAt', 'ProtectionTier'],
                 MaxRows: 200,
             }, contextUser),

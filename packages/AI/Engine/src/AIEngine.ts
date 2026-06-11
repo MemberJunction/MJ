@@ -21,7 +21,7 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentDataSourceEntity, MJAIAgentConfigurationEntity, MJAIAgentExampleEntity,
          MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
          MJAIModelModalityEntity, MJAIClientToolDefinitionEntity,
-         MJAIAgentClientToolEntity, MJAIAgentCategoryEntity } from "@memberjunction/core-entities";
+         MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus } from "@memberjunction/core-entities";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -692,7 +692,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public async RefreshNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
-            const notes = this.AgentNotes.filter(n => n.Status === 'Active' && n.EmbeddingVector);
+            const notes = this.AgentNotes.filter(n => IsInjectableNoteStatus(n.Status) && n.EmbeddingVector);
 
             const entries = notes.map(note => ({
                 key: note.ID,
@@ -1225,7 +1225,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
     ): NoteMatchResult[] {
         const notes = this.AgentNotes.filter(n => {
-            if (n.Status !== 'Active') return false;
+            if (!IsInjectableNoteStatus(n.Status)) return false;
             if (agentId && !UUIDsEqual(n.AgentID, agentId) && n.AgentID !== null) return false;
             if (userId && !UUIDsEqual(n.UserID, userId) && n.UserID !== null) return false;
             if (companyId && !UUIDsEqual(n.CompanyID, companyId) && n.CompanyID !== null) return false;
