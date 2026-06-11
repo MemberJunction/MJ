@@ -11,8 +11,10 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (2 classes)
+// @memberjunction/ai-realtime-client (4 classes)
 import {
+    AssemblyAIRealtimeClient,
+    ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     OpenAIRealtimeClient,
 } from '@memberjunction/ai-realtime-client';
@@ -456,9 +458,10 @@ import {
     MJOktaProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (1 classes)
+// @memberjunction/ng-conversations (2 classes)
 import {
     RealtimeWhiteboardChannel,
+    WhiteboardArtifactViewerComponent,
 } from '@memberjunction/ng-conversations';
 
 // @memberjunction/ng-entity-viewer (4 classes)
@@ -645,6 +648,8 @@ import {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const CLASS_REGISTRATIONS: any[] = [
+    AssemblyAIRealtimeClient,
+    ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     OpenAIRealtimeClient,
     SimpleVectorDatabase,
@@ -1051,6 +1056,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkProvider,
     MJOktaProvider,
     RealtimeWhiteboardChannel,
+    WhiteboardArtifactViewerComponent,
     CardsViewType,
     GridViewType,
     MapViewType,
@@ -1199,7 +1205,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 548;
+export const CLASS_REGISTRATIONS_COUNT = 551;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
