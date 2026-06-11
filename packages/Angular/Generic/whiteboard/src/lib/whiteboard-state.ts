@@ -8,6 +8,14 @@ import { Observable, Subject } from 'rxjs';
  * typically an AI agent driving the `Whiteboard_*` tool set (`Whiteboard_AddNote`,
  * `Whiteboard_DrawConnector`, …, see `whiteboard-tools.ts`).
  *
+ * Pages (OneNote-style): a board is an ordered list of named PAGES, each with its own
+ * items collection; exactly one page is ACTIVE at a time and every item operation
+ * (add / update / move / remove / connectors / clear / perception) targets the active
+ * page. See {@link WhiteboardState.AddPage} / {@link WhiteboardState.SwitchPage} /
+ * {@link WhiteboardState.RenamePage} / {@link WhiteboardState.RemovePage}. A fresh
+ * board starts with one page named "Page 1"; legacy (pre-pages, flat) persisted JSON
+ * rehydrates as that single page.
+ *
  * Perception model (how a programmatic co-author "sees" the board):
  *  - every mutation appends to a compact change journal and emits on {@link WhiteboardState.Changed$};
  *  - {@link WhiteboardState.BuildSceneDelta} coalesces the journal since a token into ONE delta
@@ -403,8 +411,125 @@ export interface WhiteboardBoardClearedEventArgs {
  * journaled, so perception consumers re-read the full scene.
  */
 export interface WhiteboardBoardLoadedEventArgs {
-  /** How many items the restored board contains. */
+  /** How many items the restored board contains (summed across ALL pages). */
   ItemCount: number;
+}
+
+// ────────────────────────────────────────────── pages
+
+/**
+ * Public, read-only descriptor of one board page — what {@link WhiteboardState.Pages}
+ * returns and what every page before/after event carries. A snapshot, not a live view:
+ * re-read {@link WhiteboardState.Pages} after mutations.
+ */
+export interface WhiteboardPageInfo {
+  /** Stable page id (e.g. `page-2`) — accepted anywhere a page name is accepted. */
+  ID: string;
+  /** Display name (e.g. "Page 1"). Not guaranteed unique; IDs are. */
+  Name: string;
+  /** How many items live on the page (highlights included). */
+  ItemCount: number;
+  /** Whether this is the board's active page. */
+  Active: boolean;
+}
+
+/**
+ * BEFORE-event args for {@link WhiteboardState.PageAdding$} — raised by
+ * {@link WhiteboardState.AddPage} before the page exists. Handlers may rewrite
+ * {@link Name} (the engine trims it; an emptied name falls back to the auto-name) or set
+ * `Cancel` to veto the add (the caller receives `null`).
+ */
+export interface WhiteboardPageAddingEventArgs extends WhiteboardCancelableEventArgs {
+  /** The name the page will get (auto-named "Page N" when the caller omitted one). */
+  Name: string;
+  /** Who is adding the page. */
+  Author: WhiteboardAuthor;
+}
+
+/** AFTER-event args for {@link WhiteboardState.PageAdded$} — the page exists and is active. */
+export interface WhiteboardPageAddedEventArgs {
+  /** The added page (now the active page). */
+  Page: WhiteboardPageInfo;
+  /** Who added the page. */
+  Author: WhiteboardAuthor;
+}
+
+/**
+ * BEFORE-event args for {@link WhiteboardState.PageSwitching$} — raised by
+ * {@link WhiteboardState.SwitchPage} before the active page changes. Cancel to stay on
+ * the current page.
+ */
+export interface WhiteboardPageSwitchingEventArgs extends WhiteboardCancelableEventArgs {
+  /** The page that is currently active. */
+  FromPage: WhiteboardPageInfo;
+  /** The page about to become active. */
+  ToPage: WhiteboardPageInfo;
+  /** Who is switching. */
+  Author: WhiteboardAuthor;
+}
+
+/** AFTER-event args for {@link WhiteboardState.PageSwitched$} — the active page changed. */
+export interface WhiteboardPageSwitchedEventArgs {
+  /** The previously active page. */
+  FromPage: WhiteboardPageInfo;
+  /** The newly active page. */
+  ToPage: WhiteboardPageInfo;
+  /** Who switched. */
+  Author: WhiteboardAuthor;
+}
+
+/**
+ * BEFORE-event args for {@link WhiteboardState.PageRenaming$} — raised by
+ * {@link WhiteboardState.RenamePage}. Handlers may rewrite {@link NewName} (trimmed by
+ * the engine; an emptied rewrite aborts the rename) or set `Cancel` to veto.
+ */
+export interface WhiteboardPageRenamingEventArgs extends WhiteboardCancelableEventArgs {
+  /** The page about to be renamed (pre-rename snapshot). */
+  Page: WhiteboardPageInfo;
+  /** The requested new name. Handlers may adjust it. */
+  NewName: string;
+  /** Who is renaming. */
+  Author: WhiteboardAuthor;
+}
+
+/** AFTER-event args for {@link WhiteboardState.PageRenamed$} — the rename applied. */
+export interface WhiteboardPageRenamedEventArgs {
+  /** The page in its post-rename state. */
+  Page: WhiteboardPageInfo;
+  /** The name the page had before. */
+  OldName: string;
+  /** Who renamed it. */
+  Author: WhiteboardAuthor;
+}
+
+/**
+ * BEFORE-event args for {@link WhiteboardState.PageRemoving$} — raised by
+ * {@link WhiteboardState.RemovePage} (never for the last remaining page — that is
+ * guarded before the event). Cancel to keep the page.
+ */
+export interface WhiteboardPageRemovingEventArgs extends WhiteboardCancelableEventArgs {
+  /** The page about to be removed (with all of its items). */
+  Page: WhiteboardPageInfo;
+  /** Who is removing it. */
+  Author: WhiteboardAuthor;
+}
+
+/** AFTER-event args for {@link WhiteboardState.PageRemoved$} — the page is gone. */
+export interface WhiteboardPageRemovedEventArgs {
+  /** The removed page (its last state). */
+  Page: WhiteboardPageInfo;
+  /** When the REMOVED page was active: the neighbor page that became active. Else null. */
+  ActivatedPage: WhiteboardPageInfo | null;
+  /** Who removed it. */
+  Author: WhiteboardAuthor;
+}
+
+/** Compact page descriptor carried on scene deltas / summaries (model-facing). */
+export interface WhiteboardScenePage {
+  id: string;
+  name: string;
+  active: boolean;
+  items: number;
 }
 
 /**
@@ -461,10 +586,12 @@ export interface WhiteboardSceneDelta {
   removed: string[];
   reset?: boolean;
   items?: WhiteboardCompactItem[];
+  /** The board's page list — `active: true` marks the page the item entries describe. */
+  pages: WhiteboardScenePage[];
   summary: string;
 }
 
-/** Full compact scene snapshot (popover stats + delta-reset payloads). */
+/** Full compact scene snapshot (popover stats + delta-reset payloads). ACTIVE page only. */
 export interface WhiteboardSceneSummary {
   op: 'scene-summary';
   seq: number;
@@ -475,6 +602,8 @@ export interface WhiteboardSceneSummary {
     byKind: Partial<Record<WhiteboardItemKind, number>>;
   };
   items: WhiteboardCompactItem[];
+  /** The board's page list — `active: true` marks the page the item entries describe. */
+  pages: WhiteboardScenePage[];
   summary: string;
 }
 
@@ -543,13 +672,37 @@ interface JournalEntry {
   ItemID: string;
 }
 
-/** Serialized shape produced by {@link WhiteboardState.ToJSON}. */
+/** Serialized shape of one page inside {@link WhiteboardStateJSON} (version 2+). */
+interface WhiteboardPageJSON {
+  id: string;
+  name: string;
+  items: WhiteboardItem[];
+}
+
+/**
+ * Serialized shape produced by {@link WhiteboardState.ToJSON} — VERSION 2 (paged).
+ * Version 1 (the legacy flat shape: `{ version: 1, seq, idCounter, zCounter, items }`)
+ * is still accepted by {@link WhiteboardState.FromJSON} / {@link WhiteboardState.LoadFromJSON}
+ * and rehydrates as a single page named "Page 1".
+ */
 interface WhiteboardStateJSON {
-  version: 1;
+  version: 2;
   seq: number;
   idCounter: number;
   zCounter: number;
-  items: WhiteboardItem[];
+  /** Monotonic page-id/auto-name counter (never decremented, so names don't collide). */
+  pageCounter: number;
+  /** ID of the active page (always one of `pages`). */
+  activePageId: string;
+  /** The ordered page list (always at least one page). */
+  pages: WhiteboardPageJSON[];
+}
+
+/** Internal live record of one page (the active page's map backs `this.items`). */
+interface PageRecord {
+  ID: string;
+  Name: string;
+  Items: Map<string, WhiteboardItem>;
 }
 
 /**
@@ -569,6 +722,10 @@ interface WhiteboardStateJSON {
  * | {@link UpdateItem} / {@link MoveItem} / {@link BringToFront} / {@link SendToBack} | {@link ItemUpdating$} | {@link ItemUpdated$} |
  * | {@link UpdateItem} touching content fields (Text / Label / Sub / Markdown / Html / Title) | {@link ContentChanging$} (after ItemUpdating$) | {@link ContentChanged$} |
  * | {@link RemoveItem} | {@link ItemRemoving$} | {@link ItemRemoved$} |
+ * | {@link AddPage} | {@link PageAdding$} | {@link PageAdded$} |
+ * | {@link SwitchPage} | {@link PageSwitching$} | {@link PageSwitched$} |
+ * | {@link RenamePage} | {@link PageRenaming$} | {@link PageRenamed$} |
+ * | {@link RemovePage} | {@link PageRemoving$} | {@link PageRemoved$} |
  * | {@link Select} (and implicit clears) | — | {@link SelectionChanged$} |
  * | {@link Clear} | — | {@link BoardCleared$} |
  * | {@link LoadFromJSON} | — | {@link BoardLoaded$} |
@@ -584,7 +741,30 @@ export class WhiteboardState {
   private static readonly UndoMax = 100;
   private static readonly JournalMax = 1000;
 
-  private items = new Map<string, WhiteboardItem>();
+  /**
+   * The ordered page list. A fresh board has one page named "Page 1". Every item
+   * operation reads/writes the ACTIVE page's map through the `items` accessor below, so
+   * the entire pre-pages mutation surface is page-scoped without per-call changes.
+   */
+  private pages: PageRecord[] = [{ ID: 'page-1', Name: 'Page 1', Items: new Map<string, WhiteboardItem>() }];
+  /** ID of the active page (always present in {@link pages}). */
+  private activePageId = 'page-1';
+  /** Monotonic page counter — mints page IDs and the "Page N" auto-names. */
+  private pageCounter = 1;
+
+  /** The ACTIVE page's item map (accessor keeps all item mutations page-scoped). */
+  private get items(): Map<string, WhiteboardItem> {
+    return this.activePage.Items;
+  }
+  private set items(value: Map<string, WhiteboardItem>) {
+    this.activePage.Items = value;
+  }
+
+  /** The active page record (defensive fallback to the first page — never undefined). */
+  private get activePage(): PageRecord {
+    return this.pages.find((p) => p.ID === this.activePageId) ?? this.pages[0];
+  }
+
   private idCounter = 0;
   private zCounter = 0;
   private seq = 0;
@@ -666,14 +846,87 @@ export class WhiteboardState {
   /** AFTER event: {@link LoadFromJSON} rehydrated a persisted board into this instance. */
   public readonly BoardLoaded$: Observable<WhiteboardBoardLoadedEventArgs> = this.boardLoaded.asObservable();
 
+  private pageAdding = new Subject<WhiteboardPageAddingEventArgs>();
+  /**
+   * Cancelable BEFORE event of {@link AddPage}. Set `Cancel = true` synchronously to
+   * veto — {@link AddPage} then returns `null` and nothing changes.
+   */
+  public readonly PageAdding$: Observable<WhiteboardPageAddingEventArgs> = this.pageAdding.asObservable();
+
+  private pageAdded = new Subject<WhiteboardPageAddedEventArgs>();
+  /** AFTER event: a page was added (and became the active page). */
+  public readonly PageAdded$: Observable<WhiteboardPageAddedEventArgs> = this.pageAdded.asObservable();
+
+  private pageSwitching = new Subject<WhiteboardPageSwitchingEventArgs>();
+  /**
+   * Cancelable BEFORE event of {@link SwitchPage}. Set `Cancel = true` synchronously to
+   * stay on the current page — {@link SwitchPage} then returns `false`.
+   */
+  public readonly PageSwitching$: Observable<WhiteboardPageSwitchingEventArgs> = this.pageSwitching.asObservable();
+
+  private pageSwitched = new Subject<WhiteboardPageSwitchedEventArgs>();
+  /** AFTER event: the active page changed via {@link SwitchPage}. */
+  public readonly PageSwitched$: Observable<WhiteboardPageSwitchedEventArgs> = this.pageSwitched.asObservable();
+
+  private pageRenaming = new Subject<WhiteboardPageRenamingEventArgs>();
+  /**
+   * Cancelable BEFORE event of {@link RenamePage}. Handlers may rewrite `NewName`; set
+   * `Cancel = true` synchronously to veto — {@link RenamePage} then returns `false`.
+   */
+  public readonly PageRenaming$: Observable<WhiteboardPageRenamingEventArgs> = this.pageRenaming.asObservable();
+
+  private pageRenamed = new Subject<WhiteboardPageRenamedEventArgs>();
+  /** AFTER event: a page was renamed. */
+  public readonly PageRenamed$: Observable<WhiteboardPageRenamedEventArgs> = this.pageRenamed.asObservable();
+
+  private pageRemoving = new Subject<WhiteboardPageRemovingEventArgs>();
+  /**
+   * Cancelable BEFORE event of {@link RemovePage} (never raised for the guarded
+   * last-page case). Set `Cancel = true` synchronously to keep the page.
+   */
+  public readonly PageRemoving$: Observable<WhiteboardPageRemovingEventArgs> = this.pageRemoving.asObservable();
+
+  private pageRemoved = new Subject<WhiteboardPageRemovedEventArgs>();
+  /** AFTER event: a page (and all of its items) was removed from the board. */
+  public readonly PageRemoved$: Observable<WhiteboardPageRemovedEventArgs> = this.pageRemoved.asObservable();
+
   /** The single selected item's ID, or null. Selection is UI state — not persisted. */
   public SelectedID: string | null = null;
 
   // ────────────────────────────────────────────── reads
 
-  /** All items in render order (ascending Z). */
+  /** All items on the ACTIVE page in render order (ascending Z). */
   public get Items(): WhiteboardItem[] {
     return Array.from(this.items.values()).sort((a, b) => a.Z - b.Z);
+  }
+
+  /** The ordered page list (read-only snapshots — see {@link WhiteboardPageInfo}). */
+  public get Pages(): WhiteboardPageInfo[] {
+    return this.pages.map((p) => this.pageInfo(p));
+  }
+
+  /** ID of the active page (every item operation targets this page). */
+  public get ActivePageID(): string {
+    return this.activePage.ID;
+  }
+
+  /** Display name of the active page. */
+  public get ActivePageName(): string {
+    return this.activePage.Name;
+  }
+
+  /** Total item count summed across ALL pages (the active-page count is {@link ElementCount}). */
+  public get TotalItemCount(): number {
+    return this.pages.reduce((n, p) => n + p.Items.size, 0);
+  }
+
+  /**
+   * Tolerant page lookup: by exact ID first, then by case-insensitive, trimmed name
+   * (first match wins on duplicate names). Returns `undefined` when nothing matches.
+   */
+  public FindPage(idOrName: string): WhiteboardPageInfo | undefined {
+    const page = this.resolvePage(idOrName);
+    return page ? this.pageInfo(page) : undefined;
   }
 
   /** Current sequence number — use as the `sinceToken` for the next {@link BuildSceneDelta}. */
@@ -681,17 +934,17 @@ export class WhiteboardState {
     return this.seq;
   }
 
-  /** Look up one item by ID. */
+  /** Look up one ACTIVE-page item by ID (items on other pages are not visible here). */
   public GetItem(id: string): WhiteboardItem | undefined {
     return this.items.get(id);
   }
 
-  /** Count of "elements" as the status footer reports them (highlights are transient, excluded). */
+  /** ACTIVE-page "elements" as the status footer reports them (transient highlights excluded). */
   public get ElementCount(): number {
     return this.Items.filter((i) => i.Kind !== 'highlight').length;
   }
 
-  /** Elements by author (highlights excluded, same basis as {@link ElementCount}). */
+  /** Active-page elements by author (highlights excluded, same basis as {@link ElementCount}). */
   public CountByAuthor(author: WhiteboardAuthor): number {
     return this.Items.filter((i) => i.Kind !== 'highlight' && i.Author === author).length;
   }
@@ -1064,10 +1317,11 @@ export class WhiteboardState {
   }
 
   /**
-   * Remove EVERYTHING from the board as ONE undoable operation. Journals a single
-   * `'replace'` op (perception consumers re-read the now-empty scene) and fires
-   * {@link BoardCleared$}. Clears the selection (firing {@link SelectionChanged$} when
-   * one existed). Returns false when the board was already empty.
+   * Remove EVERYTHING from the ACTIVE page as ONE undoable operation (other pages are
+   * untouched). Journals a single `'replace'` op (perception consumers re-read the
+   * now-empty scene) and fires {@link BoardCleared$}. Clears the selection (firing
+   * {@link SelectionChanged$} when one existed). Returns false when the active page was
+   * already empty.
    */
   public Clear(author: WhiteboardAuthor = 'user'): boolean {
     if (this.items.size === 0) {
@@ -1079,6 +1333,161 @@ export class WhiteboardState {
     this.changeSelection(null);
     this.record('replace', '', author, 'cleared the board');
     this.boardCleared.next({ Author: author, ItemCount: count });
+    return true;
+  }
+
+  // ────────────────────────────────────────────── pages
+
+  /** Project a live page record to its public read-only descriptor. */
+  protected pageInfo(page: PageRecord): WhiteboardPageInfo {
+    return { ID: page.ID, Name: page.Name, ItemCount: page.Items.size, Active: page.ID === this.activePageId };
+  }
+
+  /** Resolve a page by exact ID first, then case-insensitive trimmed name. */
+  private resolvePage(idOrName: string): PageRecord | undefined {
+    const key = (idOrName ?? '').trim();
+    if (key.length === 0) {
+      return undefined;
+    }
+    return this.pages.find((p) => p.ID === key)
+      ?? this.pages.find((p) => p.Name.trim().toLowerCase() === key.toLowerCase());
+  }
+
+  /**
+   * Add a new page and SWITCH to it. `name` is trimmed; when omitted (or blank) the page
+   * auto-names itself "Page N" from the monotonic page counter, so auto-names never
+   * repeat even after removals.
+   *
+   * Raises the cancelable {@link PageAdding$} BEFORE event (handlers may rewrite the
+   * name) — returns `null` when vetoed; fires {@link PageAdded$} after. One undoable
+   * step; journals a `'replace'` op (the agent's visible scene swaps to the new, empty
+   * page), so perception consumers re-read the scene.
+   */
+  public AddPage(name?: string, author: WhiteboardAuthor = 'user'): WhiteboardPageInfo | null {
+    const autoName = `Page ${this.pageCounter + 1}`;
+    const requested = (name ?? '').trim();
+    const adding: WhiteboardPageAddingEventArgs = { Name: requested.length > 0 ? requested : autoName, Author: author, Cancel: false };
+    this.pageAdding.next(adding);
+    if (adding.Cancel) {
+      return null;
+    }
+    this.beforeMutate();
+    this.pageCounter++;
+    const page: PageRecord = {
+      ID: `page-${this.pageCounter}`,
+      Name: (adding.Name ?? '').trim() || autoName,
+      Items: new Map<string, WhiteboardItem>()
+    };
+    this.pages.push(page);
+    this.activePageId = page.ID;
+    this.changeSelection(null);
+    this.record('replace', '', author, `added page "${page.Name}"`);
+    const info = this.pageInfo(page);
+    this.pageAdded.next({ Page: info, Author: author });
+    return info;
+  }
+
+  /**
+   * Make another page the active page. Tolerant lookup: exact ID first, then
+   * case-insensitive name (see {@link FindPage}). Switching to the already-active page
+   * is a successful no-op (no events, no journal entry).
+   *
+   * Raises the cancelable {@link PageSwitching$} BEFORE event — returns `false` when
+   * vetoed or the page is unknown; fires {@link PageSwitched$} after. Journals a
+   * `'replace'` op (the visible scene swaps wholesale) but deliberately pushes NO undo
+   * snapshot — switching is navigation, not a content mutation.
+   */
+  public SwitchPage(idOrName: string, author: WhiteboardAuthor = 'user'): boolean {
+    const target = this.resolvePage(idOrName);
+    if (!target) {
+      return false;
+    }
+    if (target.ID === this.activePageId) {
+      return true; // already there — successful no-op
+    }
+    const from = this.pageInfo(this.activePage);
+    const switching: WhiteboardPageSwitchingEventArgs = { FromPage: from, ToPage: this.pageInfo(target), Author: author, Cancel: false };
+    this.pageSwitching.next(switching);
+    if (switching.Cancel) {
+      return false;
+    }
+    this.activePageId = target.ID;
+    this.changeSelection(null);
+    this.record('replace', '', author, `switched to page "${target.Name}"`);
+    this.pageSwitched.next({ FromPage: from, ToPage: this.pageInfo(target), Author: author });
+    return true;
+  }
+
+  /**
+   * Rename a page (tolerant lookup, same as {@link SwitchPage}). The new name is
+   * trimmed; an empty result returns `false`. Renaming to the current name is a
+   * successful no-op (no events, no journal entry).
+   *
+   * Raises the cancelable {@link PageRenaming$} BEFORE event (handlers may rewrite
+   * `NewName`) — returns `false` when vetoed; fires {@link PageRenamed$} after. One
+   * undoable step; journals a `'replace'` op so the agent's page list stays current.
+   */
+  public RenamePage(idOrName: string, newName: string, author: WhiteboardAuthor = 'user'): boolean {
+    const target = this.resolvePage(idOrName);
+    const requested = (newName ?? '').trim();
+    if (!target || requested.length === 0) {
+      return false;
+    }
+    if (target.Name === requested) {
+      return true; // nothing to do
+    }
+    const renaming: WhiteboardPageRenamingEventArgs = { Page: this.pageInfo(target), NewName: requested, Author: author, Cancel: false };
+    this.pageRenaming.next(renaming);
+    if (renaming.Cancel) {
+      return false;
+    }
+    const effective = (renaming.NewName ?? '').trim();
+    if (effective.length === 0) {
+      return false; // a handler emptied the name — treat as an abort
+    }
+    this.beforeMutate();
+    const oldName = target.Name;
+    target.Name = effective;
+    this.record('replace', '', author, `renamed page "${oldName}" to "${target.Name}"`);
+    this.pageRenamed.next({ Page: this.pageInfo(target), OldName: oldName, Author: author });
+    return true;
+  }
+
+  /**
+   * Remove a page AND all of its items (tolerant lookup, same as {@link SwitchPage}).
+   * The LAST remaining page can never be removed (`false`, no events). Removing the
+   * ACTIVE page activates a neighbor — the next page when one exists, otherwise the
+   * previous one.
+   *
+   * Raises the cancelable {@link PageRemoving$} BEFORE event — returns `false` when
+   * vetoed or the page is unknown; fires {@link PageRemoved$} after (with the activated
+   * neighbor when the active page was removed). One undoable step; journals a
+   * `'replace'` op.
+   */
+  public RemovePage(idOrName: string, author: WhiteboardAuthor = 'user'): boolean {
+    const target = this.resolvePage(idOrName);
+    if (!target || this.pages.length <= 1) {
+      return false; // unknown, or the guarded last page
+    }
+    const removingInfo = this.pageInfo(target);
+    const removing: WhiteboardPageRemovingEventArgs = { Page: removingInfo, Author: author, Cancel: false };
+    this.pageRemoving.next(removing);
+    if (removing.Cancel) {
+      return false;
+    }
+    this.beforeMutate();
+    const index = this.pages.indexOf(target);
+    this.pages.splice(index, 1);
+    let activated: WhiteboardPageInfo | null = null;
+    if (target.ID === this.activePageId) {
+      // activate the neighbor: the page that slid into the removed slot, else the new last
+      const neighbor = this.pages[Math.min(index, this.pages.length - 1)];
+      this.activePageId = neighbor.ID;
+      activated = this.pageInfo(neighbor);
+      this.changeSelection(null);
+    }
+    this.record('replace', '', author, `removed page "${target.Name}"`);
+    this.pageRemoved.next({ Page: removingInfo, ActivatedPage: activated, Author: author });
     return true;
   }
 
@@ -1145,6 +1554,7 @@ export class WhiteboardState {
       moved: [],
       updated: [],
       removed: [],
+      pages: this.scenePages(),
       summary: ''
     };
 
@@ -1222,28 +1632,108 @@ export class WhiteboardState {
         byKind
       },
       items: items.map((i) => this.compact(i)),
+      pages: this.scenePages(),
       summary: this.composeSummaryText({})
     };
   }
 
+  /** Compact page list for deltas / summaries (model-facing). */
+  protected scenePages(): WhiteboardScenePage[] {
+    return this.pages.map((p) => ({
+      id: p.ID,
+      name: p.Name,
+      active: p.ID === this.activePageId,
+      items: p.Items.size
+    }));
+  }
+
   // ────────────────────────────────────────────── persistence
 
-  /** Serialize the board (state of record — persisted as the session-channel artifact). */
+  /**
+   * Serialize the board (state of record — persisted as the session-channel artifact).
+   * Emits the VERSION 2 paged shape (see {@link WhiteboardStateJSON}); the legacy flat
+   * shape is still accepted on load and rehydrates as a single page "Page 1".
+   */
   public ToJSON(): string {
     return JSON.stringify(this.snapshot());
   }
 
-  /** Rehydrate a board from {@link ToJSON} output. Throws on malformed input. */
+  /**
+   * Rehydrate a board from {@link ToJSON} output — BOTH shapes accepted: the current
+   * paged shape (version 2) and the legacy flat shape (version 1, `items` at the root),
+   * which migrates to one page named "Page 1". Throws on malformed input (use
+   * {@link LoadFromJSON} or `ParseBoardStateJson` for the tolerant variants).
+   */
   public static FromJSON(json: string): WhiteboardState {
-    const parsed = JSON.parse(json) as WhiteboardStateJSON;
-    if (!parsed || !Array.isArray(parsed.items)) {
+    const normalized = WhiteboardState.normalizePersisted(JSON.parse(json));
+    if (!normalized) {
       throw new Error('WhiteboardState.FromJSON: malformed payload');
     }
     const state = new WhiteboardState();
-    state.restore(parsed);
-    state.seq = parsed.seq ?? 0;
+    state.restore(normalized);
+    state.seq = normalized.seq;
     state.journalTrimmedBeforeSeq = state.seq; // older tokens force reset deltas
     return state;
+  }
+
+  /**
+   * Normalize a parsed persisted payload — EITHER shape — into the current
+   * {@link WhiteboardStateJSON}. Returns `null` for anything unrecognizable (the
+   * callers decide whether that throws or fails soft). Defensive throughout: page
+   * entries missing ids/names/item arrays are repaired, an empty page list gains one
+   * "Page 1", and an unknown `activePageId` falls back to the first page.
+   */
+  private static normalizePersisted(parsed: unknown): WhiteboardStateJSON | null {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    const raw = parsed as Record<string, unknown>;
+    const num = (value: unknown, fallback: number): number =>
+      typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+    if (Array.isArray(raw['pages'])) {
+      // CURRENT shape (version 2, paged)
+      const pages: WhiteboardPageJSON[] = [];
+      for (const entry of raw['pages'] as unknown[]) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          continue;
+        }
+        const p = entry as Record<string, unknown>;
+        const name = typeof p['name'] === 'string' && (p['name'] as string).trim().length > 0
+          ? (p['name'] as string) : `Page ${pages.length + 1}`;
+        pages.push({
+          id: typeof p['id'] === 'string' && (p['id'] as string).length > 0 ? (p['id'] as string) : `page-${pages.length + 1}`,
+          name,
+          items: Array.isArray(p['items']) ? (p['items'] as WhiteboardItem[]) : []
+        });
+      }
+      if (pages.length === 0) {
+        pages.push({ id: 'page-1', name: 'Page 1', items: [] });
+      }
+      const active = raw['activePageId'];
+      return {
+        version: 2,
+        seq: num(raw['seq'], 0),
+        idCounter: num(raw['idCounter'], 0),
+        zCounter: num(raw['zCounter'], 0),
+        pageCounter: Math.max(num(raw['pageCounter'], pages.length), pages.length),
+        activePageId: typeof active === 'string' && pages.some((p) => p.id === active) ? active : pages[0].id,
+        pages
+      };
+    }
+    if (Array.isArray(raw['items'])) {
+      // LEGACY shape (version 1, flat) — migrate to a single page "Page 1"
+      return {
+        version: 2,
+        seq: num(raw['seq'], 0),
+        idCounter: num(raw['idCounter'], 0),
+        zCounter: num(raw['zCounter'], 0),
+        pageCounter: 1,
+        activePageId: 'page-1',
+        pages: [{ id: 'page-1', name: 'Page 1', items: raw['items'] as WhiteboardItem[] }]
+      };
+    }
+    return null;
   }
 
   /**
@@ -1257,25 +1747,26 @@ export class WhiteboardState {
    * emitted so consumers re-read the full scene, and {@link BoardLoaded$} fires.
    */
   public LoadFromJSON(json: string): boolean {
-    let parsed: WhiteboardStateJSON;
+    let parsed: unknown;
     try {
-      parsed = JSON.parse(json) as WhiteboardStateJSON;
+      parsed = JSON.parse(json);
     }
     catch {
       return false;
     }
-    if (!parsed || !Array.isArray(parsed.items)) {
+    const normalized = WhiteboardState.normalizePersisted(parsed);
+    if (!normalized) {
       return false;
     }
-    this.restore(parsed);
-    this.seq = parsed.seq ?? 0;
+    this.restore(normalized);
+    this.seq = normalized.seq;
     this.journal = [];
     this.journalTrimmedBeforeSeq = this.seq; // older tokens force reset deltas
     this.undoStack = [];
     this.redoStack = [];
     this.changeSelection(null);
     this.record('replace', '', 'user', 'restored a saved board');
-    this.boardLoaded.next({ ItemCount: this.items.size });
+    this.boardLoaded.next({ ItemCount: this.TotalItemCount });
     return true;
   }
 
@@ -1309,22 +1800,47 @@ export class WhiteboardState {
     this.redoStack = [];
   }
 
-  /** Deep-copied serializable snapshot of the whole scene (undo entries / ToJSON). */
+  /**
+   * Deep-copied serializable snapshot of the WHOLE board — every page's items plus the
+   * page structure and counters (undo entries / ToJSON). Page items serialize in render
+   * order (ascending Z).
+   */
   protected snapshot(): WhiteboardStateJSON {
     return {
-      version: 1,
+      version: 2,
       seq: this.seq,
       idCounter: this.idCounter,
       zCounter: this.zCounter,
-      items: JSON.parse(JSON.stringify(this.Items)) as WhiteboardItem[]
+      pageCounter: this.pageCounter,
+      activePageId: this.activePageId,
+      pages: this.pages.map((p) => ({
+        id: p.ID,
+        name: p.Name,
+        items: JSON.parse(JSON.stringify(Array.from(p.Items.values()).sort((a, b) => a.Z - b.Z))) as WhiteboardItem[]
+      }))
     };
   }
 
-  /** Swap the scene to a snapshot's items/counters (drops a now-missing selection). */
+  /**
+   * Swap the whole board to a snapshot's pages/counters (drops a now-missing selection;
+   * an unknown active-page id falls back to the first page; an empty page list gains a
+   * fresh "Page 1" so the engine never runs page-less).
+   */
   protected restore(snap: WhiteboardStateJSON): void {
-    this.items = new Map((JSON.parse(JSON.stringify(snap.items)) as WhiteboardItem[]).map((i) => [i.ID, i]));
+    this.pages = (snap.pages ?? []).map((p) => ({
+      ID: p.id,
+      Name: p.name,
+      Items: new Map((JSON.parse(JSON.stringify(p.items ?? [])) as WhiteboardItem[])
+        .filter((i) => !!i && typeof i === 'object' && typeof i.ID === 'string')
+        .map((i) => [i.ID, i]))
+    }));
+    if (this.pages.length === 0) {
+      this.pages = [{ ID: 'page-1', Name: 'Page 1', Items: new Map<string, WhiteboardItem>() }];
+    }
+    this.activePageId = this.pages.some((p) => p.ID === snap.activePageId) ? snap.activePageId : this.pages[0].ID;
     this.idCounter = snap.idCounter ?? 0;
     this.zCounter = snap.zCounter ?? 0;
+    this.pageCounter = Math.max(snap.pageCounter ?? this.pages.length, this.pages.length);
     if (this.SelectedID && !this.items.has(this.SelectedID)) {
       this.changeSelection(null);
     }
@@ -1439,7 +1955,11 @@ export class WhiteboardState {
     }
   }
 
-  /** Compose the human-readable tail line of deltas / summaries ("2 added, 1 moved. …"). */
+  /**
+   * Compose the human-readable tail line of deltas / summaries ("2 added, 1 moved. …"),
+   * including which page is active and the full page list — so the model always knows
+   * pages exist and which one its item entries describe.
+   */
   protected composeSummaryText(parts: { added?: number; moved?: number; updated?: number; removed?: number; reset?: boolean }): string {
     const bits: string[] = [];
     if (parts.reset) {
@@ -1462,7 +1982,22 @@ export class WhiteboardState {
         bits.push('no changes');
       }
     }
-    return `${bits.join(', ')}. Board has ${this.ElementCount} elements (user ${this.CountByAuthor('user')} · agent ${this.CountByAuthor('agent')}).`;
+    return `${bits.join(', ')}. ${this.composePagesText()}`;
+  }
+
+  /** The page-aware scene sentence shared by every delta / summary tail line. */
+  protected composePagesText(): string {
+    const active = this.activePage;
+    const index = this.pages.indexOf(active) + 1;
+    const counts = `${this.ElementCount} elements (user ${this.CountByAuthor('user')} · agent ${this.CountByAuthor('agent')})`;
+    if (this.pages.length === 1) {
+      return `Active page "${active.Name}" (the only page) has ${counts}.`;
+    }
+    const others = this.pages
+      .filter((p) => p.ID !== active.ID)
+      .map((p) => `"${p.Name}" (${p.Items.size})`)
+      .join(', ');
+    return `Active page "${active.Name}" (${index} of ${this.pages.length}) has ${counts}. Other pages: ${others}.`;
   }
 
   private static describe(item: WhiteboardItem): string {

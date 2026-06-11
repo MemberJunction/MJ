@@ -64,6 +64,7 @@
     (ToolChangeRequest)="Tool = $event"
     (WidgetSubmitting)="WidgetSubmitting.emit($event)"
     (WidgetSubmitted)="WidgetSubmitted.emit($event)"
+    (WidgetInteraction)="WidgetInteraction.emit($event)"
     (ContentApplying)="ContentApplying.emit($event)"
     (ContentApplied)="ContentApplied.emit($event)"/>
 
@@ -96,6 +97,7 @@
     [MinimapOpen]="board.MinimapOpen"
     (ZoomOut)="board.ZoomOut()"
     (ZoomIn)="board.ZoomIn()"
+    (ZoomBy)="board.ZoomByFactor($event)"
     (Fit)="board.FitToContent()"
     (ToggleMinimap)="board.ToggleMinimap()"/>
 

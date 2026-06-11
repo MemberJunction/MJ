@@ -17,10 +17,12 @@ import {
 } from './whiteboard-state';
 import { WhiteboardTool, WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import {
-  EvaluateWidgetSubmitMessage, InjectWhiteboardSubmitHelper, WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS,
-  WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
+  EvaluateWidgetInteractionMessage, EvaluateWidgetSubmitMessage, InjectWhiteboardSubmitHelper,
+  WHITEBOARD_WIDGET_INTERACTION_MAX_CHARS, WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS,
+  WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
 } from './whiteboard-widget-bridge';
 import { BuildWhiteboardContextMenu, WhiteboardContextMenuAction, WhiteboardContextMenuActionID } from './whiteboard-context-menu';
+import { RealtimeWhiteboardPagesComponent } from './whiteboard-pages.component';
 
 /** The agent presence cursor state (input-driven; the host animates it to mutation points). */
 export interface WhiteboardAgentPresence {
@@ -151,7 +153,7 @@ const POP_IN_MS = 3200;
 @Component({
   standalone: true,
   selector: 'mj-realtime-whiteboard',
-  imports: [CommonModule, MarkdownModule, CodeEditorModule],
+  imports: [CommonModule, MarkdownModule, CodeEditorModule, RealtimeWhiteboardPagesComponent],
   templateUrl: './whiteboard-board.component.html',
   styleUrl: './whiteboard-board.component.css'
 })
@@ -208,6 +210,15 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
    * plugin surfaces it to the live agent as a `[whiteboard]` context note.
    */
   @Output() WidgetSubmitted = new EventEmitter<WhiteboardWidgetSubmitEvent>();
+  /**
+   * AMBIENT widget telemetry: the injected recorder observed passive form activity
+   * (clicks / changes / typing / focus) inside a sandboxed HTML widget — no widget-authored
+   * script involved. The batch was validated (marker + tracked source + size cap + shape)
+   * and pre-summarized into one compact human line. Integration layers forward it to their
+   * agent runtime as low-priority background context (MJ's channel plugin throttles per
+   * widget and frames it as a do-not-respond `[whiteboard]` note).
+   */
+  @Output() WidgetInteraction = new EventEmitter<WhiteboardWidgetInteractionEvent>();
   /**
    * Cancelable BEFORE event: an in-board editor commit (inline sticky/text/shape edit or
    * the markdown/HTML rich editor's Apply/Done) is about to write to the state engine.
@@ -994,7 +1005,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
    * {@link WidgetSubmitted} event pair.
    */
   private onWindowMessage = (event: MessageEvent): void => {
-    const outcome = EvaluateWidgetSubmitMessage(event.data, this.resolveWidgetFromSource(event.source));
+    const widget = this.resolveWidgetFromSource(event.source);
+    const outcome = EvaluateWidgetSubmitMessage(event.data, widget);
     if (outcome.Kind === 'submit') {
       const submitting: WhiteboardWidgetSubmittingEventArgs = { Event: outcome.Event, Cancel: false };
       this.WidgetSubmitting.emit(submitting);
@@ -1010,8 +1022,35 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     else if (outcome.Reason === 'unknown-source') {
       console.warn('Whiteboard widget submit dropped: message source is not a tracked widget frame.');
     }
-    // 'not-submit' is unrelated postMessage traffic — ignore silently.
+    else {
+      // 'not-submit' — may be the injected recorder's AMBIENT interaction batch instead.
+      this.handleInteractionMessage(event.data, widget);
+    }
   };
+
+  /**
+   * Second leg of the message listener: evaluate a non-submit message against the ambient
+   * interaction contract and surface accepted batches through {@link WidgetInteraction}.
+   * `'not-interaction'` is unrelated postMessage traffic — ignored silently, like the
+   * submit path's `'not-submit'`.
+   */
+  private handleInteractionMessage(messageData: unknown, widget: { ItemID: string; Title?: string } | null): void {
+    const outcome = EvaluateWidgetInteractionMessage(messageData, widget);
+    if (outcome.Kind === 'interaction') {
+      this.WidgetInteraction.emit(outcome.Event);
+      this.cdr.markForCheck();
+      return;
+    }
+    if (outcome.Reason === 'oversize') {
+      console.warn(`Whiteboard widget interaction dropped: batch exceeds ${WHITEBOARD_WIDGET_INTERACTION_MAX_CHARS} chars.`);
+    }
+    else if (outcome.Reason === 'unknown-source') {
+      console.warn('Whiteboard widget interaction dropped: message source is not a tracked widget frame.');
+    }
+    else if (outcome.Reason === 'bad-shape') {
+      console.warn('Whiteboard widget interaction dropped: events batch is malformed.');
+    }
+  }
 
   /** Resolve a message `event.source` to the tracked widget iframe (window → item) it belongs to. */
   private resolveWidgetFromSource(source: MessageEventSource | null): { ItemID: string; Title?: string } | null {
@@ -1261,6 +1300,18 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   public ZoomIn(): void {
     const next = ZOOM_STEPS.find((z) => z > this.Zoom + 0.001);
     this.zoomCentered(next ?? ZOOM_STEPS[ZOOM_STEPS.length - 1]);
+  }
+
+  /**
+   * Continuous zoom by a multiplicative factor at the viewport center — the
+   * hold-to-zoom tick path (the zoom cluster emits ~3.5% factors every 50 ms while a
+   * +/− button is held). Clamped to the same 25%–200% limits as the stepped zoom.
+   */
+  public ZoomByFactor(factor: number): void {
+    if (!Number.isFinite(factor) || factor <= 0) {
+      return;
+    }
+    this.zoomCentered(this.clampZoom(this.Zoom * factor));
   }
 
   public ZoomOut(): void {

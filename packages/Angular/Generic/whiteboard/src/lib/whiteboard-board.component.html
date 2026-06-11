@@ -387,6 +387,9 @@
     </div>
   }
 
+  <!-- page strip (OneNote-style tabs; switching works in ReadOnly, mutations don't) -->
+  <mj-realtime-whiteboard-pages [State]="State" [ReadOnly]="ReadOnly"/>
+
   <!-- minimap -->
   @if (MinimapOpen) {
     <div class="minimap">

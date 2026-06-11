@@ -15,7 +15,9 @@ import {
   RealtimeWhiteboardBoardComponent, WhiteboardAgentPresence,
   WhiteboardContentAppliedEventArgs, WhiteboardContentApplyingEventArgs
 } from './whiteboard-board.component';
-import { WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs } from './whiteboard-widget-bridge';
+import {
+  WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
+} from './whiteboard-widget-bridge';
 import { RealtimeWhiteboardToolbarComponent, WhiteboardTool, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import { RealtimeWhiteboardZoomComponent } from './whiteboard-zoom.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
@@ -93,6 +95,14 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
    * to their agent runtime — e.g. MJ's channel plugin sends a `[whiteboard]` context note.
    */
   @Output() WidgetSubmitted = new EventEmitter<WhiteboardWidgetSubmitEvent>();
+  /**
+   * AMBIENT widget telemetry (forwarded from the board): the injected recorder observed
+   * passive form activity (clicks / changes / typing / focus) inside a sandboxed HTML
+   * widget, validated + pre-summarized. Integration layers forward it to their agent
+   * runtime as throttled, low-priority background context — e.g. MJ's channel plugin sends
+   * an "ambient activity" `[whiteboard]` note at most once per widget per few seconds.
+   */
+  @Output() WidgetInteraction = new EventEmitter<WhiteboardWidgetInteractionEvent>();
   /**
    * Cancelable BEFORE event (forwarded from the board): an in-board editor commit is
    * about to write to the state engine. Set `Cancel = true` synchronously to discard it.
@@ -492,6 +502,9 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
       case WHITEBOARD_TOOL_NAMES.MoveItem: return 'moved an item';
       case WHITEBOARD_TOOL_NAMES.RemoveItem: return 'removed an item';
       case WHITEBOARD_TOOL_NAMES.StyleItem: return 'restyled an item';
+      case WHITEBOARD_TOOL_NAMES.AddPage: return 'created a page';
+      case WHITEBOARD_TOOL_NAMES.SwitchPage: return 'switched pages';
+      case WHITEBOARD_TOOL_NAMES.RenamePage: return 'renamed a page';
       default: return 'updated the board';
     }
   }

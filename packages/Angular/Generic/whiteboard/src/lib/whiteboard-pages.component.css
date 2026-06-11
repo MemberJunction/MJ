@@ -1,0 +1,117 @@
+/* Bottom-left floating page strip — OneNote-style tabs, styled with the same
+   token vocabulary as the zoom cluster (whiteboard-zoom.component.css). */
+
+:host {
+  display: block;
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 10;
+  /* leave room for the bottom-right zoom cluster */
+  max-width: calc(100% - 240px);
+}
+
+.wb-pages {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full, 9999px);
+  box-shadow: var(--mj-shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.3));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.wb-pages::-webkit-scrollbar {
+  display: none;
+}
+
+.wb-page-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: transparent;
+  color: var(--mj-text-secondary);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.wb-page-chip:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.wb-page-chip.active {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+}
+
+.wb-page-chip__name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wb-page-chip__close {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+  color: inherit;
+  opacity: 0.75;
+}
+.wb-page-chip:hover .wb-page-chip__close {
+  display: inline-block;
+}
+.wb-page-chip__close:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--mj-status-error) 22%, transparent);
+  color: var(--mj-status-error-text, var(--mj-status-error));
+}
+.wb-page-chip.active .wb-page-chip__close:hover {
+  /* on the filled active chip, keep the glyph legible against the brand fill */
+  color: var(--mj-text-inverse, #fff);
+}
+
+.wb-page-rename {
+  height: 26px;
+  width: 124px;
+  padding: 0 9px;
+  border: 1px solid var(--mj-border-focus, var(--mj-brand-primary));
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  outline: none;
+}
+
+.wb-page-add {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mj-text-secondary);
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-family: inherit;
+}
+.wb-page-add:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}

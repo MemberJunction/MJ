@@ -52,6 +52,8 @@ export interface WhiteboardToolResult {
   success: boolean;
   /** ID of the item the tool created / mutated (when applicable). */
   itemId?: string;
+  /** ID of the page the tool created / switched to / renamed (page tools only). */
+  pageId?: string;
   /** Human summary the model can narrate ("Added a sticky note …"). */
   summary?: string;
   /** Error description when `success` is false. */
@@ -78,7 +80,10 @@ export const WHITEBOARD_TOOL_NAMES = {
   Highlight: 'Whiteboard_Highlight',
   MoveItem: 'Whiteboard_MoveItem',
   RemoveItem: 'Whiteboard_RemoveItem',
-  StyleItem: 'Whiteboard_StyleItem'
+  StyleItem: 'Whiteboard_StyleItem',
+  AddPage: 'Whiteboard_AddPage',
+  SwitchPage: 'Whiteboard_SwitchPage',
+  RenamePage: 'Whiteboard_RenamePage'
 } as const;
 
 /** Max markdown source length accepted by AddMarkdown / UpdateContent (chars). */
@@ -156,7 +161,7 @@ export const WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
   },
   {
     Name: WHITEBOARD_TOOL_NAMES.AddHtml,
-    Description: 'Add an interactive HTML widget to the whiteboard — a self-contained HTML document (inline CSS/JS allowed) rendered in a STRICTLY SANDBOXED iframe with an opaque origin: scripts run isolated with NO access to the app, its session, cookies or storage, and network access is not guaranteed — make the widget fully self-contained (no external scripts, styles or data). USE WIDGETS TO TEACH AND GET USER INPUT: inline SVG diagrams and explainers, CSS concept animations, micro-quizzes and micro-forms. To collect input, have a button/form handler call MJWhiteboard.submit(data) — the host injects that helper into every widget automatically, and the submitted data (JSON-serialized, max 8000 chars) reaches you as a "[whiteboard] the user submitted input…" context note. Example: a one-question quiz whose Submit button calls MJWhiteboard.submit({question:"…",answer:picked}).',
+    Description: 'Add an interactive HTML widget to the whiteboard — a self-contained HTML document (inline CSS/JS allowed) rendered in a STRICTLY SANDBOXED iframe with an opaque origin: scripts run isolated with NO access to the app, its session, cookies or storage, and network access is not guaranteed — make the widget fully self-contained (no external scripts, styles or data). USE WIDGETS TO TEACH AND GET USER INPUT: inline SVG diagrams and explainers, CSS concept animations, micro-quizzes and micro-forms. To collect input, have a button/form handler call MJWhiteboard.submit(data) — the host injects that helper into every widget automatically, and the submitted data (JSON-serialized, max 8000 chars) reaches you as a "[whiteboard] the user submitted input…" context note. Example: a one-question quiz whose Submit button calls MJWhiteboard.submit({question:"…",answer:picked}). PASSIVE FORMS NEED NO SCRIPTING: button/select/typing activity inside the widget reaches you automatically as ambient "[whiteboard]" background context notes — reserve MJWhiteboard.submit for explicit submissions.',
     ParametersSchema: {
       type: 'object',
       properties: {
@@ -252,6 +257,39 @@ export const WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         color: { type: 'string', description: 'Hex text color, e.g. "#fbbf24" (text labels only — violet is already yours).' }
       },
       required: ['itemId']
+    }
+  },
+  {
+    Name: WHITEBOARD_TOOL_NAMES.AddPage,
+    Description: 'Create a NEW PAGE on the whiteboard and switch to it. Start a new page for a new topic, exercise or diagram instead of crowding the current board — pages keep prior work intact and the user can flip back any time. All item tools (notes, shapes, widgets, …) always target the page that is currently active.',
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Optional page name (e.g. "Practice problems"). Omit to auto-name it "Page N".' }
+      }
+    }
+  },
+  {
+    Name: WHITEBOARD_TOOL_NAMES.SwitchPage,
+    Description: 'Switch the whiteboard to another existing page (by page name, case-insensitive, or page id). Use it to return to earlier work — the page list (with the active page marked) is included in every scene update you receive. Item tools only see the active page, so switch before editing items that live elsewhere.',
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The target page\'s name (case-insensitive) or its id, e.g. "Page 2" or "page-2".' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    Name: WHITEBOARD_TOOL_NAMES.RenamePage,
+    Description: 'Rename an existing whiteboard page — give pages meaningful names ("Warm-up", "Final design") so the user can navigate them. Identify the page by its current name (case-insensitive) or id.',
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The page\'s CURRENT name (case-insensitive) or its id.' },
+        newName: { type: 'string', description: 'The new page name. Keep it short — it renders on a tab chip.' }
+      },
+      required: ['name', 'newName']
     }
   }
 ];
@@ -376,9 +414,65 @@ export function ApplyWhiteboardAgentTool(state: WhiteboardState, toolName: strin
     case WHITEBOARD_TOOL_NAMES.MoveItem: return moveItem(state, args);
     case WHITEBOARD_TOOL_NAMES.RemoveItem: return removeItem(state, args);
     case WHITEBOARD_TOOL_NAMES.StyleItem: return styleItem(state, args);
+    case WHITEBOARD_TOOL_NAMES.AddPage: return addPage(state, args);
+    case WHITEBOARD_TOOL_NAMES.SwitchPage: return switchPage(state, args);
+    case WHITEBOARD_TOOL_NAMES.RenamePage: return renamePage(state, args);
     default:
       return fail(`Unknown whiteboard tool "${toolName}".`);
   }
+}
+
+/** Success payload for the page tools (carries `pageId` instead of `itemId`). */
+function okPage(pageId: string, summary: string): string {
+  const result: WhiteboardToolResult = { success: true, pageId, summary };
+  return JSON.stringify(result);
+}
+
+/** The page list rendered into not-found errors so the model can self-correct. */
+function pageListText(state: WhiteboardState): string {
+  return state.Pages.map((p) => `"${p.Name}"${p.Active ? ' (active)' : ''}`).join(', ');
+}
+
+function addPage(state: WhiteboardState, args: Record<string, unknown>): string {
+  if (args['name'] !== undefined && typeof args['name'] !== 'string') {
+    return fail('AddPage: "name" must be a string when provided.');
+  }
+  const page = state.AddPage(asString(args['name']), 'agent');
+  if (!page) {
+    return fail('The host application canceled this operation.');
+  }
+  return okPage(page.ID, `Created page "${page.Name}" and switched to it — new items will land on this page.`);
+}
+
+function switchPage(state: WhiteboardState, args: Record<string, unknown>): string {
+  const name = asString(args['name']);
+  if (!name) {
+    return fail('SwitchPage requires a non-empty "name" (the page\'s name or id).');
+  }
+  const page = state.FindPage(name);
+  if (!page) {
+    return fail(`SwitchPage: no page named "${name}". Pages: ${pageListText(state)}.`);
+  }
+  if (!state.SwitchPage(page.ID, 'agent')) {
+    return fail('The host application canceled this operation.');
+  }
+  return okPage(page.ID, `Switched to page "${page.Name}" (${page.ItemCount} items).`);
+}
+
+function renamePage(state: WhiteboardState, args: Record<string, unknown>): string {
+  const name = asString(args['name']);
+  const newName = asString(args['newName']);
+  if (!name || !newName) {
+    return fail('RenamePage requires a non-empty "name" (current name or id) and "newName".');
+  }
+  const page = state.FindPage(name);
+  if (!page) {
+    return fail(`RenamePage: no page named "${name}". Pages: ${pageListText(state)}.`);
+  }
+  if (!state.RenamePage(page.ID, newName, 'agent')) {
+    return fail('The host application canceled this operation.');
+  }
+  return okPage(page.ID, `Renamed page "${page.Name}" to "${newName.trim()}".`);
 }
 
 function addNote(state: WhiteboardState, args: Record<string, unknown>): string {

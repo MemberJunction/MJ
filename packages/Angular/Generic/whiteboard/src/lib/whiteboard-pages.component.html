@@ -1,0 +1,32 @@
+<!-- The strip swallows pointer/dblclick/contextmenu so board tools never fire under it. -->
+<div class="wb-pages"
+     (pointerdown)="$event.stopPropagation()"
+     (dblclick)="$event.stopPropagation()"
+     (wheel)="$event.stopPropagation()"
+     (contextmenu)="$event.stopPropagation(); $event.preventDefault()">
+  @for (page of Pages; track page.ID) {
+    @if (RenamingID === page.ID) {
+      <input class="wb-page-rename" type="text" #rename
+             [value]="page.Name"
+             (keydown)="OnRenameKeydown($event, rename.value)"
+             (blur)="CommitRename(rename.value)"/>
+    } @else {
+      <button type="button" class="wb-page-chip"
+              [class.active]="page.Active"
+              [title]="page.Name + ' · ' + page.ItemCount + (page.ItemCount === 1 ? ' item' : ' items') + (ReadOnly ? '' : ' — double-click to rename')"
+              (click)="OnChipClick(page)"
+              (dblclick)="OnChipDblClick($event, page)">
+        <span class="wb-page-chip__name">{{ page.Name }}</span>
+        @if (CanDelete) {
+          <span class="wb-page-chip__close" role="button" title="Delete page"
+                (click)="OnDeletePage($event, page)"><i class="fa-solid fa-xmark"></i></span>
+        }
+      </button>
+    }
+  }
+  @if (!ReadOnly) {
+    <button type="button" class="wb-page-add" title="Add page" (click)="OnAddPage()">
+      <i class="fa-solid fa-plus"></i>
+    </button>
+  }
+</div>
