@@ -197,6 +197,14 @@ Each column is `yes` / `no` / `n/a` (`n/a` when the source doesn't exist for thi
 
 Observe URL templates. When a path like `/parents/{ParentID}/children` is grouped to an `objectKey`, populate the child IO's `ParentObjectName`, `ParentObjectIDFieldName`, `HierarchyPath`. Compute `TraversalOrder` (topological sort) at end and write to `metadata.fields.TraversalOrder`. Halt + surface error if cycles are detected.
 
+## Access path for nested-graph / reporting APIs (tables ≠ doors)
+
+When the object universe is LARGER than the set of directly-queryable entry points (the *doors* — top-level GraphQL query fields / REST collection roots), most objects are reached only by nesting inside what a door returns. The script MUST compute, per object, an **access path** and emit it into the IO's `Configuration`: the **entry-query / door name**, the **nesting field-path** from that door down to the object's records (chain of field names, list segments marked `[]` — e.g. `account → orders[] → items[]`), and any **door-level args** (pagination / date filters).
+
+- **Derive it from the type graph, not by hand.** Run a BFS/DFS over the saved schema (`__schema` types / SDL / OpenAPI components) starting from each entry point; for each object type, record the field-path by which it is first reachable from a door. Bias to MORE reachable objects, same as catalog enumeration.
+- **Depth-0 (direct) vs depth-N (nested).** A door-level object is the depth-0 case (empty nesting path); a nested object carries the full descent chain. Both are syncable — "reachable but nested" is not "unsyncable."
+- **Log unreachables.** Any object with NO derivable access path from any entry point gets a logged warning + appears in the source-check / extraction report — never emitted as a silent 0-row IO.
+
 ## AdditionalObservations (open block)
 
 When the source surfaces useful information that doesn't map to a canonical field, append to `metadata.fields.AdditionalObservations` / `io.fields.AdditionalObservations` / `iof.fields.AdditionalObservations` with `{Key, Value, Provenance}`. Recurring observations become canonical fields in framework iterations — never skip a finding because no slot exists.

@@ -36,6 +36,20 @@ Most APIs publish a **machine-readable contract**, and when one exists it is THE
 - Record each acquired contract in `SOURCES.json` with `SourceCategory` (`OpenAPISpec`/`PostmanCollection`/`GraphQLSDL`/`OfficialSDK`) **and the local raw-file path you saved**.
 - **Scratch-pad, never context.** Huge artifacts (a multi-MB schema reference, a big spec) must go to a **scratch file on disk** and be inspected with `grep`/`node`/`jq` — NEVER pulled into your reasoning window. Curl → file → grep the file for the structure you need (type/anchor counts, section markers) → emit small structured findings. Holding the raw bytes in context is both lossy and wasteful; the disk file is the artifact, code is how you read it.
 
+### Enumerate the object catalog IN CODE — `TaxonomyLeaves` is a SCRIPT'S OUTPUT, never an in-context list
+
+The single most damaging silent failure is **under-enumerating the object universe**: you read the saved source, name the objects you happened to notice, and hand a short `TaxonomyLeaves` downstream — every later gate (extraction, `compute-source-diff`, the slim reviewer) is bijective AGAINST that list, so a short universe sails through green while real objects are silently dropped. (Path LMS, 2026-06-10: the docs documented ~38 report queries; an in-context read produced 16; the whole build "passed" against the 16, because nothing downstream re-counts the universe.)
+
+**The rule: NEVER build the object list by reading the source in your head and typing names into your return.** The object catalog is enumerated by a SCRIPT that programmatically scans the SAVED RAW source file, and that script's stdout IS `TaxonomyLeaves`. You write the enumeration script, run it (`Bash`), and surface its emitted list + count — you never hand-author the array. **The object count is a number a script printed, not a number you decided.** This holds for EVERY source shape:
+- **OpenAPI** → script walks `paths` + tagged operations / `components.schemas`.
+- **GraphQL SDL / introspection JSON** → script walks `__schema.queryType.fields` (each query field is a coverable object) + `__schema.types`.
+- **SpectaQL / GraphDoc / Magidoc HTML** → script parses every `#definition-<Type>` / query-field anchor.
+- **Prose HTML / PDF docs (no machine schema — e.g. introspection is auth-gated and no SDL is downloadable)** → STILL a script: programmatically scan the saved file for the object identifiers (every `[a-z][A-Za-z0-9]*(Report|List)`-style query field, every documented endpoint/resource heading) with regex/DOM, dedupe, emit. A missing machine schema is NOT licence to under-count from prose — the prose docs simply become the catalog source the enumeration script runs over. Eyeballing a 1 MB doc and listing "the ones I saw" is the forbidden in-context read.
+
+After the script runs, **cross-check its count against an independent signal in the same file** (the SDL type count, the doc's sidebar/nav entry count, the OpenAPI operation count) and assert they agree. A catalog materially smaller than that signal is a parse/enumeration defect to FIX or ESCALATE — never a list to hand off.
+
+**The universe is the RECORD TYPES, not the entry points (this is what was missed).** An API exposes a small set of *entry points* (GraphQL query fields, REST collection roots) but the syncable data lives in the *record types* reachable through them. Path LMS exposes 16 GraphQL queries but ~93 object types (`Account, Assessment, AssessmentSubmission, Assignment, Certificate, Course, CourseItem, Order, Sale, Completion, …`) — and EACH object type that holds a record set is a syncable table. Enumerating only the 16 query "doors" drops ~80 real tables. So `TaxonomyLeaves` = **every record-bearing type the schema defines** (an object/complex type that has fields — exclude scalars/enums/inputs and the operation roots), walked from the entry points through the type graph. **Bias to MORE: if a field resolves to a list/collection of records with their own shape, it is its own object** (FK back to its parent), reached by descending the graph — not folded away. Use the shared deterministic enumerator **`packages/Integration/connector-builder-workshop/floor/enumerate-catalog.mjs`** (it already returns record types for introspection JSON / OpenAPI / XSD / SpectaQL-GraphDoc HTML / SDL) rather than writing a narrower one that stops at entry points.
+
 ### Be suspicious of cheap completeness
 
 A result that arrives suspiciously thin or suspiciously tidy is the #1 silent-failure source — be anxious about every result. A `WebFetch` summary listing "sample fields," a page that "truncated," a catalog with far fewer objects/fields than the type list implies, an object that would end up with **zero fields** when the schema clearly documents them — treat ALL of these as **INCOMPLETE until cross-checked against the raw bytes**. Count the types/fields in the raw artifact and assert downstream coverage matches; a large unexplained gap is a defect to surface, not a pass to wave through.
@@ -95,7 +109,13 @@ interface SourceAuditReturn {
                                   //   count — NOT one extraction per entry), and compute-source-diff uses
                                   //   this exact array as the `universe` to compute completeness. An
                                   //   empty/short array here = extraction over nothing. Single most
-                                  //   load-bearing field.
+                                  //   load-bearing field. MUST be the STDOUT OF YOUR ENUMERATION SCRIPT
+                                  //   (see "Enumerate the object catalog IN CODE") run over the saved raw
+                                  //   source — NEVER a hand-typed list of objects you noticed while
+                                  //   reading. An in-context read silently under-counts, and every
+                                  //   downstream gate is bijective against this array so the shortfall is
+                                  //   never caught. Cross-check its length against an independent in-file
+                                  //   signal before returning.
     VendorDocsPaths: string[];   // categorized authoritative-source URLs/paths: prose vendor docs.
     SDKPaths: string[];          // categorized authoritative-source URLs/paths: typed SDK sources.
     PostmanPaths: string[];      // categorized authoritative-source URLs/paths: Postman collections.
