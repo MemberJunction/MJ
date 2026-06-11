@@ -4815,6 +4815,7 @@ The context is now within limits. Please retry your request with the recovered c
                 userId: params.userId || params.contextUser?.ID,
                 companyId: params.companyId,
                 verbose: params.verbose,
+                provider: this.ProviderToUse,
             });
 
             const failed = result.disposition === 'error' || result.disposition === 'rejected-type';

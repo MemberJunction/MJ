@@ -1,4 +1,4 @@
-import { LogErrorEx, LogStatusEx, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogErrorEx, LogStatusEx, Metadata, UserInfo } from '@memberjunction/core';
 import { MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 
@@ -67,6 +67,13 @@ export interface MemoryWriteContext {
   companyId?: string;
   /** Mirrors ExecuteAgentParams.verbose — gates per-write logging */
   verbose?: boolean;
+  /**
+   * Metadata provider to persist through. Callers running under a non-default
+   * provider (multi-provider clients, request-bound server providers) MUST pass
+   * theirs — BaseAgent passes its ProviderToUse. Falls back to the global
+   * default only when absent.
+   */
+  provider?: IMetadataProvider;
 }
 
 export interface MemoryWriteManagerConfig {
@@ -293,7 +300,7 @@ export class MemoryWriteManager {
     scope: MemoryWriteScope,
     context: MemoryWriteContext,
   ): Promise<Omit<MemoryWriteResult, 'durationMs' | 'request'>> {
-    const note = await this.loadNote(noteId, context.contextUser);
+    const note = await this.loadNote(noteId, context);
     if (!note) {
       return { disposition: 'error', noteId, reason: `Could not load own note ${noteId} to supersede.` };
     }
@@ -324,7 +331,7 @@ export class MemoryWriteManager {
     noteId: string,
     context: MemoryWriteContext,
   ): Promise<Omit<MemoryWriteResult, 'durationMs' | 'request'>> {
-    const note = await this.loadNote(noteId, context.contextUser);
+    const note = await this.loadNote(noteId, context);
     if (!note) {
       return { disposition: 'error', noteId, reason: `Could not load existing note ${noteId} to dedupe against.` };
     }
@@ -357,7 +364,7 @@ export class MemoryWriteManager {
       return { disposition: 'error', reason: 'Could not resolve the "AI" agent note type.' };
     }
 
-    const md = new Metadata();
+    const md = context.provider ?? new Metadata();
     const note = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', context.contextUser);
     note.AgentID = scope.agentId;
     note.UserID = scope.userId;
@@ -394,9 +401,9 @@ export class MemoryWriteManager {
   }
 
   /** Load an existing note entity by ID. Overridable seam for tests. */
-  protected async loadNote(noteId: string, contextUser: UserInfo): Promise<MJAIAgentNoteEntity | null> {
-    const md = new Metadata();
-    const note = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
+  protected async loadNote(noteId: string, context: MemoryWriteContext): Promise<MJAIAgentNoteEntity | null> {
+    const md = context.provider ?? new Metadata();
+    const note = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', context.contextUser);
     const loaded = await note.Load(noteId);
     return loaded ? note : null;
   }
