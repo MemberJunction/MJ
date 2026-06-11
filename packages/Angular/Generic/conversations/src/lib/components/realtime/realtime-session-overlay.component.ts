@@ -19,7 +19,7 @@ import {
   ClampSurfacePanelWidth, DefaultSurfacePanelWidth, ParseSurfacePanelPref, SerializeSurfacePanelPref,
   SURFACE_PANEL_COLLAPSED_WIDTH, SURFACE_PANEL_DEFAULT_WIDTH, SURFACE_PANEL_MIN_WIDTH, SURFACE_PANEL_PREF_KEY
 } from './realtime-surface-panel-prefs';
-import { RealtimeChannelTabRegistration } from './realtime-surface-tabs.model';
+import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
 import { RealtimeWhiteboardBoardComponent } from './whiteboard/whiteboard-board.component';
 import { WhiteboardState } from './whiteboard/whiteboard-state';
@@ -199,6 +199,15 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
 
   /** The reviewed chain's history artifacts, registered as unfocused surface tabs. */
   private reviewArtifacts: ParsedDelegationArtifact[] = [];
+
+  /**
+   * True while the surface panel carries the REVIEW-registered (template-based, read-only)
+   * Whiteboard tab. Drives the review→live continuation edge: when the resumed live
+   * session's channel set resolves WITHOUT a Whiteboard channel, the stale review tab is
+   * removed (see {@link cleanupStaleReviewBoardTab}); when it resolves WITH one, the live
+   * plugin re-registers the same key and the tab upgrades in place.
+   */
+  private reviewWhiteboardTabRegistered = false;
 
   /** True while the overlay renders a PAST session (review data set, no live call). */
   public get IsReviewing(): boolean {
@@ -405,6 +414,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
 
   /** Registers one surface tab per active channel plugin (key/title/icon from the plugin). */
   private registerChannelTabs(channels: BaseRealtimeChannelClient[]): void {
+    this.cleanupStaleReviewBoardTab(channels);
     for (const plugin of channels) {
       this.RegisterChannelTab({
         Key: plugin.ChannelName,
@@ -414,6 +424,28 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       });
     }
     this.cdr.markForCheck();
+  }
+
+  /**
+   * REVIEW→LIVE continuation edge: when the resumed live session resolves its channel set
+   * WITHOUT a Whiteboard channel, the review-registered read-only board tab is now a dead
+   * surface — remove it (Activity regains focus if it was active). When the set HAS a
+   * Whiteboard channel, the plugin registration above upgrades the same tab key in place,
+   * so the review flag is simply released. Review ARTIFACT tabs are deliberately kept —
+   * they are wanted carryover into the live session.
+   */
+  private cleanupStaleReviewBoardTab(channels: BaseRealtimeChannelClient[]): void {
+    if (!this.reviewWhiteboardTabRegistered) {
+      return;
+    }
+    if (ShouldRemoveReviewWhiteboardTab(this.voice.IsActive, this.reviewWhiteboardTabRegistered, channels)) {
+      this.surfaceTabs?.RemoveTab('Whiteboard');
+      // Also drop a still-queued review registration (panel not rendered yet — rare but possible).
+      this.pendingChannelTabs = this.pendingChannelTabs.filter(r => !(r.Key === 'Whiteboard' && r.Content));
+      this.reviewWhiteboardTabRegistered = false;
+    } else if (channels.some(c => c.ChannelName === 'Whiteboard')) {
+      this.reviewWhiteboardTabRegistered = false; // live plugin owns the tab now (upgraded in place)
+    }
   }
 
   /** Forwards channel registrations that arrived before the panel existed. */
@@ -572,7 +604,17 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       Icon: 'fa-solid fa-chalkboard',
       Content: this.reviewBoardTpl
     });
+    this.reviewWhiteboardTabRegistered = true;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * A working delegation card's ✕ asked to cancel that delegated run — EXPLICIT user
+   * intent (barge-in never cancels work, by deliberate policy). The service calls the
+   * server cancel channel and flips the card to a failed "Cancelled by user" result.
+   */
+  public OnCancelDelegation(callId: string): void {
+    void this.voice.CancelDelegation(callId);
   }
 
   /** Minimizes the live call (it stays running) and asks the host to open the record. */

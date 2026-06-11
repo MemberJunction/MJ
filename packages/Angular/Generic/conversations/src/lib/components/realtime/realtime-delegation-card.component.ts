@@ -43,6 +43,15 @@ export class RealtimeDelegationCardComponent {
   /** Emitted when a "View" artifact chip is clicked (the overlay focuses the artifact's tab). */
   @Output() OpenArtifactRequested = new EventEmitter<ParsedDelegationArtifact>();
 
+  /**
+   * Emitted with the call's ID when the WORKING card's ✕ cancel affordance is clicked —
+   * EXPLICIT user intent to kill the in-flight delegated run (by deliberate host policy,
+   * barge-in alone never cancels delegations; only this button does). The overlay routes
+   * it to `VoiceSessionService.CancelDelegation`, which flips this card to a failed
+   * "Cancelled by user" result.
+   */
+  @Output() CancelRequested = new EventEmitter<string>();
+
   /** Whether the done chip is expanded inline to show the full result text. */
   public Expanded = false;
 
@@ -67,6 +76,14 @@ export class RealtimeDelegationCardComponent {
     event.stopPropagation();
     if (this.Card.RunID) {
       this.OpenRunRequested.emit(this.Card.RunID);
+    }
+  }
+
+  /** Emits the cancel request for this (still-working) delegation. */
+  public CancelWork(event: MouseEvent): void {
+    event.stopPropagation();
+    if (!this.Card.Done) {
+      this.CancelRequested.emit(this.Card.CallID);
     }
   }
 

@@ -660,4 +660,267 @@ describe('RealtimeSessionRunner', () => {
             expect(result.ErrorMessage).toContain('close failed');
         });
     });
+
+    // ── Delegated-run progress narration (server-bridged B3) ─────────
+
+    describe('delegated-run progress narration', () => {
+        /** Mock session that ALSO implements the optional narration capabilities. */
+        class NarratingMockSession extends MockRealtimeSession {
+            public ContextNotes: string[] = [];
+            public SpokenUpdates: string[] = [];
+            SendContextNote(text: string): void { this.ContextNotes.push(text); }
+            RequestSpokenUpdate(instructions: string): void { this.SpokenUpdates.push(instructions); }
+        }
+
+        interface NarrationHarness {
+            session: NarratingMockSession;
+            deps: RealtimeSessionRunnerDeps;
+            /** Resolves the hanging delegate (the delegated run "finishes"). */
+            finishDelegate: (result?: Partial<DelegatedResult>) => void;
+            /** The OnProgress callback the runner threaded into the delegate request. */
+            progress: () => NonNullable<DelegateToTargetRequest['OnProgress']>;
+        }
+
+        /** Harness whose delegate HANGS until the test finishes it, capturing the threaded OnProgress. */
+        function buildNarrationHarness(overrides: Partial<RealtimeSessionRunnerDeps> = {}): NarrationHarness {
+            const session = new NarratingMockSession();
+            const model = new MockRealtimeModel(session);
+            let request: DelegateToTargetRequest | null = null;
+            let resolveDelegate: ((r: DelegatedResult) => void) | null = null;
+
+            const deps: RealtimeSessionRunnerDeps = {
+                Model: model,
+                SessionParams: { Model: 'mock-realtime', SystemPrompt: 'You are the voice for Sage.' },
+                DelegateToTarget: vi.fn(
+                    (req: DelegateToTargetRequest) =>
+                        new Promise<DelegatedResult>((resolve) => {
+                            request = req;
+                            resolveDelegate = resolve;
+                        })
+                ),
+                ExecuteTool: vi.fn(async (call: RealtimeToolCall): Promise<ToolExecutionResult> => ({
+                    CallID: call.CallID, Success: true, Output: 'tool-ok'
+                })),
+                PersistTranscript: vi.fn(async () => undefined),
+                CheckpointUsage: vi.fn(async () => undefined),
+                ...overrides
+            };
+
+            return {
+                session,
+                deps,
+                finishDelegate: (result = {}) =>
+                    resolveDelegate?.({ CallID: request?.CallID ?? 'c1', Success: true, Output: 'done', ...result }),
+                progress: () => {
+                    if (!request?.OnProgress) {
+                        throw new Error('the runner did not thread OnProgress into the delegate request');
+                    }
+                    return request.OnProgress;
+                }
+            };
+        }
+
+        /** Starts the runner and fires one invoke-target tool call whose delegate hangs. */
+        async function startWithHangingDelegation(h: NarrationHarness): Promise<RealtimeSessionRunner> {
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+            h.session.fireToolCall({ CallID: 'call-1', ToolName: INVOKE_TARGET_AGENT_TOOL_NAME, Arguments: '{"request":"work"}' });
+            await Promise.resolve(); // let the async tool-call handler reach the hanging delegate
+            await Promise.resolve();
+            return runner;
+        }
+
+        const significant = (message: string): Parameters<NonNullable<DelegateToTargetRequest['OnProgress']>>[0] =>
+            ({ step: 'prompt_execution', message });
+
+        it('threads OnProgress into the delegate request and injects EVERY significant event as a context note', async () => {
+            vi.useFakeTimers();
+            const h = buildNarrationHarness();
+            const runner = await startWithHangingDelegation(h);
+
+            h.progress()(significant('Analyzing the request'));
+            h.progress()({ step: 'action_execution', message: 'Running the query', percentage: 40 });
+
+            expect(h.session.ContextNotes).toEqual([
+                '[delegated-agent progress] Analyzing the request',
+                '[delegated-agent progress] Running the query'
+            ]);
+
+            h.finishDelegate();
+            await runner.Stop();
+        });
+
+        it('drops insignificant steps (initialization noise) — no note, no spoken update', async () => {
+            vi.useFakeTimers();
+            const h = buildNarrationHarness();
+            const runner = await startWithHangingDelegation(h);
+
+            h.progress()({ step: 'initialization', message: 'warming up' });
+            h.progress()({ step: 'finalization', message: 'cleaning up' });
+            await vi.advanceTimersByTimeAsync(30000);
+
+            expect(h.session.ContextNotes).toEqual([]);
+            expect(h.session.SpokenUpdates).toEqual([]);
+
+            h.finishDelegate();
+            await runner.Stop();
+        });
+
+        it('speaks the FIRST update no earlier than ~5s into the burst, with the digest aggregated', async () => {
+            vi.useFakeTimers();
+            const h = buildNarrationHarness();
+            const runner = await startWithHangingDelegation(h);
+
+            h.progress()(significant('Analyzing the request'));
+            h.progress()(significant('Gathering data'));
+
+            await vi.advanceTimersByTimeAsync(4999);
+            expect(h.session.SpokenUpdates).toEqual([]);
+
+            await vi.advanceTimersByTimeAsync(1);
+            expect(h.session.SpokenUpdates).toHaveLength(1);
+            expect(h.session.SpokenUpdates[0]).toContain('Analyzing the request → Gathering data');
+
+            h.finishDelegate();
+            await runner.Stop();
+        });
+
+        it('spaces SUBSEQUENT updates at >=8s and aggregates the flood between them', async () => {
+            vi.useFakeTimers();
+            const h = buildNarrationHarness();
+            const runner = await startWithHangingDelegation(h);
+
+            h.progress()(significant('Step one'));
+            await vi.advanceTimersByTimeAsync(5000); // first update fires
+            expect(h.session.SpokenUpdates).toHaveLength(1);
+
+            h.progress()(significant('Step two'));
+            h.progress()(significant('Step three'));
+            await vi.advanceTimersByTimeAsync(7999);
+            expect(h.session.SpokenUpdates).toHaveLength(1); // spacing floor not reached
+
+            await vi.advanceTimersByTimeAsync(1);
+            expect(h.session.SpokenUpdates).toHaveLength(2);
+            expect(h.session.SpokenUpdates[1]).toContain('Step two → Step three');
+
+            h.finishDelegate();
+            await runner.Stop();
+        });
+
+        it('uses the documented built-in FIRST-PERSON fallback wording when no template is supplied', async () => {
+            vi.useFakeTimers();
+            const h = buildNarrationHarness();
+            const runner = await startWithHangingDelegation(h);
+
+            h.progress()(significant('Crunching the numbers'));
+            await vi.advanceTimersByTimeAsync(5000);
+
+            const spoken = h.session.SpokenUpdates[0];
+            expect(spoken).toContain('Crunching the numbers');
+            expect(spoken).toContain('FIRST PERSON');
+            expect(spoken).toContain('spoken update #1');
+
+            h.finishDelegate();
+            await runner.Stop();
+        });
+
+        it('substitutes the DB template ({{ progressMessage }} / {{ updateNumber }}) when supplied', async () => {
+            vi.useFakeTimers();
+            const h = buildNarrationHarness({
+                NarrationInstructionsTemplate: 'Update {{ updateNumber }}: narrate "{{ progressMessage }}" briefly.'
+            });
+            const runner = await startWithHangingDelegation(h);
+
+            h.progress()(significant('Loading accounts'));
+            await vi.advanceTimersByTimeAsync(5000);
+
+            expect(h.session.SpokenUpdates).toEqual(['Update 1: narrate "Loading accounts" briefly.']);
+
+            h.finishDelegate();
+            await runner.Stop();
+        });
+
+        it('feature-detects the optional capabilities — a session WITHOUT them narrates nothing and never throws', async () => {
+            vi.useFakeTimers();
+            // Build a harness whose session is the PLAIN mock (no SendContextNote / RequestSpokenUpdate).
+            const plainSession = new MockRealtimeSession();
+            let request: DelegateToTargetRequest | null = null;
+            let resolveDelegate: ((r: DelegatedResult) => void) | null = null;
+            const deps: RealtimeSessionRunnerDeps = {
+                Model: new MockRealtimeModel(plainSession),
+                SessionParams: { Model: 'mock-realtime', SystemPrompt: 'voice' },
+                DelegateToTarget: vi.fn(
+                    (req: DelegateToTargetRequest) =>
+                        new Promise<DelegatedResult>((resolve) => {
+                            request = req;
+                            resolveDelegate = resolve;
+                        })
+                ),
+                ExecuteTool: vi.fn(),
+                PersistTranscript: vi.fn(async () => undefined),
+                CheckpointUsage: vi.fn(async () => undefined)
+            };
+            const runner = new RealtimeSessionRunner(deps);
+            await runner.Start();
+            plainSession.fireToolCall({ CallID: 'c1', ToolName: INVOKE_TARGET_AGENT_TOOL_NAME, Arguments: '{}' });
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(() => request?.OnProgress?.(significant('progress on a capability-less provider'))).not.toThrow();
+            await vi.advanceTimersByTimeAsync(30000); // no timer should have produced anything
+
+            resolveDelegate?.({ CallID: 'c1', Success: true, Output: 'done' });
+            await runner.Stop();
+        });
+
+        it('cancels a pending spoken update when the delegation finishes first (the result is about to be voiced)', async () => {
+            vi.useFakeTimers();
+            const h = buildNarrationHarness();
+            const runner = await startWithHangingDelegation(h);
+
+            h.progress()(significant('Almost done'));
+            h.finishDelegate(); // result lands BEFORE the 5s anchor
+            await Promise.resolve(); // let the delegation's finally (narration cancel) settle
+            await Promise.resolve();
+            await vi.advanceTimersByTimeAsync(30000);
+
+            expect(h.session.SpokenUpdates).toEqual([]);
+            expect(h.session.SentToolResults).toHaveLength(1); // the real result was still relayed
+
+            await runner.Stop();
+        });
+
+        it('cancels a pending spoken update on barge-in (the user took the floor)', async () => {
+            vi.useFakeTimers();
+            const h = buildNarrationHarness();
+            const runner = await startWithHangingDelegation(h);
+
+            h.progress()(significant('Working on it'));
+            h.session.fireInterruption(); // barge-in — also aborts the broker's in-flight controller
+            await vi.advanceTimersByTimeAsync(30000);
+
+            expect(h.session.SpokenUpdates).toEqual([]);
+
+            h.finishDelegate();
+            await runner.Stop();
+        });
+
+        it('numbers updates across the burst (the template sees update 2 on the second utterance)', async () => {
+            vi.useFakeTimers();
+            const h = buildNarrationHarness({
+                NarrationInstructionsTemplate: '#{{ updateNumber }}: {{ progressMessage }}'
+            });
+            const runner = await startWithHangingDelegation(h);
+
+            h.progress()(significant('one'));
+            await vi.advanceTimersByTimeAsync(5000);
+            h.progress()(significant('two'));
+            await vi.advanceTimersByTimeAsync(8000);
+
+            expect(h.session.SpokenUpdates).toEqual(['#1: one', '#2: two']);
+
+            h.finishDelegate();
+            await runner.Stop();
+        });
+    });
 });

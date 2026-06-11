@@ -41,7 +41,8 @@
             [Card]="item.Card"
             [DevMode]="DevMode"
             (OpenRunRequested)="OpenRunRequested.emit($event)"
-            (OpenArtifactRequested)="OpenArtifactRequested.emit($event)">
+            (OpenArtifactRequested)="OpenArtifactRequested.emit($event)"
+            (CancelRequested)="CancelRequested.emit($event)">
           </mj-realtime-delegation-card>
           @if (ShowsLiveNote(item)) {
             <!-- Ephemeral narration: latest only, never persisted, fades with completion -->

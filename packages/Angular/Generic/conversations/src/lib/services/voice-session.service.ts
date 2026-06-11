@@ -13,7 +13,8 @@ import {
   RealtimeClientError,
   RealtimeClientState,
   RealtimeClientToolCall,
-  RealtimeClientTranscript
+  RealtimeClientTranscript,
+  RealtimeClientUsage
 } from '@memberjunction/ai-realtime-client';
 import { BuildNarrationInstructions } from './narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact } from './delegation-result-parser';
@@ -343,6 +344,24 @@ export class VoiceSessionService {
   private inFlightCallIds = new Set<string>();
   /** Timer for the deferred narration; cancelled when the delegation result lands first. */
   private narrationTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Call ids the USER explicitly cancelled via {@link CancelDelegation} /
+   * {@link CancelInFlightDelegations}. Their cards were already flipped to the
+   * "Cancelled by user" failed result, so when the original tool mutation later resolves
+   * with the aborted run's outcome, {@link emitDelegationResult} skips the duplicate card
+   * emission (the model still receives the tool result). Cleared at teardown.
+   */
+  private cancelledCallIds = new Set<string>();
+
+  // ── Usage telemetry relay (B7) ─────────────────────────────────────────────
+  /** Debounce window for relaying accumulated usage deltas to the server. */
+  private static readonly UsageFlushDebounceMs = 10000;
+  /** Accumulated input-token delta since the last flush. */
+  private pendingUsageInput = 0;
+  /** Accumulated output-token delta since the last flush. */
+  private pendingUsageOutput = 0;
+  /** Pending debounced usage flush; also force-flushed at teardown. */
+  private usageFlushTimer: ReturnType<typeof setTimeout> | null = null;
   /** Active push-status subscription that feeds delegation progress; cleared on teardown. */
   private delegationProgressSub: Subscription | null = null;
   /** Timestamp (ms) of the last narration we triggered; 0 = never. */
@@ -855,11 +874,18 @@ export class VoiceSessionService {
     client.OnError((error: RealtimeClientError) => {
       console.error('[VoiceSession] Provider error event:', error);
     });
+    // Usage telemetry: accumulate the driver's per-response token DELTAS and relay them to
+    // the server (onto the co-agent AIPromptRun) debounced + once at teardown. Providers
+    // without usage events simply never emit — registering is always safe.
+    client.OnUsage((usage: RealtimeClientUsage) => this.onUsageDelta(usage));
     // TRUE BARGE-IN (user input cut off active model output — the driver already stopped
     // the speech): the user took the floor, so any pending/queued progress narration is
     // stale — cancel it; the next progress event re-schedules at the session-global pace.
-    // Delegated server-side runs deliberately keep running (barge-in kills SPEECH, not
-    // work — cancelling relayed in-flight runs needs a server cancel channel; deferred).
+    // HOST POLICY (deliberate): barge-in does NOT abort in-flight delegated runs — the
+    // narration design EXPECTS the user to keep talking while delegated work runs, so
+    // killing the work on speech would cancel exactly the jobs the user asked for.
+    // Explicit cancellation is a separate, intentional act: the overlay's per-card ✕
+    // calls {@link CancelDelegation} (server cancel channel) instead.
     client.OnInterruption(() => {
       this.cancelPendingNarration();
     });
@@ -1031,6 +1057,12 @@ export class VoiceSessionService {
     // and any progress still in the PubSub pipe for this call is stale.
     this.inFlightCallIds.delete(callId);
     this.cancelPendingNarration();
+    if (this.cancelledCallIds.delete(callId)) {
+      // The user explicitly cancelled this call: its card already flipped to the
+      // "Cancelled by user" failed result, so the aborted run's late outcome must not
+      // overwrite it. (The tool result still flows back to the model via the caller.)
+      return;
+    }
     const parsed = ParseDelegationResultJson(resultJson);
     this._delegationResult$.next({
       CallID: callId,
@@ -1039,6 +1071,100 @@ export class VoiceSessionService {
       RunID: parsed.RunID,
       Artifacts: parsed.Artifacts
     });
+  }
+
+  // ── Explicit delegation cancellation (server cancel channel) ───────────────
+
+  /**
+   * Cancels ONE in-flight delegated tool call — the overlay's per-card ✕ affordance.
+   *
+   * EXPLICIT USER INTENT ONLY (deliberate host policy): true barge-in never aborts
+   * delegations — the narration design expects the user to talk while delegated work runs.
+   * Calls the `CancelRealtimeSessionTool` mutation (ownership-gated server-side); when the
+   * server reports it aborted the run, the card is flipped immediately to a FAILED
+   * "Cancelled by user" result and the eventual late result from the aborted run is
+   * suppressed (see {@link emitDelegationResult}).
+   *
+   * @returns `true` when the server aborted the in-flight run; `false` when there was
+   *   nothing to cancel (the work finished first — its real result is already racing in)
+   *   or the mutation failed (logged, never thrown).
+   */
+  public async CancelDelegation(callId: string): Promise<boolean> {
+    if (!this.agentSessionId || !this.inFlightCallIds.has(callId)) {
+      return false;
+    }
+    const aborted = await this.cancelSessionTool(callId);
+    if (aborted <= 0) {
+      return false; // finished first / nothing in flight server-side — let the real result land
+    }
+    this.surfaceUserCancellation(callId);
+    return true;
+  }
+
+  /**
+   * Cancels EVERY in-flight delegated tool call for the active session (callId-less form of
+   * the `CancelRealtimeSessionTool` mutation). Exposed for host policies that need a
+   * sweep-cancel (e.g. an explicit "stop everything" affordance) — NOT wired to barge-in,
+   * by the same deliberate policy as {@link CancelDelegation}.
+   *
+   * @returns The number of in-flight runs the server aborted (0 when nothing was tracked
+   *   in flight client-side, nothing was in flight server-side, or the mutation failed).
+   */
+  public async CancelInFlightDelegations(): Promise<number> {
+    if (!this.agentSessionId || this.inFlightCallIds.size === 0) {
+      return 0;
+    }
+    const aborted = await this.cancelSessionTool(null);
+    if (aborted <= 0) {
+      return 0;
+    }
+    for (const callId of [...this.inFlightCallIds]) {
+      this.surfaceUserCancellation(callId);
+    }
+    return aborted;
+  }
+
+  /** Flips a cancelled call's card to the failed "Cancelled by user" result and suppresses the late real result. */
+  private surfaceUserCancellation(callId: string): void {
+    this.inFlightCallIds.delete(callId);
+    this.cancelledCallIds.add(callId);
+    this.cancelPendingNarration();
+    this._delegationResult$.next({
+      CallID: callId,
+      Success: false,
+      Output: 'Cancelled by user'
+    });
+  }
+
+  /**
+   * Calls the `CancelRealtimeSessionTool` mutation and unwraps its structured
+   * `{ AbortedCount, Success, ErrorMessage }` result. Returns the aborted count —
+   * 0 on a structured failure or a thrown transport error (both logged, never thrown).
+   */
+  private async cancelSessionTool(callId: string | null): Promise<number> {
+    try {
+      const mutation = `
+        mutation CancelRealtimeSessionTool($agentSessionId: String!, $callId: String) {
+          CancelRealtimeSessionTool(agentSessionId: $agentSessionId, callId: $callId) {
+            AbortedCount
+            Success
+            ErrorMessage
+          }
+        }
+      `;
+      const result = await this.gql().ExecuteGQL(mutation, { agentSessionId: this.agentSessionId, callId });
+      const payload = result?.CancelRealtimeSessionTool as
+        | { AbortedCount?: number; Success?: boolean; ErrorMessage?: string }
+        | undefined;
+      if (!payload?.Success) {
+        console.warn(`[VoiceSession] Cancel reported failure: ${payload?.ErrorMessage ?? 'unknown error'}`);
+        return 0;
+      }
+      return typeof payload.AbortedCount === 'number' ? payload.AbortedCount : 0;
+    } catch (error) {
+      console.error('[VoiceSession] Failed to cancel in-flight delegation(s):', error);
+      return 0;
+    }
   }
 
   // ── Session minting (GraphQL) ──────────────────────────────────────────────
@@ -1156,6 +1282,77 @@ export class VoiceSessionService {
     } catch (error) {
       console.error('[VoiceSession] Failed to relay transcript:', error);
     }
+  }
+
+  // ── Usage telemetry relay (B7) ─────────────────────────────────────────────
+
+  /**
+   * Accumulates one usage DELTA from the realtime client (per-response token counts —
+   * the `OnUsage` contract shape) and schedules the debounced relay. Negative / non-finite
+   * values are clamped to 0; an all-zero delta is dropped without arming the timer.
+   */
+  private onUsageDelta(usage: RealtimeClientUsage): void {
+    const input = this.clampUsageDelta(usage.InputTokens);
+    const output = this.clampUsageDelta(usage.OutputTokens);
+    if (input === 0 && output === 0) {
+      return;
+    }
+    this.pendingUsageInput += input;
+    this.pendingUsageOutput += output;
+    if (!this.usageFlushTimer) {
+      this.usageFlushTimer = setTimeout(() => {
+        this.usageFlushTimer = null;
+        void this.flushPendingUsage();
+      }, VoiceSessionService.UsageFlushDebounceMs);
+    }
+  }
+
+  /** Clamps a driver-reported token delta: undefined / negative / non-finite become 0. */
+  private clampUsageDelta(value: number | undefined): number {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  }
+
+  /**
+   * Relays the accumulated usage deltas to the server via `RelayRealtimeUsage` (which
+   * accumulates them onto the co-agent `AIPromptRun`). Best-effort: a failed relay
+   * re-accumulates the captured deltas so the next debounce / teardown flush retries —
+   * usage telemetry must never disturb the live call.
+   *
+   * @param agentSessionId Optional EXPLICIT session id (the teardown flush runs while the
+   *   live id is still set, but accepts it as a parameter for symmetry with channel saves).
+   */
+  private async flushPendingUsage(agentSessionId?: string | null): Promise<void> {
+    const sessionId = agentSessionId ?? this.agentSessionId;
+    const input = this.pendingUsageInput;
+    const output = this.pendingUsageOutput;
+    if (!sessionId || (input === 0 && output === 0)) {
+      return;
+    }
+    this.pendingUsageInput = 0;
+    this.pendingUsageOutput = 0;
+    try {
+      const mutation = `
+        mutation RelayRealtimeUsage($agentSessionId: String!, $inputTokens: Int!, $outputTokens: Int!) {
+          RelayRealtimeUsage(agentSessionId: $agentSessionId, inputTokens: $inputTokens, outputTokens: $outputTokens)
+        }
+      `;
+      await this.gql().ExecuteGQL(mutation, { agentSessionId: sessionId, inputTokens: input, outputTokens: output });
+    } catch (error) {
+      console.error('[VoiceSession] Failed to relay usage telemetry:', error);
+      // Re-accumulate so a later debounce / the teardown flush retries the same deltas.
+      this.pendingUsageInput += input;
+      this.pendingUsageOutput += output;
+    }
+  }
+
+  /** Cancels the pending debounced usage flush and zeroes the accumulators (teardown tail). */
+  private resetUsageRelay(): void {
+    if (this.usageFlushTimer) {
+      clearTimeout(this.usageFlushTimer);
+      this.usageFlushTimer = null;
+    }
+    this.pendingUsageInput = 0;
+    this.pendingUsageOutput = 0;
   }
 
   // ── Delegated-run progress streaming ───────────────────────────────────────
@@ -1329,6 +1526,7 @@ export class VoiceSessionService {
     }
     this.cancelPendingNarration();
     this.inFlightCallIds.clear();
+    this.cancelledCallIds.clear();
     this.lastDelegationNarrationAt = 0;
     this.delegationBurstStartedAt = 0;
     this.narrationCount = 0;
@@ -1359,6 +1557,15 @@ export class VoiceSessionService {
       await this.client.Disconnect();
       this.client = null;
     }
+
+    // Final usage flush WHILE the live session id is still set (the relay mutation also
+    // accepts a Closed session, so ordering vs. CloseAgentSession is belt-and-braces).
+    if (this.usageFlushTimer) {
+      clearTimeout(this.usageFlushTimer);
+      this.usageFlushTimer = null;
+    }
+    await this.flushPendingUsage(this.agentSessionId);
+    this.resetUsageRelay();
 
     if (closeServerSession && this.agentSessionId) {
       await this.closeServerSession(this.agentSessionId);

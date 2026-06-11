@@ -24,13 +24,14 @@
  *
  * @module @memberjunction/server
  */
-import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
+import { Resolver, Mutation, Arg, Ctx, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
+    MJAIPromptRunEntity,
     MJArtifactEntity,
     MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
@@ -81,6 +82,7 @@ const REALTIME_AGENT_TYPE_NAME = 'Realtime';
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
+const PROMPT_RUN_ENTITY = 'MJ: AI Prompt Runs';
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
 const SESSION_CHANNEL_ENTITY = 'MJ: AI Agent Session Channels';
 const ARTIFACT_ENTITY = 'MJ: Artifacts';
@@ -226,6 +228,30 @@ export class SaveSessionChannelArtifactResult {
      */
     @Field(() => Boolean)
     ConversationDetailLinked: boolean;
+}
+
+/**
+ * Result of {@link RealtimeClientSessionResolver.CancelRealtimeSessionTool} — a structured
+ * success/failure envelope, mirroring {@link SaveSessionChannelArtifactResult}: tolerated
+ * problems (an unexpected registry error) come back as `Success: false`, never a throw, while
+ * authn/ownership violations still throw like the sibling mutations.
+ */
+@ObjectType()
+export class CancelRealtimeSessionToolResult {
+    /**
+     * How many in-flight delegations were aborted. `0` is a legitimate SUCCESS outcome — the
+     * work the user wanted dead may simply have finished (or never started) already.
+     */
+    @Field(() => Int)
+    AbortedCount: number;
+
+    /** True when the cancel request was processed (even when nothing was in flight). */
+    @Field(() => Boolean)
+    Success: boolean;
+
+    /** Human-readable failure reason. Null on success. */
+    @Field(() => String, { nullable: true })
+    ErrorMessage?: string;
 }
 
 /**
@@ -425,10 +451,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * Persist a transcript turn (user or assistant) as a `Conversation Detail` on the session's
      * conversation. Ownership-gated; heartbeats the session on success.
      *
-     * The co-agent observability `AIAgentRun`/`AIPromptRun` are now created at session start (see
-     * {@link RealtimeClientSessionResolver.StartRealtimeClientSession}) and finalized on close.
-     * Still deferred: relaying incremental usage telemetry onto the `AIPromptRun` (RelayRealtimeUsage)
-     * and linking persisted transcript turns to those runs.
+     * The co-agent observability `AIAgentRun`/`AIPromptRun` are created at session start (see
+     * {@link RealtimeClientSessionResolver.StartRealtimeClientSession}) and finalized on close;
+     * incremental usage telemetry lands on the `AIPromptRun` via
+     * {@link RealtimeClientSessionResolver.RelayRealtimeUsage}. Still deferred: linking persisted
+     * transcript turns to those runs.
      *
      * @returns `true` when the transcript turn was persisted.
      */
@@ -448,6 +475,147 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
         await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
         return true;
+    }
+
+    /**
+     * Cancel in-flight relayed tool delegations for a session — the CLIENT-DIRECT cancel channel.
+     *
+     * The browser calls this on an EXPLICIT user cancel (the call overlay's per-card ✕ — a
+     * deliberate host policy: true barge-in alone never aborts delegations, since the narration
+     * design expects the user to keep talking while delegated work runs). The service-side
+     * in-flight registry aborts the matching `AbortController`(s), which fires the delegated
+     * run's `cancellationToken`; the original `ExecuteRealtimeSessionTool` mutation then resolves
+     * with the run's cancelled/failed result through its normal path.
+     *
+     * Ownership-gated like the sibling mutations. A **Closed** session is accepted — a cancel can
+     * legitimately race teardown, and aborting stragglers is exactly what the caller wants then.
+     *
+     * @param callId When supplied, only the delegation for that provider call id is aborted;
+     *   omit to abort ALL in-flight delegations for the session.
+     * @returns A structured {@link CancelRealtimeSessionToolResult}. Tolerant: an unknown call id
+     *   or a session with nothing in flight is `Success: true, AbortedCount: 0` (the work may
+     *   simply have finished already); an unexpected registry error is a structured failure.
+     */
+    @Mutation(() => CancelRealtimeSessionToolResult)
+    async CancelRealtimeSessionTool(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Ctx() { userPayload, providers }: AppContext,
+        @Arg('callId', () => String, { nullable: true }) callId?: string,
+    ): Promise<CancelRealtimeSessionToolResult> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        try {
+            const aborted = this.clientSessionService.CancelInFlightDelegations(agentSessionId, callId);
+            return { AbortedCount: aborted, Success: true };
+        } catch (error) {
+            const message = `CancelRealtimeSessionTool failed for session ${agentSessionId}: ${(error as Error).message}`;
+            LogError(message);
+            return { AbortedCount: 0, Success: false, ErrorMessage: message };
+        }
+    }
+
+    /**
+     * Relay incremental usage telemetry from the browser's provider socket onto the co-agent's
+     * observability `AIPromptRun` (the run created at session start).
+     *
+     * The browser accumulates the realtime client's `OnUsage` token DELTAS and flushes them here
+     * debounced (~10s) plus once at teardown; this mutation ACCUMULATES the deltas onto the
+     * prompt run's `TokensPrompt` / `TokensCompletion` (and recomputes `TokensUsed`). Status is
+     * deliberately untouched — `FinalizeCoAgentRun` keeps stamping Success/Completed at close,
+     * and a post-close flush still lands (accumulation has no Status gate).
+     *
+     * Ownership-gated like the sibling mutations; a **Closed** session is accepted (the final
+     * teardown flush can land after `CloseAgentSession`). Everything PAST the ownership gate is
+     * best-effort and tolerant: a missing/malformed session config, an absent `promptRunID`
+     * (observability creation was skipped), a failed load, or a failed save all log and return
+     * `false` — usage relay must never break a live call.
+     *
+     * @param inputTokens Input-token DELTA to add (negative/non-finite values are clamped to 0).
+     * @param outputTokens Output-token DELTA to add (negative/non-finite values are clamped to 0).
+     * @returns `true` when the accumulated usage was persisted; `false` on any tolerated failure.
+     */
+    @Mutation(() => Boolean)
+    async RelayRealtimeUsage(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Arg('inputTokens', () => Int) inputTokens: number,
+        @Arg('outputTokens', () => Int) outputTokens: number,
+        @Ctx() { userPayload, providers }: AppContext,
+    ): Promise<boolean> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+
+        const inputDelta = this.clampTokenDelta(inputTokens);
+        const outputDelta = this.clampTokenDelta(outputTokens);
+        if (inputDelta === 0 && outputDelta === 0) {
+            return true; // nothing to add — a no-op flush is a success, not a failure
+        }
+
+        const promptRunID = this.readPromptRunID(session);
+        if (!promptRunID) {
+            return false; // no observability prompt run for this session — logged in the helper
+        }
+        return this.accumulatePromptRunUsage(promptRunID, inputDelta, outputDelta, contextUser, provider);
+    }
+
+    /** Clamps a relayed token delta: negative / non-finite values become 0. */
+    private clampTokenDelta(value: number): number {
+        return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    }
+
+    /**
+     * Reads the co-agent `AIPromptRun` id from the session config WITHOUT the relay path's
+     * throw-on-missing-target semantics — usage relay is best-effort, so a missing/malformed
+     * config or absent id just logs and returns `null`.
+     */
+    private readPromptRunID(session: MJAIAgentSessionEntity): string | null {
+        try {
+            const config = this.readSessionConfig(session);
+            if (config.promptRunID) {
+                return config.promptRunID;
+            }
+            LogStatus(
+                `RelayRealtimeUsage: session ${session.ID} has no co-agent promptRunID (observability run ` +
+                    'creation was skipped or failed) — usage delta dropped.',
+            );
+            return null;
+        } catch {
+            LogError(`RelayRealtimeUsage: session ${session.ID} has no parseable config — usage delta dropped.`);
+            return null;
+        }
+    }
+
+    /**
+     * Loads the co-agent `AIPromptRun` and ACCUMULATES the relayed deltas onto
+     * `TokensPrompt` / `TokensCompletion`, recomputing `TokensUsed` as their sum. Best-effort:
+     * load/save failures log and return `false`, never throw.
+     */
+    private async accumulatePromptRunUsage(
+        promptRunID: string,
+        inputDelta: number,
+        outputDelta: number,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        try {
+            const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>(PROMPT_RUN_ENTITY, contextUser);
+            if (!(await promptRun.Load(promptRunID))) {
+                LogError(`RelayRealtimeUsage: co-agent prompt run ${promptRunID} not found — usage delta dropped.`);
+                return false;
+            }
+            promptRun.TokensPrompt = (promptRun.TokensPrompt ?? 0) + inputDelta;
+            promptRun.TokensCompletion = (promptRun.TokensCompletion ?? 0) + outputDelta;
+            promptRun.TokensUsed = (promptRun.TokensPrompt ?? 0) + (promptRun.TokensCompletion ?? 0);
+            const saved = await promptRun.Save();
+            if (!saved) {
+                LogError(
+                    `RelayRealtimeUsage: prompt run ${promptRunID} save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+            }
+            return saved;
+        } catch (error) {
+            LogError(`RelayRealtimeUsage: usage accumulation failed for prompt run ${promptRunID}: ${(error as Error).message}`);
+            return false;
+        }
     }
 
     /**

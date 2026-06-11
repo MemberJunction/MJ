@@ -43,13 +43,15 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
-// --- Mock the client-direct service (prepare + relayed-tool execution) ---
+// --- Mock the client-direct service (prepare + relayed-tool execution + cancel registry) ---
 const prepareClientSessionMock = vi.fn();
 const executeRelayedToolMock = vi.fn();
+const cancelInFlightMock = vi.fn((_agentSessionID: string, _callID?: string): number => 0);
 vi.mock('@memberjunction/ai-agents', () => ({
     RealtimeClientSessionService: class {
         PrepareClientSession = prepareClientSessionMock;
         ExecuteRelayedTool = executeRelayedToolMock;
+        CancelInFlightDelegations = cancelInFlightMock;
     },
 }));
 
@@ -126,6 +128,8 @@ beforeEach(() => {
     hasPermissionMock.mockReset();
     prepareClientSessionMock.mockReset();
     executeRelayedToolMock.mockReset();
+    cancelInFlightMock.mockReset();
+    cancelInFlightMock.mockReturnValue(0);
     createSessionMock.mockReset();
     closeSessionMock.mockClear();
     heartbeatMock.mockClear();
@@ -1846,5 +1850,235 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
 
         expect(result.AgentSessionId).toBe('session-new');
         expect(prepTranscriptArg()).toBeUndefined();
+    });
+});
+
+describe('RealtimeClientSessionResolver.CancelRealtimeSessionTool', () => {
+    it('enforces ownership — rejects (no cancel) when the caller does not own the session', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: 'someone-else' }));
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.CancelRealtimeSessionTool('session-1', makeCtx(), 'call-1'),
+        ).rejects.toThrow(/do not own/i);
+        expect(cancelInFlightMock).not.toHaveBeenCalled();
+    });
+
+    it('throws before any session load when unauthenticated', async () => {
+        const provider = makeProvider(() => makeSessionEntity());
+        currentProvider = provider;
+        const resolver = new RealtimeClientSessionResolver();
+        (resolver as unknown as { GetUserFromPayload: () => unknown }).GetUserFromPayload = () => undefined;
+
+        await expect(resolver.CancelRealtimeSessionTool('session-1', makeCtx())).rejects.toThrow(/not authenticated/i);
+        expect((provider as { GetEntityObject: ReturnType<typeof vi.fn> }).GetEntityObject).not.toHaveBeenCalled();
+        expect(cancelInFlightMock).not.toHaveBeenCalled();
+    });
+
+    it('cancels ONE call when callId is supplied and returns the service count in the structured result', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity());
+        cancelInFlightMock.mockReturnValue(1);
+        const resolver = makeResolver();
+
+        const result = await resolver.CancelRealtimeSessionTool('session-1', makeCtx(), 'call-7');
+
+        expect(result).toEqual({ AbortedCount: 1, Success: true });
+        expect(cancelInFlightMock).toHaveBeenCalledWith('session-1', 'call-7');
+    });
+
+    it('cancels ALL in-flight delegations when callId is omitted', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity());
+        cancelInFlightMock.mockReturnValue(3);
+        const resolver = makeResolver();
+
+        const result = await resolver.CancelRealtimeSessionTool('session-1', makeCtx());
+
+        expect(result).toEqual({ AbortedCount: 3, Success: true });
+        expect(cancelInFlightMock).toHaveBeenCalledWith('session-1', undefined);
+    });
+
+    it('is tolerant — Success with AbortedCount 0 when nothing was in flight (the work may have finished already)', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity());
+        cancelInFlightMock.mockReturnValue(0);
+        const resolver = makeResolver();
+
+        await expect(resolver.CancelRealtimeSessionTool('session-1', makeCtx(), 'call-gone')).resolves.toEqual({
+            AbortedCount: 0,
+            Success: true,
+        });
+    });
+
+    it('accepts a CLOSED session (a cancel can legitimately race teardown)', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity({ Status: 'Closed' }));
+        cancelInFlightMock.mockReturnValue(1);
+        const resolver = makeResolver();
+
+        await expect(resolver.CancelRealtimeSessionTool('session-1', makeCtx())).resolves.toEqual({
+            AbortedCount: 1,
+            Success: true,
+        });
+    });
+
+    it('returns a structured failure (never throws) when the registry abort throws unexpectedly', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity());
+        cancelInFlightMock.mockImplementation(() => {
+            throw new Error('registry exploded');
+        });
+        const resolver = makeResolver();
+
+        const result = await resolver.CancelRealtimeSessionTool('session-1', makeCtx(), 'call-1');
+
+        expect(result.Success).toBe(false);
+        expect(result.AbortedCount).toBe(0);
+        expect(result.ErrorMessage).toContain('registry exploded');
+    });
+});
+
+describe('RealtimeClientSessionResolver.RelayRealtimeUsage', () => {
+    /** Provider routing the session and the co-agent prompt run by entity name. */
+    function makeUsageProvider(opts: {
+        session?: FakeSession;
+        promptRun?: FakeSession;
+    }): { provider: unknown; promptRun: FakeSession } {
+        const session =
+            opts.session ??
+            makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }) });
+        const promptRun = opts.promptRun ?? makeSessionEntity({ ID: 'prompt-run-1', TokensPrompt: null, TokensCompletion: null, TokensUsed: null });
+        const provider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Prompt Runs' ? promptRun : session)),
+        };
+        return { provider, promptRun };
+    }
+
+    it('enforces ownership — rejects when the caller does not own the session', async () => {
+        const { provider, promptRun } = makeUsageProvider({ session: makeSessionEntity({ UserID: 'someone-else' }) });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.RelayRealtimeUsage('session-1', 100, 25, makeCtx()),
+        ).rejects.toThrow(/do not own/i);
+        expect(promptRun.Save).not.toHaveBeenCalled();
+    });
+
+    it('ACCUMULATES the relayed deltas onto TokensPrompt/TokensCompletion and recomputes TokensUsed', async () => {
+        const { provider, promptRun } = makeUsageProvider({
+            promptRun: makeSessionEntity({ ID: 'prompt-run-1', TokensPrompt: 100, TokensCompletion: 40, TokensUsed: 140 }),
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.RelayRealtimeUsage('session-1', 30, 5, makeCtx());
+
+        expect(ok).toBe(true);
+        expect(promptRun.Load).toHaveBeenCalledWith('prompt-run-1');
+        expect(promptRun.TokensPrompt).toBe(130);
+        expect(promptRun.TokensCompletion).toBe(45);
+        expect(promptRun.TokensUsed).toBe(175);
+        expect(promptRun.Save).toHaveBeenCalled();
+    });
+
+    it('treats null token columns as 0 on first accumulation', async () => {
+        const { provider, promptRun } = makeUsageProvider({});
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.RelayRealtimeUsage('session-1', 120, 45, makeCtx());
+
+        expect(ok).toBe(true);
+        expect(promptRun.TokensPrompt).toBe(120);
+        expect(promptRun.TokensCompletion).toBe(45);
+        expect(promptRun.TokensUsed).toBe(165);
+    });
+
+    it('is a successful no-op (no prompt-run load) when both deltas are zero/negative/non-finite', async () => {
+        const { provider, promptRun } = makeUsageProvider({});
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(resolver.RelayRealtimeUsage('session-1', 0, 0, makeCtx())).resolves.toBe(true);
+        await expect(resolver.RelayRealtimeUsage('session-1', -5, -1, makeCtx())).resolves.toBe(true);
+        await expect(resolver.RelayRealtimeUsage('session-1', Number.NaN, 0, makeCtx())).resolves.toBe(true);
+        expect(promptRun.Load).not.toHaveBeenCalled();
+        expect(promptRun.Save).not.toHaveBeenCalled();
+    });
+
+    it('clamps a negative delta to 0 while accumulating the positive one', async () => {
+        const { provider, promptRun } = makeUsageProvider({
+            promptRun: makeSessionEntity({ ID: 'prompt-run-1', TokensPrompt: 10, TokensCompletion: 10, TokensUsed: 20 }),
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.RelayRealtimeUsage('session-1', -50, 7, makeCtx());
+
+        expect(ok).toBe(true);
+        expect(promptRun.TokensPrompt).toBe(10);
+        expect(promptRun.TokensCompletion).toBe(17);
+        expect(promptRun.TokensUsed).toBe(27);
+    });
+
+    it('returns false (tolerant) when the session config carries no promptRunID', async () => {
+        const { provider, promptRun } = makeUsageProvider({
+            session: makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 'target-1' }) }),
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(resolver.RelayRealtimeUsage('session-1', 10, 5, makeCtx())).resolves.toBe(false);
+        expect(promptRun.Save).not.toHaveBeenCalled();
+    });
+
+    it('returns false (tolerant, no throw) when the session config is missing/malformed', async () => {
+        const { provider } = makeUsageProvider({ session: makeSessionEntity({ Config_: '{broken json' }) });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(resolver.RelayRealtimeUsage('session-1', 10, 5, makeCtx())).resolves.toBe(false);
+    });
+
+    it('returns false when the co-agent prompt run cannot be loaded', async () => {
+        const { provider, promptRun } = makeUsageProvider({
+            promptRun: makeSessionEntity({ ID: 'prompt-run-1', Load: vi.fn(async () => false) }),
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(resolver.RelayRealtimeUsage('session-1', 10, 5, makeCtx())).resolves.toBe(false);
+        expect(promptRun.Save).not.toHaveBeenCalled();
+    });
+
+    it('returns false (logged) when the prompt-run save fails', async () => {
+        const { provider } = makeUsageProvider({
+            promptRun: makeSessionEntity({
+                ID: 'prompt-run-1',
+                TokensPrompt: null,
+                TokensCompletion: null,
+                Save: vi.fn(async () => false),
+                LatestResult: { CompleteMessage: 'db down' },
+            }),
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(resolver.RelayRealtimeUsage('session-1', 10, 5, makeCtx())).resolves.toBe(false);
+    });
+
+    it('accepts a CLOSED session (the final teardown flush lands after CloseAgentSession)', async () => {
+        const { provider, promptRun } = makeUsageProvider({
+            session: makeSessionEntity({
+                Status: 'Closed',
+                Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+            }),
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.RelayRealtimeUsage('session-1', 9, 3, makeCtx());
+
+        expect(ok).toBe(true);
+        expect(promptRun.TokensPrompt).toBe(9);
+        expect(promptRun.TokensCompletion).toBe(3);
+        expect(promptRun.TokensUsed).toBe(12);
     });
 });

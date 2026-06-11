@@ -281,3 +281,27 @@
   0% { left: -35%; }
   100% { left: 100%; }
 }
+
+/* ---------- ✕ cancel affordance on the WORKING card (explicit user cancel) ---------- */
+.cancel-work {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cancel-work:hover {
+  color: var(--mj-status-error);
+  border-color: var(--mj-status-error-border, var(--mj-status-error));
+  background: color-mix(in srgb, var(--mj-status-error) 8%, transparent);
+}
+.cancel-work i {
+  font-size: 11px;
+}

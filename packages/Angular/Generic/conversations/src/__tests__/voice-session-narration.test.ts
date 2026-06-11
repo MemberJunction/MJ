@@ -796,6 +796,7 @@ describe('VoiceSessionService — delegation lifecycle (thinking state, results,
       OnTranscript: () => undefined,
       OnToolCall: () => undefined,
       OnError: () => undefined,
+      OnUsage: () => undefined,
       OnInterruption: (handler: () => void) => { interrupt = handler; }
     };
     h.i.wireClientHandlers(wiringClient);

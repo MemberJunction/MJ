@@ -179,6 +179,22 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Removes a tab from the panel (Activity is irremovable; focus falls back to Activity —
+   * see {@link RealtimeSurfaceTabsModel.RemoveTab}). Used by the overlay shell on a
+   * review→live continuation whose live channel set resolved WITHOUT the channel a stale
+   * review tab represents (e.g. no Whiteboard channel → drop the read-only review board tab).
+   *
+   * @returns `true` when a tab was removed.
+   */
+  public RemoveTab(key: string): boolean {
+    const removed = this.Model.RemoveTab(key);
+    if (removed) {
+      this.cdr.markForCheck();
+    }
+    return removed;
+  }
+
+  /**
    * Registers an artifact tab WITHOUT stealing focus (default) — the SESSION REVIEW /
    * resume-carryover path, where a reviewed session's (and its prior legs') history
    * artifacts are surfaced as tabs the user can visit, as opposed to the live

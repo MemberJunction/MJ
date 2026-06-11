@@ -52,7 +52,8 @@
             [ShowCaptions]="ShowCaptions"
             [DevMode]="DevMode"
             (OpenRunRequested)="OnOpenRunRequested($event)"
-            (OpenArtifactRequested)="OnOpenArtifactRequested($event)">
+            (OpenArtifactRequested)="OnOpenArtifactRequested($event)"
+            (CancelRequested)="OnCancelDelegation($event)">
           </mj-realtime-session-thread>
         }
       </div>

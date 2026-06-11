@@ -47,6 +47,9 @@ export class RealtimeSessionThreadComponent implements OnInit, AfterViewChecked,
   /** Re-emitted from a delegation card's "View" artifact chip (focuses the artifact's surface tab). */
   @Output() OpenArtifactRequested = new EventEmitter<ParsedDelegationArtifact>();
 
+  /** Re-emitted from a WORKING delegation card's ✕ cancel affordance (the call's ID). */
+  @Output() CancelRequested = new EventEmitter<string>();
+
   /** Item count at the last change notification, to auto-scroll only when the list grows. */
   private lastItemCount = 0;
   /** Drives auto-scroll: set whenever the list grows. */

@@ -14,6 +14,10 @@
           <span>Open run</span>
         </button>
       }
+      <button type="button" class="cancel-work" (click)="CancelWork($event)"
+              title="Cancel this work" aria-label="Cancel this work">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
     </div>
     <div class="work-card__step">{{ StepLabel }}</div>
     @if (ShowDetailLine) {

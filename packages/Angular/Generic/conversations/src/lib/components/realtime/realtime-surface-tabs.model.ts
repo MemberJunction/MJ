@@ -194,6 +194,31 @@ export class RealtimeSurfaceTabsModel {
     this.Changed$.next();
   }
 
+  /**
+   * Removes the tab with `key`. Rules:
+   *  - the Activity tab is IRREMOVABLE (always the panel's first tab) — removing it is a no-op;
+   *  - an unknown key is a no-op (returns `false`);
+   *  - when the removed tab was focused, focus falls back to the Activity tab;
+   *  - a pending flash on the removed tab is cleaned up so the highlight can't dangle.
+   *
+   * @param key The tab key to remove.
+   * @returns `true` when a tab was removed.
+   */
+  public RemoveTab(key: string): boolean {
+    if (key === RealtimeSurfaceTabsModel.ActivityTabKey || !this.Tabs.some(t => t.Key === key)) {
+      return false;
+    }
+    this.Tabs = this.Tabs.filter(t => t.Key !== key);
+    if (this.ActiveKey === key) {
+      this.ActiveKey = RealtimeSurfaceTabsModel.ActivityTabKey;
+    }
+    if (this.FlashKey === key) {
+      this.FlashKey = null;
+    }
+    this.Changed$.next();
+    return true;
+  }
+
   /** Clears the transient flash highlight (called by the component after a beat). */
   public ClearFlash(): void {
     if (this.FlashKey !== null) {
@@ -201,4 +226,30 @@ export class RealtimeSurfaceTabsModel {
       this.Changed$.next();
     }
   }
+}
+
+/**
+ * Pure decision helper for the REVIEW→LIVE continuation edge: should the overlay REMOVE the
+ * review-registered (template-based, read-only) Whiteboard tab?
+ *
+ * Yes only when ALL hold:
+ *  - a live session is active (the channel set emission belongs to a real session start, not
+ *    the initial/teardown `[]` replay);
+ *  - review mode actually registered a whiteboard tab (otherwise there is nothing stale);
+ *  - the live session's resolved channel set has NO Whiteboard channel — when it HAS one, the
+ *    live plugin re-registers the same tab key and upgrades the pane in place instead.
+ *
+ * Review ARTIFACT tabs are deliberately NOT removed — they are wanted carryover.
+ *
+ * Kept framework-free (like the model) so the rule is unit-testable in isolation.
+ */
+export function ShouldRemoveReviewWhiteboardTab(
+  liveSessionActive: boolean,
+  reviewWhiteboardTabRegistered: boolean,
+  liveChannels: ReadonlyArray<{ ChannelName: string }>
+): boolean {
+  if (!liveSessionActive || !reviewWhiteboardTabRegistered) {
+    return false;
+  }
+  return !liveChannels.some(c => c.ChannelName?.trim().toLowerCase() === 'whiteboard');
 }
