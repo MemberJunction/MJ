@@ -559,7 +559,9 @@ export class DuplicateRecordDetector extends VectorBase {
      * Run vectorization for the entity document's records.
      */
     protected async VectorizeSourceRecords(entityDocument: MJEntityDocumentEntity, contextUser: UserInfo): Promise<void> {
-        const vectorizer = new EntityVectorSyncer();
+        // Thread this detector's provider (request-scoped on the server) down into the
+        // syncer so vectorization rides the same connection instead of the global default
+        const vectorizer = new EntityVectorSyncer(this._provider);
         vectorizer.CurrentUser = contextUser;
 
         const request: VectorizeEntityParams = {
