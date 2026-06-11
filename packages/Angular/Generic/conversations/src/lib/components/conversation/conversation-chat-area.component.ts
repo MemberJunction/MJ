@@ -344,6 +344,37 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() emptyStateConfig: EmptyStateConfig | null = null;
 
+  /**
+   * Activate the `demonstrationSurface` slot layout-mode. Per Matt's 06-10
+   * placement design: when true AND a consumer has projected
+   * `mjChatSlot="demonstrationSurface"`, the chat-content-area restructures
+   * into [stage | conversation-rail] — the stage takes the main pane, the
+   * messages pane shrinks to a side rail (below the stage on mobile). When
+   * false (default), no layout change; the chat-area renders as normal.
+   *
+   * The consumer is expected to drive this from their own state (e.g., an
+   * agent emits a demonstration intent → host sets this true; user dismisses
+   * → host sets it false). The widget itself doesn't decide.
+   */
+  @Input() showDemonstrationSurface: boolean = false;
+
+  /**
+   * Content payload forwarded to the `demonstrationSurface` slot via
+   * `$implicit` + named `content` context. Shape is consumer-defined per the
+   * {@link IMJChatDemonstrationSurfaceComponent} interface — the widget
+   * doesn't introspect or render it directly, just hands it through.
+   */
+  @Input() demonstrationSurfaceContent: unknown = null;
+
+  /**
+   * True when the demonstrationSurface layout-mode is BOTH opted-in
+   * (`showDemonstrationSurface`) AND has a slot template projected to render
+   * into. Both conditions must hold for the layout restructure to kick in.
+   */
+  public get isDemonstrationActive(): boolean {
+    return this.showDemonstrationSurface && this.slotTemplate('demonstrationSurface') !== null;
+  }
+
   // ────────────────────────────────────────────────────────────────────
   // PR 2c — Before/After cancelable @Output() events
   // ────────────────────────────────────────────────────────────────────

@@ -25,6 +25,26 @@
   box-shadow: var(--mj-shadow-sm);
 }
 
+/* agentPresence slot — sticky top, anchored with the header. Per Matt's
+   06-10 placement design: persistent presence indicator above the messages.
+   Renders only when [showAgentCharacter] is true, so existing embeds see no
+   layout change. The prominent variant grows toward a centered presence
+   (per Matt: "can grow larger toward a centered presence"). */
+.chat-agent-presence {
+  flex-shrink: 0;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  display: flex;
+  align-items: center;
+  z-index: 11;
+}
+
+.chat-agent-presence--prominent {
+  padding: 16px 20px;
+  justify-content: center;
+}
+
 .chat-info {
   display: flex;
   align-items: center;
@@ -370,6 +390,58 @@
   min-height: 0;
   overflow: hidden;
   position: relative; /* For upload overlay positioning */
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   demonstrationSurface layout-mode (Matt's 06-10 placement design)
+   ────────────────────────────────────────────────────────────────────
+   When .chat-content-area gets .demonstration-mode, the layout flips
+   from "messages pane (+ optional artifact pane)" to "stage + side rail":
+     - stage (.chat-demonstration-stage) — left, flexible, holds the
+       consumer's projected demonstrationSurface slot template
+     - rail (.chat-messages-pane) — right, fixed-width 320px, holds the
+       messages list + composer ("the conversation as a companion rail")
+   On mobile (≤768px) the same two stack vertically (stage above, rail
+   below) per Matt's note about mobile. The rail intentionally keeps the
+   composer inside it — Matt's design refers to the conversation rail
+   inclusively (messages + composer together), not as separate regions.
+*/
+.chat-demonstration-stage {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-content-area.demonstration-mode .chat-messages-pane,
+.chat-content-area.demonstration-mode .chat-messages-pane.full-width {
+  flex: 0 0 320px;
+  width: 320px;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .chat-content-area.demonstration-mode {
+    flex-direction: column;
+  }
+
+  .chat-content-area.demonstration-mode .chat-demonstration-stage {
+    flex: 1 1 60%;
+    border-right: none;
+    border-bottom: 1px solid var(--mj-border-default);
+    height: auto;
+  }
+
+  .chat-content-area.demonstration-mode .chat-messages-pane,
+  .chat-content-area.demonstration-mode .chat-messages-pane.full-width {
+    flex: 1 1 40%;
+    width: 100%;
+    height: auto;
+  }
 }
 
 /* Upload indicator overlay - centered in conversation area */

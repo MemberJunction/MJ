@@ -9,7 +9,8 @@ import {
   OnInit,
   OnChanges,
   SimpleChanges,
-  DoCheck
+  DoCheck,
+  TemplateRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
@@ -95,6 +96,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
   @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
+
+  /**
+   * Optional additive per-message slot template (forwarded from chat-area's
+   * `mjChatSlot="messageExtra"`). Rendered inside the bubble after the message
+   * content, before attachments. Receives the message as `$implicit` + a named
+   * `message` context binding. Null when no consumer template is projected.
+   */
+  @Input() public messageExtraTemplate: TemplateRef<unknown> | null = null;
 
   @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
