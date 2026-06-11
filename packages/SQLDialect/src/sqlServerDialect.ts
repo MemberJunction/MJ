@@ -223,6 +223,8 @@ export class SQLServerDialect extends SQLDialect {
     get BooleanTypeNames(): readonly string[]  { return SQLServerDialect._BooleanTypeNames; }
     get StringTypeNames(): readonly string[]   { return SQLServerDialect._StringTypeNames; }
     get FixedWidthStringTypeNames(): readonly string[] { return SQLServerDialect._FixedWidthStringTypeNames; }
+    /** SQL Server index keys are limited to 900 bytes → 450 NVARCHAR (2-byte) chars. */
+    override get MaxKeyStringLength(): number { return 450; }
     get DateTypeNames(): readonly string[]     { return SQLServerDialect._DateTypeNames; }
     get IntegerTypeNames(): readonly string[]  { return SQLServerDialect._IntegerTypeNames; }
     get FloatTypeNames(): readonly string[]    { return SQLServerDialect._FloatTypeNames; }

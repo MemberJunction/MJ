@@ -2072,7 +2072,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
                 const entityLabel = item.params.EntityName || 'unknown';
-                const resolved = await this.resolveFromServerCache(item, index, entityLabel);
+                const resolved = await this.resolveFromServerCache(item, index, entityLabel, contextUser);
                 if (resolved) {
                     if (resolved.status === 'current') {
                         currentResults.push(resolved.result);
@@ -2138,7 +2138,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             for (const entry of itemsWithoutCacheCheck) {
                 if (LocalCacheManager.Instance.IsInitialized) {
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString);
+                    const rlsWhereClause = this.ComputeRunViewRLSWhereClause(entry.item.params, contextUser);
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString, rlsWhereClause);
                     const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                     if (cached) {
                         const entityLabel = entry.item.params.EntityName || 'unknown';
@@ -2293,7 +2294,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const result = await this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
         // Cache the result so subsequent RunViewsWithCacheCheck calls can skip DB
         if (result.status !== 'error' && result.results && LocalCacheManager.Instance.IsInitialized) {
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
+            const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
+            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
             const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
             await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this);
         }
@@ -2309,10 +2311,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         item: RunViewWithCacheCheckParams,
         index: number,
         entityLabel: string,
+        contextUser?: UserInfo,
     ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } } | null> {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString);
+        const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString, rlsWhereClause);
         const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
         if (!cached) return null;
 
@@ -2495,8 +2499,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
-                if (!query.UserCanRun(user)) {
-                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage: `User does not have permission to run query: ${query.Name}` });
+                const runCheck = query.UserCanRun(user);
+                if (!runCheck.canRun) {
+                    const deniedMsg = runCheck.deniedEntities.length > 0
+                        ? ` Denied entities: ${runCheck.deniedEntities.join(', ')}.`
+                        : '';
+                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage: `User does not have permission to run query: ${query.Name}.${deniedMsg}` });
                     continue;
                 }
 
@@ -2609,8 +2617,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     protected ValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo): void {
         const user = contextUser || this.CurrentUser;
-        if (user && !query.UserHasRunPermissions(user)) {
-            throw new Error(`User does not have permission to run query '${query.Name}' (ID: ${query.ID})`);
+        if (user) {
+            const result = query.UserCanRun(user);
+            if (!result.canRun) {
+                const deniedMsg = result.deniedEntities.length > 0
+                    ? ` Denied entities: ${result.deniedEntities.join(', ')}.`
+                    : '';
+                throw new Error(
+                    `User does not have permission to run query '${query.Name}' (ID: ${query.ID}).${deniedMsg}`
+                );
+            }
         }
 
         if (query.Status !== 'Approved') {
@@ -3154,7 +3170,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
             if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
             const quotes = pk.NeedsQuotes ? "'" : '';
-            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${val.Value}${quotes}`;
+            // Escape embedded single quotes when the value is wrapped in quotes. A PK value can
+            // legitimately contain apostrophes (e.g. an object-valued soft key whose JSON carries
+            // free-text), and an unescaped quote both breaks the SQL string and is an injection vector.
+            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
+            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
         }).join(' AND ');
 
         // Append Read RLS filter (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
@@ -3297,7 +3317,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Builds a parameter placeholder for parameterized queries.
      * Default: PG-style ($1, $2, ...). SQL Server overrides to @p0, @p1, etc.
      */
-    protected BuildParameterPlaceholder(index: number): string {
+    public BuildParameterPlaceholder(index: number): string {
         return `$${index + 1}`;
     }
 
