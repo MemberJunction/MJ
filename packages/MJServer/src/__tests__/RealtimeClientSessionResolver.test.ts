@@ -969,3 +969,436 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelState', () => {
         expect(ok).toBe(false);
     });
 });
+
+describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior channel-state restore', () => {
+    const okPrep = {
+        Success: true,
+        ClientConfig: {
+            Provider: 'openai',
+            Model: 'gpt-realtime',
+            EphemeralToken: 'ek_abc',
+            ExpiresAt: '2026-01-01T00:00:00Z',
+            SessionConfig: {},
+        },
+    };
+
+    /**
+     * Provider for the restore path: GetEntityObject serves the PRIOR session (the only entity
+     * the start flow loads directly), RunView serves the prior session-channel rows.
+     */
+    function makeRestoreProvider(opts: {
+        prior?: FakeSession;
+        rows?: Array<{ Channel: string; Config: string | null }>;
+        runViewResult?: { Success: boolean; ErrorMessage?: string; Results?: unknown[] };
+    }): { provider: unknown; runView: ReturnType<typeof vi.fn>; prior: FakeSession } {
+        const prior = opts.prior ?? makeSessionEntity({ ID: 'prior-1', UserID: 'user-1' });
+        const runView = vi.fn(async () => opts.runViewResult ?? { Success: true, Results: opts.rows ?? [] });
+        return { provider: { GetEntityObject: vi.fn(async () => prior), RunView: runView }, runView, prior };
+    }
+
+    function setupHappyStart(): void {
+        hasPermissionMock.mockResolvedValue(true);
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-restore' }));
+        prepareClientSessionMock.mockResolvedValue(okPrep);
+    }
+
+    it('returns the prior session channel states keyed by channel NAME (empty configs skipped)', async () => {
+        setupHappyStart();
+        const { provider } = makeRestoreProvider({
+            rows: [
+                { Channel: 'Whiteboard', Config: '{"items":[1,2]}' },
+                { Channel: 'EmptyChannel', Config: null },
+                { Channel: 'Notes', Config: '{"text":"hi"}' },
+            ],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(result.PriorChannelStatesJson).toBeDefined();
+        expect(JSON.parse(result.PriorChannelStatesJson as string)).toEqual({
+            Whiteboard: '{"items":[1,2]}',
+            Notes: '{"text":"hi"}',
+        });
+        // lastSessionId still flows into the new durable session record.
+        const createArg = createSessionMock.mock.calls[0][0] as { lastSessionID?: string };
+        expect(createArg.lastSessionID).toBe('prior-1');
+    });
+
+    it('omits the field when no lastSessionId is supplied (no restore query at all)', async () => {
+        setupHappyStart();
+        const { provider, runView } = makeRestoreProvider({ rows: [{ Channel: 'Whiteboard', Config: '{}' }] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx());
+
+        expect(result.PriorChannelStatesJson).toBeUndefined();
+        expect(runView).not.toHaveBeenCalled();
+    });
+
+    it('omits the field (no state leak, no query) when the prior session belongs to ANOTHER user', async () => {
+        setupHappyStart();
+        const { provider, runView } = makeRestoreProvider({
+            prior: makeSessionEntity({ ID: 'prior-1', UserID: 'someone-else' }),
+            rows: [{ Channel: 'Whiteboard', Config: '{"secret":true}' }],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(result.PriorChannelStatesJson).toBeUndefined();
+        expect(runView).not.toHaveBeenCalled();
+    });
+
+    it('omits the field when the prior session does not exist', async () => {
+        setupHappyStart();
+        const { provider, runView } = makeRestoreProvider({
+            prior: makeSessionEntity({ Load: vi.fn(async () => false) }),
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-gone');
+
+        expect(result.PriorChannelStatesJson).toBeUndefined();
+        expect(runView).not.toHaveBeenCalled();
+    });
+
+    it('omits the field when the prior session has no channel rows / no non-empty configs', async () => {
+        setupHappyStart();
+        const { provider } = makeRestoreProvider({ rows: [{ Channel: 'Whiteboard', Config: null }] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        expect(result.PriorChannelStatesJson).toBeUndefined();
+    });
+
+    it('drops an oversized individual state (beyond the 2MB cap) but restores the rest', async () => {
+        setupHappyStart();
+        const { provider } = makeRestoreProvider({
+            rows: [
+                { Channel: 'Huge', Config: 'x'.repeat(2_000_001) },
+                { Channel: 'Whiteboard', Config: '{"items":[]}' },
+            ],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(JSON.parse(result.PriorChannelStatesJson as string)).toEqual({ Whiteboard: '{"items":[]}' });
+    });
+
+    it('drops states that would push the ACCUMULATED restore payload past the 2MB cap', async () => {
+        setupHappyStart();
+        const { provider } = makeRestoreProvider({
+            rows: [
+                { Channel: 'First', Config: 'a'.repeat(1_500_000) },
+                { Channel: 'Second', Config: 'b'.repeat(1_500_000) }, // would exceed the total cap
+            ],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        const states = JSON.parse(result.PriorChannelStatesJson as string) as Record<string, string>;
+        expect(Object.keys(states)).toEqual(['First']);
+    });
+
+    it('tolerates a failed restore query (start succeeds, field omitted)', async () => {
+        setupHappyStart();
+        const { provider } = makeRestoreProvider({ runViewResult: { Success: false, ErrorMessage: 'db down' } });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(result.AgentSessionId).toBe('session-restore');
+        expect(result.PriorChannelStatesJson).toBeUndefined();
+    });
+
+    it('tolerates a thrown restore failure (start succeeds, field omitted)', async () => {
+        setupHappyStart();
+        currentProvider = {
+            GetEntityObject: vi.fn(async () => {
+                throw new Error('provider exploded');
+            }),
+            RunView: vi.fn(),
+        };
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(result.AgentSessionId).toBe('session-restore');
+        expect(result.PriorChannelStatesJson).toBeUndefined();
+    });
+});
+
+describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
+    const WHITEBOARD_TYPE_ROW = { ID: 'type-wb', IsEnabled: true };
+    const CHANNEL_ROW = { ID: 'channel-wb', IsActive: true };
+
+    /**
+     * Provider for the artifact path: GetEntityObject routes by entity name (session / artifact /
+     * version / junction), RunView routes by EntityName (artifact types / conversation details /
+     * channel definitions / session-channel rows).
+     */
+    function makeArtifactProvider(opts: {
+        session?: FakeSession;
+        typeRows?: Array<{ ID: string; IsEnabled: boolean }>;
+        detailRows?: Array<{ ID: string }>;
+        channelRows?: Array<{ ID: string; IsActive: boolean }>;
+        sessionChannelRows?: FakeSession[];
+        artifact?: FakeSession;
+        version?: FakeSession;
+        junction?: FakeSession;
+    }): {
+        provider: unknown;
+        runView: ReturnType<typeof vi.fn>;
+        artifact: FakeSession;
+        version: FakeSession;
+        junction: FakeSession;
+    } {
+        const artifact = opts.artifact ?? makeSessionEntity({ ID: 'artifact-1' });
+        const version = opts.version ?? makeSessionEntity({ ID: 'version-1' });
+        const junction = opts.junction ?? makeSessionEntity({ ID: 'junction-1' });
+        const session = opts.session ?? makeSessionEntity();
+        const runView = vi.fn(async (params: { EntityName: string }) => {
+            switch (params.EntityName) {
+                case 'MJ: Artifact Types':
+                    return { Success: true, Results: opts.typeRows ?? [] };
+                case 'MJ: Conversation Details':
+                    return { Success: true, Results: opts.detailRows ?? [] };
+                case 'MJ: AI Agent Channels':
+                    return { Success: true, Results: opts.channelRows ?? [] };
+                default: // MJ: AI Agent Session Channels
+                    return { Success: true, Results: opts.sessionChannelRows ?? [] };
+            }
+        });
+        const provider = {
+            GetEntityObject: vi.fn(async (name: string) => {
+                switch (name) {
+                    case 'MJ: Artifacts':
+                        return artifact;
+                    case 'MJ: Artifact Versions':
+                        return version;
+                    case 'MJ: Conversation Detail Artifacts':
+                        return junction;
+                    default:
+                        return session;
+                }
+            }),
+            RunView: runView,
+        };
+        return { provider, runView, artifact, version, junction };
+    }
+
+    it('enforces ownership — rejects when the caller does not own the session', async () => {
+        const { provider, artifact } = makeArtifactProvider({ session: makeSessionEntity({ UserID: 'someone-else' }) });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'My Board', '{}', makeCtx()),
+        ).rejects.toThrow(/do not own/i);
+        expect(artifact.Save).not.toHaveBeenCalled();
+    });
+
+    it('fails gracefully (structured, no throw) when the Whiteboard artifact type is unseeded', async () => {
+        const { provider, artifact } = makeArtifactProvider({ typeRows: [] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'My Board', '{}', makeCtx());
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/Whiteboard.*artifact type/i);
+        expect(result.ArtifactID).toBeUndefined();
+        expect(artifact.Save).not.toHaveBeenCalled();
+    });
+
+    it('fails gracefully when the Whiteboard artifact type exists but is disabled', async () => {
+        const { provider } = makeArtifactProvider({ typeRows: [{ ID: 'type-wb', IsEnabled: false }] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'My Board', '{}', makeCtx());
+        expect(result.Success).toBe(false);
+    });
+
+    it('creates the artifact + v1 version with the right fields and links it into conversation history', async () => {
+        const sessionChannelRow = makeSessionEntity({ ID: 'sc-1' });
+        const { provider, artifact, version, junction } = makeArtifactProvider({
+            session: makeSessionEntity({ ID: 'session-1', ConversationID: 'conv-1' }),
+            typeRows: [WHITEBOARD_TYPE_ROW],
+            detailRows: [{ ID: 'detail-9' }],
+            channelRows: [CHANNEL_ROW],
+            sessionChannelRows: [sessionChannelRow],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.SaveSessionChannelArtifact(
+            'session-1', 'Whiteboard', 'Q3 Planning Board', '{"shapes":[]}', makeCtx(),
+        );
+
+        // Structured success with both ids.
+        expect(result).toEqual({
+            Success: true,
+            ArtifactID: 'artifact-1',
+            ArtifactVersionID: 'version-1',
+            ConversationDetailLinked: true,
+        });
+        // Artifact header — user-owned, typed, visible, described with session + channel.
+        expect(artifact.NewRecord).toHaveBeenCalled();
+        expect(artifact.Name).toBe('Q3 Planning Board');
+        expect(artifact.TypeID).toBe('type-wb');
+        expect(artifact.UserID).toBe('user-1');
+        expect(artifact.Visibility).toBe('Always');
+        expect(artifact.Description).toContain('session-1');
+        expect(artifact.Description).toContain('Whiteboard');
+        expect(artifact.Save).toHaveBeenCalled();
+        // Version 1 carries the content.
+        expect(version.ArtifactID).toBe('artifact-1');
+        expect(version.VersionNumber).toBe(1);
+        expect(version.Content).toBe('{"shapes":[]}');
+        expect(version.UserID).toBe('user-1');
+        expect(version.Save).toHaveBeenCalled();
+        // Junction against the LATEST session-stamped conversation detail, the way chat links.
+        expect(junction.ConversationDetailID).toBe('detail-9');
+        expect(junction.ArtifactVersionID).toBe('version-1');
+        expect(junction.Direction).toBe('Output');
+        expect(junction.Save).toHaveBeenCalled();
+        // The session-channel row got its LastActiveAt stamped (saving IS channel activity).
+        expect(sessionChannelRow.LastActiveAt).toBeInstanceOf(Date);
+        expect(sessionChannelRow.Save).toHaveBeenCalled();
+    });
+
+    it('skips the junction silently (still Success) when no conversation detail is stamped with the session', async () => {
+        const { provider, junction } = makeArtifactProvider({
+            session: makeSessionEntity({ ConversationID: 'conv-1' }),
+            typeRows: [WHITEBOARD_TYPE_ROW],
+            detailRows: [],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
+
+        expect(result.Success).toBe(true);
+        expect(result.ConversationDetailLinked).toBe(false);
+        expect(junction.Save).not.toHaveBeenCalled();
+    });
+
+    it('skips the junction (no detail query) when the session has no conversation at all', async () => {
+        const { provider, runView, junction } = makeArtifactProvider({
+            session: makeSessionEntity({ ConversationID: null }),
+            typeRows: [WHITEBOARD_TYPE_ROW],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
+
+        expect(result.Success).toBe(true);
+        expect(result.ConversationDetailLinked).toBe(false);
+        expect(junction.Save).not.toHaveBeenCalled();
+        const queriedEntities = runView.mock.calls.map((c) => (c[0] as { EntityName: string }).EntityName);
+        expect(queriedEntities).not.toContain('MJ: Conversation Details');
+    });
+
+    it('still succeeds (linked=false, logged) when the junction save fails — link is best-effort', async () => {
+        const failingJunction = makeSessionEntity({
+            ID: 'junction-fail',
+            Save: vi.fn(async () => false),
+            LatestResult: { CompleteMessage: 'fk violation' },
+        });
+        const { provider } = makeArtifactProvider({
+            session: makeSessionEntity({ ConversationID: 'conv-1' }),
+            typeRows: [WHITEBOARD_TYPE_ROW],
+            detailRows: [{ ID: 'detail-9' }],
+            junction: failingJunction,
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
+
+        expect(result.Success).toBe(true);
+        expect(result.ConversationDetailLinked).toBe(false);
+    });
+
+    it('rejects oversized content (structured failure, nothing queried or saved)', async () => {
+        const { provider, runView, artifact } = makeArtifactProvider({ typeRows: [WHITEBOARD_TYPE_ROW] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.SaveSessionChannelArtifact(
+            'session-1', 'Whiteboard', 'Board', 'x'.repeat(2_000_001), makeCtx(),
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/oversized/i);
+        expect(runView).not.toHaveBeenCalled();
+        expect(artifact.Save).not.toHaveBeenCalled();
+    });
+
+    it('returns a structured failure when the artifact header save fails (no version attempted)', async () => {
+        const failingArtifact = makeSessionEntity({
+            ID: 'artifact-fail',
+            Save: vi.fn(async () => false),
+            LatestResult: { CompleteMessage: 'db down' },
+        });
+        const { provider, version } = makeArtifactProvider({
+            typeRows: [WHITEBOARD_TYPE_ROW],
+            artifact: failingArtifact,
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/artifact save failed/i);
+        expect(version.Save).not.toHaveBeenCalled();
+    });
+
+    it('returns a structured failure (carrying the orphaned ArtifactID) when the version save fails', async () => {
+        const failingVersion = makeSessionEntity({
+            ID: 'version-fail',
+            Save: vi.fn(async () => false),
+            LatestResult: { CompleteMessage: 'too big' },
+        });
+        const { provider, junction } = makeArtifactProvider({
+            typeRows: [WHITEBOARD_TYPE_ROW],
+            detailRows: [{ ID: 'detail-9' }],
+            version: failingVersion,
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
+
+        expect(result.Success).toBe(false);
+        expect(result.ArtifactID).toBe('artifact-1');
+        expect(result.ArtifactVersionID).toBeUndefined();
+        expect(junction.Save).not.toHaveBeenCalled();
+    });
+
+    it('accepts a CLOSED session ("save my board" legitimately lands after the call ends)', async () => {
+        const { provider } = makeArtifactProvider({
+            session: makeSessionEntity({ Status: 'Closed', ConversationID: null }),
+            typeRows: [WHITEBOARD_TYPE_ROW],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
+        expect(result.Success).toBe(true);
+    });
+});

@@ -28,7 +28,14 @@ import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine }
 import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJAIAgentSessionEntity, MJAIAgentSessionChannelEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import {
+    MJAIAgentSessionEntity,
+    MJAIAgentSessionChannelEntity,
+    MJArtifactEntity,
+    MJArtifactVersionEntity,
+    MJConversationDetailArtifactEntity,
+    MJConversationDetailEntity,
+} from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
@@ -67,6 +74,17 @@ const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
 const SESSION_CHANNEL_ENTITY = 'MJ: AI Agent Session Channels';
+const ARTIFACT_ENTITY = 'MJ: Artifacts';
+const ARTIFACT_VERSION_ENTITY = 'MJ: Artifact Versions';
+const ARTIFACT_TYPE_ENTITY = 'MJ: Artifact Types';
+const CONVERSATION_DETAIL_ARTIFACT_ENTITY = 'MJ: Conversation Detail Artifacts';
+
+/**
+ * The seeded name of the artifact type that {@link RealtimeClientSessionResolver.SaveSessionChannelArtifact}
+ * stamps onto saved channel-state artifacts (e.g. the live whiteboard's board JSON). Seeded in
+ * `metadata/artifact-types/` — its absence is a graceful structured failure, never a throw.
+ */
+const WHITEBOARD_ARTIFACT_TYPE_NAME = 'Whiteboard';
 
 /** Maximum number of client-declared UI tools accepted at session mint. */
 const MAX_CLIENT_TOOLS = 16;
@@ -145,6 +163,48 @@ export class StartRealtimeClientSessionResult {
      */
     @Field(() => String, { nullable: true })
     NarrationInstructionsTemplate?: string;
+
+    /**
+     * JSON object string keyed by channel NAME mapping to that channel's persisted state JSON from
+     * the caller's PRIOR session (`lastSessionId`) — e.g. `{"Whiteboard":"{...board scene...}"}`.
+     * Null when no `lastSessionId` was supplied, the prior session has no persisted channel state,
+     * the prior session is not owned by the caller, or the restore failed for any reason (restore
+     * is strictly best-effort — a session start NEVER fails because of it).
+     */
+    @Field(() => String, { nullable: true })
+    PriorChannelStatesJson?: string;
+}
+
+/**
+ * Result of {@link RealtimeClientSessionResolver.SaveSessionChannelArtifact} — a structured
+ * success/failure envelope (graceful failures like a missing artifact type must not throw).
+ */
+@ObjectType()
+export class SaveSessionChannelArtifactResult {
+    /** True when the artifact + first version were both persisted. */
+    @Field(() => Boolean)
+    Success: boolean;
+
+    /** Human-readable failure reason. Null on success. */
+    @Field(() => String, { nullable: true })
+    ErrorMessage?: string;
+
+    /** ID of the created `MJ: Artifacts` row. Null when creation failed before the header saved. */
+    @Field(() => String, { nullable: true })
+    ArtifactID?: string;
+
+    /** ID of the created `MJ: Artifact Versions` row (version 1). Null on failure. */
+    @Field(() => String, { nullable: true })
+    ArtifactVersionID?: string;
+
+    /**
+     * True when the version was also linked into conversation history via a
+     * `MJ: Conversation Detail Artifacts` junction row. False when the session has no
+     * conversation, no conversation detail was stamped with this session id yet, or the
+     * (best-effort) junction save failed — none of which fail the overall save.
+     */
+    @Field(() => Boolean)
+    ConversationDetailLinked: boolean;
 }
 
 /**
@@ -216,7 +276,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         );
 
         const clientTools = this.parseClientTools(clientToolsJson);
-        return this.prepareClientSessionOrClose(session, coAgentID, targetAgentId, contextUser, provider, preferredModelId, clientTools);
+        const result = await this.prepareClientSessionOrClose(session, coAgentID, targetAgentId, contextUser, provider, preferredModelId, clientTools);
+        // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
+        // board). Strictly tolerant — any problem yields a null field, never a failed start.
+        result.PriorChannelStatesJson = (await this.loadPriorChannelStatesJson(lastSessionId, contextUser, provider)) ?? undefined;
+        return result;
     }
 
     /**
@@ -398,6 +462,63 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
 
         return this.upsertSessionChannelState(session.ID, channelID, stateJson, contextUser, provider);
+    }
+
+    /**
+     * Persist an interactive channel's current state (e.g. the live whiteboard's board JSON) as a
+     * durable, user-owned **artifact** — distinct from {@link SaveSessionChannelState}, which only
+     * stores the session-scoped state of record. The artifact survives the session and shows up in
+     * the user's artifact library (and, when possible, in the conversation's history).
+     *
+     * Flow:
+     * 1. Ownership gate — like the sibling mutations (`UserID === contextUser.ID`). A **Closed**
+     *    session is accepted: "save my board" legitimately arrives as/after the call ends.
+     * 2. Size cap — `contentJson` beyond {@link MAX_CHANNEL_STATE_CHARS} is a structured failure.
+     * 3. Resolve the {@link WHITEBOARD_ARTIFACT_TYPE_NAME} artifact type by name; when the seed is
+     *    absent/disabled in this deployment, return a structured failure (never throw).
+     * 4. Create the `MJ: Artifacts` header (user-owned, Visibility `Always`) + its
+     *    `MJ: Artifact Versions` v1 row carrying `contentJson`.
+     * 5. Best-effort extras that never fail the save:
+     *    - when the session has a conversation AND a `Conversation Detail` stamped with this
+     *      session id exists (the transcript relay stamps `AgentSessionID`), link the version into
+     *      history via a `MJ: Conversation Detail Artifacts` junction row (Direction `Output`);
+     *    - stamp `LastActiveAt` on the session-channel row when one exists.
+     *
+     * @returns A structured {@link SaveSessionChannelArtifactResult} — graceful failures (missing
+     *   type seed, oversized content, save failure) come back as `Success: false`, while
+     *   authn/ownership violations throw like the sibling mutations.
+     */
+    @Mutation(() => SaveSessionChannelArtifactResult)
+    async SaveSessionChannelArtifact(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Arg('channelName', () => String) channelName: string,
+        @Arg('name', () => String) name: string,
+        @Arg('contentJson', () => String) contentJson: string,
+        @Ctx() { userPayload, providers }: AppContext,
+    ): Promise<SaveSessionChannelArtifactResult> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+
+        if (contentJson.length > MAX_CHANNEL_STATE_CHARS) {
+            const message =
+                `SaveSessionChannelArtifact: rejected oversized content for session ${agentSessionId} / channel '${channelName}' ` +
+                `(${contentJson.length} chars > ${MAX_CHANNEL_STATE_CHARS}).`;
+            LogError(message);
+            return { Success: false, ErrorMessage: message, ConversationDetailLinked: false };
+        }
+
+        const typeID = await this.resolveWhiteboardArtifactTypeID(contextUser, provider);
+        if (!typeID) {
+            return {
+                Success: false,
+                ErrorMessage:
+                    `The '${WHITEBOARD_ARTIFACT_TYPE_NAME}' artifact type is not configured in this deployment — ` +
+                    'sync the artifact-type seed metadata to enable saving channel artifacts.',
+                ConversationDetailLinked: false,
+            };
+        }
+
+        return this.createChannelArtifact(session, channelName, name, contentJson, typeID, contextUser, provider);
     }
 
     // ----- internals -------------------------------------------------------------------------
@@ -708,8 +829,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const row = result.Success ? result.Results?.[0] : undefined;
         if (!row || !row.IsActive) {
             LogError(
-                `SaveSessionChannelState: no active '${channelName}' channel definition found in ${CHANNEL_ENTITY} — ` +
-                    'state not persisted (sync the channel seed metadata to enable persistence).',
+                `RealtimeClientSessionResolver: no active '${channelName}' channel definition found in ${CHANNEL_ENTITY} — ` +
+                    'channel operation skipped (sync the channel seed metadata to enable it).',
             );
             return null;
         }
@@ -758,6 +879,271 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
         }
         return saved;
+    }
+
+    /**
+     * Loads the PRIOR session's persisted channel states and serializes them as a JSON object
+     * string keyed by channel NAME (the session-channel view denormalizes the channel name as the
+     * `Channel` virtual field). Strictly best-effort — every failure path logs and returns `null`,
+     * a session start NEVER fails because of restore:
+     *  - no `lastSessionId` → `null` (silently — restore simply wasn't requested);
+     *  - prior session missing OR owned by a different user → `null` (logged — never leak another
+     *    user's channel state);
+     *  - rows with an empty `Config` are skipped;
+     *  - an individual state larger than {@link MAX_CHANNEL_STATE_CHARS} is dropped (logged), and
+     *    states that would push the accumulated payload past that same cap are dropped too (logged)
+     *    — the surviving states still restore;
+     *  - no surviving states → `null`.
+     */
+    private async loadPriorChannelStatesJson(
+        lastSessionId: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        if (!lastSessionId) {
+            return null;
+        }
+        try {
+            const prior = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
+            if (!(await prior.Load(lastSessionId))) {
+                LogError(`StartRealtimeClientSession: prior session ${lastSessionId} not found — skipping channel-state restore.`);
+                return null;
+            }
+            if (!UUIDsEqual(prior.UserID, contextUser.ID)) {
+                LogError(
+                    `StartRealtimeClientSession: prior session ${lastSessionId} is not owned by user ${contextUser.ID} — ` +
+                        'skipping channel-state restore.',
+                );
+                return null;
+            }
+
+            const safeID = lastSessionId.replace(/'/g, "''");
+            const rv = RunView.FromMetadataProvider(provider);
+            const result = await rv.RunView<{ Channel: string; Config: string | null }>(
+                {
+                    EntityName: SESSION_CHANNEL_ENTITY,
+                    ExtraFilter: `AgentSessionID='${safeID}'`,
+                    Fields: ['Channel', 'Config'],
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            if (!result.Success) {
+                LogError(`StartRealtimeClientSession: channel-state restore query failed for prior session ${lastSessionId}: ${result.ErrorMessage}`);
+                return null;
+            }
+
+            const states = this.collectChannelStates(result.Results ?? [], lastSessionId);
+            return Object.keys(states).length > 0 ? JSON.stringify(states) : null;
+        } catch (error) {
+            LogError(`StartRealtimeClientSession: channel-state restore failed for prior session ${lastSessionId}: ${(error as Error).message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Folds prior session-channel rows into a `{ channelName: stateJson }` map, skipping empty
+     * states and enforcing the {@link MAX_CHANNEL_STATE_CHARS} cap both per-state and on the
+     * accumulated total (oversized states are dropped with a log note; the rest survive).
+     */
+    private collectChannelStates(
+        rows: Array<{ Channel: string; Config: string | null }>,
+        lastSessionId: string,
+    ): Record<string, string> {
+        const states: Record<string, string> = {};
+        let totalChars = 0;
+        for (const row of rows) {
+            if (!row.Channel || !row.Config) {
+                continue;
+            }
+            if (row.Config.length > MAX_CHANNEL_STATE_CHARS || totalChars + row.Config.length > MAX_CHANNEL_STATE_CHARS) {
+                LogError(
+                    `StartRealtimeClientSession: dropped oversized '${row.Channel}' channel state from prior session ${lastSessionId} ` +
+                        `(${row.Config.length} chars; restore payload is capped at ${MAX_CHANNEL_STATE_CHARS}).`,
+                );
+                continue;
+            }
+            states[row.Channel] = row.Config;
+            totalChars += row.Config.length;
+        }
+        return states;
+    }
+
+    /**
+     * Resolves the ENABLED {@link WHITEBOARD_ARTIFACT_TYPE_NAME} artifact type's id. Returns `null`
+     * (logged) when the type seed is absent or disabled — the artifact-type seed is deployed
+     * separately, so its absence is a graceful structured failure, never a throw.
+     */
+    private async resolveWhiteboardArtifactTypeID(
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<{ ID: string; IsEnabled: boolean }>(
+            {
+                EntityName: ARTIFACT_TYPE_ENTITY,
+                ExtraFilter: `Name='${WHITEBOARD_ARTIFACT_TYPE_NAME}'`,
+                Fields: ['ID', 'IsEnabled'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            contextUser,
+        );
+        const row = result.Success ? result.Results?.[0] : undefined;
+        if (!row || !row.IsEnabled) {
+            LogError(
+                `SaveSessionChannelArtifact: no enabled '${WHITEBOARD_ARTIFACT_TYPE_NAME}' artifact type found in ${ARTIFACT_TYPE_ENTITY} — ` +
+                    'artifact not created (sync the artifact-type seed metadata to enable this).',
+            );
+            return null;
+        }
+        return row.ID;
+    }
+
+    /**
+     * Creates the user-owned artifact header + its v1 version for a channel-state save, then runs
+     * the best-effort extras (conversation-history junction + session-channel `LastActiveAt`
+     * stamp). Header/version save failures come back as structured failures; the extras NEVER
+     * fail the save.
+     */
+    private async createChannelArtifact(
+        session: MJAIAgentSessionEntity,
+        channelName: string,
+        name: string,
+        contentJson: string,
+        typeID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<SaveSessionChannelArtifactResult> {
+        const artifact = await provider.GetEntityObject<MJArtifactEntity>(ARTIFACT_ENTITY, contextUser);
+        artifact.NewRecord();
+        artifact.Name = name;
+        artifact.Description = `Saved from realtime agent session ${session.ID} ('${channelName}' channel).`;
+        artifact.TypeID = typeID;
+        artifact.UserID = contextUser.ID;
+        artifact.Visibility = 'Always';
+        if (!(await artifact.Save())) {
+            const message = `SaveSessionChannelArtifact: artifact save failed: ${artifact.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+            LogError(message);
+            return { Success: false, ErrorMessage: message, ConversationDetailLinked: false };
+        }
+
+        const version = await provider.GetEntityObject<MJArtifactVersionEntity>(ARTIFACT_VERSION_ENTITY, contextUser);
+        version.NewRecord();
+        version.ArtifactID = artifact.ID;
+        version.VersionNumber = 1;
+        version.Content = contentJson;
+        version.UserID = contextUser.ID;
+        if (!(await version.Save())) {
+            const message = `SaveSessionChannelArtifact: artifact version save failed: ${version.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+            LogError(message);
+            return { Success: false, ErrorMessage: message, ArtifactID: artifact.ID, ConversationDetailLinked: false };
+        }
+
+        const linked = await this.linkVersionToLatestSessionDetail(session, version.ID, contextUser, provider);
+        await this.stampSessionChannelLastActive(session.ID, channelName, contextUser, provider);
+
+        return { Success: true, ArtifactID: artifact.ID, ArtifactVersionID: version.ID, ConversationDetailLinked: linked };
+    }
+
+    /**
+     * Best-effort: links an artifact version into conversation history the way chat does — via a
+     * `MJ: Conversation Detail Artifacts` junction row (Direction `Output`) against the LATEST
+     * `Conversation Detail` stamped with this session's id (the transcript relay stamps
+     * `AgentSessionID` on every persisted turn). Skips silently (returns `false`) when the session
+     * has no conversation or no stamped detail exists yet; logs (and returns `false`) when the
+     * lookup or junction save fails. Never throws.
+     */
+    private async linkVersionToLatestSessionDetail(
+        session: MJAIAgentSessionEntity,
+        artifactVersionID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        if (!session.ConversationID) {
+            return false;
+        }
+        try {
+            const safeID = session.ID.replace(/'/g, "''");
+            const rv = RunView.FromMetadataProvider(provider);
+            const result = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ENTITY,
+                    ExtraFilter: `AgentSessionID='${safeID}'`,
+                    Fields: ['ID'],
+                    OrderBy: '__mj_CreatedAt DESC',
+                    ResultType: 'simple',
+                    MaxRows: 1,
+                },
+                contextUser,
+            );
+            const detail = result.Success ? result.Results?.[0] : undefined;
+            if (!detail) {
+                return false; // no transcript turn persisted yet — nothing to anchor the artifact to
+            }
+
+            const junction = await provider.GetEntityObject<MJConversationDetailArtifactEntity>(
+                CONVERSATION_DETAIL_ARTIFACT_ENTITY,
+                contextUser,
+            );
+            junction.NewRecord();
+            junction.ConversationDetailID = detail.ID;
+            junction.ArtifactVersionID = artifactVersionID;
+            junction.Direction = 'Output';
+            const saved = await junction.Save();
+            if (!saved) {
+                LogError(
+                    `SaveSessionChannelArtifact: junction save failed for detail ${detail.ID} / version ${artifactVersionID}: ` +
+                        `${junction.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+            }
+            return saved;
+        } catch (error) {
+            LogError(`SaveSessionChannelArtifact: conversation-history link failed: ${(error as Error).message}`);
+            return false;
+        }
+    }
+
+    /**
+     * Best-effort: stamps `LastActiveAt` on the session-channel row for `(session, channelName)`
+     * when one exists — saving an artifact IS channel activity. Missing channel definition or
+     * session-channel row is a silent no-op; failures log and never throw.
+     */
+    private async stampSessionChannelLastActive(
+        agentSessionID: string,
+        channelName: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<void> {
+        try {
+            const channelID = await this.resolveChannelID(channelName, contextUser, provider);
+            if (!channelID) {
+                return;
+            }
+            const rv = RunView.FromMetadataProvider(provider);
+            const existing = await rv.RunView<MJAIAgentSessionChannelEntity>(
+                {
+                    EntityName: SESSION_CHANNEL_ENTITY,
+                    ExtraFilter: `AgentSessionID='${agentSessionID}' AND ChannelID='${channelID}'`,
+                    ResultType: 'entity_object',
+                    MaxRows: 1,
+                },
+                contextUser,
+            );
+            const row = existing.Success ? existing.Results?.[0] : undefined;
+            if (!row) {
+                return;
+            }
+            row.LastActiveAt = new Date();
+            if (!(await row.Save())) {
+                LogError(
+                    `SaveSessionChannelArtifact: LastActiveAt stamp failed for session ${agentSessionID} / channel ${channelID}: ` +
+                        `${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+            }
+        } catch (error) {
+            LogError(`SaveSessionChannelArtifact: LastActiveAt stamp failed: ${(error as Error).message}`);
+        }
     }
 
     /**

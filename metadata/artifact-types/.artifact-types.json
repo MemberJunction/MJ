@@ -367,5 +367,16 @@
       "lastModified": "2026-04-28T13:30:08.532Z",
       "checksum": "02d9f97ae3797cc6f48845fbf7f7b5b4ceeec7f1e4a8866f2cf5f44a14b43879"
     }
+  },
+  {
+    "fields": {
+      "Name": "Whiteboard",
+      "Description": "Realtime whiteboard board-state snapshot. Stores the serialized board JSON (shapes, notes, connectors, layout) captured from a voice session's whiteboard channel so the board can be reopened, shared, and versioned after the call ends.",
+      "ParentID": null,
+      "ContentType": "application/json",
+      "DriverClass": "WhiteboardArtifactViewerPlugin",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-chalkboard"
+    }
   }
 ]
