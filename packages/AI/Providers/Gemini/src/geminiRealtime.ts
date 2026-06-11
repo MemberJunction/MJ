@@ -165,9 +165,16 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 uses: 1,
                 expireTime,
                 newSessionExpireTime,
-                // Lock the server-built model + config into the token (lockAdditionalFields: []
-                // means "lock exactly the fields set in liveConnectConstraints.config").
-                liveConnectConstraints: { model: params.Model, config },
+                // Lock the model + the MASK-SAFE config subset into the token
+                // (lockAdditionalFields: [] means "lock exactly the fields set in
+                // liveConnectConstraints.config"). The token API only accepts a SUBSET of
+                // LiveConnectConfig as constraints — systemInstruction / tools /
+                // transcription keys make the generated field_mask invalid
+                // ("field_mask is invalid for BidiGenerateContentSetup", 400), so those
+                // travel ONLY via SessionConfig below. They remain server-authored: the
+                // browser applies the server-built config verbatim at live.connect; the
+                // token simply can't cryptographically pin them on Gemini today.
+                liveConnectConstraints: { model: params.Model, config: GeminiRealtime.BuildConstraintConfig(config) },
                 lockAdditionalFields: [],
             },
         });
@@ -244,6 +251,37 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * input/output transcription, system instruction, mapped tools, plus any provider-specific
      * overrides from the open config bag.
      */
+    /**
+     * Projects the full connect config down to the fields Gemini's ephemeral-token API accepts
+     * as `liveConnectConstraints.config`. The token mint converts the provided keys into a
+     * field mask over `BidiGenerateContentSetup`, and only generation-level fields are valid
+     * there — `systemInstruction`, `tools`, and the transcription configs are NOT, and their
+     * presence 400s the entire mint. Only defined fields are copied (an absent key must stay
+     * absent so it doesn't enter the mask).
+     */
+    public static BuildConstraintConfig(config: LiveConnectConfig): LiveConnectConfig {
+        const constraint: LiveConnectConfig = {};
+        if (config.responseModalities) {
+            constraint.responseModalities = config.responseModalities;
+        }
+        if (config.speechConfig) {
+            constraint.speechConfig = config.speechConfig;
+        }
+        if (config.temperature != null) {
+            constraint.temperature = config.temperature;
+        }
+        if (config.topP != null) {
+            constraint.topP = config.topP;
+        }
+        if (config.maxOutputTokens != null) {
+            constraint.maxOutputTokens = config.maxOutputTokens;
+        }
+        if (config.sessionResumption) {
+            constraint.sessionResumption = config.sessionResumption;
+        }
+        return constraint;
+    }
+
     private buildConnectConfig(params: RealtimeSessionParams): LiveConnectConfig {
         const config: LiveConnectConfig = {
             responseModalities: [Modality.AUDIO],

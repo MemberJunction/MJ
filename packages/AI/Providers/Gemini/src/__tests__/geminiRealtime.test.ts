@@ -128,13 +128,15 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
 
         const constraints = mintConfig?.liveConnectConstraints;
         expect(constraints?.model).toBe('gemini-live-2.5-flash-preview');
+        // Only the MASK-SAFE subset is locked into the token — systemInstruction / tools /
+        // transcription keys 400 the mint ("field_mask is invalid for
+        // BidiGenerateContentSetup"); they travel via SessionConfig instead.
         const locked = constraints?.config as LiveConnectConfig;
-        expect(locked.systemInstruction).toBe('You are a helpful voice assistant.');
         expect(locked.responseModalities).toEqual([Modality.AUDIO]);
-        expect(locked.inputAudioTranscription).toBeDefined();
-        expect(locked.outputAudioTranscription).toBeDefined();
-        const decls = (locked.tools![0] as { functionDeclarations?: unknown[] }).functionDeclarations!;
-        expect(decls[0]).toMatchObject({ name: 'get_weather', description: 'Get the weather for a city' });
+        expect(locked.systemInstruction).toBeUndefined();
+        expect(locked.tools).toBeUndefined();
+        expect(locked.inputAudioTranscription).toBeUndefined();
+        expect(locked.outputAudioTranscription).toBeUndefined();
     });
 
     it('carries the same model + config in SessionConfig for the client to pass at connect', async () => {
@@ -149,8 +151,12 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(sc.config.responseModalities).toEqual(['AUDIO']);
         const tools = sc.config.tools as Array<{ functionDeclarations: Array<{ name: string }> }>;
         expect(tools[0].functionDeclarations[0].name).toBe('lookup');
-        // SessionConfig matches what was locked into the token (plain-JSON equivalent).
-        expect(sc.config).toEqual(JSON.parse(JSON.stringify(driver.MintParams!.config!.liveConnectConstraints!.config)));
+        // The FULL config (incl. fields the token mask can't lock) rides SessionConfig;
+        // the token constrains only the mask-safe subset of it.
+        const lockedSubset = JSON.parse(JSON.stringify(driver.MintParams!.config!.liveConnectConstraints!.config));
+        expect(sc.config).toMatchObject(lockedSubset);
+        expect(sc.config.systemInstruction).toBeDefined();
+        expect(sc.config.tools).toBeDefined();
     });
 
     it('throws when the mint returns no token name', async () => {
