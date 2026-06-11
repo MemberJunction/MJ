@@ -563,6 +563,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The view results
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        // Shallow-clone so the pipeline's in-place modifications (PlatformSQL resolution,
+        // Fields widening for cache-superset storage) never leak into the CALLER's params
+        // object — reusing a params object across calls must be safe.
+        params = { ...params };
         // Keyset (AfterKey) queries always bypass the server cache: each call uses a
         // different seek key, so a cached entry would never be reusable. Treat them like
         // explicit BypassCache=true requests.
@@ -617,6 +621,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Array of view results (shallow-copied Results per caller)
      */
     public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        // Shallow-clone every param so the pipeline's in-place modifications (PlatformSQL
+        // resolution, Fields widening for cache-superset storage) never leak into the
+        // CALLER's objects — reusing params across calls must be safe.
+        params = params.map(p => ({ ...p }));
         // Bypass dedup for side-effect calls (SaveViewResults creates DB records)
         if (this.ShouldBypassDedup(params)) {
             return this.ExecuteRunViewsPipeline<T>(params, contextUser);
@@ -1043,6 +1051,51 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * different Fields or ResultType must NOT share a dedup slot or the second
      * caller silently receives the first caller's shape.
      */
+    /**
+     * Single source of truth for whether a RunView call participates in the local
+     * cache (both READ and WRITE). Pre/Post hooks for the singular and batch paths
+     * must all use this predicate — historically each site recomputed it inline and
+     * they drifted (PostRunViews wrote BypassCache results into the cache, poisoning
+     * the Fields-agnostic superset slot with narrow rows).
+     *
+     * Ineligible:
+     * - `BypassCache` — caller explicitly wants true DB state, no cache interaction
+     * - `AfterKey` — keyset pages are single-use AND the fingerprint doesn't include
+     *   the seek key, so caching a page would poison the entity+filter slot
+     * - `ResultType 'count_only'` — returns no rows; caching its empty Results under
+     *   a fingerprint that excludes ResultType would poison row queries
+     * - entities where server caching is disallowed
+     */
+    protected runViewCacheEligible(param: RunViewParams): boolean {
+        return !param.BypassCache &&
+            !param.AfterKey &&
+            param.ResultType !== 'count_only' &&
+            (param.CacheLocal === true || this.TrustLocalCacheCompletely) &&
+            this.IsServerCacheAllowedForEntity(param);
+    }
+
+    /**
+     * Returns the caller's requested fields (lowercased) unioned with the entity's
+     * primary key field names. Platform contract: when `Fields` is explicitly
+     * specified, results ALWAYS include the primary key(s) — the direct SQL path has
+     * always done this, differential smart-cache merges require it, and entity
+     * linking in UIs depends on it. Applying the same union at every projection site
+     * keeps result shapes identical across cached, non-cached, and smart-cache paths.
+     */
+    protected static UnionFieldsWithPrimaryKeys(fields: string[], entity: EntityInfo): string[] {
+        const result = [...fields];
+        const present = new Set(fields);
+        // Defensive ?? [] — virtual entities can be PK-less, and test doubles may not model PrimaryKeys
+        for (const pk of entity.PrimaryKeys ?? []) {
+            const name = pk.Name.trim().toLowerCase();
+            if (!present.has(name)) {
+                present.add(name);
+                result.push(name);
+            }
+        }
+        return result;
+    }
+
     private GenerateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
         const parts = params.map(p => {
             const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
@@ -1718,7 +1771,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // We always fetch ALL fields from the DB so the cache entry is a universal superset
         // that satisfies any future query for the same entity+filter regardless of field subset.
         const entityLookupStart = performance.now();
-        const callerRequestedFields = params.Fields && params.Fields.length > 0
+        let callerRequestedFields = params.Fields && params.Fields.length > 0
             ? params.Fields.map(f => f.trim().toLowerCase())
             : null; // null = caller wants all fields
 
@@ -1726,16 +1779,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // for this call. For non-cached calls we respect the caller's narrow Fields
         // end-to-end — there's no cache-coherence concern to preserve.
         const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
-        const entityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
-        // Keyset (AfterKey) queries are inherently single-use, so we never read from or
-        // write to the cache for them. See RunViewParams.AfterKey JSDoc for rationale.
-        const willCache =
-            !params.BypassCache &&
-            !params.AfterKey &&
-            (params.CacheLocal || this.TrustLocalCacheCompletely) &&
-            entityCacheAllowed;
+        const willCache = this.runViewCacheEligible(params);
         if (entity && willCache) {
             params.Fields = entity.Fields.map(f => f.Name);
+            // Platform contract: explicit Fields always include the primary key(s) —
+            // project back down to requested ∪ PK, matching the direct SQL path.
+            if (callerRequestedFields) {
+                callerRequestedFields = ProviderBase.UnionFieldsWithPrimaryKeys(callerRequestedFields, entity);
+            }
         }
         const entityLookupTime = performance.now() - entityLookupStart;
 
@@ -1851,7 +1902,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Save caller's original Fields, then always fetch all fields from DB.
             // One cache entry per entity+filter satisfies all field subsets.
-            const callerFields = param.Fields && param.Fields.length > 0
+            let callerFields = param.Fields && param.Fields.length > 0
                 ? param.Fields.map(f => f.trim().toLowerCase())
                 : null;
 
@@ -1859,18 +1910,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // for this call. For non-cached calls we respect the caller's narrow Fields
             // end-to-end — there's no cache-coherence concern to preserve.
             const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
-            const batchEntityCacheAllowed = this.IsServerCacheAllowedForEntity(param);
-            // Keyset (AfterKey) queries are inherently single-use; never use the cache for them.
-            const batchWillCache =
-                !param.BypassCache &&
-                !param.AfterKey &&
-                (param.CacheLocal || this.TrustLocalCacheCompletely) &&
-                batchEntityCacheAllowed;
+            const batchWillCache = this.runViewCacheEligible(param);
             if (batchEntity && batchWillCache) {
                 param.Fields = batchEntity.Fields.map(f => f.Name);
-                // Remember the caller's original shape so PostRunViews can project
-                // cache-miss DB results back down to it
+                // Platform contract: explicit Fields always include the primary key(s)
                 if (callerFields) {
+                    callerFields = ProviderBase.UnionFieldsWithPrimaryKeys(callerFields, batchEntity);
+                    // Remember the caller's original shape so PostRunViews can project
+                    // cache-miss DB results back down to it
                     callerFieldsMap.set(i, callerFields);
                 }
             }
@@ -2337,8 +2384,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // with circular subscriber references that break JSON.stringify.
         // On cache read, TransformSimpleObjectToEntityObject is called to restore
         // entity objects when ResultType === 'entity_object'.
-        const postEntityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
-        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && postEntityCacheAllowed && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
+        // runViewCacheEligible is the same predicate PreRunView used to decide whether to
+        // widen Fields — only widened (superset) results may be written to the cache.
+        // preResult.fingerprint doubles as a guard (only computed when eligible).
+        if (this.runViewCacheEligible(params) && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 preResult.fingerprint,
@@ -2430,8 +2479,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params[i], contextUser);
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString, rlsWhereClause);
-            const batchEntityCacheAllowed = this.IsServerCacheAllowedForEntity(params[i]);
-            if ((params[i].CacheLocal || this.TrustLocalCacheCompletely) && batchEntityCacheAllowed && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
+            // CRITICAL: must be the SAME eligibility predicate PreRunViews used to decide
+            // whether to widen Fields. Writing a non-widened (narrow or keyset-paged)
+            // result here poisons the Fields-agnostic superset slot — this exact gate
+            // previously omitted BypassCache/AfterKey and cached narrow BypassCache rows.
+            if (this.runViewCacheEligible(params[i]) && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
                 cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
@@ -2653,11 +2705,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     protected shouldAutoCache(params: RunViewParams, result: RunViewResult): boolean {
         if (!this.TrustLocalCacheCompletely) return false;
-        if (params.BypassCache) return false; // caller explicitly wants no caching
         if (params.CacheLocal) return false; // already handled
+        // Same eligibility predicate as the main cache path — covers BypassCache,
+        // AfterKey (keyset pages), count_only, and cache-disallowed entities. An
+        // auto-cached keyset page or count_only result would poison the
+        // entity+filter slot just like the main-path variants of those bugs.
+        if (!this.runViewCacheEligible(params)) return false;
         if (!LocalCacheManager.Instance.IsInitialized) return false;
         if (!result.Success) return false;
-        if (!this.IsServerCacheAllowedForEntity(params)) return false;
         if (ProviderBase.ServerAutoCacheMaxRows <= 0) return false;
         if ((result.Results?.length ?? 0) > ProviderBase.ServerAutoCacheMaxRows) return false;
 

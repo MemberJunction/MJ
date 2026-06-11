@@ -621,9 +621,21 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const primaryKeys = baseEntity.EntityInfo.PrimaryKeys;
         if (!primaryKeys || primaryKeys.length === 0) return;
 
-        // Build a CompositeKey from the entity's primary key fields
+        // Build a CompositeKey from the entity's primary key fields.
+        //
+        // CRITICAL for deletes: BaseEntity.Delete() raises the 'delete' event and then
+        // immediately calls NewRecord(), wiping the entity's values — and THIS handler
+        // runs fire-and-forget async, so by the time it executes, baseEntity.GetAll()
+        // returns the wiped new-record state (null PKs) and the guard below would
+        // silently skip invalidation, leaving deleted rows visible in every cached
+        // filtered RunView (ghost rows). The delete event payload carries the
+        // pre-delete snapshot (OldValues) for exactly this reason — prefer it.
+        const payload = entityEvent.payload as { OldValues?: Record<string, unknown> } | undefined;
+        const record = (entityEvent.type === 'delete' && payload?.OldValues)
+            ? payload.OldValues
+            : baseEntity.GetAll();
         const key = new CompositeKey();
-        key.LoadFromEntityInfoAndRecord(baseEntity.EntityInfo, baseEntity.GetAll());
+        key.LoadFromEntityInfoAndRecord(baseEntity.EntityInfo, record);
         if (key.KeyValuePairs.length === 0 || key.KeyValuePairs.some(kv => kv.Value == null)) return;
 
         LogStatusVerbose(`LocalCacheManager: BaseEntity ${entityEvent.type} event for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);

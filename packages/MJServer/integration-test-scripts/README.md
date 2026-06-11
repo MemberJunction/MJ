@@ -16,8 +16,8 @@ and it can't count cache reads).
 
 | File | Purpose |
 |---|---|
-| `server-cache-tests.ts` | 17 tests against SQLServerDataProvider (`TrustLocalCacheCompletely = true`) |
-| `client-cache-tests.ts` | 8 tests against a running MJAPI via GraphQLDataProvider (`TrustLocalCacheCompletely = false`) |
+| `server-cache-tests.ts` | 23 tests against SQLServerDataProvider (`TrustLocalCacheCompletely = true`) |
+| `client-cache-tests.ts` | 10 tests against a running MJAPI via GraphQLDataProvider (`TrustLocalCacheCompletely = false`) |
 | `lib/harness.ts` | Env/config loading, minimal test runner, shape assertions, instrumented storage provider |
 
 ---
@@ -33,6 +33,9 @@ per-caller on every read:
 - **Projection** (`ProjectRowsToFields`) restores the caller's requested shape on cache
   **hits** (filtering the cached superset) AND on cache **misses** (filtering the widened
   DB result) — identical shapes regardless of cache temperature.
+- **PK contract**: explicitly requested `Fields` ALWAYS include the entity's primary
+  key(s) — on every path (cached, non-cached, smart-cache, differential). Differential
+  merges and entity linking depend on the PK, and the direct SQL path always included it.
 - The **dedup/linger key** (in-flight request sharing + 5s linger window) *includes*
   `Fields` and `ResultType`, because the dedup layer shares the FINAL pipeline output —
   rows already projected and transformed for one caller.
@@ -60,7 +63,7 @@ flowchart TD
         SBOOT["LoadEnv + LoadDbConfig<br/>(.env / mj.config.cjs — no hardcoded secrets)"]
         SCACHE["LocalCacheManager.Initialize(<br/>InstrumentedLocalStorageProvider<br/>wrapping InMemoryLocalStorageProvider)<br/><i>BEFORE provider setup — first caller wins</i>"]
         SSETUP["setupSQLServerClient(...)<br/>+ UserCache → context user"]
-        SRV["new RunView( ) calls<br/>S1–S17"]
+        SRV["new RunView( ) calls<br/>S1–S23"]
         SBOOT --> SCACHE --> SSETUP --> SRV
     end
 
@@ -88,7 +91,7 @@ flowchart TD
         CBOOT["LoadEnv + LoadClientConfig<br/>(MJ_API_KEY, GRAPHQL_PORT / MJAPI_URL)"]
         CSETUP["setupGraphQLClient(...)<br/>x-mj-api-key auth, no browser"]
         CCACHE["LocalCacheManager.Initialize(<br/>instrumented in-memory provider)<br/>per-Fields |f: slots"]
-        CRV["new RunView( ) calls<br/>C1–C8 (CacheLocal opt-in)"]
+        CRV["new RunView( ) calls<br/>C1–C10 (CacheLocal opt-in)"]
         CBOOT --> CSETUP --> CCACHE --> CRV
     end
 
@@ -148,7 +151,7 @@ its registry index asynchronously in a different category.
 
 ## Test inventory
 
-### Server suite (S1–S17)
+### Server suite (S1–S23)
 
 | # | Verifies |
 |---|---|
@@ -158,7 +161,7 @@ its registry index asynchronously in a different category.
 | S4 | No `Fields` → full entity width (pass-through) |
 | S5 | Case-insensitive field matching; original column casing preserved |
 | S6 | `entity_object` results are full `BaseEntity` instances even from a cached superset |
-| S7 | `BypassCache` skips cache read AND write, narrow fields end-to-end *(known-red — bug #1)* |
+| S7 | `BypassCache` skips cache read AND write, narrow fields end-to-end |
 | S8 | `TotalRowCount` parity across miss/hit |
 | S9 | Batch `RunViews`: each result projected to its OWN param's fields |
 | S10 | Mixed hit+miss batch: warm index from cache, cold index from DB, both correct |
@@ -168,20 +171,28 @@ its registry index asynchronously in a different category.
 | S14 | Different `ExtraFilter` values fingerprint independently |
 | S15 | `OrderBy` honored on miss and hit |
 | S16 | `MaxRows` limits rows and fingerprints separately from the unlimited query |
-| S17 | *(gated)* Save invalidates filtered entries; delete removes the row *(delete half known-red — bug #3)* |
+| S17 | *(gated)* Save invalidates filtered entries; delete removes the row |
+| S18 | AfterKey keyset pages never touch the cache and never poison the entity+filter slot |
+| S19 | `count_only` returns `TotalRowCount` with zero rows and never poisons the row cache |
+| S20 | Poisoning regression: full-width query after a narrow `BypassCache` stays full-width |
+| S21 | `entity_object` ignores narrow `Fields` — instances always carry the full field set |
+| S22 | Concurrent identical `RunViews` share one execution (at most one cache write) |
+| S23 | *(gated)* Unfiltered auto-maintained cache upserts on save / removes on delete IN PLACE — post-mutation reads still served from cache with zero DB hits |
 
-### Client suite (C1–C8)
+### Client suite (C1–C10)
 
 | # | Verifies |
 |---|---|
 | C1 | Narrow `Fields` shape survives the GraphQL transport end-to-end (no CacheLocal) |
 | C2 | Server miss/hit symmetry over the wire (second call past the linger window) |
-| C3 | `CacheLocal` miss writes a client slot; repeat validates `current` and serves locally *(known-red — bug #2)* |
-| C4 | Different subset gets its OWN `\|f:` slot — no cross-subset serving *(known-red — bug #2)* |
-| C5 | Full-width (`'*'`) request is not satisfied by a narrow slot *(known-red — bug #2)* |
+| C3 | `CacheLocal` miss writes a client slot; repeat validates `current` and serves locally |
+| C4 | Different subset gets its OWN `\|f:` slot — no cross-subset serving |
+| C5 | Full-width (`'*'`) request is not satisfied by a narrow slot |
 | C6 | `entity_object` materializes as `BaseEntity` client-side, including from cache |
 | C7 | Client dedup keying: different `Fields` in the linger window get their own shapes |
-| C8 | Mixed-CacheLocal batch projects each result to its own param *(known-red — bug #2)* |
+| C8 | Mixed-CacheLocal batch projects each result to its own param |
+| C9 | `count_only` works over the GraphQL transport (TotalRowCount, zero rows, no poisoning) |
+| C10 | *(gated)* Client slot save→revalidate→delete→revalidate round trip (differential/stale refresh) |
 
 ---
 
@@ -219,52 +230,50 @@ root `node_modules` and run directly via `tsx`.
 
 ---
 
-## Known-red tests (real product bugs found by this suite, 2026-06-11)
+## Bugs this suite found — all FIXED and re-verified live (2026-06-11)
 
-These tests assert **intended** behavior and are expected to stay red until the bugs are
-fixed. Do not "fix" the tests.
+The suite found three product bugs on its first day; all three are fixed on this branch
+and the once-red tests are now green regression guards.
 
-1. **S7 — BypassCache cache poisoning (server, batch path).**
-   `PostRunViews`' cache-write gate (`providerBase.ts`) checks
-   `CacheLocal || TrustLocalCacheCompletely` but never `BypassCache` (or `AfterKey`), and
-   computes the fingerprint inline — unlike `PostRunView` (singular) which is guarded by
-   `preResult.fingerprint`. Server-side singular `RunView({BypassCache: true})` routes
-   through the batch path, so the **narrow, un-widened** result gets written under the
-   Fields-agnostic superset fingerprint. Demonstrated consequence: a following normal
-   full-width query for the same entity+filter is served from cache with 2 columns
-   instead of ~70. (`AfterKey` keyset pages would poison the same way.)
+1. **S7/S20 — BypassCache cache poisoning (FIXED).** `PostRunViews`' cache-write gate
+   omitted `BypassCache`/`AfterKey`, so server-side `RunView({BypassCache:true})`
+   (which routes through the batch path) wrote its narrow, un-widened rows under the
+   Fields-agnostic superset fingerprint — a following full-width query was served 2
+   columns from cache. Fix: one shared `runViewCacheEligible()` predicate
+   (BypassCache / AfterKey / count_only / entity-allowed) now gates widening, cache
+   reads, cache writes, AND auto-cache in all pre/post hooks — the four sites can no
+   longer drift apart.
 
-2. **C3/C4/C5/C8 — smart-cache server path bypasses widening AND projection.**
-   `GenericDatabaseProvider.RunViewsWithCacheCheck` reimplements caching outside the
-   ProviderBase pipeline: `runFullQueryAndCacheResult` caches the caller's **narrow**
-   result under the Fields-agnostic server fingerprint, and the Phase-3
-   `serveFromServerCache` shortcut returns cached rows to no-cacheStatus clients with
-   **no per-caller Fields projection**. Net effect observed live: one client's
-   `CacheLocal` shape poisons the server slot, and every subsequent client request for
-   the same entity+filter receives that first caller's columns regardless of what it
-   asked for (including full-width `'*'` requests getting 3 columns).
+2. **C3/C4/C5/C8 — smart-cache server path bypassed widening and projection (FIXED).**
+   `GenericDatabaseProvider.RunViewsWithCacheCheck` cached narrow results under the
+   Fields-agnostic fingerprint and served cached rows unprojected, so one client's
+   `CacheLocal` shape poisoned the slot for every subsequent caller. Fix: the method
+   now widens eligible items at entry (same predicate), caches only the wide superset,
+   and every serve leg (server-cache shortcut, full-query, stale fallback, differential
+   rows) projects down to each caller's requested fields ∪ PK before returning.
 
-3. **S17 — DELETE-driven invalidation fails for filtered cache entries (ghost rows).**
-   Save-driven invalidation works (a saved row appears in a previously-cached filtered
-   query after the fire-and-forget event lands). But after `BaseEntity.Delete()`, the
-   filtered cache entry keeps serving the deleted row: reproduced in isolation —
-   post-delete cached query returns 1 row with `ExecutionTime: 0` while a
-   `BypassCache` DB-truth query returns 0 rows. Deleted records remain visible to
-   every cached filtered RunView until the entry expires or is otherwise invalidated.
+3. **S17 — DELETE-driven invalidation failed for filtered entries (FIXED).**
+   `BaseEntity.Delete()` raises the delete event then immediately wipes the entity via
+   `NewRecord()`; the cache handler runs fire-and-forget async and read
+   `baseEntity.GetAll()` AFTER the wipe — null PKs, silent skip, ghost rows in every
+   cached filtered view. Fix: the handler now prefers the event payload's pre-delete
+   `OldValues` snapshot (carried on the delete event for exactly this reason) when
+   building the invalidation key.
 
-Also noted while building the suite:
-- `ResultType: 'count_only'` is documented in `RunViewParams` but implemented by no
-  provider — it silently returns 0 rows / 0 TotalRowCount.
-- The direct (non-cached) SQL path includes the primary key alongside explicitly
-  requested `Fields`, while the cached path projects to exactly the requested fields —
-  a minor shape asymmetry between `BypassCache` and cached narrow queries.
-- Swapping storage providers post-initialization via
-  `LocalCacheManager.SetStorageProvider` appeared to break save-driven invalidation for
-  entries created after the swap (the suite originally used the swap and S17's save
-  half failed; initializing first instead made it pass). Needs verification — the same
-  swap is how MJServer installs Redis, though that happens at startup before traffic.
-- The RunView pipeline **mutates caller params objects** (`Fields` widened in place on
-  cacheable calls) — caller-visible side effect worth knowing about.
+Also resolved in the same pass:
+- **`count_only` implemented** — `BuildTotalRowCountSQL` only emitted the COUNT query
+  when rows were limited (its pagination purpose), so a bare `count_only` silently
+  returned 0. It now always emits the count for `count_only`, and `count_only` is
+  cache-ineligible (its empty Results under a ResultType-agnostic fingerprint would
+  poison row queries). Verified server-side (S19) and over GraphQL (C9).
+- **PK contract adopted** — explicitly requested `Fields` now always include the
+  primary key(s) on every path, resolving the cached-vs-direct shape asymmetry.
+- **Caller params no longer mutated** — `RunView`/`RunViews` shallow-clone params at
+  entry, so the pipeline's Fields widening never leaks into caller objects.
+- **`SetStorageProvider` exonerated** — the earlier suspicion that a post-init swap
+  broke save-invalidation was re-tested with correct settle timing: save AND delete
+  invalidation work fine after a swap. The original failure was the (since-fixed)
+  delete bug plus too-short settle windows.
 
 ---
 
@@ -275,9 +284,12 @@ Also noted while building the suite:
    different (all-fields) request. Use a `makeParams()` factory.
 2. **Scope counter assertions to the `'RunViewCache'` category.** The registry index
    persists asynchronously in another category and will randomly bump global counters.
-3. **Initialize the instrumented cache BEFORE provider setup.** `Initialize` is
-   first-caller-wins; the provider's `StartupManager` initializes it during setup, and a
-   post-hoc `SetStorageProvider` swap showed invalidation side effects (see findings).
+3. **Initialize the instrumented cache BEFORE provider setup — server AND client.**
+   `Initialize` is first-caller-wins; both `setupSQLServerClient` and
+   `setupGraphQLClient` initialize it via `StartupManager` during setup. Initializing
+   afterwards is a SILENT no-op: caching still works (against the provider's own
+   storage) but your instrumented counters never see traffic — assertions on writes
+   fail while all behavior assertions pass, which looks exactly like a product bug.
 4. **Outlive the 5-second dedup linger window** (sleep ~5.2s) when a test needs the
    second call to genuinely reach the cache or the server rather than the in-flight
    dedup slot.

@@ -22,6 +22,8 @@ import {
     EntityInfo,
     EntityFieldInfo,
     EntityFieldTSType,
+    ProjectRowsToFields,
+    ProviderBase,
     EntitySaveOptions,
     EntityDeleteOptions,
     EntityPermissionType,
@@ -1500,7 +1502,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // ── Build SELECT and COUNT SQL ──
             const topFragment = topSQL ? topSQL + ' ' : '';
             let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
-            let countSQL: string | null = this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
+            // count_only ALWAYS needs the count query — BuildTotalRowCountSQL only emits
+            // it when rows are limited (its pagination purpose), which previously left
+            // count_only with no COUNT at all (silently returned TotalRowCount 0).
+            let countSQL: string | null = params.ResultType === 'count_only'
+                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`
+                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
 
             // ── WHERE clause assembly ──
             let whereSQL = '';
@@ -2034,6 +2041,38 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return { success: false, results: [], errorMessage: 'No user context available' };
             }
 
+            // ── Superset/projection contract (same as the ProviderBase pipeline) ──
+            // For every cache-eligible item: widen Fields to ALL entity fields so any
+            // cache write stores the universal superset, and remember the caller's
+            // requested shape (∪ primary keys — platform contract) so every serve leg
+            // projects back down before returning rows to the client. This path
+            // previously cached narrow rows under the Fields-agnostic fingerprint and
+            // served cached rows unprojected — one client's shape poisoned the slot
+            // for every subsequent caller.
+            const callerFieldsByIndex = new Map<number, string[]>();
+            for (let i = 0; i < params.length; i++) {
+                // Shallow-clone: widening must never leak into the caller's objects
+                params[i] = { ...params[i], params: { ...params[i].params } };
+                const p = params[i].params;
+                const widenEntity = p.EntityName ? this.EntityByName(p.EntityName) : null;
+                if (widenEntity && this.runViewCacheEligible(p)) {
+                    const requested = p.Fields && p.Fields.length > 0
+                        ? p.Fields.map(f => f.trim().toLowerCase())
+                        : null;
+                    p.Fields = widenEntity.Fields.map(f => f.Name);
+                    if (requested) {
+                        callerFieldsByIndex.set(i, ProviderBase.UnionFieldsWithPrimaryKeys(requested, widenEntity));
+                    }
+                }
+            }
+            /** Projects rows down to the caller's requested shape for a given item index. */
+            const projectForCaller = (index: number, rows: unknown[]): unknown[] => {
+                const callerFields = callerFieldsByIndex.get(index);
+                return callerFields
+                    ? ProjectRowsToFields(rows as Record<string, unknown>[], callerFields)
+                    : rows;
+            };
+
             // Separate items by type: no cache check, needs validation
             const itemsWithoutCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
             const itemsNeedingValidation: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
@@ -2151,27 +2190,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 noCacheStatusNeedsDB.push(entry);
             }
 
-            // Phase 4: Run queries in parallel for items needing data
+            // Phase 4: Run queries in parallel for items needing data.
+            // Every leg that returns rows projects them down to the caller's requested
+            // shape (callerFieldsByIndex) — the cache always holds the wide superset.
             const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
                 // Items without cache check — served from server cache
                 ...noCacheStatusServedFromCache.map(({ index, serverCached }) =>
-                    this.serveFromServerCache<T>(index, serverCached),
+                    this.serveFromServerCache<T>(index, serverCached, callerFieldsByIndex.get(index) ?? null),
                 ),
                 // Items without cache check — server cache miss, must hit DB
                 ...noCacheStatusNeedsDB.map(({ index, item }) =>
-                    this.runFullQueryAndCacheResult<T>(item.params, index, contextUser),
+                    this.runFullQueryAndCacheResult<T>(item.params, index, contextUser, callerFieldsByIndex.get(index) ?? null),
                 ),
                 // Server cache stale — serve from server's cached data (zero DB)
                 ...serverCacheStaleItems.map(({ index, serverCached }) =>
-                    this.serveFromServerCache<T>(index, serverCached),
+                    this.serveFromServerCache<T>(index, serverCached, callerFieldsByIndex.get(index) ?? null),
                 ),
                 // DB-validated stale items (no change tracking)
                 ...staleItemsNoTracking.map(({ index, params: viewParams }) =>
-                    this.runFullQueryAndCacheResult<T>(viewParams, index, contextUser),
+                    this.runFullQueryAndCacheResult<T>(viewParams, index, contextUser, callerFieldsByIndex.get(index) ?? null),
                 ),
                 // DB-validated differential items
                 ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
-                    this.runDifferentialQueryAndReturn<T>(viewParams, entityInfo, clientMaxUpdatedAt, clientRowCount, serverStatus, whereSQL, index, contextUser),
+                    this.runDifferentialQueryAndReturn<T>(viewParams, entityInfo, clientMaxUpdatedAt, clientRowCount, serverStatus, whereSQL, index, contextUser, callerFieldsByIndex.get(index) ?? null),
                 ),
             ];
 
@@ -2290,14 +2331,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         params: RunViewParams,
         viewIndex: number,
         contextUser?: UserInfo,
+        callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         const result = await this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
-        // Cache the result so subsequent RunViewsWithCacheCheck calls can skip DB
-        if (result.status !== 'error' && result.results && LocalCacheManager.Instance.IsInitialized) {
-            const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
-            const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this);
+        if (result.status !== 'error' && result.results) {
+            // Cache the WIDE result (params.Fields was widened by RunViewsWithCacheCheck
+            // for eligible items) so subsequent calls can serve any field subset. The
+            // eligibility gate matters: BypassCache/AfterKey/count_only results were
+            // never widened and must NOT be written under the superset fingerprint.
+            if (this.runViewCacheEligible(params) && LocalCacheManager.Instance.IsInitialized) {
+                const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
+                const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
+                await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this);
+            }
+            // Project the response down to the caller's requested shape AFTER the
+            // cache write — the cache keeps the superset, the caller gets their fields.
+            if (callerFields) {
+                result.results = ProjectRowsToFields(result.results as Record<string, unknown>[], callerFields) as T[];
+            }
         }
         return result;
     }
@@ -2337,11 +2389,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
         serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number },
+        callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
+        // The server cache stores the full-width superset — project down to the
+        // caller's requested fields (∪ PK) before returning, exactly like the
+        // ProviderBase hit path. Serving unprojected rows here previously leaked
+        // whatever shape happened to be cached to every subsequent caller.
+        const results = callerFields
+            ? ProjectRowsToFields(serverCached.results as Record<string, unknown>[], callerFields)
+            : serverCached.results;
         return {
             viewIndex,
             status: 'stale',
-            results: serverCached.results as T[],
+            results: results as T[],
             maxUpdatedAt: serverCached.maxUpdatedAt,
             rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
         };
@@ -2361,6 +2421,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         whereSQL: string,
         viewIndex: number,
         contextUser?: UserInfo,
+        callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         try {
             const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, clientMaxUpdatedAt, whereSQL, contextUser);
@@ -2369,8 +2430,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Validation: detect hidden deletes not tracked in RecordChanges
             const clientMaxUpdatedDate = this.parseClientTimestamp(clientMaxUpdatedAt);
             if (!clientMaxUpdatedDate) {
-                // Unparseable client timestamp — can't trust the differential math; fall back.
-                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+                // Unparseable client timestamp — can't trust the differential math; fall
+                // back to a full refresh (cached wide + projected, like every other leg).
+                return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
             }
             const newInserts = updatedRows.filter(row => {
                 const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
@@ -2385,22 +2447,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             if (impliedDeletes < 0) {
                 LogStatus(`Differential validation failed for ${entityInfo.Name}: impliedDeletes=${impliedDeletes} (negative). Falling back to full refresh.`);
-                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+                return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
             }
 
             if (impliedDeletes > actualDeletes) {
                 LogStatus(`Differential validation failed for ${entityInfo.Name}: hidden deletes detected (implied=${impliedDeletes}, actual=${actualDeletes}). Falling back to full refresh.`);
-                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+                return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
             }
 
+            // Compute maxUpdatedAt BEFORE projection — the caller may not have
+            // requested __mj_UpdatedAt, and projection would strip it.
             const newMaxUpdatedAt = updatedRows.length > 0
                 ? this.extractMaxUpdatedAt(updatedRows)
                 : serverStatus.maxUpdatedAt || new Date().toISOString();
 
+            // Project differential rows to the caller's shape — the client merges these
+            // into its per-Fields cache slot, so the shapes must match by construction.
+            const projectedRows = callerFields
+                ? ProjectRowsToFields(updatedRows as Record<string, unknown>[], callerFields) as T[]
+                : updatedRows;
+
             return {
                 viewIndex,
                 status: 'differential',
-                differentialData: { updatedRows, deletedRecordIDs },
+                differentialData: { updatedRows: projectedRows, deletedRecordIDs },
                 maxUpdatedAt: newMaxUpdatedAt,
                 rowCount: serverStatus.rowCount,
             };

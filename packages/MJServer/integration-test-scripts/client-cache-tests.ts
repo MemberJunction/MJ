@@ -28,9 +28,12 @@ import {
     InstrumentedLocalStorageProvider, UniqueFilter, RowKeys
 } from './lib/harness';
 import {
-    BaseEntity, InMemoryLocalStorageProvider, LocalCacheManager, RunView
+    BaseEntity, InMemoryLocalStorageProvider, LocalCacheManager, Metadata, RunView
 } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
+// Side-effect import: registers generated entity subclasses (typed properties) on the ClassFactory
+import '@memberjunction/core-entities';
+import type { UserSettingEntity } from '@memberjunction/core-entities';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';
@@ -65,6 +68,16 @@ async function bootstrap(): Promise<InstrumentedLocalStorageProvider> {
     const client = LoadClientConfig();
     await preflight(client.Url, client.MJAPIKey);
 
+    // Initialize LocalCacheManager BEFORE provider setup — Initialize is
+    // first-caller-wins, and setupGraphQLClient's StartupManager initializes it
+    // during setup. Initializing afterwards is a silent no-op: caching still works,
+    // but against the provider's own storage, and the instrumented counters never
+    // see any traffic (exactly the trap this comment is warning you about).
+    // Under Node there is no IndexedDB, so in-memory is what the provider would
+    // have selected anyway.
+    const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
+    await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: false });
+
     const config = new GraphQLProviderConfigData(
         '',                 // JWT token — unused; the system API key authenticates us
         client.Url,
@@ -76,13 +89,6 @@ async function bootstrap(): Promise<InstrumentedLocalStorageProvider> {
         client.MJAPIKey     // mjAPIKey → sent as x-mj-api-key on every request
     );
     await setupGraphQLClient(config);
-
-    // GraphQLDataProvider would lazily fall back to InMemoryLocalStorageProvider
-    // under Node anyway (no IndexedDB); we construct it explicitly and wrap it so
-    // tests can observe cache reads/writes, then initialize LocalCacheManager the
-    // way the browser shell does at startup.
-    const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
-    await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: false });
     return storage;
 }
 
@@ -102,7 +108,7 @@ async function main(): Promise<void> {
         });
         Assert(result.Success, `RunView failed: ${result.ErrorMessage}`);
         Assert(result.Results.length > 100, `expected 100+ entities, got ${result.Results.length}`);
-        AssertRowShape(result.Results[0], ['Name', 'SchemaName'], 'narrow shape through GraphQL transport');
+        AssertRowShape(result.Results[0], ['ID', 'Name', 'SchemaName'], 'narrow shape through GraphQL transport (requested fields + PK)');
     });
 
     suite.Test('C2: identical narrow request twice in a row keeps the identical shape (server hit/miss symmetry over the wire)', async () => {
@@ -118,8 +124,8 @@ async function main(): Promise<void> {
         await Sleep(5200);
         const second = await rv.RunView(params);
         Assert(first.Success && second.Success, 'both calls must succeed');
-        AssertRowShape(first.Results[0], ['Name', 'BaseView'], 'first (server miss) shape');
-        AssertRowShape(second.Results[0], ['Name', 'BaseView'], 'second (server hit) shape');
+        AssertRowShape(first.Results[0], ['ID', 'Name', 'BaseView'], 'first (server miss) shape');
+        AssertRowShape(second.Results[0], ['ID', 'Name', 'BaseView'], 'second (server hit) shape');
         AssertEqual(second.Results.length, first.Results.length, 'row counts must match across server miss/hit');
     });
 
@@ -136,7 +142,7 @@ async function main(): Promise<void> {
         storage.ResetCounts();
         const first = await rv.RunView(params);
         Assert(first.Success, `first call failed: ${first.ErrorMessage}`);
-        AssertRowShape(first.Results[0], ['Name', 'SchemaName'], 'first-call shape');
+        AssertRowShape(first.Results[0], ['ID', 'Name', 'SchemaName'], 'first-call shape (requested fields + PK)');
         await Sleep(300); // the stale-path client cache write is fire-and-forget
         Assert(storage.SetItemCount > 0, 'first CacheLocal call must write a client cache slot');
 
@@ -145,7 +151,7 @@ async function main(): Promise<void> {
         storage.GetItemsCount = 0;
         const second = await rv.RunView(params);
         Assert(second.Success, `second call failed: ${second.ErrorMessage}`);
-        AssertRowShape(second.Results[0], ['Name', 'SchemaName'], 'second-call shape');
+        AssertRowShape(second.Results[0], ['ID', 'Name', 'SchemaName'], 'second-call shape');
         AssertEqual(second.Results.length, first.Results.length, 'row counts must match');
         Assert(storage.GetItemsCount > 0, 'second call must read the client cache slot');
         AssertEqual(storage.SetItemCount, setsBefore, 'a current slot must not be rewritten');
@@ -164,7 +170,7 @@ async function main(): Promise<void> {
         // Under the old Fields-agnostic client fingerprint, C3's narrow slot would have
         // validated as 'current' for this request and silently served rows WITHOUT
         // Description. The per-Fields slot forces a fresh fetch with the right columns.
-        AssertRowShape(result.Results[0], ['Name', 'Description'], 'own-slot shape must include Description');
+        AssertRowShape(result.Results[0], ['ID', 'Name', 'Description'], 'own-slot shape must include Description');
         await Sleep(300); // fire-and-forget slot write
         Assert(storage.SetItemCount > setsBefore, 'the new subset must write its own client slot');
     });
@@ -206,8 +212,8 @@ async function main(): Promise<void> {
         const a = await rv.RunViews([{ EntityName: ENTITY, ExtraFilter: filter, Fields: ['Name'], ResultType: 'simple' }]);
         const b = await rv.RunViews([{ EntityName: ENTITY, ExtraFilter: filter, Fields: ['Name', 'Description'], ResultType: 'simple' }]);
         Assert(a[0].Success && b[0].Success, 'both calls must succeed');
-        AssertRowShape(a[0].Results[0], ['Name'], 'first caller shape');
-        AssertRowShape(b[0].Results[0], ['Name', 'Description'], 'second caller must NOT inherit the first caller\'s narrower shape');
+        AssertRowShape(a[0].Results[0], ['ID', 'Name'], 'first caller shape');
+        AssertRowShape(b[0].Results[0], ['ID', 'Name', 'Description'], 'second caller must NOT inherit the first caller\'s narrower shape');
     });
 
     suite.Test('C8: batch RunViews with mixed CacheLocal projects each result to its own param', async () => {
@@ -217,9 +223,61 @@ async function main(): Promise<void> {
         ]);
         AssertEqual(results.length, 2, 'two results expected');
         Assert(results[0].Success && results[1].Success, 'both batch results must succeed');
-        AssertRowShape(results[0].Results[0], ['Name', 'SchemaName'], 'batch index 0 shape (CacheLocal)');
+        AssertRowShape(results[0].Results[0], ['ID', 'Name', 'SchemaName'], 'batch index 0 shape (CacheLocal)');
         AssertRowShape(results[1].Results[0], ['ID', 'Name'], 'batch index 1 shape (no caching)');
     });
+
+
+    // ── Widened coverage ───────────────────────────────────────────────────────
+
+    suite.Test('C9: count_only works over the GraphQL transport (TotalRowCount, zero rows)', async () => {
+        const filter = UniqueFilter('Name', 'c9');
+        const count = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, ResultType: 'count_only' });
+        Assert(count.Success, `count_only failed: ${count.ErrorMessage}`);
+        AssertEqual(count.Results.length, 0, 'count_only must return no rows');
+        Assert(count.TotalRowCount > 100, `count_only TotalRowCount expected 100+, got ${count.TotalRowCount}`);
+        // And it must not poison the row cache for the same entity+filter
+        const rows = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, Fields: ['Name'], ResultType: 'simple' });
+        Assert(rows.Success && rows.Results.length === count.TotalRowCount, 'row query after count_only must see all rows');
+    });
+
+    if (process.env.RUN_MUTATION_TESTS === '1') {
+        suite.Test('C10 (mutation): client CacheLocal slot refreshes after save and drops the row after delete (revalidation round trip)', async () => {
+            const md = new Metadata();
+            const settingPrefix = `mj.integrationtest.client.${Date.now()}`;
+            const makeParams = () => ({
+                EntityName: 'MJ: User Settings',
+                ExtraFilter: `Setting LIKE '${settingPrefix}%'`,
+                Fields: ['ID', 'Setting'],
+                ResultType: 'simple' as const,
+                CacheLocal: true
+            });
+            const before = await rv.RunView(makeParams());
+            Assert(before.Success, `pre-query failed: ${before.ErrorMessage}`);
+            AssertEqual(before.Results.length, 0, 'setting must not exist yet');
+            await Sleep(500); // let the slot write land
+
+            // Save through the SAME client (a real GraphQL mutation end-to-end)
+            const setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+            setting.UserID = md.CurrentUser.ID;
+            setting.Setting = `${settingPrefix}.a`;
+            setting.Value = 'integration-test';
+            Assert(await setting.Save(), `client-side Save must succeed: ${setting.LatestResult?.CompleteMessage ?? ''}`);
+            try {
+                await Sleep(5500); // outlive linger so the next call truly revalidates the slot
+                const after = await rv.RunView(makeParams());
+                Assert(after.Success, `post-save query failed: ${after.ErrorMessage}`);
+                AssertEqual(after.Results.length, 1, 'slot revalidation must surface the saved row');
+                AssertRowShape(after.Results[0], ['ID', 'Setting'], 'revalidated rows must match the slot shape');
+            } finally {
+                Assert(await setting.Delete(), `client-side Delete must succeed: ${setting.LatestResult?.CompleteMessage ?? ''}`);
+            }
+            await Sleep(5500);
+            const final = await rv.RunView(makeParams());
+            Assert(final.Success, `post-delete query failed: ${final.ErrorMessage}`);
+            AssertEqual(final.Results.length, 0, 'slot revalidation must drop the deleted row');
+        });
+    }
 
     const failures = await suite.Run();
     process.exit(failures > 0 ? 1 : 0);

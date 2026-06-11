@@ -29,7 +29,7 @@ import {
     AssertKeysInclude, InstrumentedLocalStorageProvider, UniqueFilter, RowKeys
 } from './lib/harness';
 import {
-    BaseEntity, InMemoryLocalStorageProvider, LocalCacheManager, Metadata, RunView, UserInfo
+    BaseEntity, CompositeKey, InMemoryLocalStorageProvider, LocalCacheManager, Metadata, RunView, UserInfo
 } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 // Registers entity subclasses on the ClassFactory (needed for entity_object tests)
@@ -59,9 +59,9 @@ async function bootstrap(): Promise<Ctx> {
 
     // Initialize LocalCacheManager BEFORE provider setup — Initialize is first-caller-wins,
     // so this preempts StartupManager's own call and every cache read/write flows through
-    // the instrumented wrapper from the very first query. (Swapping providers afterwards
-    // via SetStorageProvider was found to break the entity→fingerprint invalidation index;
-    // see README "Known findings".)
+    // the instrumented wrapper from the very first query. Initializing AFTER setup is a
+    // silent no-op: caching still works, but against the provider's own storage, and the
+    // instrumented counters never see any traffic.
     const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
     await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: false });
 
@@ -98,7 +98,7 @@ async function main(): Promise<void> {
         }, user);
         Assert(result.Success, `RunView failed: ${result.ErrorMessage}`);
         Assert(result.Results.length > 100, `expected 100+ entities, got ${result.Results.length}`);
-        AssertRowShape(result.Results[0], ['Name', 'SchemaName'], 'miss-path row shape');
+        AssertRowShape(result.Results[0], ['ID', 'Name', 'SchemaName'], 'miss-path row shape (requested fields + PK)');
         Assert(storage.SetCount('RunViewCache') > 0, 'expected a RunViewCache write on miss (SetItem not called)');
     });
 
@@ -112,7 +112,7 @@ async function main(): Promise<void> {
         const setsBefore = storage.SetCount('RunViewCache');
         const result = await rv.RunView(params, user);
         Assert(result.Success, `RunView failed: ${result.ErrorMessage}`);
-        AssertRowShape(result.Results[0], ['Name', 'SchemaName'], 'hit-path row shape');
+        AssertRowShape(result.Results[0], ['ID', 'Name', 'SchemaName'], 'hit-path row shape (requested fields + PK)');
         AssertEqual(storage.SetCount('RunViewCache'), setsBefore, 'hit must not rewrite the cache');
         AssertEqual(result.ExecutionTime, 0, 'cache-served results report ExecutionTime 0');
     });
@@ -149,7 +149,7 @@ async function main(): Promise<void> {
             ResultType: 'simple'
         }, user);
         Assert(result.Success, `RunView failed: ${result.ErrorMessage}`);
-        AssertRowShape(result.Results[0], ['Name', 'SchemaName'], 'case-insensitive projection');
+        AssertRowShape(result.Results[0], ['ID', 'Name', 'SchemaName'], 'case-insensitive projection (requested fields + PK)');
         Assert(Object.keys(result.Results[0]).includes('Name'), 'original casing (Name) must be preserved');
     });
 
@@ -215,7 +215,7 @@ async function main(): Promise<void> {
         ], user);
         AssertEqual(results.length, 2, 'two results expected');
         Assert(results[0].Success && results[1].Success, 'both batch results must succeed');
-        AssertRowShape(results[0].Results[0], ['Name', 'SchemaName'], 'batch index 0 shape');
+        AssertRowShape(results[0].Results[0], ['ID', 'Name', 'SchemaName'], 'batch index 0 shape');
         AssertRowShape(results[1].Results[0], ['ID', 'Name'], 'batch index 1 shape');
     });
 
@@ -228,8 +228,8 @@ async function main(): Promise<void> {
             { EntityName: ENTITY, ExtraFilter: UniqueFilter('Name', 's10-cold'), Fields: ['Name', 'BaseTable'], ResultType: 'simple' } // MISS
         ], user);
         Assert(results[0].Success && results[1].Success, 'both batch results must succeed');
-        AssertRowShape(results[0].Results[0], ['Name', 'Description'], 'hit index shape (from cached superset)');
-        AssertRowShape(results[1].Results[0], ['Name', 'BaseTable'], 'miss index shape (projected from DB result)');
+        AssertRowShape(results[0].Results[0], ['ID', 'Name', 'Description'], 'hit index shape (from cached superset)');
+        AssertRowShape(results[1].Results[0], ['ID', 'Name', 'BaseTable'], 'miss index shape (projected from DB result)');
     });
 
     // ── Dedup / linger keying (Fields + ResultType in the dedup key) ──────────
@@ -240,8 +240,8 @@ async function main(): Promise<void> {
         // Within the 5s linger window — would have shared A's slot under the old Fields-less dedup key
         const b = await rv.RunViews([{ EntityName: ENTITY, ExtraFilter: filter, Fields: ['Name', 'Description'], ResultType: 'simple' }], user);
         Assert(a[0].Success && b[0].Success, 'both calls must succeed');
-        AssertRowShape(a[0].Results[0], ['Name'], 'first caller shape');
-        AssertRowShape(b[0].Results[0], ['Name', 'Description'], 'second caller must NOT inherit the first caller\'s narrower shape');
+        AssertRowShape(a[0].Results[0], ['ID', 'Name'], 'first caller shape');
+        AssertRowShape(b[0].Results[0], ['ID', 'Name', 'Description'], 'second caller must NOT inherit the first caller\'s narrower shape');
     });
 
     suite.Test('S12: linger-window callers with DIFFERENT ResultType each get their own representation', async () => {
@@ -262,7 +262,7 @@ async function main(): Promise<void> {
         storage.ResetCounts();
         const b = await rv.RunViews(makeParams(), user);
         Assert(b[0].Success, `second call failed: ${b[0].ErrorMessage}`);
-        AssertRowShape(b[0].Results[0], ['Name'], 'linger-served shape');
+        AssertRowShape(b[0].Results[0], ['ID', 'Name'], 'linger-served shape');
         AssertEqual(storage.GetCount('RunViewCache') + storage.SetCount('RunViewCache'), 0,
             'linger hit must be served from the in-flight dedup slot, not from cache storage');
     });
@@ -349,7 +349,102 @@ async function main(): Promise<void> {
             Assert(final.Success, `post-delete query failed: ${final.ErrorMessage}`);
             AssertEqual(final.Results.length, 0, 'delete must invalidate the cache so the row disappears');
         });
+
+        suite.Test('S23 (mutation): unfiltered auto-maintained cache upserts on save and removes on delete IN PLACE', async () => {
+            const md = new Metadata();
+            const makeParams = () => ({ EntityName: 'MJ: User Settings', Fields: ['ID', 'Setting'], ResultType: 'simple' as const });
+            const baseline = await rv.RunView(makeParams(), user);
+            Assert(baseline.Success, `baseline failed: ${baseline.ErrorMessage}`);
+            const baselineCount = baseline.Results.length;
+
+            const setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings', user);
+            setting.UserID = user.ID;
+            setting.Setting = `mj.integrationtest.upsert.${Date.now()}`;
+            setting.Value = 'integration-test';
+            Assert(await setting.Save(), `Save failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            try {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                const after = await rv.RunView(makeParams(), user);
+                Assert(after.Success, `post-save failed: ${after.ErrorMessage}`);
+                AssertEqual(after.Results.length, baselineCount + 1, 'unfiltered cache must upsert the new row in place');
+                AssertEqual(after.ExecutionTime, 0, 'post-save read must still be served from cache (in-place upsert, no DB)');
+            } finally {
+                Assert(await setting.Delete(), `Delete failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            }
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const final2 = await rv.RunView(makeParams(), user);
+            Assert(final2.Success, `post-delete failed: ${final2.ErrorMessage}`);
+            AssertEqual(final2.Results.length, baselineCount, 'unfiltered cache must remove the deleted row in place');
+            AssertEqual(final2.ExecutionTime, 0, 'post-delete read must still be served from cache (in-place removal, no DB)');
+        });
     }
+
+
+    suite.Test('S18: AfterKey keyset pages never touch the cache and never poison the entity+filter slot', async () => {
+        const filter = UniqueFilter('Name', 's18');
+        // Page 1: a normal MaxRows query (cacheable, fingerprints separately via MaxRows)
+        const page1 = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, OrderBy: 'ID ASC', Fields: ['ID', 'Name'], MaxRows: 50, ResultType: 'simple' }, user);
+        Assert(page1.Success && page1.Results.length === 50, `page1 expected 50 rows, got ${page1.Results.length}`);
+        const lastID = String(page1.Results[page1.Results.length - 1].ID);
+
+        // Page 2: keyset — must not read OR write the cache
+        const setsBefore = storage.SetCount('RunViewCache');
+        const page2 = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, OrderBy: 'ID ASC', Fields: ['ID', 'Name'], MaxRows: 50, AfterKey: CompositeKey.FromID(lastID), ResultType: 'simple' }, user);
+        Assert(page2.Success && page2.Results.length === 50, `page2 expected 50 rows, got ${page2?.Results?.length}`);
+        AssertEqual(storage.SetCount('RunViewCache'), setsBefore, 'keyset page must not write the cache');
+        const page1IDs = new Set(page1.Results.map(r => String(r.ID).toLowerCase()));
+        Assert(page2.Results.every(r => !page1IDs.has(String(r.ID).toLowerCase())), 'keyset pages must not overlap');
+
+        // The entity+filter slot must NOT have been poisoned by the keyset page:
+        // an unlimited full-width query must return all rows, all columns
+        const full = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, ResultType: 'simple' }, user);
+        Assert(full.Success && full.Results.length > 100, `full query must see all rows, got ${full.Results.length}`);
+        Assert(RowKeys(full.Results[0]).length > 20, 'full query must see all columns (no keyset-page poisoning)');
+    });
+
+    suite.Test('S19: count_only returns TotalRowCount with zero rows and never poisons the row cache', async () => {
+        const filter = UniqueFilter('Name', 's19');
+        const count = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, ResultType: 'count_only' }, user);
+        Assert(count.Success, `count_only failed: ${count.ErrorMessage}`);
+        AssertEqual(count.Results.length, 0, 'count_only must return no rows');
+        Assert(count.TotalRowCount > 100, `count_only TotalRowCount expected 100+, got ${count.TotalRowCount}`);
+
+        // The same entity+filter must still serve full rows afterwards (no empty-poisoning)
+        const rows = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, Fields: ['Name'], ResultType: 'simple' }, user);
+        Assert(rows.Success && rows.Results.length === count.TotalRowCount, 'row query after count_only must see all rows');
+    });
+
+    suite.Test('S20: BypassCache poisoning regression — full-width query after a narrow bypass stays full-width', async () => {
+        const filter = UniqueFilter('Name', 's20');
+        const bypass = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, Fields: ['Name'], ResultType: 'simple', BypassCache: true }, user);
+        Assert(bypass.Success, `bypass failed: ${bypass.ErrorMessage}`);
+        const full = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, ResultType: 'simple' }, user);
+        Assert(full.Success, `full failed: ${full.ErrorMessage}`);
+        Assert(RowKeys(full.Results[0]).length > 20,
+            `full-width query must not be served from a bypass-written narrow entry (got ${RowKeys(full.Results[0]).length} columns)`);
+    });
+
+    suite.Test('S21: entity_object ignores narrow Fields — instances always carry the full field set', async () => {
+        const result = await rv.RunView<BaseEntity>({
+            EntityName: SMALL_ENTITY,
+            ExtraFilter: UniqueFilter('Name', 's21'),
+            Fields: ['Name'],
+            ResultType: 'entity_object'
+        }, user);
+        Assert(result.Success && result.Results.length > 0, `RunView failed: ${result.ErrorMessage}`);
+        const all = result.Results[0].GetAll();
+        AssertKeysInclude(all, ['ID', 'Name'], 'entity object must carry full fields despite narrow request');
+    });
+
+    suite.Test('S22: concurrent identical RunViews share one execution (in-flight dedup)', async () => {
+        const makeParams = () => [{ EntityName: ENTITY, ExtraFilter: UniqueFilter('Name', 's22'), Fields: ['Name'], ResultType: 'simple' as const }];
+        storage.ResetCounts();
+        const results = await Promise.all([1, 2, 3, 4, 5].map(() => rv.RunViews(makeParams(), user)));
+        Assert(results.every(r => r[0].Success), 'all concurrent calls must succeed');
+        const lengths = new Set(results.map(r => r[0].Results.length));
+        AssertEqual(lengths.size, 1, 'all concurrent callers must see the same row count');
+        Assert(storage.SetCount('RunViewCache') <= 1, `5 concurrent identical calls must produce at most one cache write, got ${storage.SetCount('RunViewCache')}`);
+    });
 
     const failures = await suite.Run();
     await ctx.pool.close();
