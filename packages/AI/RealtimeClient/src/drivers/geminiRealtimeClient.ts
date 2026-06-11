@@ -250,6 +250,12 @@ export class GeminiPcmPlayback implements IGeminiAudioPlayback {
  *   the Live API contract), so text / narration / context-note / tool-result sends issued
  *   while a turn is in flight are queued and flushed in order on `turnComplete` (the flush
  *   stops at the first send that starts a new response).
+ * - **Open-turn commit**: context notes ride as `turnComplete: false` client content, which
+ *   tells the Live API MORE INPUT IS COMING — the server holds ALL generation (including the
+ *   normally-automatic continuation after a tool response) until a `turnComplete: true`
+ *   commit. {@link SendToolResult} therefore follows `sendToolResponse` with an empty-turn
+ *   commit whenever a note left the turn open, so the model speaks the result immediately
+ *   (the behavioral equivalent of the OpenAI driver's explicit `response.create`).
  * - **Narration tagging**: {@link RequestSpokenUpdate} has no per-response-instructions
  *   equivalent on Gemini, so it is emulated as a user turn carrying the instructions with
  *   `turnComplete: true`; the response kind is stamped `'narration'` at send time (sends ARE
@@ -280,6 +286,16 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * requires the function name, which the {@link SendToolResult} contract does not carry.
      */
     private pendingToolCallNames = new Map<string, string>();
+    /**
+     * True while client content sent with `turnComplete: false` (context notes) has not yet
+     * been committed. Per the Live API, an open client turn tells the server MORE INPUT IS
+     * COMING — it will NOT start generation (even after a tool response) until a
+     * `turnComplete: true` arrives. Set by {@link SendContextNote}; cleared by any
+     * `turnComplete: true` client content ({@link sendTriggeringUserTurn}, the empty-turn
+     * commit in {@link sendToolResponseTurn}) and on a model `turnComplete` (the generation
+     * consumed the open content).
+     */
+    private openClientTurn = false;
     /**
      * The client's own view of the session state — mirrors what was last emitted, EXCEPT after
      * a tool call: the host typically shows its own busy indicator then, so the client silently
@@ -397,6 +413,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * prefixing policy). Queued while a turn is in flight because ANY client content interrupts
      * in-flight generation on Gemini (a divergence from the OpenAI driver, which can inject
      * items mid-response safely).
+     *
+     * SIDE EFFECT: `turnComplete: false` leaves the client content turn OPEN — the server
+     * holds generation until a `turnComplete: true` commit arrives. {@link openClientTurn}
+     * tracks this so {@link SendToolResult} can commit the turn and unblock the spoken reply.
      */
     public SendContextNote(text: string): void {
         if (!this.session) {
@@ -404,6 +424,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         this.enqueueOrRun(() => {
             this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: false });
+            this.openClientTurn = true;
         });
     }
 
@@ -426,6 +447,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * cached from the originating tool call (Gemini requires it; the contract only carries the
      * callID). Sent immediately when idle — Gemini speaks the result as its next turn —
      * otherwise queued until the in-flight turn (e.g. a progress narration) completes.
+     *
+     * If context notes left a client content turn OPEN (`turnComplete: false`), the tool
+     * response is followed by an empty-turn commit (`sendClientContent({ turnComplete: true })`)
+     * — without it the server keeps waiting for more client input and NEVER starts the spoken
+     * reply (observed live as the model staying silent after a delegated agent's result).
      */
     public SendToolResult(callID: string, outputJson: string): void {
         if (!this.session) {
@@ -703,6 +729,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.finalizeAssistantTranscript();
         this.responseActive = false;
         this.activeResponseKind = 'normal';
+        this.openClientTurn = false; // the completed generation consumed any open client content
         this.flushQueuedSends();
         if (this.currentState === 'speaking') {
             this.setState('listening');
@@ -779,6 +806,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return;
         }
         session.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true });
+        this.openClientTurn = false; // turnComplete: true commits any open client content turn
         this.responseActive = true;
         this.activeResponseKind = kind;
         if (emitSpeaking) {
@@ -786,7 +814,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
     }
 
-    /** Sends the tool response (Gemini continues the turn with it) and marks the model busy. */
+    /**
+     * Sends the tool response (Gemini continues the turn with it) and marks the model busy.
+     *
+     * When context notes have left a client content turn open ({@link openClientTurn}), the
+     * tool response alone does NOT start generation — the Live API holds for more client input
+     * until the turn is committed. The empty-turn commit (the SDK-documented
+     * `sendClientContent({ turnComplete: true })` form) releases generation so the model
+     * speaks the result immediately, matching the OpenAI driver's explicit `response.create`.
+     */
     private sendToolResponseTurn(callID: string, name: string, outputJson: string): void {
         const session = this.session;
         if (!session) {
@@ -795,6 +831,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         session.sendToolResponse({
             functionResponses: [{ id: callID, name, response: this.parseToolOutput(outputJson) }],
         });
+        if (this.openClientTurn) {
+            session.sendClientContent({ turnComplete: true });
+            this.openClientTurn = false;
+        }
         this.pendingToolCallNames.delete(callID);
         this.responseActive = true;
         this.activeResponseKind = 'normal';
@@ -826,6 +866,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.pendingUserText = '';
         this.responseActive = false;
         this.activeResponseKind = 'normal';
+        this.openClientTurn = false;
         this.queuedSends = [];
         this.pendingToolCallNames.clear();
     }

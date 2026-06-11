@@ -397,6 +397,36 @@ describe('GeminiRealtimeClient', () => {
             expect(client.IsBusy).toBe(true);
         });
 
+        it('COMMITS an open context-note turn after the tool response so the model speaks the result', () => {
+            // Progress notes ride turnComplete:false — the Live API holds ALL generation
+            // (incl. the auto-continuation after a tool response) until a commit. Observed
+            // live as Gemini staying silent after a delegated agent's result.
+            client.Emit({
+                toolCall: { functionCalls: [{ id: 'call-3', name: 'invoke-target-agent', args: {} }] },
+            } as LiveServerMessage);
+            client.SendContextNote('[delegated-agent progress] fetching data');
+            expect(client.Fake.ClientContents.at(-1)?.turnComplete).toBe(false);
+
+            client.SendToolResult('call-3', '{"success":true,"output":"done"}');
+
+            expect(client.Fake.ToolResponses).toHaveLength(1);
+            // the empty-turn commit immediately follows the tool response
+            const commit = client.Fake.ClientContents.at(-1);
+            expect(commit?.turnComplete).toBe(true);
+        });
+
+        it('does NOT add an empty-turn commit when no context note left the turn open', () => {
+            client.Emit({
+                toolCall: { functionCalls: [{ id: 'call-4', name: 'invoke-target-agent', args: {} }] },
+            } as LiveServerMessage);
+            const contentSendsBefore = client.Fake.ClientContents.length;
+
+            client.SendToolResult('call-4', '{"success":true,"output":"done"}');
+
+            expect(client.Fake.ToolResponses).toHaveLength(1);
+            expect(client.Fake.ClientContents.length).toBe(contentSendsBefore); // no spurious commit
+        });
+
         it('should wrap non-JSON tool output as { result }', () => {
             client.Emit({
                 toolCall: { functionCalls: [{ id: 'call-2', name: 'do_thing', args: {} }] },

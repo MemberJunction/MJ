@@ -117,7 +117,11 @@ export interface RealtimeClientError {
  * 5. **Tool-result delivery invariant.** Every result fed back via {@link SendToolResult}
  *    must EVENTUALLY be voiced/processed by the model and never dropped. If the provider
  *    rejects overlapping generation triggers, the driver queues the result's trigger
- *    behind the in-flight response and flushes it at the next turn boundary.
+ *    behind the in-flight response and flushes it at the next turn boundary. The result
+ *    must also EXPLICITLY trigger generation on providers that don't auto-continue after
+ *    a tool response: OpenAI requires an explicit `response.create`; Gemini auto-continues
+ *    UNLESS prior client content (a context note's `turnComplete: false`) left the turn
+ *    open, in which case the driver must commit the turn or the model stays silent.
  * 6. **Token/credential expiry surfaces as a FATAL error.** When the ephemeral credential
  *    dies (expiry, revocation, unexpected socket loss), the driver must surface it through
  *    {@link OnError} with `Fatal: true` so the host tears down cleanly instead of idling
