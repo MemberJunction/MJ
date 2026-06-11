@@ -34,7 +34,7 @@ import {
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 // Registers entity subclasses on the ClassFactory (needed for entity_object tests)
 import '@memberjunction/server-bootstrap-lite';
-import type { UserSettingEntity } from '@memberjunction/core-entities';
+import type { EntityEntity, UserSettingEntity } from '@memberjunction/core-entities';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';
@@ -377,7 +377,52 @@ async function main(): Promise<void> {
             AssertEqual(final2.Results.length, baselineCount, 'unfiltered cache must remove the deleted row in place');
             AssertEqual(final2.ExecutionTime, 0, 'post-delete read must still be served from cache (in-place removal, no DB)');
         });
+
+        suite.Test('S24 (mutation): AllowCaching=false entities never touch the cache — flipped live and restored', async () => {
+            const md = new Metadata();
+            const entityInfo = md.EntityByName(SMALL_ENTITY);
+            Assert(!!entityInfo, `${SMALL_ENTITY} must exist`);
+            const entityRecord = await md.GetEntityObject<EntityEntity>('MJ: Entities', user);
+            Assert(await entityRecord.Load(entityInfo!.ID), 'entity record must load');
+            Assert(entityRecord.AllowCaching === true, 'precondition: entity allows caching');
+
+            entityRecord.AllowCaching = false;
+            Assert(await entityRecord.Save(), `flip save failed: ${entityRecord.LatestResult?.CompleteMessage}`);
+            try {
+                await Metadata.Provider.Refresh(); // provider must see the new flag
+                Assert(md.EntityByName(SMALL_ENTITY)?.AllowCaching === false, 'metadata must reflect AllowCaching=false');
+
+                storage.ResetCounts();
+                const first = await rv.RunView({
+                    EntityName: SMALL_ENTITY,
+                    ExtraFilter: UniqueFilter('Name', 's24'),
+                    Fields: ['Name'],
+                    ResultType: 'simple'
+                }, user);
+                Assert(first.Success && first.Results.length > 0, `first failed: ${first.ErrorMessage}`);
+                // Direct (non-cached) path: requested fields + PK, no widening
+                AssertRowShape(first.Results[0], ['ID', 'Name'], 'no-cache entity shape (requested + PK, never widened)');
+                AssertEqual(storage.SetCount('RunViewCache'), 0, 'no-cache entity must never write the cache');
+                AssertEqual(storage.GetCount('RunViewCache'), 0, 'no-cache entity must never read the cache');
+
+                const second = await rv.RunView({
+                    EntityName: SMALL_ENTITY,
+                    ExtraFilter: UniqueFilter('Name', 's24'),
+                    Fields: ['Name'],
+                    ResultType: 'simple'
+                }, user);
+                Assert(second.Success, `second failed: ${second.ErrorMessage}`);
+                AssertEqual(storage.SetCount('RunViewCache') + storage.GetCount('RunViewCache'), 0,
+                    'repeat queries on a no-cache entity must keep hitting the DB, never the cache');
+            } finally {
+                entityRecord.AllowCaching = true;
+                Assert(await entityRecord.Save(), `restore save failed: ${entityRecord.LatestResult?.CompleteMessage}`);
+                await Metadata.Provider.Refresh();
+            }
+            Assert(md.EntityByName(SMALL_ENTITY)?.AllowCaching === true, 'flag must be restored');
+        });
     }
+
 
 
     suite.Test('S18: AfterKey keyset pages never touch the cache and never poison the entity+filter slot', async () => {
@@ -444,6 +489,52 @@ async function main(): Promise<void> {
         const lengths = new Set(results.map(r => r[0].Results.length));
         AssertEqual(lengths.size, 1, 'all concurrent callers must see the same row count');
         Assert(storage.SetCount('RunViewCache') <= 1, `5 concurrent identical calls must produce at most one cache write, got ${storage.SetCount('RunViewCache')}`);
+    });
+
+
+    suite.Test('S25: TrustServerCacheCompletely=false entities never touch the server cache (real metadata, read-only)', async () => {
+        // 'MJ: Audit Logs' has AllowCaching=true but TrustServerCacheCompletely=false in
+        // this DB (rows arrive via raw SQL, so event-driven invalidation cannot be
+        // trusted) — a DIFFERENT eligibility branch than AllowCaching (S24).
+        const md = new Metadata();
+        const info = md.EntityByName('MJ: Audit Logs');
+        Assert(!!info, 'MJ: Audit Logs must exist');
+        Assert(info!.AllowCaching === true && info!.TrustServerCacheCompletely === false,
+            `precondition: AllowCaching=true + TrustServerCacheCompletely=false (got ${info!.AllowCaching}/${info!.TrustServerCacheCompletely})`);
+
+        storage.ResetCounts();
+        const first = await rv.RunView({
+            EntityName: 'MJ: Audit Logs',
+            ExtraFilter: "'tag-s25' <> 'never'",
+            Fields: ['ID'],
+            MaxRows: 5,
+            ResultType: 'simple'
+        }, user);
+        Assert(first.Success, `first failed: ${first.ErrorMessage}`);
+        const second = await rv.RunView({
+            EntityName: 'MJ: Audit Logs',
+            ExtraFilter: "'tag-s25' <> 'never'",
+            Fields: ['ID'],
+            MaxRows: 5,
+            ResultType: 'simple'
+        }, user);
+        Assert(second.Success, `second failed: ${second.ErrorMessage}`);
+        AssertEqual(storage.SetCount('RunViewCache'), 0, 'Trust=0 entity must never write the server cache');
+        AssertEqual(storage.GetCount('RunViewCache'), 0, 'Trust=0 entity must never read the server cache');
+    });
+
+    suite.Test('S26: MJ: Record Changes is hardcoded cache-exempt (rows arrive via raw SQL)', async () => {
+        storage.ResetCounts();
+        const result = await rv.RunView({
+            EntityName: 'MJ: Record Changes',
+            ExtraFilter: "'tag-s26' <> 'never'",
+            Fields: ['ID'],
+            MaxRows: 5,
+            ResultType: 'simple'
+        }, user);
+        Assert(result.Success, `RunView failed: ${result.ErrorMessage}`);
+        AssertEqual(storage.SetCount('RunViewCache') + storage.GetCount('RunViewCache'), 0,
+            'Record Changes must never touch the cache regardless of its flags');
     });
 
     const failures = await suite.Run();

@@ -16,8 +16,9 @@ and it can't count cache reads).
 
 | File | Purpose |
 |---|---|
-| `server-cache-tests.ts` | 23 tests against SQLServerDataProvider (`TrustLocalCacheCompletely = true`) |
-| `client-cache-tests.ts` | 10 tests against a running MJAPI via GraphQLDataProvider (`TrustLocalCacheCompletely = false`) |
+| `server-cache-tests.ts` | 26 tests against SQLServerDataProvider (`TrustLocalCacheCompletely = true`) |
+| `client-cache-tests.ts` | 12 tests against a running MJAPI via GraphQLDataProvider (`TrustLocalCacheCompletely = false`) |
+| `runquery-cache-tests.ts` | 9 tests for RunQuery result caching: TTL mode, smart CacheValidationSQL validation, fingerprinting, adversarial break attempts. **Creates and deletes its own Query fixtures** — see the file header |
 | `lib/harness.ts` | Env/config loading, minimal test runner, shape assertions, instrumented storage provider |
 
 ---
@@ -151,7 +152,7 @@ its registry index asynchronously in a different category.
 
 ## Test inventory
 
-### Server suite (S1–S23)
+### Server suite (S1–S26)
 
 | # | Verifies |
 |---|---|
@@ -172,6 +173,9 @@ its registry index asynchronously in a different category.
 | S15 | `OrderBy` honored on miss and hit |
 | S16 | `MaxRows` limits rows and fingerprints separately from the unlimited query |
 | S17 | *(gated)* Save invalidates filtered entries; delete removes the row |
+| S24 | *(gated)* `AllowCaching=false` flipped LIVE on an entity → zero cache reads/writes, direct-path shapes, flag restored |
+| S25 | `TrustServerCacheCompletely=false` entities (real metadata — e.g. `MJ: Audit Logs`) never touch the server cache |
+| S26 | `MJ: Record Changes` hardcoded cache exemption (rows arrive via raw SQL) |
 | S18 | AfterKey keyset pages never touch the cache and never poison the entity+filter slot |
 | S19 | `count_only` returns `TotalRowCount` with zero rows and never poisons the row cache |
 | S20 | Poisoning regression: full-width query after a narrow `BypassCache` stays full-width |
@@ -179,7 +183,7 @@ its registry index asynchronously in a different category.
 | S22 | Concurrent identical `RunViews` share one execution (at most one cache write) |
 | S23 | *(gated)* Unfiltered auto-maintained cache upserts on save / removes on delete IN PLACE — post-mutation reads still served from cache with zero DB hits |
 
-### Client suite (C1–C10)
+### Client suite (C1–C12)
 
 | # | Verifies |
 |---|---|
@@ -193,6 +197,22 @@ its registry index asynchronously in a different category.
 | C8 | Mixed-CacheLocal batch projects each result to its own param |
 | C9 | `count_only` works over the GraphQL transport (TotalRowCount, zero rows, no poisoning) |
 | C10 | *(gated)* Client slot save→revalidate→delete→revalidate round trip (differential/stale refresh) |
+| C11 | Client RunQuery with `CacheLocal` — slot written, repeat revalidates over GraphQL |
+| C12 | Trust=0 entities: server never caches; client slots written ONLY when the result carries `__mj_UpdatedAt` (stamp-less responses are unvalidatable and correctly refused) |
+
+### RunQuery suite (Q1–Q9) — self-contained fixtures, mutates + cleans up
+
+| # | Verifies |
+|---|---|
+| Q1 | No `CacheLocal` → the RunQuery cache is never touched |
+| Q2 | TTL mode: miss writes a slot; repeat serves it (`CacheHit: true`, `ExecutionTime: 0`) |
+| Q3 | `CacheLocalTTL` expiry: expired slots re-execute and rewrite |
+| Q4 | BREAK: `MaxRows` fingerprints separately — no cross-shape serving |
+| Q5 | TTL mode serves stale-by-design within the TTL, fresh after expiry (documented semantics) |
+| Q6 | Smart validation: matching cacheStatus → `current` (no rows); mutated data → `stale` (+fresh rows) |
+| Q7 | Queries without `CacheValidationSQL` answer `no_validation` with fresh rows |
+| Q8 | BREAK: failed executions are never cached |
+| Q9 | BREAK: parameter key ORDER yields separate-but-correct slots (never wrong results) |
 
 ---
 
@@ -275,6 +295,35 @@ Also resolved in the same pass:
   invalidation work fine after a swap. The original failure was the (since-fixed)
   delete bug plus too-short settle windows.
 
+
+### Round 2 findings (2026-06-11, while building the RunQuery suite)
+
+4. **`RunQueryParams.CacheLocal` / `CacheLocalTTL` were documented but INERT (FIXED).**
+   The entire query-cache stack existed — `RunQueryCache` storage with TTL enforcement,
+   `GenerateRunQueryFingerprint`, the server's `RunQueriesWithCacheCheck` validation
+   engine, the GraphQL resolver and client method, even `CacheHit`/`CacheKey` fields on
+   `RunQueryResult` — but nothing in the standard `RunQuery()` flow ever engaged any of
+   it, on either tier. Fix (`ProviderBase.RunQuery`): `CacheLocal` now works as
+   documented — server providers serve TTL slots directly; client providers revalidate
+   via `RunQueriesWithCacheCheck` (`current` → slot, `stale`/`no_validation` → fresh
+   rows + slot rewrite); saved queries only (ad-hoc SQL never cached); `MaxRows`/`StartRow`
+   folded into the fingerprint so differently-shaped requests can't share a slot.
+
+5. **Aggregate-query validation stamps could never validate `current` (FIXED).**
+   Fresh/stale responses stamped `maxUpdatedAt` by scanning RESULT rows — meaningless
+   for aggregate queries (no `__mj_UpdatedAt` column → always empty), so a cached slot
+   could never validate `current` against the validation SQL's `MAX(...)` once
+   underlying rows existed: permanent re-fetch. Fix (`GenericDatabaseProvider`):
+   responses for queries with `CacheValidationSQL` are stamped from the VALIDATION SQL's
+   own status (first fetches included), so stamps and checks compare in the same domain
+   by construction.
+
+**Contract note for `CacheValidationSQL` authors**: return `[MaxUpdatedAt]` and
+`[RowCount]` (bracket them — `RowCount` is a reserved word) describing the FRESHNESS
+DOMAIN of the query. Stamps and validation checks both come from this SQL, so it defines
+its own consistency; typically `MAX(__mj_UpdatedAt)` + `COUNT(*)` over the underlying
+tables the query reads.
+
 ---
 
 ## Gotchas when writing tests here (learned the hard way)
@@ -298,6 +347,59 @@ Also resolved in the same pass:
 6. **Mind the deferred engines.** `StartupManager` kicks `AIEngine` ~15s after
    bootstrap; it runs its own RunViews in the background. UniqueFilter isolation keeps
    it from touching your fingerprints, but global counters will move.
+
+
+---
+
+## Roadmap: graduating into the Testing Framework as a first-class "Integration Test" type
+
+These scripts are deliberately framework-light — a proving ground. The destination is
+MJ's metadata-driven **[Testing Framework](../../TestingFramework/README.md)**
+([EngineBase](../../TestingFramework/EngineBase/README.md) ·
+[Engine](../../TestingFramework/Engine/README.md) ·
+[CLI](../../TestingFramework/CLI/README.md)), where tests are TestType / TestSuite /
+Test metadata and execution is pluggable: each TestType names a `DriverClass` extending
+[`BaseTestDriver`](../../TestingFramework/Engine/src/drivers/BaseTestDriver.ts), registered
+via `@RegisterClass(BaseTestDriver, '<DriverName>')` — see
+[`AgentEvalDriver`](../../TestingFramework/Engine/src/drivers/AgentEvalDriver.ts) for the
+existing reference implementation.
+
+**The plan** (handoff: @jordanfanapour):
+
+1. **New TestType: `Integration Test`** with an `IntegrationTestDriver` that does what
+   `lib/harness.ts` does today — bootstrap the real provider stack as a library
+   (`setupSQLServerClient` + instrumented `LocalCacheManager`, optionally
+   `setupGraphQLClient` against a running MJAPI) — then execute registered checks and
+   report structured pass/fail/timing through the framework's normal result records.
+2. **Each suite here becomes Test metadata** (suite → TestSuite, test → Test rows), so
+   coverage is versioned, discoverable in the UI, runnable via the testing CLI, and
+   composable into release gates alongside agent evals.
+3. **CI/release integration**: the suites are already deterministic, env-driven
+   (no hardcoded secrets), exit-code-clean, and mutation-gated — designed to slot into
+   the release build (e.g., the Docker regression stage) so every release gets this
+   coverage at near-zero marginal cost. Tier: PR unit tests → headless integration
+   tests (this layer) → browser/computer-use regression.
+
+### The headless pattern, and where else to apply it
+
+The technique that found 5 product bugs here generalizes: **mock the top layer, keep
+everything else real** — real DB, real engines, real transport when needed; no browser,
+no Playwright. Bootstrap follows
+[`run-dupe-detection.ts`](../../AI/Vectors/Dupe/scripts/run-dupe-detection.ts)'s
+library-bootstrap pattern. High-value next candidates (scouted 2026-06-11):
+
+| Candidate | Entry points | Why (bug surface) |
+|---|---|---|
+| **Scheduled Jobs engine** | [`ScheduledJobEngine`](../../Scheduling/engine/src/ScheduledJobEngine.ts) | Distributed lease locking, concurrency caps, stale-lease sweeps, stats integrity — classic race-condition territory |
+| **API Key engine + scope evaluator** | [`APIKeyEngine`](../../APIKeys/Engine/src/APIKeyEngine.ts), `ScopeEvaluator`/`PatternMatcher` | Auth pattern matching, wildcard expansion, key validation round-trips, usage logging — security-relevant |
+| **MetadataSync push/pull** | [`sync-engine`](../../MetadataSync/src/lib/sync-engine.ts), Push/Pull services | Dependency ordering, FK integrity, round-trip determinism, rollback correctness |
+| **AI Agent framework** | [`base-agent.ts`](../../AI/Agents/src/base-agent.ts), `AgentRunner`, `PayloadManager` | Stub the LLM (deterministic prompt-runner mock), keep DB/run-persistence/payload/scratchpad real — state-machine + persistence bugs |
+| **Query parameter pipeline** | [`queryParameterProcessor`](../../QueryProcessor/src/queryParameterProcessor.ts) + composition macros | Type coercion, Nunjucks safety, `{{query:"..."}}` macro resolution, SQL Server vs PostgreSQL parity |
+
+Also viable: Version History engine, Search engine fusion (mock the vector provider),
+Templates engine rendering, RLS/multi-user isolation (the one security-shaped gap in
+the current suites), dataset caching, and CodeGen determinism. The agent framework and
+CodeGen are the big prizes — both have huge surface and zero headless coverage today.
 
 ## Extending the suite
 

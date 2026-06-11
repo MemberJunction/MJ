@@ -279,6 +279,78 @@ async function main(): Promise<void> {
         });
     }
 
+
+    suite.Test('C11: client RunQuery with CacheLocal — slot written, repeat revalidates over GraphQL', async () => {
+        // Use any existing approved query in the DB (the client RunQuery cache is
+        // query-agnostic; we assert the caching mechanics, not the data)
+        const queries = await rv.RunView({
+            EntityName: 'MJ: Queries',
+            ExtraFilter: "Status = 'Approved' AND SQL IS NOT NULL",
+            Fields: ['ID', 'Name'],
+            MaxRows: 1,
+            ResultType: 'simple'
+        });
+        Assert(queries.Success && queries.Results.length === 1, 'need at least one approved query in the DB');
+        const queryId = String(queries.Results[0].ID);
+
+        const { RunQuery } = await import('@memberjunction/core');
+        const rq = new RunQuery();
+        storage.ResetCounts();
+        const first = await rq.RunQuery({ QueryID: queryId, CacheLocal: true, MaxRows: 5 });
+        Assert(first.Success, `first run failed: ${first.ErrorMessage}`);
+        await Sleep(300); // slot write is fire-and-forget
+        Assert(storage.SetCount('RunQueryCache') > 0, 'first CacheLocal run must write a client RunQueryCache slot');
+
+        const second = await rq.RunQuery({ QueryID: queryId, CacheLocal: true, MaxRows: 5 });
+        Assert(second.Success, `second run failed: ${second.ErrorMessage}`);
+        AssertEqual(second.Results.length, first.Results.length,
+            'revalidated results must match (current → slot, stale/no_validation → fresh rows)');
+    });
+
+
+    suite.Test('C12: Trust=0 entities — server never caches; client slots only when the result carries a validation timestamp', async () => {
+        // 'MJ: Audit Logs' has TrustServerCacheCompletely=false: the server refuses to
+        // cache it (raw-SQL inserts make event invalidation untrustworthy). Because the
+        // entity is cache-INELIGIBLE, Fields are never widened — so the response only
+        // carries a maxUpdatedAt stamp when the caller requests __mj_UpdatedAt. The
+        // client write gate correctly refuses to store unvalidatable (stamp-less) slots.
+
+        // Narrow request WITHOUT the timestamp → no slot (defensive gate)
+        storage.ResetCounts();
+        const narrow = await rv.RunView({
+            EntityName: 'MJ: Audit Logs',
+            ExtraFilter: "'tag-c12a' <> 'never'",
+            Fields: ['ID'],
+            MaxRows: 5,
+            ResultType: 'simple' as const,
+            CacheLocal: true
+        });
+        Assert(narrow.Success, `narrow failed: ${narrow.ErrorMessage}`);
+        await Sleep(300);
+        AssertEqual(storage.SetCount('RunViewCache'), 0,
+            'a stamp-less response must NOT be cached (it could never validate later)');
+
+        // Request WITH the timestamp → slot written and revalidation works
+        const params = {
+            EntityName: 'MJ: Audit Logs',
+            ExtraFilter: "'tag-c12b' <> 'never'",
+            Fields: ['ID', '__mj_UpdatedAt'],
+            MaxRows: 5,
+            ResultType: 'simple' as const,
+            CacheLocal: true
+        };
+        const first = await rv.RunView({ ...params });
+        Assert(first.Success, `first failed: ${first.ErrorMessage}`);
+        await Sleep(300);
+        Assert(storage.SetCount('RunViewCache') > 0,
+            'a stamped response must be cached (client validation is DB-checked per request, independent of Trust)');
+
+        await Sleep(5200); // outlive linger so the second call truly revalidates
+        const second = await rv.RunView({ ...params });
+        Assert(second.Success, `second failed: ${second.ErrorMessage}`);
+        AssertEqual(second.Results.length, first.Results.length, 'revalidated results must match');
+    });
+
     const failures = await suite.Run();
     process.exit(failures > 0 ? 1 : 0);
 }

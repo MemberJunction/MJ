@@ -184,6 +184,25 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
         return rows;
     }
     const requestedFieldSet = new Set(requestedFields.map(f => f.trim().toLowerCase()));
+
+    // No-op probe: SQL result rows are uniform (same SELECT list), so if every key of
+    // the first row is requested, the projection would copy every row unchanged —
+    // return the original array and skip the per-row object rebuilds entirely. This
+    // is the common case for entity_object-widened requests and full-coverage Fields.
+    const probe = rows[0] as Record<string, unknown>;
+    if (probe && typeof probe === 'object') {
+        let allKept = true;
+        for (const key of Object.keys(probe)) {
+            if (!requestedFieldSet.has(key.toLowerCase())) {
+                allKept = false;
+                break;
+            }
+        }
+        if (allKept) {
+            return rows;
+        }
+    }
+
     // Cache lowercase key→keep decisions across rows to avoid repeated allocations
     const keyCache = new Map<string, boolean>();
     return rows.map((row) => {
@@ -283,6 +302,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * still applies).  Default 5 000 ms.
      */
     public static DedupLingerMs: number = 5000;
+
+    /**
+     * Safety cap on the number of linger entries held simultaneously. The linger
+     * window is a latency optimization — under extreme churn (more distinct query
+     * keys than this resolving within one window) new resolutions skip lingering
+     * instead of accumulating result arrays in memory.
+     */
+    public static MaxLingerEntries: number = 500;
 
     /**
      * In-flight + linger cache keyed by a deterministic fingerprint of
@@ -669,14 +696,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // ── Fresh execution ──
         const promise = this.ExecuteRunViewsPipeline<T>(params, contextUser)
             .then(results => {
-                // Stash resolved results for the linger window
+                // Stash resolved results for the linger window. Safety cap: under
+                // extreme churn (hundreds of distinct keys resolving within one linger
+                // window) skip lingering rather than hold more result arrays in memory —
+                // the linger is a latency optimization, never a correctness requirement.
                 const entry = this._inflightViews.get(key);
                 if (entry && entry.promise === promise) {
-                    entry.resolvedResults = results as RunViewResult[];
-                    entry.resolvedAt = Date.now();
+                    if (ProviderBase.DedupLingerMs > 0 && this._inflightViews.size <= ProviderBase.MaxLingerEntries) {
+                        entry.resolvedResults = results as RunViewResult[];
+                        entry.resolvedAt = Date.now();
 
-                    // Schedule cleanup after linger expires
-                    if (ProviderBase.DedupLingerMs > 0) {
+                        // Schedule cleanup after linger expires
                         setTimeout(() => {
                             const current = this._inflightViews.get(key);
                             if (current && current.promise === promise) {
@@ -1146,9 +1176,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * careful staleness attribution for marginal hit-rate gains.)
      */
     private clientCacheFingerprint(param: RunViewParams): string {
+        // Memoized per params object: RunViews shallow-clones params once at entry and
+        // the SAME object references flow through prepare → execute → process, where this
+        // fingerprint was previously recomputed up to 3× per param (string building +
+        // Fields normalization each time). Safe because params are not mutated after the
+        // first computation (entity_object Fields widening happens in
+        // prepareSmartCacheCheckParams BEFORE the first fingerprint call).
+        const memoized = this._clientFingerprintMemo.get(param);
+        if (memoized) {
+            return memoized;
+        }
         const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-        return `${base}|f:${ProviderBase.NormalizeFieldsKey(param.Fields)}`;
+        const fingerprint = `${base}|f:${ProviderBase.NormalizeFieldsKey(param.Fields)}`;
+        this._clientFingerprintMemo.set(param, fingerprint);
+        return fingerprint;
     }
+    private _clientFingerprintMemo = new WeakMap<RunViewParams, string>();
 
     /**
      * Ranked search over **one** entity's records. See {@link IMetadataProvider.SearchEntity}
@@ -1493,6 +1536,87 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The query results
      */
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        // Shallow-clone for symmetry with RunView — pipeline must never mutate caller objects
+        params = { ...params };
+
+        // ── CacheLocal: the RunQuery result cache (RunQueryCache category) ──
+        // Engages ONLY on explicit opt-in. Saved queries only (QueryID/QueryName) —
+        // ad-hoc SQL is never cached. Semantics per RunQueryParams JSDoc:
+        //  - cached + unexpired + provider supports RunQueriesWithCacheCheck (client):
+        //    server validates via the Query's CacheValidationSQL → 'current' serves the
+        //    local slot, 'stale'/'no_validation' returns fresh rows and rewrites the slot
+        //  - cached + unexpired + no validation transport (server providers): TTL mode —
+        //    serve directly until expiry
+        //  - miss/expired: run normally, then store with TTL (CacheLocalTTL override,
+        //    else the LocalCacheManager default)
+        const queryCacheEngaged = params.CacheLocal === true
+            && !params.SQL
+            && (!!params.QueryID || !!params.QueryName)
+            && LocalCacheManager.Instance.IsInitialized;
+        let queryFingerprint: string | undefined;
+        if (queryCacheEngaged) {
+            // MaxRows/StartRow shape the result set — they MUST distinguish cache slots,
+            // so fold them into the parameters portion of the fingerprint.
+            const fingerprintParams: Record<string, unknown> = {
+                ...(params.Parameters ?? {}),
+                __maxRows: params.MaxRows ?? -1,
+                __startRow: params.StartRow ?? 0
+            };
+            queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
+                params.QueryID, params.QueryName, fingerprintParams, this.InstanceConnectionString
+            );
+            const cached = await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint); // TTL-enforced
+            if (cached) {
+                const serveFromSlot = (): RunQueryResult => ({
+                    QueryID: cached.queryId ?? params.QueryID ?? '',
+                    QueryName: params.QueryName ?? '',
+                    Success: true,
+                    Results: cached.results as RunQueryResult['Results'],
+                    RowCount: cached.results.length,
+                    TotalRowCount: cached.rowCount ?? cached.results.length,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    CacheHit: true,
+                    CacheKey: queryFingerprint
+                });
+                const checker = (this as IRunQueryProvider).RunQueriesWithCacheCheck?.bind(this);
+                if (!checker || this.TrustLocalCacheCompletely) {
+                    // TTL mode (server providers / no validation transport)
+                    return serveFromSlot();
+                }
+                // Client smart validation round trip
+                const response = await checker([{
+                    params,
+                    cacheStatus: { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount }
+                }], contextUser);
+                const check = response.results?.[0];
+                if (response.success && check) {
+                    if (check.status === 'current') {
+                        return serveFromSlot();
+                    }
+                    if ((check.status === 'stale' || check.status === 'no_validation') && check.results) {
+                        const freshRows = check.results as RunQueryResult['Results'];
+                        // Fire-and-forget slot rewrite — same pattern as the RunView client path
+                        LocalCacheManager.Instance.SetRunQueryResult(
+                            queryFingerprint, params.QueryName ?? '', freshRows,
+                            check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL
+                        ).catch(e => LogError(`RunQuery cache rewrite failed: ${e}`));
+                        return {
+                            QueryID: check.queryId ?? params.QueryID ?? '',
+                            QueryName: params.QueryName ?? '',
+                            Success: true,
+                            Results: freshRows,
+                            RowCount: freshRows.length,
+                            TotalRowCount: check.rowCount ?? freshRows.length,
+                            ExecutionTime: 0,
+                            ErrorMessage: ''
+                        };
+                    }
+                }
+                // validation transport failed — fall through to a normal execution
+            }
+        }
+
         // Pre-processing: telemetry, cache check
         const preResult = await this.PreRunQuery(params, contextUser);
 
@@ -1511,6 +1635,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Post-processing: cache storage, telemetry end
         await this.PostRunQuery(result, params, preResult, contextUser);
+
+        // Store in the RunQuery cache on success (fire-and-forget; TTL per CacheLocalTTL
+        // or the LocalCacheManager default). maxUpdatedAt is unknown for a plain run —
+        // the smart-validation path stamps it when the Query has CacheValidationSQL.
+        if (queryCacheEngaged && queryFingerprint && result.Success) {
+            LocalCacheManager.Instance.SetRunQueryResult(
+                queryFingerprint, result.QueryName, result.Results,
+                '', result.TotalRowCount, result.QueryID, params.CacheLocalTTL
+            ).catch(e => LogError(`RunQuery cache write failed: ${e}`));
+        }
 
         return result;
     }
@@ -1627,6 +1761,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * uses it to project cache-miss DB results back down to the requested shape.
          */
         callerFieldsMap?: Map<number, string[]>;
+        /**
+         * Per-param-index cache fingerprints computed during PreRunViews — carried
+         * forward so PostRunViews doesn't recompute the RLS where-clause and
+         * fingerprint string for every batch item.
+         */
+        fingerprintMap?: Map<number, string>;
     };
 
     /**
@@ -1890,6 +2030,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Traditional caching flow
         const cacheStatusMap = new Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunViewResult }>();
         const callerFieldsMap = new Map<number, string[]>();
+        const fingerprintMap = new Map<number, string>();
         const uncachedParams: RunViewParams[] = [];
         const cachedResults: (RunViewResult | null)[] = [];
         let allCached = true;
@@ -1928,6 +2069,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (batchWillCache && LocalCacheManager.Instance.IsInitialized) {
                 const rlsWhereClause = this.ComputeRunViewRLSWhereClause(param, contextUser);
                 const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString, rlsWhereClause);
+                fingerprintMap.set(i, fingerprint);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
                     // Filter cached results to caller's requested fields (if specified and not entity_object)
@@ -1977,7 +2119,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 : (hasCacheHits ? cachedResults as RunViewResult[] : undefined),
             uncachedParams: allCached ? undefined : uncachedParams,
             cacheStatusMap,
-            callerFieldsMap: callerFieldsMap.size > 0 ? callerFieldsMap : undefined
+            callerFieldsMap: callerFieldsMap.size > 0 ? callerFieldsMap : undefined,
+            fingerprintMap: fingerprintMap.size > 0 ? fingerprintMap : undefined
         };
     }
 
@@ -2477,8 +2620,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 continue;
             }
 
-            const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params[i], contextUser);
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString, rlsWhereClause);
+            // Reuse the fingerprint PreRunViews already computed for this index —
+            // recomputing means rebuilding the RLS where-clause + fingerprint string
+            // per item. Compute lazily only for indexes PreRunViews skipped (cache
+            // was disabled for them but auto-cache/OnDataChanged may still need it).
+            const fingerprint = preResult.fingerprintMap?.get(i)
+                ?? LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(params[i], contextUser));
             // CRITICAL: must be the SAME eligibility predicate PreRunViews used to decide
             // whether to widen Fields. Writing a non-widened (narrow or keyset-paged)
             // result here poisons the Fields-agnostic superset slot — this exact gate
@@ -2728,6 +2875,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     protected extractMaxUpdatedAt(results: unknown[]): string {
         let maxDate: Date | null = null;
+
+        // Early exit: SQL result rows are uniform — if the first row carries neither
+        // timestamp column, none do, and the full O(rows) scan is pointless.
+        if (results.length > 0 && results[0] && typeof results[0] === 'object') {
+            const probe = results[0] as Record<string, unknown>;
+            if (probe['__mj_UpdatedAt'] === undefined && probe['UpdatedAt'] === undefined) {
+                return '';
+            }
+        }
 
         for (const item of results) {
             if (item && typeof item === 'object') {

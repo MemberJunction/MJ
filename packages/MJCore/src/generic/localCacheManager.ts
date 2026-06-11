@@ -643,18 +643,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const fingerprintSnapshot = [...fingerprints];
         const nowISO = new Date().toISOString();
 
-        for (const fingerprint of fingerprintSnapshot) {
-            try {
-                await this.processEntityEventForFingerprint(
-                    entityEvent.type,
-                    fingerprint,
-                    baseEntity,
-                    key,
-                    nowISO
-                );
-            } catch (err) {
-                LogError(`HandleBaseEntityEvent: failed to update fingerprint "${fingerprint}": ${(err as Error).message}`);
-            }
+        // Process fingerprints with bounded concurrency — entities with many cached
+        // filtered views previously serialized one await per fingerprint, stretching
+        // the invalidation window after saves/deletes. Per-fingerprint failures are
+        // isolated; the batch size keeps storage-provider pressure bounded.
+        const BATCH_SIZE = 8;
+        for (let i = 0; i < fingerprintSnapshot.length; i += BATCH_SIZE) {
+            const batch = fingerprintSnapshot.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(async (fingerprint) => {
+                try {
+                    await this.processEntityEventForFingerprint(
+                        entityEvent.type,
+                        fingerprint,
+                        baseEntity,
+                        key,
+                        nowISO
+                    );
+                } catch (err) {
+                    LogError(`HandleBaseEntityEvent: failed to update fingerprint "${fingerprint}": ${(err as Error).message}`);
+                }
+            }));
         }
     }
 

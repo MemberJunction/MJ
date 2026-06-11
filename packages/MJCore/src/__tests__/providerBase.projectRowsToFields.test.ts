@@ -98,10 +98,17 @@ describe('ProjectRowsToFields', () => {
             expect(original).toEqual(snapshot);
         });
 
-        it('should return new row objects, not references to the originals', () => {
+        it('should return the ORIGINAL array when the request covers every column (no-op probe)', () => {
+            // Full-coverage projection is detected via the first row and short-circuits —
+            // no per-row rebuild, the original array is returned untouched.
             const result = ProjectRowsToFields(rows, ['ID', 'Name', 'Description', 'SchemaName', 'RowCount']);
+            expect(result).toBe(rows);
+        });
+
+        it('should return new row objects when projection actually narrows', () => {
+            const result = ProjectRowsToFields(rows, ['ID', 'Name']);
             expect(result[0]).not.toBe(rows[0]);
-            expect(result[0]).toEqual(rows[0]);
+            expect(result[0]).toEqual({ ID: '1', Name: 'Alpha' });
         });
     });
 

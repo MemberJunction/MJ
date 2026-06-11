@@ -1442,10 +1442,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             if (!viewEntity) {
                 if (!params.EntityName || params.EntityName.length === 0) throw new Error('EntityName is required when ViewID or ViewName is not provided');
-                entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === params.EntityName!.trim().toLowerCase()) ?? null;
+                entityInfo = this.EntityByName(params.EntityName) ?? null;
                 if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
             } else {
-                entityInfo = this.Entities.find((e) => UUIDsEqual(e.ID, viewEntity!.EntityID)) ?? null;
+                entityInfo = this.EntityByID(viewEntity!.EntityID) ?? null;
                 if (!entityInfo) throw new Error(`Entity ID: ${viewEntity.EntityID} not found in metadata`);
             }
 
@@ -1782,7 +1782,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (viewEntity) {
                 entityInfo = viewEntity.ViewEntityInfo;
             } else {
-                entityInfo = this.Entities.find((e) => e.Name === params.EntityName) ?? null;
+                entityInfo = (params.EntityName ? this.EntityByName(params.EntityName) : undefined) ?? null;
                 if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
             }
 
@@ -2088,9 +2088,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
-                const entityInfo = this.Entities.find(
-                    (e) => e.Name.trim().toLowerCase() === item.params.EntityName?.trim().toLowerCase(),
-                );
+                const entityInfo = item.params.EntityName ? this.EntityByName(item.params.EntityName) : undefined;
                 if (!entityInfo) {
                     errorResults.push({ viewIndex: i, status: 'error', errorMessage: `Entity ${item.params.EntityName} not found in metadata` });
                     continue;
@@ -2559,6 +2557,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const itemsNeedingCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const itemsWithoutCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams }> = [];
             const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
+            const firstFetchWithValidation: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const errorResults: RunQueryWithCacheCheckResult<T>[] = [];
 
             for (let i = 0; i < params.length; i++) {
@@ -2579,7 +2578,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 }
 
                 if (!item.cacheStatus) {
-                    itemsWithoutCacheCheck.push({ index: i, item });
+                    if (query.CacheValidationSQL) {
+                        // First fetch for a validated query — run the validation status
+                        // anyway so the fresh response is STAMPED with the validation
+                        // SQL's maxUpdatedAt/rowCount. Slots stamped from result rows
+                        // (always '' for aggregate queries) could never validate
+                        // 'current' on subsequent checks.
+                        firstFetchWithValidation.push({ index: i, item, query });
+                    } else {
+                        itemsWithoutCacheCheck.push({ index: i, item });
+                    }
                     continue;
                 }
 
@@ -2591,7 +2599,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 itemsNeedingCacheCheck.push({ index: i, item, query });
             }
 
-            const cacheStatusResults = await this.getBatchedQueryCacheStatus(itemsNeedingCacheCheck, contextUser);
+            const cacheStatusResults = await this.getBatchedQueryCacheStatus(
+                [...itemsNeedingCacheCheck, ...firstFetchWithValidation], contextUser);
 
             const staleItems: Array<{ index: number; params: RunQueryParams; query: MJQueryEntityExtended }> = [];
             const currentResults: RunQueryWithCacheCheckResult<T>[] = [];
@@ -2617,8 +2626,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ...itemsWithoutValidationSQL.map(({ index, item, query }) =>
                     this.runFullQueryAndReturnForQuery<T>(item.params, index, 'no_validation', contextUser, query.ID),
                 ),
+                // First fetches for validated queries — fresh rows stamped with the
+                // validation SQL's status so the slot can validate 'current' later
+                ...firstFetchWithValidation.map(({ index, item, query }) =>
+                    this.runFullQueryAndReturnForQuery<T>(item.params, index, 'stale', contextUser, query.ID, cacheStatusResults.get(index)),
+                ),
+                // Stale items — same stamping rationale; the status was already computed
                 ...staleItems.map(({ index, params: queryParams, query }) =>
-                    this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, query.ID),
+                    this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, query.ID, cacheStatusResults.get(index)),
                 ),
             ];
 
@@ -2765,6 +2780,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         status: 'stale' | 'no_validation',
         contextUser?: UserInfo,
         queryId?: string,
+        validationStamp?: { maxUpdatedAt?: string; rowCount?: number },
     ): Promise<RunQueryWithCacheCheckResult<T>> {
         const result = await this.InternalRunQuery(params, contextUser);
         if (!result.Success) {
@@ -2775,14 +2791,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 errorMessage: result.ErrorMessage || 'Unknown error executing query',
             };
         }
-        const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
+        // Stamp the response with the VALIDATION SQL's status when available.
+        // Extracting maxUpdatedAt from result rows is meaningless for aggregate
+        // queries (no __mj_UpdatedAt column → always '') — a slot stamped that way
+        // could never validate 'current' against the validation SQL's MAX once
+        // underlying rows exist. The validation stamp is exactly the value the next
+        // cache check compares against, so slots stamped with it validate correctly
+        // by construction.
+        const maxUpdatedAt = validationStamp?.maxUpdatedAt ?? this.extractMaxUpdatedAt(result.Results);
+        const rowCount = validationStamp?.rowCount ?? result.Results.length;
         return {
             queryIndex,
             queryId: result.QueryID,
             status,
             results: result.Results as T[],
             maxUpdatedAt,
-            rowCount: result.Results.length,
+            rowCount,
         };
     }
 
@@ -3275,7 +3299,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     const relInfo = entityInfo.RelatedEntities.find(r => r.RelatedEntity === rel);
                     if (!relInfo) continue;
 
-                    const relEntityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase());
+                    const relEntityInfo = this.EntityByName(relInfo.RelatedEntity);
                     if (!relEntityInfo) continue;
 
                     const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
@@ -3541,9 +3565,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Post-process rows for encryption/datetime
             if (itemData.length > 0) {
-                const entityInfo = provider.Entities.find(e =>
-                    e.Name.trim().toLowerCase() === entityName.trim().toLowerCase(),
-                );
+                const entityInfo = provider.EntityByName(entityName);
                 if (entityInfo && contextUser) {
                     itemData = await provider.PostProcessRows(itemData, entityInfo, contextUser);
                 }
@@ -3808,7 +3830,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected getColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string): string | null {
         const specifiedColumns = item['Columns'] ? String(item['Columns']).split(',').map(col => col.trim()) : [];
         if (specifiedColumns.length > 0) {
-            const entity = this.Entities.find(e => UUIDsEqual(e.ID, item['EntityID'] as string));
+            const entity = this.EntityByID(item['EntityID'] as string);
             if (!entity && this.Entities.length > 0) {
                 LogError(`Entity not found for dataset item ${item['Code']} in dataset ${datasetName}`);
                 return null;
