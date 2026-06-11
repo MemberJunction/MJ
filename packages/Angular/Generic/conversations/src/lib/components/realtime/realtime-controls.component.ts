@@ -12,6 +12,11 @@ import { VoiceSessionService } from '../../services/voice-session.service';
  * emitted up so the overlay shell owns that state (captions visibility, dev affordances) and
  * lifecycle (ending the call). The gear mirrors the main UX convention: developer affordances
  * stay hidden until explicitly asked for, per session, never persisted.
+ *
+ * SESSION REVIEW variant ({@link ReviewMode}): the live controls (mute / captions / gear /
+ * end) are DEAD in review, so the row is replaced by a single prominent "Start live session"
+ * button (emits {@link StartLiveRequested}) and a Close button (emits {@link CloseRequested}).
+ * Per MJ convention the affirmative action leads (left), close trails.
  */
 @Component({
   standalone: true,
@@ -27,12 +32,19 @@ export class RealtimeControlsComponent {
   /** Whether developer affordances (open-record links) are revealed (gear active state). */
   @Input() DevMode = false;
 
+  /** SESSION REVIEW presentation: replaces the live controls with Start-live + Close. */
+  @Input() ReviewMode = false;
+
   /** Emitted when the user toggles captions; parent flips {@link CaptionsOn}. */
   @Output() CaptionsToggled = new EventEmitter<boolean>();
   /** Emitted when the user toggles the developer gear; parent flips {@link DevMode}. */
   @Output() DevModeToggled = new EventEmitter<boolean>();
   /** Emitted when the user ends the call (after the session has been torn down). */
   @Output() Ended = new EventEmitter<void>();
+  /** Review only: the user asked to RESUME the reviewed session as a new live call. */
+  @Output() StartLiveRequested = new EventEmitter<void>();
+  /** Review only: the user asked to close the review and return to the conversation. */
+  @Output() CloseRequested = new EventEmitter<void>();
 
   /** Local mic mute state, reflected from the service. */
   public IsMuted = false;

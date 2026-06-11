@@ -307,14 +307,20 @@
        (header + thread + composer) while a realtime session is active. When the
        call is MINIMIZED (e.g. a dev link navigated to a record) the overlay HIDES
        (not destroyed — its merged session state must survive), the session stays
-       fully live, and a floating "on call" pill offers the way back. -->
-  @if (VoiceSession.Active$ | async) {
+       fully live, and a floating "on call" pill offers the way back.
+       ALSO hosted in SESSION REVIEW mode (RealtimeReview set, no live call): the
+       overlay renders what went down in a PAST session, with a "Start live session"
+       button that resumes it as a new call. -->
+  @if ((VoiceSession.Active$ | async) || RealtimeReview) {
     <mj-realtime-session-overlay
-      [AgentName]="VoiceSession.CurrentAgentName"
+      [AgentName]="realtimeOverlayAgentName"
       [Hidden]="(VoiceSession.Minimized$ | async) === true"
       [CurrentUser]="currentUser"
       [EnvironmentID]="environmentId"
-      (NavigateRequest)="onVoiceNavigateRequest($event)">
+      [ReviewData]="RealtimeReview"
+      (NavigateRequest)="onVoiceNavigateRequest($event)"
+      (StartLiveRequested)="onReviewStartLive($event)"
+      (ReviewClosed)="onReviewClosed()">
     </mj-realtime-session-overlay>
     @if (VoiceSession.Minimized$ | async) {
       <button type="button" class="voice-call-pill" (click)="VoiceSession.SetMinimized(false)"

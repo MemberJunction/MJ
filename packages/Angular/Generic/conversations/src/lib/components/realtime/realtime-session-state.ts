@@ -175,6 +175,32 @@ export class RealtimeSessionState {
     this.subs = [];
   }
 
+  /**
+   * SESSION REVIEW population path: replaces ALL merged state with a pre-built
+   * HISTORICAL thread (caption turns + done delegation cards, oldest first — see
+   * `BuildReviewThreadItems`). Resets the live-stream bookkeeping first, so a later
+   * live session starts from a clean merge baseline; delegation cards are indexed by
+   * CallID so the rail's {@link Cards} list and {@link ActiveCallId} derive normally.
+   */
+  public LoadHistoricalItems(items: RealtimeThreadItem[]): void {
+    this.reset();
+    this.Items = [...items];
+    for (const item of items) {
+      if (item.Kind === 'delegation') {
+        this.cardsByCallId.set(item.Card.CallID, item.Card);
+      }
+    }
+    this.rebuildCards();
+    this.recomputeActive();
+    this.Changed$.next();
+  }
+
+  /** Clears all merged state and notifies subscribers (e.g. leaving session review). */
+  public Clear(): void {
+    this.reset();
+    this.Changed$.next();
+  }
+
   /** Appends any newly-arrived captions, keeping order relative to delegation cards. */
   private onCaptions(captions: VoiceCaption[]): void {
     if (captions.length <= this.placedCaptionCount) {

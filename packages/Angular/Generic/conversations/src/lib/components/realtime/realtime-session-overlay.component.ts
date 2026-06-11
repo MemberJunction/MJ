@@ -1,10 +1,11 @@
-import { Component, EventEmitter, Input, Output, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewChild, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output, OnDestroy, AfterViewInit, ChangeDetectorRef, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { VoiceConnectionState, VoiceSessionService } from '../../services/voice-session.service';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { BuildReviewThreadItems, RealtimeSessionReview } from '../../services/realtime-session-review.service';
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
 import { RealtimeSessionThreadComponent } from './realtime-session-thread.component';
@@ -14,6 +15,8 @@ import { RealtimeControlsComponent } from './realtime-controls.component';
 import { RealtimeSurfaceTabsComponent } from './realtime-surface-tabs.component';
 import { RealtimeChannelTabRegistration } from './realtime-surface-tabs.model';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
+import { RealtimeWhiteboardBoardComponent } from './whiteboard/whiteboard-board.component';
+import { WhiteboardState } from './whiteboard/whiteboard-state';
 
 /**
  * A request to open an entity record, emitted by the call overlay's gear-gated developer
@@ -25,6 +28,22 @@ export interface RealtimeNavigateRequest {
   EntityName: string;
   /** ID of the record to open. */
   RecordID: string;
+}
+
+/**
+ * A request to RESUME a reviewed session as a NEW live call, emitted by review mode's
+ * "Start live session" button. The host (chat area) clears its review state and starts a
+ * voice session through the same path the composer's mic uses, passing
+ * {@link LastSessionId} so the server chains the new session to the reviewed one
+ * (restoring saved channel states such as the whiteboard via `PriorChannelStatesJson`).
+ */
+export interface RealtimeStartLiveRequest {
+  /** Agent the resumed session should front (review Config `targetAgentID`, else the session's `AgentID`). */
+  TargetAgentId: string;
+  /** Conversation the reviewed session was bound to, when any. */
+  ConversationId: string | null;
+  /** The reviewed session's id — chained as the new session's `lastSessionId`. */
+  LastSessionId: string;
 }
 
 /**
@@ -60,6 +79,17 @@ export interface RealtimeNavigateRequest {
  * and an "Open session" link in the banner. Clicking one emits {@link NavigateRequest}
  * and MINIMIZES the call (via {@link VoiceSessionService.SetMinimized}) — the session
  * stays live while the host navigates to the record.
+ *
+ * SESSION REVIEW MODE: when the host supplies {@link ReviewData} (a loaded
+ * `RealtimeSessionReview`) and NO live session is active, the overlay renders what went
+ * down in that PAST session instead of a live call: the banner shows a "Session review"
+ * badge + lifecycle range + close-reason chip; the SAME thread/rail components render the
+ * historical caption turns and delegated-run cards (via
+ * {@link RealtimeSessionState.LoadHistoricalItems}); a read-only Whiteboard tab is
+ * registered ONLY when the session saved a parseable Whiteboard channel state. Everything
+ * live is DEAD in review — no mic, no captions stream, no composer, no channel strip; the
+ * controls collapse to a single "Start live session" button ({@link StartLiveRequested},
+ * which resumes by chaining `lastSessionId`) and a Close button ({@link ReviewClosed}).
  */
 @Component({
   standalone: true,
@@ -72,7 +102,8 @@ export interface RealtimeNavigateRequest {
     RealtimeChannelStripComponent,
     RealtimeComposerComponent,
     RealtimeControlsComponent,
-    RealtimeSurfaceTabsComponent
+    RealtimeSurfaceTabsComponent,
+    RealtimeWhiteboardBoardComponent
   ],
   templateUrl: './realtime-session-overlay.component.html',
   styleUrl: './realtime-session-overlay.component.css'
@@ -104,6 +135,28 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   /** The active environment id, threaded to the surface panel's artifact viewer. */
   @Input() EnvironmentID = '';
 
+  /**
+   * SESSION REVIEW data: when set (and no live session is active) the overlay renders
+   * the reviewed past session instead of a live call. Setting it populates the shared
+   * {@link State} with the historical thread and prepares the read-only whiteboard tab;
+   * clearing it returns the state to its live-merge baseline.
+   */
+  @Input()
+  set ReviewData(value: RealtimeSessionReview | null) {
+    if (value === this._reviewData) {
+      return;
+    }
+    this._reviewData = value;
+    if (value && !this.voice.IsActive) {
+      this.enterReview(value);
+    } else if (!value) {
+      this.exitReview();
+    }
+  }
+  get ReviewData(): RealtimeSessionReview | null {
+    return this._reviewData;
+  }
+
   /** Emitted after the call ends so the host can react (visibility is driven by Active$). */
   @Output() Ended = new EventEmitter<void>();
 
@@ -115,8 +168,30 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
    */
   @Output() NavigateRequest = new EventEmitter<RealtimeNavigateRequest>();
 
+  /**
+   * Review mode's "Start live session": the host clears its review state and resumes the
+   * reviewed session as a new live call (chaining `LastSessionId` to restore channel states).
+   */
+  @Output() StartLiveRequested = new EventEmitter<RealtimeStartLiveRequest>();
+
+  /** Review mode's Close: the host clears its review state, returning to the conversation. */
+  @Output() ReviewClosed = new EventEmitter<void>();
+
   private voice = inject(VoiceSessionService);
   private cdr = inject(ChangeDetectorRef);
+
+  private _reviewData: RealtimeSessionReview | null = null;
+
+  /** True while the overlay renders a PAST session (review data set, no live call). */
+  public get IsReviewing(): boolean {
+    return this._reviewData !== null && !this.voice.IsActive;
+  }
+
+  /**
+   * The reviewed session's rehydrated whiteboard, when it saved a parseable Whiteboard
+   * channel state — rendered read-only by the review whiteboard tab. Null = no tab.
+   */
+  public ReviewWhiteboard: WhiteboardState | null = null;
 
   /** Shared session state — single source for the thread AND the activity rail. */
   public readonly State = new RealtimeSessionState();
@@ -144,8 +219,14 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   /** The tabbed surface panel (right panel) — channel registrations are forwarded to it. */
   @ViewChild(RealtimeSurfaceTabsComponent) private surfaceTabs?: RealtimeSurfaceTabsComponent;
 
+  /** Template hosting the read-only review whiteboard (root-level, so always resolvable). */
+  @ViewChild('reviewBoardTpl') private reviewBoardTpl?: TemplateRef<unknown>;
+
   /** Channel registrations received before the surface panel rendered (flushed in ngAfterViewInit). */
   private pendingChannelTabs: RealtimeChannelTabRegistration[] = [];
+
+  /** True once the view (and the review-board template ref) exists. */
+  private viewReady = false;
 
   // ── Channel FOCUS layout (channel-generic — any plugin may request it) ─────
 
@@ -171,12 +252,16 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       // One surface tab per registry-resolved channel plugin (replays the current set).
       this.voice.ActiveChannels$.subscribe(channels => this.registerChannelTabs(channels)),
       // Any channel may request the focus layout through its host context.
-      this.voice.ChannelFocus$.subscribe(event => this.onChannelFocus(event.Channel, event.Focused))
+      this.voice.ChannelFocus$.subscribe(event => this.onChannelFocus(event.Channel, event.Focused)),
+      // Live/idle flips re-evaluate the review-vs-live branch (IsReviewing).
+      this.voice.Active$.subscribe(() => this.cdr.markForCheck())
     );
   }
 
   ngAfterViewInit(): void {
+    this.viewReady = true;
     this.flushPendingChannelTabs();
+    this.registerReviewBoardTab();
   }
 
   ngOnDestroy(): void {
@@ -253,6 +338,95 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   /** Bubble up the end-of-call. */
   public OnEnded(): void {
     this.Ended.emit();
+  }
+
+  // ── Session review mode ────────────────────────────────────────────────────
+
+  /** Review banner convenience accessors (null-safe against the review data). */
+  public get ReviewStartedAt(): Date | null {
+    return this._reviewData?.StartedAt ?? null;
+  }
+  public get ReviewClosedAt(): Date | null {
+    return this._reviewData?.ClosedAt ?? null;
+  }
+  public get ReviewCloseReason(): string | null {
+    return this._reviewData?.CloseReason ?? null;
+  }
+
+  /** The reviewed session record's id — feeds the banner's dev "Open session" link. */
+  public get ReviewSessionID(): string | null {
+    return this._reviewData?.SessionID ?? null;
+  }
+
+  /** Review controls: resume the reviewed session as a NEW live call (host handles the start). */
+  public OnStartLive(): void {
+    const review = this._reviewData;
+    if (!review) {
+      return;
+    }
+    this.StartLiveRequested.emit({
+      TargetAgentId: review.TargetAgentID,
+      ConversationId: review.ConversationID,
+      LastSessionId: review.SessionID
+    });
+  }
+
+  /** Review controls: close the review (host clears its review state). */
+  public OnReviewClose(): void {
+    this.ReviewClosed.emit();
+  }
+
+  /**
+   * Enters review: replaces the shared state's thread with the historical items, names
+   * the cards after the reviewed agent, and rehydrates the saved whiteboard (when any).
+   */
+  private enterReview(review: RealtimeSessionReview): void {
+    this.State.AgentName = review.AgentName;
+    this.State.LoadHistoricalItems(BuildReviewThreadItems(review));
+    this.ReviewWhiteboard = this.parseReviewWhiteboard(review);
+    if (this.viewReady) {
+      // Let this CD pass create/refresh the surface panel before registering the tab.
+      setTimeout(() => this.registerReviewBoardTab(), 0);
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Leaves review: drops the historical thread + board so a live session starts clean. */
+  private exitReview(): void {
+    this.ReviewWhiteboard = null;
+    this.State.Clear();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Rehydrates the reviewed session's saved Whiteboard channel state. TOLERANT: a missing
+   * or malformed state returns null — review simply shows no whiteboard tab.
+   */
+  private parseReviewWhiteboard(review: RealtimeSessionReview): WhiteboardState | null {
+    const channel = review.ChannelStates.find(c => c.ChannelName.toLowerCase() === 'whiteboard');
+    if (!channel?.StateJson) {
+      return null;
+    }
+    try {
+      return WhiteboardState.FromJSON(channel.StateJson);
+    } catch {
+      console.warn('[RealtimeSessionReview] Saved whiteboard state was malformed — skipping the board tab.');
+      return null;
+    }
+  }
+
+  /** Registers the read-only review whiteboard tab (no-op without a board / template). */
+  private registerReviewBoardTab(): void {
+    if (!this.ReviewWhiteboard || !this.reviewBoardTpl) {
+      return;
+    }
+    this.RegisterChannelTab({
+      Key: 'Whiteboard',
+      Title: 'Whiteboard',
+      Icon: 'fa-solid fa-chalkboard',
+      Content: this.reviewBoardTpl
+    });
+    this.cdr.markForCheck();
   }
 
   /** Minimizes the live call (it stays running) and asks the host to open the record. */

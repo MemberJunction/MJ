@@ -167,3 +167,20 @@
   border-color: var(--mj-status-error);
   color: var(--mj-text-inverse, #fff);
 }
+
+/* ---------- Session review mode ---------- */
+/* Subtle archival tint so a glance says "this is history, not a live call". */
+.call-overlay--review {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--mj-text-muted) 4%, transparent), transparent 120px),
+    var(--mj-bg-surface);
+}
+
+/* The review whiteboard pane body: the board component positions itself absolutely
+   (inset: 0), so its template-based pane needs a filling, positioned frame. */
+.review-board-host {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}

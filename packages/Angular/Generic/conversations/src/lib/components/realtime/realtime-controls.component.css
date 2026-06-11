@@ -70,3 +70,31 @@
 .ctrl-label--end {
   color: var(--mj-status-error);
 }
+
+/* ---------- Session review variant: Start live session (primary) + Close ---------- */
+.controls--review {
+  gap: 24px;
+}
+.start-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid var(--mj-brand-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 150ms ease;
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+}
+.start-live:hover {
+  background: var(--mj-brand-primary-hover, var(--mj-brand-primary));
+  filter: brightness(1.05);
+}
+.start-live i {
+  font-size: 14px;
+}

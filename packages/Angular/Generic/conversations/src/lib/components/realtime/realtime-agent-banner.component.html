@@ -1,31 +1,59 @@
-<div class="banner">
-  <div class="agent-orb" [attr.data-state]="OrbState(State)" aria-hidden="true"></div>
+<div class="banner" [class.banner--review]="ReviewMode">
+  @if (ReviewMode) {
+    <!-- SESSION REVIEW: static orb · name · review badge · started→closed · close-reason chip -->
+    <div class="agent-orb agent-orb--review" aria-hidden="true"></div>
 
-  <div class="banner__id">
-    <span class="banner__name">Voice for {{ AgentName }}</span>
-    <span class="pill pill--sage"><i class="fa-solid fa-feather" aria-hidden="true"></i> Co-Agent</span>
-    <span class="banner__for">speaking as <b>{{ AgentName }}</b></span>
-    @if (ModelName) {
-      <span class="banner__model" [title]="'Realtime voice model: ' + ModelName">· {{ ModelName }}</span>
-    }
-    @if (ShowOpenSession) {
-      <button type="button" class="dev-link" (click)="OpenSession()"
-              title="Open the agent session record">
-        <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
-        <span>Open session</span>
-      </button>
-    }
-  </div>
+    <div class="banner__id">
+      <span class="banner__name">Voice for {{ AgentName }}</span>
+      <span class="pill pill--review"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Session review</span>
+      @if (ReviewRangeLabel) {
+        <span class="banner__for banner__range">{{ ReviewRangeLabel }}</span>
+      }
+      @if (ReviewCloseReasonLabel) {
+        <span class="pill pill--close-reason" [title]="'Close reason: ' + ReviewCloseReason">{{ ReviewCloseReasonLabel }}</span>
+      }
+      @if (ShowOpenSession) {
+        <button type="button" class="dev-link" (click)="OpenSession()"
+                title="Open the agent session record">
+          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          <span>Open session</span>
+        </button>
+      }
+    </div>
 
-  <div class="banner__state" [class.banner__state--busy]="IsBusy(State)">
-    @if (IsBusy(State)) {
-      <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-    } @else {
-      <div class="waveform" [class.waveform--idle]="State !== 'speaking'" aria-hidden="true">
-        <span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span>
-      </div>
-    }
-    <span class="banner__state-label">{{ StateLabel(State) }}</span>
-  </div>
+    <div class="banner__state banner__state--review">
+      <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+      <span class="banner__state-label banner__state-label--review">Reviewing past session</span>
+    </div>
+  } @else {
+    <div class="agent-orb" [attr.data-state]="OrbState(State)" aria-hidden="true"></div>
+
+    <div class="banner__id">
+      <span class="banner__name">Voice for {{ AgentName }}</span>
+      <span class="pill pill--sage"><i class="fa-solid fa-feather" aria-hidden="true"></i> Co-Agent</span>
+      <span class="banner__for">speaking as <b>{{ AgentName }}</b></span>
+      @if (ModelName) {
+        <span class="banner__model" [title]="'Realtime voice model: ' + ModelName">· {{ ModelName }}</span>
+      }
+      @if (ShowOpenSession) {
+        <button type="button" class="dev-link" (click)="OpenSession()"
+                title="Open the agent session record">
+          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          <span>Open session</span>
+        </button>
+      }
+    </div>
+
+    <div class="banner__state" [class.banner__state--busy]="IsBusy(State)">
+      @if (IsBusy(State)) {
+        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+      } @else {
+        <div class="waveform" [class.waveform--idle]="State !== 'speaking'" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+      }
+      <span class="banner__state-label">{{ StateLabel(State) }}</span>
+    </div>
+  }
 </div>

@@ -1,3 +1,20 @@
+@if (ReviewMode) {
+  <!-- SESSION REVIEW: no live controls — one prominent resume action + Close -->
+  <div class="controls controls--review">
+    <button type="button" class="start-live" (click)="StartLiveRequested.emit()"
+            title="Resume this session as a new live call">
+      <i class="fa-solid fa-phone" aria-hidden="true"></i>
+      <span>Start live session</span>
+    </button>
+    <div class="ctrl-group">
+      <button type="button" class="ctrl" (click)="CloseRequested.emit()"
+              title="Close review" aria-label="Close session review">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
+      <span class="ctrl-label">Close</span>
+    </div>
+  </div>
+} @else {
 <div class="controls">
   <div class="ctrl-group">
     <button type="button" class="ctrl" [class.ctrl--muted]="IsMuted"
@@ -36,3 +53,4 @@
     <span class="ctrl-label ctrl-label--end">End call</span>
   </div>
 </div>
+}

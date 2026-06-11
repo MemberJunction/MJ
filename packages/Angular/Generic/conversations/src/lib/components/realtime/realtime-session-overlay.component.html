@@ -1,22 +1,29 @@
 @if (ConnectionState$ | async; as state) {
   <div class="call-overlay"
        [class.call-overlay--hidden]="Hidden"
+       [class.call-overlay--review]="IsReviewing"
        [class.board-focus]="ChannelFocusMode"
-       role="region" aria-label="Live voice session">
+       role="region" [attr.aria-label]="IsReviewing ? 'Past session review' : 'Live voice session'">
 
-    <!-- MAIN column: banner → thread → channel strip → in-call composer → controls -->
+    <!-- MAIN column: banner → thread → channel strip → in-call composer → controls.
+         In SESSION REVIEW the live-only pieces (narration, connecting screen, channel
+         strip, composer) drop out and the controls swap to Start-live + Close. -->
     <div class="call-main">
       <mj-realtime-agent-banner
         [State]="state"
         [AgentName]="AgentName"
-        [ModelName]="ModelName$ | async"
+        [ModelName]="IsReviewing ? null : (ModelName$ | async)"
         [DevMode]="DevMode"
-        [SessionID]="SessionID"
+        [SessionID]="IsReviewing ? ReviewSessionID : SessionID"
+        [ReviewMode]="IsReviewing"
+        [ReviewStartedAt]="ReviewStartedAt"
+        [ReviewClosedAt]="ReviewClosedAt"
+        [ReviewCloseReason]="ReviewCloseReason"
         (OpenSessionRequested)="OnOpenSessionRequested($event)">
       </mj-realtime-agent-banner>
 
       <!-- Ephemeral narration with no active working card to anchor to → under the banner -->
-      @if (State.Narration && !State.ActiveCallId) {
+      @if (!IsReviewing && State.Narration && !State.ActiveCallId) {
         <div class="banner-live-note" role="status" aria-live="polite">
           <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
           {{ State.Narration }}
@@ -24,7 +31,7 @@
       }
 
       <div class="call-body">
-        @if (state === 'connecting') {
+        @if (!IsReviewing && state === 'connecting') {
           <div class="call-connecting">
             <mj-loading text="Connecting to the live session…" size="medium"></mj-loading>
           </div>
@@ -40,26 +47,32 @@
         }
       </div>
 
-      <!-- Active channels -->
-      <mj-realtime-channel-strip></mj-realtime-channel-strip>
+      @if (!IsReviewing) {
+        <!-- Active channels -->
+        <mj-realtime-channel-strip></mj-realtime-channel-strip>
 
-      <!-- In-session text composer (joins the SAME call) -->
-      <mj-realtime-composer></mj-realtime-composer>
+        <!-- In-session text composer (joins the SAME call) -->
+        <mj-realtime-composer></mj-realtime-composer>
+      }
 
-      <!-- Call controls -->
+      <!-- Call controls (live) / Start-live + Close (review) -->
       <mj-realtime-controls
         [CaptionsOn]="ShowCaptions"
         [DevMode]="DevMode"
+        [ReviewMode]="IsReviewing"
         (CaptionsToggled)="OnCaptionsToggled($event)"
         (DevModeToggled)="OnDevModeToggled($event)"
-        (Ended)="OnEnded()">
+        (Ended)="OnEnded()"
+        (StartLiveRequested)="OnStartLive()"
+        (CloseRequested)="OnReviewClose()">
       </mj-realtime-controls>
     </div>
 
     <!-- RIGHT: TABBED SURFACE PANEL — Activity rail | one tab per produced artifact |
          one tab per registry-resolved interactive channel (surfaces created dynamically
          from each plugin). Collapsible to a slim strip; fills the overlay when a channel
-         surface holds the focus layout. -->
+         surface holds the focus layout. In review it hosts the Activity rail plus the
+         read-only Whiteboard tab when the reviewed session saved a board. -->
     <mj-realtime-surface-tabs
       [State]="State"
       [DevMode]="DevMode"
@@ -71,7 +84,7 @@
 
     <!-- FOCUS floating call pill: the main column is hidden, so the live call's
          identity + state + mute / show-thread / end controls ride over the surface. -->
-    @if (ChannelFocusMode) {
+    @if (!IsReviewing && ChannelFocusMode) {
       <div class="board-focus-pill" role="status" aria-label="Live call (board focus)">
         <span class="board-focus-pill__orb" [attr.data-state]="state" aria-hidden="true"></span>
         <span class="board-focus-pill__text">
@@ -102,3 +115,19 @@
 
   </div>
 }
+
+<!-- SESSION REVIEW whiteboard pane body: the reviewed session's saved board, rehydrated
+     locally (WhiteboardState.FromJSON) and rendered READ-ONLY (pan/zoom only). Registered
+     as a template-based channel tab ONLY when a parseable Whiteboard state exists. -->
+<ng-template #reviewBoardTpl>
+  @if (ReviewWhiteboard; as board) {
+    <!-- The board host positions itself absolutely — give it a filling, positioned frame. -->
+    <div class="review-board-host">
+      <mj-realtime-whiteboard
+        [State]="board"
+        [AgentName]="AgentName"
+        [ReadOnly]="true">
+      </mj-realtime-whiteboard>
+    </div>
+  }
+</ng-template>

@@ -170,6 +170,45 @@
   border-color: var(--sage-border);
 }
 
+/* ---------- Session review variant ---------- */
+.banner--review {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mj-text-muted) 10%, transparent), transparent);
+}
+/* Static orb: no pulse ring, dimmed glow — the session is history, nothing is live. */
+.agent-orb--review {
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--mj-text-muted) 12%, transparent);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-text-muted) 55%, var(--mj-bg-surface)),
+    var(--mj-text-muted) 65%);
+}
+.agent-orb--review::after {
+  animation: none;
+  border-color: color-mix(in srgb, var(--mj-text-muted) 30%, transparent);
+}
+.pill--review {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-text-link, var(--mj-brand-primary));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+}
+.pill--close-reason {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  border-color: var(--mj-border-default);
+}
+.banner__range {
+  flex-shrink: 3;
+}
+.banner__state--review {
+  background: var(--mj-bg-surface-card);
+}
+.banner__state--review i {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+.banner__state-label--review {
+  color: var(--mj-text-secondary);
+}
+
 /* Gear-gated developer link to the live agent session record */
 .dev-link {
   display: inline-flex;

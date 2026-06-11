@@ -30,7 +30,8 @@ import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { VoiceSessionService } from '../../services/voice-session.service';
-import { RealtimeNavigateRequest } from '../realtime/realtime-session-overlay.component';
+import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
+import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /** Default width (percentage) for the artifact viewer pane */
@@ -449,6 +450,25 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * `Active$` is true). The trigger wiring lives in <mj-message-input>.
    */
   public readonly VoiceSession = inject(VoiceSessionService);
+
+  /** Stateless loader for the call overlay's SESSION REVIEW mode (past realtime sessions). */
+  private readonly realtimeReviewService = inject(RealtimeSessionReviewService);
+
+  /**
+   * The PAST realtime session currently under review, or null. While set (and no live
+   * call is active) the realtime overlay renders in SESSION REVIEW mode over this
+   * conversation panel. Populated via {@link OpenRealtimeSessionReview}; cleared when
+   * the user closes the review or resumes it as a new live call.
+   */
+  public RealtimeReview: RealtimeSessionReview | null = null;
+
+  /** Agent name the overlay banner shows: the reviewed session's agent while reviewing, else the live call's. */
+  public get realtimeOverlayAgentName(): string {
+    if (this.RealtimeReview && !this.VoiceSession.IsActive) {
+      return this.RealtimeReview.AgentName;
+    }
+    return this.VoiceSession.CurrentAgentName;
+  }
 
   constructor(
     private agentStateService: AgentStateService,
@@ -2342,6 +2362,58 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       entityName: event.EntityName,
       compositeKey
     });
+  }
+
+  /**
+   * ENTRY API for SESSION REVIEW: opens the realtime overlay in review mode over this
+   * conversation panel, rendering what went down in a PAST agent session (caption turns,
+   * delegated-run cards, the saved read-only whiteboard). Intended for conversation
+   * timeline affordances that reopen historical realtime sessions.
+   *
+   * @param agentSessionId The `MJ: AI Agent Sessions.ID` to review.
+   * @returns `true` when the session loaded and the review opened; `false` when it
+   *   couldn't be loaded (missing/unreadable session) or a live call is already active.
+   */
+  public async OpenRealtimeSessionReview(agentSessionId: string): Promise<boolean> {
+    if (this.VoiceSession.IsActive) {
+      return false; // a live call owns the overlay — don't fight it with a review
+    }
+    const review = await this.realtimeReviewService.LoadSessionReview(agentSessionId, this.ProviderToUse);
+    if (!review) {
+      return false;
+    }
+    this.RealtimeReview = review;
+    this.cdr.detectChanges();
+    return true;
+  }
+
+  /**
+   * Review mode's "Start live session": RESUMES the reviewed session as a new live call
+   * through the SAME start path the composer's mic uses, chaining `lastSessionId` so the
+   * server restores saved channel states (e.g. the whiteboard) via `PriorChannelStatesJson`.
+   * The start flips `Active$` synchronously, so clearing the review immediately after
+   * never unhosts the overlay mid-transition.
+   */
+  public async onReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
+    const agentName = this.RealtimeReview?.AgentName ?? null;
+    try {
+      const start = this.VoiceSession.StartVoiceSession(
+        request.TargetAgentId,
+        request.ConversationId ?? this.conversationId,
+        request.LastSessionId,
+        agentName
+      );
+      this.RealtimeReview = null;
+      await start;
+    } catch (error) {
+      console.error('Failed to resume the reviewed session as a live call:', error);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not start the live session.', 'error', 3000);
+    }
+  }
+
+  /** Review mode's Close: drop the review state (the overlay unhosts itself). */
+  public onReviewClosed(): void {
+    this.RealtimeReview = null;
   }
 
   /**
