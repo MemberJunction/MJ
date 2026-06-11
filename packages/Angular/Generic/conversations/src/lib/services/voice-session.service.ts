@@ -220,6 +220,14 @@ export class VoiceSessionService {
   private _minimized$ = new BehaviorSubject<boolean>(false);
   private _activeChannels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
   private _channelFocus$ = new Subject<RealtimeChannelFocusEvent>();
+  // ─── Generic session-lifecycle events (consumed by VoiceSessionsAdapter to
+  // bridge into @memberjunction/conversations-runtime's framework-agnostic
+  // SessionsObserver). Why not derive from Active$ + agentSessionId? Because
+  // Active$ flips true before mintSession resolves and sets agentSessionId —
+  // a naive Active$ subscription would emit session-started with sessionId === null.
+  // Emitting explicitly avoids the race entirely. ───
+  private _sessionStarted$ = new Subject<{ sessionId: string; channelNames: string[] }>();
+  private _sessionEnded$ = new Subject<{ sessionId: string; reason: 'explicit' | 'error' }>();
 
   /** Current connection / turn state. */
   public readonly ConnectionState$: Observable<VoiceConnectionState> = this._connectionState$.asObservable();
@@ -270,6 +278,32 @@ export class VoiceSessionService {
    * `SetFocusMode` — e.g. the whiteboard's "Focus board" toggle.
    */
   public readonly ChannelFocus$: Observable<RealtimeChannelFocusEvent> = this._channelFocus$.asObservable();
+
+  /**
+   * Fired EXACTLY ONCE per session after both `agentSessionId` is set AND the
+   * realtime client is connected. Carries the server-issued `sessionId` and the
+   * `ChannelName` of each plugin resolved at session mint. Consumed by
+   * `VoiceSessionsAdapter` (in this package) to feed
+   * `@memberjunction/conversations-runtime`'s `SessionsObserver`.
+   *
+   * **Why this exists separately from `Active$`:** `Active$` flips `true` BEFORE
+   * `mintSession` resolves, so `agentSessionId` is still `null` at that moment.
+   * Subscribers correlating `(Active$, agentSessionId)` would race; this event
+   * removes the race.
+   */
+  public readonly SessionStarted$: Observable<{ sessionId: string; channelNames: string[] }> =
+    this._sessionStarted$.asObservable();
+
+  /**
+   * Fired EXACTLY ONCE per session as teardown begins, with the prior
+   * `agentSessionId` (so subscribers can correlate against `SessionStarted$`'s
+   * sessionId) and the client-distinguishable reason — `'explicit'` when the
+   * user called `EndVoiceSession`, `'error'` when teardown ran from a catch
+   * block. Server-side close paths (janitor, shutdown) do NOT propagate here —
+   * they happen out-of-process and have no client push channel today.
+   */
+  public readonly SessionEnded$: Observable<{ sessionId: string; reason: 'explicit' | 'error' }> =
+    this._sessionEnded$.asObservable();
 
   /** Synchronous access to the session's active interactive-channel plugins. */
   public get ActiveChannels(): readonly BaseRealtimeChannelClient[] {
@@ -482,6 +516,15 @@ export class VoiceSessionService {
       this.subscribeDelegationProgress();
       // State advances to 'listening' once the provider control channel opens
       // (driven by the client's OnStateChange events).
+
+      // Surface a generic session-started event for the conversations runtime
+      // SessionsObserver bridge. Emitting AFTER Connect() guarantees both that
+      // agentSessionId is set (line ~468) AND the realtime client is connected,
+      // so consumers can act on it without re-checking either condition.
+      this._sessionStarted$.next({
+        sessionId: this.agentSessionId,
+        channelNames: this._activeChannels$.value.map(c => c.ChannelName),
+      });
     } catch (error) {
       console.error('[VoiceSession] Failed to start session:', error);
       this._connectionState$.next('error');
@@ -1571,6 +1614,10 @@ export class VoiceSessionService {
       await this.closeServerSession(this.agentSessionId);
     }
 
+    // Capture the session id BEFORE we null it so the lifecycle emit carries it.
+    // Skip emitting when there was no live session (defensive — teardown is safe
+    // to call without an active session).
+    const closedSessionId = this.agentSessionId;
     this.agentSessionId = null;
     this.narrationTemplate = null;
     this.clientToolHandlers.clear();
@@ -1579,6 +1626,16 @@ export class VoiceSessionService {
     this._active$.next(false);
     if (this._connectionState$.value !== 'error') {
       this._connectionState$.next('closed');
+    }
+
+    // Surface generic session-ended for the conversations runtime bridge.
+    // `closeServerSession=true` means the user explicitly called EndVoiceSession;
+    // `false` means teardown ran from a catch block (start path error path).
+    if (closedSessionId) {
+      this._sessionEnded$.next({
+        sessionId: closedSessionId,
+        reason: closeServerSession ? 'explicit' : 'error',
+      });
     }
   }
 

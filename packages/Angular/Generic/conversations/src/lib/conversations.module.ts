@@ -80,6 +80,15 @@ import { LoadWhiteboardArtifactViewer } from './components/realtime/whiteboard/w
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
 
+// PR 2c — Widget extension surface (standalone)
+import { ChatSlotDirective } from './directives/chat-slot.directive';
+import { MJChatEmptyStateDefaultComponent } from './components/slots/mj-chat-empty-state-default.component';
+import { MJChatAgentPresenceDefaultComponent } from './components/slots/mj-chat-agent-presence-default.component';
+import { MJChatHeaderDefaultComponent } from './components/slots/mj-chat-header-default.component';
+import { MJChatMessageExtraDefaultComponent } from './components/slots/mj-chat-message-extra-default.component';
+import { MJChatDemonstrationSurfaceDefaultComponent } from './components/slots/mj-chat-demonstration-surface-default.component';
+import { MJChatMessageBubbleDefaultComponent } from './components/slots/mj-chat-message-bubble-default.component';
+
 // Tree-shaking prevention for interactive-channel CLIENT PLUGINS: they are resolved
 // dynamically through the MJ ClassFactory (keyed by the `MJ: AI Agent Channels` registry's
 // ClientPluginClass), so these static calls are what keep their @RegisterClass side effects
@@ -167,6 +176,15 @@ const COMPONENTS = [
     UserPickerComponent,
     ArtifactCollectionPickerModalComponent,
     ArtifactShareModalComponent,
+    // PR 2c — Widget extension surface (standalone)
+    ChatSlotDirective,
+    MJChatEmptyStateDefaultComponent,
+    MJChatAgentPresenceDefaultComponent,
+    MJChatHeaderDefaultComponent,
+    MJChatMessageExtraDefaultComponent,
+    MJChatDemonstrationSurfaceDefaultComponent,
+    MJChatMessageBubbleDefaultComponent,
+    // Realtime / voice (PR #2787)
     VoiceOverlayComponent,
     VoiceAgentPickerComponent,
     RealtimeSessionOverlayComponent,
@@ -177,6 +195,15 @@ const COMPONENTS = [
     SearchShortcutDirective,
     // Standalone components
     TasksFullViewComponent,
+    // PR 2c — Widget extension surface
+    ChatSlotDirective,
+    MJChatEmptyStateDefaultComponent,
+    MJChatAgentPresenceDefaultComponent,
+    MJChatHeaderDefaultComponent,
+    MJChatMessageExtraDefaultComponent,
+    MJChatDemonstrationSurfaceDefaultComponent,
+    MJChatMessageBubbleDefaultComponent,
+    // Realtime / voice (PR #2787)
     VoiceOverlayComponent,
     VoiceAgentPickerComponent,
     RealtimeSessionOverlayComponent,

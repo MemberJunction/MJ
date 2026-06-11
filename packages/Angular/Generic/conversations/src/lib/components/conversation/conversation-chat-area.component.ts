@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
@@ -29,11 +29,59 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
+import { AgentClientService } from '@memberjunction/ng-agent-client';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { VoiceSessionService } from '../../services/voice-session.service';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+
+// PR 2c — Widget extension surface
+import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
+import type {
+  IMJChatAgentPresenceComponent,
+  MJChatAgentPresenceState,
+  IMJChatEmptyStateComponent,
+} from '../slots/slot-interfaces';
+import {
+  BeforeAgentTurnEventArgs,
+  AfterAgentTurnEventArgs,
+  BeforeToolInvokedEventArgs,
+  AfterToolInvokedEventArgs,
+  BeforeResponseFormSubmittedEventArgs,
+  AfterResponseFormSubmittedEventArgs,
+  SessionStartedEventArgs,
+  SessionChannelStateChangedEventArgs,
+  SessionEndedEventArgs,
+} from '../../events/chat-events';
+
+/**
+ * Configuration for the persona/character rendering in the `agentPresence` slot.
+ * Off by default — opt in via `showAgentCharacter`. Mirrors {@link IMJChatAgentPresenceComponent}.
+ */
+export interface AgentCharacterConfig {
+  /** Optional avatar URL. */
+  avatarUrl?: string;
+  /** Display name. */
+  characterName?: string;
+  /** Visual intensity. */
+  voiceStateMode?: 'subtle' | 'prominent';
+  /** Current voice state — drives state-colored styling on the default presence component. */
+  state?: MJChatAgentPresenceState;
+}
+
+/**
+ * Configuration payload for the `emptyState` slot's default component. When
+ * supplied, drives the empty-state's greeting / subtext / suggested prompts.
+ */
+export interface EmptyStateConfig {
+  greeting?: string;
+  subtext?: string;
+  suggestedPrompts?: string[];
+  /** Hide the default suggested prompts even if greeting/subtext are set. */
+  hideDefaultPrompts?: boolean;
+}
 
 /** Default width (percentage) for the artifact viewer pane */
 const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
@@ -279,6 +327,116 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   // Sidebar toggle - when true, shows toggle button in header to expand sidebar
   @Input() showSidebarToggle: boolean = false;
 
+  // ────────────────────────────────────────────────────────────────────
+  // PR 2c — Widget extension surface (additive — no breaking changes)
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * When true, the `agentPresence` slot is allowed to render (using the
+   * supplied `agentCharacterConfig` for visualization data). Off by default
+   * so existing embeds (Form Builder, Component Studio AI Assistant, the
+   * corner overlay) see no UI change.
+   */
+  @Input() showAgentCharacter: boolean = false;
+
+  /**
+   * Visualization data forwarded to the `agentPresence` slot's default
+   * component (or to any consumer-projected template via slot context).
+   * Includes avatar URL, character name, voice state, and visual intensity.
+   */
+  @Input() agentCharacterConfig: AgentCharacterConfig | null = null;
+
+  /**
+   * Structured config for the `emptyState` slot's default component —
+   * greeting, subtext, and optional suggested prompts. Backwards-compatible
+   * with the existing `emptyStateGreeting` input (which still wins when
+   * `emptyStateConfig` is null).
+   */
+  @Input() emptyStateConfig: EmptyStateConfig | null = null;
+
+  /**
+   * Activate the `demonstrationSurface` slot layout-mode. Per Matt's 06-10
+   * placement design: when true AND a consumer has projected
+   * `mjChatSlot="demonstrationSurface"`, the chat-content-area restructures
+   * into [stage | conversation-rail] — the stage takes the main pane, the
+   * messages pane shrinks to a side rail (below the stage on mobile). When
+   * false (default), no layout change; the chat-area renders as normal.
+   *
+   * The consumer is expected to drive this from their own state (e.g., an
+   * agent emits a demonstration intent → host sets this true; user dismisses
+   * → host sets it false). The widget itself doesn't decide.
+   */
+  @Input() showDemonstrationSurface: boolean = false;
+
+  /**
+   * Content payload forwarded to the `demonstrationSurface` slot via
+   * `$implicit` + named `content` context. Shape is consumer-defined per the
+   * {@link IMJChatDemonstrationSurfaceComponent} interface — the widget
+   * doesn't introspect or render it directly, just hands it through.
+   */
+  @Input() demonstrationSurfaceContent: unknown = null;
+
+  /**
+   * True when the demonstrationSurface layout-mode is BOTH opted-in
+   * (`showDemonstrationSurface`) AND has a slot template projected to render
+   * into. Both conditions must hold for the layout restructure to kick in.
+   */
+  public get isDemonstrationActive(): boolean {
+    return this.showDemonstrationSurface && this.slotTemplate('demonstrationSurface') !== null;
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR 2c — Before/After cancelable @Output() events
+  // ────────────────────────────────────────────────────────────────────
+  //
+  // Listeners set `event.Cancel = true` on the `Before*` event to halt the
+  // default behavior; the matching `After*` event then does NOT fire.
+  // Informational events (progress, shown notifications, session lifecycle)
+  // stay as single emitters without a Before-pair.
+  //
+  // WIRING STATUS:
+  //   ✓ beforeAgentTurn / afterAgentTurn — wired in message-input.component
+  //     around `agentService.processMessage()` (re-emitted from chat-area).
+  //   ✓ beforeResponseFormSubmitted / afterResponseFormSubmitted — wired in
+  //     message-item.component's `onFormSubmitted()`, forwarded through
+  //     message-list to chat-area.
+  //   ✓ beforeToolInvoked / afterToolInvoked — wired AND cancel-enforced.
+  //     Subscribed to AgentClientService.ToolRequested$ / ToolExecuted$ in
+  //     ngOnInit. When a listener sets event.Cancel = true, the chat-area's
+  //     subscriber copies it back to the ClientToolRequestEvent and
+  //     AgentClientSession.handleToolRequest short-circuits dispatch (tool
+  //     handler NOT called, ToolExecuted$ NOT emitted, server receives a
+  //     failure response carrying any CancelReason).
+  //   ✓ sessionStarted / sessionChannelStateChanged / sessionEnded — subscribed
+  //     to ConversationsRuntime.Sessions.SessionLifecycle$ in ngOnInit. The
+  //     runtime's SessionsObserver consumes whichever ISessionsAdapter the host
+  //     registered at bootstrap; the Angular default is VoiceSessionsAdapter,
+  //     which bridges VoiceSessionService's SessionStarted$ / ActiveChannels$
+  //     (diffed for open/close) / SessionEnded$. Non-Angular hosts (React,
+  //     Vue, Node) register their own adapter — the chat-area code is unchanged.
+
+  /** Cancelable — fired BEFORE a user message is sent to the agent. */
+  @Output() beforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+  /** Fired AFTER a successful agent turn completes. */
+  @Output() afterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
+
+  /** Cancelable — fired BEFORE a registered client tool is invoked by the agent. */
+  @Output() beforeToolInvoked = new EventEmitter<BeforeToolInvokedEventArgs>();
+  /** Fired AFTER a client tool invocation completes. */
+  @Output() afterToolInvoked = new EventEmitter<AfterToolInvokedEventArgs>();
+
+  /** Cancelable — fired BEFORE a response form's submitted values are sent. */
+  @Output() beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+  /** Fired AFTER a response form's values have been sent. */
+  @Output() afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+
+  /** Informational. */
+  @Output() sessionStarted = new EventEmitter<SessionStartedEventArgs>();
+  /** Informational. */
+  @Output() sessionChannelStateChanged = new EventEmitter<SessionChannelStateChangedEventArgs>();
+  /** Informational. */
+  @Output() sessionEnded = new EventEmitter<SessionEndedEventArgs>();
+
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
@@ -304,6 +462,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
   @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
+
+  /**
+   * Slot-fill templates supplied by consumers via the `mjChatSlot` directive.
+   * Looked up by slot name with {@link slotTemplate}.
+   */
+  @ContentChildren(ChatSlotDirective) private chatSlotChildren!: QueryList<ChatSlotDirective>;
+
+  /**
+   * Public helper for the template + consumers — resolve a slot name to the
+   * consumer-supplied `TemplateRef`, or `null` if no consumer template was
+   * projected for that slot. When `null`, the template should render the
+   * slot's default standalone component.
+   */
+  public slotTemplate(name: MJChatSlotName): TemplateRef<unknown> | null {
+    return this.chatSlotChildren?.find((s) => s.SlotName === name)?.Template ?? null;
+  }
 
   public messages: MJConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
@@ -498,7 +672,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     private bridge: ConversationBridgeService,
     private analyzeArtifactService: AnalyzeArtifactService,
     private uiCommandHandler: UICommandHandlerService,
-    private interactiveFormApplyService: InteractiveFormApplyService
+    private interactiveFormApplyService: InteractiveFormApplyService,
+    private agentClientService: AgentClientService
   ) {
   super();}
 
@@ -539,6 +714,75 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .subscribe((command) => {
         if (command.type === 'client:capture-data-snapshot') {
           void this.handleCaptureDataSnapshotCommand(command);
+        }
+      });
+
+    // Bridge AgentClientService's tool-dispatch observables to chat-area's
+    // Before/After cancelable @Outputs. `ToolRequested$` fires synchronously
+    // BEFORE the tool runs; `ToolExecuted$` fires after a successful dispatch
+    // (suppressed when the host vetoes via Cancel).
+    //
+    // Cancel-enforcement: the `ClientToolRequestEvent` carries a mutable
+    // `Cancel: boolean` field. We emit the Angular `beforeToolInvoked` event
+    // synchronously inside the RxJS subscriber, listeners can flip
+    // `args.Cancel = true`, and we copy that decision back to `toolEvent.Cancel`
+    // before the subscriber returns. `AgentClientSession.handleToolRequest` then
+    // sees the veto, short-circuits dispatch, and reports the cancellation back
+    // to the server. `afterToolInvoked` does NOT fire in the canceled case.
+    this.agentClientService.ToolRequested$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((toolEvent) => {
+        const args = new BeforeToolInvokedEventArgs(
+          toolEvent.Request.ToolName,
+          toolEvent.Request.Params
+        );
+        this.beforeToolInvoked.emit(args);
+        if (args.Cancel) {
+          toolEvent.Cancel = true;
+          toolEvent.CancelReason = args.CancelReason;
+        }
+      });
+    this.agentClientService.ToolExecuted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((toolEvent) => {
+        this.afterToolInvoked.emit(
+          new AfterToolInvokedEventArgs(
+            toolEvent.Request.ToolName,
+            toolEvent.Request.Params,
+            toolEvent.Result
+          )
+        );
+      });
+
+    // Bridge ConversationsRuntime.Sessions.SessionLifecycle$ → chat-area's
+    // informational session* outputs. The runtime's SessionsObserver subscribes
+    // to whichever ISessionsAdapter the host registered at bootstrap (today:
+    // VoiceSessionsAdapter from ConversationsRuntimeBootstrap, bridging
+    // VoiceSessionService from PR #2787). Each event variant maps 1:1 to one
+    // of the three @Output() emitters declared above.
+    ConversationsRuntime.Instance.Sessions.SessionLifecycle$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((event) => {
+        switch (event.kind) {
+          case 'session-started':
+            this.sessionStarted.emit(
+              new SessionStartedEventArgs(event.sessionId, event.channelKinds)
+            );
+            return;
+          case 'session-channel':
+            this.sessionChannelStateChanged.emit(
+              new SessionChannelStateChangedEventArgs(
+                event.sessionId,
+                event.channelKind,
+                event.state
+              )
+            );
+            return;
+          case 'session-ended':
+            this.sessionEnded.emit(
+              new SessionEndedEventArgs(event.sessionId, event.reason)
+            );
+            return;
         }
       });
 

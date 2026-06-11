@@ -6,6 +6,7 @@ import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunc
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
+import { BeforeAgentTurnEventArgs, AfterAgentTurnEventArgs } from '../../events/chat-events';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMetadata } from '../../services/conversation-streaming.service';
@@ -161,8 +162,32 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     return this._inProgressMessageIds;
   }
 
+  /**
+   * Application context for the current conversation. Threaded through from the
+   * chat-area component for inclusion in the {@link beforeAgentTurn} event payload —
+   * lets listeners reason about which app's chat surface is invoking the agent.
+   * Optional; defaults to null for surfaces with no app context.
+   */
+  @Input() applicationId: string | null = null;
+
   @Output() messageSent = new EventEmitter<MJConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: MJConversationDetailEntity, agentResult: any}>();
+
+  /**
+   * Cancelable — fired BEFORE `agentService.processMessage()` is called for a user turn.
+   * Listeners may set `event.Cancel = true` to halt the agent invocation (e.g., a
+   * client-side guardrail blocking the turn). When canceled, the corresponding
+   * {@link afterAgentTurn} event is NOT fired and the running task is cleared.
+   * Follows MJ's established Before/After cancelable event pattern.
+   */
+  @Output() beforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+
+  /**
+   * Fired AFTER a successful agent turn completes. Carries the agent run id and the
+   * full agent result. Not fired when {@link beforeAgentTurn} was canceled or when
+   * the underlying `processMessage` errored.
+   */
+  @Output() afterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
   @Output() agentRunUpdate = new EventEmitter<{conversationDetailId: string; agentRun?: any, agentRunId?: string}>(); // Emits when agent run data updates during progress
   @Output() messageComplete = new EventEmitter<{conversationDetailId: string; agentId?: string}>(); // Emits when message completes (success or error)
@@ -1283,6 +1308,34 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         conversationName: this.conversationName
       });
 
+      // ── PR 2c follow-up: Before/After cancelable event wiring ──
+      // Emit beforeAgentTurn so consumers can veto the turn (rate-limit, guardrail,
+      // confirm-dialog, etc.). Cancel propagates synchronously through the chat-area
+      // re-emit binding, so by the time .emit() returns, event.Cancel reflects every
+      // subscriber's final answer.
+      const beforeEvent = new BeforeAgentTurnEventArgs(
+        conversationId,
+        userMessage.Message ?? '',
+        this.applicationId
+      );
+      this.beforeAgentTurn.emit(beforeEvent);
+      if (beforeEvent.Cancel) {
+        // Mark the conversation-manager message as canceled + clear its task so the
+        // UI doesn't show a forever-pending spinner. afterAgentTurn is NOT emitted.
+        await this.updateConversationDetail(
+          conversationManagerMessage,
+          beforeEvent.CancelReason ?? '⛔ Turn canceled before agent invocation',
+          'Error'
+        );
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
+        if (taskId) {
+          this.activeTasks.remove(taskId);
+          taskId = null;
+        }
+        return;
+      }
+
       const result = await this.agentService.processMessage(
         conversationId,
         userMessage,
@@ -1291,6 +1344,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.createProgressCallback(conversationManagerMessage, 'Sage'),
         this.appContext
       );
+
+      // Emit afterAgentTurn on the happy path only — the error/failure branch
+      // immediately below handles its own cleanup and skips this emit.
+      if (result && result.success) {
+        this.afterAgentTurn.emit(new AfterAgentTurnEventArgs(
+          conversationId,
+          (result.agentRun?.ID ?? '') as string,
+          result as unknown as import('@memberjunction/ai-core-plus').ExecuteAgentResult
+        ));
+      }
 
       // Task will be removed automatically in markMessageComplete()
       // DO NOT remove here - agent may still be streaming/processing
