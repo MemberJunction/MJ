@@ -5415,7 +5415,7 @@ export class MJAIAgentNote_ {
     @Field({nullable: true, description: `Internal comments about this note, not included in agent context injection.`}) 
     Comments?: string;
         
-    @Field({description: `Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).`}) 
+    @Field({description: `Lifecycle status of the note. Pending = awaiting approval, Active = vetted and injectable, Provisional = written in-flight by an agent (immediately injectable, awaiting Memory Manager hardening to Active), Revoked = superseded/withdrawn, Archived = retired by consolidation or decay.`}) 
     @MaxLength(20)
     Status: string;
         
@@ -5479,6 +5479,10 @@ export class MJAIAgentNote_ {
     @Field(() => Float, {nullable: true, description: `Composite importance score (0-10) computed from 7 signals: recency, LLM-importance, relevance, uniqueness, correction boost, goal alignment, user mark. Replaces raw AccessCount for authority and retention decisions.`}) 
     ImportanceScore?: number;
         
+    @Field({description: `Provenance of the note: Agent = written in-flight during an agent run, MemoryManager = extracted/consolidated by the scheduled Memory Manager, User = manually created by a person.`}) 
+    @MaxLength(20)
+    AuthoredBy: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -5496,6 +5500,7 @@ export class MJAIAgentNote_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(20)
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -5609,6 +5614,9 @@ export class CreateMJAIAgentNoteInput {
     @Field(() => Float, { nullable: true })
     ImportanceScore: number | null;
 
+    @Field({ nullable: true })
+    AuthoredBy?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -5696,6 +5704,9 @@ export class UpdateMJAIAgentNoteInput {
 
     @Field(() => Float, { nullable: true })
     ImportanceScore?: number | null;
+
+    @Field({ nullable: true })
+    AuthoredBy?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10221,6 +10232,9 @@ if this limit is exceeded.`})
     @MaxLength(36)
     DefaultCoAgentID?: string;
         
+    @Field(() => Boolean, {description: `When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. Off by default.`}) 
+    AllowMemoryWrite: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -10557,6 +10571,9 @@ export class CreateMJAIAgentInput {
     @Field({ nullable: true })
     DefaultCoAgentID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    AllowMemoryWrite?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -10761,6 +10778,9 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     DefaultCoAgentID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowMemoryWrite?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

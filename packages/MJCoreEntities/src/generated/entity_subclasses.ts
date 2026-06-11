@@ -1887,7 +1887,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Internal comments about this note, not included in agent context injection.`),
-    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Provisional'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -1897,8 +1897,9 @@ export const MJAIAgentNoteSchema = z.object({
     *   * Active
     *   * Archived
     *   * Pending
+    *   * Provisional
     *   * Revoked
-        * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).`),
+        * * Description: Lifecycle status of the note. Pending = awaiting approval, Active = vetted and injectable, Provisional = written in-flight by an agent (immediately injectable, awaiting Memory Manager hardening to Active), Revoked = superseded/withdrawn, Archived = retired by consolidation or decay.`),
     SourceConversationID: z.string().nullable().describe(`
         * * Field Name: SourceConversationID
         * * Display Name: Source Conversation
@@ -2000,6 +2001,17 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Importance Score
         * * SQL Data Type: decimal(5, 2)
         * * Description: Composite importance score (0-10) computed from 7 signals: recency, LLM-importance, relevance, uniqueness, correction boost, goal alignment, user mark. Replaces raw AccessCount for authority and retention decisions.`),
+    AuthoredBy: z.union([z.literal('Agent'), z.literal('MemoryManager'), z.literal('User')]).describe(`
+        * * Field Name: AuthoredBy
+        * * Display Name: Authored By
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: MemoryManager
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * MemoryManager
+    *   * User
+        * * Description: Provenance of the note: Agent = written in-flight during an agent run, MemoryManager = extracted/consolidated by the scheduled Memory Manager, User = manually created by a person.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -2019,7 +2031,7 @@ export const MJAIAgentNoteSchema = z.object({
     SourceConversationDetail: z.string().nullable().describe(`
         * * Field Name: SourceConversationDetail
         * * Display Name: Source Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(20)`),
     SourceAIAgentRun: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRun
         * * Display Name: Source AI Agent Run
@@ -4215,6 +4227,12 @@ if this limit is exceeded.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overrides the agent type's DefaultCoAgentID; overridden by the runtime coAgentId parameter; NULL falls through to the type-level default, then the global default co-agent.`),
+    AllowMemoryWrite: z.boolean().describe(`
+        * * Field Name: AllowMemoryWrite
+        * * Display Name: Allow Memory Write
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. Off by default.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
@@ -33641,13 +33659,14 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     *   * Active
     *   * Archived
     *   * Pending
+    *   * Provisional
     *   * Revoked
-    * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).
+    * * Description: Lifecycle status of the note. Pending = awaiting approval, Active = vetted and injectable, Provisional = written in-flight by an agent (immediately injectable, awaiting Memory Manager hardening to Active), Revoked = superseded/withdrawn, Archived = retired by consolidation or decay.
     */
-    get Status(): 'Active' | 'Archived' | 'Pending' | 'Revoked' {
+    get Status(): 'Active' | 'Archived' | 'Pending' | 'Provisional' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: 'Active' | 'Archived' | 'Pending' | 'Revoked') {
+    set Status(value: 'Active' | 'Archived' | 'Pending' | 'Provisional' | 'Revoked') {
         this.Set('Status', value);
     }
 
@@ -33889,6 +33908,25 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     }
 
     /**
+    * * Field Name: AuthoredBy
+    * * Display Name: Authored By
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: MemoryManager
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * MemoryManager
+    *   * User
+    * * Description: Provenance of the note: Agent = written in-flight during an agent run, MemoryManager = extracted/consolidated by the scheduled Memory Manager, User = manually created by a person.
+    */
+    get AuthoredBy(): 'Agent' | 'MemoryManager' | 'User' {
+        return this.Get('AuthoredBy');
+    }
+    set AuthoredBy(value: 'Agent' | 'MemoryManager' | 'User') {
+        this.Set('AuthoredBy', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -33927,7 +33965,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     /**
     * * Field Name: SourceConversationDetail
     * * Display Name: Source Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(20)
     */
     get SourceConversationDetail(): string | null {
         return this.Get('SourceConversationDetail');
@@ -39706,6 +39744,20 @@ if this limit is exceeded.
     }
     set DefaultCoAgentID(value: string | null) {
         this.Set('DefaultCoAgentID', value);
+    }
+
+    /**
+    * * Field Name: AllowMemoryWrite
+    * * Display Name: Allow Memory Write
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. Off by default.
+    */
+    get AllowMemoryWrite(): boolean {
+        return this.Get('AllowMemoryWrite');
+    }
+    set AllowMemoryWrite(value: boolean) {
+        this.Set('AllowMemoryWrite', value);
     }
 
     /**
