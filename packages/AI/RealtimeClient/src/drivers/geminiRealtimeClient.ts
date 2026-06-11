@@ -121,7 +121,8 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   `outputTranscription` → Assistant deltas/finals (accumulated like the OpenAI driver),
  *   `toolCall.functionCalls` → {@link OnToolCall} (callID→name cached for
  *   {@link SendToolResult}), `interrupted` → playback flush + `'listening'`,
- *   `turnComplete` → busy cleared + queued sends flushed, `usageMetadata` → ignored.
+ *   `turnComplete` → busy cleared + queued sends flushed, `usageMetadata` → {@link OnUsage}
+ *   (per-turn prompt/response token deltas — see {@link handleUsageMetadata}).
  * - **Busy mapping**: Gemini has no `response.created` frame, so `IsBusy` is set EAGERLY when
  *   this client triggers a response (text / narration / tool result) and on the first model
  *   output of a turn (audio part or output-transcription delta); cleared on `turnComplete`,
@@ -452,8 +453,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Entry point for every inbound {@link LiveServerMessage}; fans out to per-concern
-     * handlers. `usageMetadata` is intentionally ignored — usage accounting belongs to the
-     * server-bridged topology.
+     * handlers, including `usageMetadata` → {@link emitUsage}.
      */
     private handleServerMessage(message: LiveServerMessage): void {
         if (message.serverContent) {
@@ -462,6 +462,27 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (message.toolCall) {
             this.handleToolCallFrame(message.toolCall.functionCalls);
         }
+        if (message.usageMetadata) {
+            this.handleUsageMetadata(message.usageMetadata);
+        }
+    }
+
+    /**
+     * Emits a usage update from a server message's `usageMetadata`.
+     *
+     * **Delta-vs-cumulative (verified against the `@google/genai` SDK types):** `UsageMetadata`
+     * documents `promptTokenCount` as "Number of tokens in the prompt" and `responseTokenCount`
+     * as "Total number of tokens across all the generated response candidates" — i.e. PER-RESPONSE
+     * counts for the turn this message reports, NOT a session-cumulative running total. Each
+     * emission is therefore already a delta, matching the `OnUsage` contract — and matching how
+     * the server-bridged `GeminiRealtime` driver forwards the same payload to `IRealtimeSession.OnUsage`.
+     */
+    private handleUsageMetadata(usageMetadata: NonNullable<LiveServerMessage['usageMetadata']>): void {
+        this.emitUsage({
+            InputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : undefined,
+            OutputTokens: typeof usageMetadata.responseTokenCount === 'number' ? usageMetadata.responseTokenCount : undefined,
+            Raw: usageMetadata,
+        });
     }
 
     /** Translates one {@link LiveServerContent} frame in provider-documented signal order. */

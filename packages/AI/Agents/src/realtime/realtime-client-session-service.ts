@@ -57,6 +57,11 @@ import {
     DelegatedRunArtifact,
     ToolExecutionResult
 } from './realtime-tool-broker';
+import {
+    NARRATION_PROMPT_NAME,
+    LEGACY_NARRATION_PROMPT_NAME,
+    ResolveNarrationInstructionsTemplate
+} from './realtime-narration';
 
 /**
  * Input for {@link RealtimeClientSessionService.PrepareClientSession}.
@@ -246,8 +251,9 @@ export class RealtimeClientSessionService {
      * The seeded name of the `MJ: AI Prompts` row whose `TemplateText` carries the first-person
      * progress-narration instructions (with a `{{ progressMessage }}` placeholder). Resolved at
      * session prepare time so the browser narrates with DB-driven, product-tunable wording.
+     * Canonical value lives in `realtime-narration.ts` (shared with the server-bridged runner path).
      */
-    public static readonly NarrationPromptName = 'Realtime Co-Agent - Progress Narration';
+    public static readonly NarrationPromptName = NARRATION_PROMPT_NAME;
 
     /**
      * DEPRECATED legacy name of the narration prompt, from before the co-agent's rename from
@@ -255,7 +261,26 @@ export class RealtimeClientSessionService {
      * still carry this name, so {@link resolveNarrationInstructionsTemplate} falls back to it
      * (with a deprecation log) when {@link RealtimeClientSessionService.NarrationPromptName} is absent.
      */
-    public static readonly LegacyNarrationPromptName = 'Voice Co-Agent - Progress Narration';
+    public static readonly LegacyNarrationPromptName = LEGACY_NARRATION_PROMPT_NAME;
+
+    /**
+     * IN-FLIGHT DELEGATION REGISTRY — the server half of the client-direct CANCEL channel.
+     *
+     * Every relayed tool call registers an {@link AbortController} under
+     * `(agentSessionID, callID)` for the duration of {@link ExecuteRelayedTool}; the
+     * `CancelRealtimeSessionTool` mutation aborts entries via
+     * {@link CancelInFlightDelegations} so an explicit user cancel (the overlay's per-card ✕)
+     * kills the delegated target-agent run mid-flight. Entries are removed on completion
+     * (success, failure, or abort), so the registry only ever holds truly in-flight calls.
+     *
+     * Keys are normalized (trimmed, lowercased) so SQL Server's uppercase UUIDs and
+     * PostgreSQL's lowercase UUIDs address the same entry.
+     *
+     * NOTE: this registry is per-service-instance state (the resolver holds ONE shared service
+     * per server process), not per-request state — it deliberately spans requests so the cancel
+     * mutation can reach the execute mutation's in-flight controller.
+     */
+    private readonly inFlightDelegations = new Map<string, Map<string, AbortController>>();
 
     /**
      * Prepares a client-direct realtime session: resolves the model, assembles the companion
@@ -599,9 +624,101 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<{ ResultJson: string; Success: boolean; PausedRunID?: string; Artifacts?: DelegatedRunArtifact[] }> {
-        const broker = this.buildToolBroker(input, contextUser, provider);
-        const result = await broker.ExecuteToolCall(input.Call);
-        return { ResultJson: result.ResultJson, Success: result.Success, PausedRunID: result.PausedRunID, Artifacts: result.Artifacts };
+        // Register this call in the in-flight registry so CancelInFlightDelegations (the
+        // CancelRealtimeSessionTool mutation) can abort it mid-flight. The registry controller's
+        // signal is combined with any caller-supplied signal — either source cancels the run.
+        const controller = this.registerInFlightDelegation(input.AgentSessionID, input.Call.CallID);
+        const effectiveInput: ExecuteRelayedToolInput = {
+            ...input,
+            AbortSignal: input.AbortSignal ? this.combineSignals(controller.signal, input.AbortSignal) : controller.signal
+        };
+        try {
+            const broker = this.buildToolBroker(effectiveInput, contextUser, provider);
+            const result = await broker.ExecuteToolCall(effectiveInput.Call);
+            return { ResultJson: result.ResultJson, Success: result.Success, PausedRunID: result.PausedRunID, Artifacts: result.Artifacts };
+        } finally {
+            this.unregisterInFlightDelegation(input.AgentSessionID, input.Call.CallID, controller);
+        }
+    }
+
+    /**
+     * Aborts in-flight relayed delegations for a session — the server half of the client-direct
+     * CANCEL channel (see the registry note on {@link inFlightDelegations}).
+     *
+     * @param agentSessionID The session whose in-flight delegations to abort.
+     * @param callID When supplied, only the delegation for this specific call is aborted; when
+     *   omitted, EVERY in-flight delegation for the session is aborted.
+     * @returns The number of in-flight delegations aborted. **Tolerant by design**: an unknown
+     *   session, an unknown call id, or a session with nothing in flight returns `0` — never throws
+     *   (the call the user wanted dead may simply have finished already, which is a fine outcome).
+     */
+    public CancelInFlightDelegations(agentSessionID: string, callID?: string): number {
+        const sessionKey = this.registryKey(agentSessionID);
+        const sessionMap = this.inFlightDelegations.get(sessionKey);
+        if (!sessionMap || sessionMap.size === 0) {
+            return 0;
+        }
+        let aborted = 0;
+        if (callID != null && callID.trim().length > 0) {
+            const callKey = this.registryKey(callID);
+            const controller = sessionMap.get(callKey);
+            if (controller) {
+                controller.abort();
+                sessionMap.delete(callKey);
+                aborted = 1;
+            }
+        } else {
+            for (const controller of sessionMap.values()) {
+                controller.abort();
+                aborted++;
+            }
+            sessionMap.clear();
+        }
+        if (sessionMap.size === 0) {
+            this.inFlightDelegations.delete(sessionKey);
+        }
+        if (aborted > 0) {
+            LogStatus(`RealtimeClientSessionService: aborted ${aborted} in-flight delegation(s) for session ${agentSessionID}.`);
+        }
+        return aborted;
+    }
+
+    /** Normalized (trim + lowercase) registry key so UUID casing differences can't split entries. */
+    private registryKey(id: string): string {
+        return id.trim().toLowerCase();
+    }
+
+    /** Creates + registers the abort controller for one in-flight relayed call. */
+    private registerInFlightDelegation(agentSessionID: string, callID: string): AbortController {
+        const sessionKey = this.registryKey(agentSessionID);
+        let sessionMap = this.inFlightDelegations.get(sessionKey);
+        if (!sessionMap) {
+            sessionMap = new Map<string, AbortController>();
+            this.inFlightDelegations.set(sessionKey, sessionMap);
+        }
+        const controller = new AbortController();
+        sessionMap.set(this.registryKey(callID), controller);
+        return controller;
+    }
+
+    /**
+     * Removes one call's registry entry on completion — but only when the stored controller is
+     * STILL the one this execution registered (a cancel may already have removed it, and a
+     * same-callID retry may have replaced it).
+     */
+    private unregisterInFlightDelegation(agentSessionID: string, callID: string, controller: AbortController): void {
+        const sessionKey = this.registryKey(agentSessionID);
+        const sessionMap = this.inFlightDelegations.get(sessionKey);
+        if (!sessionMap) {
+            return;
+        }
+        const callKey = this.registryKey(callID);
+        if (sessionMap.get(callKey) === controller) {
+            sessionMap.delete(callKey);
+        }
+        if (sessionMap.size === 0) {
+            this.inFlightDelegations.delete(sessionKey);
+        }
     }
 
     /**
@@ -823,37 +940,7 @@ export class RealtimeClientSessionService {
      * @returns The template text (containing a `{{ progressMessage }}` placeholder), or `null`.
      */
     protected resolveNarrationInstructionsTemplate(): string | null {
-        try {
-            const current = this.findActiveNarrationPromptText(RealtimeClientSessionService.NarrationPromptName);
-            if (current) {
-                return current;
-            }
-            const legacy = this.findActiveNarrationPromptText(RealtimeClientSessionService.LegacyNarrationPromptName);
-            if (legacy) {
-                LogStatus(
-                    `RealtimeClientSessionService: resolved the narration prompt via its DEPRECATED legacy name ` +
-                        `'${RealtimeClientSessionService.LegacyNarrationPromptName}'. Re-sync the prompt seed metadata to ` +
-                        `rename it to '${RealtimeClientSessionService.NarrationPromptName}'.`
-                );
-                return legacy;
-            }
-            return null;
-        } catch {
-            return null; // engine cache unavailable — tolerated, client falls back
-        }
-    }
-
-    /**
-     * Finds the Active `MJ: AI Prompts` row with the given name (case/whitespace-insensitive) in
-     * {@link AIEngine}'s cached prompts and returns its non-empty `TemplateText`, or `null`.
-     */
-    private findActiveNarrationPromptText(promptName: string): string | null {
-        const wanted = promptName.toLowerCase();
-        const prompt = (AIEngine.Instance.Prompts ?? []).find(
-            p => p.Name?.trim().toLowerCase() === wanted && p.Status === 'Active'
-        );
-        const text = prompt?.TemplateText;
-        return text && text.trim().length > 0 ? text : null;
+        return ResolveNarrationInstructionsTemplate();
     }
 
     /**

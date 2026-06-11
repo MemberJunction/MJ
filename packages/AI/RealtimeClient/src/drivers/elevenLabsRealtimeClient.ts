@@ -116,6 +116,9 @@ interface NativeWebSocketLike {
  *   inactive; residual server-side generation for a cancelled turn is simply not played.
  *   Spoken barge-in is handled by the platform's own VAD (which emits `interruption`), and a
  *   typed {@link SendText} takes the floor server-side as a fresh user turn.
+ * - **No usage telemetry**: the Conversational AI socket exposes no token-usage events, so
+ *   this driver NEVER emits {@link OnUsage} (registering a handler is safe; it just never
+ *   fires — usage accounting for ElevenLabs sessions happens platform-side).
  */
 @RegisterClass(BaseRealtimeClient, 'elevenlabs')
 export class ElevenLabsRealtimeClient extends BaseRealtimeClient {

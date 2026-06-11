@@ -6,6 +6,7 @@ import {
     RealtimeClientState,
     RealtimeClientToolCall,
     RealtimeClientTranscript,
+    RealtimeClientUsage,
 } from '../generic/baseRealtimeClient';
 
 /**
@@ -45,6 +46,9 @@ class StubRealtimeClient extends BaseRealtimeClient {
     }
     public EmitInterruption(): void {
         this.emitInterruption();
+    }
+    public EmitUsage(u: RealtimeClientUsage): void {
+        this.emitUsage(u);
     }
 }
 
@@ -116,6 +120,33 @@ describe('BaseRealtimeClient', () => {
             expect(second).toEqual(['speaking']);
         });
 
+        it('should deliver usage updates (deltas) to the registered handler', () => {
+            const client = new StubRealtimeClient();
+            const received: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => received.push(u));
+
+            client.EmitUsage({ InputTokens: 120, OutputTokens: 45, Raw: { input_tokens: 120 } });
+            client.EmitUsage({ OutputTokens: 7 });
+
+            expect(received).toEqual([
+                { InputTokens: 120, OutputTokens: 45, Raw: { input_tokens: 120 } },
+                { OutputTokens: 7 },
+            ]);
+        });
+
+        it('should replace the usage handler on re-registration (single-handler style)', () => {
+            const client = new StubRealtimeClient();
+            const first: RealtimeClientUsage[] = [];
+            const second: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => first.push(u));
+            client.OnUsage((u) => second.push(u));
+
+            client.EmitUsage({ InputTokens: 1, OutputTokens: 2 });
+
+            expect(first).toEqual([]);
+            expect(second).toEqual([{ InputTokens: 1, OutputTokens: 2 }]);
+        });
+
         it('should be safe to emit with no handler registered', () => {
             const client = new StubRealtimeClient();
             expect(() => {
@@ -124,6 +155,7 @@ describe('BaseRealtimeClient', () => {
                 client.EmitState('closed');
                 client.EmitError({ Message: 'm', Fatal: true });
                 client.EmitInterruption();
+                client.EmitUsage({ InputTokens: 1 });
             }).not.toThrow();
         });
     });

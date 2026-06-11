@@ -145,6 +145,8 @@ interface NativeWebSocketLike {
  *   SUPPRESSES residual `reply.audio` frames of the cancelled reply until the next reply
  *   boundary — so late-arriving chunks of a cancelled turn are never played or allowed to
  *   re-assert `'speaking'`.
+ * - **No usage telemetry**: the streaming socket exposes no token-usage events, so this
+ *   driver NEVER emits {@link OnUsage} (registering a handler is safe; it just never fires).
  */
 @RegisterClass(BaseRealtimeClient, 'assemblyai')
 export class AssemblyAIRealtimeClient extends BaseRealtimeClient {

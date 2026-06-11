@@ -8,6 +8,7 @@ import {
     RealtimeClientState,
     RealtimeClientToolCall,
     RealtimeClientTranscript,
+    RealtimeClientUsage,
 } from '../generic/baseRealtimeClient';
 import {
     GeminiClientConnectArgs,
@@ -627,6 +628,54 @@ describe('GeminiRealtimeClient', () => {
             expect(client.Fake.ClientContents).toEqual([
                 { turns: [{ role: 'user', parts: [{ text: 'progress so far' }] }], turnComplete: false },
             ]);
+        });
+    });
+
+    describe('usage telemetry (OnUsage)', () => {
+        beforeEach(async () => {
+            await connect(client);
+        });
+
+        it('should emit per-turn token deltas from usageMetadata (prompt/response counts + Raw)', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            client.Emit({ usageMetadata: { promptTokenCount: 120, responseTokenCount: 45 } } as LiveServerMessage);
+
+            expect(usages).toEqual([
+                { InputTokens: 120, OutputTokens: 45, Raw: { promptTokenCount: 120, responseTokenCount: 45 } },
+            ]);
+        });
+
+        it('should emit one delta PER usageMetadata frame (per-turn reports, not cumulative)', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            client.Emit({ usageMetadata: { promptTokenCount: 100, responseTokenCount: 10 } } as LiveServerMessage);
+            client.Emit({ usageMetadata: { promptTokenCount: 130, responseTokenCount: 20 } } as LiveServerMessage);
+
+            expect(usages.map((u) => [u.InputTokens, u.OutputTokens])).toEqual([
+                [100, 10],
+                [130, 20],
+            ]);
+        });
+
+        it('should leave missing counts undefined but still carry Raw', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            client.Emit({ usageMetadata: {} } as LiveServerMessage);
+
+            expect(usages).toEqual([{ InputTokens: undefined, OutputTokens: undefined, Raw: {} }]);
+        });
+
+        it('should emit nothing for messages without usageMetadata', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            client.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+
+            expect(usages).toEqual([]);
         });
     });
 

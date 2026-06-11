@@ -54,10 +54,14 @@ export interface OAIResponseCreated {
     type: 'response.created';
 }
 
-/** A full response (turn) completed — carries usage; ignored for the MVP. */
+/**
+ * A full response (turn) completed — carries the GA usage payload for THIS response
+ * (`input_tokens` / `output_tokens` plus per-modality detail objects), i.e. per-response
+ * DELTAS, which is exactly the `OnUsage` contract shape.
+ */
 export interface OAIResponseDone {
     type: 'response.done';
-    response?: { usage?: Record<string, number> };
+    response?: { usage?: { input_tokens?: number; output_tokens?: number; [detail: string]: unknown } };
 }
 
 /**
@@ -650,6 +654,7 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
                 // response.done), so it's safe to reset the response kind here.
                 this.responseActive = false;
                 this.activeResponseKind = 'normal';
+                this.emitResponseUsage(event as OAIResponseDone);
                 this.flushPendingResultResponse();
                 if (this.currentState === 'speaking') {
                     this.setState('listening');
@@ -706,6 +711,23 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
             this.currentState = 'connected';
         }
         this.emitToolCall({ CallID: call.call_id, ToolName: call.name, ArgumentsJson: call.arguments });
+    }
+
+    /**
+     * Emits the completed response's usage to the host as a DELTA (the GA `response.done`
+     * usage payload covers exactly this response, so it is already incremental — the
+     * `OnUsage` contract's preferred shape). Frames without a usage payload emit nothing.
+     */
+    private emitResponseUsage(event: OAIResponseDone): void {
+        const usage = event.response?.usage;
+        if (!usage) {
+            return;
+        }
+        this.emitUsage({
+            InputTokens: typeof usage.input_tokens === 'number' ? usage.input_tokens : undefined,
+            OutputTokens: typeof usage.output_tokens === 'number' ? usage.output_tokens : undefined,
+            Raw: usage,
+        });
     }
 
     /** Surfaces a provider error frame (non-fatal; the session continues). */

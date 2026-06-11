@@ -27,6 +27,7 @@ import {
     ToolExecutionResult,
     RealtimeSessionResult
 } from './realtime/realtime-session-runner';
+import { ResolveNarrationInstructionsTemplate } from './realtime/realtime-narration';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -1748,6 +1749,9 @@ export class BaseAgent {
             ExecuteTool: (call) => this.executeRealtimeTool(params, call),
             PersistTranscript: (transcript) => this.persistRealtimeTranscript(params, transcript),
             CheckpointUsage: (usage) => this.checkpointRealtimeUsage(promptRun, usage),
+            // DB-driven spoken-progress wording (shared lookup with the client-direct path);
+            // null → the runner's documented built-in first-person fallback.
+            NarrationInstructionsTemplate: ResolveNarrationInstructionsTemplate(),
             LogStatus: (message, verboseOnly) => this.logStatus(message, verboseOnly ?? false, params),
             LogError: (error) => this.logError(error, { agent: params.agent, category: 'RealtimeSession' })
         };
@@ -1875,7 +1879,11 @@ export class BaseAgent {
                 configurationId: params.configurationId,
                 apiKeys: params.apiKeys,
                 data: params.data,
-                verbose: params.verbose
+                verbose: params.verbose,
+                // Progress streams BOTH to the runner's narration consumer (request.OnProgress —
+                // it paces SendContextNote/RequestSpokenUpdate over the live socket) AND to any
+                // host-level onProgress the parent execution carries.
+                onProgress: this.combineProgressCallbacks(request.OnProgress, params.onProgress)
             });
 
             return {
@@ -1889,6 +1897,31 @@ export class BaseAgent {
             const msg = error instanceof Error ? error.message : String(error);
             return { CallID: request.CallID, Success: false, Output: `Delegation failed: ${msg}` };
         }
+    }
+
+    /**
+     * Combines the runner-supplied delegation progress callback with the host-level one so a
+     * single `onProgress` fans out to both. Returns the lone callback when only one exists, and
+     * `undefined` when neither does. A throw from one consumer never starves the other.
+     */
+    private combineProgressCallbacks(
+        first?: AgentExecutionProgressCallback,
+        second?: AgentExecutionProgressCallback
+    ): AgentExecutionProgressCallback | undefined {
+        if (!first) {
+            return second;
+        }
+        if (!second) {
+            return first;
+        }
+        return (progress) => {
+            try {
+                first(progress);
+            } catch {
+                /* one consumer failing must not starve the other */
+            }
+            second(progress);
+        };
     }
 
     /**

@@ -39,6 +39,31 @@ export interface RealtimeClientToolCall {
 }
 
 /**
+ * A usage/telemetry update emitted by a realtime client.
+ *
+ * **Deltas preferred:** each emission SHOULD carry the incremental token counts for the
+ * response/turn that just completed (not a session-cumulative running total), matching the
+ * server-side `RealtimeUsage` contract — consumers accumulate. A driver whose provider only
+ * reports cumulative totals must convert to deltas before emitting.
+ *
+ * **Per-driver availability** (capability, not laziness — providers without usage events
+ * simply never emit):
+ * - **OpenAI** — emits per-response deltas from the GA `response.done` frame's `usage` payload.
+ * - **Gemini** — emits per-turn deltas from `LiveServerMessage.usageMetadata`
+ *   (`promptTokenCount` / `responseTokenCount` are per-response counts, not cumulative).
+ * - **ElevenLabs** — the Conversational AI socket exposes no usage events; never emits.
+ * - **AssemblyAI** — the streaming STT socket exposes no token-usage events; never emits.
+ */
+export interface RealtimeClientUsage {
+    /** Input tokens reported in this update (a delta for the completed response/turn). */
+    InputTokens?: number;
+    /** Output tokens reported in this update (a delta for the completed response/turn). */
+    OutputTokens?: number;
+    /** The raw provider usage payload, for hosts that want provider-specific detail. */
+    Raw?: unknown;
+}
+
+/**
  * Connection / turn state of a realtime client session.
  * - `connecting` — the provider connection is being negotiated
  * - `connected`  — the transport is up but the control channel is not yet open
@@ -143,6 +168,7 @@ export abstract class BaseRealtimeClient {
     private stateChangeHandler?: (state: RealtimeClientState) => void;
     private errorHandler?: (error: RealtimeClientError) => void;
     private interruptionHandler?: () => void;
+    private usageHandler?: (usage: RealtimeClientUsage) => void;
 
     /**
      * Opens the provider connection using the server-minted ephemeral credential and applies
@@ -307,6 +333,22 @@ export abstract class BaseRealtimeClient {
         this.interruptionHandler = handler;
     }
 
+    /**
+     * Registers the (single) usage handler.
+     *
+     * Emissions carry token **deltas** for the response/turn that just completed (see
+     * {@link RealtimeClientUsage} — deltas preferred; cumulative-only providers must convert
+     * in the driver). Hosts accumulate and relay/persist on their own cadence (e.g. the voice
+     * session service debounces a `RelayRealtimeUsage` mutation onto the co-agent prompt run).
+     *
+     * **Optional capability:** drivers whose provider exposes no usage telemetry simply never
+     * emit — registering a handler is always safe, but hosts must not assume emissions arrive.
+     * See {@link RealtimeClientUsage} for per-driver availability.
+     */
+    public OnUsage(handler: (usage: RealtimeClientUsage) => void): void {
+        this.usageHandler = handler;
+    }
+
     // ── Protected emit helpers for concrete drivers ───────────────────────────
 
     /** Emits a transcript event to the registered handler (if any). */
@@ -332,5 +374,10 @@ export abstract class BaseRealtimeClient {
     /** Emits a true barge-in interruption to the registered handler (if any). */
     protected emitInterruption(): void {
         this.interruptionHandler?.();
+    }
+
+    /** Emits a usage update (token deltas for a completed response/turn) to the registered handler (if any). */
+    protected emitUsage(usage: RealtimeClientUsage): void {
+        this.usageHandler?.(usage);
     }
 }

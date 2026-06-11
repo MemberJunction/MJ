@@ -40,6 +40,7 @@ import {
     RealtimeStatusLogger,
     RealtimeErrorLogger
 } from './realtime-tool-broker';
+import { BuildServerNarrationInstructions } from './realtime-narration';
 
 // Re-surface the shared tool-execution contract under this module so existing consumers and tests
 // keep their import paths. The single source of truth is `realtime-tool-broker.ts`.
@@ -112,6 +113,15 @@ export interface RealtimeSessionRunnerDeps {
     /** Optional debounce window (ms) for usage checkpoints. Defaults to 5000ms. */
     UsageCheckpointDebounceMs?: number;
 
+    /**
+     * Optional DB-driven progress-narration instruction template (the
+     * `Realtime Co-Agent - Progress Narration` prompt's `TemplateText`, containing a
+     * `{{ progressMessage }}` placeholder). When absent/`null`, the runner falls back to the
+     * built-in first-person wording (see `BuildServerNarrationInstructions`). `BaseAgent`
+     * supplies this via the shared narration lookup in `realtime-narration.ts`.
+     */
+    NarrationInstructionsTemplate?: string | null;
+
     /** Optional verbose-aware status logger. */
     LogStatus?: RealtimeStatusLogger;
 
@@ -140,6 +150,21 @@ export interface RealtimeSessionResult {
  * drive the session to completion, or {@link Start}/{@link Stop} to control it explicitly.
  */
 export class RealtimeSessionRunner {
+    // ── Delegated-run progress narration (server-bridged B3) ──────────────────
+    /** First spoken update fires no earlier than this long after a delegation burst starts. */
+    private static readonly FirstNarrationDelayMs = 5000;
+    /** Minimum gap between SUBSEQUENT spoken updates (floods aggregate into one digest). */
+    private static readonly NarrationIntervalMs = 8000;
+    /** Max progress messages aggregated into one spoken digest. */
+    private static readonly MaxDigestMessages = 4;
+    /**
+     * Progress steps worth narrating — mirrors the client-direct resolver's filter so both
+     * topologies narrate the same signal and drop the same initialization/finalization noise.
+     */
+    private static readonly SignificantProgressSteps = [
+        'prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'
+    ];
+
     private deps: RealtimeSessionRunnerDeps;
     private session: IRealtimeSession | null = null;
 
@@ -149,6 +174,21 @@ export class RealtimeSessionRunner {
     private usageDirty = false;
     /** Pending debounce timer handle for usage checkpoints. */
     private usageDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** Count of delegations currently in flight (anchors the narration burst lifecycle). */
+    private activeDelegations = 0;
+    /** Epoch ms when the current delegation burst began (first in-flight delegation). */
+    private narrationBurstStartedAt = 0;
+    /** Epoch ms of the last spoken update; 0 = never. SESSION-global spacing floor. */
+    private lastNarrationAt = 0;
+    /** Spoken updates so far in the current burst (1-based numbering for the instructions). */
+    private narrationCount = 0;
+    /** Aggregation buffer: distinct progress messages since the last spoken update (oldest first). */
+    private pendingNarrationMessages: string[] = [];
+    /** Tail message of the last digest, so an identical trailing progress event isn't re-buffered. */
+    private lastNarratedTail = '';
+    /** Pending deferred-narration timer; cancelled when the delegation finishes / barge-in lands. */
+    private narrationTimer: ReturnType<typeof setTimeout> | null = null;
 
     /**
      * The shared, topology-agnostic tool-execution path. The runner delegates all tool-call routing,
@@ -169,7 +209,10 @@ export class RealtimeSessionRunner {
     constructor(deps: RealtimeSessionRunnerDeps) {
         this.deps = deps;
         this.toolBroker = new RealtimeToolBroker({
-            DelegateToTarget: deps.DelegateToTarget,
+            // Wrapped so the runner can (a) anchor the narration burst lifecycle around each
+            // delegated run and (b) thread its own OnProgress into the delegate — the production
+            // delegate (BaseAgent.delegateRealtimeToTarget) passes it into the child RunAgent.
+            DelegateToTarget: (request) => this.runDelegateWithNarration(request),
             ExecuteTool: deps.ExecuteTool,
             LogStatus: deps.LogStatus,
             LogError: deps.LogError
@@ -388,6 +431,140 @@ export class RealtimeSessionRunner {
     private handleInterruption(): void {
         this.deps.LogStatus?.('✋ Barge-in detected — aborting in-flight delegated run if any.', true);
         this.toolBroker.AbortInFlight();
+        // The user took the floor — any pending spoken progress update is stale.
+        this.cancelPendingNarration();
+    }
+
+    // ── Delegated-run progress narration (server-bridged B3) ──────────────────
+
+    /**
+     * Runs one delegated call through the injected delegate while owning the NARRATION burst
+     * around it: progress events are threaded back via {@link DelegateToTargetRequest.OnProgress},
+     * and when the delegation finishes (success, failure, or abort) any still-pending spoken
+     * update is cancelled — the final tool result is about to be voiced, so an interim "still
+     * working…" line is moot.
+     */
+    private async runDelegateWithNarration(request: DelegateToTargetRequest): Promise<DelegatedResult> {
+        this.beginDelegationBurst();
+        try {
+            return await this.deps.DelegateToTarget({
+                ...request,
+                OnProgress: (progress) => this.handleDelegationProgress(progress)
+            });
+        } finally {
+            this.endDelegation();
+        }
+    }
+
+    /**
+     * Anchors a fresh narration burst when no other delegation is in flight. Deliberately NOT
+     * reset across bursts: {@link lastNarrationAt} (the ~8s spacing floor is SESSION-global, so
+     * sequential tool calls seconds apart can never narrate faster than the interval).
+     */
+    private beginDelegationBurst(): void {
+        if (this.activeDelegations === 0) {
+            this.narrationBurstStartedAt = Date.now();
+            this.narrationCount = 0;
+            this.pendingNarrationMessages = [];
+            this.lastNarratedTail = '';
+        }
+        this.activeDelegations++;
+    }
+
+    /** Closes one delegation; when none remain in flight, pending narration is cancelled. */
+    private endDelegation(): void {
+        this.activeDelegations = Math.max(0, this.activeDelegations - 1);
+        if (this.activeDelegations === 0) {
+            this.cancelPendingNarration();
+        }
+    }
+
+    /**
+     * Consumes one delegated-run progress event:
+     *  - significant steps only (mirrors the client-direct resolver's filter);
+     *  - the message is ALWAYS injected as a background context note (feature-detected —
+     *    {@link IRealtimeSession.SendContextNote} is an optional capability) so the model can
+     *    draw on it whenever it next speaks;
+     *  - a THROTTLED spoken update is scheduled (feature-detected —
+     *    {@link IRealtimeSession.RequestSpokenUpdate} is optional): first at ~5s into the burst,
+     *    then every ~8s, with floods aggregated into ONE digest. Collision with an in-flight
+     *    model response is the DRIVER's obligation (queue or skip) per the
+     *    `RequestSpokenUpdate` contract, so the runner does not gate on busy state.
+     */
+    private handleDelegationProgress(progress: { step: string; message: string }): void {
+        if (!RealtimeSessionRunner.SignificantProgressSteps.includes(progress.step)) {
+            return;
+        }
+        const session = this.session;
+        if (!session || this.activeDelegations === 0) {
+            return; // session gone / delegation already finished — stale event
+        }
+        session.SendContextNote?.(`[delegated-agent progress] ${progress.message}`);
+        if (!session.RequestSpokenUpdate) {
+            return; // provider can't voice an instructed one-off update — context note only
+        }
+        this.bufferNarrationMessage(progress.message);
+        if (this.pendingNarrationMessages.length > 0 && !this.narrationTimer) {
+            this.narrationTimer = setTimeout(() => this.fireDeferredNarration(), this.nextNarrationDelayMs());
+        }
+    }
+
+    /** Adds a progress message to the digest buffer (deduped, capped, oldest-first). */
+    private bufferNarrationMessage(message: string): void {
+        if (message === this.lastNarratedTail || this.pendingNarrationMessages.includes(message)) {
+            return;
+        }
+        this.pendingNarrationMessages.push(message);
+        if (this.pendingNarrationMessages.length > RealtimeSessionRunner.MaxDigestMessages) {
+            this.pendingNarrationMessages.shift();
+        }
+    }
+
+    /**
+     * ms until the next spoken update is allowed. Two constraints, BOTH enforced:
+     * - first update of a burst: no earlier than ~5s after the burst started;
+     * - ~8s since the last spoken update, SESSION-global.
+     */
+    private nextNarrationDelayMs(): number {
+        const now = Date.now();
+        const firstAnchor = this.narrationCount === 0
+            ? this.narrationBurstStartedAt + RealtimeSessionRunner.FirstNarrationDelayMs
+            : 0;
+        const spacingFloor = this.lastNarrationAt > 0
+            ? this.lastNarrationAt + RealtimeSessionRunner.NarrationIntervalMs
+            : 0;
+        return Math.max(50, Math.max(firstAnchor, spacingFloor) - now);
+    }
+
+    /**
+     * Speaks the aggregated progress digest — unless the work already finished (buffer cancelled)
+     * or the session is gone. Per-turn collision safety is the driver's `RequestSpokenUpdate`
+     * obligation (queue or skip), so no busy gate is needed here.
+     */
+    private fireDeferredNarration(): void {
+        this.narrationTimer = null;
+        const session = this.session;
+        if (!session?.RequestSpokenUpdate || this.pendingNarrationMessages.length === 0 || this.activeDelegations === 0) {
+            this.pendingNarrationMessages = [];
+            return;
+        }
+        const digest = this.pendingNarrationMessages.join(' → ');
+        this.lastNarratedTail = this.pendingNarrationMessages[this.pendingNarrationMessages.length - 1];
+        this.pendingNarrationMessages = [];
+        this.narrationCount++;
+        this.lastNarrationAt = Date.now();
+        session.RequestSpokenUpdate(
+            BuildServerNarrationInstructions(this.deps.NarrationInstructionsTemplate, digest, this.narrationCount)
+        );
+    }
+
+    /** Cancels any deferred spoken update and drops the digest buffer. */
+    private cancelPendingNarration(): void {
+        if (this.narrationTimer) {
+            clearTimeout(this.narrationTimer);
+            this.narrationTimer = null;
+        }
+        this.pendingNarrationMessages = [];
     }
 
     /**
@@ -410,6 +587,9 @@ export class RealtimeSessionRunner {
             this.usageDebounceTimer = null;
         }
         await this.flushUsage();
+
+        // A pending spoken progress update is meaningless on a closing session.
+        this.cancelPendingNarration();
 
         // Abort any still-in-flight delegation before tearing down.
         this.toolBroker.AbortInFlight();

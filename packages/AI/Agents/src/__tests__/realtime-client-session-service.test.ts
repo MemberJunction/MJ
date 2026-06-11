@@ -467,6 +467,138 @@ describe('RealtimeClientSessionService.ExecuteRelayedTool', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
+// In-flight delegation registry + cancel channel (CancelRealtimeSessionTool's engine)
+// ════════════════════════════════════════════════════════════════════
+
+describe('RealtimeClientSessionService.CancelInFlightDelegations', () => {
+    function makeToolInput(callID: string, overrides: Partial<ExecuteRelayedToolInput> = {}): ExecuteRelayedToolInput {
+        const call: RealtimeToolCall = {
+            CallID: callID,
+            ToolName: INVOKE_TARGET_AGENT_TOOL_NAME,
+            Arguments: JSON.stringify({ request: 'do the work' })
+        };
+        return { AgentSessionID: 'session-1', TargetAgentID: 'target-1', Call: call, ...overrides };
+    }
+
+    /**
+     * Service whose delegate HANGS until cancelled, resolving with a "cancelled" failure —
+     * mimicking a real delegated run whose `cancellationToken` was pulled. Mirrors the REAL
+     * `delegateToTarget`'s signal handling: it listens on BOTH the broker's per-call signal
+     * (`request.AbortSignal`) and the registry-combined `input.AbortSignal` the service threads
+     * into `ExecuteRelayedTool`'s effective input (the production path combines exactly these
+     * two into the delegated run's `cancellationToken`).
+     */
+    class HangingDelegateService extends TestableService {
+        protected override async delegateToTarget(
+            input: ExecuteRelayedToolInput,
+            request: DelegateToTargetRequest
+        ): Promise<DelegatedResult> {
+            return new Promise<DelegatedResult>((resolve) => {
+                const finish = (): void => resolve({ CallID: request.CallID, Success: false, Output: 'cancelled' });
+                if (request.AbortSignal.aborted || input.AbortSignal?.aborted) {
+                    finish();
+                    return;
+                }
+                request.AbortSignal.addEventListener('abort', finish, { once: true });
+                input.AbortSignal?.addEventListener('abort', finish, { once: true });
+            });
+        }
+    }
+
+    function makeHangingService(): HangingDelegateService {
+        return new HangingDelegateService();
+    }
+
+    it('aborts ONE in-flight delegation by (sessionId, callId) and returns 1', async () => {
+        const svc = makeHangingService();
+        const pending = svc.ExecuteRelayedTool(makeToolInput('c1'), contextUser, provider);
+
+        const aborted = svc.CancelInFlightDelegations('session-1', 'c1');
+        expect(aborted).toBe(1);
+
+        const result = await pending;
+        expect(result.Success).toBe(false);
+        expect(JSON.parse(result.ResultJson)).toEqual({ success: false, output: 'cancelled' });
+    });
+
+    it('aborts ALL in-flight delegations for the session when callId is omitted', async () => {
+        const svc = makeHangingService();
+        const p1 = svc.ExecuteRelayedTool(makeToolInput('c1'), contextUser, provider);
+        const p2 = svc.ExecuteRelayedTool(makeToolInput('c2'), contextUser, provider);
+
+        const aborted = svc.CancelInFlightDelegations('session-1');
+        expect(aborted).toBe(2);
+
+        const [r1, r2] = await Promise.all([p1, p2]);
+        expect(r1.Success).toBe(false);
+        expect(r2.Success).toBe(false);
+    });
+
+    it('only aborts the targeted call — siblings keep running', async () => {
+        const svc = makeHangingService();
+        const p1 = svc.ExecuteRelayedTool(makeToolInput('c1'), contextUser, provider);
+        const p2 = svc.ExecuteRelayedTool(makeToolInput('c2'), contextUser, provider);
+
+        expect(svc.CancelInFlightDelegations('session-1', 'c1')).toBe(1);
+        await p1;
+
+        // c2 is still in flight — a follow-up cancel-all reaches exactly it.
+        expect(svc.CancelInFlightDelegations('session-1')).toBe(1);
+        await p2;
+    });
+
+    it('is tolerant: unknown session / unknown call id return 0 (never throws)', () => {
+        const svc = makeHangingService();
+        expect(svc.CancelInFlightDelegations('no-such-session')).toBe(0);
+        expect(svc.CancelInFlightDelegations('no-such-session', 'c1')).toBe(0);
+    });
+
+    it('returns 0 after the delegation completed (registry entries are cleaned up)', async () => {
+        const svc = new TestableService(); // default delegate resolves immediately
+        await svc.ExecuteRelayedTool(makeToolInput('c1'), contextUser, provider);
+
+        expect(svc.CancelInFlightDelegations('session-1', 'c1')).toBe(0);
+        expect(svc.CancelInFlightDelegations('session-1')).toBe(0);
+    });
+
+    it('normalizes ids — an uppercased session/call id cancels the same registry entry', async () => {
+        const svc = makeHangingService();
+        const pending = svc.ExecuteRelayedTool(makeToolInput('call-abc'), contextUser, provider);
+
+        expect(svc.CancelInFlightDelegations('SESSION-1', 'CALL-ABC')).toBe(1);
+        const result = await pending;
+        expect(result.Success).toBe(false);
+    });
+
+    it('scopes the registry per session — cancelling one session leaves another untouched', async () => {
+        const svc = makeHangingService();
+        const pA = svc.ExecuteRelayedTool(makeToolInput('c1', { AgentSessionID: 'session-A' }), contextUser, provider);
+        const pB = svc.ExecuteRelayedTool(makeToolInput('c1', { AgentSessionID: 'session-B' }), contextUser, provider);
+
+        expect(svc.CancelInFlightDelegations('session-A')).toBe(1);
+        await pA;
+
+        expect(svc.CancelInFlightDelegations('session-B')).toBe(1);
+        await pB;
+    });
+
+    it('still combines a caller-supplied AbortSignal — either source cancels the delegate', async () => {
+        const svc = makeHangingService();
+        const callerController = new AbortController();
+        const pending = svc.ExecuteRelayedTool(
+            makeToolInput('c1', { AbortSignal: callerController.signal }),
+            contextUser,
+            provider
+        );
+
+        callerController.abort(); // the ORIGINAL barge-in style signal still works
+        const result = await pending;
+        expect(result.Success).toBe(false);
+        expect(JSON.parse(result.ResultJson)).toEqual({ success: false, output: 'cancelled' });
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // Prior-transcript hydration (resume continuity)
 // ════════════════════════════════════════════════════════════════════
 

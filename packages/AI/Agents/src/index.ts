@@ -49,6 +49,7 @@ export * from './realtime/realtime-session-runner';
 // duplicate-export collision.
 export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, DelegatedRunArtifact } from './realtime/realtime-tool-broker';
 export * from './realtime/realtime-client-session-service';
+export * from './realtime/realtime-narration';
 
 // Re-export from ai-reranker for backward compatibility
 export {

@@ -23,6 +23,7 @@
  */
 
 import { RealtimeToolCall } from '@memberjunction/ai';
+import { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 
 /**
  * The stable name of the primary tool every Realtime Co-Agent registers with the realtime provider.
@@ -53,6 +54,15 @@ export interface DelegateToTargetRequest {
      * signal so a stale delegated result is never narrated into a conversation that has moved on.
      */
     AbortSignal: AbortSignal;
+    /**
+     * Optional progress callback the CALLER wants threaded into the delegated agent run's
+     * `onProgress` (in addition to any host-level callback the delegate already wires). The
+     * server-bridged {@link import('./realtime-session-runner').RealtimeSessionRunner} supplies
+     * this so it can narrate the delegated run's progress over the live provider socket
+     * (`SendContextNote` / `RequestSpokenUpdate`). Delegates that run agents should invoke it
+     * alongside their own progress plumbing; delegates without progress support may ignore it.
+     */
+    OnProgress?: AgentExecutionProgressCallback;
 }
 
 /**

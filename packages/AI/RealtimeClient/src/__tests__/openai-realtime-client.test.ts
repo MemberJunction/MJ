@@ -7,6 +7,7 @@ import {
     RealtimeClientState,
     RealtimeClientToolCall,
     RealtimeClientTranscript,
+    RealtimeClientUsage,
 } from '../generic/baseRealtimeClient';
 import {
     IRealtimeAudioSink,
@@ -687,6 +688,64 @@ describe('OpenAIRealtimeClient', () => {
             expect(client.IsBusy).toBe(true);
             channel.EmitServer({ type: 'response.done' });
             expect(client.IsBusy).toBe(false);
+        });
+    });
+
+    describe('usage telemetry (OnUsage)', () => {
+        beforeEach(() => {
+            client.InitChannel(channel);
+            channel.Open();
+        });
+
+        it('should emit a per-response usage DELTA from the response.done GA usage payload (with Raw)', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({
+                type: 'response.done',
+                response: { usage: { input_tokens: 120, output_tokens: 45, input_token_details: { text_tokens: 80 } } },
+            });
+
+            expect(usages).toEqual([
+                {
+                    InputTokens: 120,
+                    OutputTokens: 45,
+                    Raw: { input_tokens: 120, output_tokens: 45, input_token_details: { text_tokens: 80 } },
+                },
+            ]);
+        });
+
+        it('should emit one delta PER completed response (deltas, not cumulative)', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            channel.EmitServer({ type: 'response.done', response: { usage: { input_tokens: 100, output_tokens: 10 } } });
+            channel.EmitServer({ type: 'response.done', response: { usage: { input_tokens: 30, output_tokens: 5 } } });
+
+            expect(usages.map((u) => [u.InputTokens, u.OutputTokens])).toEqual([
+                [100, 10],
+                [30, 5],
+            ]);
+        });
+
+        it('should emit nothing for a response.done without a usage payload', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            channel.EmitServer({ type: 'response.done' });
+            channel.EmitServer({ type: 'response.done', response: {} });
+
+            expect(usages).toEqual([]);
+        });
+
+        it('should leave non-numeric token fields undefined but still carry Raw', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            channel.EmitServer({ type: 'response.done', response: { usage: { output_tokens: 9 } } });
+
+            expect(usages).toEqual([{ InputTokens: undefined, OutputTokens: 9, Raw: { output_tokens: 9 } }]);
         });
     });
 
