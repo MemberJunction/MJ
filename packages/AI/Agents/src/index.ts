@@ -47,7 +47,7 @@ export * from './realtime/realtime-session-runner';
 // DelegateToTargetRequest, DelegatedResult, ToolExecutionResult, loggers) is surfaced via the
 // runner's `export *` above, so only the broker-specific symbols are named here to avoid a
 // duplicate-export collision.
-export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall } from './realtime/realtime-tool-broker';
+export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, DelegatedRunArtifact } from './realtime/realtime-tool-broker';
 export * from './realtime/realtime-client-session-service';
 
 // Re-export from ai-reranker for backward compatibility

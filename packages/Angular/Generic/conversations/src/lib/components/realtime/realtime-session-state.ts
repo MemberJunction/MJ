@@ -78,8 +78,29 @@ export interface RealtimeThreadDelegationItem {
   Card: RealtimeDelegationCardVM;
 }
 
-/** One entry in the chronological thread: either a caption bubble or a delegation card. */
-export type RealtimeThreadItem = RealtimeThreadCaptionItem | RealtimeThreadDelegationItem;
+/**
+ * A SESSION-BOUNDARY divider in the unified thread — a subtle, token-styled rule marking
+ * where one session leg ends and another begins. Two producers:
+ *  - review→live continuation ({@link RealtimeSessionState.StartLiveContinuation}):
+ *    "Resumed live session · <time>" before the new live items;
+ *  - multi-leg session review (`BuildReviewThreadItems` over a `lastSessionId` chain):
+ *    "Session leg · started <time>" between legs, carrying the PREVIOUS leg's CloseReason
+ *    as a small chip so the reader sees why that leg ended.
+ */
+export interface RealtimeThreadDividerItem {
+  Kind: 'divider';
+  /** The divider's label (e.g. "Resumed live session", "Session leg"). */
+  Label: string;
+  /** Timestamp rendered after the label ("· <time>"), or null when unknown. */
+  At: Date | null;
+  /** Font Awesome icon class rendered before the label (e.g. `fa-solid fa-phone`). */
+  Icon: string;
+  /** Why the PRECEDING leg closed (review chains only) — rendered as a small chip. */
+  CloseReason?: string | null;
+}
+
+/** One entry in the chronological thread: a caption bubble, a delegation card, or a leg divider. */
+export type RealtimeThreadItem = RealtimeThreadCaptionItem | RealtimeThreadDelegationItem | RealtimeThreadDividerItem;
 
 /**
  * Maps a raw delegation step id to a human-friendly phrase. Unknown steps fall back to
@@ -198,6 +219,31 @@ export class RealtimeSessionState {
   /** Clears all merged state and notifies subscribers (e.g. leaving session review). */
   public Clear(): void {
     this.reset();
+    this.Changed$.next();
+  }
+
+  /**
+   * REVIEW→LIVE continuation path: KEEPS the historical thread (and its delegation cards
+   * in the rail) and appends a "Resumed live session" {@link RealtimeThreadDividerItem},
+   * then resets only the LIVE-merge bookkeeping so the new session's captions and cards
+   * append cleanly AFTER the divider:
+   *  - `placedCaptionCount` → 0 (the fresh session's caption stream starts empty, so the
+   *    start-of-session `[]` emission is a no-op rather than a reset);
+   *  - the ephemeral narration is dropped (nothing is running yet);
+   *  - historical cards stay indexed by CallID — new live CallIDs are unique, so live
+   *    cards insert alongside them and `ActiveCallId` recomputes normally.
+   */
+  public StartLiveContinuation(at: Date = new Date()): void {
+    const divider: RealtimeThreadDividerItem = {
+      Kind: 'divider',
+      Label: 'Resumed live session',
+      At: at,
+      Icon: 'fa-solid fa-phone'
+    };
+    this.Items = [...this.Items, divider];
+    this.Narration = null;
+    this.placedCaptionCount = 0;
+    this.recomputeActive();
     this.Changed$.next();
   }
 

@@ -6,6 +6,8 @@ import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
 import {
   BaseRealtimeClient,
+  LoadAssemblyAIRealtimeClient,
+  LoadElevenLabsRealtimeClient,
   LoadGeminiRealtimeClient,
   LoadOpenAIRealtimeClient,
   RealtimeClientError,
@@ -26,6 +28,8 @@ import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../components
 // and this service stays component-free (it must stay importable in plain-node tests).
 LoadOpenAIRealtimeClient();
 LoadGeminiRealtimeClient();
+LoadElevenLabsRealtimeClient();
+LoadAssemblyAIRealtimeClient();
 
 /**
  * Connection / turn state for a real-time voice session, surfaced to the UI overlay.

@@ -38,7 +38,7 @@ import {
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
+import { RealtimeClientSessionService, DelegatedRunArtifact } from '@memberjunction/ai-agents';
 import { AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -101,6 +101,13 @@ const MAX_CLIENT_TOOLS = 16;
 const MAX_CLIENT_TOOLS_JSON_CHARS = 64_000;
 /** Maximum accepted size (chars) of a persisted channel state blob. */
 const MAX_CHANNEL_STATE_CHARS = 2_000_000;
+
+/** Maximum prior-leg transcript TURNS hydrated into a resumed session's system prompt (newest kept). */
+const MAX_PRIOR_TRANSCRIPT_TURNS = 30;
+/** Maximum prior-leg transcript CHARS hydrated into a resumed session's system prompt (oldest dropped). */
+const MAX_PRIOR_TRANSCRIPT_CHARS = 8_000;
+/** Maximum prior-session chain legs walked when hydrating a resumed session's transcript. */
+const MAX_PRIOR_TRANSCRIPT_LEGS = 5;
 
 /**
  * Authoritative shape persisted in `AIAgentSession.Config_` for a client-direct voice session.
@@ -290,7 +297,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         );
 
         const clientTools = this.parseClientTools(clientToolsJson);
-        const result = await this.prepareClientSessionOrClose(session, coAgentID, targetAgentId, contextUser, provider, preferredModelId, clientTools);
+        // Best-effort model-context hydration: the PRIOR session chain's transcript (ownership-
+        // checked, capped) is framed into the system prompt so the model REMEMBERS the last leg.
+        // Strictly tolerant — any problem yields no hydration, never a failed start.
+        const priorTranscript = await this.loadPriorTranscript(lastSessionId, contextUser, provider);
+        const result = await this.prepareClientSessionOrClose(
+            session, coAgentID, targetAgentId, contextUser, provider, preferredModelId, clientTools, priorTranscript,
+        );
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
         result.PriorChannelStatesJson = (await this.loadPriorChannelStatesJson(lastSessionId, contextUser, provider)) ?? undefined;
@@ -319,7 +332,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
         const config = this.readSessionConfig(session);
 
-        const { ResultJson, PausedRunID } = await this.clientSessionService.ExecuteRelayedTool(
+        const { ResultJson, PausedRunID, Artifacts } = await this.clientSessionService.ExecuteRelayedTool(
             {
                 AgentSessionID: agentSessionId,
                 TargetAgentID: config.targetAgentID,
@@ -337,6 +350,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // Roll the paused-run id forward in the session config: clear the one we just consumed, and
         // store a new one only if the (resumed or fresh) run paused again awaiting feedback.
         await this.updatePendingFeedbackRunID(session, config, PausedRunID);
+
+        // Junction-link any artifacts the delegated run produced into the session's conversation
+        // history (best-effort) — so chat, session review, and resume carryover can all see them.
+        await this.linkDelegatedArtifactsToConversation(session, Artifacts, contextUser, provider);
 
         await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
         return ResultJson;
@@ -722,6 +739,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      *
      * @param preferredModelId Optional explicit realtime model choice — threaded to the service,
      *   which FAILS (no silent fallback) when the chosen model cannot be satisfied.
+     * @param priorTranscript Optional capped, role-tagged transcript of the PRIOR session chain
+     *   (from {@link loadPriorTranscript}) — the service frames it into the system prompt so a
+     *   resumed session remembers the previous leg(s).
      */
     private async prepareClientSessionOrClose(
         session: MJAIAgentSessionEntity,
@@ -731,6 +751,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         provider: IMetadataProvider,
         preferredModelId?: string,
         clientTools?: RealtimeToolDefinition[],
+        priorTranscript?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -747,6 +768,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // Client-declared, CLIENT-EXECUTED UI tools (see the mutation's SECURITY NOTE) —
                 // merged after invoke-target-agent into the declared tool set.
                 ExtraTools: clientTools,
+                // Resume continuity: the prior leg(s)' transcript, framed into the system prompt.
+                PriorTranscript: priorTranscript,
             },
             contextUser,
             provider,
@@ -975,6 +998,143 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
+     * Loads the PRIOR session chain's transcript for model-context hydration: when a new session
+     * carries `lastSessionId`, the chain's persisted, session-stamped `Conversation Details` are
+     * folded into capped, role-tagged lines (`User: …` / `Assistant: …`) the prepare service
+     * frames into the system prompt — so the model REMEMBERS the previous live leg(s).
+     *
+     * Chain walk + caps:
+     *  - follows `LastSessionID` BACKWARDS from `lastSessionId`, at most
+     *    {@link MAX_PRIOR_TRANSCRIPT_LEGS} legs, with a visited-set cycle guard (A→B→A stops);
+     *  - EVERY leg is ownership-checked like the channel-state restore — the FIRST leg failing
+     *    the check aborts hydration entirely (first leg) or ends the walk (deeper legs), so
+     *    another user's transcript can never leak;
+     *  - one details query covers all collected legs, chronological;
+     *  - hidden/error/empty rows are skipped, then the NEWEST {@link MAX_PRIOR_TRANSCRIPT_TURNS}
+     *    turns are kept and the total is capped at {@link MAX_PRIOR_TRANSCRIPT_CHARS} chars
+     *    (oldest dropped first).
+     *
+     * Strictly best-effort: every failure path logs and returns `undefined` — hydration NEVER
+     * blocks a session start.
+     */
+    private async loadPriorTranscript(
+        lastSessionId: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | undefined> {
+        if (!lastSessionId) {
+            return undefined;
+        }
+        try {
+            const legIDs = await this.collectOwnedPriorLegIDs(lastSessionId, contextUser, provider);
+            if (legIDs.length === 0) {
+                return undefined;
+            }
+            const turns = await this.loadChainTranscriptTurns(legIDs, contextUser, provider);
+            const lines = this.capTranscriptLines(turns);
+            return lines.length > 0 ? lines.join('\n') : undefined;
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: prior-transcript hydration failed for session ${lastSessionId}: ${(error as Error).message}`,
+            );
+            return undefined;
+        }
+    }
+
+    /**
+     * Walks the prior-session chain backwards from `lastSessionId`, returning the OWNED leg ids
+     * (newest first). The first leg must exist and be owned by the caller, else `[]` (logged);
+     * deeper-leg problems (missing, unowned, cycle) just end the walk.
+     */
+    private async collectOwnedPriorLegIDs(
+        lastSessionId: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string[]> {
+        const legIDs: string[] = [];
+        const visited = new Set<string>();
+        let cursor: string | null = lastSessionId;
+        while (cursor && legIDs.length < MAX_PRIOR_TRANSCRIPT_LEGS) {
+            const key = cursor.trim().toLowerCase();
+            if (visited.has(key)) {
+                LogError(`StartRealtimeClientSession: prior-session chain cycle detected at ${cursor} — stopping the transcript walk.`);
+                break;
+            }
+            visited.add(key);
+            const leg = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
+            if (!(await leg.Load(cursor))) {
+                if (legIDs.length === 0) {
+                    LogError(`StartRealtimeClientSession: prior session ${cursor} not found — skipping transcript hydration.`);
+                }
+                break;
+            }
+            if (!UUIDsEqual(leg.UserID, contextUser.ID)) {
+                if (legIDs.length === 0) {
+                    LogError(
+                        `StartRealtimeClientSession: prior session ${cursor} is not owned by user ${contextUser.ID} — ` +
+                            'skipping transcript hydration.',
+                    );
+                }
+                break;
+            }
+            legIDs.push(leg.ID);
+            cursor = leg.LastSessionID ?? null;
+        }
+        return legIDs;
+    }
+
+    /**
+     * Loads the chain legs' visible transcript turns (session-stamped `Conversation Details`,
+     * `Role` User/AI, not hidden, non-empty) in ONE chronological query across all legs.
+     */
+    private async loadChainTranscriptTurns(
+        legIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<Array<{ Role: string; Message: string }>> {
+        const inList = legIDs.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<{ Role: string; Message: string | null; HiddenToUser: boolean }>(
+            {
+                EntityName: CONVERSATION_DETAIL_ENTITY,
+                ExtraFilter: `AgentSessionID IN (${inList})`,
+                Fields: ['ID', 'Role', 'Message', 'HiddenToUser', '__mj_CreatedAt'],
+                OrderBy: '__mj_CreatedAt ASC',
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        if (!result.Success) {
+            LogError(`StartRealtimeClientSession: prior-transcript query failed: ${result.ErrorMessage}`);
+            return [];
+        }
+        return (result.Results ?? []).filter(
+            (row) =>
+                !row.HiddenToUser &&
+                (row.Role === 'User' || row.Role === 'AI') &&
+                typeof row.Message === 'string' &&
+                row.Message.trim().length > 0,
+        ) as Array<{ Role: string; Message: string }>;
+    }
+
+    /**
+     * Maps visible turns to role-tagged lines and applies the hydration caps: the NEWEST
+     * {@link MAX_PRIOR_TRANSCRIPT_TURNS} turns, then a total budget of
+     * {@link MAX_PRIOR_TRANSCRIPT_CHARS} chars — oldest lines dropped first in both passes,
+     * so the model always keeps the freshest context.
+     */
+    private capTranscriptLines(turns: Array<{ Role: string; Message: string }>): string[] {
+        const newest = turns.slice(-MAX_PRIOR_TRANSCRIPT_TURNS);
+        const lines = newest.map((t) => `${t.Role === 'User' ? 'User' : 'Assistant'}: ${t.Message.trim()}`);
+        let total = lines.reduce((sum, line) => sum + line.length + 1, 0);
+        while (lines.length > 0 && total > MAX_PRIOR_TRANSCRIPT_CHARS) {
+            const dropped = lines.shift() as string;
+            total -= dropped.length + 1;
+        }
+        return lines;
+    }
+
+    /**
      * Folds prior session-channel rows into a `{ channelName: stateJson }` map, skipping empty
      * states and enforcing the {@link MAX_CHANNEL_STATE_CHARS} cap both per-state and on the
      * accumulated total (oversized states are dropped with a log note; the rest survive).
@@ -1097,44 +1257,143 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return false;
         }
         try {
-            const safeID = session.ID.replace(/'/g, "''");
-            const rv = RunView.FromMetadataProvider(provider);
-            const result = await rv.RunView<{ ID: string }>(
-                {
-                    EntityName: CONVERSATION_DETAIL_ENTITY,
-                    ExtraFilter: `AgentSessionID='${safeID}'`,
-                    Fields: ['ID'],
-                    OrderBy: '__mj_CreatedAt DESC',
-                    ResultType: 'simple',
-                    MaxRows: 1,
-                },
-                contextUser,
-            );
-            const detail = result.Success ? result.Results?.[0] : undefined;
-            if (!detail) {
+            const detailID = await this.findLatestSessionDetailID(session, contextUser, provider);
+            if (!detailID) {
                 return false; // no transcript turn persisted yet — nothing to anchor the artifact to
             }
-
-            const junction = await provider.GetEntityObject<MJConversationDetailArtifactEntity>(
-                CONVERSATION_DETAIL_ARTIFACT_ENTITY,
-                contextUser,
-            );
-            junction.NewRecord();
-            junction.ConversationDetailID = detail.ID;
-            junction.ArtifactVersionID = artifactVersionID;
-            junction.Direction = 'Output';
-            const saved = await junction.Save();
-            if (!saved) {
-                LogError(
-                    `SaveSessionChannelArtifact: junction save failed for detail ${detail.ID} / version ${artifactVersionID}: ` +
-                        `${junction.LatestResult?.CompleteMessage ?? 'unknown error'}`,
-                );
-            }
-            return saved;
+            return await this.saveDetailArtifactJunction(detailID, artifactVersionID, contextUser, provider);
         } catch (error) {
             LogError(`SaveSessionChannelArtifact: conversation-history link failed: ${(error as Error).message}`);
             return false;
         }
+    }
+
+    /**
+     * Best-effort: junction-links the artifacts a DELEGATED target-agent run produced into the
+     * session's conversation history — closing the gap where voice-path artifacts were created
+     * (`RealtimeClientSessionService.createDelegatedRunArtifacts`) but never reached
+     * `MJ: Conversation Detail Artifacts`, leaving chat, session review, and resume carryover
+     * blind to them.
+     *
+     * ANCHOR CHOICE: the junction needs a `Conversation Detail`. We anchor to the MOST RECENT
+     * detail stamped with this session's id (the transcript relay stamps `AgentSessionID` on every
+     * persisted turn) — the turn closest to the tool call that produced the artifact. When NO
+     * stamped detail exists yet (the delegated run finished before the browser relayed any
+     * transcript — the relay is asynchronous), we create a minimal HIDDEN anchor detail
+     * (`Role: 'AI'`, `HiddenToUser: true`, stamped with the session id + conversation + user)
+     * rather than dropping the link: `HiddenToUser` keeps it out of the visible chat thread and
+     * out of review-mode captions (both filter hidden rows), while conversation-level artifact
+     * queries (which scan junctions across ALL details) still surface the artifact. This is the
+     * least-invasive correct anchor — no fake visible message, no orphaned artifact.
+     *
+     * Strictly best-effort: every failure path logs and returns; a relayed tool call NEVER fails
+     * because history linking did.
+     */
+    private async linkDelegatedArtifactsToConversation(
+        session: MJAIAgentSessionEntity,
+        artifacts: DelegatedRunArtifact[] | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<void> {
+        if (!artifacts || artifacts.length === 0 || !session.ConversationID) {
+            return;
+        }
+        try {
+            const detailID =
+                (await this.findLatestSessionDetailID(session, contextUser, provider)) ??
+                (await this.createHiddenSessionAnchorDetail(session, contextUser, provider));
+            if (!detailID) {
+                return; // anchor unavailable — logged in the helpers
+            }
+            for (const artifact of artifacts) {
+                await this.saveDetailArtifactJunction(detailID, artifact.ArtifactVersionID, contextUser, provider);
+            }
+        } catch (error) {
+            LogError(`ExecuteRealtimeSessionTool: delegated-artifact history link failed: ${(error as Error).message}`);
+        }
+    }
+
+    /**
+     * Finds the LATEST `Conversation Detail` stamped with this session's id (the transcript relay
+     * stamps `AgentSessionID` on every persisted turn). Returns its id, or `null` when none exists.
+     */
+    private async findLatestSessionDetailID(
+        session: MJAIAgentSessionEntity,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        const safeID = session.ID.replace(/'/g, "''");
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: CONVERSATION_DETAIL_ENTITY,
+                ExtraFilter: `AgentSessionID='${safeID}'`,
+                Fields: ['ID'],
+                OrderBy: '__mj_CreatedAt DESC',
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            contextUser,
+        );
+        const detail = result.Success ? result.Results?.[0] : undefined;
+        return detail?.ID ?? null;
+    }
+
+    /**
+     * Creates the minimal HIDDEN anchor `Conversation Detail` for artifact junction rows when no
+     * session-stamped transcript turn exists yet (see the anchor-choice rationale on
+     * {@link linkDelegatedArtifactsToConversation}). Returns the new detail's id, or `null`
+     * (logged) when the save fails.
+     */
+    private async createHiddenSessionAnchorDetail(
+        session: MJAIAgentSessionEntity,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, contextUser);
+        detail.NewRecord();
+        detail.ConversationID = session.ConversationID;
+        detail.Role = 'AI';
+        detail.HiddenToUser = true;
+        detail.Message = 'Artifacts produced during a realtime session (system anchor).';
+        detail.AgentSessionID = session.ID;
+        detail.UserID = contextUser.ID;
+        if (await detail.Save()) {
+            return detail.ID;
+        }
+        LogError(
+            `ExecuteRealtimeSessionTool: hidden anchor detail save failed for session ${session.ID}: ` +
+                `${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+        return null;
+    }
+
+    /**
+     * Saves one `MJ: Conversation Detail Artifacts` junction row (Direction `Output`) linking an
+     * artifact version to a conversation detail. Returns the boolean save result (logged on failure).
+     */
+    private async saveDetailArtifactJunction(
+        conversationDetailID: string,
+        artifactVersionID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        const junction = await provider.GetEntityObject<MJConversationDetailArtifactEntity>(
+            CONVERSATION_DETAIL_ARTIFACT_ENTITY,
+            contextUser,
+        );
+        junction.NewRecord();
+        junction.ConversationDetailID = conversationDetailID;
+        junction.ArtifactVersionID = artifactVersionID;
+        junction.Direction = 'Output';
+        const saved = await junction.Save();
+        if (!saved) {
+            LogError(
+                `RealtimeClientSessionResolver: artifact junction save failed for detail ${conversationDetailID} / version ${artifactVersionID}: ` +
+                    `${junction.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            );
+        }
+        return saved;
     }
 
     /**

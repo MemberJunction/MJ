@@ -445,6 +445,58 @@ describe('RealtimeClientSessionService.ExecuteRelayedTool', () => {
         expect(result.Success).toBe(false);
         expect(JSON.parse(result.ResultJson)).toEqual({ success: false, output: 'target failed' });
     });
+
+    it('surfaces the delegated run\'s Artifacts on the return (alongside the serialized JSON)', async () => {
+        const svc = new TestableService();
+        const artifacts: DelegatedRunArtifact[] = [{ ArtifactID: 'a-1', ArtifactVersionID: 'av-1', Name: 'Report' }];
+        svc.DelegateSpy.mockResolvedValueOnce({ CallID: 'c1', Success: true, Output: 'done', RunID: 'run-9', Artifacts: artifacts });
+
+        const result = await svc.ExecuteRelayedTool(makeToolInput(), contextUser, provider);
+
+        // The transport layer (MJServer resolver) junction-links these into conversation history.
+        expect(result.Artifacts).toEqual(artifacts);
+        // And the SAME info is embedded in ResultJson for the client overlay.
+        expect(JSON.parse(result.ResultJson).artifacts).toEqual([{ artifactId: 'a-1', artifactVersionId: 'av-1', name: 'Report' }]);
+    });
+
+    it('leaves Artifacts undefined when the delegation produced none', async () => {
+        const svc = new TestableService();
+        const result = await svc.ExecuteRelayedTool(makeToolInput(), contextUser, provider);
+        expect(result.Artifacts).toBeUndefined();
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// Prior-transcript hydration (resume continuity)
+// ════════════════════════════════════════════════════════════════════
+
+describe('RealtimeClientSessionService.PrepareClientSession — PriorTranscript framing', () => {
+    it('frames the prior transcript into the system prompt as a labeled prior-conversation section', async () => {
+        const svc = new TestableService();
+        const result = await svc.PrepareClientSession(
+            makePrepInput({ PriorTranscript: 'User: hello\nAssistant: hi there' }),
+            contextUser,
+            provider
+        );
+
+        const prompt = result.SessionParams!.SystemPrompt;
+        expect(prompt).toContain('Earlier in this conversation (a previous live session that you are now resuming)');
+        expect(prompt).toContain('User: hello\nAssistant: hi there');
+        // The framing sits BEFORE the current-conversation history block.
+        expect(prompt.indexOf('Earlier in this conversation')).toBeLessThan(prompt.indexOf('Conversation so far:'));
+    });
+
+    it('omits the prior-conversation section when no PriorTranscript is supplied', async () => {
+        const svc = new TestableService();
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.SessionParams!.SystemPrompt).not.toContain('Earlier in this conversation');
+    });
+
+    it('omits the section for an empty / whitespace-only PriorTranscript', async () => {
+        const svc = new TestableService();
+        const result = await svc.PrepareClientSession(makePrepInput({ PriorTranscript: '   \n  ' }), contextUser, provider);
+        expect(result.SessionParams!.SystemPrompt).not.toContain('Earlier in this conversation');
+    });
 });
 
 // ════════════════════════════════════════════════════════════════════

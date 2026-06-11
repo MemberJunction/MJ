@@ -178,6 +178,19 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  /**
+   * Registers an artifact tab WITHOUT stealing focus (default) — the SESSION REVIEW /
+   * resume-carryover path, where a reviewed session's (and its prior legs') history
+   * artifacts are surfaced as tabs the user can visit, as opposed to the live
+   * auto-open-on-arrival behavior. Idempotent per artifact version; the registered tab
+   * survives the review→live transition (tabs are never cleared on resume).
+   */
+  public RegisterArtifactTab(artifact: ParsedDelegationArtifact, focus: boolean = false): void {
+    this.tabbedVersionIds.add(artifact.ArtifactVersionID);
+    this.Model.OpenArtifactTab(artifact, focus);
+    this.cdr.markForCheck();
+  }
+
   /** On session-state changes: open tabs for newly-arrived artifacts, then re-render. */
   private onStateChanged(): void {
     this.syncArtifactTabs();

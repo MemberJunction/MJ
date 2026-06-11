@@ -78,6 +78,16 @@ export interface PrepareClientSessionInput {
     ConversationID?: string;
     /** Prior conversation history to seed the model's context. Optional. */
     ConversationMessages?: ChatMessage[];
+    /**
+     * Pre-formatted, role-tagged transcript lines (`User: …` / `Assistant: …`, newline-separated)
+     * from the caller's PRIOR session leg(s) when this session RESUMES one (`lastSessionId`).
+     * The transport layer (the MJServer resolver) loads, ownership-checks, and caps this
+     * (~30 turns / ~8k chars, oldest dropped) before threading it here; the service only
+     * FRAMES it into the system prompt as a clearly-labeled prior-conversation section so the
+     * model remembers the previous leg. Optional — absent for fresh sessions, and any
+     * upstream load failure simply omits it (hydration never blocks a start).
+     */
+    PriorTranscript?: string;
     /** Optional user-scope id for memory/context retrieval (falls back to the context user). */
     UserID?: string;
     /** Optional company-scope id for memory/context retrieval. */
@@ -578,18 +588,20 @@ export class RealtimeClientSessionService {
      * @param input The relayed tool call plus delegation linkage.
      * @param contextUser The calling user (threaded into the delegated agent run).
      * @param provider The request-scoped metadata provider (threaded into the delegated agent run).
-     * @returns `{ ResultJson, Success, PausedRunID? }` — the serialized tool result for the browser
-     *   to relay back, plus the paused run id when the delegated target agent paused awaiting
-     *   feedback (so the resolver can persist it and resume that run on the next answer).
+     * @returns `{ ResultJson, Success, PausedRunID?, Artifacts? }` — the serialized tool result for
+     *   the browser to relay back, the paused run id when the delegated target agent paused awaiting
+     *   feedback (so the resolver can persist it and resume that run on the next answer), and the
+     *   artifacts the delegated run produced (so the resolver can junction-link them into the
+     *   session's conversation history — the same info is embedded in `ResultJson` for the client).
      */
     public async ExecuteRelayedTool(
         input: ExecuteRelayedToolInput,
         contextUser: UserInfo,
         provider: IMetadataProvider
-    ): Promise<{ ResultJson: string; Success: boolean; PausedRunID?: string }> {
+    ): Promise<{ ResultJson: string; Success: boolean; PausedRunID?: string; Artifacts?: DelegatedRunArtifact[] }> {
         const broker = this.buildToolBroker(input, contextUser, provider);
         const result = await broker.ExecuteToolCall(input.Call);
-        return { ResultJson: result.ResultJson, Success: result.Success, PausedRunID: result.PausedRunID };
+        return { ResultJson: result.ResultJson, Success: result.Success, PausedRunID: result.PausedRunID, Artifacts: result.Artifacts };
     }
 
     /**
@@ -903,12 +915,35 @@ export class RealtimeClientSessionService {
 
         const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);
         const targetIdentity = this.formatTargetIdentity(target);
+        const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
 
-        return [framing, coAgentPrompt, targetIdentity, history, memoryContext]
+        return [framing, coAgentPrompt, targetIdentity, priorTranscript, history, memoryContext]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
+    }
+
+    /**
+     * Frames the prior-leg transcript (when a session resumes via `lastSessionId`) as a clearly
+     * labeled PRIOR-CONVERSATION section of the system prompt, so the model REMEMBERS the last
+     * live session rather than greeting the user cold. The transport layer supplies the
+     * already-capped, role-tagged lines (see {@link PrepareClientSessionInput.PriorTranscript});
+     * this method only adds the framing. Empty/whitespace input yields an empty section.
+     *
+     * @param priorTranscript The role-tagged transcript lines, or undefined.
+     * @returns The framed section, or empty string when there is nothing to frame.
+     */
+    private formatPriorTranscript(priorTranscript?: string): string {
+        const text = priorTranscript?.trim() ?? '';
+        if (text.length === 0) {
+            return '';
+        }
+        return (
+            'Earlier in this conversation (a previous live session that you are now resuming), ' +
+            'you and the user discussed the following. Treat it as shared context you both remember:\n' +
+            text
+        );
     }
 
     /**

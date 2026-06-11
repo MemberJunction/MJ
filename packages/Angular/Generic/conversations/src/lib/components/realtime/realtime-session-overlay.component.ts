@@ -189,6 +189,17 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
 
   private _reviewData: RealtimeSessionReview | null = null;
 
+  /**
+   * Set by {@link OnStartLive} just before emitting {@link StartLiveRequested}, so the
+   * ReviewData→null transition that follows is recognized as a REVIEW→LIVE CONTINUATION
+   * (keep the historical thread + append the "Resumed live session" divider) rather than
+   * a plain review close (clear everything).
+   */
+  private pendingLiveContinuation = false;
+
+  /** The reviewed chain's history artifacts, registered as unfocused surface tabs. */
+  private reviewArtifacts: ParsedDelegationArtifact[] = [];
+
   /** True while the overlay renders a PAST session (review data set, no live call). */
   public get IsReviewing(): boolean {
     return this._reviewData !== null && !this.voice.IsActive;
@@ -270,6 +281,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.loadPanelWidthPref();
     this.flushPendingChannelTabs();
     this.registerReviewBoardTab();
+    this.registerReviewArtifactTabs();
   }
 
   // ── Surface-panel sizing (angular-split; width persisted per-user) ─────────
@@ -457,12 +469,17 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     return this._reviewData?.SessionID ?? null;
   }
 
-  /** Review controls: resume the reviewed session as a NEW live call (host handles the start). */
+  /**
+   * Review controls: resume the reviewed session as a NEW live call (host handles the
+   * start). Flags the upcoming ReviewData→null transition as a CONTINUATION so the
+   * historical thread is kept (divider appended) instead of cleared.
+   */
   public OnStartLive(): void {
     const review = this._reviewData;
     if (!review) {
       return;
     }
+    this.pendingLiveContinuation = true;
     this.StartLiveRequested.emit({
       TargetAgentId: review.TargetAgentID,
       ConversationId: review.ConversationID,
@@ -476,24 +493,54 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   }
 
   /**
-   * Enters review: replaces the shared state's thread with the historical items, names
-   * the cards after the reviewed agent, and rehydrates the saved whiteboard (when any).
+   * Enters review: replaces the shared state's thread with the historical items (all
+   * chain legs, dividers between legs), names the cards after the reviewed agent,
+   * rehydrates the saved whiteboard (when any), and registers the chain's history
+   * ARTIFACTS as unfocused surface tabs.
    */
   private enterReview(review: RealtimeSessionReview): void {
     this.State.AgentName = review.AgentName;
     this.State.LoadHistoricalItems(BuildReviewThreadItems(review));
     this.ReviewWhiteboard = this.parseReviewWhiteboard(review);
+    this.reviewArtifacts = review.Artifacts ?? [];
     if (this.viewReady) {
-      // Let this CD pass create/refresh the surface panel before registering the tab.
-      setTimeout(() => this.registerReviewBoardTab(), 0);
+      // Let this CD pass create/refresh the surface panel before registering the tabs.
+      setTimeout(() => {
+        this.registerReviewBoardTab();
+        this.registerReviewArtifactTabs();
+      }, 0);
     }
     this.cdr.markForCheck();
   }
 
-  /** Leaves review: drops the historical thread + board so a live session starts clean. */
+  /**
+   * Leaves review. Two distinct exits:
+   *  - REVIEW→LIVE CONTINUATION ({@link OnStartLive} was clicked): KEEP the historical
+   *    thread and append the "Resumed live session" divider so the new live items read
+   *    as a new section of the same conversation. Artifact tabs are left in place — the
+   *    chain's artifacts carry into the live session.
+   *  - plain CLOSE: clear everything so the conversation view returns clean.
+   */
   private exitReview(): void {
     this.ReviewWhiteboard = null;
-    this.State.Clear();
+    if (this.pendingLiveContinuation) {
+      this.pendingLiveContinuation = false;
+      this.State.StartLiveContinuation();
+    } else {
+      this.reviewArtifacts = [];
+      this.State.Clear();
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Registers the reviewed chain's history artifacts as UNFOCUSED artifact tabs (idempotent). */
+  private registerReviewArtifactTabs(): void {
+    if (!this.surfaceTabs || this.reviewArtifacts.length === 0) {
+      return;
+    }
+    for (const artifact of this.reviewArtifacts) {
+      this.surfaceTabs.RegisterArtifactTab(artifact, false);
+    }
     this.cdr.markForCheck();
   }
 

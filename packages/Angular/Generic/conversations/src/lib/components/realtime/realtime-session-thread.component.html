@@ -18,6 +18,23 @@
           </div>
         }
       }
+      @case ('divider') {
+        <!-- Session-leg boundary: subtle rule marking a resume / chained leg -->
+        <div class="thread-divider" role="separator">
+          <span class="thread-divider__line" aria-hidden="true"></span>
+          <span class="thread-divider__label">
+            <i [class]="item.Icon" aria-hidden="true"></i>
+            {{ item.Label }}
+            @if (item.At) {
+              <span class="thread-divider__time">· {{ item.At | date:'MMM d, h:mm a' }}</span>
+            }
+          </span>
+          @if (item.CloseReason) {
+            <span class="thread-divider__chip" title="Why the previous session leg ended">{{ item.CloseReason }}</span>
+          }
+          <span class="thread-divider__line" aria-hidden="true"></span>
+        </div>
+      }
       @case ('delegation') {
         <div class="delegation-block">
           <mj-realtime-delegation-card

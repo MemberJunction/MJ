@@ -118,3 +118,45 @@
   from { opacity: 0; transform: translateY(2px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ---------- Session-leg divider (resume / chained-leg boundary) ---------- */
+.thread-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 6px;
+  user-select: none;
+}
+.thread-divider__line {
+  flex: 1;
+  height: 1px;
+  background: var(--mj-border-subtle);
+}
+.thread-divider__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+}
+.thread-divider__label i {
+  font-size: 10px;
+}
+.thread-divider__time {
+  font-weight: 400;
+}
+.thread-divider__chip {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mj-text-muted);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: var(--mj-bg-surface-card);
+  white-space: nowrap;
+}

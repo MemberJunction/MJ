@@ -73,7 +73,11 @@ export class RealtimeSessionThreadComponent implements OnInit, AfterViewChecked,
 
   /** track fn for the @for over thread items. */
   public TrackItem(index: number, item: RealtimeThreadItem): string {
-    return item.Kind === 'delegation' ? `d:${item.Card.CallID}` : `c:${index}`;
+    switch (item.Kind) {
+      case 'delegation': return `d:${item.Card.CallID}`;
+      case 'divider': return `s:${index}`;
+      default: return `c:${index}`;
+    }
   }
 
   /** True when the live narration note should render under THIS delegation item. */

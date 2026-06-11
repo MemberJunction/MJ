@@ -1434,3 +1434,417 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         expect(result.Success).toBe(true);
     });
 });
+
+describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool — delegated-artifact history linking', () => {
+    /**
+     * Provider for the junction-linking path: GetEntityObject routes by entity name (session load /
+     * junction rows / the hidden anchor detail), RunView serves the latest session-stamped detail
+     * lookup. Collects every created junction + anchor entity for assertion.
+     */
+    function makeLinkProvider(opts: {
+        session?: FakeSession;
+        detailRows?: Array<{ ID: string }>;
+        detailQueryFails?: boolean;
+    }): {
+        provider: unknown;
+        session: FakeSession;
+        junctions: FakeSession[];
+        anchors: FakeSession[];
+        runView: ReturnType<typeof vi.fn>;
+    } {
+        const session = opts.session ?? makeSessionEntity();
+        const junctions: FakeSession[] = [];
+        const anchors: FakeSession[] = [];
+        const runView = vi.fn(async () =>
+            opts.detailQueryFails
+                ? { Success: false, ErrorMessage: 'db down', Results: [] }
+                : { Success: true, Results: opts.detailRows ?? [] },
+        );
+        const provider = {
+            GetEntityObject: vi.fn(async (name: string) => {
+                if (name === 'MJ: AI Agent Sessions') {
+                    return session;
+                }
+                if (name === 'MJ: Conversation Detail Artifacts') {
+                    const junction = makeSessionEntity({ ID: `junction-${junctions.length + 1}` });
+                    junctions.push(junction);
+                    return junction;
+                }
+                if (name === 'MJ: Conversation Details') {
+                    const anchor = makeSessionEntity({ ID: 'anchor-detail-1' });
+                    anchors.push(anchor);
+                    return anchor;
+                }
+                return makeSessionEntity();
+            }),
+            RunView: runView,
+        };
+        return { provider, session, junctions, anchors, runView };
+    }
+
+    const ARTIFACTS = [
+        { ArtifactID: 'a-1', ArtifactVersionID: 'av-1', Name: 'Report' },
+        { ArtifactID: 'a-2', ArtifactVersionID: 'av-2', Name: 'Chart' },
+    ];
+
+    it('junction-links every delegated artifact version to the LATEST session-stamped detail', async () => {
+        const { provider, junctions } = makeLinkProvider({ detailRows: [{ ID: 'detail-latest' }] });
+        currentProvider = provider;
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true, Artifacts: ARTIFACTS });
+        const resolver = makeResolver();
+
+        const out = await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        expect(out).toBe('{"ok":true}');
+        expect(junctions).toHaveLength(2);
+        expect(junctions[0].ConversationDetailID).toBe('detail-latest');
+        expect(junctions[0].ArtifactVersionID).toBe('av-1');
+        expect(junctions[0].Direction).toBe('Output');
+        expect(junctions[0].Save).toHaveBeenCalled();
+        expect(junctions[1].ConversationDetailID).toBe('detail-latest');
+        expect(junctions[1].ArtifactVersionID).toBe('av-2');
+        // The relay still heartbeats afterward.
+        expect(heartbeatMock).toHaveBeenCalledWith('session-1', USER, currentProvider);
+    });
+
+    it('creates a HIDDEN anchor detail (Role AI, HiddenToUser, session-stamped) when no transcript turn exists yet', async () => {
+        const { provider, junctions, anchors } = makeLinkProvider({ detailRows: [] });
+        currentProvider = provider;
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true, Artifacts: [ARTIFACTS[0]] });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        expect(anchors).toHaveLength(1);
+        const anchor = anchors[0];
+        expect(anchor.Role).toBe('AI');
+        expect(anchor.HiddenToUser).toBe(true);
+        expect(anchor.ConversationID).toBe('conv-1');
+        expect(anchor.AgentSessionID).toBe('session-1');
+        expect(anchor.UserID).toBe('user-1');
+        expect(anchor.Save).toHaveBeenCalled();
+        // The junction anchors to the freshly created hidden detail.
+        expect(junctions).toHaveLength(1);
+        expect(junctions[0].ConversationDetailID).toBe('anchor-detail-1');
+        expect(junctions[0].ArtifactVersionID).toBe('av-1');
+    });
+
+    it('skips linking entirely (no detail query, no junction) when the session has no conversation', async () => {
+        const { provider, junctions, runView } = makeLinkProvider({
+            session: makeSessionEntity({ ConversationID: null }),
+        });
+        currentProvider = provider;
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true, Artifacts: ARTIFACTS });
+        const resolver = makeResolver();
+
+        const out = await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        expect(out).toBe('{"ok":true}');
+        expect(runView).not.toHaveBeenCalled();
+        expect(junctions).toHaveLength(0);
+    });
+
+    it('skips linking (no detail query) when the relayed result carries no artifacts', async () => {
+        const { provider, junctions, runView } = makeLinkProvider({ detailRows: [{ ID: 'detail-1' }] });
+        currentProvider = provider;
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        expect(runView).not.toHaveBeenCalled();
+        expect(junctions).toHaveLength(0);
+    });
+
+    it('tolerates a failed anchor lookup / junction save — the relayed result still returns', async () => {
+        const { provider } = makeLinkProvider({ detailQueryFails: true });
+        currentProvider = provider;
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true, Artifacts: ARTIFACTS });
+        const resolver = makeResolver();
+
+        const out = await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        expect(out).toBe('{"ok":true}');
+        expect(heartbeatMock).toHaveBeenCalled();
+    });
+
+    it('still enforces ownership before any linking happens', async () => {
+        const { provider, junctions } = makeLinkProvider({
+            session: makeSessionEntity({ UserID: 'someone-else' }),
+            detailRows: [{ ID: 'detail-1' }],
+        });
+        currentProvider = provider;
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true, Artifacts: ARTIFACTS });
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub()),
+        ).rejects.toThrow(/do not own/i);
+        expect(junctions).toHaveLength(0);
+    });
+});
+
+describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-transcript hydration', () => {
+    const okPrep = {
+        Success: true,
+        ClientConfig: {
+            Provider: 'openai',
+            Model: 'gpt-realtime',
+            EphemeralToken: 'ek_abc',
+            ExpiresAt: '2026-01-01T00:00:00Z',
+            SessionConfig: {},
+        },
+    };
+
+    interface ChainRow {
+        UserID: string;
+        LastSessionID?: string | null;
+    }
+
+    interface DetailQueryRow {
+        ID: string;
+        Role: string;
+        Message: string | null;
+        HiddenToUser: boolean;
+    }
+
+    /**
+     * Provider for the hydration path: GetEntityObject serves prior-session loads from a chain
+     * MAP (Load(id) hydrates the entity from the map, false when absent), RunView routes by
+     * EntityName — transcript details vs. channel-state rows.
+     */
+    function makeHydrationProvider(opts: {
+        chain: Record<string, ChainRow>;
+        detailRows?: DetailQueryRow[];
+        detailQueryFails?: boolean;
+    }): { provider: unknown; runView: ReturnType<typeof vi.fn> } {
+        const runView = vi.fn(async (params: { EntityName: string }) => {
+            if (params.EntityName === 'MJ: Conversation Details') {
+                return opts.detailQueryFails
+                    ? { Success: false, ErrorMessage: 'db down', Results: [] }
+                    : { Success: true, Results: opts.detailRows ?? [] };
+            }
+            return { Success: true, Results: [] }; // session-channel restore — none
+        });
+        const provider = {
+            GetEntityObject: vi.fn(async () => {
+                const entity = makeSessionEntity();
+                entity.Load = vi.fn(async (id: string) => {
+                    const row = opts.chain[id];
+                    if (!row) {
+                        return false;
+                    }
+                    entity.ID = id;
+                    entity.UserID = row.UserID;
+                    entity.LastSessionID = row.LastSessionID ?? null;
+                    return true;
+                });
+                return entity;
+            }),
+            RunView: runView,
+        };
+        return { provider, runView };
+    }
+
+    function setupHappyStart(): void {
+        hasPermissionMock.mockResolvedValue(true);
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-new' }));
+        prepareClientSessionMock.mockResolvedValue(okPrep);
+    }
+
+    function prepTranscriptArg(): string | undefined {
+        return (prepareClientSessionMock.mock.calls[0][0] as { PriorTranscript?: string }).PriorTranscript;
+    }
+
+    function turn(role: 'User' | 'AI', message: string, id = 'd-1'): DetailQueryRow {
+        return { ID: id, Role: role, Message: message, HiddenToUser: false };
+    }
+
+    it('threads the prior leg\'s role-tagged transcript into PrepareClientSession.PriorTranscript', async () => {
+        setupHappyStart();
+        const { provider } = makeHydrationProvider({
+            chain: { 'prior-1': { UserID: 'user-1' } },
+            detailRows: [turn('User', 'hello there'), turn('AI', 'hi! how can I help?')],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(prepTranscriptArg()).toBe('User: hello there\nAssistant: hi! how can I help?');
+    });
+
+    it('walks the prior chain through LastSessionID and queries ALL legs\' details at once', async () => {
+        setupHappyStart();
+        const { provider, runView } = makeHydrationProvider({
+            chain: {
+                'prior-2': { UserID: 'user-1', LastSessionID: 'prior-1' },
+                'prior-1': { UserID: 'user-1' },
+            },
+            detailRows: [turn('User', 'first leg'), turn('AI', 'second leg')],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-2');
+
+        const detailCall = runView.mock.calls.find(
+            (c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Details',
+        );
+        expect(detailCall).toBeDefined();
+        const filter = (detailCall![0] as { ExtraFilter: string }).ExtraFilter;
+        expect(filter).toContain("'prior-2'");
+        expect(filter).toContain("'prior-1'");
+        expect(prepTranscriptArg()).toBe('User: first leg\nAssistant: second leg');
+    });
+
+    it('NEVER loops on a cyclic prior chain (A→B→A)', async () => {
+        setupHappyStart();
+        const { provider } = makeHydrationProvider({
+            chain: {
+                'prior-a': { UserID: 'user-1', LastSessionID: 'prior-b' },
+                'prior-b': { UserID: 'user-1', LastSessionID: 'prior-a' },
+            },
+            detailRows: [turn('User', 'looped once')],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-a');
+
+        expect(result.AgentSessionId).toBe('session-new');
+        expect(prepTranscriptArg()).toBe('User: looped once');
+    });
+
+    it('keeps only the NEWEST 30 turns (oldest dropped)', async () => {
+        setupHappyStart();
+        const rows = Array.from({ length: 35 }, (_, i) => turn('User', `turn ${i}`, `d-${i}`));
+        const { provider } = makeHydrationProvider({ chain: { 'prior-1': { UserID: 'user-1' } }, detailRows: rows });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        const lines = (prepTranscriptArg() ?? '').split('\n');
+        expect(lines).toHaveLength(30);
+        expect(lines[0]).toBe('User: turn 5');
+        expect(lines[29]).toBe('User: turn 34');
+    });
+
+    it('caps the transcript at ~8k chars, dropping the OLDEST lines first', async () => {
+        setupHappyStart();
+        // 10 turns of 1000 chars each — only the newest ~7 fit the 8000-char budget.
+        const rows = Array.from({ length: 10 }, (_, i) => turn('User', `${i}`.padEnd(1000, 'x'), `d-${i}`));
+        const { provider } = makeHydrationProvider({ chain: { 'prior-1': { UserID: 'user-1' } }, detailRows: rows });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        const transcript = prepTranscriptArg() ?? '';
+        expect(transcript.length).toBeLessThanOrEqual(8000);
+        const lines = transcript.split('\n');
+        expect(lines).toHaveLength(7);
+        expect(lines[0].startsWith('User: 3')).toBe(true); // 0–2 dropped, newest 7 kept
+        expect(lines[6].startsWith('User: 9')).toBe(true);
+    });
+
+    it('skips hidden, error-role, and empty rows', async () => {
+        setupHappyStart();
+        const { provider } = makeHydrationProvider({
+            chain: { 'prior-1': { UserID: 'user-1' } },
+            detailRows: [
+                { ID: 'd-1', Role: 'Error', Message: 'boom', HiddenToUser: false },
+                { ID: 'd-2', Role: 'AI', Message: 'secret', HiddenToUser: true },
+                { ID: 'd-3', Role: 'User', Message: '   ', HiddenToUser: false },
+                { ID: 'd-4', Role: 'User', Message: null, HiddenToUser: false },
+                { ID: 'd-5', Role: 'User', Message: 'visible', HiddenToUser: false },
+            ],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(prepTranscriptArg()).toBe('User: visible');
+    });
+
+    it('omits PriorTranscript when no lastSessionId is supplied', async () => {
+        setupHappyStart();
+        const { provider } = makeHydrationProvider({ chain: {}, detailRows: [turn('User', 'never seen')] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('target-1', makeCtx());
+
+        expect(prepTranscriptArg()).toBeUndefined();
+    });
+
+    it('omits PriorTranscript (no leak) when the prior session belongs to ANOTHER user', async () => {
+        setupHappyStart();
+        const { provider } = makeHydrationProvider({
+            chain: { 'prior-1': { UserID: 'someone-else' } },
+            detailRows: [turn('User', 'their words')],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(prepTranscriptArg()).toBeUndefined();
+    });
+
+    it('stops the chain walk at the first UNOWNED deeper leg but keeps the owned legs', async () => {
+        setupHappyStart();
+        const { provider, runView } = makeHydrationProvider({
+            chain: {
+                'prior-2': { UserID: 'user-1', LastSessionID: 'prior-1' },
+                'prior-1': { UserID: 'someone-else' },
+            },
+            detailRows: [turn('User', 'owned leg only')],
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-2');
+
+        const detailCall = runView.mock.calls.find(
+            (c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Details',
+        );
+        const filter = (detailCall![0] as { ExtraFilter: string }).ExtraFilter;
+        expect(filter).toContain("'prior-2'");
+        expect(filter).not.toContain("'prior-1'");
+        expect(prepTranscriptArg()).toBe('User: owned leg only');
+    });
+
+    it('tolerates a failed details query (start succeeds, no hydration)', async () => {
+        setupHappyStart();
+        const { provider } = makeHydrationProvider({
+            chain: { 'prior-1': { UserID: 'user-1' } },
+            detailQueryFails: true,
+        });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(result.AgentSessionId).toBe('session-new');
+        expect(prepTranscriptArg()).toBeUndefined();
+    });
+
+    it('tolerates a thrown hydration failure (start succeeds, no hydration)', async () => {
+        setupHappyStart();
+        currentProvider = {
+            GetEntityObject: vi.fn(async () => {
+                throw new Error('provider exploded');
+            }),
+            RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+        };
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(result.AgentSessionId).toBe('session-new');
+        expect(prepTranscriptArg()).toBeUndefined();
+    });
+});
