@@ -88,6 +88,9 @@
 .bi {
   position: absolute;
   box-shadow: var(--mj-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.3));
+  /* drag-to-move must never fight native text selection (inline editors re-enable it) */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .author-chip {
   position: absolute;
@@ -209,12 +212,14 @@
   color: var(--mj-text-primary);
 }
 
-/* ---------- markdown panel ---------- */
+/* ---------- markdown panel ----------
+   NOTE: the card ROOT must NOT clip (no overflow:hidden) — the selection handles and the
+   author chip jut OUTSIDE its box (−8/−9px) and clipping made them invisible/ungrabbable.
+   The BODY does the clipping (overflow + the template's max-height binding) instead. */
 .md-card {
   border-radius: 10px;
   border: 1.5px solid var(--mj-border-strong);
   background: var(--mj-bg-surface-card);
-  overflow: hidden;
   cursor: default;
 }
 .md-card__body {
@@ -223,6 +228,7 @@
   line-height: 1.45;
   color: var(--mj-text-primary);
   overflow: hidden;
+  border-radius: 8.5px; /* outer 10px radius minus the 1.5px border */
 }
 .md-card--sage {
   border-color: var(--sage);
@@ -240,14 +246,16 @@
 .md-card ::ng-deep .mj-markdown-container pre { font-size: 10.5px; padding: 6px 8px; margin: 0 0 6px; overflow: auto; }
 .md-card ::ng-deep .mj-markdown-container code { font-size: 10.5px; }
 
-/* ---------- interactive HTML widget (sandboxed iframe in a mini window) ---------- */
+/* ---------- interactive HTML widget (sandboxed iframe in a mini window) ----------
+   NOTE: the card ROOT must NOT clip (no overflow:hidden) — the selection handles jut
+   OUTSIDE its box (−8px) and clipping made them invisible/ungrabbable. The head/body
+   carry the rounded-corner clipping instead. */
 .html-card {
   display: flex;
   flex-direction: column;
   border-radius: 10px;
   border: 1.5px solid var(--mj-border-strong);
   background: var(--mj-bg-surface-card);
-  overflow: hidden;
   cursor: default;
   min-width: 160px;
   min-height: 90px;
@@ -262,6 +270,7 @@
   padding: 5px 8px;
   background: var(--mj-bg-surface-sunken);
   border-bottom: 1px solid var(--mj-border-default);
+  border-radius: 8.5px 8.5px 0 0; /* outer 10px radius minus the 1.5px border */
   cursor: grab;
   user-select: none;
 }
@@ -310,6 +319,8 @@
   flex: 1;
   min-height: 0;
   background: var(--mj-bg-surface);
+  overflow: hidden;
+  border-radius: 0 0 8.5px 8.5px; /* clips the iframe's square corners */
 }
 .html-card__frame {
   position: absolute;
@@ -336,6 +347,9 @@
   font-size: 11px;
   color: var(--mj-text-muted);
   background: var(--mj-bg-surface-sunken);
+  /* off-viewport placeholder is a plain div — pointerdown bubbles to the card root,
+     so the whole placeholder is a drag surface (unlike the live iframe body) */
+  cursor: grab;
 }
 .html-card__lazy i { font-size: 16px; color: var(--mj-text-disabled); }
 
@@ -464,11 +478,12 @@
 }
 .re-btn--primary:hover { background: var(--mj-brand-primary-hover, var(--mj-brand-primary)); }
 
-/* ---------- pasted image card ---------- */
+/* ---------- pasted image card ----------
+   NOTE: the card ROOT must NOT clip (no overflow:hidden) — selection handles + author
+   chip jut outside its box. The body clips the photo's top corners instead. */
 .img-card {
   width: 198px;
   border-radius: 10px;
-  overflow: hidden;
   border: 1.5px solid var(--mj-border-strong);
   background: var(--mj-bg-surface-card);
   cursor: default;
@@ -477,6 +492,8 @@
   height: 104px;
   display: grid;
   place-items: center;
+  overflow: hidden;
+  border-radius: 8.5px 8.5px 0 0; /* outer 10px radius minus the 1.5px border */
   background:
     linear-gradient(160deg, color-mix(in srgb, var(--mj-brand-primary) 30%, transparent) 0%, color-mix(in srgb, var(--mj-brand-primary) 10%, transparent) 38%, transparent 39%),
     linear-gradient(200deg, color-mix(in srgb, var(--mj-brand-accent, var(--mj-brand-primary)) 22%, transparent) 0%, color-mix(in srgb, var(--mj-brand-accent, var(--mj-brand-primary)) 8%, transparent) 60%, transparent 61%),
@@ -489,6 +506,10 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  /* the photo is presentational — without this, the browser's NATIVE image drag
+     hijacks the pointer gesture and kills the board's move interaction */
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 .img-card__name {
   display: flex;
@@ -699,6 +720,9 @@
   font: inherit;
   line-height: inherit;
   padding: 0;
+  /* re-enable selection inside the editors (.bi disables it for drag-to-move) */
+  user-select: text;
+  -webkit-user-select: text;
 }
 .wb-edit--shape { text-align: center; }
 .wb-edit--text { min-width: 110px; }

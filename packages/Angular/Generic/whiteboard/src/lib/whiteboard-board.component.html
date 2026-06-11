@@ -156,6 +156,7 @@
                [class.pop-in]="PopInIDs.has(item.ID)"
                [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
                [style.width.px]="TextWrapWidth(item)"
+               [style.maxWidth.px]="TextWrapWidth(item)"
                [style.fontSize]="ItemFontSize(item)"
                [style.fontFamily]="ItemFontFamily(item)"
                [style.fontWeight]="ItemFontWeight(item)"
@@ -175,6 +176,11 @@
             } @else {
               {{ item.Text }}
             }
+            @if (ShowHandles(item) && !IsDragging(item)) {
+              @for (h of Handles; track h) {
+                <span [class]="'sel-h ' + h" (pointerdown)="OnHandlePointerDown($event, item, h)"></span>
+              }
+            }
           </div>
         }
 
@@ -186,7 +192,6 @@
                [class.pop-in]="PopInIDs.has(item.ID)"
                [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
                [style.width.px]="ItemW(item)"
-               [style.maxHeight.px]="MarkdownMaxHeight(item)"
                (pointerdown)="OnItemPointerDown($event, item)"
                (dblclick)="BeginRichEdit($event, item)"
                (contextmenu)="OnItemContextMenu($event, item)">
@@ -195,7 +200,10 @@
             } @else {
               <span class="author-chip author-chip--you"><i class="fa-brands fa-markdown"></i> You</span>
             }
-            <div class="md-card__body">
+            <!-- the BODY clips (overflow + max height) so the out-jutting selection
+                 handles and author chip on the card root are never clipped away -->
+            <div class="md-card__body"
+                 [style.maxHeight.px]="MarkdownMaxHeight(item)">
               <!-- rendered through the shared mj-markdown component (sanitize defaults ON — no raw HTML passthrough) -->
               <mj-markdown [data]="item.Markdown"
                            [enableMermaid]="false"
@@ -218,10 +226,13 @@
                [class.pop-in]="PopInIDs.has(item.ID)"
                [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
                [style.width.px]="ItemW(item)" [style.height.px]="ItemH(item)"
+               (pointerdown)="OnItemPointerDown($event, item)"
                (contextmenu)="OnItemContextMenu($event, item)">
-            <!-- the header is the widget's "window title bar": drag/select/connector target -->
+            <!-- Drag/select wiring lives on the CARD ROOT: pointer events from the header,
+                 the border ring and the lazy placeholder all bubble here, while events
+                 inside the sandboxed iframe never reach the parent document — so the
+                 widget body stays fully interactive and everything else drags the card. -->
             <div class="html-card__head"
-                 (pointerdown)="OnItemPointerDown($event, item)"
                  (dblclick)="BeginRichEdit($event, item)">
               <i class="fa-solid fa-code html-card__glyph"></i>
               <span class="html-card__title">{{ HtmlTitle(item) }}</span>

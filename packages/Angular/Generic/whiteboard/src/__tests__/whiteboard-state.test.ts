@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  WhiteboardChange, WhiteboardConnectorItem, WhiteboardInkItem, WhiteboardShapeItem,
+  BuildResizeCommitPatch, IsResizableKind,
+  WhiteboardChange, WhiteboardConnectorItem, WhiteboardHtmlItem, WhiteboardInkItem,
+  WhiteboardItemKind, WhiteboardMarkdownItem, WhiteboardShapeItem,
   WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
 } from '../lib/whiteboard-state';
 import {
@@ -562,6 +564,76 @@ describe('ApplyWhiteboardAgentTool', () => {
       expect(state.Items).toHaveLength(1);
       state.Undo();
       expect(state.Items).toHaveLength(0);
+    });
+  });
+});
+
+describe('user resize gesture — gate + per-kind commit (board chrome contract)', () => {
+  const BOUNDS = { X: 30, Y: 40, W: 320, H: 180 };
+
+  describe('IsResizableKind (gates the 8-handle selection chrome)', () => {
+    it('is true for every box-modeled kind — stickies, shapes, TEXT, images, highlights, markdown, html', () => {
+      const resizable: WhiteboardItemKind[] = ['sticky', 'shape', 'text', 'image', 'highlight', 'markdown', 'html'];
+      for (const kind of resizable) {
+        expect(IsResizableKind(kind), kind).toBe(true);
+      }
+    });
+
+    it('is false for path-based kinds (ink, connector)', () => {
+      expect(IsResizableKind('ink')).toBe(false);
+      expect(IsResizableKind('connector')).toBe(false);
+    });
+  });
+
+  describe('BuildResizeCommitPatch (what a committed handle drag writes)', () => {
+    it('commits the FULL box (X/Y/W/H) for shape, highlight and html widgets', () => {
+      for (const kind of ['shape', 'highlight', 'html'] as const) {
+        expect(BuildResizeCommitPatch(kind, BOUNDS), kind).toEqual({ X: 30, Y: 40, W: 320, H: 180 });
+      }
+    });
+
+    it('commits X/Y/W ONLY (height stays content-driven) for sticky, text, image and markdown', () => {
+      for (const kind of ['sticky', 'text', 'image', 'markdown'] as const) {
+        const patch = BuildResizeCommitPatch(kind, BOUNDS);
+        expect(patch, kind).toEqual({ X: 30, Y: 40, W: 320 });
+        expect(patch, kind).not.toHaveProperty('H');
+      }
+    });
+
+    it('returns null for non-resizable kinds (nothing to commit)', () => {
+      expect(BuildResizeCommitPatch('ink', BOUNDS)).toBeNull();
+      expect(BuildResizeCommitPatch('connector', BOUNDS)).toBeNull();
+    });
+  });
+
+  describe('end-to-end through the engine (UpdateItem with the commit patch)', () => {
+    it('html widget resize lands all four bounds fields', () => {
+      const state = new WhiteboardState();
+      const widget = state.AddItem({ Kind: 'html', X: 0, Y: 0, W: 360, H: 240, Html: '<p>x</p>' }, 'agent') as WhiteboardHtmlItem;
+      const patch = BuildResizeCommitPatch('html', BOUNDS);
+      expect(patch).not.toBeNull();
+      expect(state.UpdateItem(widget.ID, patch!, 'user')).toBe(true);
+      expect(state.ItemBounds(state.GetItem(widget.ID)!)).toEqual({ X: 30, Y: 40, W: 320, H: 180 });
+    });
+
+    it('markdown panel resize changes the width but PRESERVES an existing max-height cap', () => {
+      const state = new WhiteboardState();
+      const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, H: 200, Markdown: '## hi' }, 'agent') as WhiteboardMarkdownItem;
+      const patch = BuildResizeCommitPatch('markdown', BOUNDS);
+      expect(state.UpdateItem(md.ID, patch!, 'user')).toBe(true);
+      const after = state.GetItem(md.ID) as WhiteboardMarkdownItem;
+      expect(after.W).toBe(320);
+      expect(after.H).toBe(200); // the gesture never writes H — the agent-set cap survives
+    });
+
+    it('text label resize sets an explicit wrap width and is one undoable step', () => {
+      const state = new WhiteboardState();
+      const text = state.AddItem({ Kind: 'text', X: 5, Y: 6, Text: 'label' }, 'user') as WhiteboardTextItem;
+      expect(text.W).toBeUndefined();
+      state.UpdateItem(text.ID, BuildResizeCommitPatch('text', BOUNDS)!, 'user');
+      expect((state.GetItem(text.ID) as WhiteboardTextItem).W).toBe(320);
+      state.Undo();
+      expect((state.GetItem(text.ID) as WhiteboardTextItem).W).toBeUndefined();
     });
   });
 });

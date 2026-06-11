@@ -9,6 +9,7 @@ import { Subscription } from 'rxjs';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import {
+  BuildResizeCommitPatch, IsResizableKind,
   WHITEBOARD_DEFAULTS, WhiteboardBounds, WhiteboardConnectorItem, WhiteboardFontFamily,
   WhiteboardHighlightItem, WhiteboardHtmlItem, WhiteboardImageItem, WhiteboardInkItem,
   WhiteboardItem, WhiteboardItemPatch, WhiteboardMarkdownItem, WhiteboardPoint,
@@ -365,9 +366,20 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     return item.ID;
   }
 
-  /** Explicit wrap width for a text label (resize / tool w) — null lets the CSS max-width wrap. */
+  /**
+   * Explicit wrap width for a text label (resize / tool w) — null lets the CSS max-width
+   * wrap. Honors an in-flight RESIZE transient so the live preview tracks the handle drag
+   * (a move transient is deliberately ignored: its W is the rough bounds ESTIMATE, and
+   * stamping it inline would re-wrap an unsized label mid-drag).
+   */
   public TextWrapWidth(item: WhiteboardItem): number | null {
-    return item.Kind === 'text' && item.W ? item.W : null;
+    if (item.Kind !== 'text') {
+      return null;
+    }
+    if (this.Interaction?.Type === 'resize' && this.Interaction.ItemID === item.ID) {
+      return this.Interaction.CurBounds.W;
+    }
+    return item.W ?? null;
   }
 
   /** Left position of an item, honoring an in-flight move/resize transient. */
@@ -425,11 +437,9 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     return this.Interaction?.Type === 'move' && this.Interaction.ItemID === item.ID && this.Interaction.Moved;
   }
 
-  /** 8 handles render on the selected, resizable item (mockup: selection chrome). */
+  /** 8 handles render on the selected, resizable item (gate: {@link IsResizableKind}). */
   public ShowHandles(item: WhiteboardItem): boolean {
-    return this.IsSelected(item)
-      && (item.Kind === 'sticky' || item.Kind === 'shape' || item.Kind === 'image' || item.Kind === 'highlight'
-        || item.Kind === 'markdown' || item.Kind === 'html');
+    return this.IsSelected(item) && IsResizableKind(item.Kind);
   }
 
   public readonly Handles: ResizeHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -790,12 +800,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         break;
       case 'resize': {
         const item = this.State.GetItem(i.ItemID);
-        if (item && (item.Kind === 'shape' || item.Kind === 'highlight' || item.Kind === 'html')) {
-          this.State.UpdateItem(i.ItemID, { X: i.CurBounds.X, Y: i.CurBounds.Y, W: i.CurBounds.W, H: i.CurBounds.H }, 'user');
-        }
-        else if (item && (item.Kind === 'sticky' || item.Kind === 'image' || item.Kind === 'text' || item.Kind === 'markdown')) {
-          // text/markdown: resizing sets the WIDTH only (height stays content-driven)
-          this.State.UpdateItem(i.ItemID, { X: i.CurBounds.X, Y: i.CurBounds.Y, W: i.CurBounds.W }, 'user');
+        // per-kind commit: full-box kinds take X/Y/W/H; content-driven-height kinds
+        // (sticky/text/image/markdown) take X/Y/W only — see BuildResizeCommitPatch.
+        const patch = item ? BuildResizeCommitPatch(item.Kind, i.CurBounds) : null;
+        if (patch) {
+          this.State.UpdateItem(i.ItemID, patch, 'user');
         }
         break;
       }

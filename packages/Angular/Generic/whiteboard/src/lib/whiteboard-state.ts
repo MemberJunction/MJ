@@ -182,8 +182,9 @@ export interface WhiteboardMarkdownItem extends WhiteboardItemBase {
 /**
  * An interactive HTML widget — arbitrary HTML (scripts included) rendered inside a
  * STRICTLY SANDBOXED iframe (`sandbox="allow-scripts"` only, opaque origin — see the
- * board component for the full security rationale). Dragged/selected by its header bar
- * so iframe interactivity and board interactions coexist.
+ * board component for the full security rationale). Dragged/selected by its card chrome —
+ * header bar, border ring and lazy placeholder — while pointer events inside the sandboxed
+ * frame stay with the widget, so iframe interactivity and board interactions coexist.
  */
 export interface WhiteboardHtmlItem extends WhiteboardItemBase {
   Kind: 'html';
@@ -499,6 +500,36 @@ export const WHITEBOARD_DEFAULTS = {
   HtmlW: 360,
   HtmlH: 240
 } as const;
+
+/**
+ * Whether an item kind is BOX-RESIZABLE by the user — i.e. the selection chrome shows the
+ * 8 resize handles for it. Everything with a box model resizes: stickies, shapes, text
+ * labels, images, markdown panels, HTML widgets and highlight regions. Ink strokes and
+ * connectors are path-based and are not box-resizable.
+ */
+export function IsResizableKind(kind: WhiteboardItemKind): boolean {
+  return kind === 'sticky' || kind === 'shape' || kind === 'text' || kind === 'image'
+    || kind === 'highlight' || kind === 'markdown' || kind === 'html';
+}
+
+/**
+ * The patch a COMMITTED resize gesture applies for an item kind, given the gesture's
+ * final bounds:
+ *  - full-box kinds (`shape`, `highlight`, `html`) commit X / Y / W / H;
+ *  - content-driven-height kinds (`sticky`, `text`, `image`, `markdown`) commit
+ *    X / Y / W only — their rendered height stays content-driven (markdown's optional
+ *    `H` max-height cap is set by tools/agents, never by the drag gesture);
+ *  - non-resizable kinds (`ink`, `connector`) return `null` (nothing to commit).
+ */
+export function BuildResizeCommitPatch(kind: WhiteboardItemKind, bounds: WhiteboardBounds): WhiteboardItemPatch | null {
+  if (kind === 'shape' || kind === 'highlight' || kind === 'html') {
+    return { X: bounds.X, Y: bounds.Y, W: bounds.W, H: bounds.H };
+  }
+  if (kind === 'sticky' || kind === 'text' || kind === 'image' || kind === 'markdown') {
+    return { X: bounds.X, Y: bounds.Y, W: bounds.W };
+  }
+  return null;
+}
 
 /** Truncate long item text for summary fragments. */
 function clip(text: string, max = 42): string {
