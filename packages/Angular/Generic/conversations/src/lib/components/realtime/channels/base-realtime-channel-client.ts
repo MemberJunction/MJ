@@ -42,6 +42,16 @@ export interface RealtimeChannelContext {
    * {@link BaseRealtimeChannelClient.RequestFocusExit}.
    */
   SetFocusMode(on: boolean): void;
+
+  /**
+   * Persists a snapshot of the channel's state as a first-class versioned artifact
+   * (`MJ: Artifacts` + version, linked into conversation history when possible) — e.g. the
+   * whiteboard's "Save to artifacts". Distinct from {@link RealtimeChannelContext.RequestSave},
+   * which maintains the session's rolling state of record. Best-effort: resolves to the
+   * created Artifact ID, or `null` on failure (logged host-side, never thrown). Works during
+   * the call AND right after it ends (the host retains the session id for late saves).
+   */
+  SaveAsArtifact(name: string, contentJson: string): Promise<string | null>;
 }
 
 /**

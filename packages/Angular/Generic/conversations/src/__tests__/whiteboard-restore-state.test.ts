@@ -39,7 +39,8 @@ function makeContext(log: CtxLog): RealtimeChannelContext {
     AgentName: 'Sage',
     SendContextNote: () => undefined,
     RequestSave: (stateJson: string) => log.Saves.push(stateJson),
-    SetFocusMode: () => undefined
+    SetFocusMode: () => undefined,
+    SaveAsArtifact: async () => null
   };
 }
 

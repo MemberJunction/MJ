@@ -25,6 +25,7 @@ class FakeWhiteboardHost {
   public SceneDelta = new EventEmitter<string>();
   public AgentUndo = new EventEmitter<void>();
   public FocusModeChange = new EventEmitter<boolean>();
+  public SaveToArtifactsRequested = new EventEmitter<void>();
   public AppliedTools: Array<{ ToolName: string; ArgsJson: string }> = [];
 
   public ApplyAgentTool(toolName: string, argsJson: string): string {
@@ -53,7 +54,8 @@ function makeContext(log: CtxLog): RealtimeChannelContext {
     AgentName: 'Sage',
     SendContextNote: (text: string) => log.Notes.push(text),
     RequestSave: (stateJson: string) => log.Saves.push(stateJson),
-    SetFocusMode: (on: boolean) => log.Focus.push(on)
+    SetFocusMode: (on: boolean) => log.Focus.push(on),
+    SaveAsArtifact: async () => null
   };
 }
 

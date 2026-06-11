@@ -64,6 +64,8 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Output() AgentUndo = new EventEmitter<void>();
   /** Focus-board toggle — the session shell collapses/restores the call rail. */
   @Output() FocusModeChange = new EventEmitter<boolean>();
+  /** Emitted when the user picks "Save to artifacts" — the channel plugin persists via its host context. */
+  @Output() SaveToArtifactsRequested = new EventEmitter<void>();
 
   @ViewChild(RealtimeWhiteboardBoardComponent) public Board?: RealtimeWhiteboardBoardComponent;
 
@@ -191,6 +193,12 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   }
 
   /** Download the board as one self-contained HTML document. */
+  /** Request a first-class artifact snapshot of the board (handled by the channel plugin). */
+  public ExportSaveToArtifacts(): void {
+    this.ExportOpen = false;
+    this.SaveToArtifactsRequested.emit();
+  }
+
   public ExportDownloadHtml(): void {
     this.downloadBlob(this.buildExportHtml(), 'text/html', `whiteboard-${RealtimeWhiteboardHostComponent.exportDateStamp()}.html`);
     this.ExportOpen = false;

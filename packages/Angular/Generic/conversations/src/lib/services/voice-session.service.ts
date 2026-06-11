@@ -172,6 +172,14 @@ interface StartRealtimeClientSessionResult {
    * falls back to its built-in wording.
    */
   NarrationInstructionsTemplate: string | null;
+  /**
+   * JSON map of the PRIOR session's saved channel states keyed by channel name (present only
+   * when the start carried `lastSessionId` and the prior session — owned by the same user —
+   * had saved states). Applied to the matching channel plugins via
+   * {@link BaseRealtimeChannelClient.RestoreState} so e.g. the whiteboard resumes where the
+   * last session left off.
+   */
+  PriorChannelStatesJson: string | null;
 }
 
 /**
@@ -437,6 +445,9 @@ export class VoiceSessionService {
       this.agentSessionId = session.AgentSessionId;
       this.narrationTemplate = session.NarrationInstructionsTemplate ?? null;
       this._modelName$.next(session.ModelName ?? null);
+      // Resume continuity: rehydrate channel plugins from the PRIOR session's saved states
+      // (e.g. the whiteboard) BEFORE any surface binds — tolerant, never blocks the start.
+      this.applyPriorChannelStates(session.PriorChannelStatesJson);
 
       const client = this.createRealtimeClient(session.Provider);
       this.client = client;
@@ -640,8 +651,92 @@ export class VoiceSessionService {
       AgentName: this.CurrentAgentName,
       SendContextNote: (text: string) => this.SendContextNote(text),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
+      SaveAsArtifact: (name: string, contentJson: string) => this.saveChannelArtifact(plugin.ChannelName, name, contentJson),
       SetFocusMode: (on: boolean) => this._channelFocus$.next({ Channel: plugin, Focused: on })
     };
+  }
+
+  /**
+   * Applies the PRIOR session's saved channel states (resume continuity): parses the
+   * server-supplied map and offers each entry to the matching active plugin via
+   * {@link BaseRealtimeChannelClient.RestoreState}. Fully tolerant — malformed payloads,
+   * unknown channels, and plugin rejections are logged and skipped; the session start is
+   * never affected.
+   */
+  private applyPriorChannelStates(statesJson: string | null | undefined): void {
+    if (!statesJson) {
+      return;
+    }
+    let states: Record<string, string>;
+    try {
+      const parsed: unknown = JSON.parse(statesJson);
+      if (parsed === null || typeof parsed !== 'object') {
+        return;
+      }
+      states = parsed as Record<string, string>;
+    } catch {
+      console.warn('[VoiceSession] PriorChannelStatesJson was malformed — starting channels fresh');
+      return;
+    }
+    for (const plugin of this._activeChannels$.value) {
+      const state = states[plugin.ChannelName];
+      if (typeof state === 'string' && state.length > 0) {
+        try {
+          const restored = plugin.RestoreState(state);
+          if (!restored) {
+            console.warn(`[VoiceSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
+          }
+        } catch (error) {
+          console.warn(`[VoiceSession] Channel '${plugin.ChannelName}' restore threw — starting fresh`, error);
+        }
+      }
+    }
+  }
+
+  /**
+   * Persists a channel's state as a first-class versioned artifact (`MJ: Artifacts`) via the
+   * `SaveSessionChannelArtifact` mutation — the channel-context capability behind e.g. the
+   * whiteboard's "Save to artifacts". Best-effort: returns the created Artifact ID, or null
+   * on any failure (logged, never thrown). Uses the live session id, falling back to the
+   * teardown-captured one so "save my board" works right after the call ends.
+   */
+  private async saveChannelArtifact(channelName: string, name: string, contentJson: string): Promise<string | null> {
+    const sessionId = this.agentSessionId ?? this.lastKnownSessionIdForSaves();
+    if (!sessionId || !name.trim() || !contentJson) {
+      return null;
+    }
+    try {
+      const result = await this.gql().ExecuteGQL(
+        `mutation SaveSessionChannelArtifact($agentSessionId: String!, $channelName: String!, $name: String!, $contentJson: String!) {
+          SaveSessionChannelArtifact(agentSessionId: $agentSessionId, channelName: $channelName, name: $name, contentJson: $contentJson) {
+            Success
+            ErrorMessage
+            ArtifactID
+            ArtifactVersionID
+          }
+        }`,
+        { agentSessionId: sessionId, channelName, name: name.trim(), contentJson }
+      ) as { SaveSessionChannelArtifact?: { Success: boolean; ErrorMessage?: string; ArtifactID?: string } };
+      const payload = result?.SaveSessionChannelArtifact;
+      if (!payload?.Success) {
+        console.warn(`[VoiceSession] Save-as-artifact failed for '${channelName}': ${payload?.ErrorMessage ?? 'unknown error'}`);
+        return null;
+      }
+      return payload.ArtifactID ?? null;
+    } catch (error) {
+      console.warn(`[VoiceSession] Save-as-artifact errored for '${channelName}':`, error);
+      return null;
+    }
+  }
+
+  /** Most recent session id captured by the save pipeline (post-teardown saves). */
+  private lastKnownSessionIdForSaves(): string | null {
+    for (const pending of this.pendingChannelSaves.values()) {
+      if (pending.SessionID) {
+        return pending.SessionID;
+      }
+    }
+    return null;
   }
 
   /**
@@ -957,6 +1052,7 @@ export class VoiceSessionService {
           SessionConfigJson
           ModelName
           NarrationInstructionsTemplate
+          PriorChannelStatesJson
         }
       }
     `;

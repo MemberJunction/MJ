@@ -102,12 +102,34 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
       // The board's Focus toggle — ask the shell to collapse/restore the main call column.
       instance.FocusModeChange.subscribe((focused: boolean) => {
         this.Context?.SetFocusMode(focused);
+      }),
+      // "Save to artifacts": snapshot the board as a first-class versioned artifact.
+      instance.SaveToArtifactsRequested.subscribe(() => {
+        void this.saveBoardAsArtifact();
       })
     );
   }
 
   public override UnbindSurface(): void {
     this.releaseSurface();
+  }
+
+  /**
+   * Persists the current board as a `MJ: Artifacts` snapshot via the host context
+   * (best-effort; the host logs failures). On success the agent is told via a context
+   * note so it can reference the saved artifact naturally.
+   */
+  private async saveBoardAsArtifact(): Promise<void> {
+    const ctx = this.Context;
+    if (!ctx) {
+      return;
+    }
+    const now = new Date();
+    const name = `Whiteboard — ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const artifactId = await ctx.SaveAsArtifact(name, this.State.ToJSON());
+    if (artifactId) {
+      ctx.SendContextNote(`[whiteboard] the user saved the current board as the artifact "${name}"`);
+    }
   }
 
   /**
