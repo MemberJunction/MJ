@@ -45,3 +45,4 @@ The matching **browser-direct client driver** (`AssemblyAIRealtimeClient`, Class
 - Product: https://www.assemblyai.com/products/voice-agent-api
 - API reference: https://www.assemblyai.com/docs/voice-agents/voice-agent-api
 - Token endpoint: `GET https://agents.assemblyai.com/v1/token?expires_in_seconds=…`
+- Full MJ realtime architecture (topologies, co-agent model, four-provider capability matrix): [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../../guides/REALTIME_CO_AGENTS_GUIDE.md)

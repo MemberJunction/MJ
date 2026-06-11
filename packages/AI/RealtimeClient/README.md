@@ -1,6 +1,6 @@
 # @memberjunction/ai-realtime-client
 
-Framework-agnostic **browser-side** abstraction for provider-direct realtime (voice) sessions: the `BaseRealtimeClient` contract plus the shipped provider drivers (`OpenAIRealtimeClient`, `GeminiRealtimeClient`).
+Framework-agnostic **browser-side** abstraction for provider-direct realtime (voice) sessions: the `BaseRealtimeClient` contract plus the four shipped provider drivers (`OpenAIRealtimeClient`, `GeminiRealtimeClient`, `ElevenLabsRealtimeClient`, `AssemblyAIRealtimeClient`) and the shared PCM audio plane (`src/audio/`) the websocket drivers build on.
 
 This package is the **client-side mirror** of the server's `BaseRealtimeModel` pattern (`@memberjunction/ai`). In the **client-direct topology**, the MJ server mints an ephemeral credential + provider-native session config (`ClientRealtimeSessionConfig`) through its server driver, and the browser resolves the matching *client* driver through the MemberJunction `ClassFactory` using the config's `Provider` string as the registration key. The browser owns the provider socket (lowest audio latency — frames never transit the MJ server), while **prompt and tool authority stay server-side**: the client applies the server-built `SessionConfig` verbatim.
 
@@ -24,8 +24,8 @@ BaseRealtimeModel driver                   BaseRealtimeClient driver
         │                                          ▲
         │  ClientRealtimeSessionConfig             │ ClassFactory.CreateInstance(
         │  { Provider, Model,                      │   BaseRealtimeClient,
-        │    EphemeralToken, ExpiresAt,  ────────► │   config.Provider)   // 'openai' | 'gemini'
-        │    SessionConfig (opaque) }              │
+        │    EphemeralToken, ExpiresAt,  ────────► │   config.Provider)
+        │    SessionConfig (opaque) }              │   // 'openai' | 'gemini' | 'elevenlabs' | 'assemblyai'
 ```
 
 **Division of responsibility** (from the `BaseRealtimeClient` doc header):
@@ -47,7 +47,8 @@ BaseRealtimeModel driver                   BaseRealtimeClient driver
 | `Disconnect()` | Tears down everything; emits a final `'closed'` state; safe to call more than once. |
 | `IsBusy` | `true` while a model response is in flight (generation). |
 | `IsAudioPlaying` | `true` while audio is AUDIBLY playing. **Distinct from `IsBusy`** — generation runs ahead of playback; hosts must gate narration on BOTH or queued utterances come out stale. |
-| `OnTranscript / OnToolCall / OnStateChange / OnError / OnInterruption` | Single-handler registration (matching the server `IRealtimeSession` style); registering again replaces the handler. `OnInterruption` fires on **true barge-in only** — user input cut off *active* model output (response in flight or audio audibly playing); a normal turn while the model is idle is not an interruption. Hosts typically use it to abort in-flight delegated work so a stale result is never narrated into a conversation that moved on. |
+| `OnTranscript / OnToolCall / OnStateChange / OnError / OnInterruption / OnUsage` | Single-handler registration (matching the server `IRealtimeSession` style); registering again replaces the handler. `OnInterruption` fires on **true barge-in only** — user input cut off *active* model output (response in flight or audio audibly playing); a normal turn while the model is idle is not an interruption. Hosts use it per their own policy (the production host cancels pending narration; it deliberately does **not** abort delegated work — that's an explicit user action). |
+| `OnUsage(handler)` | Token-usage telemetry as **deltas** for the response/turn that just completed (`RealtimeClientUsage` — cumulative-only providers must convert in the driver). **Optional capability**: providers without usage events simply never emit (registering is always safe). Emits: OpenAI (`response.done.usage`), Gemini (`usageMetadata`). Never emits: ElevenLabs, AssemblyAI (no wire usage events — ElevenLabs accounts platform-side; AssemblyAI bills flat per session-hour). The production host accumulates deltas and relays them debounced onto the co-agent `AIPromptRun` via the `RelayRealtimeUsage` mutation. |
 
 States (`RealtimeClientState`): `connecting → connected → listening ⇄ speaking → closed | error`. There is deliberately **no `thinking` state** — "the host is executing a tool" is host policy, not wire state.
 
@@ -68,8 +69,33 @@ Errors (`RealtimeClientError`): `Fatal: true` means the session is unusable (tra
 ### `GeminiRealtimeClient` — `@RegisterClass(BaseRealtimeClient, 'gemini')`
 
 - **Transport**: WebSocket via the `@google/genai` Live SDK, authenticated with the server-minted ephemeral token (a `v1alpha` client).
-- **Audio**: client → model is 16-bit PCM @ 16 kHz mono, captured by an inline `AudioWorklet` processor (loaded from a Blob URL so the package ships no asset files); model → client is PCM @ 24 kHz, scheduled gaplessly by `GeminiPcmPlayback` (Web Audio playhead-clock scheduling), which also backs `IsAudioPlaying` and flushes on barge-in (obligation #3).
+- **Audio**: client → model is 16-bit PCM @ 16 kHz mono via the shared `createPcmMicCapture` worklet pipeline; model → client is PCM @ 24 kHz, scheduled gaplessly by `GeminiPcmPlayback` (a thin specialization of the shared `RealtimePcmPlayback`), which also backs `IsAudioPlaying` and flushes on barge-in (obligation #3).
 - The server-built `SessionConfig` carries `{ model, config }` (system instruction, tools, transcription, modalities); the client applies it at `live.connect`.
+
+### `ElevenLabsRealtimeClient` — `@RegisterClass(BaseRealtimeClient, 'elevenlabs')`
+
+- **Transport**: raw WebSocket against the server-minted **signed URL** — the `EphemeralToken` *is* the `wss://…&token=…` URL (no API key in the browser). Handshake: open → send `conversation_initiation_client_data` carrying the server-authored prompt override (from the `SessionConfig` pact `{ agentId, overrides, config }`) → wait for `conversation_initiation_metadata` → negotiate PCM rates from the metadata's audio-format tags → build the audio plane → `'listening'` (obligation #7). Non-PCM telephony formats (`ulaw_8000`) degrade loudly to the 16 kHz default with a warning.
+- **Audio**: the shared PCM plane (`createPcmMicCapture` up as bare-key `user_audio_chunk` frames, `RealtimePcmPlayback` down from `audio` events) at the **negotiated** rates; `IsAudioPlaying` from the playout clock.
+- **Capability deltas**: transcripts are **finals-only** (no interim deltas; `agent_response_correction` re-finalizes a barged-in turn with what was actually spoken — treat it as the authoritative replacement); `SendContextNote` is **native** (`contextual_update`, sent even mid-response); `RequestSpokenUpdate` is **emulated** as a `user_message` (queued behind in-flight responses; narration kind stamped at send time — there is no `response.created`-style frame to stamp on); there is **no cancel frame** — `CancelActiveResponse` flushes the locally-owned playout (residual server generation is simply never played); **no usage events**; `SendToolResult` is exactly-once (duplicate call ids dropped with a warning).
+- **Busy mapping**: set on the first `audio` / `agent_response` of a turn, cleared on `agent_response_complete` / `interruption` / `client_tool_call` (obligation #2 — no envelope frames exist; state is inferred frame-by-frame).
+
+### `AssemblyAIRealtimeClient` — `@RegisterClass(BaseRealtimeClient, 'assemblyai')`
+
+- **Transport**: raw WebSocket to `wss://agents.assemblyai.com/v1/ws?token=…` with the server-minted **one-time** temp token. Handshake: open → send the server-authored `session.update` (the whole session object: prompt, tools, voice, turn detection — from the `SessionConfig` pact `{ session, config }`) as the **first** frame → wait for `session.ready` → audio plane → `'listening'` (obligation #7; audio sent earlier would be dropped).
+- **Audio**: the shared PCM plane at the provider's **fixed 24 kHz** format both directions (`input.audio` up, `reply.audio` down).
+- **Capability deltas**: user transcripts stream as deltas + final, agent transcripts are **final-only** (a barged-in final carries the truncated text — no correction event); `RequestSpokenUpdate` is **native** (`reply.create` per-response instructions, queued behind in-flight replies); `SendText` is **emulated** via `reply.create` (the protocol has no typed-user-input event — best-effort fidelity); `SendContextNote` is emulated via the **mutable `system_prompt`** ("Background updates" section re-sent through `session.update` — a config write that never disturbs generation); **no cancel frame** — `CancelActiveResponse` flushes local playout *and suppresses* residual `reply.audio` of the cancelled reply until the next boundary; **no usage events** (flat session-hour billing).
+- **Barge-in**: `input.speech.started` while output is active is the snappy flush point (~300 ms faster than waiting per the provider's guidance); `reply.done` `status: 'interrupted'` is the authoritative verdict / fallback flush. A speech start while idle is a normal turn, NOT an interruption.
+- **Teardown**: `Disconnect()` sends `session.end` before closing — skipping it leaves a billable 30-second resume hold.
+
+### Shared audio plane (`src/audio/`)
+
+The three websocket drivers (Gemini, ElevenLabs, AssemblyAI — everyone whose audio rides the socket rather than WebRTC) share one browser audio pipeline instead of reimplementing it per provider:
+
+- **`createPcmMicCapture(micStream, sampleRate, onPcmChunk)`** (`micCapture.ts`) — `AudioWorklet`-based mic capture resampled to the requested rate, delivering base64 PCM16 chunks; the worklet is loaded from a Blob URL so the package ships no asset files.
+- **`RealtimePcmPlayback`** (`pcmPlayback.ts`) — gapless playhead-clock scheduling of inbound PCM16, backing `IsAudioPlaying` precisely ("scheduled audio extends beyond the context's current time") with an instant `Flush()` for barge-in / cancel.
+- **`pcmUtils.ts`** — base64 ↔ `ArrayBuffer` and PCM conversion helpers.
+
+Drivers expose these through overridable `protected` creation seams (`createMicCapture` / `createPlayback`), so tests run with no audio hardware.
 
 ## Driver-author obligations
 
@@ -79,12 +105,18 @@ Errors (`RealtimeClientError`): `Fatal: true` means the session is unusable (tra
 
 ```typescript
 import { MJGlobal } from '@memberjunction/global';
-import { BaseRealtimeClient, LoadOpenAIRealtimeClient, LoadGeminiRealtimeClient } from '@memberjunction/ai-realtime-client';
+import {
+    BaseRealtimeClient,
+    LoadOpenAIRealtimeClient, LoadGeminiRealtimeClient,
+    LoadElevenLabsRealtimeClient, LoadAssemblyAIRealtimeClient
+} from '@memberjunction/ai-realtime-client';
 
 // Tree-shaking prevention — drivers are resolved dynamically, so a static call path
 // must keep their @RegisterClass side effects alive:
 LoadOpenAIRealtimeClient();
 LoadGeminiRealtimeClient();
+LoadElevenLabsRealtimeClient();
+LoadAssemblyAIRealtimeClient();
 
 // 1. The server minted a ClientRealtimeSessionConfig (e.g. via the
 //    StartRealtimeClientSession mutation). Resolve the matching driver:
@@ -115,10 +147,11 @@ The production host is `VoiceSessionService` (`packages/Angular/Generic/conversa
 
 ## Testing seams
 
-Both drivers are written against **structural transport seams** so the full event flow is unit-testable with zero network, zero WebRTC, and zero audio hardware (see `src/__tests__/`, ~2,300 lines of vitest coverage):
+All four drivers are written against **structural transport seams** so the full event flow is unit-testable with zero network, zero WebRTC, and zero audio hardware (see `src/__tests__/`, ~4,200 lines of vitest coverage):
 
 - **OpenAI**: `IRealtimePeerConnection`, `IRealtimeDataChannel`, `IRealtimeAudioSink` — created through overridable `protected` factory methods (`createPeerConnection`, `createAudioSink`, …); tests subclass the driver and inject fakes, then drive provider-shaped JSON frames through the data channel.
 - **Gemini**: `GeminiLiveClientSession` (typed subset of the SDK `Session`), `IGeminiMicCapture`, `IGeminiAudioPlayback` — the `connectLiveSession` / capture / playback boundaries are the only things tests replace.
+- **ElevenLabs / AssemblyAI**: `IElevenLabsClientSocket` / `IAssemblyAIClientSocket` (assignable-handler websocket seams behind `createSocket`) plus the shared `createMicCapture` / `createPlayback` seams — tests drive provider-shaped frames straight through the socket fake.
 - Shared fakes live in `src/__tests__/helpers/realtime-fakes.ts`.
 
 If you write a new driver, follow the same shape: every wire/hardware boundary behind a `protected` overridable seam, asserted with scripted provider frames.
@@ -128,4 +161,5 @@ If you write a new driver, follow the same shape: every wire/hardware boundary b
 - [`guides/REALTIME_CO_AGENTS_GUIDE.md`](../../../guides/REALTIME_CO_AGENTS_GUIDE.md) — the flagship feature guide
 - `@memberjunction/ai` — `BaseRealtimeModel`, `IRealtimeSession`, `ClientRealtimeSessionConfig`, `RealtimeToolDefinition`
 - `@memberjunction/ai-agents` — `RealtimeSessionRunner`, `RealtimeToolBroker`, `RealtimeClientSessionService`
-- `@memberjunction/ng-conversations` — the Angular host (overlay, channels, whiteboard)
+- `@memberjunction/ng-conversations` — the Angular host (overlay, channels, session review)
+- `@memberjunction/ng-whiteboard` — the generic whiteboard the Whiteboard channel surfaces
