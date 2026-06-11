@@ -1,0 +1,2 @@
+-- Test migration: intentionally performs no schema or data changes.
+-- Used to exercise the CI migration-validation workflow. Safe to remove.
