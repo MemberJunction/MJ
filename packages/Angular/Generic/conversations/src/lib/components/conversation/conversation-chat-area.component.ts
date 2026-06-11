@@ -390,13 +390,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   //   ✓ beforeResponseFormSubmitted / afterResponseFormSubmitted — wired in
   //     message-item.component's `onFormSubmitted()`, forwarded through
   //     message-list to chat-area.
-  //   ◐ beforeToolInvoked / afterToolInvoked — FIRING (subscribed to
-  //     AgentClientService.ToolRequested$ / ToolExecuted$ in ngOnInit and
-  //     re-emitted on chat-area's outputs). Cancel is ADVISORY today —
-  //     listeners can flip event.Cancel = true and observe it, but
-  //     AgentClientSession.handleToolRequest doesn't honor it; the tool runs
-  //     regardless. Enforcing cancel requires a `beforeDispatch` hook inside
-  //     AgentClientSession — a small runtime-side follow-up commit.
+  //   ✓ beforeToolInvoked / afterToolInvoked — wired AND cancel-enforced.
+  //     Subscribed to AgentClientService.ToolRequested$ / ToolExecuted$ in
+  //     ngOnInit. When a listener sets event.Cancel = true, the chat-area's
+  //     subscriber copies it back to the ClientToolRequestEvent and
+  //     AgentClientSession.handleToolRequest short-circuits dispatch (tool
+  //     handler NOT called, ToolExecuted$ NOT emitted, server receives a
+  //     failure response carrying any CancelReason).
   //   ✗ session* — DECLARED but the SessionsObserver is a no-op stub until
   //     PR #2787 (ai-agent-sessions) lands.
 
@@ -670,21 +670,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Bridge AgentClientService's tool-dispatch observables to chat-area's
     // Before/After cancelable @Outputs. `ToolRequested$` fires synchronously
-    // BEFORE the tool runs (good for the beforeToolInvoked semantic),
-    // `ToolExecuted$` fires after.
+    // BEFORE the tool runs; `ToolExecuted$` fires after a successful dispatch
+    // (suppressed when the host vetoes via Cancel).
     //
-    // Cancel is ADVISORY today: a listener can flip `event.Cancel = true`, but
-    // AgentClientSession.handleToolRequest doesn't honor it yet — the session
-    // already kicked off the await on the registry execution by the time the
-    // subscriber's mutation lands. Enforcing cancel requires a `beforeDispatch`
-    // hook inside AgentClientSession (runtime-side follow-up). Listeners can
-    // subscribe + observe today; veto enforcement follows in a future commit.
+    // Cancel-enforcement: the `ClientToolRequestEvent` carries a mutable
+    // `Cancel: boolean` field. We emit the Angular `beforeToolInvoked` event
+    // synchronously inside the RxJS subscriber, listeners can flip
+    // `args.Cancel = true`, and we copy that decision back to `toolEvent.Cancel`
+    // before the subscriber returns. `AgentClientSession.handleToolRequest` then
+    // sees the veto, short-circuits dispatch, and reports the cancellation back
+    // to the server. `afterToolInvoked` does NOT fire in the canceled case.
     this.agentClientService.ToolRequested$
       .pipe(takeUntil(this.destroy$))
       .subscribe((toolEvent) => {
-        this.beforeToolInvoked.emit(
-          new BeforeToolInvokedEventArgs(toolEvent.Request.ToolName, toolEvent.Request.Params)
+        const args = new BeforeToolInvokedEventArgs(
+          toolEvent.Request.ToolName,
+          toolEvent.Request.Params
         );
+        this.beforeToolInvoked.emit(args);
+        if (args.Cancel) {
+          toolEvent.Cancel = true;
+          toolEvent.CancelReason = args.CancelReason;
+        }
       });
     this.agentClientService.ToolExecuted$
       .pipe(takeUntil(this.destroy$))

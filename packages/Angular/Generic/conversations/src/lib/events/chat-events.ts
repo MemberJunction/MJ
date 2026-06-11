@@ -66,9 +66,23 @@ export class AfterAgentTurnEventArgs {
 // ────────────────────────────────────────────────────────────────────
 
 /**
- * Fired BEFORE the agent invokes a registered client tool. Listeners can
- * cancel (e.g., refuse a destructive tool until the user confirms via a
- * dialog).
+ * Fired BEFORE the agent invokes a registered client tool. Listeners can veto
+ * the dispatch by setting `event.Cancel = true` — `AgentClientSession`
+ * short-circuits, the tool handler does NOT run, `afterToolInvoked` does NOT
+ * fire, and the server receives a failure response carrying the optional
+ * `CancelReason`.
+ *
+ * @example Confirm before a destructive tool runs
+ * ```typescript
+ * onBeforeToolInvoked(event: BeforeToolInvokedEventArgs) {
+ *   if (event.ToolName === 'deleteRecord') {
+ *     if (!confirm('Agent wants to delete a record. Allow?')) {
+ *       event.Cancel = true;
+ *       event.CancelReason = 'User declined deletion';
+ *     }
+ *   }
+ * }
+ * ```
  */
 export class BeforeToolInvokedEventArgs extends CancellableChatEventArgs {
     constructor(
@@ -82,7 +96,8 @@ export class BeforeToolInvokedEventArgs extends CancellableChatEventArgs {
 /**
  * Fired AFTER a tool invocation completes. Carries the tool name, the
  * arguments it was called with, and the result it produced. NOT fired when
- * the corresponding `BeforeToolInvokedEventArgs` was canceled.
+ * the corresponding `BeforeToolInvokedEventArgs` was canceled — the contract
+ * is enforced in `AgentClientSession.handleToolRequest`.
  */
 export class AfterToolInvokedEventArgs {
     constructor(
