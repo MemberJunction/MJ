@@ -303,6 +303,8 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - JSON-string-field pattern for complex payloads, client/engine type decoupling, and reference implementations (`GraphQLClusterClient`, `SearchKnowledgeResolver`, etc.)
   - **Read this before hand-writing any new resolver or GraphQL client.** Not for plain entity CRUD — that's already generated.
 
+- **[Real-Time Co-Agents Guide](guides/REALTIME_CO_AGENTS_GUIDE.md)**: The live, low-latency agent stack — the `Realtime` agent type and Voice Co-Agent (one co-agent voices any target agent via the stable `invoke-target-agent` tool), the triple-registry plugin architecture (server/client realtime-model drivers + interactive-channel plugins, all ClassFactory + metadata resolved), client-direct vs server-bridged topologies, `AIAgentSession` lifecycle/janitor, interactive channels (the live Whiteboard), progress narration, observability, and the security model. **Read before touching anything realtime / voice / agent-session / channel.**
+
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---

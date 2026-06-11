@@ -192,6 +192,25 @@ The overlay is generic — it raises events for navigation and tool execution. T
 </mj-active-agent-indicator>
 ```
 
+### Real-Time Voice (Co-Agent) UX
+
+The package hosts the full client UX for MJ's real-time co-agent sessions — live voice calls with the conversation's agent, with interactive channel surfaces (the live Whiteboard) docked beside the call. Architecture background: [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../../guides/REALTIME_CO_AGENTS_GUIDE.md).
+
+**`VoiceSessionService`** (`services/voice-session.service.ts`) is the provider-agnostic orchestrator, injectable at root. It drives a **client-direct** session: it calls the `StartRealtimeClientSession` mutation to mint a server-scoped ephemeral token, resolves the matching `BaseRealtimeClient` driver (from `@memberjunction/ai-realtime-client`) through the ClassFactory by the server-reported `Provider` key, and connects the browser **directly** to the realtime provider — audio frames never transit the MJ server; only tool calls, final transcripts, and channel state relay back over GraphQL. It exposes the reactive session state hosts consume: `ConnectionState$` (`connecting | listening | speaking | thinking | error | closed`), `Captions$`, `Active$`, `DelegationProgress$` / `DelegationResult$` / `DelegationNarration$`, `ActiveChannels$`, `ChannelFocus$`, `Minimized$`, plus `SendText` (typed input into the live call), `ToggleMute`, and `RegisterClientToolHandler` (prefix-routed, client-executed UI tools).
+
+**The call overlay** (`components/realtime/`): `RealtimeSessionOverlayComponent` (`mj-realtime-session-overlay`) fills the conversation panel in place while a session is active — hosted by `ConversationChatAreaComponent` behind `Active$`, started from the mic button in `MessageInputComponent`. Two columns:
+
+- **Main column** — agent banner (identity + turn state + model name), the unified session thread (`RealtimeSessionThreadComponent`, fed by the shared `RealtimeSessionState` merge of caption/delegation/narration streams), the channel strip, the in-call composer (typed turns behave identically to spoken ones), and the controls row (mute, end call, and a gear-gated developer mode revealing "Open run"/"Open session" links).
+- **Right panel** — `RealtimeSurfaceTabsComponent`, the tabbed surface panel (`RealtimeSurfaceTabsModel` is the framework-free, unit-tested tab state): the Activity rail is always tab 1; **one tab per artifact** a delegated run produces (auto-opened and flash-highlighted on arrival); **one tab per interactive channel**.
+
+**Interactive channels are plugins** — the shell is channel-agnostic. `BaseRealtimeChannelClient` (`components/realtime/channels/base-realtime-channel-client.ts`) is the contract: a client-executed tool set declared to the realtime model at session mint, a perception serializer feeding coalesced state deltas into the model as context notes, a dynamically-created Angular surface component the plugin binds itself, a persisted state of record, prior-session restore (`RestoreState`), artifact snapshots (`SaveAsArtifact`), and focus-mode layout requests. Plugins resolve at session start from the `MJ: AI Agent Channels` registry by `ClientPluginClass` key.
+
+**The live Whiteboard** (`components/realtime/whiteboard/`) is the canonical channel: `RealtimeWhiteboardChannel` (the plugin) + `WhiteboardState` (Angular-free state engine with a change journal and coalesced scene deltas) + the board/toolbar/zoom components. The agent draws via `Whiteboard_*` tools (notes, shapes, text, connectors, highlights, move/remove/style) in a **reserved violet** ownership style; the user sees exactly what the agent perceives via the "What the agent sees" popover; boards persist per session, restore on resume, export to self-contained HTML/SVG, and snapshot to versioned `MJ: Artifacts`.
+
+**Session review**: a past session replays through the same overlay in review mode — `ConversationChatAreaComponent.OpenRealtimeSessionReview(agentSessionId)` loads a `RealtimeSessionReview` via `RealtimeSessionReviewService` (persisted caption turns, delegated-run cards, saved channel states, close-reason chip), renders it with the same thread/rail components plus a read-only Whiteboard tab when a board was saved, and offers "Start live session" — resuming as a new session chained via `lastSessionId` so saved channel states restore.
+
+This package never navigates (no Router): developer links emit a `RealtimeNavigateRequest` the host converts onto its `openEntityRecord` chain, and minimizing the call shows the host's floating "on call" pill while the session stays live.
+
 ### Collaboration
 
 ```html
@@ -271,6 +290,21 @@ The overlay is generic — it raises events for navigation and tool execution. T
 | `AgentProcessPanelComponent` | `mj-agent-process-panel` | Agent execution panel |
 | `ActiveAgentIndicatorComponent` | `mj-active-agent-indicator` | Active processing indicator |
 | `ActiveTasksPanelComponent` | `mj-active-tasks-panel` | Active tasks panel |
+
+### Real-Time Voice Components
+
+| Component | Selector | Description |
+|-----------|----------|-------------|
+| `RealtimeSessionOverlayComponent` | `mj-realtime-session-overlay` | The in-place "call mode" overlay for a live voice session (two-column: call + tabbed surface panel) |
+| `RealtimeAgentBannerComponent` | `mj-realtime-agent-banner` | Compact agent identity + turn-state banner |
+| `RealtimeSessionThreadComponent` | `mj-realtime-session-thread` | Unified live thread (captions, delegation cards, ephemeral narration) |
+| `RealtimeActivityRailComponent` | `mj-realtime-activity-rail` | Session activity rail (the surface panel's first tab) |
+| `RealtimeDelegationCardComponent` | `mj-realtime-delegation-card` | "Working on it" → result card for a delegated agent run |
+| `RealtimeChannelStripComponent` | `mj-realtime-channel-strip` | Chip-per-channel strip |
+| `RealtimeComposerComponent` | `mj-realtime-composer` | In-call typed-input composer |
+| `RealtimeControlsComponent` | `mj-realtime-controls` | Mute / end-call / developer-mode controls |
+| `RealtimeSurfaceTabsComponent` | `mj-realtime-surface-tabs` | Tabbed surface panel: Activity + artifact tabs + channel surfaces |
+| `RealtimeWhiteboardHostComponent` | `mj-realtime-whiteboard-host` | The live whiteboard surface (created dynamically by the Whiteboard channel plugin; board, toolbar, zoom, "What the agent sees") |
 
 ### Utility Components
 
