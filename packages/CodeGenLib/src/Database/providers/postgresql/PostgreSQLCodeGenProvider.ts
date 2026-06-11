@@ -714,18 +714,13 @@ ${permissions}
 
         const trigger = this.generateTimestampTrigger(entity);
 
-        return `
-------------------------------------------------------------
------ UPDATE FUNCTION FOR ${entity.BaseTable}
-------------------------------------------------------------
-${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
-CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
-    ${paramString}
-) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
-DECLARE
-    v_updated_count INTEGER;
-BEGIN
-    UPDATE ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        // PK-only entities (e.g. junction tables with only PK + __mj timestamp columns)
+        // have no updatable fields. Generate a no-op function that just returns the
+        // existing row rather than emitting an invalid UPDATE with an empty SET clause.
+        const hasUpdatableFields = updateFields.trim().length > 0;
+
+        const fnBody = hasUpdatableFields
+            ? `    UPDATE ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
     SET
         ${updateFields}
     WHERE
@@ -741,7 +736,26 @@ BEGIN
     -- Return the updated record from the base view
     RETURN QUERY
     SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${selectWhereClause};
+    WHERE ${selectWhereClause};`
+            : `    -- No updatable fields (PK-only entity, e.g. junction table). Return the existing row.
+    RETURN QUERY
+    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
+    WHERE ${selectWhereClause};`;
+
+        // Only declare v_updated_count when we actually perform an UPDATE.
+        const declareBlock = hasUpdatableFields ? '\n    v_updated_count INTEGER;' : '';
+
+        return `
+------------------------------------------------------------
+----- UPDATE FUNCTION FOR ${entity.BaseTable}
+------------------------------------------------------------
+${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    ${paramString}
+) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
+DECLARE${declareBlock}
+BEGIN
+${fnBody}
 END;
 $$ LANGUAGE plpgsql;
 ${permissions}
@@ -2087,13 +2101,15 @@ WHERE p.prokind IN ('f', 'p')
 
         if ((firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' || firstKey.Type.toLowerCase().trim() === 'uuid') && entity.PrimaryKeys.length === 1) {
             const paramName = `p_${this.toSnakeCase(firstKey.CodeName)}`;
+            const hasNonPkFields = insertColumns.trim().length > 0;
             return {
                 preInsert: `v_new_id := COALESCE(${paramName}, gen_random_uuid());\n    `,
                 returningClause: '',
                 selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${pkCol} = v_new_id`,
-                // Include the PK column in the INSERT so caller-provided IDs are respected
-                finalColumns: `${pkCol},\n            ${insertColumns}`,
-                finalValues: `v_new_id,\n            ${insertValues}`,
+                // Include the PK column in the INSERT so caller-provided IDs are respected.
+                // When there are no non-PK columns, omit the trailing comma.
+                finalColumns: hasNonPkFields ? `${pkCol},\n            ${insertColumns}` : pkCol,
+                finalValues: hasNonPkFields ? `v_new_id,\n            ${insertValues}` : 'v_new_id',
             };
         }
 
@@ -2105,6 +2121,8 @@ WHERE p.prokind IN ('f', 'p')
         // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
         // filters them all out. Prepend them to finalColumns/finalValues so the INSERT is valid.
         // (The single-PK uniqueidentifier case is already handled above via v_new_id.)
+        // When insertColumns is empty (PK-only entities like junction tables), we must not
+        // emit a trailing comma after the PK columns.
         let finalColumns = insertColumns;
         let finalValues = insertValues;
         if (entity.PrimaryKeys.length > 1) {
@@ -2114,8 +2132,9 @@ WHERE p.prokind IN ('f', 'p')
             const pkValues = entity.PrimaryKeys
                 .map((k: EntityFieldInfo) => `p_${this.toSnakeCase(k.CodeName)}`)
                 .join(',\n            ');
-            finalColumns = `${pkColumns},\n            ${insertColumns}`;
-            finalValues = `${pkValues},\n            ${insertValues}`;
+            const hasNonPkColumns = insertColumns.trim().length > 0;
+            finalColumns = hasNonPkColumns ? `${pkColumns},\n            ${insertColumns}` : pkColumns;
+            finalValues = hasNonPkColumns ? `${pkValues},\n            ${insertValues}` : pkValues;
         }
 
         return {
