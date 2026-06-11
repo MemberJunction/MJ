@@ -31,9 +31,11 @@ import { RealtimeWhiteboardHostComponent } from './whiteboard-host.component';
  *    a save of {@link WhiteboardState.ToJSON} under channel name `'Whiteboard'` — the
  *    host debounces and flushes at teardown.
  *
- * v1 deliberately does NOT restore a prior session's persisted board (documented
- * restore-skip): a new session always starts with a fresh board; state flows one way,
- * board → debounced save → the session's channel row.
+ * A PRIOR session's persisted board is restored through {@link RestoreState} (invoked by
+ * the session host after Initialize, before any surface binding): the saved JSON is
+ * rehydrated IN PLACE into the same {@link WhiteboardState} instance, so the save
+ * subscription and any later surface binding keep pointing at one engine. Malformed or
+ * incompatible payloads are tolerated — the board simply starts fresh.
  */
 @RegisterClass(BaseRealtimeChannelClient, 'RealtimeWhiteboardChannel')
 export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<RealtimeWhiteboardHostComponent> {
@@ -123,6 +125,16 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   /** The board's serialized state of record (persisted under {@link ChannelName}). */
   public override SerializeState(): string | null {
     return this.State.ToJSON();
+  }
+
+  /**
+   * Rehydrates a prior session's saved board into THIS session's state engine (in place —
+   * the {@link State} instance and its subscriptions are preserved). Returns `true` on
+   * success; malformed / incompatible JSON returns `false` and the board stays fresh
+   * (never throws — {@link WhiteboardState.LoadFromJSON} is tolerant by contract).
+   */
+  public override RestoreState(stateJson: string): boolean {
+    return this.State.LoadFromJSON(stateJson);
   }
 
   /**

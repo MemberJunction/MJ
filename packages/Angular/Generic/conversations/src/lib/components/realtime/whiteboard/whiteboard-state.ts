@@ -29,6 +29,21 @@ export type WhiteboardShapeKind = 'rect' | 'ellipse' | 'diamond';
 /** Visual tint of a USER sticky (agent stickies always render violet, regardless of tint). */
 export type WhiteboardStickyTint = 'amber' | 'amber-light';
 
+/**
+ * Curated font-size steps for text labels and sticky notes. The toolbar's text-style flyout
+ * and the agent's `fontSize` tool params both restrict to these values.
+ */
+export const WHITEBOARD_FONT_SIZES: readonly number[] = [12, 14, 18, 24, 32];
+
+/**
+ * Font family choices for text labels / stickies. The keys are mapped to token-friendly
+ * font stacks in the board CSS (`wb-font-serif`, `wb-font-mono`; sans is the default).
+ */
+export type WhiteboardFontFamily = 'sans' | 'serif' | 'mono';
+
+/** Font weights for text labels / stickies (regular or bold). */
+export type WhiteboardFontWeight = 400 | 700;
+
 /** A point in board (content) coordinates. */
 export interface WhiteboardPoint {
   X: number;
@@ -57,6 +72,12 @@ export interface WhiteboardStickyItem extends WhiteboardItemBase {
   Tint?: WhiteboardStickyTint;
   /** Slight playful tilt, in degrees. */
   Rotation?: number;
+  /** Curated font size (see {@link WHITEBOARD_FONT_SIZES}); omitted = the CSS default. */
+  FontSize?: number;
+  /** Font family key (mapped to token-friendly stacks in CSS); omitted = sans. */
+  FontFamily?: WhiteboardFontFamily;
+  /** Font weight; omitted = the kind's CSS default. */
+  FontWeight?: WhiteboardFontWeight;
 }
 
 /** A drawn shape box (rect / ellipse / diamond) with an optional label + sub-label. */
@@ -77,6 +98,18 @@ export interface WhiteboardTextItem extends WhiteboardItemBase {
   X: number;
   Y: number;
   Text: string;
+  /** Curated font size (see {@link WHITEBOARD_FONT_SIZES}); omitted = the CSS default. */
+  FontSize?: number;
+  /** Font family key (mapped to token-friendly stacks in CSS); omitted = sans. */
+  FontFamily?: WhiteboardFontFamily;
+  /** Font weight; omitted = the kind's CSS default. */
+  FontWeight?: WhiteboardFontWeight;
+  /**
+   * Text color from the USER pen palette. Violet is reserved for the agent's ownership
+   * styling (enforced in the user UI — the palette never offers violet); agent text gets
+   * its violet from the Author treatment, never from this field.
+   */
+  Color?: string;
 }
 
 /** A pasted / inserted image card. `Url` is a runtime object URL (not persisted as pixels). */
@@ -154,6 +187,9 @@ export interface WhiteboardItemPatch {
   Points?: WhiteboardPoint[];
   Tint?: WhiteboardStickyTint;
   Rotation?: number;
+  FontSize?: number;
+  FontFamily?: WhiteboardFontFamily;
+  FontWeight?: WhiteboardFontWeight;
   Shape?: WhiteboardShapeKind;
   FromItemID?: string | null;
   ToItemID?: string | null;
@@ -195,6 +231,10 @@ export interface WhiteboardCompactItem {
   from?: string | WhiteboardPoint | null;
   to?: string | WhiteboardPoint | null;
   points?: number;
+  fontSize?: number;
+  fontFamily?: WhiteboardFontFamily;
+  bold?: boolean;
+  color?: string;
 }
 
 /**
@@ -343,8 +383,16 @@ export class WhiteboardState {
         return { X: item.X, Y: item.Y, W: item.W ?? WHITEBOARD_DEFAULTS.StickyW, H: WHITEBOARD_DEFAULTS.StickyH };
       case 'shape':
         return { X: item.X, Y: item.Y, W: item.W, H: item.H };
-      case 'text':
-        return { X: item.X, Y: item.Y, W: WHITEBOARD_DEFAULTS.TextW, H: WHITEBOARD_DEFAULTS.TextH };
+      case 'text': {
+        // estimate scales with the chosen font size (the CSS default renders ~12px)
+        const scale = item.FontSize ? item.FontSize / 12 : 1;
+        return {
+          X: item.X,
+          Y: item.Y,
+          W: Math.round(WHITEBOARD_DEFAULTS.TextW * scale),
+          H: Math.round(WHITEBOARD_DEFAULTS.TextH * scale)
+        };
+      }
       case 'image':
         return { X: item.X, Y: item.Y, W: item.W ?? WHITEBOARD_DEFAULTS.ImageW, H: WHITEBOARD_DEFAULTS.ImageH };
       case 'highlight':
@@ -679,6 +727,38 @@ export class WhiteboardState {
     return state;
   }
 
+  /**
+   * Rehydrate THIS instance in place from {@link ToJSON} output — used by the channel's
+   * `RestoreState` hook so existing subscriptions (perception feed, save pipeline) and any
+   * bound surface keep pointing at the same engine. TOLERANT: malformed input returns
+   * `false` and leaves the current state untouched (never throws).
+   *
+   * On success the undo/redo stacks and journal are cleared (restored state is the new
+   * baseline), stale delta tokens force reset semantics, and one `'replace'` change is
+   * emitted so consumers re-read the full scene.
+   */
+  public LoadFromJSON(json: string): boolean {
+    let parsed: WhiteboardStateJSON;
+    try {
+      parsed = JSON.parse(json) as WhiteboardStateJSON;
+    }
+    catch {
+      return false;
+    }
+    if (!parsed || !Array.isArray(parsed.items)) {
+      return false;
+    }
+    this.restore(parsed);
+    this.seq = parsed.seq ?? 0;
+    this.journal = [];
+    this.journalTrimmedBeforeSeq = this.seq; // older tokens force reset deltas
+    this.undoStack = [];
+    this.redoStack = [];
+    this.SelectedID = null;
+    this.record('replace', '', 'user', 'restored a saved board');
+    return true;
+  }
+
   // ────────────────────────────────────────────── internals
 
   private nextId(kind: WhiteboardItemKind): string {
@@ -737,6 +817,7 @@ export class WhiteboardState {
         c.x = Math.round(item.X);
         c.y = Math.round(item.Y);
         c.text = clip(item.Text, 120);
+        WhiteboardState.compactTextStyle(item, c);
         break;
       case 'shape':
         c.x = Math.round(item.X);
@@ -750,6 +831,10 @@ export class WhiteboardState {
         c.x = Math.round(item.X);
         c.y = Math.round(item.Y);
         c.text = clip(item.Text, 120);
+        WhiteboardState.compactTextStyle(item, c);
+        if (item.Color) {
+          c.color = item.Color;
+        }
         break;
       case 'image':
         c.x = Math.round(item.X);
@@ -780,6 +865,19 @@ export class WhiteboardState {
         break;
     }
     return c;
+  }
+
+  /** Project the optional text-style fields onto a compact item (sticky / text kinds). */
+  private static compactTextStyle(item: WhiteboardStickyItem | WhiteboardTextItem, c: WhiteboardCompactItem): void {
+    if (item.FontSize != null) {
+      c.fontSize = item.FontSize;
+    }
+    if (item.FontFamily) {
+      c.fontFamily = item.FontFamily;
+    }
+    if (item.FontWeight === 700) {
+      c.bold = true;
+    }
   }
 
   private composeSummaryText(parts: { added?: number; moved?: number; updated?: number; removed?: number; reset?: boolean }): string {

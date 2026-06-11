@@ -184,6 +184,21 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   }
 
   /**
+   * Restores a PRIOR session's saved channel state (the payload a previous session
+   * persisted via {@link SerializeState} / {@link RealtimeChannelContext.RequestSave}).
+   * Invoked by the session host AFTER {@link Initialize} and BEFORE any surface binding,
+   * when a prior session's saved state exists for this channel.
+   *
+   * Returns `true` when the state was applied; `false` when the channel ignored it —
+   * either because it keeps no persistent state (this default) or because the payload was
+   * malformed/incompatible. Implementations MUST be tolerant: never throw on bad input,
+   * just return `false` and start fresh.
+   */
+  public RestoreState(stateJson: string): boolean {
+    return false;
+  }
+
+  /**
    * The focus pill's "exit" affordance, routed by the overlay to the channel that holds
    * focus. Implementations should leave focus mode through their OWN surface (so surface
    * toggles stay in sync), ultimately emitting `Context.SetFocusMode(false)`. The overlay

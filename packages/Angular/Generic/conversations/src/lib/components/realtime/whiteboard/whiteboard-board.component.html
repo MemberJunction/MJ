@@ -79,6 +79,9 @@
                [class.pop-in]="PopInIDs.has(item.ID)"
                [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
                [style.width.px]="ItemW(item)"
+               [style.fontSize]="ItemFontSize(item)"
+               [style.fontFamily]="ItemFontFamily(item)"
+               [style.fontWeight]="ItemFontWeight(item)"
                [style.transform]="IsDragging(item) ? '' : StickyRotation(item)"
                (pointerdown)="OnItemPointerDown($event, item)"
                (dblclick)="BeginItemEdit($event, item)">
@@ -145,6 +148,10 @@
                [class.dragging]="IsDragging(item)"
                [class.pop-in]="PopInIDs.has(item.ID)"
                [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
+               [style.fontSize]="ItemFontSize(item)"
+               [style.fontFamily]="ItemFontFamily(item)"
+               [style.fontWeight]="ItemFontWeight(item)"
+               [style.color]="ItemTextColor(item)"
                (pointerdown)="OnItemPointerDown($event, item)"
                (dblclick)="BeginItemEdit($event, item)">
             @if (item.Author === 'agent') {

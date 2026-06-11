@@ -1,6 +1,7 @@
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import {
-  WhiteboardBounds, WhiteboardItem, WhiteboardPoint, WhiteboardShapeKind, WhiteboardState
+  WHITEBOARD_FONT_SIZES, WhiteboardBounds, WhiteboardFontFamily, WhiteboardItem,
+  WhiteboardItemPatch, WhiteboardPoint, WhiteboardShapeKind, WhiteboardState
 } from './whiteboard-state';
 
 /**
@@ -40,7 +41,8 @@ export const WHITEBOARD_TOOL_NAMES = {
   DrawConnector: 'Whiteboard_DrawConnector',
   Highlight: 'Whiteboard_Highlight',
   MoveItem: 'Whiteboard_MoveItem',
-  RemoveItem: 'Whiteboard_RemoveItem'
+  RemoveItem: 'Whiteboard_RemoveItem',
+  StyleItem: 'Whiteboard_StyleItem'
 } as const;
 
 /**
@@ -56,7 +58,8 @@ export const WHITEBOARD_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
       properties: {
         text: { type: 'string', description: 'The note text. Keep it short — sticky-note sized.' },
         x: { type: 'number', description: 'Left position in board coordinates. Omit to auto-place near existing content.' },
-        y: { type: 'number', description: 'Top position in board coordinates. Omit to auto-place near existing content.' }
+        y: { type: 'number', description: 'Top position in board coordinates. Omit to auto-place near existing content.' },
+        fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'Optional note font size in px (curated steps).' }
       },
       required: ['text']
     }
@@ -86,7 +89,10 @@ export const WHITEBOARD_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
       properties: {
         text: { type: 'string', description: 'The label text.' },
         x: { type: 'number', description: 'Left position in board coordinates.' },
-        y: { type: 'number', description: 'Top position in board coordinates.' }
+        y: { type: 'number', description: 'Top position in board coordinates.' },
+        fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'Optional label font size in px (curated steps).' },
+        fontFamily: { type: 'string', enum: ['sans', 'serif', 'mono'], description: 'Optional font family. Defaults to sans.' },
+        bold: { type: 'boolean', description: 'Optional bold weight. Labels render bold by default.' }
       },
       required: ['text']
     }
@@ -144,11 +150,32 @@ export const WHITEBOARD_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
       },
       required: ['itemId']
     }
+  },
+  {
+    Name: WHITEBOARD_TOOL_NAMES.StyleItem,
+    Description: 'Restyle the text of an existing sticky note or text label — font size, family, bold, and (text labels only) color. Pass at least one style field.',
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', description: 'ID of the sticky note or text label to restyle.' },
+        fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'New font size in px (curated steps).' },
+        fontFamily: { type: 'string', enum: ['sans', 'serif', 'mono'], description: 'New font family.' },
+        bold: { type: 'boolean', description: 'Bold on/off.' },
+        color: { type: 'string', description: 'Hex text color, e.g. "#fbbf24" (text labels only — violet is already yours).' }
+      },
+      required: ['itemId']
+    }
   }
 ];
 
 /** Padding added around item bounds when highlighting by itemIds. */
 const HIGHLIGHT_PAD = 18;
+
+/** The font family keys accepted by the style tool params. */
+const WHITEBOARD_FONT_FAMILIES: readonly WhiteboardFontFamily[] = ['sans', 'serif', 'mono'];
+
+/** Hex colors accepted for text color ("#abc" / "#aabbcc"). */
+const HEX_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 function ok(itemId: string | undefined, summary: string): string {
   const result: WhiteboardToolResult = { success: true, itemId, summary };
@@ -166,6 +193,46 @@ function asString(value: unknown): string | undefined {
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Extract + validate the optional text-style args shared by AddNote / AddText / StyleItem
+ * into an {@link WhiteboardItemPatch}. `allowColor` is true only for text labels — sticky
+ * tints are categorical and agent violet comes from authorship, never from `Color`.
+ */
+function textStylePatch(args: Record<string, unknown>, allowColor: boolean): { patch: WhiteboardItemPatch } | { error: string } {
+  const patch: WhiteboardItemPatch = {};
+  if (args['fontSize'] !== undefined) {
+    const size = asNumber(args['fontSize']);
+    if (size === undefined || !WHITEBOARD_FONT_SIZES.includes(size)) {
+      return { error: `"fontSize" must be one of ${WHITEBOARD_FONT_SIZES.join(', ')}.` };
+    }
+    patch.FontSize = size;
+  }
+  if (args['fontFamily'] !== undefined) {
+    const family = args['fontFamily'];
+    if (typeof family !== 'string' || !(WHITEBOARD_FONT_FAMILIES as readonly string[]).includes(family)) {
+      return { error: `"fontFamily" must be one of ${WHITEBOARD_FONT_FAMILIES.join(', ')}.` };
+    }
+    patch.FontFamily = family as WhiteboardFontFamily;
+  }
+  if (args['bold'] !== undefined) {
+    if (typeof args['bold'] !== 'boolean') {
+      return { error: '"bold" must be a boolean.' };
+    }
+    patch.FontWeight = args['bold'] ? 700 : 400;
+  }
+  if (args['color'] !== undefined) {
+    if (!allowColor) {
+      return { error: '"color" only applies to text labels.' };
+    }
+    const color = args['color'];
+    if (typeof color !== 'string' || !HEX_COLOR.test(color)) {
+      return { error: '"color" must be a hex color like "#fbbf24".' };
+    }
+    patch.Color = color;
+  }
+  return { patch };
 }
 
 /** Auto-placement when the agent omits coordinates: just right of existing content. */
@@ -217,6 +284,7 @@ export function ApplyWhiteboardAgentTool(state: WhiteboardState, toolName: strin
     case WHITEBOARD_TOOL_NAMES.Highlight: return highlight(state, args);
     case WHITEBOARD_TOOL_NAMES.MoveItem: return moveItem(state, args);
     case WHITEBOARD_TOOL_NAMES.RemoveItem: return removeItem(state, args);
+    case WHITEBOARD_TOOL_NAMES.StyleItem: return styleItem(state, args);
     default:
       return fail(`Unknown whiteboard tool "${toolName}".`);
   }
@@ -227,10 +295,15 @@ function addNote(state: WhiteboardState, args: Record<string, unknown>): string 
   if (!text) {
     return fail('AddNote requires a non-empty "text".');
   }
+  const style = textStylePatch(args, false);
+  if ('error' in style) {
+    return fail(`AddNote: ${style.error}`);
+  }
   const place = autoPlace(state);
   const x = asNumber(args['x']) ?? place.X;
   const y = asNumber(args['y']) ?? place.Y;
-  const item = state.RunBatch(() => state.AddItem({ Kind: 'sticky', X: x, Y: y, Text: text, Rotation: 1.2 }, 'agent'));
+  const item = state.RunBatch(() =>
+    state.AddItem({ Kind: 'sticky', X: x, Y: y, Text: text, Rotation: 1.2, ...style.patch }, 'agent'));
   return ok(item.ID, `Added sticky note "${text}" at (${Math.round(x)}, ${Math.round(y)}).`);
 }
 
@@ -259,10 +332,14 @@ function addText(state: WhiteboardState, args: Record<string, unknown>): string 
   if (!text) {
     return fail('AddText requires a non-empty "text".');
   }
+  const style = textStylePatch(args, false);
+  if ('error' in style) {
+    return fail(`AddText: ${style.error}`);
+  }
   const place = autoPlace(state);
   const x = asNumber(args['x']) ?? place.X;
   const y = asNumber(args['y']) ?? place.Y;
-  const item = state.RunBatch(() => state.AddItem({ Kind: 'text', X: x, Y: y, Text: text }, 'agent'));
+  const item = state.RunBatch(() => state.AddItem({ Kind: 'text', X: x, Y: y, Text: text, ...style.patch }, 'agent'));
   return ok(item.ID, `Added text label "${text}".`);
 }
 
@@ -349,4 +426,29 @@ function removeItem(state: WhiteboardState, args: Record<string, unknown>): stri
   }
   state.RunBatch(() => state.RemoveItem(itemId, 'agent'));
   return ok(itemId, `Removed ${itemId}.`);
+}
+
+function styleItem(state: WhiteboardState, args: Record<string, unknown>): string {
+  const itemId = asString(args['itemId']);
+  if (!itemId) {
+    return fail('StyleItem requires "itemId".');
+  }
+  const item = state.GetItem(itemId);
+  if (!item) {
+    return fail(`StyleItem: no item with id "${itemId}".`);
+  }
+  if (item.Kind !== 'sticky' && item.Kind !== 'text') {
+    return fail(`StyleItem only styles sticky notes and text labels (got a ${item.Kind}).`);
+  }
+  const style = textStylePatch(args, item.Kind === 'text');
+  if ('error' in style) {
+    return fail(`StyleItem: ${style.error}`);
+  }
+  if (Object.keys(style.patch).length === 0) {
+    return fail('StyleItem requires at least one of "fontSize", "fontFamily", "bold" or "color".');
+  }
+  // ONE UpdateItem inside ONE batch — a single undo step and a single journal entry,
+  // so the toast Undo reverts it whole and the perception feed sees one update.
+  state.RunBatch(() => state.UpdateItem(itemId, style.patch, 'agent'));
+  return ok(itemId, `Restyled ${itemId}.`);
 }

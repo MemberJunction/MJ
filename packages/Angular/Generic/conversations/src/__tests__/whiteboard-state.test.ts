@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   WhiteboardChange, WhiteboardConnectorItem, WhiteboardInkItem, WhiteboardShapeItem,
-  WhiteboardState, WhiteboardStickyItem
+  WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
 } from '../lib/components/realtime/whiteboard/whiteboard-state';
 import {
   ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_NAMES, WhiteboardToolResult
@@ -319,6 +319,18 @@ describe('ApplyWhiteboardAgentTool', () => {
       expect(bad.success).toBe(false);
       expect(bad.error).toContain('text');
     });
+
+    it('should apply a curated fontSize and reject off-step sizes', () => {
+      const ok = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddNote,
+        JSON.stringify({ text: 'big idea', fontSize: 18 })));
+      expect(ok.success).toBe(true);
+      expect((state.GetItem(ok.itemId as string) as WhiteboardStickyItem).FontSize).toBe(18);
+
+      const bad = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddNote,
+        JSON.stringify({ text: 'x', fontSize: 13 })));
+      expect(bad.success).toBe(false);
+      expect(bad.error).toContain('fontSize');
+    });
   });
 
   describe('Whiteboard_AddShape', () => {
@@ -346,6 +358,31 @@ describe('ApplyWhiteboardAgentTool', () => {
       expect(state.GetItem(ok.itemId as string)?.Kind).toBe('text');
       const bad = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddText, '{}'));
       expect(bad.success).toBe(false);
+    });
+
+    it('should apply optional style args and reject bad values', () => {
+      const ok = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddText,
+        JSON.stringify({ text: 'headline', fontSize: 24, fontFamily: 'mono', bold: true })));
+      expect(ok.success).toBe(true);
+      const item = state.GetItem(ok.itemId as string) as WhiteboardTextItem;
+      expect(item.FontSize).toBe(24);
+      expect(item.FontFamily).toBe('mono');
+      expect(item.FontWeight).toBe(700);
+
+      const badSize = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddText,
+        JSON.stringify({ text: 'x', fontSize: 99 })));
+      expect(badSize.success).toBe(false);
+      expect(badSize.error).toContain('fontSize');
+
+      const badFamily = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddText,
+        JSON.stringify({ text: 'x', fontFamily: 'comic-sans' })));
+      expect(badFamily.success).toBe(false);
+      expect(badFamily.error).toContain('fontFamily');
+
+      const badBold = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddText,
+        JSON.stringify({ text: 'x', bold: 'yes' })));
+      expect(badBold.success).toBe(false);
+      expect(badBold.error).toContain('bold');
     });
   });
 
@@ -437,6 +474,85 @@ describe('ApplyWhiteboardAgentTool', () => {
     });
   });
 
+  describe('Whiteboard_StyleItem', () => {
+    it('should restyle a text label (size / family / bold / color) as one agent-authored update', () => {
+      const text = state.AddItem({ Kind: 'text', X: 10, Y: 20, Text: 'label' }, 'user');
+      const authors: string[] = [];
+      const ops: string[] = [];
+      state.Changed$.subscribe((c) => { authors.push(c.Author); ops.push(c.Op); });
+
+      const ok = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.StyleItem,
+        JSON.stringify({ itemId: text.ID, fontSize: 32, fontFamily: 'serif', bold: true, color: '#fbbf24' })));
+      expect(ok.success).toBe(true);
+      expect(ok.itemId).toBe(text.ID);
+
+      const styled = state.GetItem(text.ID) as WhiteboardTextItem;
+      expect(styled.FontSize).toBe(32);
+      expect(styled.FontFamily).toBe('serif');
+      expect(styled.FontWeight).toBe(700);
+      expect(styled.Color).toBe('#fbbf24');
+
+      // ONE agent-authored update change, ONE undo step reverts the whole restyle
+      expect(ops).toEqual(['update']);
+      expect(authors).toEqual(['agent']);
+      state.Undo();
+      const reverted = state.GetItem(text.ID) as WhiteboardTextItem;
+      expect(reverted.FontSize).toBeUndefined();
+      expect(reverted.Color).toBeUndefined();
+    });
+
+    it('should restyle a sticky note font but reject color on stickies', () => {
+      const sticky = state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'note' }, 'user');
+      const ok = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.StyleItem,
+        JSON.stringify({ itemId: sticky.ID, fontSize: 14, bold: false })));
+      expect(ok.success).toBe(true);
+      const styled = state.GetItem(sticky.ID) as WhiteboardStickyItem;
+      expect(styled.FontSize).toBe(14);
+      expect(styled.FontWeight).toBe(400);
+
+      const badColor = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.StyleItem,
+        JSON.stringify({ itemId: sticky.ID, color: '#fbbf24' })));
+      expect(badColor.success).toBe(false);
+      expect(badColor.error).toContain('color');
+    });
+
+    it('should reject missing/unknown ids, non-text kinds, empty patches and bad values', () => {
+      const shape = state.AddItem({ Kind: 'shape', Shape: 'rect', X: 0, Y: 0, W: 100, H: 50, Label: 'Box' }, 'user');
+      const text = state.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 't' }, 'user');
+
+      const noId = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.StyleItem, '{"fontSize":18}'));
+      expect(noId.success).toBe(false);
+      expect(noId.error).toContain('itemId');
+
+      const unknown = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.StyleItem,
+        '{"itemId":"text-99","bold":true}'));
+      expect(unknown.success).toBe(false);
+      expect(unknown.error).toContain('text-99');
+
+      const wrongKind = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.StyleItem,
+        JSON.stringify({ itemId: shape.ID, bold: true })));
+      expect(wrongKind.success).toBe(false);
+      expect(wrongKind.error).toContain('shape');
+
+      const empty = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.StyleItem,
+        JSON.stringify({ itemId: text.ID })));
+      expect(empty.success).toBe(false);
+      expect(empty.error).toContain('at least one');
+
+      const badSize = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.StyleItem,
+        JSON.stringify({ itemId: text.ID, fontSize: 11 })));
+      expect(badSize.success).toBe(false);
+
+      const badColor = parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.StyleItem,
+        JSON.stringify({ itemId: text.ID, color: 'tomato' })));
+      expect(badColor.success).toBe(false);
+      expect(badColor.error).toContain('hex');
+
+      // nothing mutated by any of the failures
+      expect((state.GetItem(text.ID) as WhiteboardTextItem).FontSize).toBeUndefined();
+    });
+  });
+
   describe('agent tool batching + flagging', () => {
     it('should run each tool call as one undo batch with agent-authored changes', () => {
       const authors: string[] = [];
@@ -451,8 +567,8 @@ describe('ApplyWhiteboardAgentTool', () => {
 });
 
 describe('WHITEBOARD_TOOL_DEFINITIONS', () => {
-  it('should describe all seven channel tools with parameter schemas', () => {
-    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(7);
+  it('should describe all eight channel tools with parameter schemas', () => {
+    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(8);
     const names = WHITEBOARD_TOOL_DEFINITIONS.map((d) => d.Name);
     expect(names).toEqual(Object.values(WHITEBOARD_TOOL_NAMES));
     for (const def of WHITEBOARD_TOOL_DEFINITIONS) {

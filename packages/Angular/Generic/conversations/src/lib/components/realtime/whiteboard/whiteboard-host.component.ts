@@ -4,7 +4,8 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
-import { WhiteboardState } from './whiteboard-state';
+import { WhiteboardFontFamily, WhiteboardState } from './whiteboard-state';
+import { BuildWhiteboardExportHtml, BuildWhiteboardExportSvg } from './whiteboard-export';
 import { ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_NAMES, WhiteboardToolResult } from './whiteboard-tools';
 import { RealtimeWhiteboardBoardComponent, WhiteboardAgentPresence } from './whiteboard-board.component';
 import { RealtimeWhiteboardToolbarComponent, WhiteboardTool, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
@@ -71,10 +72,15 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   public PenColor: string = WHITEBOARD_PEN_COLORS[0];
   public PenWidth = 4;
   public ShapeKind: 'rect' | 'ellipse' | 'diamond' = 'rect';
+  public TextSize = 12;
+  public TextFamily: WhiteboardFontFamily = 'sans';
+  public TextBold = true;
+  public TextColor: string | null = null;
 
   // header state
   public SeesOpen = false;
   public FocusMode = false;
+  public ExportOpen = false;
 
   // agent garnish state
   public AgentPresence: WhiteboardAgentPresence | null = null;
@@ -168,6 +174,72 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   public ToggleFocus(): void {
     this.FocusMode = !this.FocusMode;
     this.FocusModeChange.emit(this.FocusMode);
+  }
+
+  // ────────────────────────────────────────────── export menu
+
+  public ToggleExport(event: Event): void {
+    event.stopPropagation();
+    this.ExportOpen = !this.ExportOpen;
+  }
+
+  @HostListener('document:click')
+  public CloseExport(): void {
+    if (this.ExportOpen) {
+      this.ExportOpen = false;
+    }
+  }
+
+  /** Download the board as one self-contained HTML document. */
+  public ExportDownloadHtml(): void {
+    this.downloadBlob(this.buildExportHtml(), 'text/html', `whiteboard-${RealtimeWhiteboardHostComponent.exportDateStamp()}.html`);
+    this.ExportOpen = false;
+  }
+
+  /** Download the board as a standalone SVG document. */
+  public ExportDownloadSvg(): void {
+    this.downloadBlob(BuildWhiteboardExportSvg(this.State), 'image/svg+xml', `whiteboard-${RealtimeWhiteboardHostComponent.exportDateStamp()}.svg`);
+    this.ExportOpen = false;
+  }
+
+  /**
+   * Print the board: open a blank window, write the self-contained export document and
+   * invoke the print dialog (same precedent as the artifact viewer's print path). When the
+   * popup is blocked this is a logged no-op — nothing breaks, the user can retry.
+   */
+  public ExportPrint(): void {
+    this.ExportOpen = false;
+    const printWindow = window.open('about:blank', '_blank');
+    if (!printWindow) {
+      console.warn('Whiteboard print: popup was blocked — allow popups for this site and retry.');
+      return;
+    }
+    printWindow.document.write(this.buildExportHtml());
+    printWindow.document.close();
+    printWindow.focus();
+    // let the document lay out before invoking the dialog (artifact-viewer precedent)
+    setTimeout(() => printWindow.print(), 250);
+  }
+
+  private buildExportHtml(): string {
+    return BuildWhiteboardExportHtml(this.State, {
+      Title: this.BoardTitle,
+      AgentName: this.AgentName,
+      GeneratedAt: new Date().toLocaleString()
+    });
+  }
+
+  private downloadBlob(content: string, mimeType: string, fileName: string): void {
+    const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private static exportDateStamp(): string {
+    return new Date().toISOString().slice(0, 10);
   }
 
   // ────────────────────────────────────────────── toast
@@ -339,6 +411,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
       case WHITEBOARD_TOOL_NAMES.Highlight: return 'highlighted a region';
       case WHITEBOARD_TOOL_NAMES.MoveItem: return 'moved an item';
       case WHITEBOARD_TOOL_NAMES.RemoveItem: return 'removed an item';
+      case WHITEBOARD_TOOL_NAMES.StyleItem: return 'restyled an item';
       default: return 'updated the board';
     }
   }

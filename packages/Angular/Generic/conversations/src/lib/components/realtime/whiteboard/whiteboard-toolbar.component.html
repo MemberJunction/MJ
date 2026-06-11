@@ -26,6 +26,39 @@
         </span>
       }
 
+      @if (entry.Tool === 'text' && ActiveTool === 'text') {
+        <span class="pen-flyout text-flyout" (click)="$event.stopPropagation()">
+          @for (size of TextSizes; track size) {
+            <span class="txt-s"
+                  [class.sel]="TextSize === size"
+                  [title]="size + ' px'"
+                  (click)="PickTextSize(size)">{{ size }}</span>
+          }
+          <span class="txt-fams">
+            @for (fam of TextFamilies; track fam.Key) {
+              <span class="txt-f"
+                    [class.sel]="TextFamily === fam.Key"
+                    [title]="fam.Title"
+                    [style.fontFamily]="fam.Stack"
+                    (click)="PickTextFamily(fam.Key)">Ag</span>
+            }
+            <span class="txt-f txt-b"
+                  [class.sel]="TextBold"
+                  title="Bold"
+                  (click)="ToggleTextBold()"><i class="fa-solid fa-bold"></i></span>
+          </span>
+          <span class="txt-colors">
+            @for (color of PenColors; track color) {
+              <span class="pen-c"
+                    [class.sel]="TextColor === color"
+                    [style.background]="color"
+                    (click)="PickTextColor(color)"></span>
+            }
+          </span>
+          <span class="pen-note">violet = {{ AgentName }}'s</span>
+        </span>
+      }
+
       @if (entry.Tool === 'shape' && ActiveTool === 'shape') {
         <span class="pen-flyout shape-flyout" (click)="$event.stopPropagation()">
           @for (shape of ShapeKinds; track shape.Kind) {

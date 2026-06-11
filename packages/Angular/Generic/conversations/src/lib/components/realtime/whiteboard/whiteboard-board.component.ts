@@ -6,11 +6,12 @@ import { CommonModule } from '@angular/common';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import {
-  WHITEBOARD_DEFAULTS, WhiteboardBounds, WhiteboardConnectorItem, WhiteboardHighlightItem,
-  WhiteboardImageItem, WhiteboardInkItem, WhiteboardItem, WhiteboardPoint, WhiteboardShapeItem,
-  WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
+  WHITEBOARD_DEFAULTS, WhiteboardBounds, WhiteboardConnectorItem, WhiteboardFontFamily,
+  WhiteboardHighlightItem, WhiteboardImageItem, WhiteboardInkItem, WhiteboardItem,
+  WhiteboardItemPatch, WhiteboardPoint, WhiteboardShapeItem, WhiteboardState,
+  WhiteboardStickyItem, WhiteboardTextItem
 } from './whiteboard-state';
-import { WhiteboardTool, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
+import { WhiteboardTool, WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 
 /** The agent presence cursor state (input-driven; the host animates it to mutation points). */
 export interface WhiteboardAgentPresence {
@@ -81,6 +82,14 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   @Input() PenWidth = 4;
   /** Selected shape kind for drag-create. */
   @Input() ShapeKind: WhiteboardShapeItem['Shape'] = 'rect';
+  /** Selected text font size for click-placed text (curated steps; 12 = CSS default). */
+  @Input() TextSize = 12;
+  /** Selected text font family for click-placed text. */
+  @Input() TextFamily: WhiteboardFontFamily = 'sans';
+  /** Selected text bold state for click-placed text (labels render bold by default). */
+  @Input() TextBold = true;
+  /** Selected text color for click-placed text (null = theme default). */
+  @Input() TextColor: string | null = null;
   /** Agent presence cursor (pulsing ring + "… is drawing" label), driven by the host. */
   @Input() AgentPresence: WhiteboardAgentPresence | null = null;
 
@@ -278,6 +287,67 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public HighlightTag(item: WhiteboardHighlightItem): string {
     return item.Label || `${item.Author === 'agent' ? this.AgentName : 'You'} highlighted`;
+  }
+
+  // ────────────────────────────────────────────── text styling
+
+  /** Family key → CSS font stack ('sans' = null so the board's default font cascades). */
+  private static readonly FontStacks: Record<WhiteboardFontFamily, string | null> = {
+    sans: null,
+    serif: 'Georgia, "Times New Roman", serif',
+    mono: 'var(--mj-font-mono, ui-monospace, "SF Mono", Menlo, monospace)'
+  };
+
+  /** Inline font-size for a styled text/sticky item (null = the kind's CSS default). */
+  public ItemFontSize(item: WhiteboardStickyItem | WhiteboardTextItem): string | null {
+    return item.FontSize != null ? `${item.FontSize}px` : null;
+  }
+
+  /** Inline font-family stack for a styled text/sticky item (null = inherit). */
+  public ItemFontFamily(item: WhiteboardStickyItem | WhiteboardTextItem): string | null {
+    return item.FontFamily ? RealtimeWhiteboardBoardComponent.FontStacks[item.FontFamily] : null;
+  }
+
+  /** Inline font-weight for a styled text/sticky item (null = the kind's CSS default). */
+  public ItemFontWeight(item: WhiteboardStickyItem | WhiteboardTextItem): string | null {
+    return item.FontWeight != null ? `${item.FontWeight}` : null;
+  }
+
+  /**
+   * Inline color for a USER text label. Agent labels keep their violet authorship
+   * treatment from CSS — `Color` never overrides it.
+   */
+  public ItemTextColor(item: WhiteboardTextItem): string | null {
+    return item.Author === 'user' && item.Color ? item.Color : null;
+  }
+
+  /**
+   * Apply a toolbar style pick to the selected text/sticky item (the "restyle existing"
+   * path — the toolbar emits `StyleSelection`, the host routes it here). No-op when
+   * nothing applicable is selected; color only applies to user text labels.
+   */
+  public ApplyTextStyleToSelection(style: WhiteboardTextStyleEvent): void {
+    const id = this.State.SelectedID;
+    const item = id ? this.State.GetItem(id) : undefined;
+    if (!id || !item || (item.Kind !== 'sticky' && item.Kind !== 'text')) {
+      return;
+    }
+    const patch: WhiteboardItemPatch = {};
+    if (style.FontSize !== undefined) {
+      patch.FontSize = style.FontSize;
+    }
+    if (style.FontFamily !== undefined) {
+      patch.FontFamily = style.FontFamily;
+    }
+    if (style.Bold !== undefined) {
+      patch.FontWeight = style.Bold ? 700 : 400;
+    }
+    if (style.Color !== undefined && item.Kind === 'text') {
+      patch.Color = style.Color;
+    }
+    if (Object.keys(patch).length > 0) {
+      this.State.UpdateItem(id, patch, 'user');
+    }
   }
 
   // ────────────────────────────────────────────── svg path builders
@@ -801,7 +871,18 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   private placeText(p: WhiteboardPoint): void {
-    const item = this.State.AddItem({ Kind: 'text', X: p.X, Y: p.Y - 9, Text: '' }, 'user');
+    // Stamp only non-default style choices so an untouched flyout keeps the default look
+    // (and the compact perception payloads stay free of noise fields).
+    const item = this.State.AddItem({
+      Kind: 'text',
+      X: p.X,
+      Y: p.Y - 9,
+      Text: '',
+      FontSize: this.TextSize !== 12 ? this.TextSize : undefined,
+      FontFamily: this.TextFamily !== 'sans' ? this.TextFamily : undefined,
+      FontWeight: this.TextBold ? undefined : 400,
+      Color: this.TextColor ?? undefined
+    }, 'user');
     this.State.Select(item.ID);
     this.beginEdit(item.ID, true);
   }

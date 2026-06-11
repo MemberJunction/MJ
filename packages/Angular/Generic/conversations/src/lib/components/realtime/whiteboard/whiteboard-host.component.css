@@ -133,6 +133,54 @@
 .head-btn--more {
   padding: 5px 9px;
 }
+
+/* ---------- export menu (Download HTML / Download SVG / Print) ---------- */
+.export-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.export-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 168px;
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 8px);
+  background: var(--mj-bg-surface-elevated);
+  box-shadow: var(--mj-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.3));
+}
+.export-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  border: none;
+  border-radius: var(--mj-radius-sm, 5px);
+  background: transparent;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.export-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.export-item i {
+  width: 14px;
+  text-align: center;
+  color: var(--mj-text-muted);
+}
+.export-item:hover i {
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+}
 @keyframes wb-pulse-ring {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sage) 50%, transparent); }
   70% { box-shadow: 0 0 0 6px transparent; }
