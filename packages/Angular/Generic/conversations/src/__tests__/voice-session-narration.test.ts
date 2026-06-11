@@ -82,6 +82,7 @@ interface VoiceSessionNarrationInternals {
   fireDeferredNarration(): void;
   teardownDelegationProgress(): void;
   teardown(closeServerSession: boolean): Promise<void>;
+  wireClientHandlers(client: unknown): void;
 }
 
 function internals(service: VoiceSessionService): VoiceSessionNarrationInternals {
@@ -785,5 +786,32 @@ describe('VoiceSessionService — delegation lifecycle (thinking state, results,
 
     expect(h.i.delegationBurstStartedAt).toBe(burstStart); // inFlight was non-empty → same burst
     expect(h.i.inFlightCallIds.size).toBe(2);
+  });
+
+  it('TRUE BARGE-IN cancels pending narration (user took the floor) but leaves delegations in flight', () => {
+    // capture the OnInterruption handler through the real wiring path
+    let interrupt: (() => void) | null = null;
+    const wiringClient = {
+      OnStateChange: () => undefined,
+      OnTranscript: () => undefined,
+      OnToolCall: () => undefined,
+      OnError: () => undefined,
+      OnInterruption: (handler: () => void) => { interrupt = handler; }
+    };
+    h.i.wireClientHandlers(wiringClient);
+    expect(interrupt).not.toBeNull();
+
+    void beginDelegation(h, 'c1');
+    h.i.dispatchProgress({ CallID: 'c1', Step: 'action_execution', Message: 'fetching data' });
+    expect(h.i.pendingNarrationMessages).toEqual(['fetching data']);
+    expect(h.i.narrationTimer).not.toBeNull();
+
+    interrupt!();
+
+    expect(h.i.pendingNarrationMessages).toEqual([]); // stale narration discarded
+    expect(h.i.narrationTimer).toBeNull();
+    expect(h.i.inFlightCallIds.has('c1')).toBe(true); // the delegated run keeps running
+    vi.advanceTimersByTime(20000);
+    expect(h.client.SpokenUpdates).toEqual([]); // nothing stale ever spoken
   });
 });

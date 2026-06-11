@@ -851,6 +851,14 @@ export class VoiceSessionService {
     client.OnError((error: RealtimeClientError) => {
       console.error('[VoiceSession] Provider error event:', error);
     });
+    // TRUE BARGE-IN (user input cut off active model output — the driver already stopped
+    // the speech): the user took the floor, so any pending/queued progress narration is
+    // stale — cancel it; the next progress event re-schedules at the session-global pace.
+    // Delegated server-side runs deliberately keep running (barge-in kills SPEECH, not
+    // work — cancelling relayed in-flight runs needs a server cancel channel; deferred).
+    client.OnInterruption(() => {
+      this.cancelPendingNarration();
+    });
   }
 
   /** Maps a client state event onto the UI connection state. */
