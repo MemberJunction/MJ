@@ -42,6 +42,8 @@ export type {
   SearchResult,
   ListContext,
   ListResult,
+  SchemaPromotionResult,
+  PostSyncSchemaPromotionCallback,
 } from './types.js';
 
 // Error classification helpers
@@ -88,6 +90,7 @@ export { ConnectorFactory } from './ConnectorFactory.js';
 // Engines
 export { FieldMappingEngine } from './FieldMappingEngine.js';
 export { MatchEngine } from './MatchEngine.js';
+export { serializeKeyValue } from './KeySerialization.js';
 
 // Services
 export { WatermarkService } from './WatermarkService.js';
@@ -114,6 +117,11 @@ export type { PersistSchemaOptions, PersistSchemaResult } from './IntegrationSch
 
 // ── Restored module exports dropped by the origin/next index.ts merge (union) ──
 export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
+export { CUSTOM_OVERFLOW_COLUMN, computeUnmappedFields, hasUnmappedFields } from './CustomOverflow.js';
+export { planPromotions, inferColumnTypeFromSamples, buildOverflowStats, sanitizeColumnName } from './CustomColumnPromotion.js';
+export { discoverFromStream, pickPrimaryKeyFromStats } from './StreamingDiscovery.js';
+export type { StreamDiscoveryOptions, DiscoveredColumnStat, StreamDiscoveryResult, PkPickOptions, PkStatVerdict } from './StreamingDiscovery.js';
+export type { InferredColumnType, OverflowKeyStats, PromotionCandidate, PromotionPlanOptions } from './CustomColumnPromotion.js';
 export { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
 export type { PartitionDiff } from './HashDiff.js';
 export { mostRecentWinner, parseTimestamp } from './ConflictRecency.js';
