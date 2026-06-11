@@ -344,5 +344,12 @@
       "lastModified": "2026-05-08T00:53:49.018Z",
       "checksum": "41df91fd00c1ad43f8e226361ea0273229325341e37edc1d9a9e134fb4838576"
     }
+  },
+  {
+    "fields": {
+      "Name": "AssemblyAI",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    }
   }
 ]

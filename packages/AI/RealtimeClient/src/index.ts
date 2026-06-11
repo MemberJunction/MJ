@@ -5,3 +5,4 @@ export * from './audio/micCapture';
 export * from './drivers/openAIRealtimeClient';
 export * from './drivers/geminiRealtimeClient';
 export * from './drivers/elevenLabsRealtimeClient';
+export * from './drivers/assemblyAIRealtimeClient';
