@@ -266,6 +266,15 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // Pending navigation state
   public pendingArtifactId: string | null = null;
+  /**
+   * A pending request to open the REALTIME SESSION REVIEW overlay (deep link /
+   * cross-resource nav with `realtimeSessionId`, e.g. the AI Agent Session form's
+   * "open session" pill). Applied once after the chat area renders — this is also the
+   * reference example for invoking an EXISTING realtime session programmatically:
+   * `await chatArea.OpenRealtimeSessionReview(agentSessionId)` (a NEW session starts
+   * through the composer's phone button / `VoiceSessionService.StartVoiceSession`).
+   */
+  public pendingRealtimeSessionId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
   public pendingMessageToSend: string | null = null;
   public pendingAttachmentsToSend: PendingAttachment[] | null = null;
@@ -443,6 +452,30 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       // Load entity asynchronously
       this.loadConversationEntity(conversationId);
     }
+
+    const realtimeSessionId = qp?.['realtimeSessionId'] || (config['realtimeSessionId'] as string);
+    if (realtimeSessionId) {
+      this.pendingRealtimeSessionId = realtimeSessionId;
+      this.applyPendingRealtimeSessionReview();
+    }
+  }
+
+  /** Opens the pending realtime session review once the chat area exists (retries next tick while it renders). */
+  private applyPendingRealtimeSessionReview(): void {
+    const sessionId = this.pendingRealtimeSessionId;
+    if (!sessionId) {
+      return;
+    }
+    if (!this.chatArea) {
+      setTimeout(() => this.applyPendingRealtimeSessionReview(), 50);
+      return;
+    }
+    this.pendingRealtimeSessionId = null;
+    void this.chatArea.OpenRealtimeSessionReview(sessionId).then((opened) => {
+      if (!opened) {
+        console.warn(`Chat: could not open realtime session review for '${sessionId}'`);
+      }
+    });
   }
 
   /**
@@ -453,6 +486,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * was already open instead of the pinned one.
    */
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    const realtimeSessionId = params['realtimeSessionId'] || null;
+    if (realtimeSessionId) {
+      this.pendingRealtimeSessionId = realtimeSessionId;
+      this.applyPendingRealtimeSessionReview();
+    }
     const conversationId = params['conversationId'] || null;
     const artifactId = params['artifactId'] || null;
     const versionNumber = params['versionNumber'] ? parseInt(params['versionNumber'], 10) : null;
@@ -527,6 +565,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       queryParams['artifactId'] = null;
       queryParams['versionNumber'] = null;
     }
+
+    // realtimeSessionId is a one-shot deep-link trigger (e.g. from the AI Agent Session
+    // form). Always clear it from the tab params here — leaving it lingering re-delivers
+    // it on every tab re-focus / popstate, which reopened the review overlay forever
+    // (the live-tested "stuck overlay" bug).
+    queryParams['realtimeSessionId'] = null;
 
     // Use NavigationService to update query params properly
     this.navigationService.UpdateActiveTabQueryParams(queryParams);

@@ -137,7 +137,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AgentTypePromptParams"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -266,7 +266,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadDownstreamPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -274,7 +274,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadUpstreamPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -282,7 +282,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadSelfReadPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -290,7 +290,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadSelfWritePaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -306,7 +306,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="FinalPayloadValidation"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -330,7 +330,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="StartingPayloadValidation"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -496,6 +496,23 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultCoAgentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RootDefaultCoAgentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -554,7 +571,7 @@
             [Record]="record"
             [ShowLabel]="false"
             FieldName="ScopeConfig"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -606,7 +623,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="RerankerConfiguration"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -1255,23 +1272,23 @@
 
     <!-- AI Agents Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgents"
+        SectionKey="mJAIAgentsParentID"
         SectionName="AI Agents"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgents')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentsParentID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgents')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentsParentID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgents', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentsParentID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1322,6 +1339,81 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Types Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentTypes"
+        SectionName="AI Agent Types"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentTypes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Types','DefaultCoAgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Types')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentTypes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentTypes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Sessions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSessions"
+        SectionName="AI Agent Sessions"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSessions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Sessions','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Sessions')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSessions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agents (Default Co-Agent) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentsDefaultCoAgentID"
+        SectionName="AI Agents (Default Co-Agent)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentsDefaultCoAgentID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','DefaultCoAgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentsDefaultCoAgentID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentsDefaultCoAgentID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -14,7 +14,8 @@
  *   npx tsx packages/AI/Vectors/Dupe/scripts/run-dupe-detection.ts
  */
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { Metadata, RunView, LogStatus } from '@memberjunction/core';
+import { LogStatus, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJDuplicateRunEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import sql from 'mssql';
@@ -49,13 +50,13 @@ async function bootstrap() {
     }).connect();
 
     const schema = config.mjCoreSchema || dbSettings.mjCoreSchema || '__mj';
-    await setupSQLServerClient(new SQLServerProviderConfigData(pool, schema));
+    const provider = await setupSQLServerClient(new SQLServerProviderConfigData(pool, schema));
     await UserCache.Instance.Refresh(pool);
     const user = UserCache.Users.find(u => u.Email?.toLowerCase() === 'amith@bluecypress.io')
         ?? UserCache.Users.find(u => u?.Type?.trim().toLowerCase() === 'owner')
         ?? UserCache.Users[0];
     if (!user) throw new Error('No context user found.');
-    return { pool, user, schema };
+    return { pool, provider, user, schema };
 }
 
 /** Delete all prior Duplicate Run data for the Events entity ONLY. */
@@ -75,9 +76,8 @@ async function wipeEventsRuns(pool: sql.ConnectionPool, schema: string): Promise
     LogStatus(`Wiped prior Events duplicate-run data (rows affected: ${JSON.stringify(result.rowsAffected)}).`);
 }
 
-async function createAndTriggerRun(user): Promise<string> {
-    const md = new Metadata();
-    const run = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', user);
+async function createAndTriggerRun(provider: IMetadataProvider, user: UserInfo): Promise<string> {
+    const run = await provider.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', user);
     run.NewRecord();
     run.EntityID = EVENTS_ENTITY_ID;
     run.StartedByUserID = user.ID;
@@ -91,12 +91,11 @@ async function createAndTriggerRun(user): Promise<string> {
     return run.ID;
 }
 
-async function pollUntilDone(user, runID: string): Promise<string> {
-    const md = new Metadata();
+async function pollUntilDone(provider: IMetadataProvider, user: UserInfo, runID: string): Promise<string> {
     const start = Date.now();
     while (Date.now() - start < POLL_TIMEOUT_MS) {
         await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-        const run = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', user);
+        const run = await provider.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', user);
         await run.Load(runID);
         const status = run.ProcessingStatus;
         LogStatus(`  ...status=${status} processed=${run.ProcessedItemCount}/${run.TotalItemCount} ended=${run.EndedAt ? 'yes' : 'no'}`);
@@ -144,13 +143,13 @@ async function verify(pool: sql.ConnectionPool, schema: string, runID: string): 
 }
 
 async function main() {
-    const { pool, user, schema } = await bootstrap();
+    const { pool, provider, user, schema } = await bootstrap();
     console.log(`ContextUser: ${user.Name} (${user.Email})`);
     await AIEngine.Instance.Config(false, user);
 
     await wipeEventsRuns(pool, schema);
-    const runID = await createAndTriggerRun(user);
-    const status = await pollUntilDone(user, runID);
+    const runID = await createAndTriggerRun(provider, user);
+    const status = await pollUntilDone(provider, user, runID);
     console.log(`\nFinal run status: ${status}`);
     await verify(pool, schema, runID);
 
