@@ -1,9 +1,8 @@
-import { Component, ElementRef, EventEmitter, Input, Output, OnDestroy, AfterViewInit, ChangeDetectorRef, TemplateRef, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, Output, OnDestroy, AfterViewInit, ChangeDetectorRef, NgZone, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
-import { AngularSplitModule } from 'angular-split';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { VoiceConnectionState, VoiceSessionService } from '../../services/voice-session.service';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
@@ -13,12 +12,13 @@ import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component'
 import { RealtimeSessionThreadComponent } from './realtime-session-thread.component';
 import { RealtimeChannelStripComponent } from './realtime-channel-strip.component';
 import { RealtimeComposerComponent } from './realtime-composer.component';
-import { RealtimeControlsComponent } from './realtime-controls.component';
 import { RealtimeSurfaceTabsComponent } from './realtime-surface-tabs.component';
 import {
-  ClampSurfacePanelWidth, DefaultSurfacePanelWidth, ParseSurfacePanelPref, SerializeSurfacePanelPref,
-  SURFACE_PANEL_COLLAPSED_WIDTH, SURFACE_PANEL_DEFAULT_WIDTH, SURFACE_PANEL_MIN_WIDTH, SURFACE_PANEL_PREF_KEY
+  ClampSurfacePanelWidth, DefaultSurfacePanelWidth, IsSurfacePanelDrag, ParseSurfacePanelPref,
+  SerializeSurfacePanelPref, SurfacePanelDragWidth,
+  SURFACE_PANEL_COLLAPSED_WIDTH, SURFACE_PANEL_DEFAULT_WIDTH, SURFACE_PANEL_PREF_KEY
 } from './realtime-surface-panel-prefs';
+import { RealtimeDisclosureModel, RealtimeUxDensity, SerializeUxMilestones, REALTIME_UX_PREF_KEY } from './realtime-disclosure';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
@@ -58,9 +58,11 @@ export interface RealtimeStartLiveRequest {
  * fixed app-wide dialog), replacing the conversation view including the composer.
  *
  * Two-column layout:
- *  - MAIN column — {@link RealtimeAgentBannerComponent} (compact identity + turn-state),
- *    the unified {@link RealtimeSessionThreadComponent}, the channel strip, the in-call
- *    {@link RealtimeComposerComponent} and {@link RealtimeControlsComponent}.
+ *  - MAIN column — {@link RealtimeAgentBannerComponent} (the unified APP-BAR: identity +
+ *    turn-state + the disclosure-gated action cluster), the unified
+ *    {@link RealtimeSessionThreadComponent} (or the level-0 pure-audio hero), the channel
+ *    strip, and {@link RealtimeComposerComponent} (the bottom dock: phone-call strip ⇄
+ *    fused minis+composer).
  *  - RIGHT PANEL — {@link RealtimeSurfaceTabsComponent}: the TABBED surface panel.
  *    Tab 1 "Activity" hosts the session activity rail; one tab opens per ARTIFACT a
  *    delegated run produces (auto-focused + flashed on arrival, viewed read-only via the
@@ -101,13 +103,11 @@ export interface RealtimeStartLiveRequest {
   selector: 'mj-realtime-session-overlay',
   imports: [
     CommonModule,
-    AngularSplitModule,
     SharedGenericModule,
     RealtimeAgentBannerComponent,
     RealtimeSessionThreadComponent,
     RealtimeChannelStripComponent,
     RealtimeComposerComponent,
-    RealtimeControlsComponent,
     RealtimeSurfaceTabsComponent,
     RealtimeWhiteboardBoardComponent
   ],
@@ -222,6 +222,22 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   /** Shared session state — single source for the thread AND the activity rail. */
   public readonly State = new RealtimeSessionState();
 
+  /**
+   * PROGRESSIVE DISCLOSURE: the levels/milestones model behind the pure-audio-first UX
+   * (see {@link RealtimeDisclosureModel}). Loaded from UserInfoEngine at construction;
+   * content events ({@link onSessionStateChanged}, {@link onChannelActivity}) raise the
+   * volatile session level; milestones ratchet + persist when the call ends. REVIEW mode
+   * bypasses disclosure entirely — a past session always renders the full console.
+   */
+  public readonly Disclosure = new RealtimeDisclosureModel();
+
+  /**
+   * The strip's Details peek: shows the surface panel ON DEMAND while it isn't earned yet
+   * (disclosure level < 2) — Activity and channel surfaces exist before their content
+   * does. Cleared automatically once content earns the panel for real.
+   */
+  public DetailsPeek = false;
+
   /** Live turn-state from the session service — drives the banner + connecting screen. */
   public readonly ConnectionState$ = this.voice.ConnectionState$;
 
@@ -242,8 +258,39 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     return this.voice.CurrentAgentSessionId;
   }
 
-  /** The tabbed surface panel (right panel) — channel registrations are forwarded to it. */
-  @ViewChild(RealtimeSurfaceTabsComponent) private surfaceTabs?: RealtimeSurfaceTabsComponent;
+  /**
+   * The tabbed surface panel (right panel) — channel registrations are forwarded to it.
+   * A SETTER because the panel is disclosure-gated (`@if`): it can be created LATE (the
+   * first delegation / channel activity reveals it mid-call), at which point any queued
+   * channel registrations and a pending auto-reveal must flush to the fresh instance.
+   */
+  private surfaceTabs?: RealtimeSurfaceTabsComponent;
+  @ViewChild(RealtimeSurfaceTabsComponent)
+  private set surfaceTabsRef(ref: RealtimeSurfaceTabsComponent | undefined) {
+    this.surfaceTabs = ref;
+    if (ref) {
+      this.flushPendingChannelTabs();
+      const reveal = this.pendingRevealKey;
+      if (reveal) {
+        this.pendingRevealKey = null;
+        // Deferred: RevealChannel un-collapses the panel, which feeds the parent's width
+        // binding — never mutate that inside the same change-detection pass.
+        setTimeout(() => ref.RevealChannel(reveal));
+      }
+    }
+  }
+
+  /** The bottom dock — the T-to-type hotkey focuses its input. */
+  @ViewChild(RealtimeComposerComponent) private composer?: RealtimeComposerComponent;
+
+  /** Channel keys already auto-revealed this session (first activity only). */
+  private revealedChannelKeys = new Set<string>();
+
+  /** Auto-reveal that arrived before the (disclosure-gated) panel rendered. */
+  private pendingRevealKey: string | null = null;
+
+  /** Previous Active$ value — edges drive disclosure session begin/ratchet. */
+  private prevActive = false;
 
   /** Template hosting the read-only review whiteboard (root-level, so always resolvable). */
   @ViewChild('reviewBoardTpl') private reviewBoardTpl?: TemplateRef<unknown>;
@@ -272,53 +319,66 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   private subs: Subscription[] = [];
 
   constructor() {
+    this.loadPanelWidthPref();
+    this.loadDisclosurePref();
     this.State.Attach(this.voice);
     this.subs.push(
-      this.State.Changed$.subscribe(() => this.cdr.markForCheck()),
+      // Re-render on merged-state changes; content arrival raises the disclosure level.
+      this.State.Changed$.subscribe(() => this.onSessionStateChanged()),
+      this.Disclosure.Changed$.subscribe(() => this.cdr.markForCheck()),
       // One surface tab per registry-resolved channel plugin (replays the current set).
       this.voice.ActiveChannels$.subscribe(channels => this.registerChannelTabs(channels)),
       // Any channel may request the focus layout through its host context.
       this.voice.ChannelFocus$.subscribe(event => this.onChannelFocus(event.Channel, event.Focused)),
-      // Live/idle flips re-evaluate the review-vs-live branch (IsReviewing).
-      this.voice.Active$.subscribe(() => this.cdr.markForCheck())
+      // The agent ACTED on a channel — auto-reveal its surface tab on first activity.
+      this.voice.ChannelActivity$.subscribe(plugin => this.onChannelActivity(plugin)),
+      // Live/idle flips: reset/ratchet disclosure + re-evaluate the review-vs-live branch.
+      this.voice.Active$.subscribe(active => this.onActiveChanged(active))
     );
   }
 
   ngAfterViewInit(): void {
     this.viewReady = true;
-    this.loadPanelWidthPref();
     this.flushPendingChannelTabs();
     this.registerReviewBoardTab();
     this.registerReviewArtifactTabs();
   }
 
-  // ── Surface-panel sizing (angular-split; width persisted per-user) ─────────
+  // ── Surface-panel sizing (flex layout + pointer-drag handle; width persisted per-user) ──
+  //
+  // The panel width is a PLAIN FIELD rendered via [style.width.px] — there is no split
+  // library with its own internal size state to fight. The resize handle uses the same
+  // mechanics as ui-components' slide-panel (`MjSlidePanelComponent`): mousedown →
+  // document mousemove/mouseup registered OUTSIDE Angular, live clamp while dragging,
+  // adopt + persist on release. A bare CLICK cannot move the panel by construction
+  // (width follows the pointer delta) and the click-vs-drag guard keeps it from being
+  // adopted or persisted.
+
   /** Whether the surface panel is collapsed to its slim strip (reported by the panel). */
   public PanelCollapsed = false;
   /** Wide tier active (a content tab is focused) — drives the DEFAULT width only. */
   public PanelWide = false;
   /** The user's explicit dragged width (persisted); null = follow the default tiers. */
   private userPanelWidth: number | null = null;
-  /** Current expanded panel width in px (the split area's size). */
+  /** Current expanded panel width in px (rendered as the panel's inline width). */
   public PanelWidthPx = SURFACE_PANEL_DEFAULT_WIDTH;
+  /** True while the resize handle is mid-drag (brand-tints the handle). */
+  public IsPanelResizing = false;
+  private panelResizeStartX = 0;
+  private panelResizeStartWidth = 0;
+  private boundPanelResizeMove = this.onPanelResizeMove.bind(this);
+  private boundPanelResizeEnd = this.onPanelResizeEnd.bind(this);
   private hostRef = inject(ElementRef);
+  private ngZone = inject(NgZone);
 
-  /** The split area size: slim strip when collapsed, otherwise the current width. */
+  /** The panel's rendered width: slim strip when collapsed, otherwise the current width. */
   public get PanelAreaSize(): number {
     return this.PanelCollapsed ? SURFACE_PANEL_COLLAPSED_WIDTH : this.PanelWidthPx;
   }
 
-  public get PanelMinSize(): number {
-    return this.PanelCollapsed ? SURFACE_PANEL_COLLAPSED_WIDTH : SURFACE_PANEL_MIN_WIDTH;
-  }
-
-  /** Gutter dragging is meaningless while collapsed or when the surface fills (focus mode). */
-  public get PanelSplitDisabled(): boolean {
+  /** Resizing is meaningless while collapsed or when the surface fills (focus mode). */
+  public get PanelResizeDisabled(): boolean {
     return this.PanelCollapsed || this.ChannelFocusMode;
-  }
-
-  public get PanelGutterSize(): number {
-    return this.PanelSplitDisabled ? 1 : 7;
   }
 
   public OnPanelCollapsedChange(collapsed: boolean): void {
@@ -335,29 +395,80 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.cdr.markForCheck();
   }
 
-  /** Drag end on the split gutter: clamp, adopt as the explicit width, persist (debounced). */
-  public OnPanelDragEnd(event: { sizes: Array<number | '*'> }): void {
-    const raw = event.sizes[event.sizes.length - 1];
-    const px = typeof raw === 'number' ? raw : Number.NaN;
-    if (!Number.isFinite(px)) {
+  /** Mousedown on the resize handle: capture the start state and track the pointer document-wide. */
+  public OnPanelResizeStart(event: MouseEvent): void {
+    if (this.PanelResizeDisabled) {
       return;
     }
-    const clamped = ClampSurfacePanelWidth(px, this.hostWidth());
-    this.userPanelWidth = clamped;
-    this.PanelWidthPx = clamped;
-    this.persistPanelWidth(clamped);
+    event.preventDefault();
+    this.IsPanelResizing = true;
+    this.panelResizeStartX = event.clientX;
+    this.panelResizeStartWidth = this.PanelWidthPx;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    this.ngZone.runOutsideAngular(() => {
+      document.addEventListener('mousemove', this.boundPanelResizeMove);
+      document.addEventListener('mouseup', this.boundPanelResizeEnd);
+    });
+    this.cdr.markForCheck();
   }
 
-  /** Double-click the gutter: back to the default tier width; persist the reset. */
-  public OnPanelGutterReset(): void {
+  /** Live drag: panel width follows the pointer delta, clamped to [min, 70% of the overlay]. */
+  private onPanelResizeMove(event: MouseEvent): void {
+    if (!this.IsPanelResizing) {
+      return;
+    }
+    this.PanelWidthPx = SurfacePanelDragWidth(
+      this.panelResizeStartWidth, this.panelResizeStartX, event.clientX, this.hostWidth()
+    );
+    this.ngZone.run(() => this.cdr.markForCheck());
+  }
+
+  /**
+   * Release: a genuine DRAG adopts the width as the user's explicit preference and
+   * persists it (debounced); a bare CLICK (movement under the tolerance) restores the
+   * start width and persists nothing — the handle never snaps on a click.
+   */
+  private onPanelResizeEnd(event: MouseEvent): void {
+    if (!this.IsPanelResizing) {
+      return;
+    }
+    this.teardownPanelResize();
+    if (IsSurfacePanelDrag(this.panelResizeStartX, event.clientX)) {
+      this.userPanelWidth = this.PanelWidthPx;
+      this.persistPanelWidth(this.PanelWidthPx);
+    } else {
+      this.PanelWidthPx = this.panelResizeStartWidth;
+    }
+    this.ngZone.run(() => {
+      this.IsPanelResizing = false;
+      this.cdr.markForCheck();
+    });
+  }
+
+  /** Double-click the handle: back to the default tier width; persist the reset. */
+  public OnPanelResizeReset(): void {
     this.userPanelWidth = null;
     this.PanelWidthPx = DefaultSurfacePanelWidth(this.PanelWide, this.hostWidth());
     this.persistPanelWidth(null);
     this.cdr.markForCheck();
   }
 
+  /** Removes the document-wide drag listeners and restores the body cursor/selection. */
+  private teardownPanelResize(): void {
+    document.removeEventListener('mousemove', this.boundPanelResizeMove);
+    document.removeEventListener('mouseup', this.boundPanelResizeEnd);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }
+
+  /**
+   * The overlay's measurable width for clamping. The component host is
+   * `display: contents` (zero rect) — measure the rendered `.call-overlay` div instead.
+   */
   private hostWidth(): number {
-    const el = this.hostRef.nativeElement as HTMLElement;
+    const host = this.hostRef.nativeElement as HTMLElement;
+    const el = (host.firstElementChild as HTMLElement | null) ?? host;
     return el.getBoundingClientRect ? el.getBoundingClientRect().width : 0;
   }
 
@@ -367,7 +478,10 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       const pref = ParseSurfacePanelPref(UserInfoEngine.Instance.GetSetting(SURFACE_PANEL_PREF_KEY));
       if (pref) {
         this.userPanelWidth = pref.Width;
+        // hostWidth() is 0 before first layout — the clamp then enforces only the
+        // minimum, and the 70% cap re-applies on the next real drag.
         this.PanelWidthPx = ClampSurfacePanelWidth(pref.Width, this.hostWidth());
+        this.cdr.markForCheck();
       }
     } catch {
       // UserInfoEngine not configured (plain-node tests / early bootstrap) — default tiers apply.
@@ -383,7 +497,173 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     }
   }
 
+  // ── Progressive disclosure (the console that grows with you) ────────────────
+
+  /** True while the PURE-AUDIO hero owns the main column (level 0, live, connected). */
+  public get ShowHero(): boolean {
+    return !this.IsReviewing && !this.Disclosure.ShowThread;
+  }
+
+  /** Whether the surface-panel area renders: earned (level 2+), peeked, or reviewing. */
+  public get ShowPanelArea(): boolean {
+    return this.IsReviewing || this.Disclosure.ShowPanel || this.DetailsPeek;
+  }
+
+  /** Whether the strip offers the Details peek (only while the panel isn't earned). */
+  public get ShowDetailsControl(): boolean {
+    return !this.IsReviewing && !this.Disclosure.ShowPanel;
+  }
+
+  /** Reads the persisted disclosure milestones (tolerant; defaults to day one). */
+  private loadDisclosurePref(): void {
+    try {
+      this.Disclosure.Load(UserInfoEngine.Instance.GetSetting(REALTIME_UX_PREF_KEY));
+    } catch {
+      // UserInfoEngine not configured (plain-node tests / early bootstrap) — day-one defaults.
+      this.Disclosure.Load(null);
+    }
+  }
+
+  /** Persists the disclosure milestones server-side (debounced, best-effort). */
+  private persistDisclosure(serialized: string): void {
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(REALTIME_UX_PREF_KEY, serialized);
+    } catch {
+      // engine unavailable — the ratchet still applies for this browser session
+    }
+  }
+
+  /**
+   * Merged-state change: re-render only. DELIBERATELY no disclosure raise — per product
+   * direction, content never flips the console open: a running delegation is narrated
+   * aloud, a finished artifact lands as a GLOWING (unfocused) tab, and the ONLY thing
+   * that auto-reveals is a channel's first agent activity (the whiteboard demands eyes).
+   * A pure-audio user stays in pure audio until THEY ask for more.
+   */
+  private onSessionStateChanged(): void {
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * The agent ACTED on a channel (a tool call routed to its local executor — e.g. the
+   * first whiteboard write). THE ONE AUTO-REVEAL: the surface panel opens (as a peek —
+   * the left column stays exactly as it was, pure audio included) with the channel's tab
+   * focused and flashed, exactly once per channel — so the user discovers the board the
+   * moment it comes alive. Disclosure levels are NOT raised: no text, no composer, no
+   * extra chrome — just the board.
+   */
+  private onChannelActivity(plugin: BaseRealtimeChannelClient): void {
+    if (this.IsReviewing || this.revealedChannelKeys.has(plugin.ChannelName)) {
+      return;
+    }
+    this.revealedChannelKeys.add(plugin.ChannelName);
+    this.DetailsPeek = true; // the panel shows via the same on-demand mechanism Details uses
+    if (this.surfaceTabs) {
+      const tabs = this.surfaceTabs;
+      setTimeout(() => tabs.RevealChannel(plugin.ChannelName));
+    } else {
+      // Panel not rendered yet (the peek just created it) — reveal once it exists.
+      this.pendingRevealKey = plugin.ChannelName;
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Active$ edges: session start resets the volatile level; session end ratchets + persists. */
+  private onActiveChanged(active: boolean): void {
+    if (active && !this.prevActive) {
+      this.Disclosure.BeginSession();
+      this.DetailsPeek = false;
+      this.revealedChannelKeys.clear();
+      this.pendingRevealKey = null;
+    } else if (!active && this.prevActive) {
+      this.persistDisclosure(this.Disclosure.RatchetOnSessionEnd());
+    }
+    this.prevActive = active;
+    this.cdr.markForCheck();
+  }
+
+  /** The strip's Details control: peek at (or hide) the surface panel on demand. */
+  public OnDetailsToggled(): void {
+    this.DetailsPeek = !this.DetailsPeek;
+    if (this.DetailsPeek) {
+      // Land on the marquee surface (channels lead the strip; Activity is pinned last).
+      setTimeout(() => this.surfaceTabs?.FocusFirstTab());
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** The gear popover picked an interface density — apply + persist immediately. */
+  public OnDensityChanged(density: RealtimeUxDensity): void {
+    this.Disclosure.SetDensity(density);
+    this.persistDisclosure(SerializeUxMilestones(this.Disclosure.Milestones));
+  }
+
+  /** The hero's "Show the conversation" affordance — reveals the caption thread. */
+  public OnTextReveal(): void {
+    this.Disclosure.Raise('text');
+  }
+
+  /** App-bar Minimize: hide the call view (CSS) — the call stays fully live. */
+  public OnMinimize(): void {
+    this.voice.SetMinimized(true);
+  }
+
+  /** App-bar / strip End: tear the session down, then notify the host. */
+  public async OnEndCall(): Promise<void> {
+    await this.voice.EndVoiceSession();
+    this.Ended.emit();
+  }
+
+  /** Maps the realtime state onto the hero orb's `data-state` (active turn-states only). */
+  public HeroOrbState(state: VoiceConnectionState): 'speaking' | 'listening' | 'thinking' {
+    switch (state) {
+      case 'speaking': return 'speaking';
+      case 'thinking': return 'thinking';
+      default: return 'listening';
+    }
+  }
+
+  /** Short first-person status line for the pure-audio hero. */
+  public HeroStateLabel(state: VoiceConnectionState): string {
+    switch (state) {
+      case 'speaking': return `${this.AgentName} is speaking…`;
+      case 'thinking': return `${this.AgentName} is working…`;
+      case 'listening': return 'Listening';
+      case 'connecting': return 'Connecting…';
+      case 'error': return 'Connection error';
+      default: return 'On call';
+    }
+  }
+
+  /**
+   * T-TO-TYPE: pressing T during a live call reveals the composer (raising disclosure to
+   * the engaged level when needed) and focuses its input — typing always exists, it just
+   * whispers until used. Ignored while review/minimized, with modifiers, or when an
+   * editable element already has focus.
+   */
+  @HostListener('document:keydown', ['$event'])
+  public OnDocumentKeydown(event: KeyboardEvent): void {
+    if (this.Hidden || this.IsReviewing || !this.voice.IsActive) {
+      return;
+    }
+    if ((event.key !== 't' && event.key !== 'T') || event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      return;
+    }
+    event.preventDefault();
+    this.Disclosure.Raise('engaged');
+    // The dock may have just been created by the raise — focus after this CD pass.
+    setTimeout(() => this.composer?.FocusInput());
+  }
+
   ngOnDestroy(): void {
+    if (this.IsPanelResizing) {
+      this.teardownPanelResize();
+      this.IsPanelResizing = false;
+    }
     for (const sub of this.subs) {
       sub.unsubscribe();
     }
@@ -475,11 +755,6 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   /** The banner's dev link asked to open the live agent session record. */
   public OnOpenSessionRequested(sessionId: string): void {
     this.requestNavigate('MJ: AI Agent Sessions', sessionId);
-  }
-
-  /** Bubble up the end-of-call. */
-  public OnEnded(): void {
-    this.Ended.emit();
   }
 
   // ── Session review mode ────────────────────────────────────────────────────

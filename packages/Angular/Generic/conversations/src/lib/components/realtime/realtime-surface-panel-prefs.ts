@@ -75,6 +75,33 @@ export function ClampSurfacePanelWidth(width: number, overlayWidth: number): num
 }
 
 /**
+ * Pointer movement (px) below which a completed resize-handle gesture is treated as a
+ * bare CLICK rather than a drag — clicks must never move, adopt, or persist a width.
+ */
+export const SURFACE_PANEL_DRAG_CLICK_TOLERANCE = 3;
+
+/**
+ * The live panel width while the resize handle is being dragged. The panel sits on the
+ * RIGHT of the overlay, so moving the pointer LEFT grows it:
+ * `startWidth + (startX - clientX)`, clamped to the standard
+ * [{@link SURFACE_PANEL_MIN_WIDTH}, 70% of the overlay] band.
+ */
+export function SurfacePanelDragWidth(startWidth: number, startX: number, clientX: number, overlayWidth: number): number {
+  return ClampSurfacePanelWidth(startWidth + (startX - clientX), overlayWidth);
+}
+
+/**
+ * Click-vs-drag guard: a completed handle gesture only counts as a DRAG (adopt + persist
+ * the resulting width) when the pointer moved at least
+ * {@link SURFACE_PANEL_DRAG_CLICK_TOLERANCE}px horizontally. Non-finite coordinates
+ * (degenerate events) are never a drag.
+ */
+export function IsSurfacePanelDrag(startX: number, endX: number): boolean {
+  return Number.isFinite(startX) && Number.isFinite(endX)
+    && Math.abs(endX - startX) >= SURFACE_PANEL_DRAG_CLICK_TOLERANCE;
+}
+
+/**
  * Parses a raw persisted preference value. Returns `null` (no preference) for
  * missing / blank / malformed JSON, non-object payloads, and non-finite or
  * non-positive widths — a reset is stored as `{ "width": null }`, which also

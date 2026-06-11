@@ -5,20 +5,17 @@
        [class.board-focus]="ChannelFocusMode"
        role="region" [attr.aria-label]="IsReviewing ? 'Past session review' : 'Live voice session'">
 
-    <!-- Resizable two-area layout (angular-split, px units): main call column | surface
-         panel. The gutter drags the panel width (clamped, persisted per-user via
-         UserInfoEngine; double-click resets to the default tier). Collapsed strip and
-         board-focus modes disable the gutter; focus mode hides the main area. -->
-    <as-split class="call-split" direction="horizontal" unit="pixel"
-              [gutterSize]="PanelGutterSize"
-              [disabled]="PanelSplitDisabled"
-              (dragEnd)="OnPanelDragEnd($event)"
-              (gutterDblClick)="OnPanelGutterReset()">
-    <as-split-area size="*" [minSize]="420" [visible]="!ChannelFocusMode">
-    <!-- MAIN column: banner → thread → channel strip → in-call composer → controls.
-         In SESSION REVIEW the live-only pieces (narration, connecting screen, channel
-         strip, composer) drop out and the controls swap to Start-live + Close. -->
+    <!-- PROGRESSIVE DISCLOSURE (the console that grows with you — Redesign A Progressive):
+         level 0 is PURE AUDIO (the hero orb owns the main column; no thread, no composer;
+         the strip's Details control peeks at the panels on demand); level 1 reveals the
+         caption thread + captions control + type-to-type hint; level 2+ docks the composer
+         and keeps the surface panel. CONTENT NEVER FLIPS THE CONSOLE OPEN: finished
+         artifacts land as glowing unfocused tabs; the ONE auto-reveal is a channel's
+         first agent activity (e.g. the first whiteboard write), which opens the panel as
+         a peek with that tab focused — the left column stays exactly as it was.
+         REVIEW always renders the full console. -->
     <div class="call-main">
+      <!-- The UNIFIED APP-BAR: identity + state + every session action (Redesign A). -->
       <mj-realtime-agent-banner
         [State]="state"
         [AgentName]="AgentName"
@@ -29,21 +26,56 @@
         [ReviewStartedAt]="ReviewStartedAt"
         [ReviewClosedAt]="ReviewClosedAt"
         [ReviewCloseReason]="ReviewCloseReason"
-        (OpenSessionRequested)="OnOpenSessionRequested($event)">
+        [CaptionsOn]="ShowCaptions"
+        [ShowCaptionsControl]="!IsReviewing && Disclosure.ShowThread"
+        [ShowGear]="!IsReviewing && Disclosure.ShowGear"
+        [ShowEnd]="!IsReviewing && Disclosure.ShowComposer"
+        [ShowMinimize]="!IsReviewing"
+        [Density]="Disclosure.Milestones.Density"
+        (OpenSessionRequested)="OnOpenSessionRequested($event)"
+        (CaptionsToggled)="OnCaptionsToggled($event)"
+        (DevModeToggled)="OnDevModeToggled($event)"
+        (DensityChanged)="OnDensityChanged($event)"
+        (MinimizeRequested)="OnMinimize()"
+        (EndRequested)="OnEndCall()"
+        (StartLiveRequested)="OnStartLive()"
+        (CloseRequested)="OnReviewClose()">
       </mj-realtime-agent-banner>
 
       <!-- Ephemeral narration with no active working card to anchor to → under the banner -->
-      @if (!IsReviewing && State.Narration && !State.ActiveCallId) {
+      @if (!IsReviewing && State.Narration && !State.ActiveCallId && Disclosure.ShowThread) {
         <div class="banner-live-note" role="status" aria-live="polite">
           <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
           {{ State.Narration }}
         </div>
       }
 
-      <div class="call-body">
+      <div class="call-body" [class.call-body--hero]="ShowHero && state !== 'connecting'">
         @if (!IsReviewing && state === 'connecting') {
           <div class="call-connecting">
             <mj-loading text="Connecting to the live session…" size="medium"></mj-loading>
+          </div>
+        } @else if (ShowHero) {
+          <!-- PURE-AUDIO HERO (level 0): the orb IS the interface — it breathes with the
+               audio inside expanding sound-wave rings; nothing to read, nothing to configure. -->
+          <div class="hero" [attr.data-state]="state" role="status" aria-live="polite">
+            <div class="hero__stage">
+              <span class="hero__ring" aria-hidden="true"></span>
+              <span class="hero__ring hero__ring--2" aria-hidden="true"></span>
+              <span class="hero__ring hero__ring--3" aria-hidden="true"></span>
+              <div class="hero__orb" [attr.data-state]="HeroOrbState(state)" aria-hidden="true"></div>
+            </div>
+            <div class="hero__eq" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <div class="hero__name">{{ AgentName }}</div>
+            <div class="hero__sub">{{ HeroStateLabel(state) }}</div>
+            <button type="button" class="hero__reveal" (click)="OnTextReveal()"
+                    title="Show the conversation as text">
+              <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+              Show the conversation
+            </button>
           </div>
         } @else {
           <mj-realtime-session-thread
@@ -59,43 +91,53 @@
       </div>
 
       @if (!IsReviewing) {
-        <!-- Active channels -->
-        <mj-realtime-channel-strip></mj-realtime-channel-strip>
+        <!-- Active channels (earned with the console at level 2+) -->
+        @if (Disclosure.ShowComposer) {
+          <mj-realtime-channel-strip></mj-realtime-channel-strip>
+        }
 
-        <!-- In-session text composer (joins the SAME call) -->
-        <mj-realtime-composer></mj-realtime-composer>
+        <!-- The BOTTOM DOCK: phone-call strip (levels 0–1) ⇄ fused minis+composer (level 2+) -->
+        <mj-realtime-composer
+          [Level]="Disclosure.SessionLevel"
+          [CaptionsOn]="ShowCaptions"
+          [ShowDetails]="ShowDetailsControl"
+          [DetailsOn]="DetailsPeek"
+          (CaptionsToggled)="OnCaptionsToggled($event)"
+          (DetailsToggled)="OnDetailsToggled()"
+          (EndRequested)="OnEndCall()">
+        </mj-realtime-composer>
       }
-
-      <!-- Call controls (live) / Start-live + Close (review) -->
-      <mj-realtime-controls
-        [CaptionsOn]="ShowCaptions"
-        [DevMode]="DevMode"
-        [ReviewMode]="IsReviewing"
-        (CaptionsToggled)="OnCaptionsToggled($event)"
-        (DevModeToggled)="OnDevModeToggled($event)"
-        (Ended)="OnEnded()"
-        (StartLiveRequested)="OnStartLive()"
-        (CloseRequested)="OnReviewClose()">
-      </mj-realtime-controls>
     </div>
 
-    <!-- RIGHT: TABBED SURFACE PANEL — Activity rail | one tab per produced artifact |
-         one tab per registry-resolved interactive channel (surfaces created dynamically
-         from each plugin). Collapsible to a slim strip; fills the overlay when a channel
-         surface holds the focus layout. In review it hosts the Activity rail plus the
-         read-only Whiteboard tab when the reviewed session saved a board. -->
-    </as-split-area>
-    <as-split-area [size]="ChannelFocusMode ? '*' : PanelAreaSize" [minSize]="PanelMinSize">
-    <mj-realtime-surface-tabs
-      [State]="State"
-      [DevMode]="DevMode"
-      [CurrentUser]="CurrentUser"
-      [EnvironmentID]="EnvironmentID"
-      [Fill]="ChannelFocusMode"
-      (OpenRunRequested)="OnOpenRunRequested($event)"
-      (CollapsedChange)="OnPanelCollapsedChange($event)"
-      (WideChanged)="OnPanelWideChanged($event)">
-    </mj-realtime-surface-tabs>
+    <!-- RIGHT: TABBED SURFACE PANEL — disclosure-gated: it EXISTS once earned (level 2+,
+         which the first delegation forces), peeked on demand via the strip's Details
+         control, or always in review. Slides in from the right when it arrives — the
+         panel's arrival IS the progress cue. -->
+    @if (ShowPanelArea) {
+      <!-- Resize handle (hidden while the panel is collapsed or a channel holds focus). -->
+      @if (!PanelResizeDisabled) {
+        <div class="call-resizer"
+             [class.call-resizer--active]="IsPanelResizing"
+             role="separator" aria-orientation="vertical"
+             aria-label="Resize the surface panel (double-click to reset)"
+             title="Drag to resize • double-click to reset"
+             (mousedown)="OnPanelResizeStart($event)"
+             (dblclick)="OnPanelResizeReset()"></div>
+      }
+
+      <div class="call-panel" [style.width.px]="ChannelFocusMode ? null : PanelAreaSize">
+        <mj-realtime-surface-tabs
+          [State]="State"
+          [DevMode]="DevMode"
+          [CurrentUser]="CurrentUser"
+          [EnvironmentID]="EnvironmentID"
+          [Fill]="ChannelFocusMode"
+          (OpenRunRequested)="OnOpenRunRequested($event)"
+          (CollapsedChange)="OnPanelCollapsedChange($event)"
+          (WideChanged)="OnPanelWideChanged($event)">
+        </mj-realtime-surface-tabs>
+      </div>
+    }
 
     <!-- FOCUS floating call pill: the main column is hidden, so the live call's
          identity + state + mute / show-thread / end controls ride over the surface. -->
@@ -127,8 +169,6 @@
         </button>
       </div>
     }
-    </as-split-area>
-    </as-split>
 
   </div>
 }

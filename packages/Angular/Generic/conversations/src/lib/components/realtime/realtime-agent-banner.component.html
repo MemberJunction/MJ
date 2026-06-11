@@ -1,6 +1,7 @@
 <div class="banner" [class.banner--review]="ReviewMode">
   @if (ReviewMode) {
-    <!-- SESSION REVIEW: static orb · name · review badge · started→closed · close-reason chip -->
+    <!-- SESSION REVIEW: static orb · name · review badge · started→closed · close-reason chip,
+         with the review's exit actions up here in the header bar (Start live leads, Close trails). -->
     <div class="agent-orb agent-orb--review" aria-hidden="true"></div>
 
     <div class="banner__id">
@@ -24,6 +25,18 @@
     <div class="banner__state banner__state--review">
       <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
       <span class="banner__state-label banner__state-label--review">Reviewing past session</span>
+    </div>
+
+    <div class="bar-actions">
+      <button type="button" class="start-live-pill" (click)="StartLiveRequested.emit()"
+              title="Resume this session as a new live call">
+        <i class="fa-solid fa-phone" aria-hidden="true"></i>
+        <span>Start live session</span>
+      </button>
+      <button type="button" class="iconb" (click)="CloseRequested.emit()"
+              title="Close review" aria-label="Close session review">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
     </div>
   } @else {
     <div class="agent-orb" [attr.data-state]="OrbState(State)" aria-hidden="true"></div>
@@ -55,5 +68,63 @@
       }
       <span class="banner__state-label">{{ StateLabel(State) }}</span>
     </div>
+
+    <!-- Disclosure-gated app-bar action cluster (the overlay decides what renders). -->
+    <div class="bar-actions">
+      @if (ShowCaptionsControl) {
+        <button type="button" class="iconb" [class.iconb--on]="CaptionsOn"
+                (click)="ToggleCaptions()"
+                [title]="CaptionsOn ? 'Hide captions' : 'Show captions'"
+                [attr.aria-pressed]="CaptionsOn">
+          <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+        </button>
+      }
+      @if (ShowGear) {
+        <button type="button" class="iconb" [class.iconb--on]="GearOpen || DevMode"
+                (click)="ToggleGear($event)"
+                title="Interface density &amp; developer links"
+                [attr.aria-expanded]="GearOpen">
+          <i class="fa-solid fa-gear" aria-hidden="true"></i>
+        </button>
+      }
+      @if (ShowMinimize) {
+        <button type="button" class="iconb" (click)="MinimizeRequested.emit()"
+                title="Hide the call view — the call stays live"
+                aria-label="Minimize the call view">
+          <i class="fa-solid fa-down-left-and-up-right-to-center" aria-hidden="true"></i>
+        </button>
+      }
+      @if (ShowEnd) {
+        <span class="bar-sep" aria-hidden="true"></span>
+        <button type="button" class="end-pill" (click)="EndRequested.emit()"
+                title="End call" aria-label="End the call">
+          <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+          <span>End call</span>
+        </button>
+      }
+    </div>
+
+    <!-- Gear popover: interface density (the disclosure escape hatch) + developer links. -->
+    @if (GearOpen) {
+      <div class="gear-pop" (click)="$event.stopPropagation()" role="menu" aria-label="Interface settings">
+        <div class="gp-h">Interface</div>
+        <div class="gp-row">
+          <span class="gp-l">Density</span>
+          <div class="gp-seg" role="radiogroup" aria-label="Interface density">
+            @for (d of Densities; track d.Key) {
+              <button type="button" [class.on]="Density === d.Key"
+                      (click)="SelectDensity(d.Key)"
+                      [attr.aria-checked]="Density === d.Key" role="radio">{{ d.Label }}</button>
+            }
+          </div>
+        </div>
+        <div class="gp-note">Simple returns to the pure-audio surface. Auto grows the console as you use it.</div>
+        <div class="gp-div"></div>
+        <button type="button" class="gp-link" (click)="ToggleDev()" [attr.aria-pressed]="DevMode">
+          <i class="fa-solid" [ngClass]="DevMode ? 'fa-toggle-on' : 'fa-toggle-off'" aria-hidden="true"></i>
+          Developer links {{ DevMode ? 'on' : 'off' }}
+        </button>
+      </div>
+    }
   }
 </div>

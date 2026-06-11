@@ -220,6 +220,7 @@ export class VoiceSessionService {
   private _minimized$ = new BehaviorSubject<boolean>(false);
   private _activeChannels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
   private _channelFocus$ = new Subject<RealtimeChannelFocusEvent>();
+  private _channelActivity$ = new Subject<BaseRealtimeChannelClient>();
 
   /** Current connection / turn state. */
   public readonly ConnectionState$: Observable<VoiceConnectionState> = this._connectionState$.asObservable();
@@ -271,6 +272,14 @@ export class VoiceSessionService {
    */
   public readonly ChannelFocus$: Observable<RealtimeChannelFocusEvent> = this._channelFocus$.asObservable();
 
+  /**
+   * Fires with the channel PLUGIN every time the agent ACTS on that channel (a tool call
+   * was routed to its local executor — e.g. the agent drew on the whiteboard). The overlay
+   * uses the FIRST emission per channel to auto-reveal + focus the channel's surface tab,
+   * so the user discovers the surface the moment the agent starts using it.
+   */
+  public readonly ChannelActivity$: Observable<BaseRealtimeChannelClient> = this._channelActivity$.asObservable();
+
   /** Synchronous access to the session's active interactive-channel plugins. */
   public get ActiveChannels(): readonly BaseRealtimeChannelClient[] {
     return this._activeChannels$.value;
@@ -286,6 +295,27 @@ export class VoiceSessionService {
    * session is open / the session hasn't been minted yet. Powers the overlay's gear-gated
    * "Open session" dev link.
    */
+  /** Conversation id the SERVER created for this session (null when the host supplied one). */
+  private createdConversationId: string | null = null;
+  /** The session's conversation id (supplied or server-created). */
+  private sessionConversationId: string | null = null;
+  /** First final user utterance of the live session (the naming seed). */
+  private firstUserTranscript: string | null = null;
+
+  /**
+   * When the active/last session CREATED its conversation (started without one), the new
+   * conversation's id — the host uses it to refresh the cached list, conditionally select
+   * it on close, and auto-name it. Null when the session joined an existing conversation.
+   */
+  public get SessionCreatedConversationId(): string | null {
+    return this.createdConversationId;
+  }
+
+  /** The first final user utterance of the session (naming seed); null before the user speaks. */
+  public get FirstUserTranscript(): string | null {
+    return this.firstUserTranscript;
+  }
+
   public get CurrentAgentSessionId(): string | null {
     return this.agentSessionId;
   }
@@ -466,6 +496,12 @@ export class VoiceSessionService {
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
       const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId);
       this.agentSessionId = session.AgentSessionId;
+      // A null input conversationId means the SERVER created a fresh conversation for
+      // this session — track it so the host can fold it into the cached list, select
+      // it on close, and auto-name it (via the shared naming helper).
+      this.createdConversationId = !conversationId && session.ConversationId ? session.ConversationId : null;
+      this.sessionConversationId = session.ConversationId ?? conversationId ?? null;
+      this.firstUserTranscript = null;
       this.narrationTemplate = session.NarrationInstructionsTemplate ?? null;
       this._modelName$.next(session.ModelName ?? null);
       // Resume continuity: rehydrate channel plugins from the PRIOR session's saved states
@@ -663,9 +699,12 @@ export class VoiceSessionService {
    */
   private initializeChannel(plugin: BaseRealtimeChannelClient): void {
     plugin.Initialize(this.buildChannelContext(plugin));
-    this.RegisterClientToolHandler(plugin.ToolNamePrefix, (toolName, argsJson) =>
-      plugin.ApplyAgentTool(toolName, argsJson)
-    );
+    this.RegisterClientToolHandler(plugin.ToolNamePrefix, (toolName, argsJson) => {
+      // The agent is ACTING on this channel — surface-discovery signal for the overlay
+      // (first activity auto-reveals + focuses the channel tab) before the tool applies.
+      this._channelActivity$.next(plugin);
+      return plugin.ApplyAgentTool(toolName, argsJson);
+    });
   }
 
   /** Builds the host-services context one channel plugin sees (its only line to the session). */
@@ -961,6 +1000,10 @@ export class VoiceSessionService {
   private async onUserTranscript(transcript: string): Promise<void> {
     if (transcript.trim().length === 0) {
       return;
+    }
+    if (this.firstUserTranscript === null) {
+      // First spoken user utterance — the naming seed for a session-created conversation.
+      this.firstUserTranscript = transcript;
     }
     this.appendCaption({ Role: 'User', Text: transcript });
     await this.relayTranscript('user', transcript);
