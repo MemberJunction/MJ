@@ -2,15 +2,15 @@
  * Skip Callback Key Provisioner
  *
  * Auto-provisions a scoped API key for Skip callbacks on the client MJAPI.
- * On first request, checks for an existing key owned by the Skip service account;
- * if none exists, creates one via APIKeyEngine and assigns the required scopes.
+ * On first request to a Skip host, creates a key and returns the raw value
+ * so SkipSDK can send it once. Skip persists it in its credential store.
  *
- * The raw key is cached in memory for subsequent requests. The key survives
- * server restarts because it's persisted in the database — SkipSDK rediscovers
- * it by querying on the next startup.
+ * On subsequent requests (including after MJ restart), the key record exists
+ * in the DB but the raw value is irrecoverable (hashed). Returns null to
+ * signal "key exists, don't send it — Skip already has it."
  *
- * Thread safety: uses a promise-based mutex so concurrent first requests don't
- * create duplicate keys.
+ * Thread safety: uses a promise-based mutex so concurrent first requests
+ * don't create duplicate keys.
  *
  * @see MJ/plans/skip-callback-scoped-api-keys.md Section 3.2
  */
@@ -18,12 +18,10 @@
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { configInfo } from '../config.js';
 
 /** The email used for the Skip service account (deployed via MJ metadata). */
 const SKIP_SERVICE_EMAIL = 'skip-service@skip.internal';
-
-/** Label used to identify the auto-provisioned callback key. */
-const SKIP_CALLBACK_KEY_LABEL = 'Skip Callback Key (auto-provisioned)';
 
 /**
  * All scope FullPaths that a Skip callback key needs.
@@ -43,28 +41,48 @@ const REQUIRED_SCOPE_PATHS: string[] = [
     'embedding:generate',
 ];
 
-/** Cached raw key — only populated after successful provisioning or discovery. */
-let cachedRawKey: string | null = null;
-
 /** Promise-based mutex: if provisioning is in-flight, subsequent callers await it. */
 let provisioningPromise: Promise<string | null> | null = null;
 
 /**
- * Returns the raw API key for Skip callbacks, auto-provisioning if needed.
+ * Whether provisioning completed successfully this server lifetime (key exists
+ * or was just created). Exported so SkipSDK can distinguish "key exists, Skip
+ * has it" (don't send anything) from "provisioning failed" (fall back to legacy).
+ */
+export let provisioningComplete = false;
+
+/** Raw key from creation — only non-null during the server lifetime that created the key. */
+let createdRawKey: string | null = null;
+
+/**
+ * Builds the label for a Skip callback key scoped to a specific Skip host.
+ * Example: "Skip Callback: https://skip.example.com"
+ */
+function buildKeyLabel(): string {
+    const skipChatUrl = configInfo.askSkip?.chatURL;
+    if (!skipChatUrl) {
+        throw new Error('ASK_SKIP_CHAT_URL is not configured — cannot provision Skip callback key');
+    }
+    return `Skip Callback: ${skipChatUrl}`;
+}
+
+/**
+ * Returns the raw API key for Skip callbacks if one was just created,
+ * or null if the key already exists (Skip already has it stored).
  *
- * - If the key is cached, returns immediately.
- * - If another call is already provisioning, awaits that result.
- * - Otherwise, kicks off provisioning (discover or create + assign scopes).
+ * - First call ever (no key in DB): creates key, returns raw key (send to Skip once)
+ * - Subsequent calls (same server lifetime): returns null (key exists, Skip has it)
+ * - After restart (key in DB, raw lost): returns null (key exists, Skip has it)
  *
- * @returns The raw API key string, or null if provisioning failed (caller should
- *          fall back to the legacy MJ_API_KEY env var during the transition period).
+ * Returns null on provisioning failure — caller should fall back to legacy MJ_API_KEY.
  */
 export async function getSkipCallbackKey(): Promise<string | null> {
-    if (cachedRawKey) {
-        return cachedRawKey;
+    // Fast path: we've already checked this lifetime
+    if (provisioningComplete) {
+        return createdRawKey;
     }
 
-    // Mutex: if provisioning is already in progress, piggyback on that promise
+    // Mutex: if provisioning is in-flight, piggyback on that promise
     if (provisioningPromise) {
         return provisioningPromise;
     }
@@ -78,7 +96,7 @@ export async function getSkipCallbackKey(): Promise<string | null> {
 }
 
 /**
- * The actual provisioning logic. Only one instance of this runs at a time.
+ * The actual provisioning logic. Runs at most once per server lifetime.
  */
 async function provisionInner(): Promise<string | null> {
     try {
@@ -97,29 +115,25 @@ async function provisionInner(): Promise<string | null> {
             return null;
         }
 
-        // Check if a key already exists for this service account.
-        // MJ: API Keys is not cached in APIKeysEngineBase so we hit the DB here.
-        // This only runs once per server lifetime (result is cached either way).
-        const existingKey = await findExistingKey(serviceAccount.ID, systemUser);
+        const label = buildKeyLabel();
+
+        // Check if a key already exists for this service account + Skip host.
+        const existingKey = await findExistingKey(serviceAccount.ID, label, systemUser);
         if (existingKey) {
-            // We found the key record but can't recover the raw key (it's hashed).
-            // The raw key was only available at creation time. Since we can't send
-            // a hashed key to Skip, we log this and return null — the caller falls
-            // back to the legacy MJ_API_KEY flow.
-            //
-            // In practice, this only happens if the server restarts after key
-            // creation but before the raw key was used. The proper fix is Phase 5:
-            // store the raw key encrypted at rest (or rotate and re-provision).
-            LogStatus(`[SkipCallbackKeyProvisioner] Found existing Skip callback key (ID: ${existingKey.ID}) ` +
-                'but raw key is not recoverable. Using legacy MJ_API_KEY fallback.');
+            // Key exists — Skip already received the raw key when it was first created.
+            // We can't recover the raw value (it's hashed), but we don't need to.
+            LogStatus(`[SkipCallbackKeyProvisioner] Found existing Skip callback key (ID: ${existingKey.ID})`);
+            provisioningComplete = true;
+            createdRawKey = null; // Signal: don't send key, Skip already has it
             return null;
         }
 
-        // No existing key — create one
-        const rawKey = await createKeyWithScopes(serviceAccount, systemUser);
+        // No existing key — create one and return the raw value for SkipSDK to send once
+        const rawKey = await createKeyWithScopes(serviceAccount, label, systemUser);
         if (rawKey) {
-            cachedRawKey = rawKey;
-            LogStatus('[SkipCallbackKeyProvisioner] Successfully auto-provisioned Skip callback key');
+            provisioningComplete = true;
+            createdRawKey = rawKey;
+            LogStatus('[SkipCallbackKeyProvisioner] Auto-provisioned new Skip callback key — will send to Skip on this request');
         }
         return rawKey;
     } catch (error: unknown) {
@@ -137,11 +151,11 @@ interface ExistingKeyRow {
     Status: string;
 }
 
-async function findExistingKey(serviceAccountUserID: string, contextUser: UserInfo): Promise<ExistingKeyRow | null> {
+async function findExistingKey(serviceAccountUserID: string, label: string, contextUser: UserInfo): Promise<ExistingKeyRow | null> {
     const rv = new RunView();
     const result = await rv.RunView<ExistingKeyRow>({
         EntityName: 'MJ: API Keys',
-        ExtraFilter: `UserID='${serviceAccountUserID}' AND Label='${SKIP_CALLBACK_KEY_LABEL}' AND Status='Active'`,
+        ExtraFilter: `UserID='${serviceAccountUserID}' AND Label='${label.replace(/'/g, "''")}' AND Status='Active'`,
     }, contextUser);
 
     if (result.Success && result.Results.length > 0) {
@@ -153,12 +167,12 @@ async function findExistingKey(serviceAccountUserID: string, contextUser: UserIn
 /**
  * Creates a new API key for the Skip service account and assigns all required scopes.
  */
-async function createKeyWithScopes(serviceAccount: UserInfo, systemUser: UserInfo): Promise<string | null> {
+async function createKeyWithScopes(serviceAccount: UserInfo, label: string, systemUser: UserInfo): Promise<string | null> {
     const engine = GetAPIKeyEngine();
 
     const createResult = await engine.CreateAPIKey({
         UserId: serviceAccount.ID,
-        Label: SKIP_CALLBACK_KEY_LABEL,
+        Label: label,
         Description: 'Auto-provisioned by SkipSDK for scoped Skip→client callbacks. ' +
             'Do not delete — Skip will re-provision on next request if missing.',
     }, systemUser);
@@ -184,8 +198,6 @@ async function createKeyWithScopes(serviceAccount: UserInfo, systemUser: UserInf
 async function assignScopes(apiKeyID: string, contextUser: UserInfo, engine: ReturnType<typeof GetAPIKeyEngine>): Promise<boolean> {
     const md = new Metadata();
 
-    // Resolve scope IDs from the engine's cached Scopes (loaded at startup).
-    // This avoids a RunView query — scopes are already in memory.
     const cachedScopes = engine.Scopes;
     const scopeMap = new Map(cachedScopes.map(s => [s.FullPath, s.ID]));
 
@@ -196,7 +208,6 @@ async function assignScopes(apiKeyID: string, contextUser: UserInfo, engine: Ret
         return false;
     }
 
-    // Create an APIKeyScope record for each required scope
     let allSaved = true;
     for (const scopePath of REQUIRED_SCOPE_PATHS) {
         const scopeID = scopeMap.get(scopePath)!;

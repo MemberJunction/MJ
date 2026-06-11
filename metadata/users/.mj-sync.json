@@ -17,6 +17,11 @@
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,
     "lookupFields": {},
-    "relatedEntities": {}
+    "relatedEntities": {
+      "MJ: User Roles": {
+        "entity": "MJ: User Roles",
+        "foreignKey": "UserID"
+      }
+    }
   }
 }

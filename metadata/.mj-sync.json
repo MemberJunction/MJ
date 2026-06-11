@@ -66,9 +66,9 @@
     "archiving",
     "entity-form-overrides",
     "entity-settings",
-    "users",
     "roles",
-    "entity-permissions"
+    "entity-permissions",
+    "users"
   ],
   "sqlLogging": {
     "enabled": true,

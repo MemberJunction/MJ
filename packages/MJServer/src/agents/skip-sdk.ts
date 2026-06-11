@@ -30,7 +30,7 @@ import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
 import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as legacyCallbackAPIKey } from '../config.js';
-import { getSkipCallbackKey } from './skip-callback-key-provisioner.js';
+import { getSkipCallbackKey, provisioningComplete as skipKeyProvisioned } from './skip-callback-key-provisioner.js';
 import { getDbType } from '../index.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -423,13 +423,26 @@ export class SkipSDK {
         // Note: requests would be built here if includeRequests is true
 
         // Setup callback auth for Skip→client callbacks if needed
-        let callbackAPIKey: string | undefined;
+        let callingServerURL: string | undefined;
+        let callingServerAPIKey: string | undefined;
         let accessToken: GetDataAccessToken | undefined;
         if (includeCallbackAuth) {
-            // Try the auto-provisioned scoped API key first; fall back to
-            // legacy MJ_API_KEY env var during the transition period.
-            const scopedKey = await getSkipCallbackKey();
-            callbackAPIKey = scopedKey ?? legacyCallbackAPIKey;
+            callingServerURL = publicUrl || `${baseUrl}:${graphqlPort}${graphqlRootPath}`;
+
+            // Auto-provisioned scoped API key. Returns the raw key ONLY when
+            // a new key was just created (first time connecting to this Skip host).
+            // Returns null when key already exists — Skip already has it stored
+            // in its credential store from the initial request.
+            const newlyCreatedKey = await getSkipCallbackKey();
+            if (newlyCreatedKey) {
+                // First time: send raw key so Skip can persist it
+                callingServerAPIKey = newlyCreatedKey;
+            } else if (!skipKeyProvisioned && legacyCallbackAPIKey) {
+                // Provisioning failed (missing service account, scopes, etc.)
+                // Fall back to legacy MJ_API_KEY during transition period
+                callingServerAPIKey = legacyCallbackAPIKey;
+            }
+            // else: skipKeyProvisioned=true, key exists in DB, Skip already has it — omit callingServerAPIKey
 
             // Access token is still generated for the transition period — the
             // legacy GetData resolver requires it. Once Phase 5 (cleanup) removes
@@ -459,8 +472,8 @@ export class SkipSDK {
             organizationID: this.config.organizationId,
             organizationInfo: this.config.organizationInfo,
             apiKeys: this.buildAPIKeys(),
-            callingServerURL: callbackAPIKey ? (publicUrl || `${baseUrl}:${graphqlPort}${graphqlRootPath}`) : undefined,
-            callingServerAPIKey: callbackAPIKey,
+            callingServerURL,
+            callingServerAPIKey,
             callingServerAccessToken: accessToken ? accessToken.Token : undefined
         };
     }
