@@ -224,7 +224,7 @@ export class MJAIAgentSessionFormComponentExtended extends MJAIAgentSessionFormC
                 },
                 // Target agent name resolution from Config.targetAgentID
                 {
-                    EntityName: 'AI Agents',
+                    EntityName: 'MJ: AI Agents',
                     Fields: ['ID', 'Name'],
                     ExtraFilter: this.sessionConfig.targetAgentID ? `ID='${this.sessionConfig.targetAgentID}'` : `1=0`,
                     ResultType: 'simple'
