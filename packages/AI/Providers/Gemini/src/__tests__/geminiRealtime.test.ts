@@ -334,17 +334,46 @@ describe('GeminiRealtime', () => {
             expect(sent.data).toBe(Buffer.from(bytes).toString('base64'));
         });
 
-        it('RegisterTools resends mapped function declarations as client content', async () => {
+        it('RegisterTools with the connect-time set is a SILENT no-op (idempotency rule)', async () => {
+            const tools = [
+                { Name: 'lookup', Description: 'Look something up', ParametersSchema: { type: 'object' } },
+                { Name: 'get_weather', Description: 'Get the weather', ParametersSchema: { type: 'object', properties: { city: { type: 'string' } } } },
+            ];
+            const freshDriver = new TestGeminiRealtime('fake-api-key');
+            const toolSession = await freshDriver.StartSession(makeParams({ Tools: tools }));
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            // identical set — including in a DIFFERENT order (comparison is order-insensitive)
+            await toolSession.RegisterTools([tools[1], tools[0]]);
+
+            expect(freshDriver.Fake.ClientContents).toHaveLength(0); // never injected as content
+            expect(warnSpy).not.toHaveBeenCalled();
+            warnSpy.mockRestore();
+        });
+
+        it('RegisterTools with an EMPTY set on a tool-less session is also a silent no-op', async () => {
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            await session.RegisterTools([]); // session was started without Tools
+            expect(driver.Fake.ClientContents).toHaveLength(0);
+            expect(warnSpy).not.toHaveBeenCalled();
+            warnSpy.mockRestore();
+        });
+
+        it('RegisterTools with a DIFFERENT set warns and does NOTHING (tool set is connect-bound)', async () => {
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
             await session.RegisterTools([{
                 Name: 'lookup', Description: 'Look something up', ParametersSchema: { type: 'object' },
             }]);
-            // One entry for the tool registration (no InitialContext was set).
-            expect(driver.Fake.ClientContents).toHaveLength(1);
-            const turn = driver.Fake.ClientContents[0];
-            expect(turn.turnComplete).toBe(false);
-            const text = (turn.turns![0].parts![0] as { text: string }).text;
-            const decl = JSON.parse(text);
-            expect(decl).toMatchObject({ name: 'lookup', description: 'Look something up', parametersJsonSchema: { type: 'object' } });
+
+            // Never degraded into the conversation as content, never sent any other way…
+            expect(driver.Fake.ClientContents).toHaveLength(0);
+            expect(driver.Fake.ToolResponses).toHaveLength(0);
+            // …but the caller is told clearly why nothing happened.
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+            expect(String(warnSpy.mock.calls[0][0])).toMatch(/connect time/i);
+            expect(String(warnSpy.mock.calls[0][0])).toMatch(/RealtimeSessionParams\.Tools/);
+            warnSpy.mockRestore();
         });
 
         it('SendToolResult sends a matching functionResponse using the cached call name', async () => {

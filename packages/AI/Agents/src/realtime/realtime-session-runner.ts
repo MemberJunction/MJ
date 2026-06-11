@@ -28,6 +28,7 @@ import {
     RealtimeToolCall,
     RealtimeUsage,
     RealtimeToolDefinition,
+    RealtimeSessionError,
     JSONObject
 } from '@memberjunction/ai';
 import {
@@ -231,8 +232,11 @@ export class RealtimeSessionRunner {
         const tools = this.BuildToolSet();
         const params: RealtimeSessionParams = { ...this.deps.SessionParams, Tools: tools };
 
+        // The tool set rides StartSession params — the canonical (and for connect-bound
+        // providers like Gemini Live, the ONLY effective) registration path. A post-start
+        // RegisterTools with the identical set would be a contract-mandated no-op, so the
+        // runner does not make that redundant call.
         this.session = await this.deps.Model.StartSession(params);
-        await this.session.RegisterTools(tools);
         this.wireHandlers(this.session);
 
         this.deps.LogStatus?.(
@@ -251,6 +255,27 @@ export class RealtimeSessionRunner {
         session.OnToolCall((call) => void this.handleToolCall(call));
         session.OnUsage((u) => this.handleUsage(u));
         session.OnInterruption(() => this.handleInterruption());
+        session.OnError((error) => this.handleSessionError(error));
+    }
+
+    /**
+     * Handles a session error per the {@link IRealtimeSession.OnError} fatality contract:
+     * - `Fatal: true` (transport/socket failure, credential expiry, unexpected close) — the
+     *   session is unusable, so the runner finalizes cleanly via {@link Stop} (final usage
+     *   flush, delegated-run abort, idempotent teardown) instead of idling on a dead socket.
+     * - `Fatal: false` — a provider-reported, recoverable error frame; logged, session
+     *   continues.
+     *
+     * @param error The error surfaced by the live session.
+     */
+    private handleSessionError(error: RealtimeSessionError): void {
+        const code = error.Code ? ` [${error.Code}]` : '';
+        if (error.Fatal) {
+            this.deps.LogError?.(`Fatal realtime session error${code} — finalizing session: ${error.Message}`);
+            void this.Stop();
+        } else {
+            this.deps.LogError?.(`Realtime session error (non-fatal)${code}: ${error.Message}`);
+        }
     }
 
     /**

@@ -131,10 +131,26 @@ export interface OAIResponseCreateEvent {
     response?: { instructions: string };
 }
 
+/** Cancels the model's in-flight response (generation stops; a response.done follows). */
+export interface OAIResponseCancelEvent {
+    type: 'response.cancel';
+}
+
+/**
+ * WebRTC-only client event: stops + clears the provider-managed output audio buffer so
+ * already-generated speech stops playing immediately (the server replies with an
+ * `output_audio_buffer.cleared` frame). Sent on typed-message barge-in.
+ */
+export interface OAIOutputAudioBufferClearEvent {
+    type: 'output_audio_buffer.clear';
+}
+
 export type OpenAIRealtimeClientEvent =
     | OAISessionUpdateEvent
     | OAIConversationItemCreateEvent
-    | OAIResponseCreateEvent;
+    | OAIResponseCreateEvent
+    | OAIResponseCancelEvent
+    | OAIOutputAudioBufferClearEvent;
 
 // ── Structural transport seams (typed subsets of the DOM WebRTC objects) ──────
 // Real `RTCDataChannel` / `RTCPeerConnection` / `HTMLAudioElement` instances satisfy
@@ -299,15 +315,20 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Injects typed text as a user-role `message` conversation item, then triggers a reply
-     * through the SAME collision-safe path tool results use ({@link requestResultResponse})
-     * so it queues behind any in-flight response instead of colliding with a second
-     * `response.create`. No-op when the data channel isn't open.
+     * through the SAME collision-safe path tool results use ({@link requestResultResponse}).
+     * No-op when the data channel isn't open.
+     *
+     * **SendText implies barge-in** (base-contract rule): an active spoken response is
+     * cancelled via {@link CancelActiveResponse} before the text is injected, so the typed
+     * turn takes the floor immediately instead of waiting behind stale speech. When nothing
+     * is active the cancel is a no-op and the reply triggers immediately.
      */
     public SendText(text: string): void {
         const channel = this.dataChannel;
         if (!channel || channel.readyState !== 'open') {
             return;
         }
+        this.CancelActiveResponse();
         this.sendEvent(channel, {
             type: 'conversation.item.create',
             item: {
@@ -317,6 +338,41 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
             },
         });
         this.requestResultResponse();
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Sends `response.cancel` (only when a response is actually in flight) and — when audio
+     * is audibly playing — the WebRTC-only `output_audio_buffer.clear` client event so
+     * already-generated speech stops coming out of the speaker immediately. Resets the local
+     * response state machine (active flag, narration kind, accumulated transcript) but
+     * PRESERVES any queued tool-result trigger: delegated work is never affected by a
+     * floor-control cancel, and the queued trigger still fires on the cancelled response's
+     * trailing `response.done`. No-op when idle or when the channel is not open.
+     */
+    public CancelActiveResponse(): void {
+        const channel = this.dataChannel;
+        if (!channel || channel.readyState !== 'open') {
+            return;
+        }
+        if (!this.responseActive && !this.audioPlaying) {
+            return; // nothing active — no-op by contract
+        }
+        if (this.responseActive) {
+            this.sendEvent(channel, { type: 'response.cancel' });
+            this.responseActive = false;
+            this.pendingNarrationKind = false;
+            this.activeResponseKind = 'normal';
+            this.pendingAssistantText = '';
+        }
+        if (this.audioPlaying) {
+            this.sendEvent(channel, { type: 'output_audio_buffer.clear' });
+            this.audioPlaying = false;
+        }
+        if (this.currentState === 'speaking') {
+            this.setState('listening');
+        }
     }
 
     /**
@@ -347,10 +403,20 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
      * transcripts are emitted with `Kind: 'narration'` — ephemeral by contract. Sets
      * {@link responseActive} eagerly so a tool result landing mid-narration queues
      * instead of colliding.
+     *
+     * **Skips when busy** (base-contract collision rule — drivers MUST queue or skip):
+     * a `response.create` sent while a response is in flight would be rejected/garbled by
+     * the provider, and narration is disposable by contract, so the update is dropped with
+     * a debug log rather than queued to come out late and stale. Hosts SHOULD still gate
+     * on {@link IsBusy} / {@link IsAudioPlaying} for timing quality.
      */
     public RequestSpokenUpdate(instructions: string): void {
         const channel = this.dataChannel;
         if (!channel) {
+            return;
+        }
+        if (this.responseActive) {
+            console.debug('[OpenAIRealtimeClient] RequestSpokenUpdate skipped — a response is already in flight (narration is disposable).');
             return;
         }
         this.responseActive = true;
@@ -547,8 +613,17 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
                 this.onToolCallFrame(event as OAIFunctionCallArgumentsDone);
                 break;
             case 'input_audio_buffer.speech_started':
-                // Barge-in: provider handles cancelling its own turn. We just reflect
-                // that the user has the floor again.
+                // The user started speaking. This is a TRUE barge-in only when it cut off
+                // active model output (a response in flight or audio audibly playing) —
+                // a normal turn while the model is idle is NOT an interruption, so the
+                // emission is gated (base-contract rule). The provider handles cancelling
+                // its own turn; we reflect that the user has the floor again. NOTE: the
+                // trailing `output_audio_buffer.cleared` frame deliberately does NOT emit —
+                // it also follows our own CancelActiveResponse, and a self-initiated cancel
+                // must never look like a user barge-in (hosts abort delegated work on it).
+                if (this.responseActive || this.audioPlaying) {
+                    this.emitInterruption();
+                }
                 this.setState('listening');
                 break;
             case 'response.created':
@@ -646,7 +721,10 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Asks the model to speak (a tool result or typed-text reply) — immediately if it's
-     * idle, otherwise queued until the current response finishes.
+     * idle, otherwise queued until the current response finishes. An immediate trigger
+     * also CONSUMES any queued trigger debt: every payload item is already in the
+     * conversation, so one `response.create` voices everything (e.g. typed text barging
+     * in over a narration that had tool results queued behind it).
      */
     private requestResultResponse(): void {
         if (!this.dataChannel) {
@@ -656,6 +734,7 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
             this.pendingResultResponse = true;
             return;
         }
+        this.pendingResultResponse = false;
         this.responseActive = true;
         this.sendEvent(this.dataChannel, { type: 'response.create' });
         this.setState('speaking');

@@ -204,16 +204,19 @@ function collect(client: OpenAIRealtimeClient): {
     toolCalls: RealtimeClientToolCall[];
     states: RealtimeClientState[];
     errors: RealtimeClientError[];
+    interruptions: number[];
 } {
     const transcripts: RealtimeClientTranscript[] = [];
     const toolCalls: RealtimeClientToolCall[] = [];
     const states: RealtimeClientState[] = [];
     const errors: RealtimeClientError[] = [];
+    const interruptions: number[] = [];
     client.OnTranscript((t) => transcripts.push(t));
     client.OnToolCall((c) => toolCalls.push(c));
     client.OnStateChange((s) => states.push(s));
     client.OnError((e) => errors.push(e));
-    return { transcripts, toolCalls, states, errors };
+    client.OnInterruption(() => interruptions.push(interruptions.length + 1));
+    return { transcripts, toolCalls, states, errors, interruptions };
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -329,6 +332,21 @@ describe('OpenAIRealtimeClient', () => {
                 { type: 'response.create', response: { instructions: 'Say one short first-person sentence.' } },
             ]);
             expect(client.IsBusy).toBe(true);
+        });
+
+        it('should SKIP the update while a response is in flight (queue-or-skip rule; narration is disposable)', () => {
+            channel.EmitServer({ type: 'response.created' });
+            channel.Sent = [];
+
+            client.RequestSpokenUpdate('late update');
+            expect(channel.Sent).toHaveLength(0); // no colliding response.create
+
+            // and the narration kind must not leak onto the NEXT, ordinary response
+            const { transcripts } = collect(client);
+            channel.EmitServer({ type: 'response.done' });
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'response.output_audio_transcript.done', transcript: 'next turn' });
+            expect(transcripts).toEqual([{ Role: 'Assistant', Text: 'next turn', IsFinal: true, Kind: 'normal' }]);
         });
 
         it("should tag the next response's transcripts as narration, then reset to normal", () => {
@@ -451,22 +469,152 @@ describe('OpenAIRealtimeClient', () => {
             ]);
         });
 
-        it('should queue the reply behind an in-flight response (collision-safe path)', () => {
+        it('should BARGE IN over an in-flight response: cancel it, inject, and trigger immediately', () => {
             client.RequestSpokenUpdate('narrating');
             channel.EmitServer({ type: 'response.created' });
             channel.Sent = [];
 
             client.SendText('typed mid-narration');
-            expect(channel.SentEvents().map((e) => e.type)).toEqual(['conversation.item.create']);
+            // SendText implies barge-in: the active narration is cancelled, then the typed
+            // turn takes the floor with its own immediate response.create.
+            expect(channel.SentEvents().map((e) => e.type)).toEqual([
+                'response.cancel',
+                'conversation.item.create',
+                'response.create',
+            ]);
+            expect(client.IsBusy).toBe(true); // the typed turn's reply is now in flight
+        });
 
-            channel.EmitServer({ type: 'response.done' });
-            expect(channel.SentEvents().map((e) => e.type)).toEqual(['conversation.item.create', 'response.create']);
+        it('should NOT surface a typed barge-in as a user interruption (no delegated-work abort)', () => {
+            const { interruptions } = collect(client);
+            client.RequestSpokenUpdate('narrating');
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'output_audio_buffer.started' });
+
+            client.SendText('typed mid-narration');
+            channel.EmitServer({ type: 'output_audio_buffer.cleared' }); // server confirms our clear
+            expect(interruptions).toHaveLength(0);
         });
 
         it('should no-op when the channel is not open', () => {
             channel.readyState = 'closed';
             client.SendText('into the void');
             expect(channel.Sent).toHaveLength(0);
+        });
+    });
+
+    describe('CancelActiveResponse', () => {
+        beforeEach(() => {
+            client.InitChannel(channel);
+            channel.Open();
+            channel.Sent = [];
+        });
+
+        it('should be a no-op when nothing is active', () => {
+            client.CancelActiveResponse();
+            expect(channel.Sent).toHaveLength(0);
+        });
+
+        it('should send response.cancel for an in-flight response and release the busy lock', () => {
+            channel.EmitServer({ type: 'response.created' });
+            channel.Sent = [];
+
+            client.CancelActiveResponse();
+            expect(channel.SentEvents().map((e) => e.type)).toEqual(['response.cancel']);
+            expect(client.IsBusy).toBe(false);
+        });
+
+        it('should also clear the provider output buffer when audio is audibly playing', () => {
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'output_audio_buffer.started' });
+            channel.Sent = [];
+
+            client.CancelActiveResponse();
+            expect(channel.SentEvents().map((e) => e.type)).toEqual(['response.cancel', 'output_audio_buffer.clear']);
+            expect(client.IsAudioPlaying).toBe(false);
+            expect(client.IsBusy).toBe(false);
+        });
+
+        it('should clear TAIL audio (generation already done, speech still playing) with only a buffer clear', () => {
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'output_audio_buffer.started' });
+            channel.EmitServer({ type: 'response.done' }); // generation finished; audio still playing
+            channel.Sent = [];
+
+            client.CancelActiveResponse();
+            expect(channel.SentEvents().map((e) => e.type)).toEqual(['output_audio_buffer.clear']);
+            expect(client.IsAudioPlaying).toBe(false);
+        });
+
+        it('should return the floor: speaking → listening emission', () => {
+            const { states } = collect(client);
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'response.output_audio_transcript.delta', delta: 'speaking…' });
+
+            client.CancelActiveResponse();
+            expect(states[states.length - 1]).toBe('listening');
+        });
+
+        it("MUST NOT drop a queued tool-result trigger: it still fires on the cancelled response's done frame", () => {
+            client.RequestSpokenUpdate('narrating');
+            channel.EmitServer({ type: 'response.created' });
+            client.SendToolResult('call_1', '{"ok":true}'); // queues behind the narration
+            channel.Sent = [];
+
+            client.CancelActiveResponse();
+            channel.EmitServer({ type: 'response.done', response: { status: 'cancelled' } });
+
+            const triggers = channel.SentEvents().filter((e) => e.type === 'response.create');
+            expect(triggers).toHaveLength(1); // delegated work unaffected; result still voiced
+        });
+
+        it('should no-op when the channel is not open', () => {
+            const c2 = new ChannelTestClient();
+            const ch2 = new FakeDataChannel();
+            c2.InitChannel(ch2); // adopted but readyState 'connecting'
+            expect(() => c2.CancelActiveResponse()).not.toThrow();
+            expect(ch2.Sent).toHaveLength(0);
+        });
+    });
+
+    describe('OnInterruption — true barge-in only', () => {
+        beforeEach(() => {
+            client.InitChannel(channel);
+            channel.Open();
+            channel.Sent = [];
+        });
+
+        it('should emit when user speech cuts off a response in flight', () => {
+            const { interruptions } = collect(client);
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(interruptions).toHaveLength(1);
+        });
+
+        it('should emit when user speech cuts off audio still audibly playing (generation already done)', () => {
+            const { interruptions } = collect(client);
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'output_audio_buffer.started' });
+            channel.EmitServer({ type: 'response.done' });
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(interruptions).toHaveLength(1);
+        });
+
+        it('should NOT emit for a normal user turn while the model is idle', () => {
+            const { interruptions, states } = collect(client);
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(interruptions).toHaveLength(0);
+            expect(states).toEqual(['listening']); // still reflects the user holding the floor
+        });
+
+        it('should NOT emit on the cleared frame that follows a self-initiated cancel', () => {
+            const { interruptions } = collect(client);
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'output_audio_buffer.started' });
+
+            client.CancelActiveResponse();
+            channel.EmitServer({ type: 'output_audio_buffer.cleared' }); // server confirms our clear
+            expect(interruptions).toHaveLength(0);
         });
     });
 

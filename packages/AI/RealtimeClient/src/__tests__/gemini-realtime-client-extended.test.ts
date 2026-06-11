@@ -108,9 +108,11 @@ describe('GeminiRealtimeClient (extended)', () => {
         });
 
         it('should drain queued sends in order and STOP at the first send that starts a new turn', () => {
+            // NOTE: SendText now implies barge-in (it cancels + sends immediately), so the
+            // triggering QUEUED send exercised here is RequestSpokenUpdate, which still queues.
             beginModelTurn(client);
             client.SendContextNote('note 1'); // non-triggering
-            client.SendText('typed reply'); // triggering — drain must stop after this
+            client.RequestSpokenUpdate('typed reply'); // triggering — drain must stop after this
             client.SendContextNote('note 2'); // must stay queued
             expect(client.Fake.ClientContents).toHaveLength(0);
 
@@ -168,7 +170,7 @@ describe('GeminiRealtimeClient (extended)', () => {
 
         it('should NOT drain the queue nor clear the busy lock on an interrupted frame alone', () => {
             beginModelTurn(client);
-            client.SendText('queued text');
+            client.RequestSpokenUpdate('queued update'); // queues behind the in-flight turn
             client.Emit({ serverContent: { interrupted: true } } as LiveServerMessage);
 
             // interruption flushes playback and yields the floor, but the turn boundary is
@@ -406,7 +408,7 @@ describe('GeminiRealtimeClient (extended)', () => {
         it('should reset the full response state machine on Disconnect mid-call', async () => {
             await connect(client);
             beginModelTurn(client);
-            client.SendText('queued');
+            client.SendContextNote('queued'); // queues behind the in-flight turn
             client.Emit({
                 serverContent: {
                     modelTurn: { role: 'model', parts: [{ inlineData: { data: btoa('zz'), mimeType: 'audio/pcm;rate=24000' } }] },

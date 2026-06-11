@@ -39,6 +39,8 @@ class MockRealtimeSession implements IRealtimeSession {
     OnToolCall(): void { /* no-op */ }
     OnInterruption(): void { /* no-op */ }
     OnUsage(): void { /* no-op */ }
+    OnError(): void { /* no-op */ }
+    async SendToolResult(): Promise<void> { /* no-op */ }
     async Close(): Promise<void> { /* no-op */ }
 }
 

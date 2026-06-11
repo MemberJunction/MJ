@@ -343,15 +343,51 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Injects typed text as a user turn with `turnComplete: true` (Gemini's "respond now"
-     * trigger). Routed through the collision-safe queue: sending client content mid-turn would
-     * INTERRUPT the in-flight generation, so it waits for `turnComplete`. No-op when the
-     * session is not open.
+     * trigger). No-op when the session is not open.
+     *
+     * **SendText implies barge-in** (base-contract rule): an active spoken response is
+     * cancelled via {@link CancelActiveResponse} first — playback flushed, turn marked
+     * inactive, queued sends drained — so the typed turn takes the floor immediately. If a
+     * drained queued send (e.g. a pending tool result) starts a new turn, the text queues
+     * behind it, preserving the tool-result delivery invariant. On the wire, sending the
+     * user turn itself interrupts any residual server-side generation (Gemini Live's
+     * any-client-content-interrupts contract), so no explicit cancel frame exists or is
+     * needed.
      */
     public SendText(text: string): void {
         if (!this.session) {
             return;
         }
+        this.CancelActiveResponse();
         this.enqueueOrRun(() => this.sendTriggeringUserTurn(text, 'normal', true));
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Gemini has no explicit cancel frame — the client OWNS the audio plane, so cancelling
+     * means: flush the local playout queue ({@link GeminiPcmPlayback}) so speech stops
+     * immediately, mark the in-flight turn inactive, and drain queued sends (a queued tool
+     * result or context note takes the floor next — tool-result delivery is never dropped
+     * by a cancel). Server-side, the next client content sent naturally interrupts any
+     * residual generation per the Live API contract. The interrupted turn's accumulated
+     * transcript is kept — the provider's trailing frames finalize what WAS spoken. No-op
+     * when nothing is active.
+     */
+    public CancelActiveResponse(): void {
+        if (!this.session) {
+            return;
+        }
+        if (!this.responseActive && !this.IsAudioPlaying) {
+            return; // nothing active — no-op by contract
+        }
+        this.playback?.Flush();
+        this.responseActive = false;
+        this.activeResponseKind = 'normal';
+        this.flushQueuedSends();
+        if (this.currentState === 'speaking') {
+            this.setState('listening');
+        }
     }
 
     /**
@@ -572,11 +608,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * Barge-in: the provider stopped generating because the user spoke. Flush every scheduled
      * playout source (per the Live API contract, `interrupted` is the signal to empty the
-     * client's audio queue) and give the floor back. The interrupted turn's accumulated
-     * transcript is kept — the following `turnComplete` finalizes what WAS spoken.
+     * client's audio queue), surface the TRUE barge-in to the host (Gemini only emits
+     * `interrupted` when user input actually cut off in-flight generation — no extra gating
+     * needed), and give the floor back. The interrupted turn's accumulated transcript is
+     * kept — the following `turnComplete` finalizes what WAS spoken.
      */
     private handleInterruption(): void {
         this.playback?.Flush();
+        this.emitInterruption();
         this.setState('listening');
     }
 

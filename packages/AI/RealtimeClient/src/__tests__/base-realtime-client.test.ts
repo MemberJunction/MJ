@@ -20,6 +20,7 @@ class StubRealtimeClient extends BaseRealtimeClient {
     public SendContextNote(_text: string): void {}
     public RequestSpokenUpdate(_instructions: string): void {}
     public SendToolResult(_callID: string, _outputJson: string): void {}
+    public CancelActiveResponse(): void {}
     public SetMuted(_muted: boolean): void {}
     public async Disconnect(): Promise<void> {}
     public get IsBusy(): boolean {
@@ -41,6 +42,9 @@ class StubRealtimeClient extends BaseRealtimeClient {
     }
     public EmitError(e: RealtimeClientError): void {
         this.emitError(e);
+    }
+    public EmitInterruption(): void {
+        this.emitInterruption();
     }
 }
 
@@ -88,6 +92,17 @@ describe('BaseRealtimeClient', () => {
             expect(errors).toEqual([{ Message: 'boom', Code: 'x', Fatal: false }]);
         });
 
+        it('should deliver interruptions to the registered handler', () => {
+            const client = new StubRealtimeClient();
+            let fired = 0;
+            client.OnInterruption(() => fired++);
+
+            client.EmitInterruption();
+            client.EmitInterruption();
+
+            expect(fired).toBe(2);
+        });
+
         it('should store a SINGLE handler — re-registering replaces the previous one', () => {
             const client = new StubRealtimeClient();
             const first: RealtimeClientState[] = [];
@@ -108,6 +123,7 @@ describe('BaseRealtimeClient', () => {
                 client.EmitToolCall({ CallID: 'c', ToolName: 't', ArgumentsJson: '{}' });
                 client.EmitState('closed');
                 client.EmitError({ Message: 'm', Fatal: true });
+                client.EmitInterruption();
             }).not.toThrow();
         });
     });

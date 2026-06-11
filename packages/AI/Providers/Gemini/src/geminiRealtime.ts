@@ -11,7 +11,6 @@ import {
     type FunctionCall,
     type FunctionResponse,
     type Content,
-    type Part,
     type Blob as GeminiBlob,
 } from '@google/genai';
 
@@ -117,6 +116,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      */
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
         const session = new GeminiRealtimeSession();
+        session.SetConnectTimeTools(params.Tools ?? []);
         const config = this.buildConnectConfig(params);
         const live = await this.connectLiveSession({
             Model: params.Model,
@@ -352,6 +352,13 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private pendingToolCallNames = new Map<string, string>();
 
     /**
+     * Fingerprint of the tool set bound at connect time (set via {@link SetConnectTimeTools});
+     * {@link RegisterTools} compares against it to no-op identical re-registrations.
+     * Defaults to the empty set's fingerprint for sessions started without tools.
+     */
+    private connectTimeToolsFingerprint = GeminiRealtimeSession.ToolSetFingerprint([]);
+
+    /**
      * Whether a model turn is currently being generated. Minimal turn tracking mirroring the
      * client driver: set when model output arrives (Gemini has no `response.created`-style frame,
      * so the first `modelTurn` content is the signal) and eagerly when this session itself sends a
@@ -397,19 +404,41 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /**
      * @inheritdoc
      *
-     * Gemini Live binds its tool set at connect time via {@link LiveConnectConfig.tools}. The
-     * provider does not support re-declaring arbitrary tool schemas on an already-open session, so
-     * the canonical path is to pass `params.Tools` to `StartSession`. This post-start call maps and
-     * resends the declarations as client content for parity, but the *callable* tool set the model
-     * may invoke is the one established at connect time.
+     * Gemini Live binds its tool set at connect time via {@link LiveConnectConfig.tools}; the
+     * provider does not support re-declaring tool schemas on an already-open session. Per the
+     * contract's idempotency rule:
+     * - A post-start set IDENTICAL to the connect-time set (`params.Tools` at `StartSession`,
+     *   compared order-insensitively) is a **silent no-op**.
+     * - A DIFFERENT set is unsupported: it logs a clear warning and does **nothing** — it is
+     *   never injected into the conversation as content (that would degrade the conversation
+     *   without making the tools callable).
      */
     public async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
-        const declarations = GeminiRealtime.MapToolsToFunctionDeclarations(tools);
-        const turns: Content[] = [{
-            role: 'user',
-            parts: declarations.map((d): Part => ({ text: JSON.stringify(d) })),
-        }];
-        this.requireLive().sendClientContent({ turns, turnComplete: false });
+        if (GeminiRealtimeSession.ToolSetFingerprint(tools) === this.connectTimeToolsFingerprint) {
+            return; // identical to the connect-time set — silent no-op
+        }
+        console.warn(
+            'GeminiRealtimeSession.RegisterTools: Gemini Live binds its tool set at connect time and cannot ' +
+            're-declare schemas on an open session. The requested set differs from the connect-time set and is ' +
+            'IGNORED — pass the full tool set via RealtimeSessionParams.Tools at StartSession.'
+        );
+    }
+
+    /**
+     * Records the tool set the driver bound at connect time so {@link RegisterTools} can
+     * apply the contract's idempotency rule. Called by {@link GeminiRealtime.StartSession}.
+     */
+    public SetConnectTimeTools(tools: RealtimeToolDefinition[]): void {
+        this.connectTimeToolsFingerprint = GeminiRealtimeSession.ToolSetFingerprint(tools);
+    }
+
+    /** Canonical, order-insensitive fingerprint of a tool set for identity comparison. */
+    private static ToolSetFingerprint(tools: RealtimeToolDefinition[]): string {
+        return JSON.stringify(
+            [...tools]
+                .sort((a, b) => a.Name.localeCompare(b.Name))
+                .map((t) => ({ Name: t.Name, Description: t.Description, ParametersSchema: t.ParametersSchema }))
+        );
     }
 
     /** @inheritdoc */

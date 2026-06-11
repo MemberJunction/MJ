@@ -101,6 +101,8 @@ export interface CollectedEmissions {
     toolCalls: RealtimeClientToolCall[];
     states: RealtimeClientState[];
     errors: RealtimeClientError[];
+    /** One entry per OnInterruption emission (true barge-ins only); assert via length. */
+    interruptions: number[];
 }
 
 /** Collects every emission from a client into arrays for assertions. */
@@ -109,11 +111,13 @@ export function collect(client: BaseRealtimeClient): CollectedEmissions {
     const toolCalls: RealtimeClientToolCall[] = [];
     const states: RealtimeClientState[] = [];
     const errors: RealtimeClientError[] = [];
+    const interruptions: number[] = [];
     client.OnTranscript((t) => transcripts.push(t));
     client.OnToolCall((c) => toolCalls.push(c));
     client.OnStateChange((s) => states.push(s));
     client.OnError((e) => errors.push(e));
-    return { transcripts, toolCalls, states, errors };
+    client.OnInterruption(() => interruptions.push(interruptions.length + 1));
+    return { transcripts, toolCalls, states, errors, interruptions };
 }
 
 // ── OpenAI fakes ───────────────────────────────────────────────────────────────

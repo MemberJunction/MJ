@@ -199,26 +199,28 @@ describe('OpenAIRealtimeClient (extended)', () => {
     describe('send queueing under concurrency', () => {
         beforeEach(openChannel);
 
-        it('should coalesce multiple queued result triggers into ONE response.create on flush', () => {
+        it('should coalesce queued result triggers into ONE response.create — a typed barge-in consumes the queued debt', () => {
             client.RequestSpokenUpdate('narrating');
             channel.EmitServer({ type: 'response.created' });
             channel.Sent = [];
 
             client.SendToolResult('call_a', '{"a":1}');
             client.SendToolResult('call_b', '{"b":2}');
-            client.SendText('and a typed message');
+            client.SendText('and a typed message'); // implies barge-in: cancel + immediate trigger
 
-            // all three payload items go out immediately; no trigger yet
-            const beforeFlush = channel.SentEvents();
-            expect(beforeFlush.map((e) => e.type)).toEqual([
+            // both tool-result items queue their trigger; the typed text cancels the narration
+            // and fires ONE response.create that voices everything already in the conversation
+            expect(channel.SentEvents().map((e) => e.type)).toEqual([
                 'conversation.item.create',
                 'conversation.item.create',
+                'response.cancel',
                 'conversation.item.create',
+                'response.create',
             ]);
 
-            channel.EmitServer({ type: 'response.done' });
+            // the cancelled narration's trailing done must NOT fire a second trigger
+            channel.EmitServer({ type: 'response.done', response: { status: 'cancelled' } });
             const triggers = channel.SentEvents().filter((e) => e.type === 'response.create');
-            // a single response.create voices everything that queued up
             expect(triggers).toHaveLength(1);
         });
 

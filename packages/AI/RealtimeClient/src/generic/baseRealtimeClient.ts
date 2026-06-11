@@ -88,6 +88,49 @@ export interface RealtimeClientError {
  *
  * All `On*` methods register a single handler (matching the server `IRealtimeSession`
  * style); registering again replaces the previous handler.
+ *
+ * ## DRIVER AUTHOR OBLIGATIONS
+ *
+ * Hard-won, provider-independent rules every client driver MUST honor (the client-side
+ * mirror of the obligations documented on the server's `BaseRealtimeModel` in
+ * `@memberjunction/ai`). Most were paid for in live debugging; do not relearn them:
+ *
+ * 1. **Silent exit from `'speaking'` after a tool call.** When the model emits a tool
+ *    call, the host typically shows its own busy ("thinking") indicator while the tool
+ *    executes. The driver must leave the `'speaking'` state *silently* (no state
+ *    emission) at tool-call time so the turn's trailing frames don't clobber the host's
+ *    indicator.
+ * 2. **Busy-flag release on tool-call emission (deadlock guard).** A tool-call frame
+ *    means the model has yielded the floor pending the result. Any internal "response
+ *    active" flag MUST be cleared then — otherwise the eventual {@link SendToolResult}
+ *    (or a queued send) deadlocks waiting for a turn boundary that will never arrive
+ *    until after the result is sent.
+ * 3. **Playback flush + honest {@link IsAudioPlaying} on interruption.** On a true
+ *    barge-in the driver must flush any locally-owned audio playback and report
+ *    `IsAudioPlaying === false` promptly — stale queued audio after an interruption is
+ *    a product bug, not a nicety. The same flush applies to {@link CancelActiveResponse}.
+ * 4. **{@link SendText} must NOT echo a user transcript — and implies barge-in.** The
+ *    driver must not synthesize a user-role transcript event for injected text (the host
+ *    owns the local echo and would render the message twice), and an active spoken
+ *    response is cancelled via the driver's own cancel path before the text is injected
+ *    (see {@link CancelActiveResponse}).
+ * 5. **Tool-result delivery invariant.** Every result fed back via {@link SendToolResult}
+ *    must EVENTUALLY be voiced/processed by the model and never dropped. If the provider
+ *    rejects overlapping generation triggers, the driver queues the result's trigger
+ *    behind the in-flight response and flushes it at the next turn boundary.
+ * 6. **Token/credential expiry surfaces as a FATAL error.** When the ephemeral credential
+ *    dies (expiry, revocation, unexpected socket loss), the driver must surface it through
+ *    {@link OnError} with `Fatal: true` so the host tears down cleanly instead of idling
+ *    forever on a dead connection.
+ * 7. **`'listening'` only after the session config is applied.** The driver must not
+ *    report the session as listening until the server-built session config (system prompt
+ *    + tools) has actually been applied to the provider socket — otherwise early turns run
+ *    against an unconfigured model.
+ * 8. **`SessionConfig` is a private pact.** The `ClientRealtimeSessionConfig.SessionConfig`
+ *    payload is authored by the same-keyed SERVER driver and consumed only by this client
+ *    driver; its shape may change between the two driver halves without notice. Hosts and
+ *    intermediaries treat it as an opaque blob — and so must any code outside the matching
+ *    driver pair.
  */
 export abstract class BaseRealtimeClient {
     // ── Registered handlers (single-handler style, like IRealtimeSession) ─────
@@ -95,11 +138,14 @@ export abstract class BaseRealtimeClient {
     private toolCallHandler?: (call: RealtimeClientToolCall) => void;
     private stateChangeHandler?: (state: RealtimeClientState) => void;
     private errorHandler?: (error: RealtimeClientError) => void;
+    private interruptionHandler?: () => void;
 
     /**
      * Opens the provider connection using the server-minted ephemeral credential and applies
-     * `config.SessionConfig` **verbatim** once the control channel is ready — so prompt and
-     * tool authority stay server-side even though the browser owns the socket.
+     * `config.SessionConfig` once the control channel is ready — so prompt and tool authority
+     * stay server-side even though the browser owns the socket. The payload's SHAPE is a
+     * private pact between this driver and the same-keyed server driver that minted it (see
+     * driver obligation #8); how it is applied is entirely driver-specific.
      *
      * @param config The server-minted client session config (provider, model, ephemeral token, session config).
      * @param micStream The user's microphone capture stream. The caller acquires it (so IT owns
@@ -114,9 +160,28 @@ export abstract class BaseRealtimeClient {
      * results so it never collides with an in-flight response. No-op when the control
      * channel is not open.
      *
+     * **SendText implies barge-in:** an active spoken response is cancelled (via the
+     * driver's own {@link CancelActiveResponse} path) before the text is injected, so the
+     * typed turn takes the floor immediately instead of waiting behind stale speech.
+     *
+     * Implementations must NOT synthesize a user-role transcript event for the injected
+     * text — the host owns the local echo (driver obligation #4).
+     *
      * @param text The user's typed message (callers pass pre-trimmed, non-empty text).
      */
     public abstract SendText(text: string): void;
+
+    /**
+     * Cancels the model's ACTIVE spoken response and flushes pending playback so a new user
+     * turn can take the floor immediately; no-op when nothing is active. MUST NOT affect
+     * server-side delegated work — cancelling speech is a floor-control action, not an abort
+     * of in-flight tools/agents (hosts abort delegated work from {@link OnInterruption} /
+     * their own policy, never from this call).
+     *
+     * Implementations must leave {@link IsBusy} and {@link IsAudioPlaying} honest after the
+     * cancel (response inactive, local playback flushed).
+     */
+    public abstract CancelActiveResponse(): void;
 
     /**
      * Injects background context into the model's conversation WITHOUT forcing a reply —
@@ -131,6 +196,13 @@ export abstract class BaseRealtimeClient {
      * delegated work runs). Implementations MUST tag the resulting turn's transcripts with
      * `Kind: 'narration'` and MUST NOT let this response collide with a pending tool-result
      * reply — the tool result is queued and spoken as soon as the narration finishes.
+     *
+     * **Collision rule — drivers MUST queue or skip:** when a model response is already in
+     * flight, the driver must either defer the update to the next turn boundary or skip it
+     * outright (skipping is acceptable — narration is disposable by contract; a stale
+     * "still working…" line has no value once the real result lands). Hosts SHOULD still
+     * gate calls on {@link IsBusy} / {@link IsAudioPlaying} for timing quality — a
+     * well-timed update beats a queued-then-stale one — but the driver is the safety net.
      *
      * @param instructions The exact provider instructions for the utterance. The instruction
      *   TEXT is host policy (e.g. first-person phrasing rules) — the client only carries it.
@@ -213,6 +285,24 @@ export abstract class BaseRealtimeClient {
         this.errorHandler = handler;
     }
 
+    /**
+     * Registers the (single) interruption handler.
+     *
+     * **True barge-in only:** fires ONLY when USER INPUT CUT OFF ACTIVE MODEL OUTPUT — a
+     * model response in flight or audio audibly playing when the user took the floor. A
+     * user simply taking their normal turn while the model is idle is NOT an interruption,
+     * and drivers must not report it as one (e.g. a raw "speech started" frame must be
+     * gated on whether a response is actually active or audio is playing).
+     *
+     * On interruption, drivers must also flush locally-owned playback and report
+     * {@link IsAudioPlaying} `=== false` promptly (driver obligation #3). Hosts typically
+     * use this hook to abort in-flight delegated work so a stale result is never narrated
+     * into a conversation that has moved on.
+     */
+    public OnInterruption(handler: () => void): void {
+        this.interruptionHandler = handler;
+    }
+
     // ── Protected emit helpers for concrete drivers ───────────────────────────
 
     /** Emits a transcript event to the registered handler (if any). */
@@ -233,5 +323,10 @@ export abstract class BaseRealtimeClient {
     /** Emits an error to the registered handler (if any). */
     protected emitError(error: RealtimeClientError): void {
         this.errorHandler?.(error);
+    }
+
+    /** Emits a true barge-in interruption to the registered handler (if any). */
+    protected emitInterruption(): void {
+        this.interruptionHandler?.();
     }
 }

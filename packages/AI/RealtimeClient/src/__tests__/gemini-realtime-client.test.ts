@@ -187,16 +187,19 @@ function collect(client: GeminiRealtimeClient): {
     toolCalls: RealtimeClientToolCall[];
     states: RealtimeClientState[];
     errors: RealtimeClientError[];
+    interruptions: number[];
 } {
     const transcripts: RealtimeClientTranscript[] = [];
     const toolCalls: RealtimeClientToolCall[] = [];
     const states: RealtimeClientState[] = [];
     const errors: RealtimeClientError[] = [];
+    const interruptions: number[] = [];
     client.OnTranscript((t) => transcripts.push(t));
     client.OnToolCall((c) => toolCalls.push(c));
     client.OnStateChange((s) => states.push(s));
     client.OnError((e) => errors.push(e));
-    return { transcripts, toolCalls, states, errors };
+    client.OnInterruption(() => interruptions.push(interruptions.length + 1));
+    return { transcripts, toolCalls, states, errors, interruptions };
 }
 
 /** Connects the harness client with one fake mic track; returns the track for assertions. */
@@ -454,14 +457,49 @@ describe('GeminiRealtimeClient', () => {
             expect(client.IsBusy).toBe(true);
         });
 
-        it('should queue typed text behind an in-flight turn (collision-safe path)', () => {
+        it('should BARGE IN over an in-flight turn: flush playback and send the typed turn immediately', () => {
+            client.Emit({ serverContent: { outputTranscription: { text: 'speaking now' } } } as LiveServerMessage);
+            client.Emit({
+                serverContent: {
+                    modelTurn: { role: 'model', parts: [{ inlineData: { data: btoa('xx'), mimeType: 'audio/pcm;rate=24000' } }] },
+                },
+            } as LiveServerMessage);
+
+            client.SendText('typed mid-turn');
+            // SendText implies barge-in: local playback flushed, turn marked inactive, the
+            // typed turn goes out NOW (on the wire, client content itself interrupts Gemini).
+            expect(client.Playback.FlushCount).toBe(1);
+            expect(client.IsAudioPlaying).toBe(false);
+            expect(client.Fake.ClientContents).toEqual([
+                { turns: [{ role: 'user', parts: [{ text: 'typed mid-turn' }] }], turnComplete: true },
+            ]);
+            expect(client.IsBusy).toBe(true); // the typed turn's reply is now in flight
+        });
+
+        it('should NOT surface a typed barge-in as a user interruption (no delegated-work abort)', () => {
+            const { interruptions } = collect(client);
             client.Emit({ serverContent: { outputTranscription: { text: 'speaking now' } } } as LiveServerMessage);
             client.SendText('typed mid-turn');
+            expect(interruptions).toHaveLength(0);
+        });
+
+        it('should queue typed text behind a queued tool result released by the barge-in (delivery order kept)', () => {
+            // model calls a tool, then starts ANOTHER turn while the result is pending
+            client.Emit({
+                toolCall: { functionCalls: [{ id: 'c1', name: 'lookup', args: {} }] },
+            } as LiveServerMessage);
+            client.Emit({ serverContent: { outputTranscription: { text: 'narrating' } } } as LiveServerMessage);
+            client.SendToolResult('c1', '{"ok":true}'); // queues behind the in-flight narration
+
+            client.SendText('typed mid-narration');
+            // the cancel drains the queue: the tool result goes first (starting a new turn),
+            // so the typed text queues behind it — tool-result delivery is never dropped
+            expect(client.Fake.ToolResponses).toHaveLength(1);
             expect(client.Fake.ClientContents).toHaveLength(0);
 
             client.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
             expect(client.Fake.ClientContents).toEqual([
-                { turns: [{ role: 'user', parts: [{ text: 'typed mid-turn' }] }], turnComplete: true },
+                { turns: [{ role: 'user', parts: [{ text: 'typed mid-narration' }] }], turnComplete: true },
             ]);
         });
 
@@ -469,6 +507,66 @@ describe('GeminiRealtimeClient', () => {
             const fresh = new TestGeminiClient();
             fresh.SendText('into the void');
             expect(fresh.Fake.ClientContents).toHaveLength(0);
+        });
+    });
+
+    describe('CancelActiveResponse', () => {
+        beforeEach(async () => {
+            await connect(client);
+        });
+
+        it('should be a no-op when nothing is active', () => {
+            client.CancelActiveResponse();
+            expect(client.Playback.FlushCount).toBe(0);
+            expect(client.Fake.ClientContents).toHaveLength(0);
+        });
+
+        it('should flush playback, release the busy lock, and return the floor', () => {
+            const { states } = collect(client);
+            client.Emit({ serverContent: { outputTranscription: { text: 'speaking now' } } } as LiveServerMessage);
+            client.Emit({
+                serverContent: {
+                    modelTurn: { role: 'model', parts: [{ inlineData: { data: btoa('xx'), mimeType: 'audio/pcm;rate=24000' } }] },
+                },
+            } as LiveServerMessage);
+
+            client.CancelActiveResponse();
+            expect(client.Playback.FlushCount).toBe(1);
+            expect(client.IsAudioPlaying).toBe(false);
+            expect(client.IsBusy).toBe(false);
+            expect(states[states.length - 1]).toBe('listening');
+        });
+
+        it('should flush TAIL audio still playing after the turn completed', () => {
+            client.Emit({
+                serverContent: {
+                    modelTurn: { role: 'model', parts: [{ inlineData: { data: btoa('xx'), mimeType: 'audio/pcm;rate=24000' } }] },
+                },
+            } as LiveServerMessage);
+            client.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+            expect(client.IsBusy).toBe(false);
+            expect(client.IsAudioPlaying).toBe(true); // playout runs behind generation
+
+            client.CancelActiveResponse();
+            expect(client.Playback.FlushCount).toBe(1);
+            expect(client.IsAudioPlaying).toBe(false);
+        });
+
+        it('MUST NOT drop a queued tool result: the cancel drains it so it is delivered', () => {
+            client.Emit({
+                toolCall: { functionCalls: [{ id: 'c9', name: 'lookup', args: {} }] },
+            } as LiveServerMessage);
+            client.Emit({ serverContent: { outputTranscription: { text: 'narrating' } } } as LiveServerMessage);
+            client.SendToolResult('c9', '{"ok":true}'); // queued behind the in-flight turn
+            expect(client.Fake.ToolResponses).toHaveLength(0);
+
+            client.CancelActiveResponse();
+            expect(client.Fake.ToolResponses).toHaveLength(1); // delegated work unaffected; result delivered
+        });
+
+        it('should be a no-op before Connect', () => {
+            const fresh = new TestGeminiClient();
+            expect(() => fresh.CancelActiveResponse()).not.toThrow();
         });
     });
 
@@ -542,6 +640,18 @@ describe('GeminiRealtimeClient', () => {
             expect(client.Playback.FlushCount).toBe(1);
             expect(client.IsAudioPlaying).toBe(false);
             expect(states).toEqual(['speaking', 'listening']);
+        });
+
+        it('should emit OnInterruption for every interrupted frame (Gemini only sends it on a true barge-in)', () => {
+            const { interruptions } = collect(client);
+            client.Emit({ serverContent: { outputTranscription: { text: 'blah' } } } as LiveServerMessage);
+            client.Emit({ serverContent: { interrupted: true } } as LiveServerMessage);
+            expect(interruptions).toHaveLength(1);
+
+            // a later turn, interrupted again
+            client.Emit({ serverContent: { outputTranscription: { text: 'more' } } } as LiveServerMessage);
+            client.Emit({ serverContent: { interrupted: true } } as LiveServerMessage);
+            expect(interruptions).toHaveLength(2);
         });
     });
 

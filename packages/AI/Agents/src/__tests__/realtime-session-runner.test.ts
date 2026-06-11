@@ -13,7 +13,8 @@ import {
     RealtimeTranscript,
     RealtimeToolCall,
     RealtimeUsage,
-    RealtimeToolDefinition
+    RealtimeToolDefinition,
+    RealtimeSessionError
 } from '@memberjunction/ai';
 import {
     RealtimeSessionRunner,
@@ -34,6 +35,8 @@ import {
  */
 class MockRealtimeSession implements IRealtimeSession {
     public RegisteredTools: RealtimeToolDefinition[] = [];
+    /** Post-start RegisterTools calls — the runner must NOT make this redundant call. */
+    public RegisterToolsCallCount = 0;
     public Closed = false;
     public CloseError: Error | null = null;
     public SentToolResults: { CallID: string; Output: string }[] = [];
@@ -42,10 +45,12 @@ class MockRealtimeSession implements IRealtimeSession {
     private toolCallHandler: ((call: RealtimeToolCall) => void) | null = null;
     private usageHandler: ((u: RealtimeUsage) => void) | null = null;
     private interruptionHandler: (() => void) | null = null;
+    private errorHandler: ((error: RealtimeSessionError) => void) | null = null;
 
     SendInput(_chunk: ArrayBuffer): void { /* no-op for tests */ }
 
     async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
+        this.RegisterToolsCallCount++;
         this.RegisteredTools = tools;
     }
 
@@ -54,6 +59,7 @@ class MockRealtimeSession implements IRealtimeSession {
     OnToolCall(handler: (call: RealtimeToolCall) => void): void { this.toolCallHandler = handler; }
     OnInterruption(handler: () => void): void { this.interruptionHandler = handler; }
     OnUsage(handler: (u: RealtimeUsage) => void): void { this.usageHandler = handler; }
+    OnError(handler: (error: RealtimeSessionError) => void): void { this.errorHandler = handler; }
 
     async SendToolResult(callID: string, output: string): Promise<void> {
         this.SentToolResults.push({ CallID: callID, Output: output });
@@ -69,8 +75,10 @@ class MockRealtimeSession implements IRealtimeSession {
     fireToolCall(call: RealtimeToolCall): void { this.toolCallHandler?.(call); }
     fireUsage(u: RealtimeUsage): void { this.usageHandler?.(u); }
     fireInterruption(): void { this.interruptionHandler?.(); }
+    fireError(error: RealtimeSessionError): void { this.errorHandler?.(error); }
 
     hasInterruptionHandler(): boolean { return this.interruptionHandler !== null; }
+    hasErrorHandler(): boolean { return this.errorHandler !== null; }
 }
 
 /**
@@ -145,12 +153,12 @@ describe('RealtimeSessionRunner', () => {
     // ── Tool set ──────────────────────────────────────────────────────
 
     describe('tool set (target-independent)', () => {
-        it('always registers the invoke-target-agent tool', async () => {
+        it('always registers the invoke-target-agent tool (via StartSession params)', async () => {
             const h = buildHarness();
             const runner = new RealtimeSessionRunner(h.deps);
             await runner.Start();
 
-            const names = h.session.RegisteredTools.map((t) => t.Name);
+            const names = (h.model.LastParams?.Tools ?? []).map((t) => t.Name);
             expect(names).toContain(INVOKE_TARGET_AGENT_TOOL_NAME);
             expect(names[0]).toBe(INVOKE_TARGET_AGENT_TOOL_NAME);
             await runner.Stop();
@@ -166,7 +174,7 @@ describe('RealtimeSessionRunner', () => {
             const runner = new RealtimeSessionRunner(h.deps);
             await runner.Start();
 
-            const names = h.session.RegisteredTools.map((t) => t.Name);
+            const names = (h.model.LastParams?.Tools ?? []).map((t) => t.Name);
             expect(names).toEqual([INVOKE_TARGET_AGENT_TOOL_NAME, 'ShowChart']);
             await runner.Stop();
         });
@@ -176,6 +184,14 @@ describe('RealtimeSessionRunner', () => {
             const runner = new RealtimeSessionRunner(h.deps);
             await runner.Start();
             expect(h.model.LastParams?.Tools?.[0]?.Name).toBe(INVOKE_TARGET_AGENT_TOOL_NAME);
+            await runner.Stop();
+        });
+
+        it('does NOT make a redundant post-start RegisterTools call (StartSession params are the registration)', async () => {
+            const h = buildHarness();
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+            expect(h.session.RegisterToolsCallCount).toBe(0);
             await runner.Stop();
         });
     });
@@ -528,6 +544,66 @@ describe('RealtimeSessionRunner', () => {
             const runner = new RealtimeSessionRunner(h.deps);
             await runner.Start();
             expect(h.session.hasInterruptionHandler()).toBe(true);
+            await runner.Stop();
+        });
+    });
+
+    // ── Session errors (OnError consumption) ──────────────────────────
+
+    describe('session errors (OnError)', () => {
+        it('wires the error handler on the session', async () => {
+            const h = buildHarness();
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+            expect(h.session.hasErrorHandler()).toBe(true);
+            await runner.Stop();
+        });
+
+        it('a FATAL error finalizes the session cleanly via Stop (close + final usage flush)', async () => {
+            const errors: string[] = [];
+            const h = buildHarness({ LogError: (msg) => errors.push(msg) });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+            h.session.fireUsage({ InputTokens: 7, OutputTokens: 3 });
+
+            h.session.fireError({ Message: 'ephemeral token expired', Code: 'token_expired', Fatal: true });
+            await new Promise((r) => setTimeout(r, 0)); // let the fire-and-forget Stop() settle
+
+            expect(h.session.Closed).toBe(true);
+            // the close-path flush persisted the accumulated usage — nothing lost
+            expect(h.checkpointSpy).toHaveBeenCalledWith({ InputTokens: 7, OutputTokens: 3 });
+            expect(errors.some((m) => m.includes('Fatal') && m.includes('ephemeral token expired') && m.includes('[token_expired]'))).toBe(true);
+        });
+
+        it('a fatal error followed by an explicit Stop stays idempotent', async () => {
+            const h = buildHarness();
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireError({ Message: 'socket dropped', Fatal: true });
+            await new Promise((r) => setTimeout(r, 0));
+            expect(h.session.Closed).toBe(true);
+
+            const result = await runner.Stop(); // second finalization is a safe no-op
+            expect(result.Success).toBe(true);
+        });
+
+        it('a NON-FATAL error is logged and the session continues', async () => {
+            const errors: string[] = [];
+            const h = buildHarness({ LogError: (msg) => errors.push(msg) });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireError({ Message: 'transient provider hiccup', Fatal: false });
+            await Promise.resolve();
+
+            expect(h.session.Closed).toBe(false);
+            expect(errors.some((m) => m.includes('non-fatal') && m.includes('transient provider hiccup'))).toBe(true);
+
+            // the session is still fully usable — e.g. transcripts keep persisting
+            h.session.fireTranscript({ Role: 'assistant', Text: 'still here', IsFinal: true });
+            await new Promise((r) => setTimeout(r, 0));
+            expect(h.persistSpy).toHaveBeenCalledTimes(1);
             await runner.Stop();
         });
     });
