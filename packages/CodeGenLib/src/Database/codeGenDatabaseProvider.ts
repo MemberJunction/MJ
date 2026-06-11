@@ -1,5 +1,6 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { logWarning } from '../Misc/status_logging';
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
 
@@ -643,6 +644,11 @@ export abstract class CodeGenDatabaseProvider {
                 parts.push(paramRef);
             }
         }
+
+        if (parts.length === 0 && !excludePrimaryKey) {
+            logWarning(`[CodeGen] generateInsertFieldString produced an empty column list for entity "${entity.Name}" (${entity.SchemaName}.${entity.BaseTable}). This typically means all columns are PKs with no additional data columns.`);
+        }
+
         return parts.join(',\n                ');
     }
 
