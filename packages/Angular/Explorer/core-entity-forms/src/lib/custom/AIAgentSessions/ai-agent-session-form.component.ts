@@ -459,7 +459,9 @@ export class MJAIAgentSessionFormComponentExtended extends MJAIAgentSessionFormC
         }
         this.navigationService.OpenNavItemByName(
             'Conversations',
-            { conversationId: this.record.ConversationID },
+            // realtimeSessionId opens the SESSION REVIEW overlay directly on arrival
+            // (the chat wrapper consumes it once) — not just the containing chat.
+            { conversationId: this.record.ConversationID, realtimeSessionId: this.record.ID },
             chatApp.ID
         );
     }
