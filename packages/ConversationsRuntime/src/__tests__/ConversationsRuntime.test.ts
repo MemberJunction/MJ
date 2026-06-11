@@ -72,6 +72,7 @@ vi.mock('@memberjunction/graphql-dataprovider', () => ({
     GraphQLDataProvider: { Instance: { PushStatusUpdates: vi.fn() } },
 }));
 
+import { StartupManager } from '@memberjunction/core';
 import { ConversationsRuntime } from '../ConversationsRuntime';
 import { MentionParser } from '../mentions/MentionParser';
 import { ConversationBridge } from '../bridge/ConversationBridge';
@@ -192,6 +193,40 @@ describe('ConversationsRuntime', () => {
             expect(runner).toBeInstanceOf(ConversationAgentRunner);
             expect(ConversationsRuntime.Instance.Streaming).toBe(streaming);
             expect(ConversationsRuntime.Instance.AgentRunner).toBe(runner);
+        });
+    });
+
+    // ────────────────────────────────────────────────────────────────────
+    // Startup registration (@RegisterForStartup — Amith feedback)
+    // ────────────────────────────────────────────────────────────────────
+
+    describe('@RegisterForStartup', () => {
+        it('registers itself with StartupManager as a deferred, non-blocking sink', () => {
+            const reg = StartupManager.Instance.GetRegistrations().find(
+                (r) => r.constructor === (ConversationsRuntime as unknown as new (...args: unknown[]) => unknown)
+            );
+            expect(reg).toBeDefined();
+            expect(reg!.options.deferred).toBe(true);
+            expect(reg!.options.deferredDelay).toBe(5000);
+            expect(reg!.options.severity).toBe('warn');
+        });
+
+        it('HandleStartup delegates to Config (single call across dependents)', async () => {
+            aiConfig.mockClear();
+            settingsConfig.mockClear();
+            conversationsConfig.mockClear();
+            await ConversationsRuntime.Instance.HandleStartup();
+            expect(aiConfig).toHaveBeenCalledTimes(1);
+            expect(settingsConfig).toHaveBeenCalledTimes(1);
+            expect(conversationsConfig).toHaveBeenCalledTimes(1);
+        });
+
+        it('HandleStartup forwards contextUser and provider through to Config', async () => {
+            aiConfig.mockClear();
+            const contextUser = { ID: 'startup-user' } as never;
+            const provider = { kind: 'startup-provider' } as never;
+            await ConversationsRuntime.Instance.HandleStartup(contextUser, provider);
+            expect(aiConfig).toHaveBeenCalledWith(false, contextUser, provider);
         });
     });
 });

@@ -484,7 +484,7 @@ The same TSDoc bar applies to every new public symbol in `ng-conversations` (slo
 
 | README | Action | What it covers |
 |---|---|---|
-| `packages/conversations-runtime/README.md` | **NEW** | Overview, "when to use this vs. the widget", `Config()` bootstrap, four short code samples (send a message, observe a conversation, register a client tool, observe Sessions). Links to the guide. |
+| `packages/ConversationsRuntime/README.md` | **NEW** | Overview, "when to use this vs. the widget", `Config()` bootstrap, four short code samples (send a message, observe a conversation, register a client tool, observe Sessions). Links to the guide. |
 | `packages/Angular/Generic/conversations/README.md` | **UPDATE** | Reposition the package as the Angular wrapper over the runtime. Full prop/event reference for the new extension surface. Slot system + three consumption modes (project / wrap / subclass). Updated embed examples that match current Form Builder + Component Studio usage. |
 | `packages/MJCoreEntities/src/engines/conversations.ts` | **JSDoc top-of-file expand** | Clarify that `ConversationEngine` is the data layer; orchestration lives in `@memberjunction/conversations-runtime`. Point readers at the new package. |
 | Any subpackage README that mentions the chat widget today | **UPDATE in place** | Audit pass. Anything that references the widget's internal services or implies they're a public API gets corrected. |
@@ -524,7 +524,7 @@ One new line in the existing development-guides list pointing to the new guide. 
 
 Vitest, `src/__tests__/`, no DB, mocks at boundaries — MJ standard.
 
-**Pure-TS runtime — `packages/conversations-runtime/src/__tests__/`:**
+**Pure-TS runtime — `packages/ConversationsRuntime/src/__tests__/`:**
 
 | Test file | Covers |
 |---|---|
@@ -549,7 +549,7 @@ Coverage target: **80%+ line coverage on the runtime package.**
 | `chat-area.events.before-after.test.ts` | Before/After cancelable event pairs — `Cancel = true` halts default behavior and suppresses the `After*` emit; `Cancel = false` (default) lets it through and fires the `After*`; informational events fire regardless. Covers `BeforeAgentTurn`/`AfterAgentTurn`, `BeforeToolInvoked`/`AfterToolInvoked`, `BeforeResponseFormSubmitted`/`AfterResponseFormSubmitted`. |
 | `chat-area.tokens.test.ts` | New `--mj-chat-*` tokens have correct fallbacks to existing semantic tokens |
 
-**One integration smoke test** in `packages/conversations-runtime/src/__tests__/integration/sendMessage.smoke.test.ts`: mock `IMetadataProvider` + mock GraphQL client, call `sendMessage()`, assert full event sequence comes back. Catches wiring regressions across all sub-components at once.
+**One integration smoke test** in `packages/ConversationsRuntime/src/__tests__/integration/sendMessage.smoke.test.ts`: mock `IMetadataProvider` + mock GraphQL client, call `sendMessage()`, assert full event sequence comes back. Catches wiring regressions across all sub-components at once.
 
 **No new Playwright tests.** Existing browser smoke tests should catch widget regressions. Add Playwright coverage only if real regressions surface during dogfooding.
 
@@ -605,7 +605,7 @@ The work decomposes into six steps (the original Step 1 migration is gone — se
 
 **Step 6 — Documentation + Sessions integration stub** (~3.5 hrs)
 - TSDoc pass over the runtime public API.
-- `packages/conversations-runtime/README.md` (new).
+- `packages/ConversationsRuntime/README.md` (new).
 - `packages/Angular/Generic/conversations/README.md` update.
 - Top-of-file JSDoc expand on `ConversationEngine` in `core-entities`.
 - Audit pass over subpackage READMEs that mention the widget.

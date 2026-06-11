@@ -24,7 +24,7 @@
  * @module @memberjunction/conversations-runtime
  */
 
-import { BaseEngine, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { BaseEngine, IMetadataProvider, IStartupSink, RegisterForStartup, UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ApplicationSettingEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ClientToolRegistry } from '@memberjunction/ai-agent-client';
@@ -83,9 +83,15 @@ import { IConversationsRuntimeContext } from './context/IConversationsRuntimeCon
  * });
  * ```
  */
+@RegisterForStartup({
+    deferred: true,
+    deferredDelay: 5000,
+    severity: 'warn',
+    description: 'Conversations runtime (mentions, default-agent, agent runner) pre-warming'
+})
 export class ConversationsRuntime
     extends BaseEngine<ConversationsRuntime>
-    implements IConversationsRuntimeContext
+    implements IConversationsRuntimeContext, IStartupSink
 {
     /**
      * The singleton instance. Backed by the Global Object Store so the same instance is
@@ -243,6 +249,17 @@ export class ConversationsRuntime
             ApplicationSettingEngine.Instance.Config(forceRefresh, contextUser, provider),
             ConversationEngine.Instance.Config(forceRefresh, contextUser, provider),
         ]);
+    }
+
+    /**
+     * {@link IStartupSink} entry point fired by the MJ startup manager when this class
+     * is registered via `@RegisterForStartup`. Pre-warms the runtime so the first user
+     * to open a conversations surface doesn't pay the load cost. Deferred + non-blocking
+     * per the decorator config — failures are logged (`severity: 'warn'`) but never
+     * block app boot.
+     */
+    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        await this.Config(false, contextUser, provider);
     }
 
     /**
