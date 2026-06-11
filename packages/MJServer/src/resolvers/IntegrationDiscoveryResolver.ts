@@ -1609,12 +1609,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 continue;
             }
 
-            // If columns exist but no PK was found, log diagnostic info and skip rather than
-            // generating broken DDL with UNIQUE ([ID]) on a non-existent column.
+            // Provable-only: no PK we could prove from the streamed data (single OR composite) means
+            // the object is NOT added — and we say so clearly. We never fabricate a key (e.g. "all
+            // columns as the PK"); a wrong identity is worse than an honest omission. The fix for a
+            // missing PK is to STREAM MORE DATA at discovery time so the stats can prove one, not to
+            // invent a key here.
             if (primaryKeyFields.length === 0 && columns.length > 0) {
                 droppedNoPrimaryKey.push(obj.SourceObjectName);
                 const fieldNames = sourceObj.Fields.map(f => `${f.Name}(pk=${f.IsPrimaryKey})`).join(', ');
-                LogError(`[buildTargetConfigs] Skipping "${obj.SourceObjectName}" — ${columns.length} columns but NO primary key field found. Fields: [${fieldNames}]`);
+                LogError(`[buildTargetConfigs] Skipping "${obj.SourceObjectName}" — ${columns.length} columns but NO provable primary key. Fields: [${fieldNames}]`);
                 continue;
             }
 

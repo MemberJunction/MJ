@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -11,689 +11,143 @@ import {
     type ConnectionTestResult,
     type ExternalObjectSchema,
     type ExternalFieldSchema,
+    type ExternalRecord,
     type FetchContext,
     type FetchBatchResult,
-    type ExternalRecord,
-    type SourceSchemaInfo,
-    type SourceFieldInfo,
-    type SourceRelationshipInfo,
-    type IntrospectSchemaOptions,
 } from '@memberjunction/integration-engine';
 import { z } from 'zod';
 
-// ─── Connection config ──────────────────────────────────────────────────
-
 /**
- * Connection configuration for the PropFuel (re:Members) file-feed connector.
+ * PropFuel data-export file-feed connector.
  *
- * PropFuel integrates via a scheduled JSON data-export FILE FEED — not a per-object
- * REST CRUD API. Two credential fields are required:
- *  - `Token`     — bearer token sent on every request as `Authorization: Bearer <token>`.
- *  - `AccountID` — numeric tenant id embedded in every URL path (e.g. `2019`).
- */
-export interface PropFuelConnectionConfig {
-    /** Bearer token for the Authorization header. */
-    Token: string;
-    /** Numeric account/tenant id embedded in the dataexport URL paths. */
-    AccountID: string;
-    /** Optional override of the base host. Defaults to https://app.propfuel.com */
-    BaseURL?: string;
-    /** Max retries for retryable transport failures. Default: 3 */
-    MaxRetries?: number;
-    /** HTTP request timeout in milliseconds. Default: 30000 */
-    RequestTimeoutMs?: number;
-}
-
-/** Zod schema for the parsed credential / configuration shape. */
-const PropFuelConnectionConfigSchema = z.object({
-    Token: z.string().min(1, 'PropFuelConnector: Token is required'),
-    AccountID: z.union([z.string(), z.number()]).transform(v => String(v)),
-    BaseURL: z.string().optional(),
-    MaxRetries: z.number().optional(),
-    RequestTimeoutMs: z.number().optional(),
-});
-
-/** Auth context carrying the parsed PropFuel config. */
-interface PropFuelAuthContext extends RESTAuthContext {
-    Config: PropFuelConnectionConfig;
-}
-
-// ─── Constants ──────────────────────────────────────────────────────────
-
-const PROPFUEL_DEFAULT_BASE_URL = 'https://app.propfuel.com';
-const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
-
-/** The three proven data streams, keyed by lowercase IntegrationObject name. */
-const PROPFUEL_STREAMS = ['checkin_questions', 'clicks', 'opens'] as const;
-type PropFuelStream = (typeof PROPFUEL_STREAMS)[number];
-
-/**
- * Maps an IntegrationObject (stream) name to the `[data type]` token that appears
- * in its export filenames: `[microtime]-[datatype].json`. Confirmed from live broker
- * results: `…-checkin_questions.json`, `…-clicks.json`, `…-opens.json`.
- */
-const STREAM_FILENAME_TOKEN: Record<PropFuelStream, string> = {
-    checkin_questions: 'checkin_questions',
-    clicks: 'clicks',
-    opens: 'opens',
-};
-
-/**
- * Per-stream flattening descriptor. The download files contain records with NESTED
- * objects; the connector flattens them into the exact IOF column names the frozen
- * contract declares. checkin_questions uses DOTTED names (`checkin_question.id`),
- * while clicks/opens use UNDERSCORE-prefixed names (`click_id`, `open_id`, `contact_id`).
+ * PropFuel exposes a per-tenant hourly data-export feed as a set of JSON files. There is NO
+ * public OpenAPI spec and NO describe/introspection endpoint, so this connector encodes the
+ * DISCOVERY MECHANISM, never a baked answer:
  *
- * Each entry maps a nested source-object key in the raw record to the column-name PREFIX
- * + separator used when flattening that object's fields. The record's leading object
- * (the stream's own record object) is listed first.
- */
-interface FlattenRule {
-    /** Key of the nested object in the raw download record (e.g. 'checkin_question', 'contact'). */
-    SourceKey: string;
-    /** Prefix applied to each leaf field name when flattening this object. */
-    Prefix: string;
-    /** Separator between prefix and leaf field name ('.' for dotted, '_' for underscore). */
-    Separator: string;
-}
-
-const STREAM_FLATTEN_RULES: Record<PropFuelStream, FlattenRule[]> = {
-    // Dotted names: checkin_question.id, contact.id, question.id, campaign.id
-    checkin_questions: [
-        { SourceKey: 'checkin_question', Prefix: 'checkin_question', Separator: '.' },
-        { SourceKey: 'contact', Prefix: 'contact', Separator: '.' },
-        { SourceKey: 'question', Prefix: 'question', Separator: '.' },
-        { SourceKey: 'campaign', Prefix: 'campaign', Separator: '.' },
-    ],
-    // Underscore names: click_id, contact_id, campaign_id, checkin_notification_id
-    clicks: [
-        { SourceKey: 'click', Prefix: 'click', Separator: '_' },
-        { SourceKey: 'contact', Prefix: 'contact', Separator: '_' },
-        { SourceKey: 'campaign', Prefix: 'campaign', Separator: '_' },
-        { SourceKey: 'checkin_notification', Prefix: 'checkin_notification', Separator: '_' },
-    ],
-    // Underscore names: open_id, contact_id, campaign_id, checkin_notification_id
-    opens: [
-        { SourceKey: 'open', Prefix: 'open', Separator: '_' },
-        { SourceKey: 'contact', Prefix: 'contact', Separator: '_' },
-        { SourceKey: 'campaign', Prefix: 'campaign', Separator: '_' },
-        { SourceKey: 'checkin_notification', Prefix: 'checkin_notification', Separator: '_' },
-    ],
-};
-
-/** The PK column name (post-flatten) for each stream. */
-const STREAM_PK_COLUMN: Record<PropFuelStream, string> = {
-    checkin_questions: 'checkin_question.id',
-    clicks: 'click_id',
-    opens: 'open_id',
-};
-
-/**
- * Soft-delete tombstone column (post-flatten) per stream. Only checkin_questions is
- * mutable with soft-delete; clicks/opens are insert-only event streams (no tombstone).
- */
-const STREAM_TOMBSTONE_COLUMN: Partial<Record<PropFuelStream, string>> = {
-    checkin_questions: 'checkin_question.deleted_at',
-};
-
-/** Field schema for action/static discovery — surfaces EVERY proven column per stream. */
-interface PropFuelStaticField {
-    Name: string;
-    Type: string;
-    IsPrimaryKey: boolean;
-    IsRequired: boolean;
-    Description?: string;
-}
-
-/**
- * Static per-stream field catalog — mirrors the frozen contract's PerStreamSchema so
- * discovery works before the integration metadata is seeded into the DB. Every proven
- * field is surfaced (bounded typing is applied downstream by the schema builder; here
- * we report a generous source type so columns are sized comfortably, never MAX-stingy).
- */
-const PROPFUEL_FIELDS: Record<PropFuelStream, PropFuelStaticField[]> = {
-    checkin_questions: [
-        { Name: 'checkin_question.id', Type: 'Integer', IsPrimaryKey: true, IsRequired: true, Description: 'Primary key of the check-in question record (live-proven identity field).' },
-        { Name: 'checkin_question.checkin_id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'Identifier of the parent check-in.' },
-        { Name: 'checkin_question.rating', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'Numeric rating supplied when answering. Null until answered.' },
-        { Name: 'checkin_question.selection', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Selected choice value. Null until answered.' },
-        { Name: 'checkin_question.response', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Free-text response. Null until answered.' },
-        { Name: 'checkin_question.answered_at', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Timestamp the contact answered (update signal).' },
-        { Name: 'checkin_question.created_at', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Timestamp the record was created.' },
-        { Name: 'checkin_question.updated_at', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Timestamp of last update (record-level incremental watermark field).' },
-        { Name: 'checkin_question.deleted_at', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Soft-delete tombstone timestamp. Non-null => deleted.' },
-        { Name: 'contact.id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'Identifier of the contact.' },
-        { Name: 'contact.name', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Display name of the contact.' },
-        { Name: 'contact.email', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Email address of the contact.' },
-        { Name: 'contact.external_ids', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'External identifier mapping (observed only null; type unknown).' },
-        { Name: 'question.id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'Identifier of the underlying question definition.' },
-        { Name: 'question.display', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Display text of the question.' },
-        { Name: 'question.follow_up', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Follow-up prompt text (observed only null; type unknown).' },
-        { Name: 'question.response_type', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Response type of the question.' },
-        { Name: 'campaign.id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'Identifier of the campaign.' },
-        { Name: 'campaign.name', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'Name of the campaign.' },
-    ],
-    clicks: [
-        { Name: 'click_id', Type: 'Integer', IsPrimaryKey: true, IsRequired: true, Description: 'click.id — primary key of the click event.' },
-        { Name: 'click_type', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'click.type' },
-        { Name: 'click_checkin_id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'click.checkin_id' },
-        { Name: 'click_clicked_at', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'click.clicked_at' },
-        { Name: 'click_link', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'click.link' },
-        { Name: 'contact_id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'contact.id' },
-        { Name: 'contact_name', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'contact.name' },
-        { Name: 'contact_email', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'contact.email' },
-        { Name: 'campaign_id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'campaign.id' },
-        { Name: 'campaign_name', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'campaign.name' },
-        { Name: 'checkin_notification_id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'checkin_notification.id' },
-        { Name: 'checkin_notification_type', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'checkin_notification.type' },
-    ],
-    opens: [
-        { Name: 'open_id', Type: 'Integer', IsPrimaryKey: true, IsRequired: true, Description: 'open.id — primary key of the open event.' },
-        { Name: 'open_type', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'open.type' },
-        { Name: 'open_checkin_id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'open.checkin_id' },
-        { Name: 'open_opened_at', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'open.opened_at' },
-        { Name: 'contact_id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'contact.id' },
-        { Name: 'contact_name', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'contact.name' },
-        { Name: 'contact_email', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'contact.email' },
-        { Name: 'campaign_id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'campaign.id' },
-        { Name: 'campaign_name', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'campaign.name' },
-        { Name: 'checkin_notification_id', Type: 'Integer', IsPrimaryKey: false, IsRequired: false, Description: 'checkin_notification.id' },
-        { Name: 'checkin_notification_type', Type: 'String', IsPrimaryKey: false, IsRequired: false, Description: 'checkin_notification.type' },
-    ],
-};
-
-/** Result of parsing a list-endpoint filename into its microtime cursor + datatype token. */
-interface ParsedFeedFile {
-    /** The raw filename as returned by the list endpoint. */
-    FileName: string;
-    /** The leading microtime prefix (Unix seconds with sub-second precision, e.g. "1777565710.1224"). */
-    Microtime: string;
-    /** The numeric microtime value, for ordering / watermark comparison. */
-    MicrotimeValue: number;
-    /** The `[data type]` segment of the filename. */
-    DataType: string;
-}
-
-// ─── Connector ──────────────────────────────────────────────────────────
-
-/**
- * Connector for the PropFuel (re:Members) member-engagement platform.
+ *  - {@link DiscoverObjects} calls `GET /dataexport/{AccountID}/list` and derives each object
+ *    from the `[microtime]-[datatype].json` filename suffix. The concrete data-type set is
+ *    whatever the live listing actually contains — never a static `PROPFUEL_STREAMS` array.
+ *  - {@link DiscoverFields} lists the files for a data type, downloads ONE sample file, and
+ *    streams its records through the base {@link DiscoverFieldsViaStream} helper to derive the
+ *    field set + data-informed soft-PK from real values — never a frozen `STREAM_FIELDS` catalog.
  *
- * PropFuel integrates via a scheduled JSON **data-export file feed**, NOT a per-object
- * REST CRUD API. A PropFuel-side job emits `.json` export files (~hourly); the connector
- * lists, downloads, and imports them. One IntegrationObject per proven data stream:
- *  - `checkin_questions` — mutable Q&A records; upsert-by-identity with soft-delete tombstones.
- *  - `clicks`            — insert-only link-click event stream.
- *  - `opens`             — insert-only email/message open event stream.
+ * Incremental sync uses a SYNTHETIC, FILE-LEVEL, CLIENT-SIDE cursor `__file_microtime`: the feed
+ * is append-only and chronologically sortable by the filename microtime prefix, so the connector
+ * resumes by tracking the max microtime seen across processed files (WatermarkService). The vendor
+ * `ack` endpoint is operational state and is NOT used as the read-only incremental cursor.
  *
- * It extends BaseRESTIntegrationConnector for the HTTP + Bearer-auth + JSON transport, but
- * OVERRIDES discovery and FetchChanges for FILE-FEED semantics (there is no record-level GET
- * by id, no per-object list path — the data arrives as whole files).
+ * READ-ONLY: the data-export feed creates/updates/deletes no source records, so all write
+ * capability getters stay false and no ack/POST/delete path is exercised.
  *
- * Watermark/cursor: the leading `[microtime]` filename prefix. Files are processed oldest →
- * newest; the highest fully-downloaded file's microtime is the durable cursor, persisted by the
- * engine from FetchBatchResult.NewWatermarkValue. A partial-batch failure (a download error)
- * throws out of FetchChanges, so the engine never advances the watermark and the next run
- * resumes from the same point.
- *
- * WRITE POSTURE: PULL-ONLY. SupportsWrite=false and SupportsCreate/Update/Delete=false. The
- * `ack` endpoint (POST /dataexport/{AccountID}/ack/{file}) is the production CURSOR-ADVANCE
- * (consumes a processed file from the queue) — it is NOT record CRUD and NOT a write capability.
- * It is exposed via AcknowledgeFile and called ONLY on the real sync queue-advance path; it is
- * NEVER called from FetchChanges or from any test (tests are read-only: list + download only).
+ * AccountID and the bearer Token both come from the credential (or Configuration JSON) — the
+ * AccountID is per-tenant config and is NEVER hardcoded.
  */
 @RegisterClass(BaseIntegrationConnector, 'PropFuelConnector')
 export class PropFuelConnector extends BaseRESTIntegrationConnector {
 
-    /** Timestamp of the last HTTP request — reserved for throttling hooks. */
-    private lastRequestTime = 0;
-
-    // ── Identity + capability surface (PULL-ONLY) ──────────────────────
-
-    public override get IntegrationName(): string { return 'PropFuel'; }
-
-    // No record-level write API exists. ack is a feed cursor-advance, not record CRUD.
-    public override get SupportsCreate(): boolean { return false; }
-    public override get SupportsUpdate(): boolean { return false; }
-    public override get SupportsDelete(): boolean { return false; }
-    public override get SupportsSearch(): boolean { return false; }
-    public override get SupportsListing(): boolean { return false; }
-
-    /**
-     * Keyset/no-watermark resume hint. clicks/opens are insert-only event streams with no
-     * per-record modified column; their stable ordering key is the integer PK, which the engine
-     * can use for seek-resume. checkin_questions carries a real record-level watermark
-     * (updated_at), so it returns null here (watermark-incremental, not keyset).
-     */
-    public override StableOrderingKey(objectName: string): string | null {
-        const stream = this.normalizeStream(objectName);
-        if (stream === 'clicks') return 'click_id';
-        if (stream === 'opens') return 'open_id';
-        return null;
+    /** Verbatim three-way invariant name: ClassName / IntegrationName getter / MJ: Integrations.Name. */
+    public override get IntegrationName(): string {
+        return 'PropFuel';
     }
 
-    // ── Discovery (file-feed: static per-stream catalog) ───────────────
+    // ─── Capability surface (read-only file feed) ────────────────────
+    // SupportsCreate/Update/Delete stay false (BaseIntegrationConnector defaults). The data-export
+    // feed is a pull-only source; the ack endpoint is operational and is not modelled as a write.
 
     /**
-     * Returns the three proven data streams. Overrides the base cache-driven discovery so the
-     * connector is usable before the integration metadata is seeded into the DB.
+     * KEYSET / no-watermark resume hint: every PropFuel object is a data-export file stream ordered
+     * by the filename microtime prefix, so 'microtime' is the stable, monotonic ordering key for all
+     * of them (the docs-provable feed object and every runtime-discovered data-type stream alike).
      */
-    public override async DiscoverObjects(
-        _companyIntegration: MJCompanyIntegrationEntity,
-        _contextUser: UserInfo
-    ): Promise<ExternalObjectSchema[]> {
-        return PROPFUEL_STREAMS.map(stream => ({
-            Name: stream,
-            Label: this.streamLabel(stream),
-            Description: this.streamDescription(stream),
-            // Only checkin_questions has a record-level incremental watermark (updated_at).
-            SupportsIncrementalSync: stream === 'checkin_questions',
-            SupportsWrite: false,
-        }));
+    public override StableOrderingKey(_objectName: string): string | null {
+        return MICROTIME_ORDERING_KEY;
     }
 
     /**
-     * Returns the proven field catalog for the named stream. Every proven column is surfaced.
+     * The file-feed microtime IS a reliable monotonic high-water mark: PropFuel emits export files in
+     * ascending microtime order, and an updated record re-appears in a NEW (higher-microtime) file. So
+     * `NewWatermarkValue` (= max microtime seen) is the true global max — the engine can NARROW the next
+     * incremental to `microtime > watermark` instead of clearing the keyset position and re-scanning the
+     * whole stream every run. Without this, a clean sync's keyset-resume marker is cleared and every
+     * incremental re-walks the entire object (correct via content-hash, but wasteful at scale).
      */
-    public override async DiscoverFields(
-        _companyIntegration: MJCompanyIntegrationEntity,
-        objectName: string,
-        _contextUser: UserInfo
-    ): Promise<ExternalFieldSchema[]> {
-        const stream = this.normalizeStream(objectName);
-        if (!stream) return [];
-        return PROPFUEL_FIELDS[stream].map(f => ({
-            Name: f.Name,
-            Label: f.Name,
-            Description: f.Description,
-            DataType: f.Type,
-            IsRequired: f.IsRequired,
-            IsPrimaryKey: f.IsPrimaryKey,
-            IsUniqueKey: f.IsPrimaryKey,
-            IsReadOnly: true,
-            IsForeignKey: false,
-            ForeignKeyTarget: null,
-        }));
+    public override get MonotonicWatermark(): boolean {
+        return true;
     }
+
+    // ─── Auth + transport (BaseRESTIntegrationConnector abstracts) ────
 
     /**
-     * Builds the source-schema introspection result from the static catalog, additionally
-     * surfacing each stream's IncrementalWatermarkField (the base IntrospectSchema does not).
-     * Only checkin_questions has a record-level watermark; clicks/opens have none (file-level
-     * microtime cursor only).
+     * Resolves the bearer Token + per-tenant AccountID from the linked Credential entity, falling
+     * back to the CompanyIntegration.Configuration JSON. The credential bytes never leave this scope.
      */
-    public override async IntrospectSchema(
-        companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo,
-        options?: IntrospectSchemaOptions
-    ): Promise<SourceSchemaInfo> {
-        const wanted = options?.ObjectNames && options.ObjectNames.length > 0
-            ? new Set(options.ObjectNames.map(n => n.toLowerCase()))
-            : null;
-        const streams = PROPFUEL_STREAMS.filter(s => !wanted || wanted.has(s));
-
-        const result: SourceSchemaInfo = { Objects: [] };
-        for (const stream of streams) {
-            const fields = await this.DiscoverFields(companyIntegration, stream, contextUser);
-            const sourceFields: SourceFieldInfo[] = fields.map(f => ({
-                Name: f.Name,
-                Label: f.Label,
-                Description: f.Description,
-                SourceType: f.DataType,
-                IsRequired: f.IsRequired,
-                AllowsNull: f.AllowsNull,
-                MaxLength: f.MaxLength ?? null,
-                Precision: f.Precision ?? null,
-                Scale: f.Scale ?? null,
-                DefaultValue: f.DefaultValue ?? null,
-                IsPrimaryKey: f.IsPrimaryKey ?? false,
-                IsUniqueKey: f.IsUniqueKey,
-                IsReadOnly: f.IsReadOnly,
-                IsForeignKey: f.IsForeignKey ?? false,
-                ForeignKeyTarget: f.ForeignKeyTarget ?? null,
-            }));
-            const relationships: SourceRelationshipInfo[] = [];
-            result.Objects.push({
-                ExternalName: stream,
-                ExternalLabel: this.streamLabel(stream),
-                Description: this.streamDescription(stream),
-                Fields: sourceFields,
-                PrimaryKeyFields: sourceFields.filter(f => f.IsPrimaryKey).map(f => f.Name),
-                Relationships: relationships,
-                IncrementalWatermarkField: stream === 'checkin_questions' ? 'checkin_question.updated_at' : undefined,
-            });
-        }
-        return result;
-    }
-
-    // ── FetchChanges (file-feed pull) ──────────────────────────────────
-
-    /**
-     * File-feed pull: list → filter by this stream's datatype → sort oldest→newest by the leading
-     * microtime → download each file after the watermark → flatten + emit records.
-     *
-     * The microtime filename prefix is the cursor. NewWatermarkValue is the highest microtime of a
-     * FULLY-downloaded file; if a download fails mid-iteration the method throws, the engine catches
-     * it and never advances the watermark, so the next run resumes from the same point.
-     *
-     * NEVER calls ack — that is the production cursor-advance on the queue, exercised only by the
-     * real sync queue-advance path (AcknowledgeFile), never during fetch or tests.
-     */
-    public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const stream = this.normalizeStream(ctx.ObjectName);
-        if (!stream) {
-            return {
-                Records: [],
-                HasMore: false,
-                Warnings: [{ Code: 'UNKNOWN_STREAM', Message: `No PropFuel stream mapped for object "${ctx.ObjectName}"` }],
-            };
-        }
-
-        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser) as PropFuelAuthContext;
-        const allFiles = await this.listFiles(auth);
-        const filesForStream = this.selectFilesForStream(allFiles, stream, ctx.WatermarkValue);
-
-        if (filesForStream.length === 0) {
-            return { Records: [], HasMore: false };
-        }
-
-        const records: ExternalRecord[] = [];
-        let highestProcessedMicrotime: string | null = null;
-
-        // Oldest → newest. A download failure throws BEFORE advancing highestProcessedMicrotime,
-        // leaving the watermark unchanged for the whole batch (partial-failure safety).
-        for (const file of filesForStream) {
-            const rawRecords = await this.downloadFile(auth, file.FileName);
-            for (const raw of rawRecords) {
-                records.push(this.buildExternalRecord(raw, stream));
-            }
-            highestProcessedMicrotime = file.Microtime;
-        }
-
-        return {
-            Records: records,
-            HasMore: false,
-            NewWatermarkValue: highestProcessedMicrotime ?? undefined,
-        };
-    }
-
-    /**
-     * Acknowledges a processed file — the PRODUCTION cursor-advance. POST /dataexport/{AccountID}/ack/{file}
-     * consumes the file from the queue. This is NOT record CRUD and NOT a write capability; it is the
-     * feed's "advance the cursor" primitive, invoked ONLY by the real sync queue-advance path after a file
-     * is fully imported. It is NEVER called from FetchChanges or from any test (read-only testing only).
-     */
-    public async AcknowledgeFile(
-        companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo,
-        fileName: string
-    ): Promise<boolean> {
-        const auth = await this.Authenticate(companyIntegration, contextUser) as PropFuelAuthContext;
-        const url = `${this.accountBasePath(auth)}/ack/${encodeURIComponent(fileName)}`;
-        const headers = this.BuildHeaders(auth);
-        const resp = await this.MakeHTTPRequest(auth, url, 'POST', headers);
-        return resp.Status >= 200 && resp.Status < 300;
-    }
-
-    // ── TestConnection (read-only: list only) ──────────────────────────
-
-    /**
-     * Verifies connectivity by hitting GET /dataexport/{AccountID}/list (read-only — no ack, no
-     * download mutation). A 2xx response confirms both the bearer token and the account path.
-     */
-    public async TestConnection(
-        companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo
-    ): Promise<ConnectionTestResult> {
-        try {
-            const auth = await this.Authenticate(companyIntegration, contextUser) as PropFuelAuthContext;
-            const url = `${this.accountBasePath(auth)}/list`;
-            const headers = this.BuildHeaders(auth);
-            const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
-            if (resp.Status < 200 || resp.Status >= 300) {
-                return { Success: false, Message: `PropFuel TestConnection failed: HTTP ${resp.Status}` };
-            }
-            return {
-                Success: true,
-                Message: 'Successfully connected to PropFuel data-export feed',
-                ServerVersion: 'PropFuel data-export API',
-            };
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            return { Success: false, Message: `Connection failed: ${message}` };
-        }
-    }
-
-    // ── File-feed helpers ──────────────────────────────────────────────
-
-    /** Lists available export files via GET /dataexport/{AccountID}/list. */
-    private async listFiles(auth: PropFuelAuthContext): Promise<ParsedFeedFile[]> {
-        const url = `${this.accountBasePath(auth)}/list`;
-        const headers = this.BuildHeaders(auth);
-        const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
-        if (resp.Status < 200 || resp.Status >= 300) {
-            throw new Error(`PropFuel list failed: HTTP ${resp.Status}`);
-        }
-        const names = this.extractFileNames(resp.Body);
-        const parsed: ParsedFeedFile[] = [];
-        for (const name of names) {
-            const file = this.parseFeedFileName(name);
-            if (file) parsed.push(file);
-        }
-        return parsed;
-    }
-
-    /**
-     * Downloads one export file via GET /dataexport/{AccountID}/download/{file}.
-     * The file body is a JSON array of record objects.
-     */
-    private async downloadFile(auth: PropFuelAuthContext, fileName: string): Promise<Record<string, unknown>[]> {
-        const url = `${this.accountBasePath(auth)}/download/${encodeURIComponent(fileName)}`;
-        const headers = this.BuildHeaders(auth);
-        const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
-        if (resp.Status < 200 || resp.Status >= 300) {
-            throw new Error(`PropFuel download failed for "${fileName}": HTTP ${resp.Status}`);
-        }
-        return this.NormalizeResponse(resp.Body, null);
-    }
-
-    /**
-     * Selects the export files belonging to `stream`, sorted oldest → newest by microtime,
-     * keeping only those strictly after the supplied watermark (the last fully-processed microtime).
-     */
-    private selectFilesForStream(
-        files: ParsedFeedFile[],
-        stream: PropFuelStream,
-        watermark: string | null
-    ): ParsedFeedFile[] {
-        const token = STREAM_FILENAME_TOKEN[stream];
-        const watermarkValue = watermark != null && watermark.length > 0 ? Number(watermark) : null;
-        const filtered = files.filter(f => {
-            if (f.DataType !== token) return false;
-            if (watermarkValue == null || Number.isNaN(watermarkValue)) return true;
-            return f.MicrotimeValue > watermarkValue;
-        });
-        // Sort ascending by microtime so we process oldest first and advance the cursor monotonically.
-        filtered.sort((a, b) => a.MicrotimeValue - b.MicrotimeValue);
-        return filtered;
-    }
-
-    /**
-     * Parses a feed filename `[microtime]-[data type].json` into its parts.
-     * Returns null when the name doesn't match the expected pattern.
-     */
-    private parseFeedFileName(name: string): ParsedFeedFile | null {
-        const trimmed = name.replace(/\.json$/i, '');
-        const dashIdx = trimmed.indexOf('-');
-        if (dashIdx <= 0) return null;
-        const microtime = trimmed.slice(0, dashIdx);
-        const dataType = trimmed.slice(dashIdx + 1);
-        const microtimeValue = Number(microtime);
-        if (Number.isNaN(microtimeValue)) return null;
-        return { FileName: name, Microtime: microtime, MicrotimeValue: microtimeValue, DataType: dataType };
-    }
-
-    /**
-     * Extracts filenames from the list-endpoint response, tolerating both a bare string array
-     * and an array of objects carrying the name under `file` / `name` / `filename`.
-     */
-    private extractFileNames(body: unknown): string[] {
-        const arr = Array.isArray(body)
-            ? body
-            : (body && typeof body === 'object' && Array.isArray((body as Record<string, unknown>).files)
-                ? (body as Record<string, unknown>).files as unknown[]
-                : []);
-        const out: string[] = [];
-        for (const item of arr) {
-            if (typeof item === 'string') {
-                out.push(item);
-            } else if (item && typeof item === 'object') {
-                const o = item as Record<string, unknown>;
-                const candidate = o.file ?? o.name ?? o.filename;
-                if (typeof candidate === 'string') out.push(candidate);
-            }
-        }
-        return out;
-    }
-
-    /**
-     * Flattens a raw download record into an ExternalRecord with the exact IOF column names and
-     * builds the record identity. checkin_questions is upsert-by-identity (PK = checkin_question.id)
-     * with soft-delete tombstones (deleted_at presence → IsDeleted); clicks/opens are insert-only.
-     */
-    private buildExternalRecord(raw: Record<string, unknown>, stream: PropFuelStream): ExternalRecord {
-        const fields = this.flattenRecord(raw, stream);
-        const pkColumn = STREAM_PK_COLUMN[stream];
-        const pkValue = fields[pkColumn];
-        const externalID = pkValue != null ? String(pkValue) : '';
-
-        const record: ExternalRecord = {
-            ExternalID: externalID,
-            ObjectType: stream,
-            Fields: fields,
-        };
-
-        // Tombstone application: only checkin_questions carries a soft-delete column.
-        const tombstoneColumn = STREAM_TOMBSTONE_COLUMN[stream];
-        if (tombstoneColumn) {
-            const tombstone = fields[tombstoneColumn];
-            record.IsDeleted = tombstone != null && String(tombstone).trim().length > 0;
-        } else {
-            record.IsDeleted = false;
-        }
-
-        return record;
-    }
-
-    /**
-     * Flattens the raw record's nested objects into the per-stream column names, per
-     * STREAM_FLATTEN_RULES. Any object key present in the raw record but not covered by a rule
-     * is flattened generically under its own key with the stream's default separator, so no
-     * proven field is silently dropped if the vendor adds one.
-     */
-    private flattenRecord(raw: Record<string, unknown>, stream: PropFuelStream): Record<string, unknown> {
-        const rules = STREAM_FLATTEN_RULES[stream];
-        const defaultSeparator = stream === 'checkin_questions' ? '.' : '_';
-        const out: Record<string, unknown> = {};
-        const handledKeys = new Set(rules.map(r => r.SourceKey));
-
-        for (const rule of rules) {
-            const nested = raw[rule.SourceKey];
-            if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-                for (const [leaf, value] of Object.entries(nested as Record<string, unknown>)) {
-                    out[`${rule.Prefix}${rule.Separator}${leaf}`] = value;
-                }
-            }
-        }
-
-        // Generic fallthrough for any nested object/scalar the rules didn't cover.
-        for (const [key, value] of Object.entries(raw)) {
-            if (handledKeys.has(key)) continue;
-            if (value && typeof value === 'object' && !Array.isArray(value)) {
-                for (const [leaf, leafValue] of Object.entries(value as Record<string, unknown>)) {
-                    out[`${key}${defaultSeparator}${leaf}`] = leafValue;
-                }
-            } else {
-                out[key] = value;
-            }
-        }
-
-        return out;
-    }
-
-    private accountBasePath(auth: PropFuelAuthContext): string {
-        const base = (auth.Config.BaseURL ?? PROPFUEL_DEFAULT_BASE_URL).replace(/\/+$/, '');
-        return `${base}/dataexport/${encodeURIComponent(auth.Config.AccountID)}`;
-    }
-
-    private normalizeStream(objectName: string): PropFuelStream | null {
-        const lower = objectName.toLowerCase();
-        return (PROPFUEL_STREAMS as readonly string[]).includes(lower) ? (lower as PropFuelStream) : null;
-    }
-
-    private streamLabel(stream: PropFuelStream): string {
-        switch (stream) {
-            case 'checkin_questions': return 'Check-in Questions';
-            case 'clicks': return 'Clicks';
-            case 'opens': return 'Opens';
-        }
-    }
-
-    private streamDescription(stream: PropFuelStream): string {
-        switch (stream) {
-            case 'checkin_questions':
-                return 'PropFuel check-in question (Q&A) records — mutable upsert-with-soft-delete stream sourced from the file feed.';
-            case 'clicks':
-                return 'PropFuel link-click event stream — insert-only append feed.';
-            case 'opens':
-                return 'PropFuel email/message open event stream — insert-only append feed.';
-        }
-    }
-
-    // ── Abstract REST hooks (BaseRESTIntegrationConnector) ─────────────
-
     protected async Authenticate(
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
-    ): Promise<RESTAuthContext> {
-        const config = await this.parseConfig(companyIntegration, contextUser);
-        return { Token: config.Token, Config: config } as PropFuelAuthContext;
+    ): Promise<PropFuelAuthContext> {
+        const creds = await this.LoadCredentials(companyIntegration, contextUser);
+        return { Token: creds.Token, AccountID: creds.AccountID };
     }
 
-    /**
-     * Builds the auth + content headers sent on EVERY request:
-     *  - Authorization: Bearer <token>
-     *  - Content-Type: application/json
-     *
-     * A bearer token in a header is not a crypto operation (no signing/hashing), so it is set
-     * directly here; there is no inlined cryptography.
-     */
-    protected BuildHeaders(auth: RESTAuthContext): Record<string, string> {
-        const token = auth.Token ?? '';
+    /** Static Bearer header. No crypto/signing is required for a static token, so no auth-helper is used. */
+    protected BuildHeaders(auth: PropFuelAuthContext): Record<string, string> {
         return {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${auth.Token}`,
             'Accept': 'application/json',
         };
     }
 
-    /**
-     * NormalizeResponse for the file feed: a downloaded file body is a JSON ARRAY of record
-     * objects at the root. responseDataKey is always null for this connector.
-     */
-    protected NormalizeResponse(rawBody: unknown, responseDataKey: string | null): Record<string, unknown>[] {
-        if (responseDataKey) {
-            const body = rawBody as Record<string, unknown> | null;
-            const arr = body ? body[responseDataKey] : undefined;
-            return Array.isArray(arr) ? (arr as Record<string, unknown>[]) : [];
-        }
-        return Array.isArray(rawBody) ? (rawBody as Record<string, unknown>[]) : [];
+    /** Base URL for the data-export feed, tenant-scoped by the resolved AccountID. */
+    protected GetBaseURL(_companyIntegration: MJCompanyIntegrationEntity, auth: PropFuelAuthContext): string {
+        return `${PROPFUEL_HOST}/dataexport/${encodeURIComponent(auth.AccountID)}`;
     }
 
     /**
-     * The file feed is not page-paginated — each list response returns all available files and the
-     * connector walks them itself. Required for abstract-contract compliance; always reports no more pages.
+     * Executes an HTTP request via fetch. Parses JSON when the response is JSON, else returns the
+     * raw text body. The concrete connector owns the transport seam so tests can override it.
+     */
+    protected async MakeHTTPRequest(
+        _auth: PropFuelAuthContext,
+        url: string,
+        method: string,
+        headers: Record<string, string>,
+        body?: unknown
+    ): Promise<RESTResponse> {
+        const init: RequestInit = { method, headers };
+        if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
+            init.body = typeof body === 'string' ? body : JSON.stringify(body);
+            (init.headers as Record<string, string>)['Content-Type'] = 'application/json';
+        }
+        const response = await fetch(url, init);
+        const responseHeaders: Record<string, string> = {};
+        response.headers.forEach((value, key) => { responseHeaders[key.toLowerCase()] = value; });
+        const text = await response.text();
+        let parsed: unknown = text;
+        const contentType = responseHeaders['content-type'] ?? '';
+        if (contentType.includes('json') || (text.length > 0 && (text[0] === '{' || text[0] === '['))) {
+            try { parsed = JSON.parse(text); } catch { parsed = text; }
+        }
+        return { Status: response.status, Body: parsed, Headers: responseHeaders };
+    }
+
+    /**
+     * The download response for a data-export file is a JSON array of records (no envelope). When a
+     * vendor wraps records under a key, that key is honored; otherwise a root array / single object
+     * is normalized to an array.
+     */
+    protected NormalizeResponse(rawBody: unknown, responseDataKey: string | null): Record<string, unknown>[] {
+        if (responseDataKey && rawBody && typeof rawBody === 'object' && !Array.isArray(rawBody)) {
+            const inner = (rawBody as Record<string, unknown>)[responseDataKey];
+            if (Array.isArray(inner)) return inner.filter(isRecord);
+        }
+        if (Array.isArray(rawBody)) return rawBody.filter(isRecord);
+        if (isRecord(rawBody)) return [rawBody];
+        return [];
+    }
+
+    /**
+     * The file feed has no in-file pagination — each downloaded file is read whole. File-level
+     * paging across the listing is handled by {@link FetchChanges} via the microtime cursor.
      */
     protected ExtractPaginationInfo(
         _rawBody: unknown,
@@ -705,143 +159,363 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
         return { HasMore: false };
     }
 
-    protected GetBaseURL(
-        _companyIntegration: MJCompanyIntegrationEntity,
-        auth: RESTAuthContext
-    ): string {
-        const pf = auth as PropFuelAuthContext;
-        return (pf.Config?.BaseURL ?? PROPFUEL_DEFAULT_BASE_URL).replace(/\/+$/, '');
-    }
-
-    // ── HTTP transport ─────────────────────────────────────────────────
-
-    protected async MakeHTTPRequest(
-        auth: RESTAuthContext,
-        url: string,
-        method: string,
-        headers: Record<string, string>,
-        body?: unknown
-    ): Promise<RESTResponse> {
-        const pf = auth as PropFuelAuthContext;
-        const maxRetries = pf.Config?.MaxRetries ?? DEFAULT_MAX_RETRIES;
-        const timeoutMs = pf.Config?.RequestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            try {
-                const resp = await this.doFetch(url, method, headers, body, timeoutMs);
-                this.lastRequestTime = Date.now();
-                if ((resp.Status === 429 || resp.Status === 503) && attempt < maxRetries) {
-                    await this.sleep(this.backoffMs(attempt));
-                    continue;
-                }
-                return resp;
-            } catch (err: unknown) {
-                if (attempt === maxRetries || !this.isRetryableError(err)) throw err;
-                await this.sleep(this.backoffMs(attempt));
-            }
-        }
-        throw new Error(`PropFuel request to ${url} exhausted ${maxRetries + 1} attempts`);
-    }
-
-    /** Executes a single fetch() with an AbortController-backed timeout. `protected` so tests can
-     *  drive the 429/503 retry loop in MakeHTTPRequest by overriding the single-fetch primitive. */
-    protected async doFetch(
-        url: string,
-        method: string,
-        headers: Record<string, string>,
-        body: unknown,
-        timeoutMs: number
-    ): Promise<RESTResponse> {
-        const controller = new AbortController();
-        const handle = setTimeout(() => controller.abort(), timeoutMs);
-        try {
-            const resp = await fetch(url, {
-                method,
-                headers,
-                body: body !== undefined ? JSON.stringify(body) : undefined,
-                signal: controller.signal,
-            });
-            const respHeaders: Record<string, string> = {};
-            resp.headers.forEach((value, key) => { respHeaders[key.toLowerCase()] = value; });
-            const text = await resp.text();
-            const parsed = text.length > 0 ? this.safeParseJSON(text) : null;
-            return { Status: resp.status, Body: parsed, Headers: respHeaders };
-        } finally {
-            clearTimeout(handle);
-        }
-    }
-
-    private safeParseJSON(text: string): unknown {
-        try { return JSON.parse(text) as unknown; } catch { return text; }
-    }
-
-    private isRetryableError(err: unknown): boolean {
-        const msg = err instanceof Error ? err.message : String(err);
-        return /abort|timeout|ECONNRESET|ENOTFOUND|ETIMEDOUT|network/i.test(msg);
-    }
-
-    private backoffMs(attempt: number): number {
-        const base = Math.min(1000 * Math.pow(2, attempt), 15000);
-        return base + Math.floor(Math.random() * 250);
-    }
-
-    /** `protected` so tests can no-op the backoff wait (keeping the retry loop instant + asserting backoff growth). */
-    protected sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    // ── Config parsing ─────────────────────────────────────────────────
-
-    /**
-     * Resolves { Token, AccountID } from the bound credential (preferred) or the
-     * CompanyIntegration.Configuration JSON fallback. Validates with Zod.
-     */
-    private async parseConfig(
+    /** Tests connectivity by listing the tenant's available data-export files. */
+    public override async TestConnection(
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
-    ): Promise<PropFuelConnectionConfig> {
-        const credentialID = companyIntegration.CredentialID;
-        if (credentialID) {
-            const fromCred = await this.loadFromCredential(credentialID, contextUser);
-            if (fromCred) return fromCred;
+    ): Promise<ConnectionTestResult> {
+        try {
+            const auth = await this.Authenticate(companyIntegration, contextUser);
+            const response = await this.ListFiles(auth);
+            if (response.Status === 401 || response.Status === 403) {
+                return { Success: false, Message: `Authentication failed (HTTP ${response.Status}) listing PropFuel data-export files.` };
+            }
+            if (response.Status < 200 || response.Status >= 300) {
+                return { Success: false, Message: `PropFuel list endpoint returned HTTP ${response.Status}.` };
+            }
+            const files = this.ParseFileListing(response.Body);
+            return { Success: true, Message: `Connected to PropFuel account ${auth.AccountID}; ${files.length} data-export file(s) available.` };
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            return { Success: false, Message: `PropFuel connection error: ${message}` };
         }
-        const raw = companyIntegration.Configuration;
-        if (!raw) {
-            throw new Error('PropFuelConnector: No credential or Configuration JSON found on CompanyIntegration');
-        }
-        return this.validateConfig(JSON.parse(raw) as unknown);
     }
 
-    private async loadFromCredential(
-        credentialID: string,
-        contextUser: UserInfo,
-        provider?: IMetadataProvider
-    ): Promise<PropFuelConnectionConfig | null> {
-        const md = provider ?? new Metadata();
+    // ─── Runtime discovery MECHANISM (NOT a baked catalog) ───────────
+
+    /**
+     * Discovers objects by listing the live data-export files and deriving the distinct data-type
+     * suffix from each `[microtime]-[datatype].json` filename. The returned object set is exactly
+     * what the source currently exposes — the frozen contract's `propfuel_data_export_file` is the
+     * VERIFICATION FLOOR (discovery must surface at least the feed), never a ceiling.
+     */
+    public override async DiscoverObjects(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const response = await this.ListFiles(auth);
+        this.AssertOK(response, 'list data-export files');
+        const files = this.ParseFileListing(response.Body);
+
+        const dataTypes = new Set<string>();
+        for (const f of files) {
+            const parsed = parseFileName(f);
+            if (parsed) dataTypes.add(parsed.dataType);
+        }
+
+        return [...dataTypes].sort().map(dataType => ({
+            Name: dataType,
+            Label: dataType,
+            Description: `PropFuel data-export stream "${dataType}" (discovered from the data-export file listing).`,
+            SupportsIncrementalSync: true,
+            SupportsWrite: false,
+        }));
+    }
+
+    /**
+     * Discovers fields by downloading ONE sample file for the data type and streaming its records
+     * through the base data-informed discovery helper. The field set + soft-PK come from the real
+     * values the source returns — never a static `STREAM_FIELDS` map. READ-ONLY: the sample file is
+     * fetched and parsed, never acked.
+     */
+    public override async DiscoverFields(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo
+    ): Promise<ExternalFieldSchema[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const response = await this.ListFiles(auth);
+        this.AssertOK(response, 'list data-export files');
+        const files = this.ParseFileListing(response.Body);
+
+        // Pick the most-recent file (max microtime) of this data type as the discovery sample.
+        const sample = files
+            .map(f => ({ file: f, parsed: parseFileName(f) }))
+            .filter(x => x.parsed && x.parsed.dataType === objectName)
+            .sort((a, b) => compareMicrotime(b.parsed!.microtime, a.parsed!.microtime))[0];
+
+        if (!sample) return [];
+
+        const records = await this.DownloadFileRecords(auth, sample.file);
+        // Data-informed discovery: full field corpus + statistics-first soft-PK over the real records.
+        // Default Pk options let the helper combine uniqueness/null statistics with the built-in
+        // naming-convention rank (defaultPkNameRank) to pick a best-available soft key.
+        return this.DiscoverFieldsViaStream(records, { ReadOnly: true });
+    }
+
+    // ─── Incremental fetch via the synthetic file-level microtime cursor ──
+
+    /**
+     * Fetches records for a data type using the synthetic `__file_microtime` cursor.
+     *
+     * Mechanism: load the stored cursor (max microtime processed), list the live files, select the
+     * files of this data type whose microtime exceeds the cursor (ascending microtime order), and
+     * download each, emitting every record with full-record pass-through. The max microtime seen
+     * across the processed files is persisted as the new cursor — ONLY on full-batch success, so a
+     * partial failure leaves the cursor unchanged and the next run resumes from the same point.
+     */
+    public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
+        const listResponse = await this.ListFiles(auth);
+        this.AssertOK(listResponse, 'list data-export files');
+        const allFiles = this.ParseFileListing(listResponse.Body);
+
+        // The resume cursor: prefer the engine-provided keyset position, else the watermark value.
+        const cursor = ctx.AfterKeyValue ?? ctx.WatermarkValue ?? null;
+
+        const candidates = allFiles
+            .map(f => ({ file: f, parsed: parseFileName(f) }))
+            .filter((x): x is { file: string; parsed: ParsedFileName } => x.parsed != null && x.parsed.dataType === ctx.ObjectName)
+            .filter(x => cursor == null || compareMicrotime(x.parsed.microtime, cursor) > 0)
+            .sort((a, b) => compareMicrotime(a.parsed.microtime, b.parsed.microtime));
+
+        const records: ExternalRecord[] = [];
+        let maxMicrotime = cursor ?? '';
+        const batchLimit = ctx.BatchSize && ctx.BatchSize > 0 ? ctx.BatchSize : Number.MAX_SAFE_INTEGER;
+        let filesProcessed = 0;
+
+        for (const candidate of candidates) {
+            if (records.length >= batchLimit) break;
+            const fileRecords = await this.DownloadFileRecords(auth, candidate.file);
+            for (const raw of fileRecords) {
+                // Full-record pass-through: the COMPLETE source record reaches ExternalRecord.Fields
+                // so the framework's custom-column capture sees every key the source returned.
+                records.push({
+                    ExternalID: this.BuildRecordIdentity(raw, candidate.parsed),
+                    ObjectType: ctx.ObjectName,
+                    Fields: raw,
+                });
+            }
+            if (compareMicrotime(candidate.parsed.microtime, maxMicrotime) > 0) {
+                maxMicrotime = candidate.parsed.microtime;
+            }
+            filesProcessed++;
+        }
+
+        const moreFiles = filesProcessed < candidates.length;
+        const result: FetchBatchResult = {
+            Records: records,
+            HasMore: moreFiles,
+        };
+        if (maxMicrotime && maxMicrotime !== (cursor ?? '')) {
+            // Surface the new cursor both as the watermark value and the keyset resume position.
+            result.NewWatermarkValue = maxMicrotime;
+            result.NextAfterKeyValue = maxMicrotime;
+        }
+        return result;
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────
+
+    /** Issues the list call. Path is relative; BuildHeaders + GetBaseURL supply auth + host. */
+    private async ListFiles(auth: PropFuelAuthContext): Promise<RESTResponse> {
+        const url = `${this.GetBaseURL({} as MJCompanyIntegrationEntity, auth)}/list`;
+        return this.MakeHTTPRequest(auth, url, 'GET', this.BuildHeaders(auth));
+    }
+
+    /** Downloads one file by name and returns its records (read-only; never acked). */
+    private async DownloadFileRecords(auth: PropFuelAuthContext, file: string): Promise<Record<string, unknown>[]> {
+        const url = `${this.GetBaseURL({} as MJCompanyIntegrationEntity, auth)}/download/${encodeURIComponent(file)}`;
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', this.BuildHeaders(auth));
+        this.AssertOK(response, `download file ${file}`);
+        return this.NormalizeResponse(response.Body, null);
+    }
+
+    /**
+     * Parses the list endpoint body into an array of file names. The listing may be a bare array of
+     * strings, an array of objects with a name/file/filename key, or an object wrapping such an array.
+     */
+    private ParseFileListing(body: unknown): string[] {
+        const arr = Array.isArray(body)
+            ? body
+            : (isRecord(body) ? this.FindArrayInObject(body) : []);
+        const files: string[] = [];
+        for (const item of arr) {
+            if (typeof item === 'string') {
+                files.push(item);
+            } else if (isRecord(item)) {
+                const name = item['name'] ?? item['file'] ?? item['filename'] ?? item['fileName'] ?? item['key'];
+                if (typeof name === 'string') files.push(name);
+            }
+        }
+        return files;
+    }
+
+    /** Finds the first array-valued property of an object (the file listing under a wrapper key). */
+    private FindArrayInObject(obj: Record<string, unknown>): unknown[] {
+        for (const v of Object.values(obj)) {
+            if (Array.isArray(v)) return v;
+        }
+        return [];
+    }
+
+    /**
+     * Builds a stable record identity. The per-record schema is undocumented (no provable PK), so
+     * the connector prefers a common id key when one is present and otherwise falls back to a
+     * deterministic content hash scoped to the file's microtime — the base engine dedupes by the
+     * record-map + content hash regardless.
+     */
+    private BuildRecordIdentity(raw: Record<string, unknown>, parsed: ParsedFileName): string {
+        for (const k of ['id', 'ID', 'Id', 'uuid', 'externalID', 'ExternalID']) {
+            const v = raw[k];
+            if (typeof v === 'string' && v.length > 0) return v;
+            if (typeof v === 'number') return String(v);
+        }
+        return `${parsed.microtime}:${stableHash(raw)}`;
+    }
+
+    /** Throws a descriptive error on a non-2xx response (404 included, since a missing file is unexpected here). */
+    private AssertOK(response: RESTResponse, action: string): void {
+        if (response.Status < 200 || response.Status >= 300) {
+            throw new Error(`PropFuel failed to ${action}: HTTP ${response.Status}`);
+        }
+    }
+
+    /**
+     * Resolves the bearer Token + per-tenant AccountID from the linked Credential entity, falling
+     * back to the CompanyIntegration.Configuration JSON. AccountID is per-tenant config — NEVER hardcoded.
+     */
+    private async LoadCredentials(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<PropFuelCredentials> {
+        let token: string | undefined;
+        let accountID: string | undefined;
+
+        const credentialID = companyIntegration.CredentialID;
+        if (credentialID) {
+            const fromCred = await this.LoadFromCredentialEntity(credentialID, contextUser);
+            if (fromCred) {
+                token = fromCred.Token ?? token;
+                accountID = fromCred.AccountID ?? accountID;
+            }
+        }
+
+        // Configuration JSON supplies AccountID (and a token fallback) when not on the credential.
+        const configJson = companyIntegration.Configuration;
+        if (configJson) {
+            const fromConfig = this.ParseCredentialJson(configJson);
+            if (fromConfig) {
+                token = token ?? fromConfig.Token;
+                accountID = accountID ?? fromConfig.AccountID;
+            }
+        }
+
+        if (!token) {
+            throw new Error('No PropFuel credential or Configuration JSON found — a "Token" is required.');
+        }
+        if (!accountID) {
+            throw new Error('No PropFuel AccountID found — set "AccountID" on the credential or Configuration JSON (it is per-tenant, never hardcoded).');
+        }
+        return { Token: token, AccountID: accountID };
+    }
+
+    /** Loads Token/AccountID from a Credential entity's Values JSON. */
+    private async LoadFromCredentialEntity(credentialID: string, contextUser: UserInfo): Promise<PropFuelCredentials | null> {
+        const md = new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;
+        return this.ParseCredentialJson(credential.Values);
+    }
+
+    /** Parses a JSON string to extract Token + AccountID (tolerant of casing/aliases). */
+    private ParseCredentialJson(json: string): PropFuelCredentials | null {
         try {
-            return this.validateConfig(JSON.parse(credential.Values) as unknown);
+            const result = PropFuelCredentialSchema.safeParse(JSON.parse(json));
+            if (!result.success) return null;
+            const p = result.data;
+            const token = p.Token ?? p.token ?? p.apiKey ?? p.ApiKey;
+            const accountID = p.AccountID ?? p.accountId ?? p.accountID;
+            if (!token && accountID == null) return null;
+            return { Token: token ?? '', AccountID: accountID != null ? String(accountID) : '' } as PropFuelCredentials;
         } catch {
             return null;
         }
     }
-
-    private validateConfig(raw: unknown): PropFuelConnectionConfig {
-        const parsed = PropFuelConnectionConfigSchema.safeParse(raw);
-        if (!parsed.success) {
-            throw new Error(`PropFuelConnector: invalid configuration — ${parsed.error.issues.map(i => i.message).join('; ')}`);
-        }
-        return {
-            Token: parsed.data.Token,
-            AccountID: parsed.data.AccountID,
-            BaseURL: parsed.data.BaseURL,
-            MaxRetries: parsed.data.MaxRetries ?? DEFAULT_MAX_RETRIES,
-            RequestTimeoutMs: parsed.data.RequestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
-        };
-    }
 }
 
-/** Tree-shaking prevention function — import and call from module entry point. */
-export function LoadPropFuelConnector(): void { /* no-op */ }
+// ─── Module-level constants + helpers (mechanism, NOT a catalog) ──────
+
+/** PropFuel host root. Tenant + endpoint are appended at runtime. */
+const PROPFUEL_HOST = 'https://app.propfuel.com';
+
+/** Stable ordering key name for keyset/no-watermark resume — the filename microtime prefix. */
+const MICROTIME_ORDERING_KEY = 'microtime';
+
+/** Auth context: resolved bearer token + per-tenant AccountID. */
+interface PropFuelAuthContext extends RESTAuthContext {
+    Token: string;
+    AccountID: string;
+}
+
+/** Resolved PropFuel credentials. */
+interface PropFuelCredentials {
+    Token: string;
+    AccountID: string;
+}
+
+/** Parsed `[microtime]-[datatype].json` filename. */
+interface ParsedFileName {
+    microtime: string;
+    dataType: string;
+}
+
+/** Zod schema for the credential/Configuration JSON shape (tolerant of casing aliases). */
+const PropFuelCredentialSchema = z.object({
+    Token: z.string().optional(),
+    token: z.string().optional(),
+    apiKey: z.string().optional(),
+    ApiKey: z.string().optional(),
+    AccountID: z.union([z.string(), z.number()]).optional(),
+    accountId: z.union([z.string(), z.number()]).optional(),
+    accountID: z.union([z.string(), z.number()]).optional(),
+}).passthrough();
+
+/** Narrows an unknown value to a plain record. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+    return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Parses a PropFuel data-export filename of the form `[microtime]-[datatype].json`.
+ * The microtime is the leading numeric segment (PHP microtime, e.g. `1717804800.123456`); the data
+ * type is everything between the first `-` and the `.json` suffix. Returns null when the name does
+ * not match the convention.
+ */
+export function parseFileName(fileName: string): ParsedFileName | null {
+    // Strip any path prefix and the .json extension.
+    const base = fileName.split('/').pop() ?? fileName;
+    const noExt = base.replace(/\.json$/i, '');
+    const dashIndex = noExt.indexOf('-');
+    if (dashIndex <= 0) return null;
+    const microtime = noExt.slice(0, dashIndex);
+    const dataType = noExt.slice(dashIndex + 1);
+    if (!/^[0-9]+(\.[0-9]+)?$/.test(microtime) || dataType.length === 0) return null;
+    return { microtime, dataType };
+}
+
+/**
+ * Compares two microtime strings chronologically. Microtimes are numeric (possibly fractional);
+ * numeric comparison avoids lexical pitfalls (e.g. different integer widths). Returns >0 when a>b.
+ */
+export function compareMicrotime(a: string, b: string): number {
+    const na = Number(a);
+    const nb = Number(b);
+    if (Number.isFinite(na) && Number.isFinite(nb)) {
+        return na === nb ? 0 : (na > nb ? 1 : -1);
+    }
+    return a === b ? 0 : (a > b ? 1 : -1);
+}
+
+/** Small deterministic hash for record identity fallback (FNV-1a, hex). */
+function stableHash(record: Record<string, unknown>): string {
+    const json = JSON.stringify(record, Object.keys(record).sort());
+    let h = 0x811c9dc5;
+    for (let i = 0; i < json.length; i++) {
+        h ^= json.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+    }
+    return (h >>> 0).toString(16);
+}

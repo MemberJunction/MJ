@@ -17,7 +17,8 @@
     "@memberjunction/core": "5.40.2",
     "@memberjunction/global": "5.40.2",
     "@memberjunction/integration-engine": "5.40.2",
-    "@memberjunction/schema-engine": "5.40.2"
+    "@memberjunction/schema-engine": "5.40.2",
+    "@memberjunction/sql-dialect": "5.40.2"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

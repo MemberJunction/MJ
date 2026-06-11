@@ -13,7 +13,7 @@ import {
     SoftPKClassifier,
     type LLMOneShotCallback,
 } from '@memberjunction/integration-pk-classifier';
-import { BaseIntegrationConnector } from './BaseIntegrationConnector.js';
+import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
 import type { IntrospectSchemaOptions } from './types.js';
@@ -242,6 +242,72 @@ export class IntegrationConnectorCreationPipeline {
                 opts.ContextUser,
                 opts.IntrospectOptions
             );
+
+            // UNIVERSAL additive runtime-object discovery — the single chokepoint EVERY connector
+            // funnels through, regardless of which base it extends or whether that base's
+            // IntrospectSchema only reflects already-declared metadata. IntrospectSchema gives the
+            // rich declared/persisted catalog; we then ADD any objects the connector surfaces at
+            // runtime that aren't already in it, via the abstract DiscoverObjects/DiscoverFields
+            // primitives that EVERY connector implements (so a future connector on a different base
+            // can't silently lose runtime discovery). PersistDiscoveredSchema is additive, so
+            // declared objects are preserved and runtime-only objects (e.g. an auth-gated file
+            // feed's streams) get created as Discovered. Errors are SURFACED, never swallowed.
+            const seen = new Set(schema.Objects.map(o => o.ExternalName.toLowerCase()));
+            let runtimeObjects: ExternalObjectSchema[] = [];
+            try {
+                runtimeObjects = await opts.Connector.DiscoverObjects(opts.CompanyIntegration, opts.ContextUser);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                emitter.stageError('Introspect', `DiscoverObjects failed: ${msg}`, { code: 'discover-objects-failed' });
+                console.error(`[IntrospectPipeline] DiscoverObjects failed: ${msg}`);
+            }
+            let runtimeAdded = 0;
+            for (const d of runtimeObjects) {
+                const key = d.Name.toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                let fields: ExternalFieldSchema[] = [];
+                try {
+                    // Discover fields + PROVABLE PK over the READ PATH (FetchChanges), time-bounded and
+                    // SAVE-LESS — stream as much of the feed as the budget allows so the PK decision is
+                    // made on a statistically-significant sample, not a single (possibly tiny) file. No
+                    // DB write happens here; the real save is the later ApplyAll → StartSync.
+                    fields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, d.Name, opts.ContextUser);
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
+                    console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`);
+                }
+                schema.Objects.push({
+                    ExternalName: d.Name,
+                    ExternalLabel: d.Label,
+                    Description: d.Description,
+                    Fields: fields.map(f => ({
+                        Name: f.Name,
+                        Label: f.Label,
+                        Description: f.Description,
+                        SourceType: f.DataType,
+                        IsRequired: f.IsRequired,
+                        AllowsNull: f.AllowsNull,
+                        MaxLength: f.MaxLength ?? null,
+                        Precision: f.Precision ?? null,
+                        Scale: f.Scale ?? null,
+                        DefaultValue: f.DefaultValue ?? null,
+                        IsPrimaryKey: f.IsPrimaryKey ?? false,
+                        IsUniqueKey: f.IsUniqueKey,
+                        IsReadOnly: f.IsReadOnly,
+                        IsForeignKey: f.IsForeignKey ?? false,
+                        ForeignKeyTarget: f.ForeignKeyTarget ?? null,
+                    })),
+                    PrimaryKeyFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),
+                    Relationships: fields
+                        .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                        .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' })),
+                });
+                runtimeAdded++;
+            }
+            console.log(`[IntrospectPipeline] declared=${seen.size - runtimeAdded} runtime-added=${runtimeAdded} total=${schema.Objects.length}`);
+
             const fieldCount = schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
             emitter.stageComplete('Introspect', {
                 processed: schema.Objects.length,

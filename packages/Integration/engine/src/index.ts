@@ -90,6 +90,7 @@ export { ConnectorFactory } from './ConnectorFactory.js';
 // Engines
 export { FieldMappingEngine } from './FieldMappingEngine.js';
 export { MatchEngine } from './MatchEngine.js';
+export { serializeKeyValue } from './KeySerialization.js';
 
 // Services
 export { WatermarkService } from './WatermarkService.js';
@@ -118,7 +119,7 @@ export type { PersistSchemaOptions, PersistSchemaResult } from './IntegrationSch
 export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
 export { CUSTOM_OVERFLOW_COLUMN, computeUnmappedFields, hasUnmappedFields } from './CustomOverflow.js';
 export { planPromotions, inferColumnTypeFromSamples, buildOverflowStats, sanitizeColumnName } from './CustomColumnPromotion.js';
-export { discoverFromStream, pickPrimaryKeyFromStats, defaultPkNameRank } from './StreamingDiscovery.js';
+export { discoverFromStream, pickPrimaryKeyFromStats } from './StreamingDiscovery.js';
 export type { StreamDiscoveryOptions, DiscoveredColumnStat, StreamDiscoveryResult, PkPickOptions, PkStatVerdict } from './StreamingDiscovery.js';
 export type { InferredColumnType, OverflowKeyStats, PromotionCandidate, PromotionPlanOptions } from './CustomColumnPromotion.js';
 export { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
