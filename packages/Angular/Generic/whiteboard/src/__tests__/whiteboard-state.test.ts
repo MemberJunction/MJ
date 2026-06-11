@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   WhiteboardChange, WhiteboardConnectorItem, WhiteboardInkItem, WhiteboardShapeItem,
   WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
-} from '../lib/components/realtime/whiteboard/whiteboard-state';
+} from '../lib/whiteboard-state';
 import {
   ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_NAMES, WhiteboardToolResult
-} from '../lib/components/realtime/whiteboard/whiteboard-tools';
+} from '../lib/whiteboard-tools';
 
 function parseResult(json: string): WhiteboardToolResult {
   return JSON.parse(json) as WhiteboardToolResult;

@@ -2,9 +2,10 @@ import { Component } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '@memberjunction/ng-artifacts';
-import { ParseBoardStateJson, WhiteboardSnapshotComponent } from './whiteboard-snapshot.component';
-import { BuildWhiteboardExportHtml, BuildWhiteboardExportSvg } from './whiteboard-export';
-import { WhiteboardState } from './whiteboard-state';
+import {
+  BuildWhiteboardExportHtml, BuildWhiteboardExportSvg, ParseBoardStateJson,
+  WhiteboardSnapshotComponent, WhiteboardState
+} from '@memberjunction/ng-whiteboard';
 
 /**
  * ARTIFACT VIEWER PLUGIN for saved whiteboards — renders the session-channel board

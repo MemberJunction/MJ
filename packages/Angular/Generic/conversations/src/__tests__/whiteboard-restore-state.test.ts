@@ -6,7 +6,7 @@ import type { Type } from '@angular/core';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
 import { RealtimeWhiteboardChannel } from '../lib/components/realtime/whiteboard/whiteboard-channel';
-import { WhiteboardStickyItem, WhiteboardTextItem } from '../lib/components/realtime/whiteboard/whiteboard-state';
+import { WhiteboardStickyItem, WhiteboardTextItem } from '@memberjunction/ng-whiteboard';
 
 /**
  * The RestoreState hook — base-class default (channels keep no state → false) and the

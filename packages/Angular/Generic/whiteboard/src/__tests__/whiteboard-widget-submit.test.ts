@@ -5,9 +5,9 @@ import { describe, it, expect } from 'vitest';
 import {
   EvaluateWidgetSubmitMessage, InjectWhiteboardSubmitHelper, WHITEBOARD_SUBMIT_HELPER,
   WHITEBOARD_SUBMIT_MARKER, WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS
-} from '../lib/components/realtime/whiteboard/whiteboard-widget-bridge';
-import { WHITEBOARD_WIDGET_STARTER_HTML } from '../lib/components/realtime/whiteboard/whiteboard-board.component';
-import { WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_NAMES } from '../lib/components/realtime/whiteboard/whiteboard-tools';
+} from '../lib/whiteboard-widget-bridge';
+import { WHITEBOARD_WIDGET_STARTER_HTML } from '../lib/whiteboard-board.component';
+import { WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_NAMES } from '../lib/whiteboard-tools';
 
 /**
  * The HTML-widget INPUT BRIDGE (`MJWhiteboard.submit`): helper injection into widget

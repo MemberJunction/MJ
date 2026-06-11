@@ -73,7 +73,7 @@ import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.co
 import { VoiceOverlayComponent } from './components/voice/voice-overlay.component';
 import { VoiceAgentPickerComponent } from './components/voice/voice-agent-picker.component';
 import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
-import { RealtimeWhiteboardHostComponent } from './components/realtime/whiteboard/whiteboard-host.component';
+import { RealtimeWhiteboardHostComponent } from '@memberjunction/ng-whiteboard';
 import { LoadRealtimeWhiteboardChannel } from './components/realtime/whiteboard/whiteboard-channel';
 import { LoadWhiteboardArtifactViewer } from './components/realtime/whiteboard/whiteboard-artifact-viewer.component';
 

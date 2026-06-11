@@ -1,20 +1,25 @@
 import { Observable, Subject } from 'rxjs';
 
 /**
- * LIVE WHITEBOARD — typed board model + state engine.
+ * WHITEBOARD — typed board model + state engine.
  *
  * This file is intentionally Angular-free: it is the single mutation API used by BOTH the
- * user-facing board tools (pen, stickies, shapes, …) and the agent's channel tools
- * (`Whiteboard_AddNote`, `Whiteboard_DrawConnector`, …, see `whiteboard-tools.ts`).
+ * user-facing board tools (pen, stickies, shapes, …) and any programmatic co-author —
+ * typically an AI agent driving the `Whiteboard_*` tool set (`Whiteboard_AddNote`,
+ * `Whiteboard_DrawConnector`, …, see `whiteboard-tools.ts`).
  *
- * Perception model (per plans/ai-agent-sessions.md → "Interactive Channels"):
+ * Perception model (how a programmatic co-author "sees" the board):
  *  - every mutation appends to a compact change journal and emits on {@link WhiteboardState.Changed$};
  *  - {@link WhiteboardState.BuildSceneDelta} coalesces the journal since a token into ONE delta
  *    (multiple moves of one item → one `moved` entry) with replace-current-state semantics;
  *  - {@link WhiteboardState.BuildSceneSummary} produces the full compact scene the
  *    "What the agent sees" popover renders;
- *  - {@link WhiteboardState.ToJSON} / {@link WhiteboardState.FromJSON} persist the channel's
- *    state of record (session artifact on AIAgentSessionChannel).
+ *  - {@link WhiteboardState.ToJSON} / {@link WhiteboardState.FromJSON} persist the board's
+ *    state of record (e.g. a session-channel artifact in MJ realtime sessions).
+ *
+ * Extensibility: every targeted mutation also raises a cancelable BEFORE event and a
+ * matching AFTER event (`ItemAdding$` / `ItemAdded$`, `ItemUpdating$` / `ItemUpdated$`,
+ * `ItemRemoving$` / `ItemRemoved$`) — see the {@link WhiteboardState} class docs.
  */
 
 /** Who authored a board item / mutation. The violet treatment is RESERVED for `'agent'`. */
@@ -242,6 +247,165 @@ export interface WhiteboardItemPatch {
 /** Mutation kinds carried on {@link WhiteboardChange} and in the journal. */
 export type WhiteboardChangeOp = 'add' | 'update' | 'move' | 'remove' | 'replace';
 
+// ────────────────────────────────────────────── before / after mutation events
+
+/**
+ * Base shape of every cancelable BEFORE event raised by {@link WhiteboardState} (and by
+ * the components layered on top of it). Handlers run SYNCHRONOUSLY during the emit; any
+ * handler may set {@link Cancel} to `true` and the operation is aborted before it touches
+ * the board (no undo snapshot, no journal entry, no {@link WhiteboardState.Changed$}
+ * emission). The matching AFTER event then never fires.
+ */
+export interface WhiteboardCancelableEventArgs {
+  /** Set to `true` (in a synchronous handler) to veto the operation. */
+  Cancel: boolean;
+}
+
+/**
+ * BEFORE-event args for {@link WhiteboardState.ItemAdding$}. Raised by
+ * {@link WhiteboardState.AddItem} (and therefore also by {@link WhiteboardState.Highlight}
+ * and {@link WhiteboardState.DuplicateItem}, which add through it) before anything is
+ * stamped or stored. Handlers may mutate {@link Input} (e.g. clamp coordinates, rewrite
+ * text) — the engine adds whatever the args carry after the emit — or set `Cancel` to
+ * veto the add entirely (the caller receives `null`).
+ */
+export interface WhiteboardItemAddingEventArgs extends WhiteboardCancelableEventArgs {
+  /** The item about to be added (no ID / Z / Author yet — the engine stamps those). */
+  Input: WhiteboardItemInput;
+  /** Who is adding the item. */
+  Author: WhiteboardAuthor;
+}
+
+/** AFTER-event args for {@link WhiteboardState.ItemAdded$} — the item is on the board. */
+export interface WhiteboardItemAddedEventArgs {
+  /** The added item, with its engine-stamped ID / Z / Author. */
+  Item: WhiteboardItem;
+  /** Who added the item. */
+  Author: WhiteboardAuthor;
+}
+
+/**
+ * Which mutation family an updating/updated event describes:
+ *  - `'update'` — a field patch via {@link WhiteboardState.UpdateItem};
+ *  - `'move'` — a reposition via {@link WhiteboardState.MoveItem};
+ *  - `'reorder'` — a z-order change via {@link WhiteboardState.BringToFront} /
+ *    {@link WhiteboardState.SendToBack}.
+ */
+export type WhiteboardUpdateOperation = 'update' | 'move' | 'reorder';
+
+/**
+ * BEFORE-event args for {@link WhiteboardState.ItemUpdating$}. {@link Item} is the LIVE,
+ * pre-mutation item (do not mutate it directly — cancel and apply your own patch
+ * instead). For `'update'` operations handlers may adjust {@link Patch}; for `'move'`
+ * operations {@link Position} carries the requested top-left target.
+ */
+export interface WhiteboardItemUpdatingEventArgs extends WhiteboardCancelableEventArgs {
+  /** The item about to change (current, pre-mutation state). */
+  Item: WhiteboardItem;
+  /** Which mutation family is about to run. */
+  Operation: WhiteboardUpdateOperation;
+  /** The field patch (`'update'` operations only). Handlers may adjust it. */
+  Patch?: WhiteboardItemPatch;
+  /** The requested top-left position (`'move'` operations only). */
+  Position?: WhiteboardPoint;
+  /** Who is changing the item. */
+  Author: WhiteboardAuthor;
+}
+
+/** AFTER-event args for {@link WhiteboardState.ItemUpdated$} — the change has applied. */
+export interface WhiteboardItemUpdatedEventArgs {
+  /** The item in its post-mutation state. */
+  Item: WhiteboardItem;
+  /** Which mutation family ran. */
+  Operation: WhiteboardUpdateOperation;
+  /** Who changed the item. */
+  Author: WhiteboardAuthor;
+}
+
+/**
+ * BEFORE-event args for {@link WhiteboardState.ItemRemoving$} — raised before the item
+ * leaves the board (and before any connector endpoints anchored to it are frozen).
+ * Cancel to keep the item.
+ */
+export interface WhiteboardItemRemovingEventArgs extends WhiteboardCancelableEventArgs {
+  /** The item about to be removed. */
+  Item: WhiteboardItem;
+  /** Who is removing the item. */
+  Author: WhiteboardAuthor;
+}
+
+/** AFTER-event args for {@link WhiteboardState.ItemRemoved$} — the item is gone. */
+export interface WhiteboardItemRemovedEventArgs {
+  /** The removed item (its last state — no longer on the board). */
+  Item: WhiteboardItem;
+  /** Who removed the item. */
+  Author: WhiteboardAuthor;
+}
+
+/**
+ * BEFORE-event args for {@link WhiteboardState.ContentChanging$} — raised (in addition to
+ * {@link WhiteboardState.ItemUpdating$}) when an {@link WhiteboardState.UpdateItem} patch
+ * touches an item's CONTENT fields: `Text`, `Label`, `Sub`, `Markdown`, `Html` or `Title`.
+ * This is the hook for content governance (length limits, redaction, moderation) without
+ * having to inspect every geometry patch. Cancel to veto the whole update.
+ */
+export interface WhiteboardContentChangingEventArgs extends WhiteboardCancelableEventArgs {
+  /** The item whose content is about to change (current, pre-mutation state). */
+  Item: WhiteboardItem;
+  /** The full patch being applied (content fields included). Handlers may adjust it. */
+  Patch: WhiteboardItemPatch;
+  /** Who is changing the content. */
+  Author: WhiteboardAuthor;
+}
+
+/** AFTER-event args for {@link WhiteboardState.ContentChanged$} — the content has applied. */
+export interface WhiteboardContentChangedEventArgs {
+  /** The item in its post-mutation state. */
+  Item: WhiteboardItem;
+  /** The patch that was applied. */
+  Patch: WhiteboardItemPatch;
+  /** Who changed the content. */
+  Author: WhiteboardAuthor;
+}
+
+/**
+ * AFTER-event args for {@link WhiteboardState.SelectionChanged$} — the single selection
+ * moved to a different item (or cleared). Selection is UI state: it is not journaled, not
+ * undoable and not persisted, so this event is a notification only (not cancelable).
+ * Fires for explicit {@link WhiteboardState.Select} calls AND for implicit clears (the
+ * selected item was removed, or a restore dropped it).
+ */
+export interface WhiteboardSelectionChangedEventArgs {
+  /** The newly selected item's ID, or null when the selection was cleared. */
+  SelectedID: string | null;
+  /** The previously selected item's ID, or null when nothing was selected. */
+  PreviousID: string | null;
+}
+
+/**
+ * AFTER-event args for {@link WhiteboardState.BoardCleared$} — every item was removed in
+ * one operation via {@link WhiteboardState.Clear}. The clear is a single undo step; one
+ * `'replace'` op lands in the journal so perception consumers re-read the (now empty)
+ * scene.
+ */
+export interface WhiteboardBoardClearedEventArgs {
+  /** Who cleared the board. */
+  Author: WhiteboardAuthor;
+  /** How many items were removed (highlights included). */
+  ItemCount: number;
+}
+
+/**
+ * AFTER-event args for {@link WhiteboardState.BoardLoaded$} — a persisted board was
+ * rehydrated IN PLACE via {@link WhiteboardState.LoadFromJSON}. Undo/redo stacks and the
+ * journal were reset (the restored state is the new baseline) and one `'replace'` op was
+ * journaled, so perception consumers re-read the full scene.
+ */
+export interface WhiteboardBoardLoadedEventArgs {
+  /** How many items the restored board contains. */
+  ItemCount: number;
+}
+
 /**
  * One coalesce-able change notification, emitted on {@link WhiteboardState.Changed$}
  * after every mutation. `'replace'` means "the whole scene was swapped" (undo / redo /
@@ -360,7 +524,30 @@ interface WhiteboardStateJSON {
 /**
  * The whiteboard engine: items + ordered render list, single selection, snapshot-based
  * undo/redo (one entry per user gesture or per agent tool call via {@link RunBatch}),
- * change journal + coalesced scene deltas, and JSON persistence.
+ * change journal + coalesced scene deltas, JSON persistence, and the cancelable
+ * BEFORE / AFTER mutation event surface.
+ *
+ * ## Before / after events
+ *
+ * Every targeted mutation raises a cancelable BEFORE event and, when it applies, a
+ * matching AFTER event:
+ *
+ * | Mutation | Before (cancelable) | After |
+ * |---|---|---|
+ * | {@link AddItem} (incl. {@link Highlight}, {@link DuplicateItem}) | {@link ItemAdding$} | {@link ItemAdded$} |
+ * | {@link UpdateItem} / {@link MoveItem} / {@link BringToFront} / {@link SendToBack} | {@link ItemUpdating$} | {@link ItemUpdated$} |
+ * | {@link UpdateItem} touching content fields (Text / Label / Sub / Markdown / Html / Title) | {@link ContentChanging$} (after ItemUpdating$) | {@link ContentChanged$} |
+ * | {@link RemoveItem} | {@link ItemRemoving$} | {@link ItemRemoved$} |
+ * | {@link Select} (and implicit clears) | — | {@link SelectionChanged$} |
+ * | {@link Clear} | — | {@link BoardCleared$} |
+ * | {@link LoadFromJSON} | — | {@link BoardLoaded$} |
+ *
+ * Handlers run synchronously during the emit; setting `Cancel = true` on the event args
+ * aborts the mutation (the caller sees `null` / `false`) with no undo snapshot, journal
+ * entry or {@link Changed$} emission. These events layer ALONGSIDE the existing
+ * {@link Changed$} / journal / perception machinery — they never replace it. Undo / redo
+ * whole-scene replacements are NOT item mutations and only surface through
+ * {@link Changed$} as `'replace'` ops.
  */
 export class WhiteboardState {
   private static readonly UndoMax = 100;
@@ -383,6 +570,70 @@ export class WhiteboardState {
   private changed = new Subject<WhiteboardChange>();
   /** Fires after every mutation (including undo/redo `'replace'` events). */
   public readonly Changed$: Observable<WhiteboardChange> = this.changed.asObservable();
+
+  private itemAdding = new Subject<WhiteboardItemAddingEventArgs>();
+  /**
+   * Cancelable BEFORE event of {@link AddItem} (and {@link Highlight} /
+   * {@link DuplicateItem}, which add through it). Set `Cancel = true` synchronously to
+   * veto the add — {@link AddItem} then returns `null` and nothing changes.
+   */
+  public readonly ItemAdding$: Observable<WhiteboardItemAddingEventArgs> = this.itemAdding.asObservable();
+
+  private itemAdded = new Subject<WhiteboardItemAddedEventArgs>();
+  /** AFTER event: an item was added (fires once per applied {@link AddItem}). */
+  public readonly ItemAdded$: Observable<WhiteboardItemAddedEventArgs> = this.itemAdded.asObservable();
+
+  private itemUpdating = new Subject<WhiteboardItemUpdatingEventArgs>();
+  /**
+   * Cancelable BEFORE event of {@link UpdateItem} (`Operation: 'update'`),
+   * {@link MoveItem} (`'move'`) and {@link BringToFront} / {@link SendToBack}
+   * (`'reorder'`). Set `Cancel = true` synchronously to veto — the mutator returns `false`.
+   */
+  public readonly ItemUpdating$: Observable<WhiteboardItemUpdatingEventArgs> = this.itemUpdating.asObservable();
+
+  private itemUpdated = new Subject<WhiteboardItemUpdatedEventArgs>();
+  /** AFTER event: an item changed (patch applied / moved / z-reordered). */
+  public readonly ItemUpdated$: Observable<WhiteboardItemUpdatedEventArgs> = this.itemUpdated.asObservable();
+
+  private itemRemoving = new Subject<WhiteboardItemRemovingEventArgs>();
+  /**
+   * Cancelable BEFORE event of {@link RemoveItem}. Set `Cancel = true` synchronously to
+   * keep the item — {@link RemoveItem} then returns `false` and nothing changes.
+   */
+  public readonly ItemRemoving$: Observable<WhiteboardItemRemovingEventArgs> = this.itemRemoving.asObservable();
+
+  private itemRemoved = new Subject<WhiteboardItemRemovedEventArgs>();
+  /** AFTER event: an item was removed from the board. */
+  public readonly ItemRemoved$: Observable<WhiteboardItemRemovedEventArgs> = this.itemRemoved.asObservable();
+
+  private contentChanging = new Subject<WhiteboardContentChangingEventArgs>();
+  /**
+   * Cancelable BEFORE event raised — in addition to {@link ItemUpdating$} — when an
+   * {@link UpdateItem} patch touches CONTENT fields (Text / Label / Sub / Markdown /
+   * Html / Title). The dedicated hook for content governance: set `Cancel = true`
+   * synchronously to veto the whole update.
+   */
+  public readonly ContentChanging$: Observable<WhiteboardContentChangingEventArgs> = this.contentChanging.asObservable();
+
+  private contentChanged = new Subject<WhiteboardContentChangedEventArgs>();
+  /** AFTER event: an item's content fields changed (markdown / html / text edits). */
+  public readonly ContentChanged$: Observable<WhiteboardContentChangedEventArgs> = this.contentChanged.asObservable();
+
+  private selectionChanged = new Subject<WhiteboardSelectionChangedEventArgs>();
+  /**
+   * AFTER event: the single selection changed — via {@link Select} or implicitly (the
+   * selected item was removed / dropped by a restore). Selection is transient UI state,
+   * so this is a notification only (never cancelable, never journaled).
+   */
+  public readonly SelectionChanged$: Observable<WhiteboardSelectionChangedEventArgs> = this.selectionChanged.asObservable();
+
+  private boardCleared = new Subject<WhiteboardBoardClearedEventArgs>();
+  /** AFTER event: {@link Clear} removed everything from the board (one undo step). */
+  public readonly BoardCleared$: Observable<WhiteboardBoardClearedEventArgs> = this.boardCleared.asObservable();
+
+  private boardLoaded = new Subject<WhiteboardBoardLoadedEventArgs>();
+  /** AFTER event: {@link LoadFromJSON} rehydrated a persisted board into this instance. */
+  public readonly BoardLoaded$: Observable<WhiteboardBoardLoadedEventArgs> = this.boardLoaded.asObservable();
 
   /** The single selected item's ID, or null. Selection is UI state — not persisted. */
   public SelectedID: string | null = null;
@@ -518,46 +769,110 @@ export class WhiteboardState {
 
   // ────────────────────────────────────────────── selection
 
-  /** Set (or clear) the single selection. */
+  /**
+   * Set (or clear) the single selection. Unknown IDs clear the selection. Fires
+   * {@link SelectionChanged$} when the effective selection actually changes.
+   */
   public Select(id: string | null): void {
-    this.SelectedID = id != null && this.items.has(id) ? id : null;
+    this.changeSelection(id != null && this.items.has(id) ? id : null);
+  }
+
+  /** Apply a selection change and fire {@link SelectionChanged$} when it differs. */
+  protected changeSelection(next: string | null): void {
+    if (next === this.SelectedID) {
+      return;
+    }
+    const previous = this.SelectedID;
+    this.SelectedID = next;
+    this.selectionChanged.next({ SelectedID: next, PreviousID: previous });
   }
 
   // ────────────────────────────────────────────── mutations
 
-  /** Add an item; the engine stamps ID, Z and Author and emits one change. */
-  public AddItem(input: WhiteboardItemInput, author: WhiteboardAuthor): WhiteboardItem {
+  /**
+   * Add an item; the engine stamps ID, Z and Author and emits one change.
+   *
+   * Raises the cancelable {@link ItemAdding$} BEFORE event first — when a handler
+   * cancels, nothing changes and `null` is returned. On success the stamped item is
+   * returned and {@link ItemAdded$} fires after the journal/{@link Changed$} emission.
+   */
+  public AddItem(input: WhiteboardItemInput, author: WhiteboardAuthor): WhiteboardItem | null {
+    const adding: WhiteboardItemAddingEventArgs = { Input: input, Author: author, Cancel: false };
+    this.itemAdding.next(adding);
+    if (adding.Cancel) {
+      return null;
+    }
     this.beforeMutate();
-    const item = { ...input, ID: this.nextId(input.Kind), Z: ++this.zCounter, Author: author } as WhiteboardItem;
+    const item = { ...adding.Input, ID: this.nextId(adding.Input.Kind), Z: ++this.zCounter, Author: author } as WhiteboardItem;
     this.items.set(item.ID, item);
     this.record('add', item.ID, author, `added ${WhiteboardState.describe(item)}`);
+    this.itemAdded.next({ Item: item, Author: author });
     return item;
   }
 
-  /** Patch an item's mutable fields. Returns false when the ID is unknown. */
+  /**
+   * Patch an item's mutable fields. Returns false when the ID is unknown — or when a
+   * handler of the cancelable {@link ItemUpdating$} BEFORE event (or, for patches that
+   * touch content fields, the cancelable {@link ContentChanging$} event) vetoed the
+   * change. On success {@link ItemUpdated$} — and {@link ContentChanged$} for content
+   * patches — fires after the journal/{@link Changed$} emission.
+   */
   public UpdateItem(id: string, patch: WhiteboardItemPatch, author: WhiteboardAuthor): boolean {
     const item = this.items.get(id);
     if (!item) {
       return false;
     }
+    const updating: WhiteboardItemUpdatingEventArgs = { Item: item, Operation: 'update', Patch: patch, Author: author, Cancel: false };
+    this.itemUpdating.next(updating);
+    if (updating.Cancel) {
+      return false;
+    }
+    const effective = updating.Patch ?? patch;
+    const isContent = WhiteboardState.isContentPatch(effective);
+    if (isContent) {
+      const changing: WhiteboardContentChangingEventArgs = { Item: item, Patch: effective, Author: author, Cancel: false };
+      this.contentChanging.next(changing);
+      if (changing.Cancel) {
+        return false;
+      }
+    }
     this.beforeMutate();
     const target = item as WhiteboardItemBase & WhiteboardItemPatch;
-    for (const [key, value] of Object.entries(patch)) {
+    for (const [key, value] of Object.entries(effective)) {
       if (value !== undefined) {
         (target as Record<string, typeof value>)[key] = value;
       }
     }
     this.record('update', id, author, `updated ${WhiteboardState.describe(item)}`);
+    this.itemUpdated.next({ Item: item, Operation: 'update', Author: author });
+    if (isContent) {
+      this.contentChanged.next({ Item: item, Patch: effective, Author: author });
+    }
     return true;
+  }
+
+  /** Whether a patch touches CONTENT fields (drives the ContentChanging/Changed pair). */
+  protected static isContentPatch(patch: WhiteboardItemPatch): boolean {
+    return patch.Text !== undefined || patch.Label !== undefined || patch.Sub !== undefined
+      || patch.Markdown !== undefined || patch.Html !== undefined || patch.Title !== undefined;
   }
 
   /**
    * Move an item to an absolute board position. Positioned kinds move their origin; ink
    * strokes translate every point; connectors translate their floating endpoints.
+   *
+   * Raises the cancelable {@link ItemUpdating$} BEFORE event (`Operation: 'move'`,
+   * `Position` = the requested top-left) — returns false when vetoed or the ID is
+   * unknown; fires {@link ItemUpdated$} after an applied move.
    */
   public MoveItem(id: string, x: number, y: number, author: WhiteboardAuthor): boolean {
     const item = this.items.get(id);
     if (!item) {
+      return false;
+    }
+    const moving: WhiteboardItemUpdatingEventArgs = { Item: item, Operation: 'move', Position: { X: x, Y: y }, Author: author, Cancel: false };
+    this.itemUpdating.next(moving);
+    if (moving.Cancel) {
       return false;
     }
     this.beforeMutate();
@@ -580,16 +895,25 @@ export class WhiteboardState {
       item.Y = y;
     }
     this.record('move', id, author, `moved ${WhiteboardState.describe(item)}`);
+    this.itemUpdated.next({ Item: item, Operation: 'move', Author: author });
     return true;
   }
 
   /**
    * Remove an item. Connectors that referenced it survive: their endpoint freezes to the
    * removed item's last center (the floating-endpoint fallback).
+   *
+   * Raises the cancelable {@link ItemRemoving$} BEFORE event — returns false when vetoed
+   * or the ID is unknown; fires {@link ItemRemoved$} after an applied removal.
    */
   public RemoveItem(id: string, author: WhiteboardAuthor): boolean {
     const item = this.items.get(id);
     if (!item) {
+      return false;
+    }
+    const removing: WhiteboardItemRemovingEventArgs = { Item: item, Author: author, Cancel: false };
+    this.itemRemoving.next(removing);
+    if (removing.Cancel) {
       return false;
     }
     this.beforeMutate();
@@ -612,9 +936,10 @@ export class WhiteboardState {
     }
     this.items.delete(id);
     if (this.SelectedID === id) {
-      this.SelectedID = null;
+      this.changeSelection(null);
     }
     this.record('remove', id, author, `removed ${WhiteboardState.describe(item)}`);
+    this.itemRemoved.next({ Item: item, Author: author });
     return true;
   }
 
@@ -623,7 +948,8 @@ export class WhiteboardState {
    * identity, offset +16/+16 from the source so the copy is visibly distinct. Connectors
    * (which reference other items) and transient highlights cannot be duplicated — returns
    * `null` without mutating. The clone lands through {@link AddItem}, so it journals as a
-   * normal `'add'` and is one undo step.
+   * normal `'add'`, is one undo step, and raises the {@link ItemAdding$} /
+   * {@link ItemAdded$} pair (a canceled add also returns `null`).
    */
   public DuplicateItem(id: string, author: WhiteboardAuthor): WhiteboardItem | null {
     const source = this.items.get(id);
@@ -646,22 +972,37 @@ export class WhiteboardState {
    * Raise an item above everything else. Follows the engine's existing Z handling:
    * `++zCounter` is by construction greater than every assigned Z (max + 1), exactly how
    * {@link AddItem} stamps new items. Journals as an `'update'`.
+   *
+   * Raises the cancelable {@link ItemUpdating$} BEFORE event (`Operation: 'reorder'`) —
+   * returns false when vetoed or the ID is unknown; fires {@link ItemUpdated$} after.
    */
   public BringToFront(id: string, author: WhiteboardAuthor): boolean {
     const item = this.items.get(id);
     if (!item) {
       return false;
     }
+    if (!this.raiseReorder(item, author)) {
+      return false;
+    }
     this.beforeMutate();
     item.Z = ++this.zCounter;
     this.record('update', id, author, `brought ${WhiteboardState.describe(item)} to the front`);
+    this.itemUpdated.next({ Item: item, Operation: 'reorder', Author: author });
     return true;
   }
 
-  /** Drop an item below everything else (current min Z − 1). Journals as an `'update'`. */
+  /**
+   * Drop an item below everything else (current min Z − 1). Journals as an `'update'`.
+   *
+   * Raises the cancelable {@link ItemUpdating$} BEFORE event (`Operation: 'reorder'`) —
+   * returns false when vetoed or the ID is unknown; fires {@link ItemUpdated$} after.
+   */
   public SendToBack(id: string, author: WhiteboardAuthor): boolean {
     const item = this.items.get(id);
     if (!item) {
+      return false;
+    }
+    if (!this.raiseReorder(item, author)) {
       return false;
     }
     this.beforeMutate();
@@ -671,12 +1012,43 @@ export class WhiteboardState {
     }
     item.Z = minZ - 1;
     this.record('update', id, author, `sent ${WhiteboardState.describe(item)} to the back`);
+    this.itemUpdated.next({ Item: item, Operation: 'reorder', Author: author });
     return true;
   }
 
-  /** Convenience: add a pulsing highlight region (agent "pointing without touching"). */
-  public Highlight(x: number, y: number, w: number, h: number, label: string | undefined, author: WhiteboardAuthor): WhiteboardHighlightItem {
-    return this.AddItem({ Kind: 'highlight', X: x, Y: y, W: w, H: h, Label: label }, author) as WhiteboardHighlightItem;
+  /** Raise the cancelable `'reorder'` BEFORE event; returns false when a handler vetoed. */
+  protected raiseReorder(item: WhiteboardItem, author: WhiteboardAuthor): boolean {
+    const reordering: WhiteboardItemUpdatingEventArgs = { Item: item, Operation: 'reorder', Author: author, Cancel: false };
+    this.itemUpdating.next(reordering);
+    return !reordering.Cancel;
+  }
+
+  /**
+   * Convenience: add a pulsing highlight region (agent "pointing without touching").
+   * Adds through {@link AddItem}, so the {@link ItemAdding$} / {@link ItemAdded$} pair
+   * fires — returns `null` when a handler canceled the add.
+   */
+  public Highlight(x: number, y: number, w: number, h: number, label: string | undefined, author: WhiteboardAuthor): WhiteboardHighlightItem | null {
+    return this.AddItem({ Kind: 'highlight', X: x, Y: y, W: w, H: h, Label: label }, author) as WhiteboardHighlightItem | null;
+  }
+
+  /**
+   * Remove EVERYTHING from the board as ONE undoable operation. Journals a single
+   * `'replace'` op (perception consumers re-read the now-empty scene) and fires
+   * {@link BoardCleared$}. Clears the selection (firing {@link SelectionChanged$} when
+   * one existed). Returns false when the board was already empty.
+   */
+  public Clear(author: WhiteboardAuthor = 'user'): boolean {
+    if (this.items.size === 0) {
+      return false;
+    }
+    const count = this.items.size;
+    this.beforeMutate();
+    this.items = new Map<string, WhiteboardItem>();
+    this.changeSelection(null);
+    this.record('replace', '', author, 'cleared the board');
+    this.boardCleared.next({ Author: author, ItemCount: count });
+    return true;
   }
 
   /**
@@ -850,8 +1222,8 @@ export class WhiteboardState {
    * `false` and leaves the current state untouched (never throws).
    *
    * On success the undo/redo stacks and journal are cleared (restored state is the new
-   * baseline), stale delta tokens force reset semantics, and one `'replace'` change is
-   * emitted so consumers re-read the full scene.
+   * baseline), stale delta tokens force reset semantics, one `'replace'` change is
+   * emitted so consumers re-read the full scene, and {@link BoardLoaded$} fires.
    */
   public LoadFromJSON(json: string): boolean {
     let parsed: WhiteboardStateJSON;
@@ -870,18 +1242,26 @@ export class WhiteboardState {
     this.journalTrimmedBeforeSeq = this.seq; // older tokens force reset deltas
     this.undoStack = [];
     this.redoStack = [];
-    this.SelectedID = null;
+    this.changeSelection(null);
     this.record('replace', '', 'user', 'restored a saved board');
+    this.boardLoaded.next({ ItemCount: this.items.size });
     return true;
   }
 
   // ────────────────────────────────────────────── internals
 
-  private nextId(kind: WhiteboardItemKind): string {
+  /** Mint the next stable item ID for a kind (`sticky-3`, `shape-7`, …). */
+  protected nextId(kind: WhiteboardItemKind): string {
     return `${kind}-${++this.idCounter}`;
   }
 
-  private beforeMutate(): void {
+  /**
+   * Pre-mutation bookkeeping shared by every committed mutation: pushes the undo
+   * snapshot (unless inside a {@link RunBatch}, which snapshotted at batch start) and
+   * invalidates the redo branch. Subclasses extending the mutation paths should call
+   * this exactly once per logical change, AFTER any cancelable before-event survived.
+   */
+  protected beforeMutate(): void {
     if (this.batchDepth === 0) {
       this.pushUndo();
     }
@@ -889,7 +1269,8 @@ export class WhiteboardState {
     this.redoStack = [];
   }
 
-  private pushUndo(): void {
+  /** Push the current scene onto the undo stack (bounded) and drop the redo branch. */
+  protected pushUndo(): void {
     this.undoStack.push(this.snapshot());
     if (this.undoStack.length > WhiteboardState.UndoMax) {
       this.undoStack.shift();
@@ -897,7 +1278,8 @@ export class WhiteboardState {
     this.redoStack = [];
   }
 
-  private snapshot(): WhiteboardStateJSON {
+  /** Deep-copied serializable snapshot of the whole scene (undo entries / ToJSON). */
+  protected snapshot(): WhiteboardStateJSON {
     return {
       version: 1,
       seq: this.seq,
@@ -907,16 +1289,22 @@ export class WhiteboardState {
     };
   }
 
-  private restore(snap: WhiteboardStateJSON): void {
+  /** Swap the scene to a snapshot's items/counters (drops a now-missing selection). */
+  protected restore(snap: WhiteboardStateJSON): void {
     this.items = new Map((JSON.parse(JSON.stringify(snap.items)) as WhiteboardItem[]).map((i) => [i.ID, i]));
     this.idCounter = snap.idCounter ?? 0;
     this.zCounter = snap.zCounter ?? 0;
     if (this.SelectedID && !this.items.has(this.SelectedID)) {
-      this.SelectedID = null;
+      this.changeSelection(null);
     }
   }
 
-  private record(op: WhiteboardChangeOp, itemId: string, author: WhiteboardAuthor, summaryFragment: string): void {
+  /**
+   * Post-mutation bookkeeping shared by every committed mutation: bumps the sequence,
+   * appends the journal entry (bounded — trimming forces reset deltas for stale tokens)
+   * and emits the {@link Changed$} notification.
+   */
+  protected record(op: WhiteboardChangeOp, itemId: string, author: WhiteboardAuthor, summaryFragment: string): void {
     this.seq++;
     this.journal.push({ Seq: this.seq, Op: op, ItemID: itemId });
     if (this.journal.length > WhiteboardState.JournalMax) {
@@ -926,7 +1314,8 @@ export class WhiteboardState {
     this.changed.next({ Op: op, ItemID: itemId, Author: author, SummaryFragment: summaryFragment, Seq: this.seq });
   }
 
-  private compact(item: WhiteboardItem): WhiteboardCompactItem {
+  /** Project one item to its compact, model-facing representation (deltas / summaries). */
+  protected compact(item: WhiteboardItem): WhiteboardCompactItem {
     const c: WhiteboardCompactItem = { id: item.ID, type: item.Kind, author: item.Author };
     switch (item.Kind) {
       case 'sticky':
@@ -1019,7 +1408,8 @@ export class WhiteboardState {
     }
   }
 
-  private composeSummaryText(parts: { added?: number; moved?: number; updated?: number; removed?: number; reset?: boolean }): string {
+  /** Compose the human-readable tail line of deltas / summaries ("2 added, 1 moved. …"). */
+  protected composeSummaryText(parts: { added?: number; moved?: number; updated?: number; removed?: number; reset?: boolean }): string {
     const bits: string[] = [];
     if (parts.reset) {
       bits.push('full scene snapshot (state replaced)');

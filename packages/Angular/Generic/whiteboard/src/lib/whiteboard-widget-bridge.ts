@@ -36,7 +36,7 @@ export const WHITEBOARD_SUBMIT_HELPER =
 /** Max serialized payload size (chars) accepted from one `MJWhiteboard.submit` call. */
 export const WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS = 8000;
 
-/** One accepted widget submission, surfaced by the board host's `WidgetSubmit` output. */
+/** One accepted widget submission, surfaced by the board/host `WidgetSubmitted` output. */
 export interface WhiteboardWidgetSubmitEvent {
   /** The submitting widget's board item ID (e.g. `html-2`). */
   ItemID: string;
@@ -44,6 +44,20 @@ export interface WhiteboardWidgetSubmitEvent {
   Title: string;
   /** The submitted payload, JSON-serialized (capped at {@link WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS}). */
   DataJson: string;
+}
+
+/**
+ * BEFORE-event args for the board/host `WidgetSubmitting` output — raised after a
+ * widget's `MJWhiteboard.submit` payload passed validation (marker + tracked source +
+ * size cap) but BEFORE it is surfaced through `WidgetSubmitted`. Handlers run
+ * synchronously; set {@link Cancel} to `true` to drop the submission (no `WidgetSubmitted`
+ * fires and nothing reaches the agent/consumer).
+ */
+export interface WhiteboardWidgetSubmittingEventArgs {
+  /** The validated submission about to be surfaced. */
+  Event: WhiteboardWidgetSubmitEvent;
+  /** Set to `true` (in a synchronous handler) to drop the submission. */
+  Cancel: boolean;
 }
 
 /** Why an incoming 'message' event was NOT surfaced as a widget submission. */

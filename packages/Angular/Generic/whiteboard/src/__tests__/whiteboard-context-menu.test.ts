@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   WhiteboardChange, WhiteboardHtmlItem, WhiteboardInkItem, WhiteboardItem, WhiteboardState, WhiteboardStickyItem
-} from '../lib/components/realtime/whiteboard/whiteboard-state';
+} from '../lib/whiteboard-state';
 import {
   BuildWhiteboardContextMenu, WhiteboardContextMenuActionID
-} from '../lib/components/realtime/whiteboard/whiteboard-context-menu';
+} from '../lib/whiteboard-context-menu';
 
 /**
  * RIGHT-CLICK CONTEXT MENU — the pure menu-model builder (action set per item kind /

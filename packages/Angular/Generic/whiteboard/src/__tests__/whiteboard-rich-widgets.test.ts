@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   WhiteboardChange, WhiteboardHtmlItem, WhiteboardMarkdownItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
-} from '../lib/components/realtime/whiteboard/whiteboard-state';
+} from '../lib/whiteboard-state';
 import {
   ApplyWhiteboardAgentTool, WHITEBOARD_HTML_MAX_CHARS, WHITEBOARD_MARKDOWN_MAX_CHARS,
   WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_NAMES, WhiteboardToolResult
-} from '../lib/components/realtime/whiteboard/whiteboard-tools';
+} from '../lib/whiteboard-tools';
 import {
   BuildWhiteboardExportHtml, BuildWhiteboardExportSvg, RenderMarkdownInert, WhiteboardExportOptions
-} from '../lib/components/realtime/whiteboard/whiteboard-export';
+} from '../lib/whiteboard-export';
 
 /**
  * RICH WIDGETS — markdown panels + sandboxed HTML widgets: engine support (bounds,

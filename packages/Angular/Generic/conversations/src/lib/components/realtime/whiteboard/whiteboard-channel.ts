@@ -3,10 +3,10 @@ import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeChannelClient } from '../channels/base-realtime-channel-client';
-import { WhiteboardState } from './whiteboard-state';
-import { WhiteboardWidgetSubmitEvent } from './whiteboard-widget-bridge';
-import { ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_PREFIX } from './whiteboard-tools';
-import { RealtimeWhiteboardHostComponent } from './whiteboard-host.component';
+import {
+  ApplyWhiteboardAgentTool, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
+  WHITEBOARD_TOOL_PREFIX, WhiteboardState, WhiteboardWidgetSubmitEvent
+} from '@memberjunction/ng-whiteboard';
 
 /**
  * The LIVE WHITEBOARD as a pluggable interactive channel — the canonical
@@ -107,9 +107,10 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
         this.Context?.SendContextNote('[whiteboard] user undid your last change');
       }),
       // A sandboxed HTML widget submitted user input (MJWhiteboard.submit) — already
-      // validated and size-capped by the board. Surface it to the agent so it can react
-      // to quiz answers / micro-form input it asked for.
-      instance.WidgetSubmit.subscribe((submit: WhiteboardWidgetSubmitEvent) => {
+      // validated, size-capped and not canceled (the host's cancelable WidgetSubmitting
+      // event ran first). Surface it to the agent so it can react to quiz answers /
+      // micro-form input it asked for.
+      instance.WidgetSubmitted.subscribe((submit: WhiteboardWidgetSubmitEvent) => {
         this.Context?.SendContextNote(
           `[whiteboard] the user submitted input in widget "${submit.Title || submit.ItemID}": ${submit.DataJson}`);
       }),

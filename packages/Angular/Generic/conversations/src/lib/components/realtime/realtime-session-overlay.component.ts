@@ -21,8 +21,7 @@ import {
 } from './realtime-surface-panel-prefs';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
-import { RealtimeWhiteboardBoardComponent } from './whiteboard/whiteboard-board.component';
-import { WhiteboardState } from './whiteboard/whiteboard-state';
+import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 
 /**
  * A request to open an entity record, emitted by the call overlay's gear-gated developer

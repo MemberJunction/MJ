@@ -5,9 +5,8 @@ import { describe, it, expect } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '@memberjunction/ng-artifacts';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
-import { ParseBoardStateJson } from '../lib/components/realtime/whiteboard/whiteboard-snapshot.component';
+import { ParseBoardStateJson, WhiteboardState } from '@memberjunction/ng-whiteboard';
 import { WhiteboardArtifactViewerComponent, LoadWhiteboardArtifactViewer } from '../lib/components/realtime/whiteboard/whiteboard-artifact-viewer.component';
-import { WhiteboardState } from '../lib/components/realtime/whiteboard/whiteboard-state';
 
 /**
  * The whiteboard ARTIFACT VIEWER plugin + read-only snapshot helper — the pure

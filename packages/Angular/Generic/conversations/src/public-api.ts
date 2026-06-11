@@ -88,10 +88,8 @@ export * from './lib/components/realtime/realtime-controls.component';
 // Pluggable interactive-channel contract (registry-resolved client plugins) + pane host
 export * from './lib/components/realtime/channels/base-realtime-channel-client';
 export * from './lib/components/realtime/channels/realtime-channel-pane.component';
-// Live whiteboard channel (board engine + agent tool surface + host component + plugin)
-export * from './lib/components/realtime/whiteboard/whiteboard-host.component';
-export * from './lib/components/realtime/whiteboard/whiteboard-state';
-export * from './lib/components/realtime/whiteboard/whiteboard-tools';
+// Live whiteboard channel plugin + artifact viewer (thin consumers of the generic board).
+// NOTE: the whiteboard itself (engine, tools, components, export builders) lives in
+// @memberjunction/ng-whiteboard — import board types/components from there directly.
 export * from './lib/components/realtime/whiteboard/whiteboard-channel';
-export * from './lib/components/realtime/whiteboard/whiteboard-snapshot.component';
 export * from './lib/components/realtime/whiteboard/whiteboard-artifact-viewer.component';

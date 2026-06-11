@@ -17,7 +17,7 @@ import {
 import { WhiteboardTool, WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import {
   EvaluateWidgetSubmitMessage, InjectWhiteboardSubmitHelper, WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS,
-  WhiteboardWidgetSubmitEvent
+  WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
 } from './whiteboard-widget-bridge';
 import { BuildWhiteboardContextMenu, WhiteboardContextMenuAction, WhiteboardContextMenuActionID } from './whiteboard-context-menu';
 
@@ -27,6 +27,42 @@ export interface WhiteboardAgentPresence {
   X: number;
   Y: number;
   Label: string;
+}
+
+/** Item kinds whose content can be committed through an in-board editor. */
+export type WhiteboardEditableContentKind = 'sticky' | 'text' | 'shape' | 'markdown' | 'html';
+
+/**
+ * BEFORE-event args for the board/host `ContentApplying` output — raised when an
+ * in-board editor commit (inline sticky/text/shape edit, or the markdown/HTML rich
+ * editor's Apply/Done) is about to write the draft into the state engine. Handlers run
+ * synchronously; set {@link Cancel} to `true` to discard the commit (the item keeps its
+ * previous content and `ContentApplied` never fires). Handlers may also rewrite
+ * {@link Content} / {@link Title} — the edited values are what gets applied.
+ */
+export interface WhiteboardContentApplyingEventArgs {
+  /** The target item's ID. */
+  ItemID: string;
+  /** The target item's kind (decides which field the content lands in). */
+  Kind: WhiteboardEditableContentKind;
+  /** The committed content: Text (sticky/text), Label (shape), Markdown or Html source. */
+  Content: string;
+  /** HTML widgets only: the committed header title ('' clears it). */
+  Title?: string;
+  /** Set to `true` (in a synchronous handler) to discard the commit. */
+  Cancel: boolean;
+}
+
+/** AFTER-event args for the board/host `ContentApplied` output — the commit applied. */
+export interface WhiteboardContentAppliedEventArgs {
+  /** The updated item's ID. */
+  ItemID: string;
+  /** The updated item's kind. */
+  Kind: WhiteboardEditableContentKind;
+  /** The content that was applied. */
+  Content: string;
+  /** HTML widgets only: the applied header title. */
+  Title?: string;
 }
 
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
@@ -159,11 +195,27 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   /** Requests a tool switch decided by a board gesture (e.g. Esc → select). */
   @Output() ToolChangeRequest = new EventEmitter<WhiteboardTool>();
   /**
-   * A sandboxed HTML widget called `MJWhiteboard.submit(data)` — validated (marker +
-   * tracked source window) and size-capped. The host forwards it to the channel plugin,
-   * which surfaces it to the agent as a `[whiteboard]` context note.
+   * Cancelable BEFORE event: a sandboxed HTML widget called `MJWhiteboard.submit(data)`
+   * and the payload passed validation (marker + tracked source window + size cap).
+   * Handlers run synchronously — set `Cancel = true` on the args to drop the submission
+   * ({@link WidgetSubmitted} then never fires).
    */
-  @Output() WidgetSubmit = new EventEmitter<WhiteboardWidgetSubmitEvent>();
+  @Output() WidgetSubmitting = new EventEmitter<WhiteboardWidgetSubmittingEventArgs>();
+  /**
+   * AFTER event: a validated widget submission was accepted (not canceled). Integration
+   * layers forward this to their agent/automation runtime — e.g. MJ's realtime channel
+   * plugin surfaces it to the live agent as a `[whiteboard]` context note.
+   */
+  @Output() WidgetSubmitted = new EventEmitter<WhiteboardWidgetSubmitEvent>();
+  /**
+   * Cancelable BEFORE event: an in-board editor commit (inline sticky/text/shape edit or
+   * the markdown/HTML rich editor's Apply/Done) is about to write to the state engine.
+   * Set `Cancel = true` synchronously to discard the commit; handlers may also rewrite
+   * the args' `Content` / `Title`.
+   */
+  @Output() ContentApplying = new EventEmitter<WhiteboardContentApplyingEventArgs>();
+  /** AFTER event: an editor commit applied to the state engine. */
+  @Output() ContentApplied = new EventEmitter<WhiteboardContentAppliedEventArgs>();
 
   @ViewChild('canvas') private canvasRef?: ElementRef<HTMLDivElement>;
 
@@ -762,8 +814,10 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         if (r.W >= 16 && r.H >= 16) {
           const item = this.State.AddItem(
             { Kind: 'shape', Shape: this.ShapeKind, X: r.X, Y: r.Y, W: Math.max(r.W, 60), H: Math.max(r.H, WHITEBOARD_DEFAULTS.ShapeMinH), Label: '' }, 'user');
-          this.State.Select(item.ID);
-          this.beginEdit(item.ID, true);
+          if (item) {
+            this.State.Select(item.ID);
+            this.beginEdit(item.ID, true);
+          }
         }
         break;
       }
@@ -815,6 +869,12 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this.beginEdit(item.ID, false);
   }
 
+  /**
+   * Commit the inline editor's value to the edited sticky / text / shape item. Routes
+   * through the {@link ContentApplying} (cancelable) / {@link ContentApplied} event pair;
+   * an empty commit on a JUST-PLACED sticky/text abandons the placement instead (the item
+   * is removed — that path raises the engine's remove events, not the content pair).
+   */
   public CommitEdit(value: string): void {
     const id = this.EditingID;
     if (!id) {
@@ -831,12 +891,36 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       return;
     }
     if (item.Kind === 'shape') {
-      this.State.UpdateItem(id, { Label: text }, 'user');
+      this.applyContent(id, 'shape', text);
     }
     else if (item.Kind === 'sticky' || item.Kind === 'text') {
-      this.State.UpdateItem(id, { Text: text }, 'user');
+      this.applyContent(id, item.Kind, text);
     }
     this.editIsNew = false;
+  }
+
+  /**
+   * Run one editor commit through the {@link ContentApplying} / {@link ContentApplied}
+   * pair: raise the cancelable BEFORE event, apply the (possibly handler-edited) content
+   * via the state engine when not canceled, and raise the AFTER event when the engine
+   * applied it (an engine-level `ItemUpdating$` veto also suppresses the AFTER event).
+   */
+  private applyContent(itemId: string, kind: WhiteboardEditableContentKind, content: string, title?: string): void {
+    const applying: WhiteboardContentApplyingEventArgs = { ItemID: itemId, Kind: kind, Content: content, Title: title, Cancel: false };
+    this.ContentApplying.emit(applying);
+    if (applying.Cancel) {
+      return;
+    }
+    let patch: WhiteboardItemPatch;
+    switch (kind) {
+      case 'shape': patch = { Label: applying.Content }; break;
+      case 'markdown': patch = { Markdown: applying.Content }; break;
+      case 'html': patch = { Html: applying.Content, Title: applying.Title }; break;
+      default: patch = { Text: applying.Content }; break; // sticky / text
+    }
+    if (this.State.UpdateItem(itemId, patch, 'user')) {
+      this.ContentApplied.emit({ ItemID: itemId, Kind: kind, Content: applying.Content, Title: applying.Title });
+    }
   }
 
   public OnEditKeydown(event: KeyboardEvent, value: string): void {
@@ -897,12 +981,17 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
    * origins (their helper posts with `'*'`), so validation happens HERE: the payload
    * must carry the bridge marker AND `event.source` must be the contentWindow of one of
    * this board's tracked widget iframes — anything else is dropped. Accepted payloads
-   * are JSON-capped and surfaced through {@link WidgetSubmit}.
+   * are JSON-capped and surfaced through the {@link WidgetSubmitting} (cancelable) /
+   * {@link WidgetSubmitted} event pair.
    */
   private onWindowMessage = (event: MessageEvent): void => {
     const outcome = EvaluateWidgetSubmitMessage(event.data, this.resolveWidgetFromSource(event.source));
     if (outcome.Kind === 'submit') {
-      this.WidgetSubmit.emit(outcome.Event);
+      const submitting: WhiteboardWidgetSubmittingEventArgs = { Event: outcome.Event, Cancel: false };
+      this.WidgetSubmitting.emit(submitting);
+      if (!submitting.Cancel) {
+        this.WidgetSubmitted.emit(outcome.Event);
+      }
       this.cdr.markForCheck();
       return;
     }
@@ -999,18 +1088,21 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     }
   }
 
-  /** Commit the draft to the item (ONE update = one undo step) and keep the panel open. */
+  /**
+   * Commit the draft to the item (ONE update = one undo step) and keep the panel open.
+   * Routes through the {@link ContentApplying} (cancelable) / {@link ContentApplied} pair.
+   */
   public RichEditorApply(): void {
     const editor = this.RichEditor;
     if (!editor || !this.State.GetItem(editor.ItemID)) {
       return;
     }
     if (editor.Kind === 'markdown') {
-      this.State.UpdateItem(editor.ItemID, { Markdown: editor.Draft }, 'user');
+      this.applyContent(editor.ItemID, 'markdown', editor.Draft);
     }
     else {
       // empty title clears the header label (UpdateItem skips undefined, so pass '' to clear)
-      this.State.UpdateItem(editor.ItemID, { Html: editor.Draft, Title: editor.TitleDraft.trim() }, 'user');
+      this.applyContent(editor.ItemID, 'html', editor.Draft, editor.TitleDraft.trim());
     }
   }
 
@@ -1322,6 +1414,9 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this.userStickyCount++;
     const item = this.State.AddItem(
       { Kind: 'sticky', X: p.X - WHITEBOARD_DEFAULTS.StickyW / 2, Y: p.Y - 24, Text: '', Tint: tint, Rotation: rotation }, 'user');
+    if (!item) {
+      return; // canceled via ItemAdding
+    }
     this.State.Select(item.ID);
     this.beginEdit(item.ID, true);
   }
@@ -1339,13 +1434,18 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       FontWeight: this.TextBold ? undefined : 400,
       Color: this.TextColor ?? undefined
     }, 'user');
+    if (!item) {
+      return; // canceled via ItemAdding
+    }
     this.State.Select(item.ID);
     this.beginEdit(item.ID, true);
   }
 
   private placeImage(p: WhiteboardPoint, name: string, url: string | null): void {
     const item = this.State.AddItem({ Kind: 'image', X: p.X, Y: p.Y, Name: name, Url: url }, 'user');
-    this.State.Select(item.ID);
+    if (item) {
+      this.State.Select(item.ID);
+    }
   }
 
   /** Click-place a starter markdown panel and open its editor. */
@@ -1356,7 +1456,10 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       Y: p.Y - 20,
       W: WHITEBOARD_DEFAULTS.MarkdownW,
       Markdown: STARTER_MARKDOWN
-    }, 'user') as WhiteboardMarkdownItem;
+    }, 'user') as WhiteboardMarkdownItem | null;
+    if (!item) {
+      return; // canceled via ItemAdding
+    }
     this.State.Select(item.ID);
     this.openRichEditor(item);
   }
@@ -1371,7 +1474,10 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       H: WHITEBOARD_DEFAULTS.HtmlH,
       Html: WHITEBOARD_WIDGET_STARTER_HTML,
       Title: 'New widget'
-    }, 'user') as WhiteboardHtmlItem;
+    }, 'user') as WhiteboardHtmlItem | null;
+    if (!item) {
+      return; // canceled via ItemAdding
+    }
     this.State.Select(item.ID);
     this.openRichEditor(item);
   }

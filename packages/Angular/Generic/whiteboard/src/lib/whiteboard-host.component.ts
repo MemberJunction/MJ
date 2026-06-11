@@ -4,11 +4,18 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
-import { WhiteboardFontFamily, WhiteboardState } from './whiteboard-state';
+import {
+  WhiteboardFontFamily, WhiteboardItemAddedEventArgs, WhiteboardItemAddingEventArgs,
+  WhiteboardItemRemovedEventArgs, WhiteboardItemRemovingEventArgs,
+  WhiteboardItemUpdatedEventArgs, WhiteboardItemUpdatingEventArgs, WhiteboardState
+} from './whiteboard-state';
 import { BuildWhiteboardExportHtml, BuildWhiteboardExportSvg } from './whiteboard-export';
 import { ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_NAMES, WhiteboardToolResult } from './whiteboard-tools';
-import { RealtimeWhiteboardBoardComponent, WhiteboardAgentPresence } from './whiteboard-board.component';
-import { WhiteboardWidgetSubmitEvent } from './whiteboard-widget-bridge';
+import {
+  RealtimeWhiteboardBoardComponent, WhiteboardAgentPresence,
+  WhiteboardContentAppliedEventArgs, WhiteboardContentApplyingEventArgs
+} from './whiteboard-board.component';
+import { WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs } from './whiteboard-widget-bridge';
 import { RealtimeWhiteboardToolbarComponent, WhiteboardTool, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import { RealtimeWhiteboardZoomComponent } from './whiteboard-zoom.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
@@ -35,6 +42,13 @@ const PRESENCE_MS = 4200;
  *    toast and presence-cursor garnish, returning the result JSON for the tool round-trip;
  *  - `AgentUndo` fires when the user clicks Undo on the agent-action toast;
  *  - `FocusModeChange` asks the shell to collapse/restore the call rail ("Focus board").
+ *
+ * Extensibility (before/after events): the host mirrors the engine's cancelable
+ * BEFORE / AFTER mutation pairs as outputs (`ItemAdding`/`ItemAdded`,
+ * `ItemUpdating`/`ItemUpdated`, `ItemRemoving`/`ItemRemoved`) and forwards the board's
+ * editor + widget pairs (`ContentApplying`/`ContentApplied`,
+ * `WidgetSubmitting`/`WidgetSubmitted`). All BEFORE events honor `Cancel = true` set
+ * synchronously by a handler.
  */
 @Component({
   standalone: true,
@@ -68,10 +82,43 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   /** Emitted when the user picks "Save to artifacts" — the channel plugin persists via its host context. */
   @Output() SaveToArtifactsRequested = new EventEmitter<void>();
   /**
-   * A sandboxed HTML widget submitted user input via `MJWhiteboard.submit` (validated +
-   * size-capped by the board). The channel plugin forwards it to the agent's live context.
+   * Cancelable BEFORE event (forwarded from the board): a sandboxed HTML widget submitted
+   * input via `MJWhiteboard.submit` and it passed validation. Set `Cancel = true`
+   * synchronously to drop it before {@link WidgetSubmitted} fires.
    */
-  @Output() WidgetSubmit = new EventEmitter<WhiteboardWidgetSubmitEvent>();
+  @Output() WidgetSubmitting = new EventEmitter<WhiteboardWidgetSubmittingEventArgs>();
+  /**
+   * AFTER event: a sandboxed HTML widget submitted user input via `MJWhiteboard.submit`
+   * (validated + size-capped by the board, not canceled). Integration layers forward it
+   * to their agent runtime — e.g. MJ's channel plugin sends a `[whiteboard]` context note.
+   */
+  @Output() WidgetSubmitted = new EventEmitter<WhiteboardWidgetSubmitEvent>();
+  /**
+   * Cancelable BEFORE event (forwarded from the board): an in-board editor commit is
+   * about to write to the state engine. Set `Cancel = true` synchronously to discard it.
+   */
+  @Output() ContentApplying = new EventEmitter<WhiteboardContentApplyingEventArgs>();
+  /** AFTER event (forwarded from the board): an editor commit applied. */
+  @Output() ContentApplied = new EventEmitter<WhiteboardContentAppliedEventArgs>();
+
+  // Engine mutation mirrors — the same before/after events {@link WhiteboardState} raises,
+  // re-emitted as component outputs so template-driven consumers can bind them without
+  // subscribing to the engine directly. Emission is synchronous, so cancelable BEFORE
+  // mirrors (`ItemAdding` / `ItemUpdating` / `ItemRemoving`) honor `Cancel = true` set by
+  // a template handler exactly like a direct engine subscription would.
+
+  /** Cancelable BEFORE mirror of {@link WhiteboardState.ItemAdding$}. */
+  @Output() ItemAdding = new EventEmitter<WhiteboardItemAddingEventArgs>();
+  /** AFTER mirror of {@link WhiteboardState.ItemAdded$}. */
+  @Output() ItemAdded = new EventEmitter<WhiteboardItemAddedEventArgs>();
+  /** Cancelable BEFORE mirror of {@link WhiteboardState.ItemUpdating$} (update / move / reorder). */
+  @Output() ItemUpdating = new EventEmitter<WhiteboardItemUpdatingEventArgs>();
+  /** AFTER mirror of {@link WhiteboardState.ItemUpdated$}. */
+  @Output() ItemUpdated = new EventEmitter<WhiteboardItemUpdatedEventArgs>();
+  /** Cancelable BEFORE mirror of {@link WhiteboardState.ItemRemoving$}. */
+  @Output() ItemRemoving = new EventEmitter<WhiteboardItemRemovingEventArgs>();
+  /** AFTER mirror of {@link WhiteboardState.ItemRemoved$}. */
+  @Output() ItemRemoved = new EventEmitter<WhiteboardItemRemovedEventArgs>();
 
   @ViewChild(RealtimeWhiteboardBoardComponent) public Board?: RealtimeWhiteboardBoardComponent;
 
@@ -108,6 +155,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   private ticker: ReturnType<typeof setInterval> | null = null;
 
   private changedSub?: Subscription;
+  private mirrorSubs: Subscription[] = [];
   private cdr = inject(ChangeDetectorRef);
 
   ngOnInit(): void {
@@ -118,6 +166,17 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
       }
       this.cdr.markForCheck();
     });
+    // Mirror the engine's before/after mutation events as component outputs. The re-emit
+    // runs synchronously inside the engine's emit, so Cancel set by an output handler
+    // still vetoes the mutation.
+    this.mirrorSubs.push(
+      this.State.ItemAdding$.subscribe((e) => this.ItemAdding.emit(e)),
+      this.State.ItemAdded$.subscribe((e) => this.ItemAdded.emit(e)),
+      this.State.ItemUpdating$.subscribe((e) => this.ItemUpdating.emit(e)),
+      this.State.ItemUpdated$.subscribe((e) => this.ItemUpdated.emit(e)),
+      this.State.ItemRemoving$.subscribe((e) => this.ItemRemoving.emit(e)),
+      this.State.ItemRemoved$.subscribe((e) => this.ItemRemoved.emit(e))
+    );
     this.ticker = setInterval(() => {
       this.NowTick = Date.now();
       this.cdr.markForCheck();
@@ -126,6 +185,10 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.changedSub?.unsubscribe();
+    for (const sub of this.mirrorSubs) {
+      sub.unsubscribe();
+    }
+    this.mirrorSubs = [];
     if (this.deltaTimer) {
       clearTimeout(this.deltaTimer);
     }

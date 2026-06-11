@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BuildWhiteboardExportHtml, BuildWhiteboardExportSvg, WhiteboardExportOptions } from '../lib/components/realtime/whiteboard/whiteboard-export';
-import { WhiteboardState } from '../lib/components/realtime/whiteboard/whiteboard-state';
+import { BuildWhiteboardExportHtml, BuildWhiteboardExportSvg, WhiteboardExportOptions } from '../lib/whiteboard-export';
+import { WhiteboardState } from '../lib/whiteboard-state';
 
 /**
  * EXPORT builders — self-contained HTML document structure, every item kind rendered,

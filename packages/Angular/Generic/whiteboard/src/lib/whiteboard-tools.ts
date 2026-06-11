@@ -1,19 +1,51 @@
-import { RealtimeToolDefinition } from '@memberjunction/ai';
 import {
   WHITEBOARD_FONT_SIZES, WhiteboardBounds, WhiteboardFontFamily, WhiteboardItem,
   WhiteboardItemPatch, WhiteboardPoint, WhiteboardShapeKind, WhiteboardState
 } from './whiteboard-state';
 
 /**
- * LIVE WHITEBOARD — the agent-facing channel tool surface.
+ * WHITEBOARD — the programmatic (agent-facing) mutation tool surface.
  *
  * Angular-free on purpose: `ApplyWhiteboardAgentTool` is the pure round-trip the host
  * component delegates to (the host adds the UI garnish — violet pop-in, toast, presence
- * cursor). The integration layer registers {@link WHITEBOARD_TOOL_DEFINITIONS} with the
- * realtime session so the co-agent can call `Whiteboard_AddNote` etc.; tool-call frames
- * are routed back through {@link ApplyWhiteboardAgentTool}, which returns the JSON result
- * string fed to the model as the `tool_response`.
+ * cursor). The integration layer registers {@link WHITEBOARD_TOOL_DEFINITIONS} with its
+ * agent/automation runtime so a co-author can call `Whiteboard_AddNote` etc.; tool-call
+ * frames are routed back through {@link ApplyWhiteboardAgentTool}, which returns the JSON
+ * result string fed back to the caller (e.g. as a realtime model's `tool_response`).
  */
+
+/**
+ * Any JSON-serializable value (the building block of {@link WhiteboardToolJSONObject}).
+ * Structurally identical to `JSONValue` from `@memberjunction/ai` — re-declared locally
+ * so this generic package carries no AI-framework dependency.
+ */
+export type WhiteboardToolJSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | WhiteboardToolJSONValue[]
+  | { [key: string]: WhiteboardToolJSONValue };
+
+/** A JSON object (string-keyed map of {@link WhiteboardToolJSONValue}). */
+export type WhiteboardToolJSONObject = { [key: string]: WhiteboardToolJSONValue };
+
+/**
+ * One JSON-described programmatic whiteboard tool: a name, a model-facing description,
+ * and a JSON-schema parameter object. Structurally identical to (mutually assignable
+ * with) `RealtimeToolDefinition` from `@memberjunction/ai`, re-declared locally so the
+ * package stays dependency-light — consumers integrating with the MJ realtime stack can
+ * pass {@link WHITEBOARD_TOOL_DEFINITIONS} straight into APIs typed against
+ * `RealtimeToolDefinition[]`.
+ */
+export interface WhiteboardToolDefinition {
+  /** The tool's name, used to match tool-call frames back to {@link ApplyWhiteboardAgentTool}. */
+  Name: string;
+  /** Human/model-readable description of what the tool does (drives when it gets called). */
+  Description: string;
+  /** A JSON-schema object describing the tool's parameters. */
+  ParametersSchema: WhiteboardToolJSONObject;
+}
 
 /** Result payload (serialized to JSON) returned from every whiteboard tool call. */
 export interface WhiteboardToolResult {
@@ -27,13 +59,14 @@ export interface WhiteboardToolResult {
 }
 
 /**
- * The shared name prefix of every whiteboard channel tool — the key the integration layer
- * registers with `VoiceSessionService.RegisterClientToolHandler` so all `Whiteboard_*` calls
- * route locally to {@link ApplyWhiteboardAgentTool} instead of the server relay.
+ * The shared name prefix of every whiteboard tool — the key an integration layer uses to
+ * route all `Whiteboard_*` tool calls locally to {@link ApplyWhiteboardAgentTool} (e.g.
+ * MJ's realtime sessions register it with `VoiceSessionService.RegisterClientToolHandler`
+ * so calls execute in the browser instead of the server relay).
  */
 export const WHITEBOARD_TOOL_PREFIX = 'Whiteboard_';
 
-/** Names of the whiteboard channel tools, as registered with the realtime session. */
+/** Names of the whiteboard tools, as registered with the agent/automation runtime. */
 export const WHITEBOARD_TOOL_NAMES = {
   AddNote: 'Whiteboard_AddNote',
   AddShape: 'Whiteboard_AddShape',
@@ -54,10 +87,10 @@ export const WHITEBOARD_MARKDOWN_MAX_CHARS = 32_000;
 export const WHITEBOARD_HTML_MAX_CHARS = 64_000;
 
 /**
- * Tool definitions for session registration (shape-compatible with
- * {@link RealtimeToolDefinition} from `@memberjunction/ai`).
+ * The full `Whiteboard_*` tool set, ready for registration with an agent/automation
+ * runtime (shape-compatible with `RealtimeToolDefinition` from `@memberjunction/ai`).
  */
-export const WHITEBOARD_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
+export const WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
   {
     Name: WHITEBOARD_TOOL_NAMES.AddNote,
     Description: 'Add a sticky note to the shared whiteboard. Your notes render in your reserved violet style so the user always knows they came from you.',
@@ -362,6 +395,9 @@ function addNote(state: WhiteboardState, args: Record<string, unknown>): string 
   const y = asNumber(args['y']) ?? place.Y;
   const item = state.RunBatch(() =>
     state.AddItem({ Kind: 'sticky', X: x, Y: y, Text: text, Rotation: 1.2, ...style.patch }, 'agent'));
+  if (!item) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(item.ID, `Added sticky note "${text}" at (${Math.round(x)}, ${Math.round(y)}).`);
 }
 
@@ -382,6 +418,9 @@ function addShape(state: WhiteboardState, args: Record<string, unknown>): string
   const h = asNumber(args['h']) ?? 56;
   const item = state.RunBatch(() =>
     state.AddItem({ Kind: 'shape', Shape: shape, X: x, Y: y, W: w, H: h, Label: label, Sub: asString(args['sub']) }, 'agent'));
+  if (!item) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(item.ID, `Added ${shape} "${label}" at (${Math.round(x)}, ${Math.round(y)}).`);
 }
 
@@ -400,6 +439,9 @@ function addText(state: WhiteboardState, args: Record<string, unknown>): string 
   const wRaw = asNumber(args['w']);
   const w = wRaw !== undefined ? Math.min(800, Math.max(60, Math.round(wRaw))) : undefined;
   const item = state.RunBatch(() => state.AddItem({ Kind: 'text', X: x, Y: y, Text: text, ...(w !== undefined ? { W: w } : {}), ...style.patch }, 'agent'));
+  if (!item) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(item.ID, `Added text label "${text}".`);
 }
 
@@ -427,6 +469,9 @@ function addMarkdown(state: WhiteboardState, args: Record<string, unknown>): str
   const h = clampedNumber(args['h'], 80, 800, undefined);
   const item = state.RunBatch(() =>
     state.AddItem({ Kind: 'markdown', X: x, Y: y, W: w, ...(h !== undefined ? { H: h } : {}), Markdown: markdown }, 'agent'));
+  if (!item) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(item.ID, `Added a markdown panel at (${Math.round(x)}, ${Math.round(y)}).`);
 }
 
@@ -446,6 +491,9 @@ function addHtml(state: WhiteboardState, args: Record<string, unknown>): string 
   const h = clampedNumber(args['h'], 120, 800, 240) as number;
   const item = state.RunBatch(() =>
     state.AddItem({ Kind: 'html', X: x, Y: y, W: w, H: h, Html: html, Title: title }, 'agent'));
+  if (!item) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(item.ID, `Added an HTML widget${title ? ` "${title}"` : ''} at (${Math.round(x)}, ${Math.round(y)}) — rendered sandboxed.`);
 }
 
@@ -514,7 +562,10 @@ function updateContent(state: WhiteboardState, args: Record<string, unknown>): s
     return fail(`UpdateContent: ${result.error}`);
   }
   // ONE UpdateItem in ONE batch — single undo step, single journal entry.
-  state.RunBatch(() => state.UpdateItem(itemId, result.patch, 'agent'));
+  const applied = state.RunBatch(() => state.UpdateItem(itemId, result.patch, 'agent'));
+  if (!applied) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(itemId, `Updated the content of ${itemId}.`);
 }
 
@@ -545,6 +596,9 @@ function drawConnector(state: WhiteboardState, args: Record<string, unknown>): s
       FromPoint: fromId ? null : { X: fromX as number, Y: fromY as number },
       ToPoint: toId ? null : { X: toX as number, Y: toY as number }
     }, 'agent'));
+  if (!item) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(item.ID, `Drew a connector ${fromId ?? '(point)'} → ${toId ?? '(point)'}.`);
 }
 
@@ -564,6 +618,9 @@ function highlight(state: WhiteboardState, args: Record<string, unknown>): strin
     const b = unionBounds(state, items);
     const region = state.RunBatch(() =>
       state.Highlight(b.X - HIGHLIGHT_PAD, b.Y - HIGHLIGHT_PAD, b.W + HIGHLIGHT_PAD * 2, b.H + HIGHLIGHT_PAD * 2, label, 'agent'));
+    if (!region) {
+      return fail('The host application canceled this operation.');
+    }
     return ok(region.ID, `Highlighted ${items.length} item(s).`);
   }
   const x = asNumber(args['x']);
@@ -574,6 +631,9 @@ function highlight(state: WhiteboardState, args: Record<string, unknown>): strin
     return fail('Highlight requires itemIds, or an explicit x/y/w/h region.');
   }
   const region = state.RunBatch(() => state.Highlight(x, y, w, h, label, 'agent'));
+  if (!region) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(region.ID, `Highlighted the region at (${Math.round(x)}, ${Math.round(y)}).`);
 }
 
@@ -587,7 +647,10 @@ function moveItem(state: WhiteboardState, args: Record<string, unknown>): string
   if (!state.GetItem(itemId)) {
     return fail(`MoveItem: no item with id "${itemId}".`);
   }
-  state.RunBatch(() => state.MoveItem(itemId, x, y, 'agent'));
+  const moved = state.RunBatch(() => state.MoveItem(itemId, x, y, 'agent'));
+  if (!moved) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(itemId, `Moved ${itemId} to (${Math.round(x)}, ${Math.round(y)}).`);
 }
 
@@ -599,7 +662,10 @@ function removeItem(state: WhiteboardState, args: Record<string, unknown>): stri
   if (!state.GetItem(itemId)) {
     return fail(`RemoveItem: no item with id "${itemId}".`);
   }
-  state.RunBatch(() => state.RemoveItem(itemId, 'agent'));
+  const removed = state.RunBatch(() => state.RemoveItem(itemId, 'agent'));
+  if (!removed) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(itemId, `Removed ${itemId}.`);
 }
 
@@ -624,6 +690,9 @@ function styleItem(state: WhiteboardState, args: Record<string, unknown>): strin
   }
   // ONE UpdateItem inside ONE batch — a single undo step and a single journal entry,
   // so the toast Undo reverts it whole and the perception feed sees one update.
-  state.RunBatch(() => state.UpdateItem(itemId, style.patch, 'agent'));
+  const styled = state.RunBatch(() => state.UpdateItem(itemId, style.patch, 'agent'));
+  if (!styled) {
+    return fail('The host application canceled this operation.');
+  }
   return ok(itemId, `Restyled ${itemId}.`);
 }
