@@ -148,6 +148,7 @@
                [class.dragging]="IsDragging(item)"
                [class.pop-in]="PopInIDs.has(item.ID)"
                [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
+               [style.width.px]="TextWrapWidth(item)"
                [style.fontSize]="ItemFontSize(item)"
                [style.fontFamily]="ItemFontFamily(item)"
                [style.fontWeight]="ItemFontWeight(item)"

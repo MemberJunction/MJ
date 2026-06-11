@@ -93,7 +93,13 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     this.surfaceSubs.push(
       // The board's coalesced scene delta — the perception feed the agent "sees".
       instance.SceneDelta.subscribe((deltaJson: string) => {
-        this.Context?.SendContextNote('[whiteboard] ' + deltaJson);
+        // Background PERCEPTION, not conversation: the model sees every user edit without
+        // being told, but must not narrate minor changes — only react when something is
+        // significant (or when asked). The etiquette rides in the note itself so any
+        // realtime model gets it regardless of system-prompt sync state.
+        this.Context?.SendContextNote(
+          '[whiteboard] board update (background context — do NOT comment on minor edits; ' +
+          'only mention it if the change is significant to the discussion): ' + deltaJson);
       }),
       // The user clicked Undo on the agent-action toast (the undo already applied locally).
       instance.AgentUndo.subscribe(() => {

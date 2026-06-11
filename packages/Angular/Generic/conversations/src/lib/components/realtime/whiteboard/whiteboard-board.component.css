@@ -193,7 +193,11 @@
   box-shadow: none;
   letter-spacing: 0.01em;
   text-shadow: 0 1px 6px rgba(2, 6, 23, 0.8);
-  white-space: nowrap;
+  /* WRAP by default: long labels fold at the default max width; an explicit item
+     width (resize / the tool's w param) binds inline and wins. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  max-width: 380px;
   cursor: default;
 }
 .tlabel i {

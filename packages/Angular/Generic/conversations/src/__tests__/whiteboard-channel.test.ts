@@ -117,7 +117,12 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     fake.SceneDelta.emit('{"added":[1]}');
     fake.AgentUndo.emit();
     fake.FocusModeChange.emit(true);
-    expect(log.Notes).toEqual(['[whiteboard] {"added":[1]}', '[whiteboard] user undid your last change']);
+    // scene deltas carry the perception ETIQUETTE inline (don't comment on minor edits)
+    expect(log.Notes).toHaveLength(2);
+    expect(log.Notes[0]).toContain('[whiteboard] board update');
+    expect(log.Notes[0]).toContain('do NOT comment on minor edits');
+    expect(log.Notes[0]).toContain('{"added":[1]}');
+    expect(log.Notes[1]).toBe('[whiteboard] user undid your last change');
     expect(log.Focus).toEqual([true]);
   });
 

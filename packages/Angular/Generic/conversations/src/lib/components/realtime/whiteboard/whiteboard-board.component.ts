@@ -205,6 +205,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     return item.ID;
   }
 
+  /** Explicit wrap width for a text label (resize / tool w) — null lets the CSS max-width wrap. */
+  public TextWrapWidth(item: WhiteboardItem): number | null {
+    return item.Kind === 'text' && item.W ? item.W : null;
+  }
+
   /** Left position of an item, honoring an in-flight move/resize transient. */
   public ItemX(item: WhiteboardItem): number {
     const t = this.transientBounds(item.ID);
@@ -613,7 +618,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         if (item && (item.Kind === 'shape' || item.Kind === 'highlight')) {
           this.State.UpdateItem(i.ItemID, { X: i.CurBounds.X, Y: i.CurBounds.Y, W: i.CurBounds.W, H: i.CurBounds.H }, 'user');
         }
-        else if (item && (item.Kind === 'sticky' || item.Kind === 'image')) {
+        else if (item && (item.Kind === 'sticky' || item.Kind === 'image' || item.Kind === 'text')) {
+          // text: resizing sets the WRAP WIDTH (height stays content-driven)
           this.State.UpdateItem(i.ItemID, { X: i.CurBounds.X, Y: i.CurBounds.Y, W: i.CurBounds.W }, 'user');
         }
         break;

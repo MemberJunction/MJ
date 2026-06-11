@@ -171,7 +171,9 @@ function shapeHtml(item: WhiteboardShapeItem, ox: number, oy: number, agentName:
 
 function textHtml(item: WhiteboardTextItem, ox: number, oy: number, agentName: string): string {
   const color = item.Color ? `color:${escapeHtml(item.Color)};` : '';
-  const style = `left:${n(item.X - ox)}px;top:${n(item.Y - oy)}px;${color}${textStyleCss(item)}`;
+  // explicit wrap width wins; otherwise wrap at the on-board default max width
+  const width = item.W ? `width:${n(item.W)}px;` : 'max-width:380px;';
+  const style = `left:${n(item.X - ox)}px;top:${n(item.Y - oy)}px;${width}${color}${textStyleCss(item)}`;
   return `<div class="it label" style="${style}">${chipHtml(item, agentName)}<div class="it-text">${escapeHtml(item.Text)}</div></div>`;
 }
 

@@ -98,6 +98,8 @@ export interface WhiteboardTextItem extends WhiteboardItemBase {
   X: number;
   Y: number;
   Text: string;
+  /** Wrap width in px — text wraps at this width. Omitted = wrap at the default max width. */
+  W?: number;
   /** Curated font size (see {@link WHITEBOARD_FONT_SIZES}); omitted = the CSS default. */
   FontSize?: number;
   /** Font family key (mapped to token-friendly stacks in CSS); omitted = sans. */
@@ -384,12 +386,13 @@ export class WhiteboardState {
       case 'shape':
         return { X: item.X, Y: item.Y, W: item.W, H: item.H };
       case 'text': {
-        // estimate scales with the chosen font size (the CSS default renders ~12px)
+        // estimate scales with the chosen font size (the CSS default renders ~12px);
+        // an explicit wrap width (item.W) wins over the single-line estimate
         const scale = item.FontSize ? item.FontSize / 12 : 1;
         return {
           X: item.X,
           Y: item.Y,
-          W: Math.round(WHITEBOARD_DEFAULTS.TextW * scale),
+          W: item.W ?? Math.round(WHITEBOARD_DEFAULTS.TextW * scale),
           H: Math.round(WHITEBOARD_DEFAULTS.TextH * scale)
         };
       }
@@ -830,6 +833,9 @@ export class WhiteboardState {
       case 'text':
         c.x = Math.round(item.X);
         c.y = Math.round(item.Y);
+        if (item.W) {
+          c.w = Math.round(item.W);
+        }
         c.text = clip(item.Text, 120);
         WhiteboardState.compactTextStyle(item, c);
         if (item.Color) {

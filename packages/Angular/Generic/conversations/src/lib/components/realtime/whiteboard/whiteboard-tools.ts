@@ -90,6 +90,7 @@ export const WHITEBOARD_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
         text: { type: 'string', description: 'The label text.' },
         x: { type: 'number', description: 'Left position in board coordinates.' },
         y: { type: 'number', description: 'Top position in board coordinates.' },
+        w: { type: 'number', description: 'Optional wrap width in px (60-800). Long text wraps at this width — use for sentences/paragraphs; omit for short labels.' },
         fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'Optional label font size in px (curated steps).' },
         fontFamily: { type: 'string', enum: ['sans', 'serif', 'mono'], description: 'Optional font family. Defaults to sans.' },
         bold: { type: 'boolean', description: 'Optional bold weight. Labels render bold by default.' }
@@ -339,7 +340,9 @@ function addText(state: WhiteboardState, args: Record<string, unknown>): string 
   const place = autoPlace(state);
   const x = asNumber(args['x']) ?? place.X;
   const y = asNumber(args['y']) ?? place.Y;
-  const item = state.RunBatch(() => state.AddItem({ Kind: 'text', X: x, Y: y, Text: text, ...style.patch }, 'agent'));
+  const wRaw = asNumber(args['w']);
+  const w = wRaw !== undefined ? Math.min(800, Math.max(60, Math.round(wRaw))) : undefined;
+  const item = state.RunBatch(() => state.AddItem({ Kind: 'text', X: x, Y: y, Text: text, ...(w !== undefined ? { W: w } : {}), ...style.patch }, 'agent'));
   return ok(item.ID, `Added text label "${text}".`);
 }
 
