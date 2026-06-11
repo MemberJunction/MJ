@@ -203,12 +203,16 @@
 :host ::ng-deep .call-split > .as-split-gutter .as-split-gutter-icon {
   display: none;
 }
-/* Areas must allow their children to own scrolling. */
+/* Areas CONTAIN their children (overflow hidden keeps the flex height chain intact
+   so the thread scrolls internally under a fixed banner — overflow:visible here let
+   the whole column overflow the area and broke scrolling). Children own their own
+   scrollbars via flex + min-height:0. */
 :host ::ng-deep .call-split > .as-split-area {
-  overflow: visible;
+  overflow: hidden;
   display: flex;
 }
 :host ::ng-deep .call-split > .as-split-area > * {
   flex: 1;
   min-width: 0;
+  min-height: 0;
 }
