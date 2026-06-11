@@ -1,5 +1,40 @@
 # @memberjunction/ai-zhipu
 
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.2
+- @memberjunction/ai-openai@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.1
+- @memberjunction/ai-openai@5.40.1
+- @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.0
+- @memberjunction/ai-openai@5.40.0
+- @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [34fe6d1]
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/ai-openai@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

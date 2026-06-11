@@ -2,15 +2,46 @@
     Title="Content Sources"
     Subtitle="Configure where content is ingested from">
   <div actions>
+    <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading">
+      @if (IsLoading) {
+        <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Refreshing…</span>
+      } @else {
+        <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
+      }
+    </button>
+    <button mjButton variant="secondary" size="sm" (click)="onAddSourceGuided()">
+      <i class="fa-solid fa-wand-magic-sparkles"></i> <span class="mj-action-label">Add Source (Guided)</span>
+    </button>
     <button mjButton variant="primary" size="sm" (click)="onAddSource()">
-      <i class="fa-solid fa-plus"></i> Add Source
+      <i class="fa-solid fa-plus"></i> <span class="mj-action-label">Add Source</span>
     </button>
   </div>
 </mj-page-header-interior>
 
 <mj-page-body-interior [Padding]="false" [Flex]="true">
   <div class="at-main-area">
+    @if (IsLoading) {
+      <div class="at-loading-overlay">
+        <mj-loading text="Refreshing sources…"></mj-loading>
+      </div>
+    }
     <div class="at-page-body">
+      @if (SourceCards.length === 0 && !IsLoading) {
+        <div class="at-sources-empty">
+          <i class="fa-solid fa-database"></i>
+          <h3>No content sources yet</h3>
+          <p>Use the guided setup to stand up your first source — pick an entity or URL, configure its document, taxonomy, and domain context in one flow.</p>
+          <div class="at-sources-empty-actions">
+            <button mjButton variant="primary" size="sm" (click)="onAddSourceGuided()">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Add Source (Guided)
+            </button>
+            <button mjButton variant="secondary" size="sm" (click)="onAddSource()">
+              <i class="fa-solid fa-plus"></i> Add manually
+            </button>
+          </div>
+        </div>
+      }
+
       <div class="at-sources-grid">
         @for (card of SourceCards; track card.ID) {
           <div class="at-source-card-full at-source-card-clickable" (click)="OpenSourceDetail(card)">

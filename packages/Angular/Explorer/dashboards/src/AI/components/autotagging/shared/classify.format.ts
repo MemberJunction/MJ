@@ -10,6 +10,61 @@ export function formatNumber(n: number): string {
     return n.toLocaleString();
 }
 
+/**
+ * Derive a human-meaningful display name for a content item.
+ *
+ * Entity-sourced content items now carry a real per-record `Name` (the source
+ * entity's name field — e.g. "GPT-4"), so we prefer `Name` directly. Only when a
+ * Name is missing (or is a generic source-name placeholder) do we fall back to
+ * the first meaningful line of the LLM-generated `Description` to keep rows
+ * distinguishable, then to a placeholder.
+ *
+ * Pure/stateless — safe to call from any render site.
+ */
+export function deriveDisplayName(item: { Name?: string | null; Description?: string | null }): string {
+    const name = item?.Name?.trim();
+    if (name) {
+        return name.length > DISPLAY_NAME_MAX_LEN
+            ? `${name.slice(0, DISPLAY_NAME_MAX_LEN).trimEnd()}…`
+            : name;
+    }
+
+    const fromDescription = firstMeaningfulLine(item?.Description);
+    if (fromDescription) return fromDescription;
+
+    return '(Untitled)';
+}
+
+/** Max length of a derived display name before it is truncated with an ellipsis. */
+const DISPLAY_NAME_MAX_LEN = 80;
+
+/**
+ * Returns the first non-empty, markdown-stripped line of a description, clamped
+ * to DISPLAY_NAME_MAX_LEN characters. Returns null when nothing meaningful remains.
+ */
+function firstMeaningfulLine(description: string | null | undefined): string | null {
+    if (!description) return null;
+
+    for (const rawLine of description.split(/\r?\n/)) {
+        const cleaned = stripMarkdown(rawLine);
+        if (cleaned.length === 0) continue;
+        return cleaned.length > DISPLAY_NAME_MAX_LEN
+            ? `${cleaned.slice(0, DISPLAY_NAME_MAX_LEN).trimEnd()}…`
+            : cleaned;
+    }
+    return null;
+}
+
+/** Strip leading markdown markers (#, *, -, >, backticks) and collapse whitespace. */
+function stripMarkdown(line: string): string {
+    return line
+        .replace(/^[#>\s]*/g, '')      // leading heading / blockquote markers + space
+        .replace(/^[-*+]\s+/, '')      // leading bullet markers
+        .replace(/[`*_~]/g, '')        // inline emphasis / code markers
+        .replace(/\s+/g, ' ')          // collapse runs of whitespace
+        .trim();
+}
+
 /** Compact token count (e.g. 1500 → "2K", 2_400_000 → "2.4M"). */
 export function formatTokenCount(tokens: number): string {
     if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;

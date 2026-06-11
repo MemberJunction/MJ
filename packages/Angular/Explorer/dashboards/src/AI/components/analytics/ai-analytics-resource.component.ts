@@ -50,6 +50,7 @@ interface NavItem {
         </mj-page-header>
         <mj-page-body [Padding]="false" class="analytics-shell">
             <mj-left-nav
+                MobileTitle="Analytics"
                 [Sections]="navSections"
                 [ActiveId]="ActiveSection"
                 (ItemClicked)="onNavItemClicked($event)">
@@ -81,12 +82,12 @@ interface NavItem {
                     }
                     @if (FilterBarConfig.ShowCompareToggle) {
                         <button mjButton variant="secondary" size="sm" [toggleable]="true" [(selected)]="compareActive" (selectedChange)="toggleCompare()">
-                            <i class="fa-solid fa-code-compare"></i> Compare
+                            <i class="fa-solid fa-code-compare"></i> <span class="mj-action-label">Compare</span>
                         </button>
                     }
                     @if (FilterBarConfig.ShowExportButton) {
                         <button mjButton variant="secondary" size="sm" (click)="OnExportClicked()">
-                            <i class="fa-solid fa-download"></i> Export
+                            <i class="fa-solid fa-download"></i> <span class="mj-action-label">Export</span>
                         </button>
                     }
                 </div>
@@ -149,6 +150,17 @@ interface NavItem {
                         <app-analytics-usage-patterns
                             [TimeRange]="CurrentTimeRange"
                         ></app-analytics-usage-patterns>
+                    }
+                    @case ('realtime-overview') {
+                        <app-analytics-realtime-overview
+                            [TimeRange]="CurrentTimeRange"
+                            (SectionNavigate)="OnSectionChange($event)"
+                        ></app-analytics-realtime-overview>
+                    }
+                    @case ('realtime-sessions') {
+                        <app-analytics-realtime-sessions
+                            [TimeRange]="CurrentTimeRange"
+                        ></app-analytics-realtime-sessions>
                     }
                 }
             </div>
@@ -226,6 +238,15 @@ interface NavItem {
                 padding: 16px;
             }
         }
+
+        /* <mj-left-nav> collapses to a full-width top bar at ≤700px; stack the
+           shell vertically so the content pane sits below it instead of being
+           squeezed to zero width in the flex row. */
+        @media (max-width: 700px) {
+            .analytics-shell {
+                flex-direction: column;
+            }
+        }
     `]
 })
 export class AIAnalyticsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
@@ -283,6 +304,13 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: true,  ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
             case 'usage-patterns':
                 return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            // Realtime Voice sections own their filters internally (search/status/
+            // target/user/host live with the grid); only the time-range chips come
+            // from the shared chrome. Session data is bucketed daily, so the
+            // sub-day ranges are dropped.
+            case 'realtime-overview':
+            case 'realtime-sessions':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['24h', '7d', '30d'] };
             default:
                 return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
         }
@@ -466,6 +494,11 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
           Description: 'Failure patterns and root causes' },
         { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns',
           Description: 'Volume, frequency, and concurrency over time' },
+        { Key: 'divider2' },
+        { Label: 'Realtime Voice', Icon: 'fa-solid fa-tower-broadcast', Key: 'realtime-overview',
+          Description: 'Operational analytics for voice-agent sessions — sessions, channels, and delegated runs' },
+        { Label: 'Voice Sessions', Icon: 'fa-solid fa-table-list', Key: 'realtime-sessions',
+          Description: 'Every long-lived agent session — live calls, idle holds, and closed history' },
     ];
 
     /**
@@ -487,7 +520,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     get navSections(): MJLeftNavSection[] {
         const sections: MJLeftNavSection[] = [{ items: [] }];
         for (const item of this.NavItems) {
-            if (item.Key === 'divider') {
+            if (item.Key.startsWith('divider')) {
                 sections.push({ items: [] });
             } else {
                 sections[sections.length - 1].items.push({
@@ -528,7 +561,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
 
     /** Navigate to a different analytics section */
     public OnSectionChange(key: string): void {
-        if (key === 'divider' || key === this.ActiveSection) {
+        if (key.startsWith('divider') || key === this.ActiveSection) {
             return;
         }
         this.ActiveSection = key;

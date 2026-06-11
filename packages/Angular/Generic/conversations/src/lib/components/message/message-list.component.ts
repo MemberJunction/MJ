@@ -1,5 +1,6 @@
 import {
   Component,
+  ComponentRef,
   Input,
   Output,
   EventEmitter,
@@ -16,9 +17,18 @@ import {
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment } from './message-item.component';
+import { RealtimeSessionTimelineCardComponent } from '../realtime/realtime-session-timeline-card.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
+import { selectDistinctLatestArtifacts } from '../../utils/distinct-artifacts';
+import {
+  BuildConversationTimeline,
+  ConversationTimelineItem,
+  RealtimeSessionTimelineGroup,
+  RealtimeSessionTimelineMeta
+} from '../../utils/realtime-session-timeline';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
@@ -42,6 +52,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public attachmentsMap: Map<string, MessageAttachment[]> = new Map();
+  /**
+   * Optional session-row enrichment for realtime SESSION BLOCKS, keyed by
+   * `NormalizeUUID(sessionId)` (agent name / status / close reason). Details stamped
+   * with an `AgentSessionID` collapse into one timeline card per session — see
+   * `BuildConversationTimeline` — and this map dresses those cards up when present.
+   */
+  @Input() public sessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
 
   @Output() public editMessage = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteMessage = new EventEmitter<MJConversationDetailEntity>();
@@ -56,11 +73,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
   @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId
   @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+  /** Emitted with the `MJ: AI Agent Sessions.ID` when a realtime session block's Open affordance is clicked. */
+  @Output() public realtimeSessionOpenRequested = new EventEmitter<string>();
 
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
 
-  private _renderedMessages = new Map<string, any>();
+  private _renderedMessages = new Map<string, ComponentRef<MessageItemComponent> | ComponentRef<RealtimeSessionTimelineCardComponent>>();
   private _shouldScrollToBottom = false;
   private _previousMessageCount = 0; // Track previous count to detect new messages
 
@@ -138,6 +157,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     if (changes['attachmentsMap'] && this.messages && this.messageContainerRef) {
       this.updateMessages(this.messages);
     }
+
+    // Watch for session-meta changes so realtime session blocks pick up their
+    // agent name / status chip once the (async, batched) session lookup lands
+    if (changes['sessionMetaMap'] && this.messages && this.messageContainerRef) {
+      this.updateMessages(this.messages);
+    }
   }
 
   ngAfterViewChecked() {
@@ -175,157 +200,38 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   /**
    * Updates the message list using dynamic component creation
    * Only adds/removes changed messages for optimal performance
+   *
+   * REALTIME SESSIONS: details stamped with an `AgentSessionID` (turns persisted during
+   * a live realtime session) do NOT render as normal chat bubbles. The timeline pass
+   * (`BuildConversationTimeline`) collapses each session's stamped rows into ONE session
+   * block, rendered as a `RealtimeSessionTimelineCardComponent` at the session's
+   * chronological position. Everything else renders exactly as before.
    */
   private updateMessages(messages: MJConversationDetailEntity[]): void {
     // Temporarily detach change detection for performance
     this.cdRef.detach();
 
     try {
-      // Remove messages that no longer exist
-      const currentIds = new Set(messages.map(m => this.getMessageKey(m)));
+      const timeline = BuildConversationTimeline(messages);
+
+      // Remove rendered items (messages AND session blocks) that no longer exist
+      const currentKeys = new Set(timeline.map(item => this.getTimelineKey(item)));
       this._renderedMessages.forEach((componentRef, key) => {
-        if (!currentIds.has(key)) {
+        if (!currentKeys.has(key)) {
           componentRef.destroy();
           this._renderedMessages.delete(key);
         }
       });
 
-      // Add or update messages
-      messages.forEach((message, index) => {
-        const key = this.getMessageKey(message);
-        const existing = this._renderedMessages.get(key);
-
-        if (existing) {
-          // Update existing component
-          const instance = existing.instance as MessageItemComponent;
-
-          // Store previous message for comparison
-          const previousMessage = instance.message;
-
-          instance.message = message;
-          instance.allMessages = messages;
-          instance.isProcessing = this.isProcessing;
-          instance.userAvatarMap = this.userAvatarMap;
-          instance.isLastMessage = (index === messages.length - 1); // Update last message flag
-
-          // Get artifact from lazy-loading map
-          const artifactList = this.artifactMap.get(message.ID);
-          // Use LAST artifact (most recent) instead of first for display
-          const lastArtifact = artifactList && artifactList.length > 0
-            ? artifactList[artifactList.length - 1]
-            : undefined;
-
-          // Trigger lazy load and set properties
-          if (lastArtifact) {
-            // Lazy load in background - don't block UI
-            Promise.all([
-              lastArtifact.getArtifact(),
-              lastArtifact.getVersion()
-            ]).then(([artifact, version]) => {
-              instance.artifact = artifact;
-              instance.artifactVersion = version;
-              // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
-              existing.changeDetectorRef.detectChanges();
-              this.cdRef.detectChanges();
-            }).catch(err => {
-              console.error('Failed to lazy-load artifact:', err);
-            });
-          } else {
-            instance.artifact = undefined;
-            instance.artifactVersion = undefined;
-          }
-
-          // Update agent run from map
-          instance.agentRun = this.agentRunMap.get(message.ID) || null;
-
-          // Update ratings from map
-          instance.ratings = this.ratingsMap.get(message.ID);
-
-          // Update attachments from map
-          instance.attachments = this.attachmentsMap.get(message.ID) || [];
-
-          // Manually trigger change detection in child component when message status changes
-          // This is necessary because we're using OnPush change detection and direct property assignment
-          // doesn't trigger ngOnChanges (only reference changes do)
-          if (previousMessage && previousMessage.Status !== message.Status) {
-            // Use ComponentRef.changeDetectorRef to force update on dynamic child
-            existing.changeDetectorRef.markForCheck();
-          }
+      // Add or update timeline items in chronological order
+      const lastMessageKey = this.findLastMessageKey(timeline);
+      for (const item of timeline) {
+        if (item.Kind === 'session') {
+          this.renderSessionBlock(item.Group);
         } else {
-          // Create new component
-          const componentRef = this.messageContainerRef.createComponent(MessageItemComponent);
-          const instance = componentRef.instance;
-
-          // Set inputs
-          instance.message = message;
-          instance.conversation = this.conversation;
-          instance.currentUser = this.currentUser;
-          instance.allMessages = messages;
-          instance.isProcessing = this.isProcessing;
-          instance.userAvatarMap = this.userAvatarMap;
-          instance.isLastMessage = (index === messages.length - 1); // Mark last message
-
-          // Get artifact from lazy-loading map
-          const artifactList = this.artifactMap.get(message.ID);
-          // Use LAST artifact (most recent) instead of first for display
-          const lastArtifact = artifactList && artifactList.length > 0
-            ? artifactList[artifactList.length - 1]
-            : undefined;
-
-          // Trigger lazy load and set properties
-          if (lastArtifact) {
-            // Lazy load in background - don't block UI
-            Promise.all([
-              lastArtifact.getArtifact(),
-              lastArtifact.getVersion()
-            ]).then(([artifact, version]) => {
-              instance.artifact = artifact;
-              instance.artifactVersion = version;
-              // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
-              componentRef.changeDetectorRef.detectChanges();
-              this.cdRef.detectChanges();
-            }).catch(err => {
-              console.error('Failed to lazy-load artifact:', err);
-            });
-          }
-
-          // Pass agent run from map (loaded once per conversation)
-          instance.agentRun = this.agentRunMap.get(message.ID) || null;
-
-          // Pass ratings from map (parsed once per conversation)
-          instance.ratings = this.ratingsMap.get(message.ID);
-
-          // Pass attachments from map
-          instance.attachments = this.attachmentsMap.get(message.ID) || [];
-
-          // Subscribe to outputs
-          instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.editMessage.emit(msg));
-          instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.deleteMessage.emit(msg));
-          instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.retryMessage.emit(msg));
-          instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.testFeedbackMessage.emit(msg));
-          instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
-          instance.messageEdited.subscribe((msg: MJConversationDetailEntity) => this.messageEdited.emit(msg));
-          instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));
-          instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.suggestedResponseSelected.emit(data));
-          instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.attachmentClicked.emit(attachment));
-          instance.diagnosticRequested.subscribe((messageId: string) => this.diagnosticRequested.emit(messageId));
-          instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.messagePinToggled.emit(msg));
-
-          // Handle artifact actions if the output exists
-          if (instance.artifactActionPerformed) {
-            instance.artifactActionPerformed.subscribe((data: {action: string; artifactId: string}) => {
-              // Parent can handle artifact actions (save, fork, history, share)
-              console.log('Artifact action:', data);
-            });
-          }
-
-          // Store reference
-          this._renderedMessages.set(key, componentRef);
-
-          // Store reference on the message entity for later access (like skip-chat pattern)
-          (message as any)._componentRef = componentRef;
+          this.renderMessageItem(item.Detail, messages, this.getMessageKey(item.Detail) === lastMessageKey);
         }
-      });
+      }
 
       // Only scroll to bottom if new messages were added (not just updates)
       // This prevents scrolling when the message list is merely refreshed (e.g., during agent run timer)
@@ -340,6 +246,210 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.cdRef.reattach();
       this.cdRef.detectChanges();
     }
+  }
+
+  /** Stable render key for a timeline item — message ID, or a prefixed session key for session blocks. */
+  private getTimelineKey(item: ConversationTimelineItem<MJConversationDetailEntity>): string {
+    return item.Kind === 'session' ? this.getSessionKey(item.Group.SessionID) : this.getMessageKey(item.Detail);
+  }
+
+  /** Render key for a session block (case-insensitive on the session id; prefixed so it can't collide with message IDs). */
+  private getSessionKey(sessionId: string): string {
+    return `session:${NormalizeUUID(sessionId)}`;
+  }
+
+  /** The render key of the LAST normal message item in the timeline (drives `isLastMessage`), or null when none. */
+  private findLastMessageKey(timeline: ConversationTimelineItem<MJConversationDetailEntity>[]): string | null {
+    for (let i = timeline.length - 1; i >= 0; i--) {
+      const item = timeline[i];
+      if (item.Kind === 'message') {
+        return this.getMessageKey(item.Detail);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Creates or updates the ONE timeline card a realtime session collapses to.
+   * Click/Open on the card bubbles up via {@link realtimeSessionOpenRequested} so the
+   * chat area can host the SESSION REVIEW overlay for it.
+   */
+  private renderSessionBlock(group: RealtimeSessionTimelineGroup): void {
+    const key = this.getSessionKey(group.SessionID);
+    const meta = this.sessionMetaMap.get(NormalizeUUID(group.SessionID)) ?? null;
+    const existing = this._renderedMessages.get(key);
+
+    if (existing) {
+      const instance = existing.instance as RealtimeSessionTimelineCardComponent;
+      instance.Group = group;
+      instance.Meta = meta;
+      existing.changeDetectorRef.markForCheck();
+    } else {
+      const componentRef = this.messageContainerRef.createComponent(RealtimeSessionTimelineCardComponent);
+      componentRef.instance.Group = group;
+      componentRef.instance.Meta = meta;
+      componentRef.instance.OpenRequested.subscribe((sessionId: string) => this.realtimeSessionOpenRequested.emit(sessionId));
+      this._renderedMessages.set(key, componentRef);
+    }
+  }
+
+  /** Creates or updates one normal chat message item (the pre-existing per-message render path, unchanged). */
+  private renderMessageItem(message: MJConversationDetailEntity, messages: MJConversationDetailEntity[], isLastMessage: boolean): void {
+    const key = this.getMessageKey(message);
+    const existing = this._renderedMessages.get(key);
+
+    if (existing) {
+      // Update existing component
+      const instance = existing.instance as MessageItemComponent;
+
+      // Store previous message for comparison
+      const previousMessage = instance.message;
+
+      instance.message = message;
+      instance.allMessages = messages;
+      instance.isProcessing = this.isProcessing;
+      instance.userAvatarMap = this.userAvatarMap;
+      instance.isLastMessage = isLastMessage; // Update last message flag
+
+      // Surface ALL distinct artifacts on this message (latest version each),
+      // not just the most recent one. Loads lazily in the background.
+      this.applyArtifactsToInstance(instance, message.ID, existing.changeDetectorRef);
+
+      // Update agent run from map
+      instance.agentRun = this.agentRunMap.get(message.ID) || null;
+
+      // Update ratings from map
+      instance.ratings = this.ratingsMap.get(message.ID);
+
+      // Update attachments from map
+      instance.attachments = this.attachmentsMap.get(message.ID) || [];
+
+      // Manually trigger change detection in child component when message status changes
+      // This is necessary because we're using OnPush change detection and direct property assignment
+      // doesn't trigger ngOnChanges (only reference changes do)
+      if (previousMessage && previousMessage.Status !== message.Status) {
+        // Use ComponentRef.changeDetectorRef to force update on dynamic child
+        existing.changeDetectorRef.markForCheck();
+      }
+    } else {
+      // Create new component
+      const componentRef = this.messageContainerRef.createComponent(MessageItemComponent);
+      const instance = componentRef.instance;
+
+      // Set inputs
+      instance.message = message;
+      instance.conversation = this.conversation;
+      instance.currentUser = this.currentUser;
+      instance.allMessages = messages;
+      instance.isProcessing = this.isProcessing;
+      instance.userAvatarMap = this.userAvatarMap;
+      instance.isLastMessage = isLastMessage; // Mark last message
+
+      // Surface ALL distinct artifacts on this message (latest version each).
+      this.applyArtifactsToInstance(instance, message.ID, componentRef.changeDetectorRef);
+
+      // Pass agent run from map (loaded once per conversation)
+      instance.agentRun = this.agentRunMap.get(message.ID) || null;
+
+      // Pass ratings from map (parsed once per conversation)
+      instance.ratings = this.ratingsMap.get(message.ID);
+
+      // Pass attachments from map
+      instance.attachments = this.attachmentsMap.get(message.ID) || [];
+
+      // Subscribe to outputs
+      instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.editMessage.emit(msg));
+      instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.deleteMessage.emit(msg));
+      instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.retryMessage.emit(msg));
+      instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.testFeedbackMessage.emit(msg));
+      instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
+      instance.messageEdited.subscribe((msg: MJConversationDetailEntity) => this.messageEdited.emit(msg));
+      instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));
+      instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.suggestedResponseSelected.emit(data));
+      instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.attachmentClicked.emit(attachment));
+      instance.diagnosticRequested.subscribe((messageId: string) => this.diagnosticRequested.emit(messageId));
+      instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.messagePinToggled.emit(msg));
+
+      // Handle artifact actions if the output exists
+      if (instance.artifactActionPerformed) {
+        instance.artifactActionPerformed.subscribe((data: {action: string; artifactId: string}) => {
+          // Parent can handle artifact actions (save, fork, history, share)
+          console.log('Artifact action:', data);
+        });
+      }
+
+      // Store reference
+      this._renderedMessages.set(key, componentRef);
+
+      // Store reference on the message entity for later access (like skip-chat pattern)
+      (message as any)._componentRef = componentRef;
+    }
+  }
+
+  /**
+   * Resolves the DISTINCT artifacts for a message (one entry per artifactId at its
+   * latest version), lazy-loads them all, and applies them to the rendered
+   * message-item. Loads in the background so the UI never blocks.
+   *
+   * WHY WE SURFACE THEM ALL (design rationale — see PR discussion w/ Pranav & Ethan):
+   * A single message can legitimately carry more than one DISTINCT artifact — e.g. a
+   * research report PLUS a *standalone* generated infographic. This is deliberately
+   * NOT in conflict with the server-side consolidation in AgentRunner
+   * (Pranav, 5664b86: "keep the report's embedded image in the report, not as a
+   * duplicate artifact"): that logic only suppresses media that is *embedded inline*
+   * (base64) in another artifact's payload — a true duplicate. Genuinely standalone
+   * sibling artifacts (the report uses SVG charts; the infographic is a separate JPEG)
+   * are correctly kept as separate artifacts, and the UI must show every one of them.
+   *
+   * The earlier `artifactList[length - 1]` ("show only the most recent") approach
+   * (EL-BC, 95492622) assumed consolidation always left exactly one artifact per
+   * message; when it legitimately leaves two, that silently hid the report behind the
+   * image. Grouping by artifactId (latest version each) shows all distinct artifacts
+   * while still collapsing multiple *versions* of the same artifact to one card.
+   */
+  private applyArtifactsToInstance(
+    instance: MessageItemComponent,
+    messageId: string,
+    childCdRef: ChangeDetectorRef
+  ): void {
+    const infos = this.resolveDistinctArtifacts(messageId);
+    if (infos.length === 0) {
+      instance.artifacts = [];
+      instance.artifact = undefined;
+      instance.artifactVersion = undefined;
+      return;
+    }
+
+    Promise.all(
+      infos.map(info =>
+        Promise.all([info.getArtifact(), info.getVersion()]).then(([artifact, version]) => ({ artifact, version }))
+      )
+    )
+      .then(refs => {
+        instance.artifacts = refs;
+        // Keep the legacy single inputs pointed at the first entry for back-compat.
+        instance.artifact = refs[0]?.artifact;
+        instance.artifactVersion = refs[0]?.version;
+        // zone.js 0.15: parent detectChanges doesn't propagate to dynamically created children
+        childCdRef.detectChanges();
+        this.cdRef.detectChanges();
+      })
+      .catch(err => {
+        console.error('Failed to lazy-load artifacts:', err);
+      });
+  }
+
+  /**
+   * Groups a message's artifact list by artifactId, keeping the highest version of
+   * each. Multiple versions of the SAME artifact collapse to one card (latest wins),
+   * while genuinely distinct artifacts are all retained.
+   */
+  private resolveDistinctArtifacts(messageId: string): LazyArtifactInfo[] {
+    const list = this.artifactMap.get(messageId);
+    if (!list || list.length === 0) {
+      return [];
+    }
+    return selectDistinctLatestArtifacts(list);
   }
 
   /**

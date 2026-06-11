@@ -286,6 +286,7 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
 
 - **[BaseEntity Server-Side Patterns](guides/BASE_ENTITY_SERVER_PATTERNS.md)**: Use **before** writing a new server-side entity subclass under `MJCoreEntitiesServer`. Covers the persisted-embedding pattern (`Save()` + `EmbedTextLocal` + engine cache sync), cross-record invariants via `ValidateAsync` (NOT DB triggers), and FK cleanup before delete. Reference implementations: `MJAIAgentNoteEntityServer`, `MJTagEntityServer`, `MJTagScopeEntityServer`. Lift the recipes from there — don't reinvent.
 
+- **[Magic Link Access Guide](guides/MAGIC_LINK_GUIDE.md)**: How to share an app-scoped, passwordless session with **external** users (MJ-issued RS256 magic links). Covers enabling the feature, the **two-layer model** (framework mechanism vs. per-deployment scenario config vs. runtime-provisioned users), and the **recipe for defining an external-access scenario** via metadata (restricted role + entity permissions + application role). Read before wiring up external/guest access — external user *accounts* are runtime-provisioned, but the role + permissions that scope them are version-controlled metadata.
 - **[Search Overview Guide](guides/SEARCH_OVERVIEW_GUIDE.md)**: Decision tree across MJ's search/lookup APIs — `EntityByName`/`EntityByID` (definition lookup), `SearchEntity`/`SearchEntities` (per-entity ranked hybrid search, see [ENTITY_SEARCH_GUIDE](guides/ENTITY_SEARCH_GUIDE.md)), `FullTextSearch` (multi-entity DB-level FTS, see [FULL_TEXT_SEARCH_GUIDE](packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)), and `SearchEngine.Search` (cross-source unified search with scopes, see [SEARCH_SCOPES_AND_RAG_GUIDE](guides/SEARCH_SCOPES_AND_RAG_GUIDE.md)). Read this first when you need to find records / definitions / cross-source matches — picking the wrong API can mean wasted round-trips or missed semantic matches.
 
 - **[Forms Architecture Guide](guides/FORMS_ARCHITECTURE_GUIDE.md)**: How MJ renders/edits entity records across **all** surfaces from one set of forms — full-page tabs, modal dialogs, and slide-in panels. Covers:
@@ -294,6 +295,15 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - **`EntityFormConfig`** — per-instance control over toolbar / related-entity sections / collapsibility / width / in-form navigation, applied **without regenerating** any form
   - Imperative (`forms.open({...})`) and declarative (`<mj-form-dialog>` / `<mj-form-slide-in>`) usage
   - **Read this before building any bespoke "edit a record in a dialog/slide-in" component** — the generic capability almost certainly covers it.
+
+- **[Transport-Layer Architecture Guide](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md)**: The canonical **engine → resolver → GraphQL client → thin UI** layering (plus the optional **Action** layer for agentic/workflow/low-code invocation) for any *custom server-side capability* the browser or an agent invokes — clustering, search, classify, LLM calls, "run this pipeline" buttons. Covers:
+  - Why business logic lives in the framework-agnostic **engine** exactly once, and what each adapter layer must NOT do
+  - Step-by-step: build the engine → thin TypeGraphQL resolver (`ResolverBase` + per-request user) → typed `GraphQL<Feature>Client` in `@memberjunction/graphql-dataprovider` → thinnest Angular wrapper (never inline `gql`) → optional Action that calls the engine *directly*
+  - A decision table for which layers you actually need (and when to just use the generated entity CRUD layer instead)
+  - JSON-string-field pattern for complex payloads, client/engine type decoupling, and reference implementations (`GraphQLClusterClient`, `SearchKnowledgeResolver`, etc.)
+  - **Read this before hand-writing any new resolver or GraphQL client.** Not for plain entity CRUD — that's already generated.
+
+- **[Real-Time Co-Agents Guide](guides/REALTIME_CO_AGENTS_GUIDE.md)**: The live, low-latency agent stack — the `Realtime` agent type and Voice Co-Agent (one co-agent voices any target agent via the stable `invoke-target-agent` tool), the triple-registry plugin architecture (server/client realtime-model drivers + interactive-channel plugins, all ClassFactory + metadata resolved), client-direct vs server-bridged topologies, `AIAgentSession` lifecycle/janitor, interactive channels (the live Whiteboard), progress narration, observability, and the security model. **Read before touching anything realtime / voice / agent-session / channel.**
 
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 

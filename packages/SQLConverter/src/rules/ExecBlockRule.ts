@@ -23,6 +23,7 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
 import { resolveType } from './TypeResolver.js';
 import { removeNPrefix } from './ExpressionHelpers.js';
+import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from './ProcedureToFunctionRule.js';
 
 interface DeclaredVar {
   name: string;
@@ -48,10 +49,10 @@ export class ExecBlockRule implements IConversionRule {
   BypassSqlglot = true;
   BypassJustification = 'DECLARE @var; SET @var = ...; EXEC schema.proc(...) blocks (the metadata-sync EXEC pattern) need conversion to PG PERFORM calls inside DO $ blocks with variable renaming and parameter passing. sqlglot does not understand the T-SQL @var → PG variable mapping or how to wrap as PERFORM.';
 
-  PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
+  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     // Split into individual DECLARE/SET/EXEC blocks (a file may contain many)
     const blocks = this.splitIntoBlocks(sql);
-    return blocks.map(block => this.convertOneBlock(block)).join('\n');
+    return blocks.map(block => this.convertOneBlock(block, context)).join('\n');
   }
 
   // ─── Block splitting ───────────────────────────────────────────────
@@ -103,7 +104,7 @@ export class ExecBlockRule implements IConversionRule {
   // ─── Single block conversion ──────────────────────────────────────
 
   /** Convert one DECLARE/SET/EXEC block to a DO $$ block */
-  private convertOneBlock(block: string): string {
+  private convertOneBlock(block: string, context: ConversionContext): string {
     const { comments, body } = this.extractLeadingComments(block);
     const declareVars = this.parseDeclare(body);
     const { setSection, execSection } = this.findSetsAndExec(body);
@@ -114,7 +115,7 @@ export class ExecBlockRule implements IConversionRule {
       return `-- SKIPPED: EXEC block (auto-conversion not supported)\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
     }
 
-    return this.generateDoBlock(comments, declareVars, assignments, exec);
+    return this.generateDoBlock(comments, declareVars, assignments, exec, context);
   }
 
   // ─── Comment extraction ───────────────────────────────────────────
@@ -464,11 +465,79 @@ export class ExecBlockRule implements IConversionRule {
 
   // ─── DO $$ block generation ───────────────────────────────────────
 
+  /**
+   * Resolve the boolean columns relevant to a CRUD sproc call. The procRef looks
+   * like `__mj."spCreateAuditLogType"`; we derive the entity's base table name
+   * (strip the spCreate/spUpdate/spDelete prefix) and look it up in the accumulated
+   * column-type map (which includes the seeded baseline catalog plus any tables the
+   * current migration created). Returns an empty set when the table is unknown.
+   */
+  private boolColumnsForProc(
+    procRef: string,
+    tableColumns: Map<string, Map<string, string>>,
+  ): Set<string> {
+    const m = procRef.match(/"?sp(?:Create|Update|Delete)([A-Za-z0-9_]+)"?\s*$/i);
+    if (!m) return new Set();
+    const cols = tableColumns.get(m[1].toLowerCase());
+    if (!cols) return new Set();
+    const out = new Set<string>();
+    for (const [name, type] of cols) {
+      if (type.toUpperCase() === 'BOOLEAN') out.add(name);
+    }
+    return out;
+  }
+
+  /**
+   * Coerce a `1`/`0` named-argument literal to `TRUE`/`FALSE` when the parameter is
+   * boolean. A param is boolean if its column name is a known boolean column OR it is
+   * one of CodeGen's synthetic `<Col>_Clear` flags (always BIT/boolean). Non-boolean
+   * integer params (e.g. Priority) and non-literal values pass through unchanged.
+   */
+  private coerceBooleanArg(paramName: string, valueExpr: string, boolCols: Set<string>): string {
+    const v = valueExpr.trim();
+    if (v !== '0' && v !== '1') return valueExpr;
+    const colName = paramName.replace(/^p_/, '');
+    const isClearFlag = /_Clear$/i.test(colName);
+    const isBoolColumn = boolCols.has(colName.toLowerCase());
+    if (!isClearFlag && !isBoolColumn) return valueExpr;
+    return v === '1' ? 'TRUE' : 'FALSE';
+  }
+
+  /**
+   * Build the `jsonb_build_object('Col', value, ...)` argument for a wide-entity
+   * CRUD sproc call. Column names come from the parameter names (drop the `p_`
+   * prefix); the synthetic `<Col>_Clear` flags are omitted. Boolean values are
+   * coerced from 1/0 to TRUE/FALSE just like the individual-param path.
+   */
+  private buildJsonArg(params: ExecCall['params'], boolCols: Set<string>): string {
+    const pairs = params
+      .filter(p => !/_Clear$/i.test(p.paramName.replace(/^p_/, '')))
+      .map(p => {
+        const col = p.paramName.replace(/^p_/, '');
+        const val = this.coerceBooleanArg(p.paramName, p.valueExpr, boolCols);
+        return `'${col}', ${val}`;
+      });
+
+    // PostgreSQL caps any function call at 100 arguments, so a single
+    // jsonb_build_object() can hold at most 50 key/value pairs. Wide entities can
+    // exceed that, so chunk the pairs into multiple jsonb_build_object() calls and
+    // concatenate them with `||` (jsonb concat — later keys win, but keys are unique
+    // here so order is irrelevant).
+    const CHUNK = 50;
+    const chunks: string[] = [];
+    for (let i = 0; i < pairs.length; i += CHUNK) {
+      const slice = pairs.slice(i, i + CHUNK);
+      chunks.push(`jsonb_build_object(\n    ${slice.join(',\n    ')}\n  )`);
+    }
+    return chunks.join(' ||\n  ');
+  }
+
   private generateDoBlock(
     comments: string,
     vars: DeclaredVar[],
     assignments: SetAssignment[],
     exec: ExecCall,
+    context: ConversionContext,
   ): string {
     const out: string[] = [];
 
@@ -487,8 +556,17 @@ export class ExecBlockRule implements IConversionRule {
     }
     out.push('BEGIN');
 
+    // Variables declared BOOLEAN (from a T-SQL BIT) must not be assigned an integer
+    // 0/1 literal — PL/pgSQL rejects `boolvar := 0`. Map name → isBoolean for coercion.
+    const boolVarNames = new Set(
+      vars.filter(v => v.pgType.toUpperCase() === 'BOOLEAN').map(v => v.name),
+    );
+
     for (const a of assignments) {
-      const convertedValue = this.convertValue(a.rawValue);
+      let convertedValue = this.convertValue(a.rawValue);
+      if (boolVarNames.has(a.varName) && (convertedValue.trim() === '0' || convertedValue.trim() === '1')) {
+        convertedValue = convertedValue.trim() === '1' ? 'TRUE' : 'FALSE';
+      }
       // Indent multi-line values
       const valueLines = convertedValue.split('\n');
       if (valueLines.length === 1) {
@@ -506,9 +584,26 @@ export class ExecBlockRule implements IConversionRule {
       }
     }
 
-    // Generate PERFORM call
-    const paramList = exec.params.map(p => `${p.paramName} := ${p.valueExpr}`).join(', ');
-    out.push(`  PERFORM ${exec.procRef}(${paramList});`);
+    // Generate PERFORM call. CodeGen's wide CRUD sprocs take BIT/boolean params —
+    // both real boolean columns and the synthetic `<Col>_Clear` flags. A literal
+    // `1`/`0` passed positionally-by-name would make PG fail to resolve the function
+    // overload ("function ... does not exist"), so coerce those to TRUE/FALSE.
+    const boolCols = this.boolColumnsForProc(exec.procRef, context.TableColumns);
+
+    if (exec.params.length > POSTGRESQL_PROCEDURE_PARAM_LIMIT) {
+      // Wide entity: the baseline defines this CRUD sproc in single-JSONB-arg shape
+      // (spXxx(p_data JSONB)) because the individual-param form exceeds PG's
+      // FUNC_MAX_ARGS / param limit. Emit the matching call: build a JSON object
+      // keyed by column name. The `_Clear` flags are dropped — in JSON-arg shape a
+      // present key (even with a null value) means "set this column", which is
+      // exactly the full-record semantics the metadata-sync UPDATE/INSERT expresses.
+      out.push(`  PERFORM ${exec.procRef}(p_data := ${this.buildJsonArg(exec.params, boolCols)});`);
+    } else {
+      const paramList = exec.params
+        .map(p => `${p.paramName} := ${this.coerceBooleanArg(p.paramName, p.valueExpr, boolCols)}`)
+        .join(', ');
+      out.push(`  PERFORM ${exec.procRef}(${paramList});`);
+    }
 
     out.push('END $mj$;');
     return out.join('\n') + '\n';

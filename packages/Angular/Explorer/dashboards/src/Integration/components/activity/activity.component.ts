@@ -254,6 +254,18 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
   get ActivityFilterFields(): FilterFieldConfig[] {
     return [
       {
+        key: 'dateRange',
+        type: 'chips',
+        label: 'Date range',
+        chipOptions: this.DateOptions.map(d => ({ text: d.Label, value: d.Value })),
+      },
+      {
+        key: 'status',
+        type: 'chips',
+        label: 'Status',
+        chipOptions: this.StatusOptions.map(s => ({ text: s, value: s })),
+      },
+      {
         key: 'integration',
         type: 'dropdown',
         label: 'Integration',
@@ -269,19 +281,38 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
   }
 
   get ActivityFilterValues(): Record<string, unknown> {
-    return { integration: this.IntegrationFilter ?? '' };
+    return {
+      dateRange: this.DateFilter,
+      status: this.StatusFilter,
+      integration: this.IntegrationFilter ?? ''
+    };
   }
 
   get ActiveFilterCount(): number {
-    return this.IntegrationFilter ? 1 : 0;
+    let count = 0;
+    if (this.DateFilter !== '7d') count++;
+    if (this.StatusFilter !== 'All') count++;
+    if (this.IntegrationFilter) count++;
+    return count;
   }
 
   OnFilterValuesChange(values: Record<string, unknown>): void {
-    const next = ((values ?? {}) as { integration?: string }).integration ?? '';
-    this.SetIntegrationFilter(next || null);
+    const next = (values ?? {}) as { dateRange?: string; status?: string; integration?: string };
+    if (next.dateRange && next.dateRange !== this.DateFilter) {
+      this.SetDateFilter(next.dateRange as DateFilterType);
+    }
+    if (next.status && next.status !== this.StatusFilter) {
+      this.SetStatusFilter(next.status as StatusFilterType);
+    }
+    const integ = next.integration ?? '';
+    if ((integ || null) !== this.IntegrationFilter) {
+      this.SetIntegrationFilter(integ || null);
+    }
   }
 
   ResetIntegrationFilter(): void {
+    if (this.DateFilter !== '7d') this.SetDateFilter('7d');
+    if (this.StatusFilter !== 'All') this.SetStatusFilter('All');
     if (this.IntegrationFilter) this.SetIntegrationFilter(null);
   }
 

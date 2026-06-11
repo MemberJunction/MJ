@@ -2687,6 +2687,106 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Cluster Analysis Section -->
+    <mj-collapsible-panel
+        SectionKey="mJClusterAnalysis"
+        SectionName="Cluster Analysis"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJClusterAnalysis')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Cluster Analysis','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Cluster Analysis')"
+                [AllowLoad]="IsSectionExpanded('mJClusterAnalysis')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJClusterAnalysis', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Magic Link Redemptions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMagicLinkRedemptions"
+        SectionName="Magic Link Redemptions"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMagicLinkRedemptions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Redemptions','ProvisionedUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Redemptions')"
+                [AllowLoad]="IsSectionExpanded('mJMagicLinkRedemptions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMagicLinkRedemptions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Magic Link Invites Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMagicLinkInvites"
+        SectionName="Magic Link Invites"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMagicLinkInvites')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Invites','CreatedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invites')"
+                [AllowLoad]="IsSectionExpanded('mJMagicLinkInvites')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMagicLinkInvites', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Sessions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSessions"
+        SectionName="AI Agent Sessions"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSessions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Sessions','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Sessions')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSessions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

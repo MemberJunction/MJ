@@ -220,6 +220,40 @@ const loggingSettingsSchema = z.object({
   }).optional().default({}),
 });
 
+const corsSchema = z.object({
+  /** Allowed origins for CORS. Default ['*'] preserves backward-compatible "allow all" behavior. */
+  allowedOrigins: z.array(z.string()).default(['*']),
+  /** Whether to include credentials (cookies, auth headers) in CORS responses. */
+  allowCredentials: z.boolean().default(true),
+  /** How long (seconds) browsers may cache preflight responses. Default 24 hours. */
+  maxAge: z.number().default(86400),
+});
+
+const rateLimitSchema = z.object({
+  /** Master switch — when false (default), no rate limiting is applied. */
+  enabled: z.boolean().default(false),
+  global: z.object({
+    /** Sliding window duration in milliseconds. */
+    windowMs: z.number().default(60_000),
+    /** Maximum requests per window per IP. */
+    maxRequests: z.number().default(300),
+    /** Response body sent when the limit is exceeded. */
+    message: z.string().default('Too many requests, please try again later'),
+  }).default({}),
+  auth: z.object({
+    /** Sliding window duration in milliseconds for auth endpoints. */
+    windowMs: z.number().default(900_000),
+    /** Maximum failed auth attempts per window per IP. */
+    maxAttempts: z.number().default(15),
+  }).default({}),
+  graphql: z.object({
+    /** Sliding window duration in milliseconds for GraphQL operations. */
+    windowMs: z.number().default(60_000),
+    /** Maximum GraphQL operations per window per IP. */
+    maxRequests: z.number().default(100),
+  }).default({}),
+});
+
 const feedbackGithubSettingsSchema = z.object({
   owner: z.string().optional(),
   repo: z.string().optional(),
@@ -236,8 +270,69 @@ const feedbackSettingsSchema = z.object({
   github: feedbackGithubSettingsSchema.optional(),
 });
 
+const magicLinkSchema = z.object({
+  /** Master switch for the magic-link feature. When false, routes are not mounted and the auth provider is not registered. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /**
+   * PEM-encoded RS256 private key used to sign session JWTs. May be raw PEM or
+   * base64-encoded PEM. If omitted, an ephemeral keypair is generated at startup
+   * (dev only — restarting the server invalidates all outstanding sessions).
+   */
+  rsaPrivateKey: z.string().optional().default(process.env.MJ_MAGIC_LINK_PRIVATE_KEY || ''),
+  /** Hours an unredeemed invite link remains valid (hard expiry). Default 72. */
+  defaultExpiresInHours: z.coerce.number().optional().default(72),
+  /** Hours the minted session JWT remains valid after redemption. No refresh tokens. Default 8. */
+  sessionTokenTtlHours: z.coerce.number().optional().default(8),
+  /** Name of the restricted Role assigned to redeeming users when an invite does not specify one. */
+  restrictedRoleName: z.string().optional().default('Magic Link Baseline'),
+  /**
+   * Role names (besides Owner) whose members may issue invites via POST /create.
+   * Empty (default) means Owner-only — the secure default. The restricted role
+   * must never be listed here, or external users could mint their own invites.
+   */
+  inviteIssuerRoleNames: z.array(z.string()).optional().default([]),
+  /**
+   * Role names an invite may grant, IN ADDITION to restrictedRoleName (which is
+   * always allowed). A caller-supplied roleId is rejected unless its role name is
+   * the restricted role or appears here. This is the guard that stops a caller
+   * from attaching a privileged role (e.g. Owner) to an external magic-link user.
+   */
+  grantableRoleNames: z.array(z.string()).optional().default([]),
+  /** Email of the internal user whose context provisions magic-link users (falls back to userHandling.contextUserForNewUserCreation). */
+  contextUserForProvisioning: z.string().optional(),
+  /**
+   * Guard against bolting an external magic-link role/app onto an EXISTING account
+   * that is an Owner or already holds non-restricted ("real") roles. One mistyped
+   * recipient email is all it takes to hand a colleague an external role otherwise.
+   * `block` (default) refuses to provision onto such accounts; `warn` logs loudly
+   * and proceeds. Provisioning onto brand-new or already-external accounts is never
+   * affected.
+   */
+  provisioningGuard: z.enum(['block', 'warn']).optional().default('block'),
+  /** CommunicationEngine provider name used to deliver invite emails (e.g. 'SendGrid', 'Microsoft Graph'). When unset, emails are not sent and the redemption link is returned to the caller instead. */
+  communicationProvider: z.string().optional(),
+  /** From address for invite emails. */
+  fromAddress: z.string().optional(),
+  /** Audience claim for minted JWTs and the auto-registered magic-link auth provider. */
+  audience: z.string().optional().default('mj-magic-link'),
+  /** Rate-limit window (ms) for the public /redeem and authenticated /create endpoints. Default 60s. */
+  rateLimitWindowMs: z.coerce.number().optional().default(60_000),
+  /** Max /redeem attempts per IP per window. Default 20. */
+  redeemRateLimitMax: z.coerce.number().optional().default(20),
+  /** Max /create requests per IP per window. Default 30. */
+  createRateLimitMax: z.coerce.number().optional().default(30),
+  /**
+   * Base URL of the Explorer instance that redeems land in. When set, GET
+   * /magic-link/redeem 302-redirects the browser to `${explorerUrl}/#token=<jwt>`
+   * (Explorer's magic-link auth provider reads the fragment). When unset, redeem
+   * returns the token as JSON. Append `?format=json` to force JSON regardless.
+   */
+  explorerUrl: z.string().optional(),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
+  magicLink: magicLinkSchema.optional().default({}),
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
@@ -253,6 +348,8 @@ const configInfoSchema = z.object({
   cacheSettings: cacheSettingsSchema.optional().default({}),
   loggingSettings: loggingSettingsSchema.optional().default({}),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
+  cors: corsSchema.optional().default({}),
+  rateLimiting: rateLimitSchema.optional().default({}),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -286,6 +383,7 @@ const configInfoSchema = z.object({
 });
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
+export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
 export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;
@@ -303,6 +401,8 @@ export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type LoggingSettingsConfig = z.infer<typeof loggingSettingsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
+export type CorsConfig = z.infer<typeof corsSchema>;
+export type RateLimitConfig = z.infer<typeof rateLimitSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MemberJunction · Real-Time Voice Agents — UX Mockups</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <div class="brand-lockup">
+      <span class="brand-mark"><i class="fa-solid fa-bolt"></i></span>
+      <span>MemberJunction</span>
+      <span class="brand-sub">· Real-Time Agents</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <span class="topbar-pill"><i class="fa-solid fa-flask"></i> UX Mockups · static prototype</span>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="page-body">
+    <div class="hub-hero">
+      <span class="pill pill--brand"><i class="fa-solid fa-microphone-lines"></i> Voice Co-Agent · speaking as Sage</span>
+      <h1>Real-Time Voice Agents</h1>
+      <p>High-fidelity UX mockups for MemberJunction's new real-time voice agent experience — the live "call"
+      overlay in Explorer's conversations, the delegation-to-Sage flow with on-screen result surfacing, interactive
+      channels, the collapsed timeline session block, and the new admin tooling for sessions and channels.</p>
+    </div>
+
+    <div class="hub-group-title">End-User Experience</div>
+    <div class="hub-grid">
+      <a class="hub-card" href="live-session.html">
+        <div class="hub-thumb"><span class="hub-letter">A</span><i class="fa-solid fa-waveform-lines"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">Live voice session</div>
+          <div class="hub-card__desc">The focused call overlay over the conversation — agent identity, turn state, unified voice+text thread, channel strip and controls.</div>
+        </div>
+      </a>
+      <a class="hub-card" href="delegation-flow.html">
+        <div class="hub-thumb"><span class="hub-letter">B</span><i class="fa-solid fa-diagram-project"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">Delegation + result surfacing</div>
+          <div class="hub-card__desc">Co-agent hands off to Sage with live step progress, then renders a result card inline with unmistakable "via Sage" provenance while it narrates.</div>
+        </div>
+      </a>
+      <a class="hub-card" href="session-channels.html">
+        <div class="hub-thumb"><span class="hub-letter">C</span><i class="fa-solid fa-chalkboard"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">Multi-channel · Whiteboard</div>
+          <div class="hub-card__desc">Voice + an interactive whiteboard docked alongside the call, with agent-driven mutations highlighted distinctly from user edits.</div>
+        </div>
+      </a>
+      <a class="hub-card" href="whiteboard.html">
+        <div class="hub-thumb"><span class="hub-letter">C2</span><i class="fa-solid fa-pen-ruler"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">Live whiteboard channel · full board</div>
+          <div class="hub-card__desc">The two-way whiteboard expanded inside the tabbed surface panel — drawing toolbar, ownership-legible items (you vs Sage), agent pop-in &amp; presence cursor, "what Sage sees" perception popover, focus-board layout toggle, and a 4-beat storyboard.</div>
+        </div>
+      </a>
+      <a class="hub-card" href="timeline-collapsed.html">
+        <div class="hub-thumb"><span class="hub-letter">D</span><i class="fa-solid fa-clock-rotate-left"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">Timeline · collapsed session</div>
+          <div class="hub-card__desc">A normal chat thread with a single collapsed "Voice session" block — collapsed and expanded states with resume + Sage run links.</div>
+        </div>
+      </a>
+      <a class="hub-card" href="session-detail.html">
+        <div class="hub-thumb"><span class="hub-letter">E</span><i class="fa-solid fa-list-timeline"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">Session "behind the scenes"</div>
+          <div class="hub-card__desc">End-user drill-in: overview, full transcript, delegated Sage runs with results, tool calls and usage/cost.</div>
+        </div>
+      </a>
+    </div>
+
+    <div class="hub-group-title">Admin Tooling — native MJ Explorer chrome</div>
+    <p class="muted" style="font-size:12.5px;margin:-6px 0 14px;max-width:760px">Rebuilt to match MJ's real admin patterns: the AI Dashboard's KPI tiles &amp; charts, the AI Agent Run form's header / tabs / run-step tree / accordion details, and MJ data grids with status pills. These should feel lifted straight out of Explorer.</p>
+    <div class="hub-grid">
+      <a class="hub-card" href="admin-dashboard.html">
+        <div class="hub-thumb"><span class="hub-letter">F</span><i class="fa-solid fa-chart-line"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">Realtime Voice analytics</div>
+          <div class="hub-card__desc">Analytics dashboard in the AI Dashboard idiom — KPI tiles (active sessions, avg duration, delegated runs, janitor closes, cost), sessions-over-time &amp; channel-usage charts, top target agents, recent sessions list.</div>
+        </div>
+      </a>
+      <a class="hub-card" href="admin-sessions.html">
+        <div class="hub-thumb"><span class="hub-letter">G</span><i class="fa-solid fa-table-list"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">AI Agent Sessions list</div>
+          <div class="hub-card__desc">Dashboard list page — KPI tiles up top, then an MJ data grid of all AIAgentSessions (agent → target, user, status pills, channels, runs, tokens/cost, host instance) with filters, search and drill-in. Mirrors the AI Agent Runs list.</div>
+        </div>
+      </a>
+      <a class="hub-card" href="admin-session-detail.html">
+        <div class="hub-thumb"><span class="hub-letter">H</span><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">Session detail · entity form</div>
+          <div class="hub-card__desc">A single session rendered as an MJ entity form — record-form-container toolbar, agent-run-style header + stat row, tabs, the delegated run tree (Co-Agent → Sage via ParentRunID with token/cost chips), lifecycle timeline, host/affinity facts, accordion details and transcript.</div>
+        </div>
+      </a>
+      <a class="hub-card" href="admin-channels.html">
+        <div class="hub-thumb"><span class="hub-letter">I</span><i class="fa-solid fa-plug"></i></div>
+        <div class="hub-card__body">
+          <div class="hub-card__title">AI Agent Channels registry</div>
+          <div class="hub-card__desc">The pluggable AIAgentChannel registry as an MJ list + entity-form edit — plugin classes (ClassFactory keys), transport-type pills, config schema, IsActive toggle and a form-container edit panel.</div>
+        </div>
+      </a>
+    </div>
+
+    <div class="divider" style="margin-top:34px"></div>
+    <p class="muted" style="font-size:12.5px">
+      These are static, self-contained HTML/CSS mockups (Font Awesome via CDN, tiny vanilla JS for expand/toggle).
+      Colors and chrome derive from MJ's dark-theme design tokens. Real transcript content from a live test session.
+    </p>
+  </div>
+</div>
+</body>
+</html>

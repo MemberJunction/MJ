@@ -3,7 +3,7 @@
     Subtitle="Real-time processing status and recent activity">
   <div actions>
     <button mjButton variant="secondary" size="sm" (click)="onRefresh()">
-      <i class="fa-solid fa-arrows-rotate"></i> Refresh
+      <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
     </button>
   </div>
 </mj-page-header-interior>
@@ -25,6 +25,11 @@
                     }
                 </div>
             }
+        </div>
+
+        <!-- Phase 4: Overview analytics (KPI cards + hand-rolled SVG charts) -->
+        <div class="at-analytics-section">
+            <classify-overview-analytics [Provider]="Provider"></classify-overview-analytics>
         </div>
 
         <div class="at-pipeline-layout">
@@ -196,6 +201,20 @@
                             <button class="at-action-btn at-secondary-btn" [disabled]="FeedPage >= FeedTotalPages - 1" (click)="FeedNextPage()">
                                 <i class="fa-solid fa-chevron-right"></i>
                             </button>
+                        </div>
+                    }
+                    @if (TotalItemCount > 0) {
+                        <div class="at-load-more-bar">
+                            <span class="at-load-more-count">Showing {{ FeedItems.length }} of {{ TotalItemCount }} items</span>
+                            @if (HasMoreItems) {
+                                <button mjButton variant="secondary" size="sm" (click)="onLoadMoreItems()" [disabled]="IsLoadingMoreItems">
+                                    @if (IsLoadingMoreItems) {
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                                    } @else {
+                                        <i class="fa-solid fa-chevron-down"></i> Load more
+                                    }
+                                </button>
+                            }
                         </div>
                     }
                 </div>

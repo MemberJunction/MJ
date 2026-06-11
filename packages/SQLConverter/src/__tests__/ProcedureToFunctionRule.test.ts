@@ -63,6 +63,42 @@ END`;
     });
   });
 
+  describe('orphaned deprecated-entity sprocs', () => {
+    it('should emit an INTENTIONAL skip for a sproc returning a deprecated/orphaned view', () => {
+      const input = `CREATE PROCEDURE [__mj].[spCreateEntityBehavior]
+    @Name nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO [__mj].[EntityBehavior] ([Name]) VALUES (@Name)
+    SELECT * FROM [__mj].[vwEntityBehaviors] WHERE [ID] = SCOPE_IDENTITY()
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('-- SKIPPED (INTENTIONAL)');
+      expect(result).toContain('vwEntityBehaviors');
+      // Must NOT emit a function whose RETURNS SETOF targets the missing view.
+      expect(result).not.toContain('CREATE OR REPLACE FUNCTION');
+      expect(result).not.toMatch(/RETURNS SETOF __mj\."vw/);
+    });
+
+    it('should still emit a normal sproc whose return view is not orphaned', () => {
+      const input = `CREATE PROCEDURE [__mj].[spCreateUser]
+    @Name nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO [__mj].[User] ([Name]) VALUES (@Name)
+    SELECT * FROM [__mj].[vwUsers] WHERE [ID] = SCOPE_IDENTITY()
+END`;
+
+      const result = convert(input);
+      expect(result).not.toContain('-- SKIPPED');
+      expect(result).toContain('CREATE OR REPLACE FUNCTION __mj."spCreateUser"');
+      expect(result).toContain('RETURNS SETOF __mj."vwUsers"');
+    });
+  });
+
   describe('parameter conversion', () => {
     it('should convert parameter types', () => {
       const input = `CREATE PROCEDURE [__mj].[spTest]

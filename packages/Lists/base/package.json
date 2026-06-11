@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/lists-base",
   "type": "module",
-  "version": "5.38.0",
+  "version": "5.40.2",
   "description": "MemberJunction: Lists — shared TypeScript type surface used by the server-side @memberjunction/lists package, the GraphQL data provider client, and Angular UI consumers. Pure types/interfaces only; no runtime, isomorphic.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

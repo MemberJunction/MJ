@@ -291,6 +291,55 @@ export interface SourceDetailInfo {
     RunHistory: RunHistoryRow[];
 }
 
+// ── Phase 4: Audit / Analytics ──
+
+/**
+ * A single content-item row shown in {@link ClassifyItemGridComponent}. Built from
+ * a narrow `ResultType:'simple'` projection of `MJ: Content Items` — no BaseEntity.
+ */
+export interface ClassifyItemGridRow {
+    ID: string;
+    DisplayName: string;
+    SourceName: string;
+    TagCount: number;
+    EmbeddingStatus: string;
+    TaggingStatus: string;
+    UpdatedAt: string;
+    /** Raw ISO timestamp used for sorting (the grid renders UpdatedAt formatted). */
+    UpdatedAtRaw: string;
+}
+
+/**
+ * A single tag on a content item, enriched with the LLM provenance fields
+ * (Reasoning + AIPromptRunID) surfaced in {@link ClassifyItemDrilldownComponent}.
+ */
+export interface ClassifyDrilldownTag {
+    Tag: string;
+    Weight: number;
+    /** The LLM's justification for this tag, when captured at extraction time. */
+    Reasoning: string | null;
+    /** FK to the AI Prompt Run that produced this tag (provenance link). */
+    AIPromptRunID: string | null;
+    CreatedAt: string;
+}
+
+/** A single provenance fact shown in the drilldown's Provenance section. */
+export interface ClassifyProvenanceFact {
+    Label: string;
+    Value: string;
+    Icon: string;
+    /** Optional record reference the user can open (entity + id). */
+    RecordEntity?: string;
+    RecordID?: string;
+}
+
+/** A single audit-trail entry shown in the drilldown's Audit section. */
+export interface ClassifyAuditEntry {
+    Label: string;
+    Timestamp: string;
+    Icon: string;
+}
+
 // ── Slide-in form mode ──
 
 export type FormMode = 'none' | 'add-source' | 'edit-source' | 'add-type' | 'edit-type';

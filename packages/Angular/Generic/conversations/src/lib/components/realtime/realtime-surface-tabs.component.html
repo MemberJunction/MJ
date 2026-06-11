@@ -1,0 +1,95 @@
+<!-- SIZING IS EXTERNAL: the overlay hosts this panel inside an angular-split area and
+     owns its width (drag, persistence, default tiers) — the panel just fills the area. -->
+<aside class="surface"
+       [class.surface--collapsed]="Collapsed"
+       [class.surface--fill]="Fill && !Collapsed"
+       aria-label="Session surfaces">
+
+  @if (Collapsed) {
+    <!-- Slim strip: the panel's collapse target (lifted from the old rail behavior) -->
+    <div class="surface__strip">
+      <button type="button"
+              class="surface__toggle"
+              (click)="ToggleCollapsed()"
+              title="Show session panel"
+              aria-expanded="false">
+        <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+      </button>
+      <i class="fa-solid fa-list-check surface__strip-icon" aria-hidden="true" title="Session activity"></i>
+    </div>
+  } @else {
+    <!-- Tab strip: Activity | artifact tabs… | channel tabs… -->
+    <div class="surface-tabs" role="tablist">
+      @for (tab of Model.Tabs; track TrackTab($index, tab)) {
+        <button type="button"
+                class="s-tab"
+                role="tab"
+                [class.s-tab--active]="tab.Key === Model.ActiveKey"
+                [class.s-tab--flash]="tab.Key === Model.FlashKey"
+                [attr.aria-selected]="tab.Key === Model.ActiveKey"
+                [title]="tab.Title"
+                (click)="Model.Focus(tab.Key)">
+          <i [class]="tab.Icon" aria-hidden="true"></i>
+          <span class="s-tab__title">{{ tab.Title }}</span>
+        </button>
+      }
+      <div class="tabs-end">
+        <button type="button"
+                class="surface__toggle"
+                (click)="ToggleCollapsed()"
+                title="Hide session panel"
+                aria-expanded="true">
+          <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Panes: ALL kept alive; only the active one is displayed (mirrors the mockup) -->
+    @for (tab of Model.Tabs; track TrackTab($index, tab)) {
+      <div class="s-pane" [class.s-pane--active]="tab.Key === Model.ActiveKey" role="tabpanel">
+        @switch (tab.Kind) {
+          @case ('activity') {
+            <mj-realtime-activity-rail
+              [State]="State"
+              [DevMode]="DevMode"
+              [Embedded]="true"
+              (OpenRunRequested)="OpenRunRequested.emit($event)"
+              (OpenArtifactRequested)="FocusArtifact($event)">
+            </mj-realtime-activity-rail>
+          }
+          @case ('artifact') {
+            @if (tab.Data?.Artifact; as artifact) {
+              <div class="artifact-pane">
+                <mj-artifact-viewer-panel
+                  [artifactId]="artifact.ArtifactID"
+                  [currentUser]="CurrentUser!"
+                  [environmentId]="EnvironmentID"
+                  [showHeader]="false"
+                  [showTabs]="false"
+                  [showSaveToCollection]="false"
+                  [showCloseButton]="false"
+                  [showMaximizeButton]="false">
+                </mj-artifact-viewer-panel>
+              </div>
+            }
+          }
+          @case ('channel') {
+            @if (tab.Data?.Plugin; as plugin) {
+              <!-- Registry-resolved channel: the pane host creates the plugin's surface
+                   component dynamically and hands the instance back for binding -->
+              <mj-realtime-channel-pane [Plugin]="plugin"></mj-realtime-channel-pane>
+            } @else if (tab.Data?.Content; as content) {
+              <ng-container [ngTemplateOutlet]="content"></ng-container>
+            } @else {
+              <!-- Placeholder until the channel registration supplies a plugin / template -->
+              <div class="channel-placeholder" role="status">
+                <i class="fa-solid fa-chalkboard" aria-hidden="true"></i>
+                <span>{{ tab.Title }} coming online…</span>
+              </div>
+            }
+          }
+        }
+      </div>
+    }
+  }
+</aside>

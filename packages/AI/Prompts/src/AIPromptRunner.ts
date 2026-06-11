@@ -1074,14 +1074,20 @@ export class AIPromptRunner {
     // Calculate total tokens and costs from all parallel executions
     let totalPromptTokens = 0;
     let totalCompletionTokens = 0;
+    let totalCacheReadTokens = 0;
+    let totalCacheWriteTokens = 0;
     let totalCost = 0;
     let hasCost = false;
-    
+
     for (const result of successfulResults) {
       const usage = result.modelResult?.data?.usage;
       if (usage) {
         totalPromptTokens += usage.promptTokens || 0;
         totalCompletionTokens += usage.completionTokens || 0;
+        // Sum cache tokens across every attempt — each was a real provider call, so the billed
+        // cache usage is the sum, not the selected result's alone (which feeds the non-rollup field).
+        totalCacheReadTokens += usage.cacheReadTokens || 0;
+        totalCacheWriteTokens += usage.cacheWriteTokens || 0;
         if (usage.cost !== undefined) {
           totalCost += usage.cost;
           hasCost = true;
@@ -1141,6 +1147,8 @@ export class AIPromptRunner {
     consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
     consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
     consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
+    consolidatedPromptRun.TokensCacheReadRollup = totalCacheReadTokens;
+    consolidatedPromptRun.TokensCacheWriteRollup = totalCacheWriteTokens;
     if (hasCost) {
       consolidatedPromptRun.TotalCost = totalCost;
     }
@@ -3373,7 +3381,7 @@ export class AIPromptRunner {
       if (prompt.FrequencyPenalty != null) chatParams.frequencyPenalty = prompt.FrequencyPenalty;
       if (prompt.PresencePenalty != null) chatParams.presencePenalty = prompt.PresencePenalty;
       if (prompt.Seed != null) chatParams.seed = prompt.Seed;
-      if (prompt.StopSequences) {
+      if (prompt.StopSequences && this.shouldApplyStopSequences(prompt, model, vendorId, llm)) {
         // Parse comma-delimited stop sequences
         chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.replace(AIPromptRunner.STOP_SEQUENCE_TRIM_REGEX, '')).filter((s: string) => s.length > 0);
       }
@@ -3446,6 +3454,14 @@ export class AIPromptRunner {
       // Apply response format from prompt settings
       if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
         chatParams.responseFormat = prompt.ResponseFormat //as 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific';
+
+        if (prompt.ModelSpecificResponseFormat) {
+          try {
+            chatParams.modelSpecificResponseFormat = JSON.parse(prompt.ModelSpecificResponseFormat);
+          } catch (e) {
+            console.warn(`AIPromptRunner: failed to parse ModelSpecificResponseFormat on prompt ${prompt.Name}; ignoring`, e);
+          }
+        }
       } else {
         // if chatParams.responseFormat is not set or set to Any, stay silent on response format
         chatParams.responseFormat = undefined;
@@ -3763,6 +3779,39 @@ export class AIPromptRunner {
    * - `true` means "force enable" (overrides code default)
    * - `false` means "force disable" (overrides code default, even if the driver says yes)
    */
+  /**
+   * Decides whether a prompt's StopSequences should be sent to the model.
+   *
+   * StopSequences are commonly paired with AssistantPrefill to fence JSON output:
+   * prefill the assistant turn with "```json" and stop on the closing "\n```".
+   * That pairing is ONLY safe when native prefill is applied — prefill guarantees the
+   * response BEGINS at the fence, so the only "\n```" in the output is the closing one.
+   *
+   * Without native prefill, a model that adds any preamble before the fence
+   * (e.g. Gemini emitting `Here is the JSON requested:\n```json\n{...}`) manufactures a
+   * "\n```" at the OPENING fence, so the stop fires immediately and truncates the response
+   * to just the preamble (an empty/invalid result). To avoid that, when a prompt uses
+   * AssistantPrefill but the resolved model/vendor does NOT support native prefill, we skip
+   * the stop sequences entirely and let the full response through — downstream JSON
+   * extraction strips the fence/preamble.
+   *
+   * Prompts that declare StopSequences WITHOUT AssistantPrefill are treated as independent
+   * (not part of the prefill/fence optimization) and are always applied.
+   */
+  private shouldApplyStopSequences(
+    prompt: MJAIPromptEntityExtended,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    llm: BaseLLM
+  ): boolean {
+    // Not part of the prefill/fence optimization → always honor.
+    if (!prompt.AssistantPrefill) {
+      return true;
+    }
+    // Prefill-paired → only safe to apply when native prefill is actually supported.
+    return this.resolveSupportsPrefill(model, vendorId, llm);
+  }
+
   private resolveSupportsPrefill(
     model: MJAIModelEntityExtended,
     vendorId: string | null,
@@ -5213,6 +5262,8 @@ export class AIPromptRunner {
       promptRun.TokensPromptRollup = promptRun.TokensPrompt;
       promptRun.TokensCompletionRollup = promptRun.TokensCompletion;
       promptRun.TokensUsedRollup = promptRun.TokensUsed;
+      promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
+      promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
       if (promptRun.Cost !== undefined) {
         promptRun.TotalCost = promptRun.Cost;
       }

@@ -145,6 +145,106 @@
                     }
                 </ng-template>
                 <div class="panel-content execution-history-panel">
+                  <!-- Segmented toggle: agent runs vs. realtime voice sessions -->
+                  @if (UserCanViewSessions) {
+                    <div class="history-view-toggle" role="tablist">
+                      <button type="button" class="history-toggle-option"
+                        [class.active]="executionHistoryView === 'runs'"
+                        (click)="setExecutionHistoryView('runs')">
+                        <i class="fa-solid fa-person-running"></i> Runs
+                        @if (totalExecutionHistoryCount > 0) {
+                          <span class="history-toggle-count">{{ totalExecutionHistoryCount }}</span>
+                        }
+                      </button>
+                      <button type="button" class="history-toggle-option"
+                        [class.active]="executionHistoryView === 'sessions'"
+                        (click)="setExecutionHistoryView('sessions')">
+                        <i class="fa-solid fa-tower-broadcast"></i> Sessions
+                        @if (totalSessionCount > 0) {
+                          <span class="history-toggle-count">{{ totalSessionCount }}</span>
+                        }
+                      </button>
+                    </div>
+                  }
+                  @if (executionHistoryView === 'sessions') {
+                    <!-- Voice/realtime sessions list -->
+                    @if (loadingSessions) {
+                      <mj-loading text="Loading sessions..." size="medium"></mj-loading>
+                    } @else if (agentSessions.length === 0) {
+                      <div class="empty-state">
+                        <i class="fa-solid fa-tower-broadcast"></i>
+                        <h4>No Voice Sessions</h4>
+                        <p>This agent hasn't participated in any realtime voice sessions yet — neither as the co-agent nor as a delegation target.</p>
+                      </div>
+                    } @else {
+                      <div class="execution-history-list">
+                        @for (item of agentSessions; track item.row.ID) {
+                          <div class="execution-card session-card" (click)="openSessionRecord(item.row.ID)" title="Open session">
+                            <div class="execution-header">
+                              <div class="execution-left-section">
+                                <div class="execution-status">
+                                  <div class="status-indicator" [style.background-color]="getSessionStatusColor(item.row.Status)">
+                                    <i [class]="getSessionStatusIcon(item.row.Status)"></i>
+                                  </div>
+                                  <div class="execution-info">
+                                    <div class="execution-title">
+                                      Session #{{ item.row.ID.substring(0, 8) }}
+                                      @if (item.isCoAgent) {
+                                        <span class="session-role-chip">as co-agent</span>
+                                      }
+                                      @if (item.isTarget) {
+                                        <span class="session-role-chip session-role-chip--target">as target</span>
+                                      }
+                                    </div>
+                                    <div class="execution-date">{{ item.row.__mj_CreatedAt | date:'MMM d, h:mm a' }}</div>
+                                  </div>
+                                </div>
+                                <div class="execution-metrics">
+                                  <div class="metric-item">
+                                    <span class="session-status-pill" [attr.data-status]="item.row.Status">{{ item.row.Status }}</span>
+                                  </div>
+                                  <div class="metric-item">
+                                    <i class="fa-solid fa-stopwatch"></i>
+                                    <span class="metric-label">Duration:</span>
+                                    <span class="metric-value">{{ formatSessionDuration(item) }}</span>
+                                  </div>
+                                  <div class="metric-item">
+                                    <i class="fa-solid fa-plug"></i>
+                                    <span class="metric-label">Channels:</span>
+                                    <span class="metric-value">{{ item.channelCount }}</span>
+                                  </div>
+                                  @if (item.isCoAgent && item.targetAgentName) {
+                                    <div class="metric-item">
+                                      <i class="fa-solid fa-bullseye"></i>
+                                      <span class="metric-label">Target:</span>
+                                      <span class="metric-value">{{ item.targetAgentName }}</span>
+                                    </div>
+                                  }
+                                  @if (item.isTarget && !item.isCoAgent && item.row.Agent) {
+                                    <div class="metric-item">
+                                      <i class="fa-solid fa-tower-broadcast"></i>
+                                      <span class="metric-label">Co-agent:</span>
+                                      <span class="metric-value">{{ item.row.Agent }}</span>
+                                    </div>
+                                  }
+                                  <div class="metric-item">
+                                    <i class="fa-solid fa-user"></i>
+                                    <span class="metric-label">User:</span>
+                                    <span class="metric-value">{{ item.row.User }}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div class="execution-actions">
+                                <button class="action-btn" (click)="openSessionRecord(item.row.ID); $event.stopPropagation()" title="View session details">
+                                  <i class="fa-solid fa-external-link-alt"></i>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
+                  } @else {
                   @if (loadingStates.executionHistory) {
                     <mj-loading text="Loading execution history..." size="medium"></mj-loading>
                   } @else if (executionHistoryCount === 0) {
@@ -361,6 +461,7 @@
                         </div>
                       }
                     </div>
+                  }
                   }
                 </div>
             </mj-accordion-panel>

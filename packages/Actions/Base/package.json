@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/actions-base",
   "type": "module",
-  "version": "5.38.0",
+  "version": "5.40.2",
   "description": "Base Classes for MemberJunction Actions. This library is used on both server and network nodes.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,10 +21,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/code-execution": "5.38.0",
-    "@memberjunction/core": "5.38.0",
-    "@memberjunction/core-entities": "5.38.0",
-    "@memberjunction/global": "5.38.0",
+    "@memberjunction/code-execution": "5.40.2",
+    "@memberjunction/core": "5.40.2",
+    "@memberjunction/core-entities": "5.40.2",
+    "@memberjunction/global": "5.40.2",
     "zod": "~3.24.4"
   },
   "repository": {

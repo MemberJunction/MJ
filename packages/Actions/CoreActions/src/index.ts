@@ -76,6 +76,14 @@ export * from './custom/integration/oauth-flow.action';
 export * from './custom/integration/api-rate-limiter.action';
 export * from './custom/integration/gamma-generate-presentation.action';
 export * from './custom/integration/integration-action-executor';
+export * from './custom/integration/generate-integration-action.action';
+
+// eSignature Actions
+export * from './custom/esignature/base-esignature.action';
+export * from './custom/esignature/send-document-for-signature.action';
+export * from './custom/esignature/get-signature-status.action';
+export * from './custom/esignature/download-signed-document.action';
+export * from './custom/esignature/void-signature-request.action';
 
 // Security Actions
 export * from './custom/security/password-strength.action';
@@ -100,6 +108,7 @@ export * from './custom/ai/find-candidate-agents.action';
 export * from './custom/ai/find-candidate-actions.action';
 export * from './custom/ai/load-agent-spec.action';
 export * from './custom/ai/generate-image.action';
+export * from './custom/ai/run-cluster-analysis.action';
 export * from './custom/ai/actionsmith-agent';
 
 // User Management Actions

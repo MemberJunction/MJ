@@ -388,16 +388,18 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
     }`;
       let graphQLPKEYArgs = '';
       let whereClause = '';
+      const pkParamNames: string[] = [];
       for (let i = 0; i < entity.PrimaryKeys.length; i++) {
         const pk = entity.PrimaryKeys[i];
-        const idQuotes = pk.NeedsQuotes ? "'" : '';
         graphQLPKEYArgs += graphQLPKEYArgs.length > 0 ? ', ' : '';
         graphQLPKEYArgs += `@Arg('${pk.CodeName}', () => ${pk.GraphQLType}) `;
         graphQLPKEYArgs += `${pk.CodeName}: ${pk.TSType}`;
 
         whereClause += whereClause.length > 0 ? ' AND ' : '';
-        whereClause += `\${provider.QuoteIdentifier('${pk.CodeName}')}=${idQuotes}\${${pk.CodeName}}${idQuotes}`;
+        whereClause += `\${provider.QuoteIdentifier('${pk.CodeName}')}=\${provider.BuildParameterPlaceholder(${i})}`;
+        pkParamNames.push(pk.CodeName);
       }
+      const pkParamsList = pkParamNames.join(', ');
 
       sRet += `
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
@@ -405,7 +407,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(entity)}, '${entity.BaseView}')} WHERE ${whereClause} \` + this.getRowLevelSecurityWhereClause(provider, '${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const rows = await provider.ExecuteSQL(sSQL, [${pkParamsList}], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('${entity.Name}', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -632,7 +634,6 @@ export class ${classPrefix}${typeNameBase}Input {`;
       return '';
     }
 
-    const quotes = filterField.NeedsQuotes ? "'" : '';
     const serverPackagePrefix = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
     const relatedTypeName = this.getServerGraphQLTypeName(re);
     const serverClassName = serverPackagePrefix + relatedTypeName;
@@ -646,8 +647,8 @@ export class ${classPrefix}${typeNameBase}Input {`;
     async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${r.RelatedEntityJoinField}')}=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${r.RelatedEntityJoinField}')}=\${provider.BuildParameterPlaceholder(0)} \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [${instanceName}.${filterFieldName}], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -682,7 +683,6 @@ export class ${classPrefix}${typeNameBase}Input {`;
       return '';
     }
 
-    const quotes = filterField.NeedsQuotes ? "'" : '';
     const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
     const relatedTypeName = this.getServerGraphQLTypeName(re);
     const serverClassName = serverPackagePrefix + relatedTypeName;
@@ -696,8 +696,8 @@ export class ${classPrefix}${typeNameBase}Input {`;
     async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${re.FirstPrimaryKey.Name}')} IN (SELECT \${provider.QuoteIdentifier('${r.JoinEntityInverseJoinField}')} FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.JoinView}')} WHERE \${provider.QuoteIdentifier('${r.JoinEntityJoinField}')}=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${re.FirstPrimaryKey.Name}')} IN (SELECT \${provider.QuoteIdentifier('${r.JoinEntityInverseJoinField}')} FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.JoinView}')} WHERE \${provider.QuoteIdentifier('${r.JoinEntityJoinField}')}=\${provider.BuildParameterPlaceholder(0)}) \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [${instanceName}.${filterFieldName}], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows, this.GetUserFromPayload(userPayload));
         return result;
     }

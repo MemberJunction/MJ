@@ -62,8 +62,17 @@
                 <div class="card-content">
                   <h3>Total Cost</h3>
                   <div class="metric-value">{{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
-                  <div class="metric-detail">
-                    <span>{{ promptMetrics.tokenUsage.totalInput + promptMetrics.tokenUsage.totalOutput }} tokens</span>
+                  <div class="metric-detail cache-detail">
+                    <span>{{ totalTokensProcessed | number }} tokens</span>
+                    @if (promptMetrics.tokenUsage.totalCacheRead > 0 || promptMetrics.tokenUsage.totalCacheWrite > 0) {
+                      <span>incl. {{ (promptMetrics.tokenUsage.totalCacheRead + promptMetrics.tokenUsage.totalCacheWrite) | number }} cached</span>
+                    }
+                    @if (inputCost > 0 || outputCost > 0) {
+                      <span>input {{ formatCost(inputCost) }} &middot; output {{ formatCost(outputCost) }}</span>
+                    }
+                    @if (cacheSavings > 0) {
+                      <span class="success">saved {{ formatCost(cacheSavings) }} ({{ cacheSavingsPct | number:'1.0-0' }}%) via cache</span>
+                    }
                   </div>
                 </div>
               </div>
@@ -74,10 +83,13 @@
                 <div class="card-content">
                   <h3>Prompt Cache</h3>
                   <div class="metric-value">{{ promptMetrics.tokenUsage.totalCacheRead | number }}</div>
-                  <div class="metric-detail">
+                  <div class="metric-detail cache-detail">
                     <span>tokens read from cache</span>
                     @if (promptMetrics.tokenUsage.totalCacheWrite > 0) {
                       <span>{{ promptMetrics.tokenUsage.totalCacheWrite | number }} written</span>
+                    }
+                    @if (promptMetrics.tokenUsage.totalCacheRead > 0 || promptMetrics.tokenUsage.totalCacheWrite > 0) {
+                      <span>{{ cacheHitRatePct | number:'1.0-0' }}% hit rate</span>
                     }
                   </div>
                 </div>
@@ -127,8 +139,8 @@
                   <div class="chart-card" [class.expanded]="expandedCharts['modelDistribution']">
                     <div class="chart-card-header" (click)="toggleChartExpansion('modelDistribution')">
                       <h3><i class="fas fa-chart-pie"></i> Prompts by Model</h3>
-                      <button class="expand-btn">
-                        <i class="fas" [ngClass]="expandedCharts['modelDistribution'] ? 'fa-compress' : 'fa-expand'"></i>
+                    <button class="expand-btn" [attr.aria-label]="expandedCharts['modelDistribution'] ? 'Collapse Model Distribution chart' : 'Expand Model Distribution chart'">
+                      <i class="fas" [ngClass]="expandedCharts['modelDistribution'] ? 'fa-compress' : 'fa-expand'" aria-hidden="true"></i>
                       </button>
                     </div>
                     <div class="chart-card-body">
@@ -151,8 +163,8 @@
                   <div class="chart-card" [class.expanded]="expandedCharts['executionTime']">
                     <div class="chart-card-header" (click)="toggleChartExpansion('executionTime')">
                       <h3><i class="fas fa-clock"></i> Average Execution Time by Vendor</h3>
-                      <button class="expand-btn">
-                        <i class="fas" [ngClass]="expandedCharts['executionTime'] ? 'fa-compress' : 'fa-expand'"></i>
+                    <button class="expand-btn" [attr.aria-label]="expandedCharts['executionTime'] ? 'Collapse Average Execution Time by Vendor chart' : 'Expand Average Execution Time by Vendor chart'">
+                      <i class="fas" [ngClass]="expandedCharts['executionTime'] ? 'fa-compress' : 'fa-expand'" aria-hidden="true"></i>
                       </button>
                     </div>
                     <div class="chart-card-body">
@@ -165,8 +177,8 @@
                   <div class="chart-card" [class.expanded]="expandedCharts['costByVendor']">
                     <div class="chart-card-header" (click)="toggleChartExpansion('costByVendor')">
                       <h3><i class="fas fa-dollar-sign"></i> Cost Distribution by Vendor</h3>
-                      <button class="expand-btn">
-                        <i class="fas" [ngClass]="expandedCharts['costByVendor'] ? 'fa-compress' : 'fa-expand'"></i>
+                    <button class="expand-btn" [attr.aria-label]="expandedCharts['costByVendor'] ? 'Collapse Cost Distribution by Vendor chart' : 'Expand Cost Distribution by Vendor chart'">
+                      <i class="fas" [ngClass]="expandedCharts['costByVendor'] ? 'fa-compress' : 'fa-expand'" aria-hidden="true"></i>
                       </button>
                     </div>
                     <div class="chart-card-body">
@@ -180,8 +192,8 @@
                   <div class="chart-card" [class.expanded]="expandedCharts['tokenUsage']">
                     <div class="chart-card-header" (click)="toggleChartExpansion('tokenUsage')">
                       <h3><i class="fas fa-coins"></i> Token Usage by Model</h3>
-                      <button class="expand-btn">
-                        <i class="fas" [ngClass]="expandedCharts['tokenUsage'] ? 'fa-compress' : 'fa-expand'"></i>
+                    <button class="expand-btn" [attr.aria-label]="expandedCharts['tokenUsage'] ? 'Collapse Token Usage by Model chart' : 'Expand Token Usage by Model chart'">
+                      <i class="fas" [ngClass]="expandedCharts['tokenUsage'] ? 'fa-compress' : 'fa-expand'" aria-hidden="true"></i>
                       </button>
                     </div>
                     <div class="chart-card-body">
@@ -199,8 +211,8 @@
                   <div class="chart-card" [class.expanded]="expandedCharts['promptTime']">
                     <div class="chart-card-header" (click)="toggleChartExpansion('promptTime')">
                       <h3><i class="fas fa-hourglass-half"></i> Average Execution Time by Prompt</h3>
-                      <button class="expand-btn">
-                        <i class="fas" [ngClass]="expandedCharts['promptTime'] ? 'fa-compress' : 'fa-expand'"></i>
+                    <button class="expand-btn" [attr.aria-label]="expandedCharts['promptTime'] ? 'Collapse Average Execution Time by Prompt chart' : 'Expand Average Execution Time by Prompt chart'">
+                      <i class="fas" [ngClass]="expandedCharts['promptTime'] ? 'fa-compress' : 'fa-expand'" aria-hidden="true"></i>
                       </button>
                     </div>
                     <div class="chart-card-body">
@@ -213,8 +225,8 @@
                   <div class="chart-card" [class.expanded]="expandedCharts['promptToken']">
                     <div class="chart-card-header" (click)="toggleChartExpansion('promptToken')">
                       <h3><i class="fas fa-database"></i> Token Usage by Prompt</h3>
-                      <button class="expand-btn">
-                        <i class="fas" [ngClass]="expandedCharts['promptToken'] ? 'fa-compress' : 'fa-expand'"></i>
+                    <button class="expand-btn" [attr.aria-label]="expandedCharts['promptToken'] ? 'Collapse Token Usage by Prompt chart' : 'Expand Token Usage by Prompt chart'">
+                      <i class="fas" [ngClass]="expandedCharts['promptToken'] ? 'fa-compress' : 'fa-expand'" aria-hidden="true"></i>
                       </button>
                     </div>
                     <div class="chart-card-body">
@@ -227,8 +239,8 @@
                   <div class="chart-card" [class.expanded]="expandedCharts['promptCost']">
                     <div class="chart-card-header" (click)="toggleChartExpansion('promptCost')">
                       <h3><i class="fas fa-chart-pie"></i> Cost Distribution by Prompt</h3>
-                      <button class="expand-btn">
-                        <i class="fas" [ngClass]="expandedCharts['promptCost'] ? 'fa-compress' : 'fa-expand'"></i>
+                    <button class="expand-btn" [attr.aria-label]="expandedCharts['promptCost'] ? 'Collapse Cost Distribution by Prompt chart' : 'Expand Cost Distribution by Prompt chart'">
+                      <i class="fas" [ngClass]="expandedCharts['promptCost'] ? 'fa-compress' : 'fa-expand'" aria-hidden="true"></i>
                       </button>
                     </div>
                     <div class="chart-card-body">
@@ -241,8 +253,8 @@
                   <div class="chart-card" [class.expanded]="expandedCharts['promptCount']">
                     <div class="chart-card-header" (click)="toggleChartExpansion('promptCount')">
                       <h3><i class="fas fa-list-ol"></i> Prompt Execution Count</h3>
-                      <button class="expand-btn">
-                        <i class="fas" [ngClass]="expandedCharts['promptCount'] ? 'fa-compress' : 'fa-expand'"></i>
+                    <button class="expand-btn" [attr.aria-label]="expandedCharts['promptCount'] ? 'Collapse Prompt Execution Count chart' : 'Expand Prompt Execution Count chart'">
+                      <i class="fas" [ngClass]="expandedCharts['promptCount'] ? 'fa-compress' : 'fa-expand'" aria-hidden="true"></i>
                       </button>
                     </div>
                     <div class="chart-card-body">
@@ -306,8 +318,8 @@
                 <div class="chart-card" [class.expanded]="expandedCharts['actionSuccess']">
                   <div class="chart-card-header" (click)="toggleChartExpansion('actionSuccess')">
                     <h3><i class="fas fa-chart-bar"></i> Action Success Rate</h3>
-                    <button class="expand-btn">
-                      <i class="fas" [ngClass]="expandedCharts['actionSuccess'] ? 'fa-compress' : 'fa-expand'"></i>
+                    <button class="expand-btn" [attr.aria-label]="expandedCharts['actionSuccess'] ? 'Collapse Action Success Rate chart' : 'Expand Action Success Rate chart'">
+                      <i class="fas" [ngClass]="expandedCharts['actionSuccess'] ? 'fa-compress' : 'fa-expand'" aria-hidden="true"></i>
                     </button>
                   </div>
                   <div class="chart-card-body">
@@ -320,8 +332,8 @@
                 <div class="chart-card" [class.expanded]="expandedCharts['stepType']">
                   <div class="chart-card-header" (click)="toggleChartExpansion('stepType')">
                     <h3><i class="fas fa-layer-group"></i> Step Type Distribution</h3>
-                    <button class="expand-btn">
-                      <i class="fas" [ngClass]="expandedCharts['stepType'] ? 'fa-compress' : 'fa-expand'"></i>
+                    <button class="expand-btn" [attr.aria-label]="expandedCharts['stepType'] ? 'Collapse Step Type Distribution chart' : 'Expand Step Type Distribution chart'">
+                      <i class="fas" [ngClass]="expandedCharts['stepType'] ? 'fa-compress' : 'fa-expand'" aria-hidden="true"></i>
                     </button>
                   </div>
                   <div class="chart-card-body">
