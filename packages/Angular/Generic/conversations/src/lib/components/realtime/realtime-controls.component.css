@@ -1,0 +1,100 @@
+:host {
+  display: block;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 16px 22px 22px;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+
+.ctrl-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ctrl {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mj-border-strong);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 150ms ease;
+}
+.ctrl:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.ctrl--on {
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+}
+.ctrl--muted {
+  background: var(--mj-status-warning-bg);
+  border-color: var(--mj-status-warning);
+  color: var(--mj-status-warning);
+}
+.ctrl--dev {
+  font-size: 16px;
+}
+.ctrl--end {
+  width: 60px;
+  height: 60px;
+  background: var(--mj-status-error);
+  border-color: var(--mj-status-error);
+  color: var(--mj-text-inverse, #fff);
+  font-size: 20px;
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--mj-status-error) 40%, transparent);
+}
+.ctrl--end:hover {
+  background: var(--mj-status-error);
+  filter: brightness(0.92);
+}
+
+.ctrl-label {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  text-align: center;
+  margin-top: 6px;
+  font-weight: 500;
+}
+.ctrl-label--end {
+  color: var(--mj-status-error);
+}
+
+/* ---------- Session review variant: Start live session (primary) + Close ---------- */
+.controls--review {
+  gap: 24px;
+}
+.start-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid var(--mj-brand-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 150ms ease;
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+}
+.start-live:hover {
+  background: var(--mj-brand-primary-hover, var(--mj-brand-primary));
+  filter: brightness(1.05);
+}
+.start-live i {
+  font-size: 14px;
+}

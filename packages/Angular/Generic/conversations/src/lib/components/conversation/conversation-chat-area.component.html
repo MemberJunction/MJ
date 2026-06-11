@@ -170,6 +170,8 @@
               [ratingsMap]="ratingsByDetailId"
               [userAvatarMap]="userAvatarMap"
               [attachmentsMap]="attachmentsByDetailId"
+              [sessionMetaMap]="realtimeSessionMetaMap"
+              (realtimeSessionOpenRequested)="OpenRealtimeSessionReview($event)"
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
               (deleteMessage)="onDeleteMessage($event)"
@@ -302,6 +304,38 @@
       </mj-pinned-messages-panel>
     }
   </div>
+
+  <!-- Live voice "call mode" overlay — fills this conversation panel in place
+       (header + thread + composer) while a realtime session is active. When the
+       call is MINIMIZED (e.g. a dev link navigated to a record) the overlay HIDES
+       (not destroyed — its merged session state must survive), the session stays
+       fully live, and a floating "on call" pill offers the way back.
+       ALSO hosted in SESSION REVIEW mode (RealtimeReview set, no live call): the
+       overlay renders what went down in a PAST session, with a "Start live session"
+       button that resumes it as a new call. -->
+  @if ((VoiceSession.Active$ | async) || RealtimeReview) {
+    <mj-realtime-session-overlay
+      [AgentName]="realtimeOverlayAgentName"
+      [Hidden]="(VoiceSession.Minimized$ | async) === true"
+      [CurrentUser]="currentUser"
+      [EnvironmentID]="environmentId"
+      [ReviewData]="RealtimeReview"
+      (NavigateRequest)="onVoiceNavigateRequest($event)"
+      (StartLiveRequested)="onReviewStartLive($event)"
+      (ReviewClosed)="onReviewClosed()">
+    </mj-realtime-session-overlay>
+    @if (VoiceSession.Minimized$ | async) {
+      <button type="button" class="voice-call-pill" (click)="VoiceSession.SetMinimized(false)"
+              title="Return to the live call" aria-label="Return to the live call">
+        <span class="voice-call-pill__pulse" aria-hidden="true"></span>
+        <i class="fa-solid fa-phone-volume" aria-hidden="true"></i>
+        <span class="voice-call-pill__text">
+          <span class="voice-call-pill__name">On call · {{ VoiceSession.CurrentAgentName }}</span>
+          <span class="voice-call-pill__hint">Tap to return</span>
+        </span>
+      </button>
+    }
+  }
 </div>
 
 <!-- Thread Panel -->

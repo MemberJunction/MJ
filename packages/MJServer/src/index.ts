@@ -52,6 +52,7 @@ import { PubSubManager } from './generic/PubSubManager.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
+import { SessionJanitor } from './agentSessions/index.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
@@ -167,6 +168,9 @@ export * from './resolvers/UserViewResolver.js';
 export * from './resolvers/VersionHistoryResolver.js';
 export * from './resolvers/CurrentUserContextResolver.js';
 export * from './resolvers/RSUResolver.js';
+export * from './resolvers/AgentSessionResolver.js';
+export * from './resolvers/RealtimeClientSessionResolver.js';
+export * from './agentSessions/index.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
@@ -1103,6 +1107,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
     AgentRunWatchdog.SweepOrphanedRuns(Metadata.Provider, resumeUser) // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
       .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
+  }
+
+  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then keep a
+  // periodic staleness sweep running. Self-registers with ShutdownRegistry, so its timer is cleared
+  // by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
+  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
+    SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+      .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
   }
 
   // Set up graceful shutdown handlers

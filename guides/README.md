@@ -22,6 +22,10 @@ If you're about to start work in one of the areas below, **read the guide first*
 - **[Content Autotagging Guide](CONTENT_AUTOTAGGING_GUIDE.md)** — The Knowledge Hub pluggable autotagging pipeline: providers, keyword extraction, taxonomy bridging.
 - **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** — How the tag taxonomy itself is shaped, scoped, governed, grown, embedded, reviewed, and pruned. Companion to the autotagging guide.
 
+## AI and agents
+
+- **[Real-Time Co-Agents Guide](REALTIME_CO_AGENTS_GUIDE.md)** — Live, low-latency voice agents: the `Realtime` agent type and Realtime Co-Agent (one co-agent voices any target agent), the triple-registry plugin architecture (server/client model drivers + channel plugins), client-direct vs server-bridged topologies, session lifecycle/janitor, interactive channels (the live Whiteboard), narration, observability, and security. Companion to [`plans/ai-agent-sessions.md`](../plans/ai-agent-sessions.md).
+
 ## Angular / MJExplorer
 
 - **[Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md)** — Architecture, naming, state management with getter/setters, engine class patterns, user preferences, layout, permission checking for MJ dashboards.

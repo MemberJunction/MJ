@@ -76,8 +76,14 @@ async function wipeEventsRuns(pool: sql.ConnectionPool, schema: string): Promise
     LogStatus(`Wiped prior Events duplicate-run data (rows affected: ${JSON.stringify(result.rowsAffected)}).`);
 }
 
+<<<<<<< fix/runview-cache-miss-fields-projection
 async function createAndTriggerRun(provider: IMetadataProvider, user: UserInfo): Promise<string> {
     const run = await provider.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', user);
+=======
+async function createAndTriggerRun(user): Promise<string> {
+    const md = new Metadata(); // global-provider-ok: one-off CLI script, global default provider is correct
+    const run = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', user);
+>>>>>>> next
     run.NewRecord();
     run.EntityID = EVENTS_ENTITY_ID;
     run.StartedByUserID = user.ID;
@@ -91,7 +97,12 @@ async function createAndTriggerRun(provider: IMetadataProvider, user: UserInfo):
     return run.ID;
 }
 
+<<<<<<< fix/runview-cache-miss-fields-projection
 async function pollUntilDone(provider: IMetadataProvider, user: UserInfo, runID: string): Promise<string> {
+=======
+async function pollUntilDone(user, runID: string): Promise<string> {
+    const md = new Metadata(); // global-provider-ok: one-off CLI script, global default provider is correct
+>>>>>>> next
     const start = Date.now();
     while (Date.now() - start < POLL_TIMEOUT_MS) {
         await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));

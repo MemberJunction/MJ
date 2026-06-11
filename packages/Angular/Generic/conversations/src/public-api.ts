@@ -31,6 +31,9 @@ export * from './lib/services/collection-state.service';
 export * from './lib/services/conversation-attachment.service';
 export * from './lib/services/ui-command-handler.service';
 export * from './lib/services/conversation-bridge.service';
+export * from './lib/services/voice-session.service';
+export * from './lib/services/realtime-session-review.service';
+export * from './lib/services/delegation-result-parser';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
@@ -67,3 +70,29 @@ export * from './lib/components/toast/toast.component';
 export * from './lib/components/global-tasks/global-tasks-panel.component';
 export * from './lib/components/attachment/image-viewer.component';
 export * from './lib/components/overlay/chat-overlay.component';
+export * from './lib/components/voice/voice-overlay.component';
+export * from './lib/components/voice/voice-agent-picker.component';
+// Real-time "call mode" overlay + its componentized parts
+export * from './lib/components/realtime/realtime-session-overlay.component';
+export * from './lib/components/realtime/realtime-session-state';
+export * from './lib/components/realtime/realtime-agent-banner.component';
+export * from './lib/components/realtime/realtime-session-thread.component';
+export * from './lib/components/realtime/realtime-delegation-card.component';
+export * from './lib/components/realtime/realtime-activity-rail.component';
+export * from './lib/components/realtime/realtime-surface-tabs.component';
+export * from './lib/components/realtime/realtime-surface-tabs.model';
+export * from './lib/components/realtime/realtime-surface-panel-prefs';
+export * from './lib/components/realtime/realtime-composer.component';
+export * from './lib/components/realtime/realtime-channel-strip.component';
+export * from './lib/components/realtime/realtime-controls.component';
+// Conversation-timeline collapse of past realtime sessions (one card per session) + its pure grouping pass
+export * from './lib/components/realtime/realtime-session-timeline-card.component';
+export * from './lib/utils/realtime-session-timeline';
+// Pluggable interactive-channel contract (registry-resolved client plugins) + pane host
+export * from './lib/components/realtime/channels/base-realtime-channel-client';
+export * from './lib/components/realtime/channels/realtime-channel-pane.component';
+// Live whiteboard channel plugin + artifact viewer (thin consumers of the generic board).
+// NOTE: the whiteboard itself (engine, tools, components, export builders) lives in
+// @memberjunction/ng-whiteboard — import board types/components from there directly.
+export * from './lib/components/realtime/whiteboard/whiteboard-channel';
+export * from './lib/components/realtime/whiteboard/whiteboard-artifact-viewer.component';

@@ -1,0 +1,8 @@
+<div class="zoom-cluster">
+  <button type="button" title="Zoom out" (click)="ZoomOut.emit()"><i class="fa-solid fa-minus"></i></button>
+  <span class="zoom-pct">{{ ZoomPercent }}%</span>
+  <button type="button" title="Zoom in" (click)="ZoomIn.emit()"><i class="fa-solid fa-plus"></i></button>
+  <span class="zoom-sep"></span>
+  <button type="button" title="Fit to content" (click)="Fit.emit()"><i class="fa-solid fa-compress"></i></button>
+  <button type="button" title="Mini-map" [class.on]="MinimapOpen" (click)="ToggleMinimap.emit()"><i class="fa-regular fa-map"></i></button>
+</div>
