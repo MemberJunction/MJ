@@ -164,6 +164,73 @@ describe('AgentMemoryContextBuilder', () => {
             expect(arg.observability).toEqual({ agentRunID: 'run-9', stepNumber: 3 });
         });
 
+        it('injects an examples-only system message when only InjectExamples is enabled', async () => {
+            getExamples.mockResolvedValueOnce([{ ID: 'e1' }, { ID: 'e2' }]);
+            const messages: ChatMessage[] = [{ role: 'user', content: 'hi' }];
+            const builder = new AgentMemoryContextBuilder();
+
+            const result = await builder.InjectContextMemory(
+                'hi',
+                makeAgent({ InjectNotes: false, InjectExamples: true }),
+                undefined,
+                undefined,
+                fakeUser,
+                messages
+            );
+
+            expect(getNotes).not.toHaveBeenCalled();
+            expect(result.examples).toHaveLength(2);
+            expect(messages[0].role).toBe('system');
+            expect(messages[0].content).toContain('EXAMPLES(2)');
+            expect(messages[0].content).not.toContain('NOTES');
+        });
+
+        it('returns the retrieved memory without unshifting when no conversationMessages array is supplied', async () => {
+            getNotes.mockResolvedValueOnce([{ ID: 'n1' }]);
+            const builder = new AgentMemoryContextBuilder();
+
+            const result = await builder.InjectContextMemory(
+                'hi',
+                makeAgent({ InjectNotes: true }),
+                undefined,
+                undefined,
+                fakeUser,
+                undefined // no message array — formatting/unshift must be skipped safely
+            );
+
+            expect(result.notes).toHaveLength(1);
+            expect(formatNotes).not.toHaveBeenCalled();
+        });
+
+        it('falls back to the default limits (5 notes / 3 examples) when the agent limits are null', async () => {
+            getNotes.mockResolvedValueOnce([{ ID: 'n1' }]);
+            getExamples.mockResolvedValueOnce([{ ID: 'e1' }]);
+            const builder = new AgentMemoryContextBuilder();
+
+            await builder.InjectContextMemory(
+                'hi',
+                makeAgent({
+                    InjectNotes: true,
+                    InjectExamples: true,
+                    MaxNotesToInject: null as unknown as number,
+                    MaxExamplesToInject: null as unknown as number,
+                    NoteInjectionStrategy: 'Recent',
+                    ExampleInjectionStrategy: 'Rated'
+                }),
+                'user-1',
+                'company-1',
+                fakeUser,
+                []
+            );
+
+            const notesArg = getNotes.mock.calls[0][0] as { maxNotes: number; strategy: string };
+            expect(notesArg.maxNotes).toBe(5);
+            expect(notesArg.strategy).toBe('Recent');
+            const examplesArg = getExamples.mock.calls[0][0] as { maxExamples: number; strategy: string };
+            expect(examplesArg.maxExamples).toBe(3);
+            expect(examplesArg.strategy).toBe('Rated');
+        });
+
         it('invokes the verbose status logger when content is injected', async () => {
             getNotes.mockResolvedValueOnce([{ ID: 'n1' }]);
             const logStatus = vi.fn();
@@ -242,6 +309,49 @@ describe('AgentMemoryContextBuilder', () => {
             expect(messages).toHaveLength(2);
             expect(messages[0].role).toBe('system');
             expect(messages[0].content).toContain('<retrieved_context>');
+        });
+
+        it('returns null without injecting when the RAG engine yields no result', async () => {
+            ragExecute.mockResolvedValueOnce(null);
+            const messages: ChatMessage[] = [{ role: 'user', content: 'hi' }];
+            const builder = new AgentMemoryContextBuilder();
+
+            const result = await builder.InjectPreExecutionRAG('hi', makeAgent({}), fakeUser, messages, messages);
+
+            expect(ragExecute).toHaveBeenCalledTimes(1);
+            expect(result).toBeNull();
+            expect(messages).toHaveLength(1);
+        });
+
+        it('returns the result WITHOUT unshifting when it carries no formattedSystemMessage', async () => {
+            ragExecute.mockResolvedValueOnce({
+                formattedSystemMessage: '',
+                combinedResults: [],
+                queriedScopeIDs: ['s1']
+            });
+            const messages: ChatMessage[] = [{ role: 'user', content: 'hi' }];
+            const builder = new AgentMemoryContextBuilder();
+
+            const result = await builder.InjectPreExecutionRAG('hi', makeAgent({}), fakeUser, messages, messages);
+
+            expect(result).not.toBeNull();
+            expect(messages).toHaveLength(1); // nothing injected
+        });
+
+        it('passes only the LAST FIVE original messages to the RAG engine as recentMessages', async () => {
+            ragExecute.mockResolvedValueOnce(null);
+            const original: ChatMessage[] = Array.from({ length: 8 }, (_, i) => ({
+                role: 'user' as const,
+                content: `msg-${i}`
+            }));
+            const builder = new AgentMemoryContextBuilder();
+
+            await builder.InjectPreExecutionRAG('msg-7', makeAgent({}), fakeUser, [...original], original);
+
+            const arg = ragExecute.mock.calls[0][0] as { recentMessages?: ChatMessage[] };
+            expect(arg.recentMessages).toHaveLength(5);
+            expect(arg.recentMessages![0].content).toBe('msg-3');
+            expect(arg.recentMessages![4].content).toBe('msg-7');
         });
 
         it('returns null and calls the error logger when RAG execution throws', async () => {

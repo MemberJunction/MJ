@@ -176,4 +176,82 @@ describe('RealtimeToolBroker', () => {
         const { broker } = buildBroker();
         expect(() => broker.AbortInFlight()).not.toThrow();
     });
+
+    it('propagates PausedRunID from the delegate onto ExecutedToolCall (AwaitingFeedback resume linkage)', async () => {
+        const { broker } = buildBroker({
+            DelegateToTarget: vi.fn(async (): Promise<DelegatedResult> => ({
+                CallID: 'c1',
+                Success: true,
+                Output: 'Ask the user: include archived rows?',
+                PausedRunID: 'paused-run-7',
+                RunID: 'paused-run-7',
+            })),
+        });
+        const result = await broker.ExecuteToolCall(targetCall);
+        expect(result.PausedRunID).toBe('paused-run-7');
+        expect(result.RunID).toBe('paused-run-7');
+        // PausedRunID is transport metadata only — it is NOT serialized into the model's tool_response.
+        expect(JSON.parse(result.ResultJson)).toEqual({
+            success: true,
+            output: 'Ask the user: include archived rows?',
+            runId: 'paused-run-7',
+        });
+    });
+
+    it('leaves PausedRunID/RunID/Artifacts undefined on the structured-error path', async () => {
+        const { broker } = buildBroker({
+            DelegateToTarget: vi.fn(async () => {
+                throw new Error('target exploded');
+            }),
+        });
+        const result = await broker.ExecuteToolCall(targetCall);
+        expect(result.PausedRunID).toBeUndefined();
+        expect(result.RunID).toBeUndefined();
+        expect(result.Artifacts).toBeUndefined();
+    });
+
+    it('clears the per-call controller after completion — a later AbortInFlight never aborts a finished call', async () => {
+        let firstSignal: AbortSignal | null = null;
+        const { broker } = buildBroker({
+            DelegateToTarget: vi.fn(async (req: DelegateToTargetRequest): Promise<DelegatedResult> => {
+                firstSignal = req.AbortSignal;
+                return { CallID: req.CallID, Success: true, Output: 'done' };
+            }),
+        });
+
+        await broker.ExecuteToolCall(targetCall);
+        expect(firstSignal).not.toBeNull();
+
+        // The finally block must have cleared the controller — AbortInFlight is a no-op now.
+        broker.AbortInFlight();
+        expect(firstSignal!.aborted).toBe(false);
+    });
+
+    it('AbortInFlight aborts only the CURRENT delegation when a second call replaced the controller', async () => {
+        const signals: AbortSignal[] = [];
+        const resolvers: Array<(r: DelegatedResult) => void> = [];
+        const { broker } = buildBroker({
+            DelegateToTarget: vi.fn((req: DelegateToTargetRequest) => {
+                signals.push(req.AbortSignal);
+                return new Promise<DelegatedResult>((resolve) => resolvers.push(resolve));
+            }),
+        });
+
+        const first = broker.ExecuteToolCall(targetCall);
+        await Promise.resolve();
+        // Complete the first delegation, then start a second one.
+        resolvers[0]({ CallID: 'c1', Success: true, Output: 'first done' });
+        await first;
+
+        const second = broker.ExecuteToolCall({ ...targetCall, CallID: 'c2' });
+        await Promise.resolve();
+        expect(signals).toHaveLength(2);
+
+        broker.AbortInFlight();
+        expect(signals[0].aborted).toBe(false); // finished call untouched
+        expect(signals[1].aborted).toBe(true);  // in-flight call cancelled
+
+        resolvers[1]({ CallID: 'c2', Success: false, Output: 'cancelled' });
+        await second;
+    });
 });

@@ -532,6 +532,134 @@ describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
 
         expect(getEntity).not.toHaveBeenCalled();
     });
+
+    it('tolerates a finalize save failure (logged, never thrown) and still finalizes the sibling run', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1', Save: vi.fn(async () => false), LatestResult: { CompleteMessage: 'db down' } });
+        const promptRun = makeRun({ ID: 'prompt-run-1' });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+        const svc = new RealtimeClientSessionService();
+
+        await expect(
+            svc.FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true)
+        ).resolves.toBeUndefined();
+
+        // The agent-run save failed, but the prompt run was still finalized afterward.
+        expect(promptRun.Status).toBe('Completed');
+        expect(promptRun.Save).toHaveBeenCalledTimes(1);
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// createCoAgentObservabilityRun — REAL DB-seam path (fake provider):
+// field stamping, best-effort containment, prompt-run skip/failure.
+// ════════════════════════════════════════════════════════════════════
+
+/** Exposes the protected observability-run creation seam against a fake provider. */
+class ObservabilityTestService extends RealtimeClientSessionService {
+    public CallCreateObservabilityRun(
+        coAgent: MJAIAgentEntityExtended,
+        promptID: string | null,
+        modelID: string,
+        userID: string | undefined,
+        agentSessionID: string,
+        prov: IMetadataProvider,
+        conversationID?: string,
+    ): Promise<{ CoAgentRunID: string; PromptRunID?: string } | null> {
+        return this.createCoAgentObservabilityRun(
+            coAgent, promptID, modelID, userID, agentSessionID, contextUser, prov, conversationID
+        );
+    }
+}
+
+interface FakeObsRun extends FakeRun {
+    NewRecord: () => void;
+}
+
+function makeObsRun(id: string, overrides: Partial<FakeObsRun> = {}): FakeObsRun {
+    return {
+        ...makeRun({ ID: id }),
+        NewRecord: vi.fn(),
+        ...overrides,
+    } as FakeObsRun;
+}
+
+describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)', () => {
+    it('creates the co-agent AIAgentRun + linked AIPromptRun with full linkage stamping', async () => {
+        const agentRun = makeObsRun('co-run-real');
+        const promptRun = makeObsRun('prompt-run-real');
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+        const svc = new ObservabilityTestService();
+
+        const result = await svc.CallCreateObservabilityRun(
+            makeCoAgent(), 'prompt-77', 'model-77', 'voice-user', 'session-77', prov, 'conv-77'
+        );
+
+        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real' });
+
+        // Agent run stamping.
+        expect(agentRun.NewRecord).toHaveBeenCalled();
+        expect(agentRun.AgentID).toBe('co-1');
+        expect(agentRun.Status).toBe('Running');
+        expect(agentRun.StartedAt).toBeInstanceOf(Date);
+        expect(agentRun.AgentSessionID).toBe('session-77');
+        expect(agentRun.ConversationID).toBe('conv-77');
+        expect(agentRun.UserID).toBe('voice-user');
+
+        // Prompt run stamping + linkage back to the co-agent run.
+        expect(promptRun.NewRecord).toHaveBeenCalled();
+        expect(promptRun.PromptID).toBe('prompt-77');
+        expect(promptRun.ModelID).toBe('model-77');
+        expect(promptRun.Status).toBe('Running');
+        expect(promptRun.RunType).toBe('Single');
+        expect(promptRun.RunAt).toBeInstanceOf(Date);
+        expect(promptRun.AgentRunID).toBe('co-run-real');
+    });
+
+    it('leaves ConversationID/UserID unset when not supplied', async () => {
+        const agentRun = makeObsRun('co-run-real');
+        const prov = makeRunProvider(() => agentRun);
+        const svc = new ObservabilityTestService();
+
+        await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', undefined, 'session-1', prov);
+
+        expect(agentRun.ConversationID).toBeUndefined();
+        expect(agentRun.UserID).toBeUndefined();
+    });
+
+    it('returns null (no prompt run attempted) when the agent-run save fails — best-effort', async () => {
+        const agentRun = makeObsRun('co-run-fail', { Save: vi.fn(async () => false), LatestResult: { CompleteMessage: 'fk violation' } });
+        const getEntity = vi.fn(async () => agentRun);
+        const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
+        const svc = new ObservabilityTestService();
+
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+
+        expect(result).toBeNull();
+        expect(getEntity).toHaveBeenCalledTimes(1); // only the agent run was ever requested
+    });
+
+    it('skips the prompt run (PromptRunID undefined) when no co-agent prompt resolved', async () => {
+        const agentRun = makeObsRun('co-run-real');
+        const getEntity = vi.fn(async () => agentRun);
+        const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
+        const svc = new ObservabilityTestService();
+
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', 'u1', 's1', prov);
+
+        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: undefined });
+        expect(getEntity).toHaveBeenCalledTimes(1);
+    });
+
+    it('still returns the CoAgentRunID when only the prompt-run save fails', async () => {
+        const agentRun = makeObsRun('co-run-real');
+        const promptRun = makeObsRun('prompt-run-fail', { Save: vi.fn(async () => false), LatestResult: { CompleteMessage: 'boom' } });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+        const svc = new ObservabilityTestService();
+
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+
+        expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: undefined });
+    });
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -747,5 +875,193 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         expect(result.PausedRunID).toBe('paused-run-9');
         expect(result.Success).toBe(true);
         expect(JSON.parse(result.ResultJson).output).toContain('Confirm the task graph?');
+    });
+
+    it('fails cleanly (no RunAgent call) when no target agent resolves', async () => {
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput({ TargetAgentID: '' }), makeDelegateRequest());
+
+        expect(result.Success).toBe(false);
+        expect(result.Output).toContain('No target agent');
+        expect(result.CallID).toBe('c1');
+        expect(runAgentMock).not.toHaveBeenCalled();
+    });
+
+    it('contains a thrown RunAgent error as a "Delegation failed" result (never throws)', async () => {
+        runAgentMock.mockRejectedValue(new Error('runner exploded'));
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(result.Success).toBe(false);
+        expect(result.Output).toBe('Delegation failed: runner exploded');
+        expect(result.PausedRunID).toBeUndefined();
+    });
+
+    it('parses the request text from { request } JSON arguments', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest({ Arguments: JSON.stringify({ request: 'build the report' }) }));
+
+        expect(runAgentMock.mock.calls[0][0].conversationMessages).toEqual([{ role: 'user', content: 'build the report' }]);
+    });
+
+    it('falls back to the raw argument string when arguments are not JSON', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest({ Arguments: 'just do the thing' }));
+
+        expect(runAgentMock.mock.calls[0][0].conversationMessages[0].content).toBe('just do the thing');
+    });
+
+    it('falls back to the raw string when the JSON has no string `request` member', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+        const raw = JSON.stringify({ request: 42 });
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest({ Arguments: raw }));
+
+        expect(runAgentMock.mock.calls[0][0].conversationMessages[0].content).toBe(raw);
+    });
+
+    it('passes the broker signal through UNCHANGED when no caller signal exists (no extra controller)', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const brokerSignal = new AbortController().signal;
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest({ AbortSignal: brokerSignal }));
+
+        expect(runAgentMock.mock.calls[0][0].cancellationToken).toBe(brokerSignal);
+    });
+
+    it('combines the caller barge-in signal with the broker signal — either aborts the run', async () => {
+        let token: AbortSignal | undefined;
+        runAgentMock.mockImplementation(async (params: { cancellationToken?: AbortSignal }) => {
+            token = params.cancellationToken;
+            return { success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } };
+        });
+        const caller = new AbortController();
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput({ AbortSignal: caller.signal }), makeDelegateRequest());
+
+        expect(token).toBeInstanceOf(AbortSignal);
+        expect(token!.aborted).toBe(false);
+        caller.abort(); // caller-side barge-in flips the combined token
+        expect(token!.aborted).toBe(true);
+    });
+
+    it('hands RunAgent an already-aborted token when the caller signal was pre-aborted', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const caller = new AbortController();
+        caller.abort();
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput({ AbortSignal: caller.signal }), makeDelegateRequest());
+
+        expect(runAgentMock.mock.calls[0][0].cancellationToken.aborted).toBe(true);
+    });
+
+    it('uses the fallback question when an AwaitingFeedback run carries no Message', async () => {
+        runAgentMock.mockResolvedValue({
+            success: true,
+            agentRun: { ID: 'paused-1', Status: 'AwaitingFeedback', Message: '   ' },
+        });
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(result.Success).toBe(true);
+        expect(result.PausedRunID).toBe('paused-1');
+        expect(result.Output).toContain('needs more information');
+    });
+
+    it('uses the default completion narration when a successful run carries no Message', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: '' } });
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(result.Success).toBe(true);
+        expect(result.Output).toContain('delegated work is complete');
+    });
+
+    it('uses the default failure narration (and still surfaces RunID) when a failed run has no ErrorMessage', async () => {
+        runAgentMock.mockResolvedValue({ success: false, agentRun: { ID: 'r-fail', Status: 'Failed', ErrorMessage: '' } });
+        const svc = new DelegateTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(result.Success).toBe(false);
+        expect(result.Output).toContain('could not be completed');
+        expect(result.RunID).toBe('r-fail');
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// loadParentRun — REAL path: parent linkage threading + tolerant load failure.
+// ════════════════════════════════════════════════════════════════════
+
+/** Like DelegateTestService but keeps the REAL loadParentRun so we can exercise it. */
+class ParentRunTestService extends RealtimeClientSessionService {
+    protected override resolveTargetAgent(targetAgentID: string): MJAIAgentEntityExtended | null {
+        if (!targetAgentID) return null;
+        return { ID: targetAgentID, Name: 'Query Builder', Description: 'Builds queries.' } as unknown as MJAIAgentEntityExtended;
+    }
+    protected override async processRunArtifacts(): Promise<DelegatedRunArtifact[] | undefined> {
+        return undefined;
+    }
+    public CallDelegate(
+        input: ExecuteRelayedToolInput,
+        request: DelegateToTargetRequest,
+        prov: IMetadataProvider
+    ): Promise<DelegatedResult> {
+        return (this as unknown as {
+            delegateToTarget: (i: ExecuteRelayedToolInput, r: DelegateToTargetRequest, u: UserInfo, p: IMetadataProvider) => Promise<DelegatedResult>;
+        }).delegateToTarget(input, request, contextUser, prov);
+    }
+}
+
+describe('RealtimeClientSessionService.loadParentRun (real path)', () => {
+    beforeEach(() => {
+        runAgentMock.mockReset();
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+    });
+
+    it('loads the parent run and threads it into RunAgent as parentRun', async () => {
+        const parent = makeRun({ ID: 'co-run-1' });
+        const prov = makeRunProvider(() => parent);
+        const svc = new ParentRunTestService();
+
+        await svc.CallDelegate(makeDelegateInput({ ParentRunID: 'co-run-1' }), makeDelegateRequest(), prov);
+
+        expect(parent.Load).toHaveBeenCalledWith('co-run-1');
+        expect(runAgentMock.mock.calls[0][0].parentRun).toBe(parent);
+        expect(runAgentMock.mock.calls[0][0].agentSessionID).toBe('session-1');
+    });
+
+    it('proceeds WITHOUT parent linkage when the parent run cannot be loaded', async () => {
+        const parent = makeRun({ ID: 'gone', Load: vi.fn(async () => false) });
+        const prov = makeRunProvider(() => parent);
+        const svc = new ParentRunTestService();
+
+        const result = await svc.CallDelegate(makeDelegateInput({ ParentRunID: 'gone' }), makeDelegateRequest(), prov);
+
+        expect(result.Success).toBe(true); // delegation still ran
+        expect(runAgentMock.mock.calls[0][0].parentRun).toBeUndefined();
+    });
+
+    it('never touches the provider when no ParentRunID is supplied', async () => {
+        const getEntity = vi.fn();
+        const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
+        const svc = new ParentRunTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest(), prov);
+
+        expect(getEntity).not.toHaveBeenCalled();
+        expect(runAgentMock.mock.calls[0][0].parentRun).toBeUndefined();
     });
 });

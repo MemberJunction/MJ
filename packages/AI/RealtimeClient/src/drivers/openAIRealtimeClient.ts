@@ -523,6 +523,9 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
         } catch {
             return; // non-JSON frame — ignore
         }
+        if (event === null || typeof event !== 'object') {
+            return; // valid JSON but not an event object (e.g. "null", a number) — ignore
+        }
         this.handleEvent(event);
     }
 

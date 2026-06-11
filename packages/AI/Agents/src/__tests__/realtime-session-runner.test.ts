@@ -379,6 +379,108 @@ describe('RealtimeSessionRunner', () => {
             await runner.Stop();
             expect(h.checkpointSpy).not.toHaveBeenCalled();
         });
+
+        it('re-marks usage dirty when a checkpoint fails so the close flush retries it (nothing lost)', async () => {
+            vi.useFakeTimers();
+            const errorSpy = vi.fn();
+            const h = buildHarness({ LogError: errorSpy });
+            // First flush fails; the retry (at close) succeeds.
+            h.checkpointSpy.mockRejectedValueOnce(new Error('db hiccup'));
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireUsage({ InputTokens: 6, OutputTokens: 3 });
+            await vi.advanceTimersByTimeAsync(5000); // debounce fires → checkpoint throws
+
+            expect(h.checkpointSpy).toHaveBeenCalledTimes(1);
+            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('checkpointing usage'));
+
+            const result = await runner.Stop(); // close flush retries the SAME cumulative total
+            expect(h.checkpointSpy).toHaveBeenCalledTimes(2);
+            expect(h.checkpointSpy.mock.calls[1][0]).toEqual({ InputTokens: 6, OutputTokens: 3 });
+            expect(result.FinalUsage).toEqual({ InputTokens: 6, OutputTokens: 3 });
+        });
+    });
+
+    // ── Failure containment ───────────────────────────────────────────
+
+    describe('failure containment', () => {
+        it('logs (does not throw) and does not count a transcript turn whose persistence fails', async () => {
+            const errorSpy = vi.fn();
+            const persist = vi.fn(async (_t: RealtimeTranscript) => {
+                throw new Error('detail save failed');
+            });
+            const h = buildHarness({ PersistTranscript: persist, LogError: errorSpy });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireTranscript({ Role: 'user', Text: 'hi', IsFinal: true });
+            await settle();
+
+            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('persisting transcript'));
+            const result = await runner.Stop();
+            expect(result.TranscriptTurnCount).toBe(0);
+            expect(result.Success).toBe(true); // a persistence failure never fails the session
+        });
+
+        it('logs (does not throw) when SendToolResult fails on the live session', async () => {
+            const errorSpy = vi.fn();
+            const h = buildHarness({ LogError: errorSpy });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+            h.session.SendToolResult = vi.fn(async () => {
+                throw new Error('socket gone');
+            });
+
+            h.session.fireToolCall({ CallID: 'call-1', ToolName: 'ShowChart', Arguments: '{}' });
+            await settle();
+
+            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('sending tool result'));
+            const result = await runner.Stop();
+            expect(result.Success).toBe(true);
+        });
+    });
+
+    // ── Stop aborts in-flight work ────────────────────────────────────
+
+    describe('Stop with in-flight delegation', () => {
+        it('aborts a still-running delegated run before tearing the session down', async () => {
+            let capturedSignal: AbortSignal | null = null;
+            const delegate = vi.fn((req: DelegateToTargetRequest) => {
+                capturedSignal = req.AbortSignal;
+                return new Promise<DelegatedResult>((resolve) => {
+                    req.AbortSignal.addEventListener('abort', () =>
+                        resolve({ CallID: req.CallID, Success: false, Output: 'aborted' })
+                    );
+                });
+            });
+            const h = buildHarness({ DelegateToTarget: delegate });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireToolCall({
+                CallID: 'call-1',
+                ToolName: INVOKE_TARGET_AGENT_TOOL_NAME,
+                Arguments: '{}'
+            });
+            await Promise.resolve();
+            expect(capturedSignal).not.toBeNull();
+            expect(capturedSignal!.aborted).toBe(false);
+
+            const result = await runner.Stop();
+            expect(capturedSignal!.aborted).toBe(true);
+            expect(result.Success).toBe(true);
+        });
+
+        it('Stop before Start is a safe no-op returning a successful empty result', async () => {
+            const h = buildHarness();
+            const runner = new RealtimeSessionRunner(h.deps);
+            const result = await runner.Stop();
+            expect(result.Success).toBe(true);
+            expect(result.TranscriptTurnCount).toBe(0);
+            expect(result.FinalUsage).toEqual({ InputTokens: 0, OutputTokens: 0 });
+            expect(h.session.Closed).toBe(false); // never opened, never closed
+        });
     });
 
     // ── Interruption (barge-in) ───────────────────────────────────────

@@ -133,6 +133,42 @@ describe('SessionManager.CreateSession', () => {
         expect(handedOut.length).toBe(1);
         expect(session.ConversationID).toBe('conv-existing');
     });
+
+    it('throws (with the entity error detail) when the Conversation save fails — no session row attempted', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({
+            ID: 'conv-fail',
+            Save: vi.fn(async () => false),
+            LatestResult: { CompleteMessage: 'conversation insert denied' },
+        });
+        const { provider, handedOut } = makeProvider(() => conversation);
+        const mgr = new SessionManager();
+
+        await expect(
+            mgr.CreateSession({ agentID: 'agent-1', userID: 'user-1' }, makeUser(), provider),
+        ).rejects.toThrow(/conversation insert denied/);
+
+        expect(handedOut.length).toBe(1); // only the conversation was requested
+    });
+
+    it('throws (with the entity error detail) when the session save fails', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const session = makeSessionEntity({
+            ID: 'session-fail',
+            Save: vi.fn(async () => false),
+            LatestResult: { CompleteMessage: 'session insert denied' },
+        });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        await expect(
+            mgr.CreateSession(
+                { agentID: 'agent-1', userID: 'user-1', conversationID: 'conv-existing' },
+                makeUser(),
+                provider,
+            ),
+        ).rejects.toThrow(/session insert denied/);
+    });
 });
 
 describe('SessionManager.CloseSession', () => {
