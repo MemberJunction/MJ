@@ -8,6 +8,7 @@ import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/compon
 import { RealtimeWhiteboardChannel } from '../lib/components/realtime/whiteboard/whiteboard-channel';
 import { RealtimeWhiteboardHostComponent } from '../lib/components/realtime/whiteboard/whiteboard-host.component';
 import { WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_PREFIX, WhiteboardToolResult } from '../lib/components/realtime/whiteboard/whiteboard-tools';
+import { WhiteboardWidgetSubmitEvent } from '../lib/components/realtime/whiteboard/whiteboard-widget-bridge';
 
 /**
  * The LIVE WHITEBOARD as a registry plugin — contract metadata, ClassFactory registration,
@@ -26,6 +27,7 @@ class FakeWhiteboardHost {
   public AgentUndo = new EventEmitter<void>();
   public FocusModeChange = new EventEmitter<boolean>();
   public SaveToArtifactsRequested = new EventEmitter<void>();
+  public WidgetSubmit = new EventEmitter<WhiteboardWidgetSubmitEvent>();
   public AppliedTools: Array<{ ToolName: string; ArgsJson: string }> = [];
 
   public ApplyAgentTool(toolName: string, argsJson: string): string {
@@ -124,6 +126,24 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(log.Notes[0]).toContain('{"added":[1]}');
     expect(log.Notes[1]).toBe('[whiteboard] user undid your last change');
     expect(log.Focus).toEqual([true]);
+  });
+
+  it('routes widget MJWhiteboard.submit input to the agent as a [whiteboard] context note', () => {
+    const fake = new FakeWhiteboardHost();
+    channel.BindSurface(asHost(fake));
+
+    fake.WidgetSubmit.emit({ ItemID: 'html-2', Title: 'Quick quiz', DataJson: '{"answer":"Mercury"}' });
+    expect(log.Notes).toHaveLength(1);
+    expect(log.Notes[0]).toBe('[whiteboard] the user submitted input in widget "Quick quiz": {"answer":"Mercury"}');
+
+    // untitled widgets fall back to the item ID
+    fake.WidgetSubmit.emit({ ItemID: 'html-3', Title: '', DataJson: '{"ok":true}' });
+    expect(log.Notes[1]).toBe('[whiteboard] the user submitted input in widget "html-3": {"ok":true}');
+
+    // released with the surface, like the other output subscriptions
+    channel.UnbindSurface();
+    fake.WidgetSubmit.emit({ ItemID: 'html-2', Title: 'Quick quiz', DataJson: '{"stale":true}' });
+    expect(log.Notes).toHaveLength(2);
   });
 
   it('UnbindSurface flips back to the engine fallback and stops listening to old outputs', () => {

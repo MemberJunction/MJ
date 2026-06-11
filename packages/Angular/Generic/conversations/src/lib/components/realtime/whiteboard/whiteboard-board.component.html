@@ -6,6 +6,7 @@
      [style.backgroundPosition]="GridBackgroundPosition"
      tabindex="0"
      (pointerdown)="OnCanvasPointerDown($event)"
+     (contextmenu)="OnCanvasContextMenu($event)"
      (wheel)="OnWheel($event)"
      (paste)="OnPaste($event)">
 
@@ -21,7 +22,8 @@
               [attr.stroke]="ink.Author === 'agent' ? null : ink.Color"
               [attr.stroke-width]="ink.StrokeWidth"
               fill="none" stroke-linecap="round" stroke-linejoin="round"
-              (pointerdown)="OnItemPointerDown($event, ink)"/>
+              (pointerdown)="OnItemPointerDown($event, ink)"
+              (contextmenu)="OnItemContextMenu($event, ink)"/>
       }
       @for (conn of ConnectorItems; track conn.ID) {
         <g [class.conn-sage]="conn.Author === 'agent'" [class.conn-user]="conn.Author === 'user'">
@@ -29,7 +31,8 @@
                 [class.draw-in]="PopInIDs.has(conn.ID)"
                 [class.wb-erasable]="Tool === 'eraser' || Tool === 'select'"
                 stroke-width="2.5" fill="none" stroke-linecap="round"
-                (pointerdown)="OnItemPointerDown($event, conn)"/>
+                (pointerdown)="OnItemPointerDown($event, conn)"
+                (contextmenu)="OnItemContextMenu($event, conn)"/>
           <path [attr.d]="ConnectorArrow(conn)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
         </g>
       }
@@ -50,7 +53,8 @@
            [style.left.px]="ItemX(hl)" [style.top.px]="ItemY(hl)"
            [style.width.px]="ItemW(hl)" [style.height.px]="ItemH(hl)"
            title="Click to dismiss"
-           (pointerdown)="OnHighlightClick($event, hl)">
+           (pointerdown)="OnHighlightClick($event, hl)"
+           (contextmenu)="OnItemContextMenu($event, hl)">
         <span class="hl-tag"><i class="fa-solid fa-highlighter"></i> {{ HighlightTag(hl) }}</span>
       </div>
     }
@@ -85,7 +89,8 @@
                [style.fontWeight]="ItemFontWeight(item)"
                [style.transform]="IsDragging(item) ? '' : StickyRotation(item)"
                (pointerdown)="OnItemPointerDown($event, item)"
-               (dblclick)="BeginItemEdit($event, item)">
+               (dblclick)="BeginItemEdit($event, item)"
+               (contextmenu)="OnItemContextMenu($event, item)">
             @if (item.Author === 'agent') {
               <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather"></i> {{ AgentName }}</span>
             } @else {
@@ -119,7 +124,8 @@
                [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
                [style.width.px]="ItemW(item)" [style.height.px]="ItemH(item)"
                (pointerdown)="OnItemPointerDown($event, item)"
-               (dblclick)="BeginItemEdit($event, item)">
+               (dblclick)="BeginItemEdit($event, item)"
+               (contextmenu)="OnItemContextMenu($event, item)">
             @if (item.Author === 'agent') {
               <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather"></i> {{ AgentName }}</span>
             } @else {
@@ -155,7 +161,8 @@
                [style.fontWeight]="ItemFontWeight(item)"
                [style.color]="ItemTextColor(item)"
                (pointerdown)="OnItemPointerDown($event, item)"
-               (dblclick)="BeginItemEdit($event, item)">
+               (dblclick)="BeginItemEdit($event, item)"
+               (contextmenu)="OnItemContextMenu($event, item)">
             @if (item.Author === 'agent') {
               <i class="fa-solid fa-feather"></i>
             }
@@ -181,7 +188,8 @@
                [style.width.px]="ItemW(item)"
                [style.maxHeight.px]="MarkdownMaxHeight(item)"
                (pointerdown)="OnItemPointerDown($event, item)"
-               (dblclick)="BeginRichEdit($event, item)">
+               (dblclick)="BeginRichEdit($event, item)"
+               (contextmenu)="OnItemContextMenu($event, item)">
             @if (item.Author === 'agent') {
               <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather"></i> {{ AgentName }}</span>
             } @else {
@@ -209,7 +217,8 @@
                [class.dragging]="IsDragging(item)"
                [class.pop-in]="PopInIDs.has(item.ID)"
                [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
-               [style.width.px]="ItemW(item)" [style.height.px]="ItemH(item)">
+               [style.width.px]="ItemW(item)" [style.height.px]="ItemH(item)"
+               (contextmenu)="OnItemContextMenu($event, item)">
             <!-- the header is the widget's "window title bar": drag/select/connector target -->
             <div class="html-card__head"
                  (pointerdown)="OnItemPointerDown($event, item)"
@@ -237,6 +246,7 @@
                 <iframe class="html-card__frame"
                         sandbox="allow-scripts"
                         [srcdoc]="HtmlSrcdoc(item)"
+                        [attr.data-item-id]="item.ID"
                         [attr.title]="HtmlTitle(item)"></iframe>
               } @else {
                 <div class="html-card__lazy">
@@ -260,7 +270,8 @@
                [class.pop-in]="PopInIDs.has(item.ID)"
                [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
                [style.width.px]="ItemW(item)"
-               (pointerdown)="OnItemPointerDown($event, item)">
+               (pointerdown)="OnItemPointerDown($event, item)"
+               (contextmenu)="OnItemContextMenu($event, item)">
             @if (item.Author === 'agent') {
               <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather"></i> {{ AgentName }}</span>
             } @else {
@@ -342,6 +353,26 @@
         <span class="re-spacer"></span>
         <button type="button" class="re-btn" title="Close without applying draft changes" (click)="RichEditorCancel()">Cancel</button>
       </div>
+    </div>
+  }
+
+  <!-- right-click context menu (item actions / "add … here") -->
+  @if (ContextMenu; as menu) {
+    <div class="wb-context-menu"
+         [style.left.px]="menu.Left" [style.top.px]="menu.Top"
+         (pointerdown)="$event.stopPropagation()"
+         (contextmenu)="$event.preventDefault(); $event.stopPropagation()"
+         (wheel)="$event.stopPropagation()">
+      @for (action of menu.Actions; track action.ID) {
+        @if (action.SeparatorBefore) {
+          <div class="wb-context-menu__sep"></div>
+        }
+        <button type="button" class="wb-context-menu__item"
+                [class.wb-context-menu__item--danger]="action.Danger"
+                (click)="OnContextMenuAction(action.ID)">
+          <i [class]="action.Icon"></i> {{ action.Label }}
+        </button>
+      }
     </div>
   }
 

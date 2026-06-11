@@ -734,3 +734,62 @@
   stroke-width: 6;
   vector-effect: non-scaling-stroke;
 }
+
+/* ── right-click context menu — matches the export-menu / flyout chrome ───────────── */
+.wb-context-menu {
+  position: absolute;
+  z-index: 40;
+  min-width: 178px;
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 8px);
+  background: var(--mj-bg-surface-elevated);
+  box-shadow: var(--mj-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.3));
+  cursor: default;
+}
+.wb-context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  border: none;
+  border-radius: var(--mj-radius-sm, 5px);
+  background: transparent;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wb-context-menu__item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.wb-context-menu__item i {
+  width: 14px;
+  text-align: center;
+  color: var(--mj-text-muted);
+}
+.wb-context-menu__item:hover i {
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+}
+.wb-context-menu__item--danger {
+  color: var(--mj-status-error);
+}
+.wb-context-menu__item--danger:hover {
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface-elevated));
+  color: var(--mj-status-error-text, var(--mj-status-error));
+}
+.wb-context-menu__item--danger i,
+.wb-context-menu__item--danger:hover i {
+  color: var(--mj-status-error);
+}
+.wb-context-menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--mj-border-subtle, var(--mj-border-default));
+}

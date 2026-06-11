@@ -61,7 +61,8 @@
     [TextBold]="TextBold"
     [TextColor]="TextColor"
     [AgentPresence]="AgentPresence"
-    (ToolChangeRequest)="Tool = $event"/>
+    (ToolChangeRequest)="Tool = $event"
+    (WidgetSubmit)="WidgetSubmit.emit($event)"/>
 
   <mj-realtime-whiteboard-toolbar
     [ActiveTool]="Tool"

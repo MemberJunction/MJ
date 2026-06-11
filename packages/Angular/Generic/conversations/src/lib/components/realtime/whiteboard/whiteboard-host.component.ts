@@ -8,6 +8,7 @@ import { WhiteboardFontFamily, WhiteboardState } from './whiteboard-state';
 import { BuildWhiteboardExportHtml, BuildWhiteboardExportSvg } from './whiteboard-export';
 import { ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_NAMES, WhiteboardToolResult } from './whiteboard-tools';
 import { RealtimeWhiteboardBoardComponent, WhiteboardAgentPresence } from './whiteboard-board.component';
+import { WhiteboardWidgetSubmitEvent } from './whiteboard-widget-bridge';
 import { RealtimeWhiteboardToolbarComponent, WhiteboardTool, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import { RealtimeWhiteboardZoomComponent } from './whiteboard-zoom.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
@@ -66,6 +67,11 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Output() FocusModeChange = new EventEmitter<boolean>();
   /** Emitted when the user picks "Save to artifacts" — the channel plugin persists via its host context. */
   @Output() SaveToArtifactsRequested = new EventEmitter<void>();
+  /**
+   * A sandboxed HTML widget submitted user input via `MJWhiteboard.submit` (validated +
+   * size-capped by the board). The channel plugin forwards it to the agent's live context.
+   */
+  @Output() WidgetSubmit = new EventEmitter<WhiteboardWidgetSubmitEvent>();
 
   @ViewChild(RealtimeWhiteboardBoardComponent) public Board?: RealtimeWhiteboardBoardComponent;
 

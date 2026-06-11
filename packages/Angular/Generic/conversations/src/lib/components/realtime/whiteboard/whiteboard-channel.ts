@@ -4,6 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeChannelClient } from '../channels/base-realtime-channel-client';
 import { WhiteboardState } from './whiteboard-state';
+import { WhiteboardWidgetSubmitEvent } from './whiteboard-widget-bridge';
 import { ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_PREFIX } from './whiteboard-tools';
 import { RealtimeWhiteboardHostComponent } from './whiteboard-host.component';
 
@@ -104,6 +105,13 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
       // The user clicked Undo on the agent-action toast (the undo already applied locally).
       instance.AgentUndo.subscribe(() => {
         this.Context?.SendContextNote('[whiteboard] user undid your last change');
+      }),
+      // A sandboxed HTML widget submitted user input (MJWhiteboard.submit) — already
+      // validated and size-capped by the board. Surface it to the agent so it can react
+      // to quiz answers / micro-form input it asked for.
+      instance.WidgetSubmit.subscribe((submit: WhiteboardWidgetSubmitEvent) => {
+        this.Context?.SendContextNote(
+          `[whiteboard] the user submitted input in widget "${submit.Title || submit.ItemID}": ${submit.DataJson}`);
       }),
       // The board's Focus toggle — ask the shell to collapse/restore the main call column.
       instance.FocusModeChange.subscribe((focused: boolean) => {

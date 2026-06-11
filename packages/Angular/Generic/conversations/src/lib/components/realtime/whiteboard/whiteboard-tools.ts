@@ -123,7 +123,7 @@ export const WHITEBOARD_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
   },
   {
     Name: WHITEBOARD_TOOL_NAMES.AddHtml,
-    Description: 'Add an interactive HTML widget to the whiteboard — a self-contained HTML document (inline CSS/JS allowed) rendered in a STRICTLY SANDBOXED iframe with an opaque origin: scripts run isolated with NO access to the app, its session, cookies or storage, and network access is not guaranteed — make the widget fully self-contained (no external scripts, styles or data). Great for small visualizations, tables, or interactive demos.',
+    Description: 'Add an interactive HTML widget to the whiteboard — a self-contained HTML document (inline CSS/JS allowed) rendered in a STRICTLY SANDBOXED iframe with an opaque origin: scripts run isolated with NO access to the app, its session, cookies or storage, and network access is not guaranteed — make the widget fully self-contained (no external scripts, styles or data). USE WIDGETS TO TEACH AND GET USER INPUT: inline SVG diagrams and explainers, CSS concept animations, micro-quizzes and micro-forms. To collect input, have a button/form handler call MJWhiteboard.submit(data) — the host injects that helper into every widget automatically, and the submitted data (JSON-serialized, max 8000 chars) reaches you as a "[whiteboard] the user submitted input…" context note. Example: a one-question quiz whose Submit button calls MJWhiteboard.submit({question:"…",answer:picked}).',
     ParametersSchema: {
       type: 'object',
       properties: {

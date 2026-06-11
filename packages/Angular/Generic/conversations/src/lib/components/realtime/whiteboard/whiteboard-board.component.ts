@@ -15,6 +15,11 @@ import {
   WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
 } from './whiteboard-state';
 import { WhiteboardTool, WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
+import {
+  EvaluateWidgetSubmitMessage, InjectWhiteboardSubmitHelper, WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS,
+  WhiteboardWidgetSubmitEvent
+} from './whiteboard-widget-bridge';
+import { BuildWhiteboardContextMenu, WhiteboardContextMenuAction, WhiteboardContextMenuActionID } from './whiteboard-context-menu';
 
 /** The agent presence cursor state (input-driven; the host animates it to mutation points). */
 export interface WhiteboardAgentPresence {
@@ -52,18 +57,38 @@ interface RichEditorState {
   Preview: boolean;
 }
 
-/** Starter document placed by the HTML-widget tool (user click-place). */
-const STARTER_HTML = `<!doctype html>
+/**
+ * Starter document placed by the HTML-widget tool (user click-place) — a one-question
+ * quiz that demos the `MJWhiteboard.submit` input bridge: the Submit button posts the
+ * picked answer to the host, which surfaces it to the session agent as a context note.
+ * (Hardcoded colors are fine here: this is an isolated sandboxed document — the app's
+ * design tokens cannot reach inside the opaque-origin frame.)
+ */
+export const WHITEBOARD_WIDGET_STARTER_HTML = `<!doctype html>
 <html>
 <head>
 <style>
   body { font-family: system-ui, sans-serif; margin: 14px; color: #1f2937; }
   h3 { margin: 0 0 6px; }
+  label { display: block; margin: 4px 0; }
+  button { margin-top: 8px; padding: 5px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f1f5f9; cursor: pointer; }
+  .hint { margin-top: 8px; color: #6b7280; font-size: 12px; }
 </style>
 </head>
 <body>
-<h3>New widget</h3>
-<p>Edit this HTML and press Apply.</p>
+<h3>Quick quiz</h3>
+<p>Which planet is closest to the sun?</p>
+<label><input type="radio" name="q" value="Mercury"> Mercury</label>
+<label><input type="radio" name="q" value="Venus"> Venus</label>
+<label><input type="radio" name="q" value="Mars"> Mars</label>
+<button id="go">Submit answer</button>
+<p class="hint">Submitting sends your answer to the agent via MJWhiteboard.submit.</p>
+<script>
+  document.getElementById('go').addEventListener('click', function () {
+    var picked = document.querySelector('input[name="q"]:checked');
+    MJWhiteboard.submit({ question: 'closest planet to the sun', answer: picked ? picked.value : null });
+  });
+</script>
 </body>
 </html>`;
 
@@ -133,6 +158,12 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   /** Requests a tool switch decided by a board gesture (e.g. Esc → select). */
   @Output() ToolChangeRequest = new EventEmitter<WhiteboardTool>();
+  /**
+   * A sandboxed HTML widget called `MJWhiteboard.submit(data)` — validated (marker +
+   * tracked source window) and size-capped. The host forwards it to the channel plugin,
+   * which surfaces it to the agent as a `[whiteboard]` context note.
+   */
+  @Output() WidgetSubmit = new EventEmitter<WhiteboardWidgetSubmitEvent>();
 
   @ViewChild('canvas') private canvasRef?: ElementRef<HTMLDivElement>;
 
@@ -148,6 +179,16 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   public EditingID: string | null = null;
   /** The rich-content editor panel state (markdown / html items), or null when closed. */
   public RichEditor: RichEditorState | null = null;
+  /** The open right-click context menu (canvas-relative position + model), or null. */
+  public ContextMenu: {
+    Left: number;
+    Top: number;
+    /** Board-coordinate click point — "add … here" placement target. */
+    Point: WhiteboardPoint;
+    /** Target item, or null for the empty-canvas menu. */
+    ItemID: string | null;
+    Actions: WhiteboardContextMenuAction[];
+  } | null = null;
   private editIsNew = false;
   private pendingFocus = false;
   private userStickyCount = 0;
@@ -168,6 +209,9 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   private changedSub?: Subscription;
   private cdr = inject(ChangeDetectorRef);
 
+  /** Whether the single window 'message' listener (the widget input bridge) is attached. */
+  private widgetMessageListenerAttached = false;
+
   ngOnInit(): void {
     this.changedSub = this.State.Changed$.subscribe((change) => {
       if (change.Op === 'add' && change.Author === 'agent') {
@@ -187,14 +231,24 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       if (this.RichEditor && !this.State.GetItem(this.RichEditor.ItemID)) {
         this.RichEditor = null;
       }
+      // close the context menu when its target item no longer exists
+      if (this.ContextMenu?.ItemID && !this.State.GetItem(this.ContextMenu.ItemID)) {
+        this.ContextMenu = null;
+      }
+      this.syncWidgetMessageListener();
       this.cdr.markForCheck();
     });
+    this.syncWidgetMessageListener();
   }
 
   ngOnDestroy(): void {
     this.changedSub?.unsubscribe();
     for (const t of this.popInTimers) {
       clearTimeout(t);
+    }
+    if (this.widgetMessageListenerAttached) {
+      window.removeEventListener('message', this.onWindowMessage);
+      this.widgetMessageListenerAttached = false;
     }
   }
 
@@ -816,9 +870,70 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     if (cached && cached.Html === item.Html) {
       return cached.Safe;
     }
-    const safe = this.sanitizer.bypassSecurityTrustHtml(item.Html);
+    // Every widget gets the MJWhiteboard.submit input-bridge helper, prepended exactly
+    // once (idempotent) — see whiteboard-widget-bridge.ts for the postMessage contract.
+    const safe = this.sanitizer.bypassSecurityTrustHtml(InjectWhiteboardSubmitHelper(item.Html));
     this.htmlSrcdocCache.set(item.ID, { Html: item.Html, Safe: safe });
     return safe;
+  }
+
+  // ────────────────────────────────────────────── widget input bridge (MJWhiteboard.submit)
+
+  /** Attach/detach the SINGLE window 'message' listener so it only runs while widgets exist. */
+  private syncWidgetMessageListener(): void {
+    const hasWidgets = this.State.Items.some((i) => i.Kind === 'html');
+    if (hasWidgets && !this.widgetMessageListenerAttached) {
+      window.addEventListener('message', this.onWindowMessage);
+      this.widgetMessageListenerAttached = true;
+    }
+    else if (!hasWidgets && this.widgetMessageListenerAttached) {
+      window.removeEventListener('message', this.onWindowMessage);
+      this.widgetMessageListenerAttached = false;
+    }
+  }
+
+  /**
+   * The widget input bridge's host-side listener. The sandboxed frames have OPAQUE
+   * origins (their helper posts with `'*'`), so validation happens HERE: the payload
+   * must carry the bridge marker AND `event.source` must be the contentWindow of one of
+   * this board's tracked widget iframes — anything else is dropped. Accepted payloads
+   * are JSON-capped and surfaced through {@link WidgetSubmit}.
+   */
+  private onWindowMessage = (event: MessageEvent): void => {
+    const outcome = EvaluateWidgetSubmitMessage(event.data, this.resolveWidgetFromSource(event.source));
+    if (outcome.Kind === 'submit') {
+      this.WidgetSubmit.emit(outcome.Event);
+      this.cdr.markForCheck();
+      return;
+    }
+    if (outcome.Reason === 'oversize') {
+      console.warn(`Whiteboard widget submit dropped: payload exceeds ${WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS} chars.`);
+    }
+    else if (outcome.Reason === 'unknown-source') {
+      console.warn('Whiteboard widget submit dropped: message source is not a tracked widget frame.');
+    }
+    // 'not-submit' is unrelated postMessage traffic — ignore silently.
+  };
+
+  /** Resolve a message `event.source` to the tracked widget iframe (window → item) it belongs to. */
+  private resolveWidgetFromSource(source: MessageEventSource | null): { ItemID: string; Title?: string } | null {
+    if (!source) {
+      return null;
+    }
+    const frames = this.canvasRef?.nativeElement.querySelectorAll<HTMLIFrameElement>('iframe.html-card__frame[data-item-id]');
+    if (!frames) {
+      return null;
+    }
+    for (const frame of Array.from(frames)) {
+      if (frame.contentWindow === source) {
+        const id = frame.dataset['itemId'];
+        const item = id ? this.State.GetItem(id) : undefined;
+        if (item && item.Kind === 'html') {
+          return { ItemID: item.ID, Title: item.Title };
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -925,6 +1040,121 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       : { ItemID: item.ID, Kind: 'html', Draft: item.Html, TitleDraft: item.Title ?? '', Preview: false };
   }
 
+  // ────────────────────────────────────────────── context menu (right-click)
+
+  /** Right-click on empty canvas → the "add … here" menu (suppresses the native menu). */
+  public OnCanvasContextMenu(event: MouseEvent): void {
+    if (this.ReadOnly) {
+      return; // no board menu in read-only — the native browser menu stays available
+    }
+    event.preventDefault();
+    this.openContextMenu(event, null);
+  }
+
+  /** Right-click on a board item → the item action menu (selects the item first). */
+  public OnItemContextMenu(event: MouseEvent, item: WhiteboardItem): void {
+    if (this.ReadOnly) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (item.Kind !== 'highlight') {
+      this.State.Select(item.ID);
+    }
+    this.openContextMenu(event, item);
+  }
+
+  /** Dispatch one picked context-menu action, then close the menu. */
+  public OnContextMenuAction(actionId: WhiteboardContextMenuActionID): void {
+    const menu = this.ContextMenu;
+    this.ContextMenu = null;
+    if (!menu) {
+      return;
+    }
+    const item = menu.ItemID ? this.State.GetItem(menu.ItemID) : undefined;
+    switch (actionId) {
+      case 'edit':
+        // same paths as dblclick: inline edit for sticky/text/shape, rich editor for md/html
+        if (item && (item.Kind === 'sticky' || item.Kind === 'text' || item.Kind === 'shape')) {
+          this.State.Select(item.ID);
+          this.beginEdit(item.ID, false);
+        }
+        else if (item && (item.Kind === 'markdown' || item.Kind === 'html')) {
+          this.openRichEditor(item);
+        }
+        break;
+      case 'restyle':
+        // open the toolbar's text-style flyout with the item selected — style picks
+        // restyle the selection through the existing StyleSelection path
+        if (item) {
+          this.State.Select(item.ID);
+          this.ToolChangeRequest.emit('text');
+        }
+        break;
+      case 'duplicate':
+        if (item) {
+          const copy = this.State.DuplicateItem(item.ID, 'user');
+          if (copy) {
+            this.State.Select(copy.ID);
+          }
+        }
+        break;
+      case 'bring-front':
+        if (item) {
+          this.State.BringToFront(item.ID, 'user');
+        }
+        break;
+      case 'send-back':
+        if (item) {
+          this.State.SendToBack(item.ID, 'user');
+        }
+        break;
+      case 'delete':
+        if (item) {
+          this.State.RemoveItem(item.ID, 'user');
+        }
+        break;
+      case 'add-sticky':
+        this.placeSticky(menu.Point);
+        break;
+      case 'add-text':
+        this.placeText(menu.Point);
+        break;
+      case 'add-markdown':
+        this.placeMarkdown(menu.Point);
+        break;
+      case 'add-html':
+        this.placeHtml(menu.Point);
+        break;
+    }
+  }
+
+  /** Click-away closes the menu (the menu root stops pointerdown propagation for itself). */
+  @HostListener('document:pointerdown')
+  public CloseContextMenu(): void {
+    if (this.ContextMenu) {
+      this.ContextMenu = null;
+    }
+  }
+
+  private openContextMenu(event: MouseEvent, item: WhiteboardItem | null): void {
+    const el = this.canvasRef?.nativeElement;
+    const rect = el ? el.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
+    const actions = BuildWhiteboardContextMenu(item);
+    // keep the menu inside the canvas (estimate: ~200px wide, ~31px per row + padding)
+    const menuW = 200;
+    const menuH = actions.length * 31 + 12;
+    const left = Math.max(4, Math.min(event.clientX - rect.left, Math.max(menuW, rect.width) - menuW));
+    const top = Math.max(4, Math.min(event.clientY - rect.top, Math.max(menuH, rect.height) - menuH));
+    this.ContextMenu = {
+      Left: left,
+      Top: top,
+      Point: this.toBoard(event),
+      ItemID: item ? item.ID : null,
+      Actions: actions
+    };
+  }
+
   // ────────────────────────────────────────────── zoom / fit / minimap
 
   public ZoomIn(): void {
@@ -955,11 +1185,12 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this.MinimapOpen = !this.MinimapOpen;
   }
 
-  /** Cancel any in-flight transient gesture (tool switch, Esc) — incl. the rich editor. */
+  /** Cancel any in-flight transient gesture (tool switch, Esc) — incl. the rich editor + context menu. */
   public CancelTransient(): void {
     this.Interaction = null;
     this.PendingConnector = null;
     this.RichEditor = null;
+    this.ContextMenu = null;
   }
 
   // minimap render model
@@ -1138,7 +1369,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       Y: p.Y - 20,
       W: WHITEBOARD_DEFAULTS.HtmlW,
       H: WHITEBOARD_DEFAULTS.HtmlH,
-      Html: STARTER_HTML,
+      Html: WHITEBOARD_WIDGET_STARTER_HTML,
       Title: 'New widget'
     }, 'user') as WhiteboardHtmlItem;
     this.State.Select(item.ID);

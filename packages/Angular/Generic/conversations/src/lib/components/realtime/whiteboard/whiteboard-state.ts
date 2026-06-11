@@ -618,6 +618,62 @@ export class WhiteboardState {
     return true;
   }
 
+  /**
+   * Duplicate an item: a DEEP clone (ink points included) with a fresh engine-stamped
+   * identity, offset +16/+16 from the source so the copy is visibly distinct. Connectors
+   * (which reference other items) and transient highlights cannot be duplicated — returns
+   * `null` without mutating. The clone lands through {@link AddItem}, so it journals as a
+   * normal `'add'` and is one undo step.
+   */
+  public DuplicateItem(id: string, author: WhiteboardAuthor): WhiteboardItem | null {
+    const source = this.items.get(id);
+    if (!source || source.Kind === 'connector' || source.Kind === 'highlight') {
+      return null;
+    }
+    const { ID: _id, Z: _z, Author: _author, ...rest } = JSON.parse(JSON.stringify(source)) as WhiteboardItem;
+    const input = rest as WhiteboardItemInput;
+    if (input.Kind === 'ink') {
+      input.Points = input.Points.map((p) => ({ X: p.X + 16, Y: p.Y + 16 }));
+    }
+    else if (input.Kind !== 'connector') {
+      input.X += 16;
+      input.Y += 16;
+    }
+    return this.AddItem(input, author);
+  }
+
+  /**
+   * Raise an item above everything else. Follows the engine's existing Z handling:
+   * `++zCounter` is by construction greater than every assigned Z (max + 1), exactly how
+   * {@link AddItem} stamps new items. Journals as an `'update'`.
+   */
+  public BringToFront(id: string, author: WhiteboardAuthor): boolean {
+    const item = this.items.get(id);
+    if (!item) {
+      return false;
+    }
+    this.beforeMutate();
+    item.Z = ++this.zCounter;
+    this.record('update', id, author, `brought ${WhiteboardState.describe(item)} to the front`);
+    return true;
+  }
+
+  /** Drop an item below everything else (current min Z − 1). Journals as an `'update'`. */
+  public SendToBack(id: string, author: WhiteboardAuthor): boolean {
+    const item = this.items.get(id);
+    if (!item) {
+      return false;
+    }
+    this.beforeMutate();
+    let minZ = item.Z;
+    for (const other of this.items.values()) {
+      minZ = Math.min(minZ, other.Z);
+    }
+    item.Z = minZ - 1;
+    this.record('update', id, author, `sent ${WhiteboardState.describe(item)} to the back`);
+    return true;
+  }
+
   /** Convenience: add a pulsing highlight region (agent "pointing without touching"). */
   public Highlight(x: number, y: number, w: number, h: number, label: string | undefined, author: WhiteboardAuthor): WhiteboardHighlightItem {
     return this.AddItem({ Kind: 'highlight', X: x, Y: y, W: w, H: h, Label: label }, author) as WhiteboardHighlightItem;
