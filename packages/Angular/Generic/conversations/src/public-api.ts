@@ -92,3 +92,5 @@ export * from './lib/components/realtime/whiteboard/whiteboard-host.component';
 export * from './lib/components/realtime/whiteboard/whiteboard-state';
 export * from './lib/components/realtime/whiteboard/whiteboard-tools';
 export * from './lib/components/realtime/whiteboard/whiteboard-channel';
+export * from './lib/components/realtime/whiteboard/whiteboard-snapshot.component';
+export * from './lib/components/realtime/whiteboard/whiteboard-artifact-viewer.component';

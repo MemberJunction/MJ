@@ -92,6 +92,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   @Input() TextColor: string | null = null;
   /** Agent presence cursor (pulsing ring + "… is drawing" label), driven by the host. */
   @Input() AgentPresence: WhiteboardAgentPresence | null = null;
+  /**
+   * Read-only mode (artifact viewer / session review): all mutating pointer interactions,
+   * paste, and inline editing are disabled; pan + zoom remain available for navigation.
+   */
+  @Input() ReadOnly = false;
 
   /** Requests a tool switch decided by a board gesture (e.g. Esc → select). */
   @Output() ToolChangeRequest = new EventEmitter<WhiteboardTool>();
@@ -453,6 +458,13 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     if (event.button !== 0) {
       return;
     }
+    if (this.ReadOnly) {
+      // Pan stays available for read navigation; every other tool is inert.
+      if (this.Tool === 'pan') {
+        this.Interaction = { Type: 'pan', StartClientX: event.clientX, StartClientY: event.clientY, OrigPanX: this.PanX, OrigPanY: this.PanY };
+      }
+      return;
+    }
     this.canvasRef?.nativeElement.focus();
     const p = this.toBoard(event);
     switch (this.Tool) {
@@ -486,6 +498,9 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   public OnItemPointerDown(event: PointerEvent, item: WhiteboardItem): void {
+    if (this.ReadOnly) {
+      return;
+    }
     if (event.button !== 0) {
       return;
     }
@@ -518,6 +533,9 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   public OnHandlePointerDown(event: PointerEvent, item: WhiteboardItem, handle: ResizeHandle): void {
+    if (this.ReadOnly) {
+      return;
+    }
     if (event.button !== 0 || this.Tool !== 'select') {
       return;
     }
@@ -639,6 +657,9 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   /** Paste an image from the clipboard onto the board (mockup: pasted-image card). */
   public OnPaste(event: ClipboardEvent): void {
+    if (this.ReadOnly) {
+      return;
+    }
     const files = event.clipboardData?.files;
     if (!files || files.length === 0) {
       return;

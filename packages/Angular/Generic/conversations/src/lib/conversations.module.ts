@@ -75,6 +75,7 @@ import { VoiceAgentPickerComponent } from './components/voice/voice-agent-picker
 import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
 import { RealtimeWhiteboardHostComponent } from './components/realtime/whiteboard/whiteboard-host.component';
 import { LoadRealtimeWhiteboardChannel } from './components/realtime/whiteboard/whiteboard-channel';
+import { LoadWhiteboardArtifactViewer } from './components/realtime/whiteboard/whiteboard-artifact-viewer.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -85,6 +86,9 @@ import { SearchShortcutDirective } from './directives/search-shortcut.directive'
 // from being eliminated by the bundler. They live here (not in VoiceSessionService) because
 // channel plugins carry Angular surface components — the service stays component-free.
 LoadRealtimeWhiteboardChannel();
+// Whiteboard ARTIFACT VIEWER plugin — resolved by the artifact plugin host via the
+// ClassFactory (keyed by the artifact type's DriverClass), same tree-shaking concern.
+LoadWhiteboardArtifactViewer();
 
 // Export all components (excluding standalone components)
 const COMPONENTS = [
