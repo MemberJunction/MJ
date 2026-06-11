@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { WHITEBOARD_FONT_SIZES, WhiteboardFontFamily, WhiteboardShapeKind } from './whiteboard-state';
 
 /** A user-selectable board tool. */
-export type WhiteboardTool = 'select' | 'pan' | 'pen' | 'shape' | 'sticky' | 'text' | 'image' | 'connector' | 'eraser';
+export type WhiteboardTool = 'select' | 'pan' | 'pen' | 'shape' | 'sticky' | 'text' | 'markdown' | 'html' | 'image' | 'connector' | 'eraser';
 
 /** One entry in the floating toolbar. */
 interface ToolbarEntry {
@@ -95,6 +95,8 @@ export class RealtimeWhiteboardToolbarComponent {
     { Tool: 'shape', Icon: 'fa-regular fa-square', Title: 'Shapes', Kbd: 'R' },
     { Tool: 'sticky', Icon: 'fa-regular fa-note-sticky', Title: 'Sticky note', Kbd: 'S' },
     { Tool: 'text', Icon: 'fa-solid fa-font', Title: 'Text', Kbd: 'T' },
+    { Tool: 'markdown', Icon: 'fa-brands fa-markdown', Title: 'Markdown panel', Kbd: 'M' },
+    { Tool: 'html', Icon: 'fa-solid fa-code', Title: 'HTML widget (sandboxed)', Kbd: 'W' },
     { Tool: 'image', Icon: 'fa-regular fa-image', Title: 'Paste / insert image', Kbd: 'I' },
     { Tool: 'connector', Icon: 'fa-solid fa-arrow-trend-up', Title: 'Connector', Kbd: 'C' },
     { Tool: 'eraser', Icon: 'fa-solid fa-eraser', Title: 'Eraser', Kbd: 'E' }

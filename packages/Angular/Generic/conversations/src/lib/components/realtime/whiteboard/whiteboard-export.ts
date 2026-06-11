@@ -4,9 +4,11 @@ import {
   WhiteboardConnectorItem,
   WhiteboardFontFamily,
   WhiteboardHighlightItem,
+  WhiteboardHtmlItem,
   WhiteboardImageItem,
   WhiteboardInkItem,
   WhiteboardItem,
+  WhiteboardMarkdownItem,
   WhiteboardShapeItem,
   WhiteboardState,
   WhiteboardStickyItem,
@@ -25,6 +27,10 @@ import {
  *  - BOX items (sticky / shape / text / image placeholder) become absolutely positioned
  *    divs honoring the optional text-style fields (FontSize / FontFamily / FontWeight /
  *    Color), each garnished with a small ownership chip (You / the agent's name);
+ *  - MARKDOWN panels render their formatted content through {@link RenderMarkdownInert}
+ *    (escape-FIRST, no raw-HTML passthrough); HTML widgets export as a placeholder card
+ *    (title + note + escaped source in a <details>) — live widget HTML is NEVER inlined
+ *    into the export document (no iframe sandbox exists there, so it would be XSS);
  *  - VECTOR items (ink strokes, connectors, highlight regions) render in one inline SVG
  *    layer underneath the boxes — connectors anchor to item centers via the engine's own
  *    {@link WhiteboardState.ResolveEndpoint} bounds math, highlights become dashed
@@ -100,6 +106,107 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// ────────────────────────────────────────────── minimal inert markdown renderer
+
+/**
+ * Format ONE already-escaped line's inline markdown: code spans, links (http/https/mailto
+ * only — anything else stays literal text), bold, italic. Code spans are protected from
+ * the other inline formats via placeholders.
+ */
+function markdownInline(escaped: string): string {
+  const codeSpans: string[] = [];
+  let text = escaped.replace(/`([^`]+)`/g, (_m, c: string) => {
+    codeSpans.push(c);
+    return `\u0000${codeSpans.length - 1}\u0000`;
+  });
+  // href is escaped text in a whitelisted scheme — quotes are entities, so it can't break the attribute
+  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^()\s]+|mailto:[^()\s]+)\)/g,
+    '<a href="$2" rel="noopener noreferrer">$1</a>');
+  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  return text.replace(/\u0000(\d+)\u0000/g, (_m, i: string) => `<code>${codeSpans[Number(i)]}</code>`);
+}
+
+/**
+ * Minimal, SAFE markdown → HTML renderer for the self-contained exports (the live board
+ * renders through the shared `mj-markdown` Angular component instead — this exists only
+ * because export builders are pure functions with no Angular available).
+ *
+ * SECURITY: ESCAPE-FIRST — the whole source is HTML-escaped before any formatting, so raw
+ * HTML in the markdown can never become live markup (NO passthrough, ever). Supported:
+ * headings, bold/italic, inline code, fenced code blocks, un/ordered lists, paragraphs,
+ * and links restricted to http(s)/mailto.
+ */
+export function RenderMarkdownInert(markdown: string): string {
+  const lines = escapeHtml(markdown ?? '').split('\n');
+  const out: string[] = [];
+  let para: string[] = [];
+  let list: { tag: 'ul' | 'ol'; items: string[] } | null = null;
+  let code: string[] | null = null;
+  const flushPara = (): void => {
+    if (para.length > 0) {
+      out.push(`<p>${para.join('<br>')}</p>`);
+      para = [];
+    }
+  };
+  const flushList = (): void => {
+    if (list) {
+      out.push(`<${list.tag}>${list.items.map((i) => `<li>${i}</li>`).join('')}</${list.tag}>`);
+      list = null;
+    }
+  };
+  for (const line of lines) {
+    if (code) {
+      if (/^```/.test(line)) {
+        out.push(`<pre><code>${code.join('\n')}</code></pre>`);
+        code = null;
+      }
+      else {
+        code.push(line);
+      }
+      continue;
+    }
+    if (/^```/.test(line)) {
+      flushPara();
+      flushList();
+      code = [];
+      continue;
+    }
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (heading) {
+      flushPara();
+      flushList();
+      out.push(`<h${heading[1].length}>${markdownInline(heading[2])}</h${heading[1].length}>`);
+      continue;
+    }
+    const ul = /^\s*[-*]\s+(.*)$/.exec(line);
+    const ol = /^\s*\d+\.\s+(.*)$/.exec(line);
+    if (ul || ol) {
+      flushPara();
+      const tag: 'ul' | 'ol' = ul ? 'ul' : 'ol';
+      if (!list || list.tag !== tag) {
+        flushList();
+        list = { tag, items: [] };
+      }
+      list.items.push(markdownInline((ul ?? ol)![1]));
+      continue;
+    }
+    if (line.trim().length === 0) {
+      flushPara();
+      flushList();
+      continue;
+    }
+    flushList();
+    para.push(markdownInline(line));
+  }
+  if (code) {
+    out.push(`<pre><code>${code.join('\n')}</code></pre>`); // unterminated fence
+  }
+  flushPara();
+  flushList();
+  return out.join('');
 }
 
 /** Round to 2 decimals for compact, deterministic coordinate output. */
@@ -185,6 +292,29 @@ function imageHtml(item: WhiteboardImageItem, ox: number, oy: number, agentName:
     `<div class="image-glyph">▦</div><div class="image-name">${escapeHtml(item.Name)}</div></div>`;
 }
 
+/** Markdown panel: rendered through the inert escape-first renderer (never raw HTML). */
+function markdownItemHtml(item: WhiteboardMarkdownItem, ox: number, oy: number, agentName: string): string {
+  const maxH = item.H ? `max-height:${n(item.H)}px;overflow:hidden;` : '';
+  const style = `left:${n(item.X - ox)}px;top:${n(item.Y - oy)}px;width:${n(item.W)}px;${maxH}`;
+  return `<div class="it md" style="${style}">${chipHtml(item, agentName)}` +
+    `<div class="md-body">${RenderMarkdownInert(item.Markdown)}</div></div>`;
+}
+
+/**
+ * HTML widget: exported as a PLACEHOLDER card — title, an "interactive widget" note, and
+ * the ESCAPED source inside a collapsed <details>. The live HTML is deliberately NOT
+ * inlined into the export document: the board's iframe sandbox doesn't exist here, so
+ * embedding it would hand arbitrary script a same-origin document (XSS).
+ */
+function htmlWidgetItemHtml(item: WhiteboardHtmlItem, ox: number, oy: number, agentName: string): string {
+  const title = escapeHtml(item.Title || 'HTML widget');
+  const style = `left:${n(item.X - ox)}px;top:${n(item.Y - oy)}px;width:${n(item.W)}px;min-height:${n(item.H)}px;`;
+  return `<div class="it htmlw" style="${style}">${chipHtml(item, agentName)}` +
+    `<div class="htmlw-title">${title}</div>` +
+    `<div class="htmlw-note">Interactive HTML widget — renders sandboxed on the live board; not embedded in this export.</div>` +
+    `<details class="htmlw-src"><summary>View source</summary><pre>${escapeHtml(item.Html)}</pre></details></div>`;
+}
+
 /** Ink strokes draw in the SVG layer, but their ownership chip is an HTML div at the stroke's bounds. */
 function inkChipHtml(item: WhiteboardInkItem, state: WhiteboardState, ox: number, oy: number, agentName: string): string {
   const b = state.ItemBounds(item);
@@ -245,6 +375,8 @@ function boxLayerHtml(state: WhiteboardState, b: WhiteboardBounds, agentName: st
       case 'shape': parts.push(shapeHtml(item, b.X, b.Y, agentName)); break;
       case 'text': parts.push(textHtml(item, b.X, b.Y, agentName)); break;
       case 'image': parts.push(imageHtml(item, b.X, b.Y, agentName)); break;
+      case 'markdown': parts.push(markdownItemHtml(item, b.X, b.Y, agentName)); break;
+      case 'html': parts.push(htmlWidgetItemHtml(item, b.X, b.Y, agentName)); break;
       case 'ink': parts.push(inkChipHtml(item, state, b.X, b.Y, agentName)); break;
       case 'connector':
       case 'highlight':
@@ -282,6 +414,23 @@ function documentCss(): string {
   .image-name { font-size: 10.5px; color: ${PALETTE.TextMuted}; max-width: 100%; overflow: hidden;
                 text-overflow: ellipsis; white-space: nowrap; }
   .ink-chip { position: absolute; }
+  .it.md { background: ${PALETTE.PaperBg}; border-color: ${PALETTE.PaperBorder}; }
+  .md-body h1 { font-size: 16px; margin: 2px 0 6px; }
+  .md-body h2 { font-size: 14px; margin: 2px 0 6px; }
+  .md-body h3, .md-body h4, .md-body h5, .md-body h6 { font-size: 12.5px; margin: 2px 0 4px; }
+  .md-body p { margin: 0 0 6px; }
+  .md-body ul, .md-body ol { margin: 0 0 6px; padding-left: 18px; }
+  .md-body pre { background: ${PALETTE.ImageBg}; border: 1px solid ${PALETTE.ImageBorder}; border-radius: 4px;
+                 padding: 6px 8px; margin: 0 0 6px; font-size: 10.5px; overflow: auto; white-space: pre-wrap; }
+  .md-body code { font-family: ${FONT_STACKS.mono}; font-size: 10.5px; }
+  .md-body a { color: ${PALETTE.AgentChipText}; }
+  .it.htmlw { background: ${PALETTE.ImageBg}; border-color: ${PALETTE.ImageBorder}; border-style: dashed; }
+  .htmlw-title { font-weight: 700; margin-bottom: 4px; }
+  .htmlw-note { font-size: 10.5px; color: ${PALETTE.TextMuted}; margin-bottom: 6px; }
+  .htmlw-src summary { font-size: 10.5px; color: ${PALETTE.TextMuted}; cursor: pointer; }
+  .htmlw-src pre { background: ${PALETTE.PaperBg}; border: 1px solid ${PALETTE.ImageBorder}; border-radius: 4px;
+                   padding: 6px 8px; margin: 4px 0 0; font-size: 9.5px; font-family: ${FONT_STACKS.mono};
+                   overflow: auto; white-space: pre-wrap; word-break: break-word; max-height: 220px; }
   .chip { position: absolute; top: -9px; left: 8px; font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
           padding: 1px 7px; border-radius: 999px; border: 1px solid ${PALETTE.UserChipBorder};
           background: ${PALETTE.UserChipBg}; color: ${PALETTE.UserChipText}; white-space: nowrap; }
@@ -382,6 +531,20 @@ function boxItemSvg(item: WhiteboardItem, state: WhiteboardState, ox: number, oy
       const b = state.ItemBounds(item);
       return `<rect x="${n(b.X - ox)}" y="${n(b.Y - oy)}" width="${n(b.W)}" height="${n(b.H)}" rx="6" fill="${PALETTE.ImageBg}" stroke="${PALETTE.ImageBorder}"/>` +
         `<text x="${n(b.X - ox + b.W / 2)}" y="${n(b.Y - oy + b.H / 2 + 4)}" font-size="10.5" text-anchor="middle" fill="${PALETTE.TextMuted}">${svgLine(item.Name)}</text>`;
+    }
+    case 'markdown': {
+      // simple labeled rect — the first markdown line as the label
+      const b = state.ItemBounds(item);
+      return `<rect x="${n(b.X - ox)}" y="${n(b.Y - oy)}" width="${n(b.W)}" height="${n(b.H)}" rx="6" fill="${PALETTE.PaperBg}" stroke="${PALETTE.PaperBorder}"/>` +
+        `<text x="${n(b.X - ox + 10)}" y="${n(b.Y - oy + 20)}" font-size="11" fill="${PALETTE.TextPrimary}">${svgLine(item.Markdown)}</text>` +
+        `<text x="${n(b.X - ox + 10)}" y="${n(b.Y - oy + 36)}" font-size="9.5" fill="${PALETTE.TextMuted}">markdown panel</text>`;
+    }
+    case 'html': {
+      // simple labeled rect — title + an "interactive widget" note (never live HTML)
+      const x = item.X - ox, y = item.Y - oy;
+      return `<rect x="${n(x)}" y="${n(y)}" width="${n(item.W)}" height="${n(item.H)}" rx="6" fill="${PALETTE.ImageBg}" stroke="${PALETTE.ImageBorder}" stroke-dasharray="5 4"/>` +
+        `<text x="${n(x + item.W / 2)}" y="${n(y + item.H / 2 - 4)}" font-size="11" font-weight="600" text-anchor="middle" fill="${PALETTE.TextPrimary}">${svgLine(item.Title || 'HTML widget')}</text>` +
+        `<text x="${n(x + item.W / 2)}" y="${n(y + item.H / 2 + 12)}" font-size="9.5" text-anchor="middle" fill="${PALETTE.TextMuted}">interactive HTML widget</text>`;
     }
     default:
       return '';

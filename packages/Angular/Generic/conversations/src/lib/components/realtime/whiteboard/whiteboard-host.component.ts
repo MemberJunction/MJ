@@ -415,6 +415,9 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
       case WHITEBOARD_TOOL_NAMES.AddNote: return 'added a note';
       case WHITEBOARD_TOOL_NAMES.AddShape: return 'added a shape';
       case WHITEBOARD_TOOL_NAMES.AddText: return 'added a label';
+      case WHITEBOARD_TOOL_NAMES.AddMarkdown: return 'added a markdown panel';
+      case WHITEBOARD_TOOL_NAMES.AddHtml: return 'added an HTML widget';
+      case WHITEBOARD_TOOL_NAMES.UpdateContent: return 'edited an item';
       case WHITEBOARD_TOOL_NAMES.DrawConnector: return 'added a connector';
       case WHITEBOARD_TOOL_NAMES.Highlight: return 'highlighted a region';
       case WHITEBOARD_TOOL_NAMES.MoveItem: return 'moved an item';
@@ -432,6 +435,8 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
       case 'r': return 'shape';
       case 's': return 'sticky';
       case 't': return 'text';
+      case 'm': return 'markdown';
+      case 'w': return 'html';
       case 'i': return 'image';
       case 'c': return 'connector';
       case 'e': return 'eraser';

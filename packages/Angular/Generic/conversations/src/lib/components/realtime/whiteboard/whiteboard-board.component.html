@@ -1,6 +1,7 @@
 <div #canvas
      [class]="'board-canvas ' + CursorClass"
      [class.is-panning]="Interaction?.Type === 'pan'"
+     [class.is-interacting]="Interaction !== null || PendingConnector !== null"
      [style.backgroundSize]="GridBackgroundSize"
      [style.backgroundPosition]="GridBackgroundPosition"
      tabindex="0"
@@ -170,6 +171,88 @@
           </div>
         }
 
+        @case ('markdown') {
+          <div class="bi md-card"
+               [class.md-card--sage]="item.Author === 'agent'"
+               [class.selected]="IsSelected(item)"
+               [class.dragging]="IsDragging(item)"
+               [class.pop-in]="PopInIDs.has(item.ID)"
+               [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
+               [style.width.px]="ItemW(item)"
+               [style.maxHeight.px]="MarkdownMaxHeight(item)"
+               (pointerdown)="OnItemPointerDown($event, item)"
+               (dblclick)="BeginRichEdit($event, item)">
+            @if (item.Author === 'agent') {
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather"></i> {{ AgentName }}</span>
+            } @else {
+              <span class="author-chip author-chip--you"><i class="fa-brands fa-markdown"></i> You</span>
+            }
+            <div class="md-card__body">
+              <!-- rendered through the shared mj-markdown component (sanitize defaults ON — no raw HTML passthrough) -->
+              <mj-markdown [data]="item.Markdown"
+                           [enableMermaid]="false"
+                           [enableCodeCopy]="false"
+                           [enableCollapsibleHeadings]="false"/>
+            </div>
+            @if (ShowHandles(item) && !IsDragging(item)) {
+              @for (h of Handles; track h) {
+                <span [class]="'sel-h ' + h" (pointerdown)="OnHandlePointerDown($event, item, h)"></span>
+              }
+            }
+          </div>
+        }
+
+        @case ('html') {
+          <div class="bi html-card"
+               [class.html-card--sage]="item.Author === 'agent'"
+               [class.selected]="IsSelected(item)"
+               [class.dragging]="IsDragging(item)"
+               [class.pop-in]="PopInIDs.has(item.ID)"
+               [style.left.px]="ItemX(item)" [style.top.px]="ItemY(item)"
+               [style.width.px]="ItemW(item)" [style.height.px]="ItemH(item)">
+            <!-- the header is the widget's "window title bar": drag/select/connector target -->
+            <div class="html-card__head"
+                 (pointerdown)="OnItemPointerDown($event, item)"
+                 (dblclick)="BeginRichEdit($event, item)">
+              <i class="fa-solid fa-code html-card__glyph"></i>
+              <span class="html-card__title">{{ HtmlTitle(item) }}</span>
+              @if (item.Author === 'agent') {
+                <span class="author-chip author-chip--sage author-chip--inline"><i class="fa-solid fa-feather"></i> {{ AgentName }}</span>
+              } @else {
+                <span class="author-chip author-chip--you author-chip--inline"><i class="fa-solid fa-user"></i> You</span>
+              }
+              @if (!ReadOnly) {
+                <button type="button" class="html-card__btn" title="Edit HTML"
+                        (pointerdown)="$event.stopPropagation()"
+                        (click)="BeginRichEdit($event, item)"><i class="fa-solid fa-pen"></i></button>
+                <button type="button" class="html-card__btn" title="Remove widget"
+                        (pointerdown)="$event.stopPropagation()"
+                        (click)="RemoveItemClick($event, item)"><i class="fa-solid fa-trash-can"></i></button>
+              }
+            </div>
+            <div class="html-card__body">
+              @if (IsNearViewport(item)) {
+                <!-- SANDBOXED: allow-scripts ONLY (no allow-same-origin) — opaque origin,
+                     no access to the app DOM, session, cookies or storage. See HtmlSrcdoc(). -->
+                <iframe class="html-card__frame"
+                        sandbox="allow-scripts"
+                        [srcdoc]="HtmlSrcdoc(item)"
+                        [attr.title]="HtmlTitle(item)"></iframe>
+              } @else {
+                <div class="html-card__lazy">
+                  <i class="fa-solid fa-code"></i>
+                  <span>{{ HtmlTitle(item) }}</span>
+                </div>
+              }
+            </div>
+            @if (ShowHandles(item) && !IsDragging(item)) {
+              @for (h of Handles; track h) {
+                <span [class]="'sel-h ' + h" (pointerdown)="OnHandlePointerDown($event, item, h)"></span>
+              }
+            }
+          </div>
+        }
+
         @case ('image') {
           <div class="bi img-card"
                [class.selected]="IsSelected(item)"
@@ -209,6 +292,58 @@
       </div>
     }
   </div>
+
+  <!-- in-board rich-content editor panel (markdown / html items) -->
+  @if (RichEditor; as ed) {
+    <div class="rich-editor"
+         (keydown)="OnRichEditorKeydown($event)"
+         (pointerdown)="$event.stopPropagation()"
+         (dblclick)="$event.stopPropagation()"
+         (wheel)="$event.stopPropagation()">
+      <div class="rich-editor__head">
+        @if (ed.Kind === 'markdown') {
+          <i class="fa-brands fa-markdown"></i>
+          <span class="rich-editor__label">Markdown panel</span>
+          <span class="rich-editor__modes">
+            <button type="button" class="re-mode" [class.on]="!ed.Preview" (click)="RichEditorSetPreview(false)">Edit</button>
+            <button type="button" class="re-mode" [class.on]="ed.Preview" (click)="RichEditorSetPreview(true)">Preview</button>
+          </span>
+        } @else {
+          <i class="fa-solid fa-code"></i>
+          <span class="rich-editor__label">HTML widget</span>
+          <input class="rich-editor__title" type="text" placeholder="Title" #reTitle
+                 [value]="ed.TitleDraft" (input)="OnRichEditorTitleChange(reTitle.value)"/>
+        }
+      </div>
+      <div class="rich-editor__body">
+        @if (ed.Kind === 'markdown' && ed.Preview) {
+          <div class="rich-editor__preview">
+            <mj-markdown [data]="ed.Draft"
+                         [enableMermaid]="false"
+                         [enableCodeCopy]="false"
+                         [enableCollapsibleHeadings]="false"/>
+          </div>
+        } @else {
+          <mj-code-editor class="rich-editor__code"
+                          [value]="ed.Draft"
+                          [language]="ed.Kind === 'markdown' ? 'markdown' : 'html'"
+                          (change)="OnRichEditorDraftChange($event)"/>
+        }
+      </div>
+      @if (ed.Kind === 'html') {
+        <div class="rich-editor__note">
+          <i class="fa-solid fa-shield-halved"></i>
+          Renders in a sandboxed frame — scripts run isolated, no app or network access guaranteed.
+        </div>
+      }
+      <div class="rich-editor__foot">
+        <button type="button" class="re-btn re-btn--primary" (click)="RichEditorDone()">Done</button>
+        <button type="button" class="re-btn" title="Apply without closing — re-renders the widget" (click)="RichEditorApply()">Apply</button>
+        <span class="re-spacer"></span>
+        <button type="button" class="re-btn" title="Close without applying draft changes" (click)="RichEditorCancel()">Cancel</button>
+      </div>
+    </div>
+  }
 
   <!-- minimap -->
   @if (MinimapOpen) {

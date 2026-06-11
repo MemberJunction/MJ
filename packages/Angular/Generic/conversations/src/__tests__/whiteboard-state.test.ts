@@ -567,8 +567,8 @@ describe('ApplyWhiteboardAgentTool', () => {
 });
 
 describe('WHITEBOARD_TOOL_DEFINITIONS', () => {
-  it('should describe all eight channel tools with parameter schemas', () => {
-    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(8);
+  it('should describe all eleven channel tools with parameter schemas', () => {
+    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(11);
     const names = WHITEBOARD_TOOL_DEFINITIONS.map((d) => d.Name);
     expect(names).toEqual(Object.values(WHITEBOARD_TOOL_NAMES));
     for (const def of WHITEBOARD_TOOL_DEFINITIONS) {

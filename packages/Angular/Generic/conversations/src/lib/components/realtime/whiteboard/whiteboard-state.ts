@@ -21,7 +21,7 @@ import { Observable, Subject } from 'rxjs';
 export type WhiteboardAuthor = 'user' | 'agent';
 
 /** The discriminant for the {@link WhiteboardItem} union. */
-export type WhiteboardItemKind = 'sticky' | 'shape' | 'ink' | 'text' | 'image' | 'connector' | 'highlight';
+export type WhiteboardItemKind = 'sticky' | 'shape' | 'ink' | 'text' | 'image' | 'connector' | 'highlight' | 'markdown' | 'html';
 
 /** Shape geometry of a {@link WhiteboardShapeItem}. */
 export type WhiteboardShapeKind = 'rect' | 'ellipse' | 'diamond';
@@ -157,6 +157,41 @@ export interface WhiteboardHighlightItem extends WhiteboardItemBase {
   Label?: string;
 }
 
+/**
+ * A rendered MARKDOWN panel — a rich, formatted card (headings, lists, code, links) for
+ * illustrative content that outgrows a sticky note. Width is explicit (the panel's column
+ * width); height is content-driven, optionally capped by `H` (overflow clips).
+ */
+export interface WhiteboardMarkdownItem extends WhiteboardItemBase {
+  Kind: 'markdown';
+  X: number;
+  Y: number;
+  /** Panel width in px (required — markdown always renders in an explicit column). */
+  W: number;
+  /** Optional max height in px; content beyond it is clipped. Omitted = content-driven. */
+  H?: number;
+  /** The markdown source. Rendered SAFELY (sanitized — never raw HTML passthrough). */
+  Markdown: string;
+}
+
+/**
+ * An interactive HTML widget — arbitrary HTML (scripts included) rendered inside a
+ * STRICTLY SANDBOXED iframe (`sandbox="allow-scripts"` only, opaque origin — see the
+ * board component for the full security rationale). Dragged/selected by its header bar
+ * so iframe interactivity and board interactions coexist.
+ */
+export interface WhiteboardHtmlItem extends WhiteboardItemBase {
+  Kind: 'html';
+  X: number;
+  Y: number;
+  W: number;
+  H: number;
+  /** The widget's full HTML source (becomes the sandboxed iframe's `srcdoc`). */
+  Html: string;
+  /** Optional title shown on the widget's header bar. */
+  Title?: string;
+}
+
 /** Discriminated union of everything that can live on the board. */
 export type WhiteboardItem =
   | WhiteboardStickyItem
@@ -165,7 +200,9 @@ export type WhiteboardItem =
   | WhiteboardImageItem
   | WhiteboardInkItem
   | WhiteboardConnectorItem
-  | WhiteboardHighlightItem;
+  | WhiteboardHighlightItem
+  | WhiteboardMarkdownItem
+  | WhiteboardHtmlItem;
 
 /** Distributive Omit that preserves the discriminated union. */
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -193,6 +230,9 @@ export interface WhiteboardItemPatch {
   FontFamily?: WhiteboardFontFamily;
   FontWeight?: WhiteboardFontWeight;
   Shape?: WhiteboardShapeKind;
+  Markdown?: string;
+  Html?: string;
+  Title?: string;
   FromItemID?: string | null;
   ToItemID?: string | null;
   FromPoint?: WhiteboardPoint | null;
@@ -227,8 +267,10 @@ export interface WhiteboardCompactItem {
   y?: number;
   w?: number;
   h?: number;
+  /** Clipped text content (sticky/text/shape labels; markdown/html: clipped SOURCE). */
   text?: string;
   shape?: WhiteboardShapeKind;
+  /** Image file name, or the html widget's Title. */
   name?: string;
   from?: string | WhiteboardPoint | null;
   to?: string | WhiteboardPoint | null;
@@ -287,7 +329,11 @@ export const WHITEBOARD_DEFAULTS = {
   ImageH: 134,
   TextW: 132,
   TextH: 18,
-  ShapeMinH: 56
+  ShapeMinH: 56,
+  MarkdownW: 280,
+  MarkdownMinH: 96,
+  HtmlW: 360,
+  HtmlH: 240
 } as const;
 
 /** Truncate long item text for summary fragments. */
@@ -400,6 +446,11 @@ export class WhiteboardState {
         return { X: item.X, Y: item.Y, W: item.W ?? WHITEBOARD_DEFAULTS.ImageW, H: WHITEBOARD_DEFAULTS.ImageH };
       case 'highlight':
         return { X: item.X, Y: item.Y, W: item.W, H: item.H };
+      case 'markdown':
+        // content-driven height: an explicit max (H) wins, otherwise estimate from line count
+        return { X: item.X, Y: item.Y, W: item.W, H: item.H ?? WhiteboardState.markdownHeightEstimate(item.Markdown) };
+      case 'html':
+        return { X: item.X, Y: item.Y, W: item.W, H: item.H };
       case 'ink': {
         return WhiteboardState.pointsBounds(item.Points, item.StrokeWidth);
       }
@@ -409,6 +460,12 @@ export class WhiteboardState {
         return WhiteboardState.pointsBounds([from, to], 2);
       }
     }
+  }
+
+  /** Rough rendered height of a markdown panel (line count · line height + card padding). */
+  private static markdownHeightEstimate(markdown: string): number {
+    const lines = (markdown || '').split('\n').length;
+    return Math.max(WHITEBOARD_DEFAULTS.MarkdownMinH, Math.min(520, 44 + lines * 19));
   }
 
   private static pointsBounds(points: WhiteboardPoint[], pad: number): WhiteboardBounds {
@@ -869,6 +926,26 @@ export class WhiteboardState {
           c.text = clip(item.Label, 120);
         }
         break;
+      case 'markdown':
+        // the agent must SEE what's in the panel — project the clipped SOURCE, not a stub
+        c.x = Math.round(item.X);
+        c.y = Math.round(item.Y);
+        c.w = Math.round(item.W);
+        if (item.H != null) {
+          c.h = Math.round(item.H);
+        }
+        c.text = clip(item.Markdown, 200);
+        break;
+      case 'html':
+        c.x = Math.round(item.X);
+        c.y = Math.round(item.Y);
+        c.w = Math.round(item.W);
+        c.h = Math.round(item.H);
+        if (item.Title) {
+          c.name = clip(item.Title, 80);
+        }
+        c.text = clip(item.Html, 200);
+        break;
     }
     return c;
   }
@@ -920,6 +997,8 @@ export class WhiteboardState {
       case 'ink': return 'an ink stroke';
       case 'connector': return 'a connector';
       case 'highlight': return 'a highlight region';
+      case 'markdown': return `a markdown panel ("${clip(item.Markdown)}")`;
+      case 'html': return `an HTML widget${item.Title ? ` ("${clip(item.Title)}")` : ''}`;
     }
   }
 }

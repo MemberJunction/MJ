@@ -209,6 +209,261 @@
   color: var(--mj-text-primary);
 }
 
+/* ---------- markdown panel ---------- */
+.md-card {
+  border-radius: 10px;
+  border: 1.5px solid var(--mj-border-strong);
+  background: var(--mj-bg-surface-card);
+  overflow: hidden;
+  cursor: default;
+}
+.md-card__body {
+  padding: 16px 12px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--mj-text-primary);
+  overflow: hidden;
+}
+.md-card--sage {
+  border-color: var(--sage);
+  background: color-mix(in srgb, var(--sage) 8%, var(--mj-bg-surface-card));
+}
+/* compact the shared markdown renderer's defaults inside the small board card
+   (mj-markdown uses encapsulation:None, so ::ng-deep reaches its rendered content) */
+.md-card ::ng-deep .mj-markdown-container h1 { font-size: 16px; margin: 4px 0 6px; }
+.md-card ::ng-deep .mj-markdown-container h2 { font-size: 14px; margin: 4px 0 6px; }
+.md-card ::ng-deep .mj-markdown-container h3,
+.md-card ::ng-deep .mj-markdown-container h4 { font-size: 12.5px; margin: 4px 0 4px; }
+.md-card ::ng-deep .mj-markdown-container p { margin: 0 0 6px; }
+.md-card ::ng-deep .mj-markdown-container ul,
+.md-card ::ng-deep .mj-markdown-container ol { margin: 0 0 6px; padding-left: 18px; }
+.md-card ::ng-deep .mj-markdown-container pre { font-size: 10.5px; padding: 6px 8px; margin: 0 0 6px; overflow: auto; }
+.md-card ::ng-deep .mj-markdown-container code { font-size: 10.5px; }
+
+/* ---------- interactive HTML widget (sandboxed iframe in a mini window) ---------- */
+.html-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1.5px solid var(--mj-border-strong);
+  background: var(--mj-bg-surface-card);
+  overflow: hidden;
+  cursor: default;
+  min-width: 160px;
+  min-height: 90px;
+}
+.html-card--sage {
+  border-color: var(--sage);
+}
+.html-card__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
+  cursor: grab;
+  user-select: none;
+}
+.html-card--sage .html-card__head {
+  background: color-mix(in srgb, var(--sage) 14%, var(--mj-bg-surface-sunken));
+}
+.html-card__glyph {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+}
+.html-card--sage .html-card__glyph { color: var(--sage); }
+.html-card__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.author-chip--inline {
+  position: static;
+  flex-shrink: 0;
+}
+.html-card__btn {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mj-radius-sm, 4px);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+.html-card__btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.html-card__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--mj-bg-surface);
+}
+.html-card__frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #ffffff; /* widgets author against a plain document background */
+}
+/* While a board gesture is in flight, frames must not swallow pointermove —
+   otherwise dragging a widget by its header dies the moment the pointer crosses an iframe. */
+.board-canvas.is-interacting .html-card__frame {
+  pointer-events: none;
+}
+.html-card__lazy {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  background: var(--mj-bg-surface-sunken);
+}
+.html-card__lazy i { font-size: 16px; color: var(--mj-text-disabled); }
+
+/* ---------- in-board rich-content editor panel ---------- */
+.rich-editor {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  bottom: 14px;
+  z-index: 12;
+  width: min(480px, 62%);
+  display: flex;
+  flex-direction: column;
+  background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg, 12px);
+  box-shadow: var(--mj-shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.3));
+  overflow: hidden;
+  cursor: default;
+}
+.rich-editor__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-sunken);
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+.rich-editor__label {
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+}
+.rich-editor__modes {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+}
+.re-mode {
+  border: 0;
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: var(--mj-radius-full, 9999px);
+  cursor: pointer;
+}
+.re-mode.on {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+}
+.rich-editor__title {
+  flex: 1;
+  min-width: 0;
+  margin-left: 4px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm, 4px);
+  outline: none;
+}
+.rich-editor__title:focus { border-color: var(--mj-border-focus, var(--mj-brand-primary)); }
+.rich-editor__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rich-editor__code {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  overflow: auto;
+  font-size: 12px;
+}
+.rich-editor__preview {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  color: var(--mj-text-primary);
+}
+.rich-editor__note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  font-size: 10px;
+  color: var(--mj-text-muted);
+  border-top: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+}
+.rich-editor__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-sunken);
+}
+.re-spacer { flex: 1; }
+.re-btn {
+  padding: 4px 14px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: var(--mj-radius-md, 6px);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  cursor: pointer;
+}
+.re-btn:hover { background: var(--mj-bg-surface-hover); }
+.re-btn--primary {
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+}
+.re-btn--primary:hover { background: var(--mj-brand-primary-hover, var(--mj-brand-primary)); }
+
 /* ---------- pasted image card ---------- */
 .img-card {
   width: 198px;

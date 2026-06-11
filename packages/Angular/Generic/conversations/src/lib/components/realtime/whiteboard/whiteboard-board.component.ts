@@ -3,13 +3,16 @@ import {
   Input, OnDestroy, OnInit, Output, ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import {
   WHITEBOARD_DEFAULTS, WhiteboardBounds, WhiteboardConnectorItem, WhiteboardFontFamily,
-  WhiteboardHighlightItem, WhiteboardImageItem, WhiteboardInkItem, WhiteboardItem,
-  WhiteboardItemPatch, WhiteboardPoint, WhiteboardShapeItem, WhiteboardState,
-  WhiteboardStickyItem, WhiteboardTextItem
+  WhiteboardHighlightItem, WhiteboardHtmlItem, WhiteboardImageItem, WhiteboardInkItem,
+  WhiteboardItem, WhiteboardItemPatch, WhiteboardMarkdownItem, WhiteboardPoint,
+  WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
 } from './whiteboard-state';
 import { WhiteboardTool, WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 
@@ -37,6 +40,36 @@ interface PendingConnector {
   CurY: number;
 }
 
+/** Transient state of the in-board rich-content editor panel (markdown / html items). */
+interface RichEditorState {
+  ItemID: string;
+  Kind: 'markdown' | 'html';
+  /** The in-flight source draft (committed only on Apply / Done). */
+  Draft: string;
+  /** HTML widgets only: the in-flight header title draft. */
+  TitleDraft: string;
+  /** Markdown only: show the rendered preview instead of the source editor. */
+  Preview: boolean;
+}
+
+/** Starter document placed by the HTML-widget tool (user click-place). */
+const STARTER_HTML = `<!doctype html>
+<html>
+<head>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 14px; color: #1f2937; }
+  h3 { margin: 0 0 6px; }
+</style>
+</head>
+<body>
+<h3>New widget</h3>
+<p>Edit this HTML and press Apply.</p>
+</body>
+</html>`;
+
+/** Starter markdown placed by the markdown-panel tool (user click-place). */
+const STARTER_MARKDOWN = '## New note\n\n- point one';
+
 /** Zoom presets stepped by the zoom cluster (25%–200%, matching the mockup's range). */
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 0.9, 1, 1.25, 1.5, 2] as const;
 const GRID_SIZE = 22;
@@ -56,7 +89,7 @@ const POP_IN_MS = 3200;
 @Component({
   standalone: true,
   selector: 'mj-realtime-whiteboard',
-  imports: [CommonModule],
+  imports: [CommonModule, MarkdownModule, CodeEditorModule],
   templateUrl: './whiteboard-board.component.html',
   styleUrl: './whiteboard-board.component.css'
 })
@@ -113,9 +146,19 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   public Interaction: BoardInteraction | null = null;
   public PendingConnector: PendingConnector | null = null;
   public EditingID: string | null = null;
+  /** The rich-content editor panel state (markdown / html items), or null when closed. */
+  public RichEditor: RichEditorState | null = null;
   private editIsNew = false;
   private pendingFocus = false;
   private userStickyCount = 0;
+
+  /**
+   * Per-item memoized `srcdoc` payloads for HTML widgets. The SafeHtml instance MUST be
+   * stable across change-detection cycles — handing the iframe a fresh object every CD
+   * pass would reload (and reset) the widget continuously.
+   */
+  private htmlSrcdocCache = new Map<string, { Html: string; Safe: SafeHtml }>();
+  private sanitizer = inject(DomSanitizer);
 
   /** Agent items that just popped in (drive the .pop-in violet flash). */
   public PopInIDs = new Set<string>();
@@ -133,6 +176,16 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
           this.PopInIDs.delete(change.ItemID);
           this.cdr.markForCheck();
         }, POP_IN_MS));
+      }
+      if (change.Op === 'remove') {
+        this.htmlSrcdocCache.delete(change.ItemID);
+      }
+      else if (change.Op === 'replace') {
+        this.htmlSrcdocCache.clear(); // whole scene swapped (undo/redo/load)
+      }
+      // close the rich editor when its target item no longer exists (erased / undone)
+      if (this.RichEditor && !this.State.GetItem(this.RichEditor.ItemID)) {
+        this.RichEditor = null;
       }
       this.cdr.markForCheck();
     });
@@ -155,10 +208,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   // ────────────────────────────────────────────── render-model getters
 
-  public get BoxItems(): (WhiteboardStickyItem | WhiteboardShapeItem | WhiteboardTextItem | WhiteboardImageItem)[] {
+  public get BoxItems(): (WhiteboardStickyItem | WhiteboardShapeItem | WhiteboardTextItem | WhiteboardImageItem | WhiteboardMarkdownItem | WhiteboardHtmlItem)[] {
     return this.State.Items.filter(
-      (i): i is WhiteboardStickyItem | WhiteboardShapeItem | WhiteboardTextItem | WhiteboardImageItem =>
-        i.Kind === 'sticky' || i.Kind === 'shape' || i.Kind === 'text' || i.Kind === 'image');
+      (i): i is WhiteboardStickyItem | WhiteboardShapeItem | WhiteboardTextItem | WhiteboardImageItem | WhiteboardMarkdownItem | WhiteboardHtmlItem =>
+        i.Kind === 'sticky' || i.Kind === 'shape' || i.Kind === 'text' || i.Kind === 'image'
+        || i.Kind === 'markdown' || i.Kind === 'html');
   }
 
   public get InkItems(): WhiteboardInkItem[] {
@@ -194,7 +248,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     switch (this.Tool) {
       case 'pan': return 'cur-pan';
       case 'pen': case 'shape': case 'connector': return 'cur-cross';
-      case 'sticky': case 'image': return 'cur-copy';
+      case 'sticky': case 'image': case 'markdown': case 'html': return 'cur-copy';
       case 'text': return 'cur-text';
       case 'eraser': return 'cur-eraser';
       default: return '';
@@ -235,18 +289,26 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     if (item.Kind === 'image') {
       return item.W ?? WHITEBOARD_DEFAULTS.ImageW;
     }
+    if (item.Kind === 'markdown' || item.Kind === 'html') {
+      return item.W;
+    }
     return null;
   }
 
   public ItemH(item: WhiteboardItem): number | null {
     const t = this.transientBounds(item.ID);
-    if (t && (item.Kind === 'shape' || item.Kind === 'highlight')) {
+    if (t && (item.Kind === 'shape' || item.Kind === 'highlight' || item.Kind === 'html')) {
       return t.H;
     }
-    if (item.Kind === 'shape' || item.Kind === 'highlight') {
+    if (item.Kind === 'shape' || item.Kind === 'highlight' || item.Kind === 'html') {
       return item.H;
     }
     return null;
+  }
+
+  /** A markdown panel's optional max height (its rendered height stays content-driven). */
+  public MarkdownMaxHeight(item: WhiteboardMarkdownItem): number | null {
+    return item.H ?? null;
   }
 
   public IsSelected(item: WhiteboardItem): boolean {
@@ -260,7 +322,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   /** 8 handles render on the selected, resizable item (mockup: selection chrome). */
   public ShowHandles(item: WhiteboardItem): boolean {
     return this.IsSelected(item)
-      && (item.Kind === 'sticky' || item.Kind === 'shape' || item.Kind === 'image' || item.Kind === 'highlight');
+      && (item.Kind === 'sticky' || item.Kind === 'shape' || item.Kind === 'image' || item.Kind === 'highlight'
+        || item.Kind === 'markdown' || item.Kind === 'html');
   }
 
   public readonly Handles: ResizeHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -491,6 +554,12 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       case 'text':
         this.placeText(p);
         break;
+      case 'markdown':
+        this.placeMarkdown(p);
+        break;
+      case 'html':
+        this.placeHtml(p);
+        break;
       case 'image':
         this.placeImage(p, 'pasted-image.png', null);
         break;
@@ -615,11 +684,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         break;
       case 'resize': {
         const item = this.State.GetItem(i.ItemID);
-        if (item && (item.Kind === 'shape' || item.Kind === 'highlight')) {
+        if (item && (item.Kind === 'shape' || item.Kind === 'highlight' || item.Kind === 'html')) {
           this.State.UpdateItem(i.ItemID, { X: i.CurBounds.X, Y: i.CurBounds.Y, W: i.CurBounds.W, H: i.CurBounds.H }, 'user');
         }
-        else if (item && (item.Kind === 'sticky' || item.Kind === 'image' || item.Kind === 'text')) {
-          // text: resizing sets the WRAP WIDTH (height stays content-driven)
+        else if (item && (item.Kind === 'sticky' || item.Kind === 'image' || item.Kind === 'text' || item.Kind === 'markdown')) {
+          // text/markdown: resizing sets the WIDTH only (height stays content-driven)
           this.State.UpdateItem(i.ItemID, { X: i.CurBounds.X, Y: i.CurBounds.Y, W: i.CurBounds.W }, 'user');
         }
         break;
@@ -728,6 +797,134 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     }
   }
 
+  // ────────────────────────────────────────────── rich widgets (markdown / html)
+
+  /**
+   * The sandboxed iframe's `srcdoc` for an HTML widget.
+   *
+   * SECURITY — why `bypassSecurityTrustHtml` is correct here: Angular's sanitizer would
+   * strip the scripts/styles that make the widget interactive, but the payload NEVER
+   * touches the app's DOM — it only becomes the `srcdoc` of an iframe whose `sandbox`
+   * attribute is `allow-scripts` ONLY. Without `allow-same-origin` the frame runs in a
+   * unique opaque origin: its scripts cannot reach the parent document, the MJ session,
+   * cookies, or any storage, and adding `allow-same-origin` (which would let the frame
+   * script remove its own sandbox) is deliberately ruled out. The trusted value is
+   * memoized per item so the iframe doesn't reload on every change-detection pass.
+   */
+  public HtmlSrcdoc(item: WhiteboardHtmlItem): SafeHtml {
+    const cached = this.htmlSrcdocCache.get(item.ID);
+    if (cached && cached.Html === item.Html) {
+      return cached.Safe;
+    }
+    const safe = this.sanitizer.bypassSecurityTrustHtml(item.Html);
+    this.htmlSrcdocCache.set(item.ID, { Html: item.Html, Safe: safe });
+    return safe;
+  }
+
+  /**
+   * Cheap "on-screen-ish" check that gates iframe instantiation for HTML widgets: only
+   * widgets within (or near) the current viewport get a live sandboxed frame; the rest
+   * render a static placeholder until panned/zoomed into view. Re-entering view re-creates
+   * the frame (any internal widget state resets — acceptable for board decorations).
+   */
+  public IsNearViewport(item: WhiteboardItem): boolean {
+    const el = this.canvasRef?.nativeElement;
+    if (!el) {
+      return true; // before the first layout, render rather than blank out
+    }
+    const margin = 320;
+    const b = this.State.ItemBounds(item);
+    const vx = -this.PanX / this.Zoom;
+    const vy = -this.PanY / this.Zoom;
+    const vw = el.clientWidth / this.Zoom;
+    const vh = el.clientHeight / this.Zoom;
+    return b.X < vx + vw + margin && b.X + b.W > vx - margin
+      && b.Y < vy + vh + margin && b.Y + b.H > vy - margin;
+  }
+
+  /** Header title for an HTML widget. */
+  public HtmlTitle(item: WhiteboardHtmlItem): string {
+    return item.Title || 'HTML widget';
+  }
+
+  /** Open the rich editor for a markdown panel / HTML widget (dblclick or header edit). */
+  public BeginRichEdit(event: Event, item: WhiteboardItem): void {
+    if (this.ReadOnly || (item.Kind !== 'markdown' && item.Kind !== 'html')) {
+      return;
+    }
+    event.stopPropagation();
+    this.openRichEditor(item);
+  }
+
+  /** Delete affordance on the HTML widget header (the user removing their own widget). */
+  public RemoveItemClick(event: Event, item: WhiteboardItem): void {
+    if (this.ReadOnly) {
+      return;
+    }
+    event.stopPropagation();
+    this.State.RemoveItem(item.ID, 'user');
+  }
+
+  /** Markdown editor: flip between the source editor and the rendered preview. */
+  public RichEditorSetPreview(preview: boolean): void {
+    if (this.RichEditor) {
+      this.RichEditor.Preview = preview;
+    }
+  }
+
+  public OnRichEditorDraftChange(value: string): void {
+    if (this.RichEditor) {
+      this.RichEditor.Draft = value;
+    }
+  }
+
+  public OnRichEditorTitleChange(value: string): void {
+    if (this.RichEditor) {
+      this.RichEditor.TitleDraft = value;
+    }
+  }
+
+  /** Commit the draft to the item (ONE update = one undo step) and keep the panel open. */
+  public RichEditorApply(): void {
+    const editor = this.RichEditor;
+    if (!editor || !this.State.GetItem(editor.ItemID)) {
+      return;
+    }
+    if (editor.Kind === 'markdown') {
+      this.State.UpdateItem(editor.ItemID, { Markdown: editor.Draft }, 'user');
+    }
+    else {
+      // empty title clears the header label (UpdateItem skips undefined, so pass '' to clear)
+      this.State.UpdateItem(editor.ItemID, { Html: editor.Draft, Title: editor.TitleDraft.trim() }, 'user');
+    }
+  }
+
+  /** Commit the draft and close the editor panel. */
+  public RichEditorDone(): void {
+    this.RichEditorApply();
+    this.RichEditor = null;
+  }
+
+  /** Close the editor, discarding any uncommitted draft changes. */
+  public RichEditorCancel(): void {
+    this.RichEditor = null;
+  }
+
+  /** Esc inside the editor panel closes it; keys must not leak to the board shortcuts. */
+  public OnRichEditorKeydown(event: KeyboardEvent): void {
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.RichEditorCancel();
+    }
+  }
+
+  private openRichEditor(item: WhiteboardMarkdownItem | WhiteboardHtmlItem): void {
+    this.RichEditor = item.Kind === 'markdown'
+      ? { ItemID: item.ID, Kind: 'markdown', Draft: item.Markdown, TitleDraft: '', Preview: false }
+      : { ItemID: item.ID, Kind: 'html', Draft: item.Html, TitleDraft: item.Title ?? '', Preview: false };
+  }
+
   // ────────────────────────────────────────────── zoom / fit / minimap
 
   public ZoomIn(): void {
@@ -758,10 +955,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this.MinimapOpen = !this.MinimapOpen;
   }
 
-  /** Cancel any in-flight transient gesture (tool switch, Esc). */
+  /** Cancel any in-flight transient gesture (tool switch, Esc) — incl. the rich editor. */
   public CancelTransient(): void {
     this.Interaction = null;
     this.PendingConnector = null;
+    this.RichEditor = null;
   }
 
   // minimap render model
@@ -917,6 +1115,34 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   private placeImage(p: WhiteboardPoint, name: string, url: string | null): void {
     const item = this.State.AddItem({ Kind: 'image', X: p.X, Y: p.Y, Name: name, Url: url }, 'user');
     this.State.Select(item.ID);
+  }
+
+  /** Click-place a starter markdown panel and open its editor. */
+  private placeMarkdown(p: WhiteboardPoint): void {
+    const item = this.State.AddItem({
+      Kind: 'markdown',
+      X: p.X - WHITEBOARD_DEFAULTS.MarkdownW / 2,
+      Y: p.Y - 20,
+      W: WHITEBOARD_DEFAULTS.MarkdownW,
+      Markdown: STARTER_MARKDOWN
+    }, 'user') as WhiteboardMarkdownItem;
+    this.State.Select(item.ID);
+    this.openRichEditor(item);
+  }
+
+  /** Click-place a starter HTML widget (sandboxed) and open its editor. */
+  private placeHtml(p: WhiteboardPoint): void {
+    const item = this.State.AddItem({
+      Kind: 'html',
+      X: p.X - WHITEBOARD_DEFAULTS.HtmlW / 2,
+      Y: p.Y - 20,
+      W: WHITEBOARD_DEFAULTS.HtmlW,
+      H: WHITEBOARD_DEFAULTS.HtmlH,
+      Html: STARTER_HTML,
+      Title: 'New widget'
+    }, 'user') as WhiteboardHtmlItem;
+    this.State.Select(item.ID);
+    this.openRichEditor(item);
   }
 
   private beginEdit(id: string, isNew: boolean): void {

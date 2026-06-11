@@ -38,12 +38,20 @@ export const WHITEBOARD_TOOL_NAMES = {
   AddNote: 'Whiteboard_AddNote',
   AddShape: 'Whiteboard_AddShape',
   AddText: 'Whiteboard_AddText',
+  AddMarkdown: 'Whiteboard_AddMarkdown',
+  AddHtml: 'Whiteboard_AddHtml',
+  UpdateContent: 'Whiteboard_UpdateContent',
   DrawConnector: 'Whiteboard_DrawConnector',
   Highlight: 'Whiteboard_Highlight',
   MoveItem: 'Whiteboard_MoveItem',
   RemoveItem: 'Whiteboard_RemoveItem',
   StyleItem: 'Whiteboard_StyleItem'
 } as const;
+
+/** Max markdown source length accepted by AddMarkdown / UpdateContent (chars). */
+export const WHITEBOARD_MARKDOWN_MAX_CHARS = 32_000;
+/** Max HTML source length accepted by AddHtml / UpdateContent (chars). */
+export const WHITEBOARD_HTML_MAX_CHARS = 64_000;
 
 /**
  * Tool definitions for session registration (shape-compatible with
@@ -96,6 +104,52 @@ export const WHITEBOARD_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
         bold: { type: 'boolean', description: 'Optional bold weight. Labels render bold by default.' }
       },
       required: ['text']
+    }
+  },
+  {
+    Name: WHITEBOARD_TOOL_NAMES.AddMarkdown,
+    Description: 'Add a rendered MARKDOWN panel to the whiteboard — headings, lists, code blocks and links, for richer illustrative content than a sticky note. The source is rendered safely (sanitized; raw HTML in the markdown is NOT executed). Renders in your reserved violet chrome.',
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        markdown: { type: 'string', description: `The markdown source (max ${WHITEBOARD_MARKDOWN_MAX_CHARS} chars).` },
+        x: { type: 'number', description: 'Left position in board coordinates. Omit to auto-place near existing content.' },
+        y: { type: 'number', description: 'Top position in board coordinates.' },
+        w: { type: 'number', description: 'Panel width in px (160-800). Defaults to 280.' },
+        h: { type: 'number', description: 'Optional max height in px (80-800); content beyond it is clipped. Omit for content-driven height.' }
+      },
+      required: ['markdown']
+    }
+  },
+  {
+    Name: WHITEBOARD_TOOL_NAMES.AddHtml,
+    Description: 'Add an interactive HTML widget to the whiteboard — a self-contained HTML document (inline CSS/JS allowed) rendered in a STRICTLY SANDBOXED iframe with an opaque origin: scripts run isolated with NO access to the app, its session, cookies or storage, and network access is not guaranteed — make the widget fully self-contained (no external scripts, styles or data). Great for small visualizations, tables, or interactive demos.',
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        html: { type: 'string', description: `The widget's full HTML source (max ${WHITEBOARD_HTML_MAX_CHARS} chars). Self-contained — inline everything.` },
+        title: { type: 'string', description: 'Optional short title shown on the widget header bar.' },
+        x: { type: 'number', description: 'Left position in board coordinates. Omit to auto-place near existing content.' },
+        y: { type: 'number', description: 'Top position in board coordinates.' },
+        w: { type: 'number', description: 'Widget width in px (200-960). Defaults to 360.' },
+        h: { type: 'number', description: 'Widget height in px (120-800). Defaults to 240.' }
+      },
+      required: ['html']
+    }
+  },
+  {
+    Name: WHITEBOARD_TOOL_NAMES.UpdateContent,
+    Description: 'Replace the CONTENT of an existing whiteboard item: pass exactly one of "markdown" (for a markdown panel), "html" (for an HTML widget — re-renders its sandboxed iframe), or "text" (for a sticky note or text label). The field must match the item\'s kind.',
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', description: 'ID of the item to update (from a scene delta), e.g. "markdown-3".' },
+        markdown: { type: 'string', description: `New markdown source — markdown panels only (max ${WHITEBOARD_MARKDOWN_MAX_CHARS} chars).` },
+        html: { type: 'string', description: `New HTML source — HTML widgets only (max ${WHITEBOARD_HTML_MAX_CHARS} chars). Still rendered sandboxed.` },
+        text: { type: 'string', description: 'New text — sticky notes and text labels only.' },
+        title: { type: 'string', description: 'Optional new header title — HTML widgets only (alongside "html", or alone).' }
+      },
+      required: ['itemId']
     }
   },
   {
@@ -281,6 +335,9 @@ export function ApplyWhiteboardAgentTool(state: WhiteboardState, toolName: strin
     case WHITEBOARD_TOOL_NAMES.AddNote: return addNote(state, args);
     case WHITEBOARD_TOOL_NAMES.AddShape: return addShape(state, args);
     case WHITEBOARD_TOOL_NAMES.AddText: return addText(state, args);
+    case WHITEBOARD_TOOL_NAMES.AddMarkdown: return addMarkdown(state, args);
+    case WHITEBOARD_TOOL_NAMES.AddHtml: return addHtml(state, args);
+    case WHITEBOARD_TOOL_NAMES.UpdateContent: return updateContent(state, args);
     case WHITEBOARD_TOOL_NAMES.DrawConnector: return drawConnector(state, args);
     case WHITEBOARD_TOOL_NAMES.Highlight: return highlight(state, args);
     case WHITEBOARD_TOOL_NAMES.MoveItem: return moveItem(state, args);
@@ -344,6 +401,121 @@ function addText(state: WhiteboardState, args: Record<string, unknown>): string 
   const w = wRaw !== undefined ? Math.min(800, Math.max(60, Math.round(wRaw))) : undefined;
   const item = state.RunBatch(() => state.AddItem({ Kind: 'text', X: x, Y: y, Text: text, ...(w !== undefined ? { W: w } : {}), ...style.patch }, 'agent'));
   return ok(item.ID, `Added text label "${text}".`);
+}
+
+/** Clamp an optional numeric arg into [min, max], or return the default when omitted. */
+function clampedNumber(value: unknown, min: number, max: number, fallback: number | undefined): number | undefined {
+  const raw = asNumber(value);
+  if (raw === undefined) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, Math.round(raw)));
+}
+
+function addMarkdown(state: WhiteboardState, args: Record<string, unknown>): string {
+  const markdown = asString(args['markdown']);
+  if (!markdown) {
+    return fail('AddMarkdown requires a non-empty "markdown".');
+  }
+  if (markdown.length > WHITEBOARD_MARKDOWN_MAX_CHARS) {
+    return fail(`AddMarkdown: "markdown" exceeds the ${WHITEBOARD_MARKDOWN_MAX_CHARS}-character limit (got ${markdown.length}).`);
+  }
+  const place = autoPlace(state);
+  const x = asNumber(args['x']) ?? place.X;
+  const y = asNumber(args['y']) ?? place.Y;
+  const w = clampedNumber(args['w'], 160, 800, 280) as number;
+  const h = clampedNumber(args['h'], 80, 800, undefined);
+  const item = state.RunBatch(() =>
+    state.AddItem({ Kind: 'markdown', X: x, Y: y, W: w, ...(h !== undefined ? { H: h } : {}), Markdown: markdown }, 'agent'));
+  return ok(item.ID, `Added a markdown panel at (${Math.round(x)}, ${Math.round(y)}).`);
+}
+
+function addHtml(state: WhiteboardState, args: Record<string, unknown>): string {
+  const html = asString(args['html']);
+  if (!html) {
+    return fail('AddHtml requires a non-empty "html".');
+  }
+  if (html.length > WHITEBOARD_HTML_MAX_CHARS) {
+    return fail(`AddHtml: "html" exceeds the ${WHITEBOARD_HTML_MAX_CHARS}-character limit (got ${html.length}).`);
+  }
+  const title = asString(args['title']);
+  const place = autoPlace(state);
+  const x = asNumber(args['x']) ?? place.X;
+  const y = asNumber(args['y']) ?? place.Y;
+  const w = clampedNumber(args['w'], 200, 960, 360) as number;
+  const h = clampedNumber(args['h'], 120, 800, 240) as number;
+  const item = state.RunBatch(() =>
+    state.AddItem({ Kind: 'html', X: x, Y: y, W: w, H: h, Html: html, Title: title }, 'agent'));
+  return ok(item.ID, `Added an HTML widget${title ? ` "${title}"` : ''} at (${Math.round(x)}, ${Math.round(y)}) — rendered sandboxed.`);
+}
+
+/** Validate one UpdateContent content field against the target item's kind. Returns the patch or an error. */
+function contentPatchFor(item: WhiteboardItem, args: Record<string, unknown>): { patch: WhiteboardItemPatch } | { error: string } {
+  if (args['text'] !== undefined && typeof args['text'] !== 'string') {
+    return { error: '"text" must be a string.' };
+  }
+  const markdown = asString(args['markdown']);
+  const html = asString(args['html']);
+  const text = args['text'] as string | undefined;
+  const title = asString(args['title']);
+  const contentFields = [markdown, html, text].filter((v) => v !== undefined).length;
+  if (contentFields > 1) {
+    return { error: 'pass exactly ONE of "markdown", "html" or "text".' };
+  }
+  if (contentFields === 0 && title === undefined) {
+    return { error: 'pass one of "markdown", "html", "text" (or "title" for an HTML widget).' };
+  }
+  if (markdown !== undefined) {
+    if (item.Kind !== 'markdown') {
+      return { error: `"markdown" only applies to markdown panels (item ${item.ID} is a ${item.Kind}).` };
+    }
+    if (markdown.length > WHITEBOARD_MARKDOWN_MAX_CHARS) {
+      return { error: `"markdown" exceeds the ${WHITEBOARD_MARKDOWN_MAX_CHARS}-character limit (got ${markdown.length}).` };
+    }
+    return { patch: { Markdown: markdown } };
+  }
+  if (html !== undefined || title !== undefined) {
+    if (item.Kind !== 'html') {
+      return { error: `"html"/"title" only apply to HTML widgets (item ${item.ID} is a ${item.Kind}).` };
+    }
+    if (html !== undefined && html.length > WHITEBOARD_HTML_MAX_CHARS) {
+      return { error: `"html" exceeds the ${WHITEBOARD_HTML_MAX_CHARS}-character limit (got ${html.length}).` };
+    }
+    const patch: WhiteboardItemPatch = {};
+    if (html !== undefined) {
+      patch.Html = html;
+    }
+    if (title !== undefined) {
+      patch.Title = title;
+    }
+    return { patch };
+  }
+  // text — sticky notes and free text labels
+  if (item.Kind !== 'sticky' && item.Kind !== 'text') {
+    return { error: `"text" only applies to sticky notes and text labels (item ${item.ID} is a ${item.Kind}).` };
+  }
+  if (!text || text.trim().length === 0) {
+    return { error: '"text" must be a non-empty string.' };
+  }
+  return { patch: { Text: text } };
+}
+
+function updateContent(state: WhiteboardState, args: Record<string, unknown>): string {
+  const itemId = asString(args['itemId']);
+  if (!itemId) {
+    return fail('UpdateContent requires "itemId".');
+  }
+  const item = state.GetItem(itemId);
+  if (!item) {
+    return fail(`UpdateContent: no item with id "${itemId}".`);
+  }
+  const result = contentPatchFor(item, args);
+  if ('error' in result) {
+    return fail(`UpdateContent: ${result.error}`);
+  }
+  // ONE UpdateItem in ONE batch — single undo step, single journal entry.
+  state.RunBatch(() => state.UpdateItem(itemId, result.patch, 'agent'));
+  return ok(itemId, `Updated the content of ${itemId}.`);
 }
 
 function drawConnector(state: WhiteboardState, args: Record<string, unknown>): string {
