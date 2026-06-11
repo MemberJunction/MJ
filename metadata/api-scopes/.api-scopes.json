@@ -796,5 +796,135 @@
       "lastModified": "2026-02-01T00:26:50.140Z",
       "checksum": "825a4d5b3a35bdd3df1e3ffd15bdcd19dfe475b40ad487cd42245d23c2698c85"
     }
+  },
+  {
+    "fields": {
+      "Name": "batch",
+      "FullPath": "view:batch",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=view",
+      "Category": "Views",
+      "Description": "Batch execute multiple views in a single call via RunViews",
+      "ResourceType": "View",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "7ED62962-C267-47E3-BA90-E8B6D08046D1"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T04:53:12.757Z",
+      "checksum": "31e1444e2dad7217d0625537587abcd425a04c36ccd144718a91e489d74a0b5d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "create",
+      "FullPath": "query:create",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=query",
+      "Category": "Queries",
+      "Description": "Create new query definitions",
+      "ResourceType": "Query",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "A9E36770-536E-4B82-8F9D-805442E2B633"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T04:53:12.771Z",
+      "checksum": "4d332874a78b6d01e56a34cd4806f4a4170c973d4ef465df195858fb18a7d544"
+    }
+  },
+  {
+    "fields": {
+      "Name": "update",
+      "FullPath": "query:update",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=query",
+      "Category": "Queries",
+      "Description": "Update existing query definitions",
+      "ResourceType": "Query",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "61063598-BD04-4F76-B54B-4A5D1FB7BC20"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T04:53:12.790Z",
+      "checksum": "459a53fd1a1f3c362cb1a0f6f7ca1563aa1e643b150d6fa325fc2367379ce537"
+    }
+  },
+  {
+    "fields": {
+      "Name": "delete",
+      "FullPath": "query:delete",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=query",
+      "Category": "Queries",
+      "Description": "Delete query definitions",
+      "ResourceType": "Query",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "2AB09C9F-16CD-4394-8AF9-74FC2535AC65"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T04:53:12.804Z",
+      "checksum": "233eb78e399503e3d0f0363c5d5721d86510b5d89767f63a22a26ac24989209f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "test",
+      "FullPath": "query:test",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=query",
+      "Category": "Queries",
+      "Description": "Test transient SQL with composition and Nunjucks template processing",
+      "ResourceType": "Query",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "E8407520-483E-4FAA-A02C-8AEE35EE8458"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T04:53:12.824Z",
+      "checksum": "cad598365f6ef1abf5d15af7fbccf39294b1efdfcdc04f9ae1e5caf880effd6c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "search",
+      "FullPath": "search",
+      "ParentID": null,
+      "Category": "Search",
+      "Description": "Parent scope for knowledge search operations",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-magnifying-glass",
+        "color": "#f43f5e"
+      }
+    },
+    "primaryKey": {
+      "ID": "411AA5E8-7F8E-4092-B6B1-9566847E2A3A"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T04:53:12.720Z",
+      "checksum": "4efc78059a92d3357edbb9fd0cfdccc69848037e19cb89a1679717562ce0bfe5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "search:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=search",
+      "Category": "Search",
+      "Description": "Execute knowledge search and preview search operations",
+      "ResourceType": "Entity",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "BB1E7EDF-955E-44DA-821D-A385BC5DD150"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T04:53:12.838Z",
+      "checksum": "9975eb617cd5c07d99a2e11cb2e05347598a23d0b521a8361bd436585fe1d601"
+    }
   }
 ]

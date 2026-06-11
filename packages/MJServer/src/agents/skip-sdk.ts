@@ -29,7 +29,8 @@ import { MJConversationDetailEntity, QueryEngine } from '@memberjunction/core-en
 import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
-import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as callbackAPIKey } from '../config.js';
+import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as legacyCallbackAPIKey } from '../config.js';
+import { getSkipCallbackKey } from './skip-callback-key-provisioner.js';
 import { getDbType } from '../index.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -421,9 +422,18 @@ export class SkipSDK {
         const { notes, noteTypes } = includeNotes ? await this.buildAgentNotes(contextUser) : { notes: [], noteTypes: [] };
         // Note: requests would be built here if includeRequests is true
 
-        // Setup access token for Skip callbacks if needed
+        // Setup callback auth for Skip→client callbacks if needed
+        let callbackAPIKey: string | undefined;
         let accessToken: GetDataAccessToken | undefined;
         if (includeCallbackAuth) {
+            // Try the auto-provisioned scoped API key first; fall back to
+            // legacy MJ_API_KEY env var during the transition period.
+            const scopedKey = await getSkipCallbackKey();
+            callbackAPIKey = scopedKey ?? legacyCallbackAPIKey;
+
+            // Access token is still generated for the transition period — the
+            // legacy GetData resolver requires it. Once Phase 5 (cleanup) removes
+            // GetData usage, this can be removed.
             const tokenInfo = {
                 type: 'skip_api_request',
                 userEmail: contextUser.Email,
@@ -449,8 +459,8 @@ export class SkipSDK {
             organizationID: this.config.organizationId,
             organizationInfo: this.config.organizationInfo,
             apiKeys: this.buildAPIKeys(),
-            callingServerURL: accessToken ? (publicUrl || `${baseUrl}:${graphqlPort}${graphqlRootPath}`) : undefined,
-            callingServerAPIKey: accessToken ? callbackAPIKey : undefined,
+            callingServerURL: callbackAPIKey ? (publicUrl || `${baseUrl}:${graphqlPort}${graphqlRootPath}`) : undefined,
+            callingServerAPIKey: callbackAPIKey,
             callingServerAccessToken: accessToken ? accessToken.Token : undefined
         };
     }

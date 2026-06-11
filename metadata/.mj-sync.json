@@ -66,6 +66,7 @@
     "archiving",
     "entity-form-overrides",
     "entity-settings",
+    "users",
     "roles",
     "entity-permissions"
   ],

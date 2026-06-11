@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "Name": "Skip Service Account",
+      "FirstName": "Skip",
+      "LastName": "Service",
+      "Email": "skip-service@skip.internal",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "primaryKey": {
+      "ID": "0199FC9E-1468-57FC-8A4E-EF1131DA76EB"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T04:53:12.872Z",
+      "checksum": "5cb83a61748a5d23d5d8114cff73e15976d7616dab1ac02e3aa2407e08b55120"
+    }
+  }
+]

@@ -715,6 +715,7 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) 
@@ -746,6 +747,7 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewID, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) 
@@ -777,6 +779,7 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.EntityName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) return null;
@@ -806,6 +809,7 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:batch', '*', userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       // Note: RunViewsGeneric returns the core RunViewResult type, not the GraphQL type
       const rawData = await super.RunViewsGeneric(input, provider, userPayload);
