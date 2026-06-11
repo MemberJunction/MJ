@@ -23,3 +23,4 @@ export { BlackbaudConnector } from './BlackbaudConnector.js';
 export { NetSuiteConnector } from './NetSuiteConnector.js';
 export { NetForumConnector } from './NetForumConnector.js';
 export { NimbleAMSConnector } from './NimbleAMSConnector.js';
+export { ORCIDConnector, LoadORCIDConnector, type ORCIDConnectionConfig } from './ORCIDConnector.js';
