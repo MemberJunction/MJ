@@ -44,6 +44,7 @@
     "@memberjunction/ai-agent-manager": "5.40.2",
     "@memberjunction/ai-agents": "5.40.2",
     "@memberjunction/ai-anthropic": "5.40.2",
+    "@memberjunction/ai-assemblyai": "5.40.2",
     "@memberjunction/ai-azure": "5.40.2",
     "@memberjunction/ai-bedrock": "5.40.2",
     "@memberjunction/ai-betty-bot": "5.40.2",

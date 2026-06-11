@@ -1,0 +1,23 @@
+{
+  "fields": {
+    "Name": "Realtime Co-Agent - Progress Narration",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:templates/Voice Co-Agent - Progress Narration.template.md",
+    "ResponseFormat": "Text",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "Status": "Active",
+    "Description": "One-off spoken-update instructions the Voice Co-Agent's realtime model receives while a delegated target-agent run is in flight. Contains a {{ progressMessage }} placeholder the client substitutes with the live progress message. Enforces strictly first-person narration (the co-agent owns the work): one short sentence, an explicit rewrite example, a ban on 'it'/the agent's name as the sentence subject, no repeated updates, and no generic filler. Resolved by name at session prepare time and threaded to the browser; clients fall back to built-in wording when this prompt is absent.",
+    "PromptRole": "System",
+    "PromptPosition": "First"
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": []
+  },
+  "primaryKey": {
+    "ID": "6D5500D7-DD13-4418-AC29-C948AD490DC9"
+  },
+  "sync": {
+    "lastModified": "2026-06-11T13:54:30.457Z",
+    "checksum": "ddb1f695d845fb8ad7a394ac17ebdbe90903d7a76ca1d4c8d2d73a30748fd653"
+  }
+}

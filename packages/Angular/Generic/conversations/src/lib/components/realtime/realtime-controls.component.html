@@ -1,0 +1,56 @@
+@if (ReviewMode) {
+  <!-- SESSION REVIEW: no live controls — one prominent resume action + Close -->
+  <div class="controls controls--review">
+    <button type="button" class="start-live" (click)="StartLiveRequested.emit()"
+            title="Resume this session as a new live call">
+      <i class="fa-solid fa-phone" aria-hidden="true"></i>
+      <span>Start live session</span>
+    </button>
+    <div class="ctrl-group">
+      <button type="button" class="ctrl" (click)="CloseRequested.emit()"
+              title="Close review" aria-label="Close session review">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
+      <span class="ctrl-label">Close</span>
+    </div>
+  </div>
+} @else {
+<div class="controls">
+  <div class="ctrl-group">
+    <button type="button" class="ctrl" [class.ctrl--muted]="IsMuted"
+            (click)="ToggleMute()"
+            [title]="IsMuted ? 'Unmute microphone' : 'Mute microphone'"
+            [attr.aria-pressed]="IsMuted">
+      <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
+    </button>
+    <span class="ctrl-label">{{ IsMuted ? 'Unmute' : 'Mute' }}</span>
+  </div>
+
+  <div class="ctrl-group">
+    <button type="button" class="ctrl" [class.ctrl--on]="CaptionsOn"
+            (click)="ToggleCaptions()"
+            [title]="CaptionsOn ? 'Hide captions' : 'Show captions'"
+            [attr.aria-pressed]="CaptionsOn">
+      <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+    </button>
+    <span class="ctrl-label">Captions</span>
+  </div>
+
+  <div class="ctrl-group">
+    <button type="button" class="ctrl ctrl--dev" [class.ctrl--on]="DevMode"
+            (click)="ToggleDevMode()"
+            [title]="DevMode ? 'Hide developer links' : 'Show developer links'"
+            [attr.aria-pressed]="DevMode">
+      <i class="fa-solid fa-gear" aria-hidden="true"></i>
+    </button>
+    <span class="ctrl-label">Dev</span>
+  </div>
+
+  <div class="ctrl-group">
+    <button type="button" class="ctrl ctrl--end" (click)="EndCall()" title="End call" aria-label="End call">
+      <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+    </button>
+    <span class="ctrl-label ctrl-label--end">End call</span>
+  </div>
+</div>
+}

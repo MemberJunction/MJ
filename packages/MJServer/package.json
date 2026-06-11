@@ -40,6 +40,7 @@
     "@memberjunction/ai-agent-manager-actions": "5.40.2",
     "@memberjunction/ai-agents": "5.40.2",
     "@memberjunction/ai-core-plus": "5.40.2",
+    "@memberjunction/ai-engine-base": "5.40.2",
     "@memberjunction/ai-mcp-client": "5.40.2",
     "@memberjunction/ai-prompts": "5.40.2",
     "@memberjunction/ai-provider-bundle": "5.40.2",

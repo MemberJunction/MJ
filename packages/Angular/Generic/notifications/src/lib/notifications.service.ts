@@ -134,8 +134,10 @@ export class MJNotificationService {
               }
             }
             else {
-              // otherwise just post it as a simple notification, except Skip messages, we will let Skip handle those
-              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && typeof statusObj.message === 'string') {
+              // otherwise just post it as a simple notification, except Skip messages, we will let Skip handle those.
+              // 'realtimedelegationprogress' carries a per-step message that the voice session consumes + narrates
+              // itself — it must NOT raise a toast (otherwise a live voice call spams a toast per progress step).
+              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && type !== 'realtimedelegationprogress' && typeof statusObj.message === 'string') {
                 this.CreateSimpleNotification(statusObj.message, "success", 2500);
               }
             }

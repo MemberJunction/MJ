@@ -1,0 +1,24 @@
+<div class="composer">
+  <div class="composer__note">
+    <i class="fa-solid fa-arrow-turn-down" aria-hidden="true"></i>
+    Type here to join the live session — your text goes into this voice call
+  </div>
+  <div class="composer__box">
+    <input
+      type="text"
+      class="composer__input"
+      placeholder="Type a message into the live session…"
+      [(ngModel)]="Draft"
+      (keydown)="OnKeydown($event)"
+      aria-label="Type a message into the live voice session" />
+    <button
+      class="composer__send"
+      type="button"
+      [disabled]="!CanSend"
+      (click)="Send()"
+      title="Send into live session"
+      aria-label="Send">
+      <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+    </button>
+  </div>
+</div>
