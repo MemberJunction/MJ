@@ -377,6 +377,13 @@
       "DriverClass": "WhiteboardArtifactViewerPlugin",
       "IsEnabled": true,
       "Icon": "fa-solid fa-chalkboard"
+    },
+    "primaryKey": {
+      "ID": "D37C0785-C5FD-42B4-9442-D48B076E2BA4"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T00:39:04.323Z",
+      "checksum": "6d58bfe5c82547da9713a939ac8612ad37ee0e8729fac20bdda891e0ad2eecc5"
     }
   }
 ]

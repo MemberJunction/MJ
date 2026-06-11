@@ -1,7 +1,9 @@
-import { Component, EventEmitter, Input, Output, OnDestroy, AfterViewInit, ChangeDetectorRef, TemplateRef, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, Output, OnDestroy, AfterViewInit, ChangeDetectorRef, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { AngularSplitModule } from 'angular-split';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { VoiceConnectionState, VoiceSessionService } from '../../services/voice-session.service';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
@@ -13,6 +15,10 @@ import { RealtimeChannelStripComponent } from './realtime-channel-strip.componen
 import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeControlsComponent } from './realtime-controls.component';
 import { RealtimeSurfaceTabsComponent } from './realtime-surface-tabs.component';
+import {
+  ClampSurfacePanelWidth, DefaultSurfacePanelWidth, ParseSurfacePanelPref, SerializeSurfacePanelPref,
+  SURFACE_PANEL_COLLAPSED_WIDTH, SURFACE_PANEL_DEFAULT_WIDTH, SURFACE_PANEL_MIN_WIDTH, SURFACE_PANEL_PREF_KEY
+} from './realtime-surface-panel-prefs';
 import { RealtimeChannelTabRegistration } from './realtime-surface-tabs.model';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
 import { RealtimeWhiteboardBoardComponent } from './whiteboard/whiteboard-board.component';
@@ -96,6 +102,7 @@ export interface RealtimeStartLiveRequest {
   selector: 'mj-realtime-session-overlay',
   imports: [
     CommonModule,
+    AngularSplitModule,
     SharedGenericModule,
     RealtimeAgentBannerComponent,
     RealtimeSessionThreadComponent,
@@ -260,8 +267,100 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
 
   ngAfterViewInit(): void {
     this.viewReady = true;
+    this.loadPanelWidthPref();
     this.flushPendingChannelTabs();
     this.registerReviewBoardTab();
+  }
+
+  // ── Surface-panel sizing (angular-split; width persisted per-user) ─────────
+  /** Whether the surface panel is collapsed to its slim strip (reported by the panel). */
+  public PanelCollapsed = false;
+  /** Wide tier active (a content tab is focused) — drives the DEFAULT width only. */
+  public PanelWide = false;
+  /** The user's explicit dragged width (persisted); null = follow the default tiers. */
+  private userPanelWidth: number | null = null;
+  /** Current expanded panel width in px (the split area's size). */
+  public PanelWidthPx = SURFACE_PANEL_DEFAULT_WIDTH;
+  private hostRef = inject(ElementRef);
+
+  /** The split area size: slim strip when collapsed, otherwise the current width. */
+  public get PanelAreaSize(): number {
+    return this.PanelCollapsed ? SURFACE_PANEL_COLLAPSED_WIDTH : this.PanelWidthPx;
+  }
+
+  public get PanelMinSize(): number {
+    return this.PanelCollapsed ? SURFACE_PANEL_COLLAPSED_WIDTH : SURFACE_PANEL_MIN_WIDTH;
+  }
+
+  /** Gutter dragging is meaningless while collapsed or when the surface fills (focus mode). */
+  public get PanelSplitDisabled(): boolean {
+    return this.PanelCollapsed || this.ChannelFocusMode;
+  }
+
+  public get PanelGutterSize(): number {
+    return this.PanelSplitDisabled ? 1 : 7;
+  }
+
+  public OnPanelCollapsedChange(collapsed: boolean): void {
+    this.PanelCollapsed = collapsed;
+    this.cdr.markForCheck();
+  }
+
+  /** Wide-tier flips only move the DEFAULT width — an explicit user width always wins. */
+  public OnPanelWideChanged(wide: boolean): void {
+    this.PanelWide = wide;
+    if (this.userPanelWidth === null) {
+      this.PanelWidthPx = DefaultSurfacePanelWidth(wide, this.hostWidth());
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Drag end on the split gutter: clamp, adopt as the explicit width, persist (debounced). */
+  public OnPanelDragEnd(event: { sizes: Array<number | '*'> }): void {
+    const raw = event.sizes[event.sizes.length - 1];
+    const px = typeof raw === 'number' ? raw : Number.NaN;
+    if (!Number.isFinite(px)) {
+      return;
+    }
+    const clamped = ClampSurfacePanelWidth(px, this.hostWidth());
+    this.userPanelWidth = clamped;
+    this.PanelWidthPx = clamped;
+    this.persistPanelWidth(clamped);
+  }
+
+  /** Double-click the gutter: back to the default tier width; persist the reset. */
+  public OnPanelGutterReset(): void {
+    this.userPanelWidth = null;
+    this.PanelWidthPx = DefaultSurfacePanelWidth(this.PanelWide, this.hostWidth());
+    this.persistPanelWidth(null);
+    this.cdr.markForCheck();
+  }
+
+  private hostWidth(): number {
+    const el = this.hostRef.nativeElement as HTMLElement;
+    return el.getBoundingClientRect ? el.getBoundingClientRect().width : 0;
+  }
+
+  /** Reads the persisted width once per overlay instance (no-op when the engine isn't configured). */
+  private loadPanelWidthPref(): void {
+    try {
+      const pref = ParseSurfacePanelPref(UserInfoEngine.Instance.GetSetting(SURFACE_PANEL_PREF_KEY));
+      if (pref) {
+        this.userPanelWidth = pref.Width;
+        this.PanelWidthPx = ClampSurfacePanelWidth(pref.Width, this.hostWidth());
+      }
+    } catch {
+      // UserInfoEngine not configured (plain-node tests / early bootstrap) — default tiers apply.
+    }
+  }
+
+  /** Persists the width preference server-side (debounced); reset serializes {"width":null}. */
+  private persistPanelWidth(width: number | null): void {
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(SURFACE_PANEL_PREF_KEY, SerializeSurfacePanelPref(width));
+    } catch {
+      // engine unavailable — width still applies for this session
+    }
   }
 
   ngOnDestroy(): void {

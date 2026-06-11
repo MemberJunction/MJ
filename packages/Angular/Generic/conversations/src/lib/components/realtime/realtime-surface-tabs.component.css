@@ -7,45 +7,16 @@
   --sage-border: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 38%, transparent);
 }
 
-/* The surface panel: Activity-width by default, wider when a content tab is focused,
-   slim strip when collapsed (the collapse behavior lifted from the old standalone rail).
-   An explicit user-dragged width (inline style, persisted per-user) overrides both tiers. */
+/* The surface panel fills its angular-split AREA — the overlay owns the width
+   (user drag via the split gutter, persisted per-user, default tiers). */
 .surface {
   position: relative;
-  width: 308px;
+  width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--mj-border-default);
   background: var(--mj-bg-surface);
-  transition: width 200ms ease;
-}
-.surface--wide {
-  width: clamp(380px, 44%, 640px);
-}
-/* While dragging the grab handle, track the pointer 1:1 (no eased transition). */
-.surface--resizing {
-  transition: none;
-}
-
-/* ---------- left-edge grab handle (drag to resize, double-click to reset) ---------- */
-.surface__resizer {
-  position: absolute;
-  left: -3px;
-  top: 0;
-  bottom: 0;
-  width: 6px;
-  z-index: 5;
-  cursor: col-resize;
-  touch-action: none;
-  background: transparent;
-  transition: background 140ms ease;
-}
-.surface__resizer:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 22%, transparent);
-}
-.surface--resizing .surface__resizer {
-  background: color-mix(in srgb, var(--mj-brand-primary) 38%, transparent);
 }
 /* Board-focus fill: the panel owns the whole overlay (the main call column is hidden). */
 .surface--fill {

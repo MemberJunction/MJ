@@ -184,3 +184,31 @@
   min-height: 0;
   overflow: hidden;
 }
+
+/* ---------- angular-split layout (main column | surface panel) ---------- */
+.call-split {
+  flex: 1;
+  min-height: 0;
+}
+/* Token-styled gutter: invisible until hover, brand-tinted while interacting.
+   (angular-split's default gutter is a gray bar with a dotted icon — restyle.) */
+:host ::ng-deep .call-split > .as-split-gutter {
+  background: transparent !important;
+  transition: background 140ms ease;
+}
+:host ::ng-deep .call-split > .as-split-gutter:hover,
+:host ::ng-deep .call-split > .as-split-gutter.as-dragged {
+  background: color-mix(in srgb, var(--mj-brand-primary) 26%, transparent) !important;
+}
+:host ::ng-deep .call-split > .as-split-gutter .as-split-gutter-icon {
+  display: none;
+}
+/* Areas must allow their children to own scrolling. */
+:host ::ng-deep .call-split > .as-split-area {
+  overflow: visible;
+  display: flex;
+}
+:host ::ng-deep .call-split > .as-split-area > * {
+  flex: 1;
+  min-width: 0;
+}

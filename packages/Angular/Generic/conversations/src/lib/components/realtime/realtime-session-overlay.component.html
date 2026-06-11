@@ -5,6 +5,16 @@
        [class.board-focus]="ChannelFocusMode"
        role="region" [attr.aria-label]="IsReviewing ? 'Past session review' : 'Live voice session'">
 
+    <!-- Resizable two-area layout (angular-split, px units): main call column | surface
+         panel. The gutter drags the panel width (clamped, persisted per-user via
+         UserInfoEngine; double-click resets to the default tier). Collapsed strip and
+         board-focus modes disable the gutter; focus mode hides the main area. -->
+    <as-split class="call-split" direction="horizontal" unit="pixel"
+              [gutterSize]="PanelGutterSize"
+              [disabled]="PanelSplitDisabled"
+              (dragEnd)="OnPanelDragEnd($event)"
+              (gutterDblClick)="OnPanelGutterReset()">
+    <as-split-area size="*" [minSize]="420" [visible]="!ChannelFocusMode">
     <!-- MAIN column: banner → thread → channel strip → in-call composer → controls.
          In SESSION REVIEW the live-only pieces (narration, connecting screen, channel
          strip, composer) drop out and the controls swap to Start-live + Close. -->
@@ -73,13 +83,17 @@
          from each plugin). Collapsible to a slim strip; fills the overlay when a channel
          surface holds the focus layout. In review it hosts the Activity rail plus the
          read-only Whiteboard tab when the reviewed session saved a board. -->
+    </as-split-area>
+    <as-split-area [size]="ChannelFocusMode ? '*' : PanelAreaSize" [minSize]="PanelMinSize">
     <mj-realtime-surface-tabs
       [State]="State"
       [DevMode]="DevMode"
       [CurrentUser]="CurrentUser"
       [EnvironmentID]="EnvironmentID"
       [Fill]="ChannelFocusMode"
-      (OpenRunRequested)="OnOpenRunRequested($event)">
+      (OpenRunRequested)="OnOpenRunRequested($event)"
+      (CollapsedChange)="OnPanelCollapsedChange($event)"
+      (WideChanged)="OnPanelWideChanged($event)">
     </mj-realtime-surface-tabs>
 
     <!-- FOCUS floating call pill: the main column is hidden, so the live call's
@@ -112,6 +126,8 @@
         </button>
       </div>
     }
+    </as-split-area>
+    </as-split>
 
   </div>
 }
