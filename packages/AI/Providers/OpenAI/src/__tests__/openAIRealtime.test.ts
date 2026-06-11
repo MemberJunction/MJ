@@ -32,23 +32,53 @@ vi.mock('openai', () => ({
 }));
 
 import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection } from '../models/openAIRealtime';
+import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
 import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
 
 /**
  * In-memory fake connection: records every outbound `send`, lets tests fire server events to all
- * `'event'` listeners, and tracks open/closed state. No network, fully deterministic.
+ * `'event'` listeners (and SDK-level errors to `'error'` listeners), exposes a fake raw socket
+ * whose `'close'` listeners tests can fire, and tracks open/closed state. No network, fully
+ * deterministic.
  */
 class FakeConnection implements IOpenAIRealtimeConnection {
     public Sent: RealtimeClientEvent[] = [];
     public Closed = false;
     private listeners: Array<(event: RealtimeServerEvent) => void> = [];
+    private errorListeners: Array<(error: OpenAIRealtimeError) => void> = [];
+    private socketCloseListeners: Array<() => void> = [];
 
-    public on(_event: 'event', listener: (event: RealtimeServerEvent) => void): void {
-        this.listeners.push(listener);
+    /** Fake raw-socket surface (the driver only uses addEventListener('close', ...)). */
+    public socket = {
+        addEventListener: (_type: 'close', listener: () => void): void => {
+            this.socketCloseListeners.push(listener);
+        },
+    };
+
+    public on(event: 'event', listener: (event: RealtimeServerEvent) => void): void;
+    public on(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;
+    public on(
+        event: 'event' | 'error',
+        listener: ((event: RealtimeServerEvent) => void) | ((error: OpenAIRealtimeError) => void)
+    ): void {
+        if (event === 'event') {
+            this.listeners.push(listener as (event: RealtimeServerEvent) => void);
+        } else {
+            this.errorListeners.push(listener as (error: OpenAIRealtimeError) => void);
+        }
     }
-    public off(_event: 'event', listener: (event: RealtimeServerEvent) => void): void {
-        this.listeners = this.listeners.filter((l) => l !== listener);
+    public off(event: 'event', listener: (event: RealtimeServerEvent) => void): void;
+    public off(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;
+    public off(
+        event: 'event' | 'error',
+        listener: ((event: RealtimeServerEvent) => void) | ((error: OpenAIRealtimeError) => void)
+    ): void {
+        if (event === 'event') {
+            this.listeners = this.listeners.filter((l) => l !== listener);
+        } else {
+            this.errorListeners = this.errorListeners.filter((l) => l !== listener);
+        }
     }
     public send(event: RealtimeClientEvent): void {
         this.Sent.push(event);
@@ -62,9 +92,33 @@ class FakeConnection implements IOpenAIRealtimeConnection {
             l(event);
         }
     }
+    /** Test helper: dispatch an SDK-level error to all registered error listeners. */
+    public FireError(error: OpenAIRealtimeError): void {
+        for (const l of this.errorListeners) {
+            l(error);
+        }
+    }
+    /** Test helper: fire the raw socket's close listeners. */
+    public FireSocketClose(): void {
+        for (const l of this.socketCloseListeners) {
+            l();
+        }
+    }
     public get ListenerCount(): number {
         return this.listeners.length;
     }
+    public get ErrorListenerCount(): number {
+        return this.errorListeners.length;
+    }
+}
+
+/** Builds a minimal OpenAIRealtimeError-shaped object (the class is just Error + two fields). */
+function makeSdkError(message: string, providerError?: { code?: string | null }): OpenAIRealtimeError {
+    const err = new Error(message) as OpenAIRealtimeError;
+    if (providerError) {
+        err.error = { message, type: 'invalid_request_error', code: providerError.code };
+    }
+    return err;
 }
 
 /** Driver subclass that injects the fake connection through the createConnection seam. */
@@ -170,6 +224,31 @@ describe('OpenAIRealtime', () => {
                 expect(create.item.content[0]).toMatchObject({ type: 'input_text', text: 'prior chat' });
             } else {
                 throw new Error('expected conversation.item.create user message');
+            }
+        });
+
+        it('opts into USER input transcription on the start session.update (server-bridged parity)', async () => {
+            await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+            const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+            if (update?.type === 'session.update' && update.session.type === 'realtime') {
+                // Same opt-in CreateClientSession applies — user-role transcripts flow in BOTH topologies.
+                expect(update.session.audio).toEqual({ input: { transcription: { model: 'gpt-4o-mini-transcribe' } } });
+            } else {
+                throw new Error('expected realtime session.update');
+            }
+        });
+
+        it('lets the Config bag override the default audio/input-transcription block', async () => {
+            await driver.StartSession({
+                Model: 'gpt-realtime',
+                SystemPrompt: 'sys',
+                Config: { audio: { input: { transcription: { model: 'whisper-1' } } } },
+            });
+            const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+            if (update?.type === 'session.update' && update.session.type === 'realtime') {
+                expect(update.session.audio).toEqual({ input: { transcription: { model: 'whisper-1' } } });
+            } else {
+                throw new Error('expected realtime session.update');
             }
         });
 
@@ -380,9 +459,11 @@ describe('OpenAIRealtime', () => {
             expect(calls).toEqual([{ CallID: 'call_42', ToolName: 'GetWeather', Arguments: '{"city":"NYC"}' }]);
         });
 
-        it('translates speech_started to OnInterruption', () => {
+        it('fires OnInterruption on speech_started ONLY while a response is active (true barge-in)', () => {
             const fn = vi.fn();
             session.OnInterruption(fn);
+            // A response is in flight — user speech over it is a true barge-in.
+            driver.Fake.Fire({ type: 'response.created', event_id: 'e', response: {} } as RealtimeServerEvent);
             driver.Fake.Fire({
                 type: 'input_audio_buffer.speech_started',
                 audio_start_ms: 100,
@@ -390,6 +471,33 @@ describe('OpenAIRealtime', () => {
                 item_id: 'i',
             } as RealtimeServerEvent);
             expect(fn).toHaveBeenCalledTimes(1);
+        });
+
+        it('does NOT fire OnInterruption on speech_started while the model is idle', () => {
+            const fn = vi.fn();
+            session.OnInterruption(fn);
+            // No active response — this is the user taking their normal turn, not barge-in.
+            driver.Fake.Fire({
+                type: 'input_audio_buffer.speech_started',
+                audio_start_ms: 100,
+                event_id: 'e',
+                item_id: 'i',
+            } as RealtimeServerEvent);
+            expect(fn).not.toHaveBeenCalled();
+        });
+
+        it('does NOT fire OnInterruption for speech after the response completed (response.done clears)', () => {
+            const fn = vi.fn();
+            session.OnInterruption(fn);
+            driver.Fake.Fire({ type: 'response.created', event_id: 'e', response: {} } as RealtimeServerEvent);
+            driver.Fake.Fire({ type: 'response.done', event_id: 'e', response: {} } as RealtimeServerEvent);
+            driver.Fake.Fire({
+                type: 'input_audio_buffer.speech_started',
+                audio_start_ms: 100,
+                event_id: 'e',
+                item_id: 'i',
+            } as RealtimeServerEvent);
+            expect(fn).not.toHaveBeenCalled();
         });
 
         it('translates response.done usage to OnUsage', () => {
@@ -408,12 +516,57 @@ describe('OpenAIRealtime', () => {
         });
     });
 
+    describe('errors and unexpected close (OnError / OnClose)', () => {
+        let session: OpenAIRealtimeSession;
+
+        beforeEach(async () => {
+            session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+        });
+
+        it('classifies a transport-level SDK error (no provider payload) as Fatal', () => {
+            const errors: Array<{ Message: string; Code?: string; Fatal: boolean }> = [];
+            session.OnError((e) => errors.push(e));
+            driver.Fake.FireError(makeSdkError('could not send data'));
+            expect(errors).toEqual([{ Message: 'could not send data', Code: undefined, Fatal: true }]);
+        });
+
+        it('classifies a provider error frame (payload present) as non-fatal with its code', () => {
+            const errors: Array<{ Message: string; Code?: string; Fatal: boolean }> = [];
+            session.OnError((e) => errors.push(e));
+            driver.Fake.FireError(makeSdkError('bad request', { code: 'invalid_value' }));
+            expect(errors).toEqual([{ Message: 'bad request', Code: 'invalid_value', Fatal: false }]);
+        });
+
+        it('surfaces an UNEXPECTED socket close as a fatal error followed by OnClose', () => {
+            const errors: Array<{ Message: string; Fatal: boolean }> = [];
+            const closed = vi.fn();
+            session.OnError((e) => errors.push({ Message: e.Message, Fatal: e.Fatal }));
+            session.OnClose(closed);
+            driver.Fake.FireSocketClose();
+            expect(errors).toEqual([{ Message: 'OpenAI realtime connection closed unexpectedly', Fatal: true }]);
+            expect(closed).toHaveBeenCalledTimes(1);
+        });
+
+        it('stays silent when the socket closes AFTER a consumer-initiated Close()', async () => {
+            const onError = vi.fn();
+            const onClose = vi.fn();
+            session.OnError(onError);
+            session.OnClose(onClose);
+            await session.Close();
+            driver.Fake.FireSocketClose(); // the socket closing is the expected consequence
+            expect(onError).not.toHaveBeenCalled();
+            expect(onClose).not.toHaveBeenCalled();
+        });
+    });
+
     describe('lifecycle', () => {
-        it('Close removes the listener and closes the connection', async () => {
+        it('Close removes the event + error listeners and closes the connection', async () => {
             const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
             expect(driver.Fake.ListenerCount).toBe(1);
+            expect(driver.Fake.ErrorListenerCount).toBe(1);
             await session.Close();
             expect(driver.Fake.ListenerCount).toBe(0);
+            expect(driver.Fake.ErrorListenerCount).toBe(0);
             expect(driver.Fake.Closed).toBe(true);
         });
 
@@ -421,6 +574,8 @@ describe('OpenAIRealtime', () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
             const fn = vi.fn();
             session.OnInterruption(fn);
+            // Put a response in flight so a still-attached listener WOULD fire on barge-in.
+            driver.Fake.Fire({ type: 'response.created', event_id: 'e', response: {} } as RealtimeServerEvent);
             await session.Close();
             driver.Fake.Fire({
                 type: 'input_audio_buffer.speech_started',

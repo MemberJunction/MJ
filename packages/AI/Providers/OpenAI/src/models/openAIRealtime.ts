@@ -7,11 +7,15 @@ import {
     RealtimeTranscript,
     RealtimeToolCall,
     RealtimeUsage,
+    RealtimeSessionError,
     JSONObject,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
 import { OpenAIRealtimeWebSocket } from 'openai/realtime/websocket';
+// NOTE: the bare 'openai/realtime' directory subpath is not exported by the SDK's package
+// exports map — only './realtime/*' file segments are — so the explicit /index is required.
+import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type {
     RealtimeClientEvent,
     RealtimeServerEvent,
@@ -25,6 +29,15 @@ import type {
     ClientSecretCreateParams,
     ClientSecretCreateResponse,
 } from 'openai/resources/realtime/client-secrets';
+
+/**
+ * The ASR model used to transcribe the USER's audio input. Realtime models accept audio
+ * natively, so input transcription is a separate pass that must be opted into — without it only
+ * assistant-side transcripts flow. Shared by BOTH topologies ({@link OpenAIRealtime.CreateClientSession}
+ * for client-direct and {@link OpenAIRealtimeSession.applyInitialConfig} for server-bridged) so the
+ * contract's promise of both-role transcripts holds everywhere.
+ */
+const OPENAI_INPUT_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 
 /**
  * Maps Core {@link RealtimeToolDefinition}s up to OpenAI's native function-tool schema.
@@ -64,12 +77,27 @@ export interface IOpenAIRealtimeConnection {
      * value-returning one, so a real `OpenAIRealtimeWebSocket` still satisfies this interface.
      */
     on(event: 'event', listener: (event: RealtimeServerEvent) => void): void;
+    /**
+     * Registers a listener for connection errors. The SDK routes BOTH transport-level failures
+     * (socket error, unparseable frame, failed send — `error.error` is undefined) and provider
+     * `error` server frames (`error.error` carries the payload) through this channel; the driver
+     * classifies fatality from that distinction.
+     */
+    on(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;
     /** Removes a previously-registered listener. See {@link IOpenAIRealtimeConnection.on} re: return type. */
     off(event: 'event', listener: (event: RealtimeServerEvent) => void): void;
+    /** Removes a previously-registered error listener. */
+    off(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;
     /** Sends a client event to the realtime API. */
     send(event: RealtimeClientEvent): void;
     /** Closes the underlying socket. */
     close(props?: { code: number; reason: string }): void;
+    /**
+     * Optional raw WebSocket surface (present on the real `OpenAIRealtimeWebSocket`, which exposes
+     * its underlying `socket`). Used solely to detect UNEXPECTED closure — the SDK emitter has no
+     * close event of its own. The driver feature-detects; fakes may omit it.
+     */
+    socket?: { addEventListener(type: 'close', listener: () => void): void };
 }
 
 /**
@@ -165,7 +193,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
         // Enable transcription of the user's mic input so BOTH sides of the conversation are
         // captured (live captions + persisted ConversationDetail turns). Realtime models accept
         // audio natively, so input transcription is a separate ASR pass that must be opted into.
-        session.audio = { input: { transcription: { model: 'gpt-4o-mini-transcribe' } } };
+        session.audio = { input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL } } };
         const response = await this.mintClientSecret({ session });
         return {
             Provider: 'openai',
@@ -191,7 +219,12 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private toolCallHandler?: (call: RealtimeToolCall) => void;
     private interruptionHandler?: () => void;
     private usageHandler?: (u: RealtimeUsage) => void;
+    private errorHandler?: (error: RealtimeSessionError) => void;
+    private closeHandler?: () => void;
     private eventListener: (event: RealtimeServerEvent) => void;
+    private errorListener: (error: OpenAIRealtimeError) => void;
+    /** Set by {@link Close} so a consumer-initiated teardown never reports an "unexpected" close. */
+    private closedByConsumer = false;
 
     /**
      * Whether a model response is currently in flight. Minimal response tracking that mirrors the
@@ -208,6 +241,11 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.connection = connection;
         this.eventListener = (event: RealtimeServerEvent) => this.dispatch(event);
         this.connection.on('event', this.eventListener);
+        this.errorListener = (error: OpenAIRealtimeError) => this.handleConnectionError(error);
+        this.connection.on('error', this.errorListener);
+        // The SDK emitter has no close event; detect unexpected closure from the raw socket when
+        // the connection exposes it (the real OpenAIRealtimeWebSocket does; fakes may omit it).
+        this.connection.socket?.addEventListener('close', () => this.handleSocketClose());
     }
 
     /**
@@ -335,8 +373,20 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     }
 
     /** @inheritdoc */
+    public OnError(handler: (error: RealtimeSessionError) => void): void {
+        this.errorHandler = handler;
+    }
+
+    /** @inheritdoc */
+    public OnClose(handler: () => void): void {
+        this.closeHandler = handler;
+    }
+
+    /** @inheritdoc */
     public async Close(): Promise<void> {
+        this.closedByConsumer = true;
         this.connection.off('event', this.eventListener);
+        this.connection.off('error', this.errorListener);
         this.connection.close();
     }
 
@@ -392,9 +442,48 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.toolCallHandler?.({ CallID: callId, ToolName: name, Arguments: args });
     }
 
-    /** Notifies the interruption handler of provider-detected barge-in. */
+    /**
+     * Notifies the interruption handler of TRUE barge-in only: user speech that cut off an
+     * ACTIVE model response. A `speech_started` while the model is idle is just the user taking
+     * their normal turn — the {@link IRealtimeSession.OnInterruption} contract explicitly excludes
+     * it, so the raw frame is gated on {@link responseActive} (the server-bridged topology's proxy
+     * for "model output in flight"). The provider cancels its own turn and emits a terminal
+     * `response.done`, which clears the flag.
+     */
     private handleInterruption(): void {
+        if (!this.responseActive) {
+            return;
+        }
         this.interruptionHandler?.();
+    }
+
+    /**
+     * Classifies an SDK connection error and forwards it to the error handler. The SDK routes
+     * BOTH kinds through its `'error'` emitter: provider `error` server frames carry a payload in
+     * `error.error` (recoverable — the session stays open, `Fatal: false`) while transport-level
+     * failures (socket error, unparseable frame, failed send) have no payload (`Fatal: true` —
+     * including the credential/token-expiry case, which surfaces as a transport teardown).
+     */
+    private handleConnectionError(error: OpenAIRealtimeError): void {
+        const isProviderFrame = error.error != null;
+        this.errorHandler?.({
+            Message: error.message,
+            Code: error.error?.code ?? undefined,
+            Fatal: !isProviderFrame,
+        });
+    }
+
+    /**
+     * Handles the raw socket closing. A consumer-initiated {@link Close} is expected and silent;
+     * anything else (provider hangup, network drop, token death) is surfaced as a FATAL error —
+     * so consumers finalize instead of idling on a dead socket — followed by the close handler.
+     */
+    private handleSocketClose(): void {
+        if (this.closedByConsumer) {
+            return;
+        }
+        this.errorHandler?.({ Message: 'OpenAI realtime connection closed unexpectedly', Fatal: true });
+        this.closeHandler?.();
     }
 
     /** Translates a response's usage block into a {@link RealtimeUsage} update. */
@@ -410,11 +499,16 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     // ---- Config helpers ----
 
-    /** Sends the `session.update` that establishes instructions and tools. */
+    /** Sends the `session.update` that establishes instructions, input transcription, and tools. */
     private sendSessionUpdate(systemPrompt: string, tools?: RealtimeToolDefinition[], config?: JSONObject): void {
         const session: RealtimeSessionCreateRequest = {
             type: 'realtime',
             instructions: systemPrompt,
+            // Opt into USER input transcription — the same opt-in CreateClientSession applies for
+            // the client-direct topology — so user-role transcripts flow server-bridged too (the
+            // contract promises BOTH roles). The config bag spreads after this so a
+            // per-conversation override can still replace the audio block.
+            audio: { input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL } } },
             ...config,
         };
         if (tools && tools.length > 0) {

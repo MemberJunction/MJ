@@ -7,6 +7,7 @@ import {
     RealtimeTranscript,
     RealtimeToolCall,
     RealtimeUsage,
+    RealtimeSessionError,
     ClientRealtimeSessionConfig,
 } from '../generic/baseRealtime';
 
@@ -27,6 +28,8 @@ class MockRealtimeSession implements IRealtimeSession {
     public ToolCallHandler?: (call: RealtimeToolCall) => void;
     public InterruptionHandler?: () => void;
     public UsageHandler?: (u: RealtimeUsage) => void;
+    public ErrorHandler?: (error: RealtimeSessionError) => void;
+    public CloseHandler?: () => void;
 
     public SendInput(chunk: ArrayBuffer): void {
         this.SentInput.push(chunk);
@@ -66,6 +69,14 @@ class MockRealtimeSession implements IRealtimeSession {
 
     public OnUsage(handler: (u: RealtimeUsage) => void): void {
         this.UsageHandler = handler;
+    }
+
+    public OnError(handler: (error: RealtimeSessionError) => void): void {
+        this.ErrorHandler = handler;
+    }
+
+    public OnClose(handler: () => void): void {
+        this.CloseHandler = handler;
     }
 
     public async Close(): Promise<void> {
@@ -254,8 +265,8 @@ describe('IRealtimeSession', () => {
     });
 
     it('a session OMITTING the optional interim-update members still satisfies the contract', () => {
-        // Minimal session with NO SendContextNote / RequestSpokenUpdate — providers that cannot
-        // inject mid-session omit the members; optionality keeps them contract-conformant.
+        // Minimal session with NO SendContextNote / RequestSpokenUpdate / OnClose — providers
+        // that cannot support them omit the members; optionality keeps them contract-conformant.
         const minimal: IRealtimeSession = {
             SendInput: () => undefined,
             RegisterTools: async () => undefined,
@@ -265,13 +276,16 @@ describe('IRealtimeSession', () => {
             OnToolCall: () => undefined,
             OnInterruption: () => undefined,
             OnUsage: () => undefined,
+            OnError: () => undefined,
             Close: async () => undefined,
         };
         expect(minimal.SendContextNote).toBeUndefined();
         expect(minimal.RequestSpokenUpdate).toBeUndefined();
+        expect(minimal.OnClose).toBeUndefined();
         // Optional-chained invocation on an omitting session is a safe no-op for callers.
         expect(() => minimal.SendContextNote?.('note')).not.toThrow();
         expect(() => minimal.RequestSpokenUpdate?.('update')).not.toThrow();
+        expect(() => minimal.OnClose?.(() => undefined)).not.toThrow();
     });
 
     it('OnInterruption registers a handler that fires on barge-in', () => {
@@ -289,6 +303,30 @@ describe('IRealtimeSession', () => {
         const usage: RealtimeUsage = { InputTokens: 10, OutputTokens: 20 };
         session.UsageHandler?.(usage);
         expect(handler).toHaveBeenCalledWith(usage);
+    });
+
+    it('OnError is part of the contract and receives fatal + non-fatal errors', () => {
+        session = newSession();
+        const contract: IRealtimeSession = session;
+        expect(typeof contract.OnError).toBe('function');
+        const handler = vi.fn();
+        contract.OnError(handler);
+        const fatal: RealtimeSessionError = { Message: 'token expired', Fatal: true };
+        const recoverable: RealtimeSessionError = { Message: 'bad frame', Code: 'invalid_request_error', Fatal: false };
+        session.ErrorHandler?.(fatal);
+        session.ErrorHandler?.(recoverable);
+        expect(handler).toHaveBeenNthCalledWith(1, fatal);
+        expect(handler).toHaveBeenNthCalledWith(2, recoverable);
+    });
+
+    it('OnClose is an OPTIONAL capability exercised when present', () => {
+        session = newSession();
+        const contract: IRealtimeSession = session;
+        expect(typeof contract.OnClose).toBe('function');
+        const handler = vi.fn();
+        contract.OnClose?.(handler);
+        session.CloseHandler?.();
+        expect(handler).toHaveBeenCalledTimes(1);
     });
 
     it('Close is callable and marks the session closed', async () => {

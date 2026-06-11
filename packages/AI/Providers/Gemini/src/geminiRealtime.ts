@@ -25,6 +25,7 @@ import {
     type RealtimeTranscript,
     type RealtimeToolCall,
     type RealtimeUsage,
+    type RealtimeSessionError,
     type JSONObject,
     type JSONValue,
 } from '@memberjunction/ai';
@@ -79,6 +80,10 @@ export interface GeminiConnectArgs {
     Config: LiveConnectConfig;
     /** Invoked for every {@link LiveServerMessage} the server emits over the session. */
     OnMessage: (message: LiveServerMessage) => void;
+    /** Invoked on a websocket-level error (fatal — the session is unusable). Optional. */
+    OnError?: (event: ErrorEvent) => void;
+    /** Invoked when the websocket closes. Optional. */
+    OnClose?: (event: CloseEvent) => void;
 }
 
 /**
@@ -117,6 +122,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
             Model: params.Model,
             Config: config,
             OnMessage: (message) => session.HandleServerMessage(message),
+            OnError: (event) => session.HandleTransportError(event?.message ?? 'Gemini Live websocket error'),
+            OnClose: (event) => session.HandleTransportClose(event?.code, event?.reason),
         });
         session.AttachLiveSession(live);
         // If the caller provided initial context, seed it as client content (without completing the
@@ -232,6 +239,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
             config: args.Config,
             callbacks: {
                 onmessage: args.OnMessage,
+                onerror: args.OnError,
+                onclose: args.OnClose,
             },
         });
     }
@@ -330,6 +339,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private toolCallHandler: ((call: RealtimeToolCall) => void) | null = null;
     private interruptionHandler: (() => void) | null = null;
     private usageHandler: ((u: RealtimeUsage) => void) | null = null;
+    private errorHandler: ((error: RealtimeSessionError) => void) | null = null;
+    /** True once Close() ran — an expected close must not surface as a fatal error. */
+    private closedByConsumer = false;
 
     /**
      * Maps each pending tool call's `CallID` to its function name. Gemini's `sendToolResponse`
@@ -423,6 +435,31 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** @inheritdoc */
     public OnUsage(handler: (u: RealtimeUsage) => void): void {
         this.usageHandler = handler;
+    }
+
+    public OnError(handler: (error: RealtimeSessionError) => void): void {
+        this.errorHandler = handler;
+    }
+
+    /**
+     * Surfaces a websocket-level failure as a FATAL session error — the transport is gone,
+     * so the consumer (e.g. the session runner) should finalize cleanly instead of idling.
+     */
+    public HandleTransportError(message: string): void {
+        this.errorHandler?.({ Message: message, Fatal: true });
+    }
+
+    /**
+     * Surfaces an UNEXPECTED socket close as a fatal error (expected closes — the consumer
+     * called {@link Close} — are silent). Gemini hard-closes at token expiry, so this is
+     * also how credential death reaches the consumer.
+     */
+    public HandleTransportClose(code?: number, reason?: string): void {
+        if (this.closedByConsumer) {
+            return;
+        }
+        const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
+        this.errorHandler?.({ Message: `Gemini Live session closed unexpectedly${detail ? ` (${detail})` : ''}`, Fatal: true });
     }
 
     /**
@@ -536,6 +573,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
 
     /** @inheritdoc */
     public async Close(): Promise<void> {
+        this.closedByConsumer = true;
         this.live?.close();
         this.live = null;
         this.clearHandlers();

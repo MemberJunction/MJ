@@ -37,6 +37,47 @@ export type JSONObject = { [key: string]: JSONValue };
  * `@RegisterClass(BaseRealtimeModel, 'GeminiRealtime')`. The associated `MJ: AI Models`
  * are typed with the `AIModelType` value **`Realtime`**.
  *
+ * ## DRIVER AUTHOR OBLIGATIONS
+ *
+ * Hard-won, provider-independent rules every server-side realtime driver (and its
+ * client-direct twin — see `BaseRealtimeClient` in `@memberjunction/ai-realtime-client`)
+ * MUST honor. Most were paid for in live debugging; do not relearn them:
+ *
+ * 1. **Silent exit from "speaking" after a tool call.** When the model emits a tool call,
+ *    the host typically shows its own busy ("thinking") indicator while the tool executes.
+ *    A driver that surfaces UI state must leave any "speaking" state *silently* (no state
+ *    emission) at tool-call time so the turn's trailing frames don't clobber the host's
+ *    indicator.
+ * 2. **Busy-flag release on tool-call emission (deadlock guard).** A tool-call frame means
+ *    the model has yielded the floor pending the result. Any internal "response active" /
+ *    busy flag MUST be cleared at that point — otherwise the eventual `SendToolResult` (or
+ *    a queued send) deadlocks waiting for a turn boundary that will never arrive until
+ *    after the result is sent.
+ * 3. **Playback flush + honest playback reporting on interruption.** On a true barge-in the
+ *    driver (or its client twin) must flush any locally-owned audio playback and report
+ *    "audio playing = false" promptly — stale queued audio after an interruption is a
+ *    product bug, not a nicety.
+ * 4. **Text injection must NOT echo a user transcript.** A "send typed text" capability
+ *    must not synthesize a user-role transcript event for the injected text — the host owns
+ *    the local echo and would render the message twice.
+ * 5. **Tool-result delivery invariant.** Every tool result fed back via
+ *    {@link IRealtimeSession.SendToolResult} must EVENTUALLY be voiced/processed by the
+ *    model and must never be dropped. If the provider rejects overlapping generation
+ *    triggers, the driver queues the result's trigger behind the in-flight response and
+ *    flushes it at the next turn boundary.
+ * 6. **Token/credential expiry surfaces as a FATAL error.** When the session's credential
+ *    dies (ephemeral token expiry, auth revocation), the driver must surface it through
+ *    {@link IRealtimeSession.OnError} with `Fatal: true` so the consumer finalizes cleanly
+ *    instead of idling forever on a dead socket.
+ * 7. **"Ready" only after the session config is applied.** A driver (or client twin) must
+ *    not report the session as live/listening until the server-built session config
+ *    (system prompt + tools) has actually been applied to the provider socket — otherwise
+ *    early turns run against an unconfigured model.
+ * 8. **`SessionConfig` is a private pact.** The {@link ClientRealtimeSessionConfig.SessionConfig}
+ *    payload a server driver mints is consumed ONLY by the same-keyed client driver. Hosts
+ *    and intermediaries treat it as an opaque blob; its shape may change between the two
+ *    driver halves without notice.
+ *
  * @abstract
  */
 export abstract class BaseRealtimeModel extends BaseModel {
@@ -75,8 +116,9 @@ export abstract class BaseRealtimeModel extends BaseModel {
      *
      * In the client-direct topology the browser owns the provider socket (e.g. WebRTC), but the
      * **server** still controls the prompt and tool set: it mints a short-lived token and hands back
-     * a {@link ClientRealtimeSessionConfig} whose `SessionConfig` the browser applies verbatim. This
-     * keeps prompt/tool authority server-side even though the media plane is client-direct.
+     * a {@link ClientRealtimeSessionConfig} whose `SessionConfig` the matching client driver applies
+     * when it opens its socket. This keeps prompt/tool authority server-side even though the media
+     * plane is client-direct.
      *
      * Not every provider supports this (some only expose a server-bridged socket), so this is a
      * concrete method that throws by default rather than an abstract one — that would force every
@@ -96,9 +138,15 @@ export abstract class BaseRealtimeModel extends BaseModel {
  * The server-minted configuration a browser needs to open a **client-direct** realtime session.
  *
  * Returned by {@link BaseRealtimeModel.CreateClientSession}. The browser authenticates to the
- * provider with {@link ClientRealtimeSessionConfig.EphemeralToken} and applies
- * {@link ClientRealtimeSessionConfig.SessionConfig} verbatim — so the server retains control of the
- * prompt and tool set even though the browser owns the socket.
+ * provider with {@link ClientRealtimeSessionConfig.EphemeralToken} and hands
+ * {@link ClientRealtimeSessionConfig.SessionConfig} to the matching client driver — so the server
+ * retains control of the prompt and tool set even though the browser owns the socket.
+ *
+ * **`SessionConfig` is a private pact between same-keyed driver halves.** The server driver that
+ * minted it (selected by {@link ClientRealtimeSessionConfig.Provider}) and the client driver
+ * registered under the same key are the ONLY parties that understand its shape. Hosts and any
+ * transport in between must treat it as an opaque, serializable blob — never inspect, edit, or
+ * depend on its fields.
  */
 export interface ClientRealtimeSessionConfig {
     /**
@@ -124,10 +172,12 @@ export interface ClientRealtimeSessionConfig {
     ExpiresAt: string;
 
     /**
-     * The provider-native session config the browser must apply when it opens its socket
-     * (instructions/system prompt, tools, audio formats, turn detection). Because the server builds
-     * this, prompt and tool authority stay server-side even in the client-direct topology. Typed as
-     * a JSON object so it stays serializable across the server→client boundary.
+     * The provider-native session config the matching client driver applies when it opens its
+     * socket (instructions/system prompt, tools, audio formats, turn detection). Because the server
+     * builds this, prompt and tool authority stay server-side even in the client-direct topology.
+     * Typed as a JSON object so it stays serializable across the server→client boundary — but its
+     * SHAPE is a private pact between the same-keyed server and client drivers; hosts must treat it
+     * opaquely and never read or rewrite its fields.
      */
     SessionConfig: JSONObject;
 }
@@ -163,6 +213,13 @@ export interface IRealtimeSession {
      * Note that some providers (e.g. Eleven Labs) bind to a pre-declared tool set on a
      * server-side agent configuration; for those, the driver maps these definitions onto the
      * pre-declared tool names rather than registering arbitrary schemas at session start.
+     *
+     * **Idempotency rule:** a post-start registration of a set IDENTICAL to the set supplied at
+     * connect time (via {@link RealtimeSessionParams.Tools}) MUST be a no-op. Providers that bind
+     * their tool set at connect time and cannot re-declare schemas on an open session MUST no-op
+     * (and may log) rather than degrade the conversation — e.g. by injecting schema text into the
+     * conversation as content. A genuinely DIFFERENT post-start set on such a provider is
+     * unsupported and should be surfaced as a warning, not silently mangled.
      *
      * @param tools The tools to expose to the model.
      */
@@ -250,14 +307,48 @@ export interface IRealtimeSession {
     /**
      * Registers a handler for provider-detected interruptions (barge-in).
      *
+     * **True barge-in only:** the handler fires ONLY when user speech interrupts ACTIVE model
+     * output — NOT on every user utterance. A user simply taking their normal turn while the
+     * model is idle is not an interruption, and drivers must not report it as one (e.g. a raw
+     * "speech started" frame must be gated on whether a model response is actually in flight).
+     *
      * Turn detection / VAD is owned by the provider. The agent layer uses this hook to cancel
      * the model's current turn **and** to fire the `cancellationToken` of any in-flight
      * delegated agent run — a stale delegated result must never be narrated into a conversation
      * that has moved on.
      *
-     * @param handler Invoked when the provider reports an interruption.
+     * @param handler Invoked when the provider reports a true barge-in interruption.
      */
     OnInterruption(handler: () => void): void;
+
+    /**
+     * Registers a handler for session errors.
+     *
+     * Fatality semantics mirror the client-side `BaseRealtimeClient` contract:
+     * - `Fatal: true` — the session is unusable (transport/socket failure, credential/token
+     *   expiry, unexpected connection loss). The consumer should finalize the session (e.g.
+     *   `RealtimeSessionRunner` calls `Stop()`) instead of idling forever on a dead socket.
+     * - `Fatal: false` — a provider-reported, recoverable error frame; the session stays open
+     *   and the consumer should log and continue.
+     *
+     * @param handler Invoked with each {@link RealtimeSessionError}.
+     */
+    OnError(handler: (error: RealtimeSessionError) => void): void;
+
+    /**
+     * **Optional capability** — registers a handler invoked when the underlying provider
+     * connection closes WITHOUT the consumer having called {@link IRealtimeSession.Close}
+     * (provider-side hangup, network drop). Not fired for a consumer-initiated `Close()` —
+     * the caller already knows about that one.
+     *
+     * Optional because not every provider surface exposes a close signal cheaply; callers
+     * must feature-detect (`if (session.OnClose) { ... }`). An unexpected close is typically
+     * ALSO surfaced as a `Fatal` {@link IRealtimeSession.OnError}, which is the signal
+     * consumers should drive finalization from.
+     *
+     * @param handler Invoked when the provider connection closes unexpectedly.
+     */
+    OnClose?(handler: () => void): void;
 
     /**
      * Registers a handler for usage/telemetry updates.
@@ -324,14 +415,34 @@ export interface RealtimeTranscript {
     Role: 'user' | 'assistant';
 
     /**
-     * The transcribed text. For partial transcripts this is the best-effort text so far.
+     * The transcribed text. For `IsFinal: false` events this is the incremental **DELTA** for
+     * the in-flight turn (drivers emit each new fragment, not a re-send of the accumulated
+     * text); for `IsFinal: true` it is the complete turn text.
      */
     Text: string;
 
     /**
-     * Whether this is the final transcript for the turn (`true`) or an interim/partial update (`false`).
+     * Whether this is the final transcript for the turn (`true`) or an interim delta (`false`).
      */
     IsFinal: boolean;
+}
+
+/**
+ * An error surfaced by a realtime session via {@link IRealtimeSession.OnError}.
+ *
+ * Mirrors the client-side `RealtimeClientError` shape: `Fatal: true` means the session is
+ * unusable (transport failure, credential expiry, unexpected close) and the consumer should
+ * finalize; `Fatal: false` is a provider-reported, recoverable error frame.
+ */
+export interface RealtimeSessionError {
+    /** Human-readable error message. */
+    Message: string;
+
+    /** Optional provider-specific error code. */
+    Code?: string;
+
+    /** Whether the error terminated the session. */
+    Fatal: boolean;
 }
 
 /**
