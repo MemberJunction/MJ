@@ -225,6 +225,22 @@ Optimizes agent startup by batch-loading all required metadata in parallel:
 - Sub-agent data
 - Prompt configurations
 
+### MemoryWriteManager (In-Flight Memory Writes)
+
+Lets agents commit durable, cross-run memories mid-run — the user says "I prefer bar charts" and the agent records it the moment it's stated, via a `memoryWrites` field on the loop response (a sibling of `scratchpad` and `artifactToolCalls`, processed inline with zero turn cost). Opt-in per agent via `AIAgent.AllowMemoryWrite` (off by default); disabled agents never see the capability in their system prompt, and the turn loop independently rejects drift.
+
+The agent-facing surface is intentionally trivial ("remember this") — the framework enforces every guard:
+
+- **Type restriction** — only descriptive `Preference`/`Context` memories in-flight; behavioral/`Constraint` memories require Memory Manager or human promotion (prompt-injection defense)
+- **Scope clamp** — writes land ≤ Agent + User scope; hints can narrow but never broaden, and never global
+- **Near-duplicate guard** (vector similarity, default `0.85`) — a near-dup of a note written *earlier in the same run* is superseded in place (last write wins); a near-dup of a pre-existing note reinforces it (`AccessCount` bump) instead of inserting. Fails open if the vector service is unavailable.
+- **Per-run cap** (default 5) and within-run idempotency hashing
+- **Provenance + TTL** — notes land with `Status='Provisional'`, `AuthoredBy='Agent'`, source run/conversation stamped, and a 7-day `ExpiresAt` safety net
+
+Provisional notes are **immediately injectable** into future runs — rendered first with `(provisional)` labels and recency-wins precedence (a just-stated preference beats stale vetted memory) — and are later hardened or pruned by MemoryManagerAgent's hardening pass (below). Every write is recorded as a `Tool` run step, and outcomes are reported back to the agent in an expiring conversation message so it doesn't re-emit. Writes execute sequentially by design: each save syncs the in-memory vector store that the next write's dedupe check reads.
+
+For the full design see [`plans/agent-inflight-memory-writes.md`](../../../plans/agent-inflight-memory-writes.md); end-to-end verification harness at [`scripts/memory-write-smoke.ts`](../../../scripts/memory-write-smoke.ts).
+
 ### MemoryManagerAgent
 
 Handles persistent memory operations for agents:
@@ -233,6 +249,7 @@ Handles persistent memory operations for agents:
 - Managing agent examples
 - Scoped memory for multi-tenant deployments (UserScope support)
 - Consolidation, decay, and protection-tier maintenance over the agent note pool (see below)
+- **Hardening pass** over agent-authored provisional notes — runs unconditionally at the start of every cycle (before the consolidation-gated phases): LLM-dedupes each `Status='Provisional'` note against hardened notes (duplicates archived with `ConsolidatedIntoNoteID` lineage), and hardens survivors to `Status='Active'` with `ExpiresAt=NULL` so they join importance scoring, consolidation, contradiction detection, and decay in the same cycle
 
 #### Consolidation Pipeline
 
