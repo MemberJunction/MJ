@@ -98,6 +98,7 @@ export * from './lib/components/realtime/realtime-surface-tabs.component';
 export * from './lib/components/realtime/realtime-surface-tabs.model';
 export * from './lib/components/realtime/realtime-surface-panel-prefs';
 export * from './lib/components/realtime/realtime-disclosure';
+export * from './lib/components/realtime/realtime-audio-visuals';
 export * from './lib/components/realtime/realtime-composer.component';
 export * from './lib/components/realtime/realtime-channel-strip.component';
 // Conversation-timeline collapse of past realtime sessions (one card per session) + its pure grouping pass

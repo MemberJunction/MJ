@@ -10,6 +10,7 @@ import {
   LoadElevenLabsRealtimeClient,
   LoadGeminiRealtimeClient,
   LoadOpenAIRealtimeClient,
+  RealtimeAudioActivity,
   RealtimeClientError,
   RealtimeClientState,
   RealtimeClientToolCall,
@@ -647,6 +648,16 @@ export class VoiceSessionService {
       return;
     }
     this.client.SendContextNote(trimmed);
+  }
+
+  /**
+   * The active client's current audio activity (per-direction RMS levels + spectrum
+   * bins), or `null` when no session is live or the driver attached no audio meters.
+   * Sampled by the overlay's animation-frame loop to drive the audio-reactive orb/EQ —
+   * a cheap analyser read, never provider traffic.
+   */
+  public GetAudioActivity(): RealtimeAudioActivity | null {
+    return this.client?.GetAudioActivity() ?? null;
   }
 
   // ── Interactive channels (registry-driven plugins) ─────────────────────────

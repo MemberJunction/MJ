@@ -3,6 +3,7 @@ import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientState } from '../generic/baseRealtimeClient';
 import { base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
+import { RealtimeAudioMeter } from '../audio/audioMeter';
 import { createPcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
 
 // ── Audio constants (AssemblyAI Voice Agent wire format) ───────────────────────
@@ -250,6 +251,11 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         this.micCapture = await this.createMicCapture(micStream, ASSEMBLYAI_PCM_SAMPLE_RATE, (base64Pcm16) =>
             this.sendMicChunk(base64Pcm16)
         );
+        // Audio-activity capability (base obligation #9): agent side taps the playout
+        // engine's master gain; user side meters the mic stream. Null-safe — test fakes /
+        // no-WebAudio environments simply leave the session un-metered.
+        this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForStream(micStream));
         this.setState('listening');
     }
 
@@ -261,6 +267,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      */
     public async Disconnect(): Promise<void> {
         this.closedByConsumer = true;
+        this.closeAudioMeters();
         this.micStream?.getTracks().forEach((track) => track.stop());
         this.micStream = null;
         this.micCapture?.Stop();

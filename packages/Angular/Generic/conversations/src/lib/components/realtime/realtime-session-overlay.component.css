@@ -177,6 +177,49 @@
   font-size: 12.5px;
   color: var(--mj-text-muted);
 }
+/* ---------- AUDIO-REACTIVE MODE (data-audio-live, set by the rAF meter loop) ----------
+   With real audio metering the orb stops acting and starts REACTING: scale + glow follow
+   the smoothed output envelope (--voice-out) like a speaker cone, the EQ renders the true
+   spectrum (--eq-1..9), and [data-voice-dir] colors the visuals by who is speaking
+   (agent = brand, user = green). Without metering (driver attached no meters) the
+   attribute stays 'false' and the turn-state keyframe animations above stay in charge. */
+.call-overlay[data-audio-live='true'] .hero__orb {
+  animation: none;
+  transform: scale(calc(1 + var(--voice-out, 0) * 0.18));
+  transition: transform 70ms linear;
+}
+.call-overlay[data-audio-live='true'] .hero__ring {
+  opacity: calc(var(--voice-out, 0) * 0.55);
+  animation-duration: 2.1s;
+}
+.call-overlay[data-audio-live='true'][data-voice-dir='user'] .hero__orb {
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--mj-status-success) 16%, transparent),
+    0 0 48px color-mix(in srgb, var(--mj-status-success) 45%, transparent);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-status-success) 60%, white), var(--mj-brand-primary) 65%);
+}
+.call-overlay[data-audio-live='true'][data-voice-dir='user'] .hero__ring {
+  border-color: color-mix(in srgb, var(--mj-status-success) 55%, transparent);
+}
+/* True-spectrum EQ: per-bar heights from the meter's bins. */
+.call-overlay[data-audio-live='true'] .hero__eq span {
+  animation: none;
+  transition: height 70ms linear, opacity 120ms linear;
+}
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(1) { height: calc(6px + var(--eq-1, 0) * 24px); opacity: calc(0.45 + var(--eq-1, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(2) { height: calc(6px + var(--eq-2, 0) * 24px); opacity: calc(0.45 + var(--eq-2, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(3) { height: calc(6px + var(--eq-3, 0) * 24px); opacity: calc(0.45 + var(--eq-3, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(4) { height: calc(6px + var(--eq-4, 0) * 24px); opacity: calc(0.45 + var(--eq-4, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(5) { height: calc(6px + var(--eq-5, 0) * 24px); opacity: calc(0.45 + var(--eq-5, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(6) { height: calc(6px + var(--eq-6, 0) * 24px); opacity: calc(0.45 + var(--eq-6, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(7) { height: calc(6px + var(--eq-7, 0) * 24px); opacity: calc(0.45 + var(--eq-7, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(8) { height: calc(6px + var(--eq-8, 0) * 24px); opacity: calc(0.45 + var(--eq-8, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(9) { height: calc(6px + var(--eq-9, 0) * 24px); opacity: calc(0.45 + var(--eq-9, 0) * 0.55); }
+.call-overlay[data-audio-live='true'][data-voice-dir='user'] .hero__eq span {
+  background: var(--mj-status-success);
+}
+
 /* The quiet first reveal: show the conversation as text (raises disclosure to level 1). */
 .hero__reveal {
   display: inline-flex;

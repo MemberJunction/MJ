@@ -19,6 +19,7 @@ import {
   SURFACE_PANEL_COLLAPSED_WIDTH, SURFACE_PANEL_DEFAULT_WIDTH, SURFACE_PANEL_PREF_KEY
 } from './realtime-surface-panel-prefs';
 import { RealtimeDisclosureModel, RealtimeUxDensity, SerializeUxMilestones, REALTIME_UX_PREF_KEY } from './realtime-disclosure';
+import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeVoiceDirection } from './realtime-audio-visuals';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
@@ -575,11 +576,92 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       this.DetailsPeek = false;
       this.revealedChannelKeys.clear();
       this.pendingRevealKey = null;
+      this.startAudioVisualLoop();
     } else if (!active && this.prevActive) {
       this.persistDisclosure(this.Disclosure.RatchetOnSessionEnd());
+      this.stopAudioVisualLoop();
     }
     this.prevActive = active;
     this.cdr.markForCheck();
+  }
+
+  // ── Audio-reactive visuals (the orb that vibrates like a speaker cone) ──────
+  //
+  // A requestAnimationFrame loop OUTSIDE Angular samples the client's audio meters
+  // (VoiceSessionService.GetAudioActivity → driver AnalyserNodes), runs the frame through
+  // the smoothing state machine, and writes CSS custom properties + data attributes
+  // straight onto the rendered overlay element — zero change detection per frame. CSS
+  // gates on [data-audio-live]: with real metering the orb/EQ follow the waveform; when
+  // the driver attached no meters the attribute stays 'false' and the turn-state-driven
+  // keyframe animations keep working unchanged.
+
+  /** Per-frame smoothing state (attack/decay envelopes + direction hysteresis). */
+  private readonly audioSmoother = new RealtimeAudioVisualSmoother();
+  private audioRafHandle: number | null = null;
+  /** Last attribute values written (attributes are only touched on change). */
+  private lastAudioLive: boolean | null = null;
+  private lastVoiceDirection: RealtimeVoiceDirection | null = null;
+
+  /** Starts the sampling loop (idempotent). Runs outside Angular — no CD per frame. */
+  private startAudioVisualLoop(): void {
+    if (this.audioRafHandle !== null || typeof requestAnimationFrame !== 'function') {
+      return;
+    }
+    this.audioSmoother.Reset();
+    this.ngZone.runOutsideAngular(() => {
+      const tick = (): void => {
+        this.audioRafHandle = requestAnimationFrame(tick);
+        if (this.Hidden) {
+          return; // minimized — skip the work, keep the loop armed
+        }
+        const frame = this.audioSmoother.Next(this.voice.GetAudioActivity(), performance.now());
+        this.applyAudioVisualFrame(frame);
+      };
+      this.audioRafHandle = requestAnimationFrame(tick);
+    });
+  }
+
+  /** Stops the loop and returns the overlay to turn-state-driven animation. */
+  private stopAudioVisualLoop(): void {
+    if (this.audioRafHandle !== null) {
+      cancelAnimationFrame(this.audioRafHandle);
+      this.audioRafHandle = null;
+    }
+    this.audioSmoother.Reset();
+    this.lastAudioLive = null;
+    this.lastVoiceDirection = null;
+    this.overlayElement()?.setAttribute('data-audio-live', 'false');
+  }
+
+  /** The rendered `.call-overlay` element (the :host is display:contents). */
+  private overlayElement(): HTMLElement | null {
+    const host = this.hostRef.nativeElement as HTMLElement;
+    return (host.firstElementChild as HTMLElement | null) ?? null;
+  }
+
+  /** Writes one smoothed frame as CSS vars/attributes (attributes only on change). */
+  private applyAudioVisualFrame(frame: RealtimeAudioVisualFrame | null): void {
+    const el = this.overlayElement();
+    if (!el) {
+      return;
+    }
+    const live = frame !== null;
+    if (live !== this.lastAudioLive) {
+      this.lastAudioLive = live;
+      el.setAttribute('data-audio-live', String(live));
+    }
+    if (!frame) {
+      return;
+    }
+    el.style.setProperty('--voice-out', frame.OutputLevel.toFixed(3));
+    el.style.setProperty('--voice-in', frame.InputLevel.toFixed(3));
+    for (let i = 0; i < frame.Bins.length; i++) {
+      el.style.setProperty(`--eq-${i + 1}`, frame.Bins[i].toFixed(3));
+    }
+    if (frame.Direction !== this.lastVoiceDirection) {
+      this.lastVoiceDirection = frame.Direction;
+      el.setAttribute('data-voice-dir', frame.Direction);
+    }
   }
 
   /** The strip's Details control: peek at (or hide) the surface panel on demand. */
@@ -660,6 +742,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   }
 
   ngOnDestroy(): void {
+    this.stopAudioVisualLoop();
     if (this.IsPanelResizing) {
       this.teardownPanelResize();
       this.IsPanelResizing = false;

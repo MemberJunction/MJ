@@ -1,5 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
+import { RealtimeAudioMeter } from '../audio/audioMeter';
 import {
     BaseRealtimeClient,
     RealtimeClientState,
@@ -281,6 +282,10 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
         this.attachMicrophone(pc, micStream);
         this.attachRemoteAudio(pc);
         this.adoptDataChannel(pc.createDataChannel('oai-events'));
+        // Audio-activity capability (base obligation #9): user side meters the mic stream
+        // now; the agent side attaches when the remote track arrives (attachRemoteAudio's
+        // ontrack). Null-safe — no-WebAudio environments leave the session un-metered.
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForStream(micStream));
 
         await this.performSdpHandshake(pc, config.EphemeralToken);
         this.setState('connected');
@@ -291,6 +296,7 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
      * response state machine, and emits a final `'closed'` (unless already `'error'`).
      */
     public async Disconnect(): Promise<void> {
+        this.closeAudioMeters();
         this.micStream?.getTracks().forEach((t) => t.stop());
         this.micStream = null;
 
@@ -533,6 +539,9 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
         pc.ontrack = (e: RTCTrackEvent) => {
             if (this.remoteAudioEl && e.streams[0]) {
                 this.remoteAudioEl.srcObject = e.streams[0];
+                // Agent-side audio meter taps the remote stream (obligation #9). The
+                // analyser sinks nowhere — playback still flows through the <audio> element.
+                this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(e.streams[0]));
             }
         };
     }
