@@ -263,74 +263,20 @@ export function resolveFromEnvironment(): PartialInstallConfig {
   return config;
 }
 
-/** Canonical PascalCase keys accepted in `install.config.json`. */
-const KNOWN_KEYS: ReadonlySet<string> = new Set<string>([
-  'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
-  'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
-  'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
-  'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
-]);
-
-/**
- * Aliases for legacy camelCase keys that shipped in pre-5.34 `install.config.json`
- * templates. The newer installer expects {@link KNOWN_KEYS} (PascalCase), but
- * we accept these too so existing user-authored config files don't silently
- * fall through to defaults.
- *
- * Maps `legacyKey` → canonical `PascalCaseKey`.
- */
-const LEGACY_KEY_ALIASES: Readonly<Record<string, string>> = Object.freeze({
-  dbUrl: 'DatabaseHost',
-  dbPort: 'DatabasePort',
-  dbDatabase: 'DatabaseName',
-  dbTrustServerCertificate: 'DatabaseTrustCert',
-  codeGenLogin: 'CodeGenUser',
-  codeGenPwD: 'CodeGenPassword',
-  mjAPILogin: 'APIUser',
-  mjAPIPwD: 'APIPassword',
-  graphQLPort: 'APIPort',
-  openAIAPIKey: 'OpenAIKey',
-  anthropicAPIKey: 'AnthropicKey',
-  mistralAPIKey: 'MistralKey',
-});
-
-/**
- * Legacy auth-provider-related keys that translate into a nested
- * {@link InstallConfig.AuthProviderValues} object on the canonical side.
- */
-const LEGACY_AUTH_KEYS: ReadonlySet<string> = new Set([
-  'authType', 'msalWebClientId', 'msalTenantId',
-  'auth0ClientId', 'auth0ClientSecret', 'auth0Domain',
-]);
-
-/**
- * Legacy new-user-creation keys that translate into a nested
- * {@link InstallConfig.CreateNewUser} object on the canonical side.
- */
-const LEGACY_USER_KEYS: ReadonlySet<string> = new Set([
-  'createNewUser', 'userName', 'userEmail', 'userFirstName', 'userLastName',
-]);
-
 /**
  * Load a JSON config file and return it as a partial install config.
  *
- * Accepts both the canonical PascalCase keys ({@link InstallConfig}) and a
- * curated set of legacy camelCase aliases for backward compatibility with
- * `install.config.json` files written against pre-5.34 docs.
- *
- * Throws when the file is present but **no** recognized keys are found —
- * this catches the "I copied the old template and edited values but the
- * installer silently ignored everything" failure mode that was previously
- * a silent default-fallthrough.
+ * The file should be a JSON object whose keys match {@link InstallConfig}
+ * field names. Unknown keys are silently ignored. Invalid JSON causes
+ * the returned promise to reject.
  *
  * @param filePath - Absolute or relative path to the JSON config file.
- * @returns A partial config containing the fields recognized from the file.
- * @throws If the file cannot be read, contains invalid JSON, isn't an object,
- *         or contains keys but none are recognized.
+ * @returns A partial config containing the fields defined in the file.
+ * @throws If the file cannot be read or contains invalid JSON.
  *
  * @example
  * ```typescript
- * const fileConfig = await loadConfigFile('./install.config.json');
+ * const fileConfig = await loadConfigFile('./mj-install.json');
  * ```
  */
 export async function loadConfigFile(filePath: string): Promise<PartialInstallConfig> {
@@ -341,146 +287,23 @@ export async function loadConfigFile(filePath: string): Promise<PartialInstallCo
     throw new Error(`Config file must contain a JSON object, got ${Array.isArray(parsed) ? 'array' : typeof parsed}`);
   }
 
-  const input = parsed as Record<string, unknown>;
+  // Pick only known InstallConfig keys — ignore unknown fields
+  const known = parsed as Record<string, unknown>;
   const config: PartialInstallConfig = {};
-  const authValues: Record<string, string> = {};
-  const newUser: Partial<NonNullable<InstallConfig['CreateNewUser']>> = {};
-  let createNewUserOptIn = false;
-  let recognized = 0;
-  const unknownKeys: string[] = [];
+  const KNOWN_KEYS: ReadonlySet<string> = new Set<string>([
+    'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
+    'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
+    'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
+    'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
+  ]);
 
-  for (const key of Object.keys(input)) {
-    const value = input[key];
-
-    // 1. Canonical PascalCase key
+  for (const key of Object.keys(known)) {
     if (KNOWN_KEYS.has(key)) {
-      (config as Record<string, unknown>)[key] = value;
-      recognized++;
-      continue;
+      (config as Record<string, unknown>)[key] = known[key];
     }
-
-    // 2. Direct legacy alias (1:1 rename, no value transformation)
-    if (Object.prototype.hasOwnProperty.call(LEGACY_KEY_ALIASES, key)) {
-      const canonicalKey = LEGACY_KEY_ALIASES[key];
-      (config as Record<string, unknown>)[canonicalKey] = canonicalizeLegacyValue(canonicalKey, value);
-      recognized++;
-      continue;
-    }
-
-    // 3. Legacy auth keys → AuthProviderValues / AuthProvider
-    if (LEGACY_AUTH_KEYS.has(key)) {
-      applyLegacyAuthKey(key, value, config, authValues);
-      recognized++;
-      continue;
-    }
-
-    // 4. Legacy CreateNewUser keys → nested object
-    if (LEGACY_USER_KEYS.has(key)) {
-      if (key === 'createNewUser') {
-        createNewUserOptIn = stringIsYes(value);
-      } else if (typeof value === 'string') {
-        applyLegacyUserKey(key, value, newUser);
-      }
-      recognized++;
-      continue;
-    }
-
-    unknownKeys.push(key);
-  }
-
-  if (unknownKeys.length > 0) {
-    // Surface typos / unsupported keys (e.g. `explorerPort` when only
-    // MJ_INSTALL_EXPLORER_PORT env var is wired up) instead of silently
-    // dropping them — which is the failure mode that bit Bug #7.
-    console.warn(
-      `Config file at ${filePath} has ${unknownKeys.length} unrecognized key(s): ${unknownKeys.join(', ')}. ` +
-      `These will be ignored. Check for typos or consult the supported schema.`
-    );
-  }
-
-  if (Object.keys(authValues).length > 0) {
-    config.AuthProviderValues = { ...(config.AuthProviderValues ?? {}), ...authValues };
-  }
-  if (createNewUserOptIn && (newUser.Email || newUser.Username)) {
-    config.CreateNewUser = {
-      Username: newUser.Username ?? newUser.Email ?? '',
-      Email: newUser.Email ?? '',
-      FirstName: newUser.FirstName ?? '',
-      LastName: newUser.LastName ?? '',
-    };
-  }
-
-  if (Object.keys(input).length > 0 && recognized === 0) {
-    throw new Error(
-      `Config file at ${filePath} contains ${Object.keys(input).length} key(s) but none are recognized. ` +
-      `Expected PascalCase keys like DatabaseHost, APIPort, AuthProvider. ` +
-      `See docs at packages/MJInstaller/install-in-minutes-new.md ("Config File Format") for the supported schema, ` +
-      `or check the install.config.json template at the repository root.`
-    );
   }
 
   return config;
-}
-
-/**
- * Some legacy keys carry string-encoded values ("Y"/"N") where the canonical
- * field is a boolean. Translate them in-place when we map.
- */
-function canonicalizeLegacyValue(canonicalKey: string, value: unknown): unknown {
-  if (canonicalKey === 'DatabaseTrustCert' && typeof value === 'string') {
-    return stringIsYes(value);
-  }
-  return value;
-}
-
-/** Apply a single legacy auth-related key to the building config. */
-function applyLegacyAuthKey(
-  key: string,
-  value: unknown,
-  config: PartialInstallConfig,
-  authValues: Record<string, string>
-): void {
-  if (key === 'authType' && typeof value === 'string') {
-    const upper = value.toUpperCase();
-    if (upper === 'MSAL' || upper === 'ENTRA') {
-      config.AuthProvider = 'entra';
-    } else if (upper === 'AUTH0') {
-      config.AuthProvider = 'auth0';
-    } else if (upper === 'NONE' || value === '') {
-      config.AuthProvider = 'none';
-    }
-    return;
-  }
-  if (typeof value !== 'string') return;
-  switch (key) {
-    case 'msalWebClientId': authValues.ClientID = value; break;
-    case 'msalTenantId':    authValues.TenantID = value; break;
-    case 'auth0ClientId':   authValues.ClientID = value; break;
-    case 'auth0ClientSecret': authValues.ClientSecret = value; break;
-    case 'auth0Domain':     authValues.Domain = value; break;
-  }
-}
-
-/** Apply a single legacy CreateNewUser-related key to the building object. */
-function applyLegacyUserKey(
-  key: string,
-  value: string,
-  newUser: Partial<NonNullable<InstallConfig['CreateNewUser']>>
-): void {
-  switch (key) {
-    case 'userName':      newUser.Username  = value; break;
-    case 'userEmail':     newUser.Email     = value; break;
-    case 'userFirstName': newUser.FirstName = value; break;
-    case 'userLastName':  newUser.LastName  = value; break;
-  }
-}
-
-/** "Y"/"y"/"yes"/"true"/"1" → true; anything else → false. */
-function stringIsYes(value: unknown): boolean {
-  if (typeof value === 'boolean') return value;
-  if (typeof value !== 'string') return false;
-  const lower = value.trim().toLowerCase();
-  return lower === 'y' || lower === 'yes' || lower === 'true' || lower === '1';
 }
 
 /**

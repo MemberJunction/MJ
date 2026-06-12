@@ -1,111 +1,63 @@
 /**
- * SQL Server-specific connection configuration and management for
- * MemberJunction CodeGen. Provides the lazy mssql pool used by the
- * SQL Server codegen path (see `runCodeGen.ts` → `setupSQLServerDataSource`).
- *
- * **Scope** — this file is intentionally SQL-Server-only; it imports `mssql`
- * directly. The PostgreSQL codegen path (`setupPostgreSQLDataSource` in
- * `runCodeGen.ts`) creates its `pg.Pool` inline and does not touch
- * `MSSQLConnection` or `getSqlConfig`. A future refactor may unify both
- * paths behind the existing `CodeGenDatabaseProvider` factory; for now the
- * SQL Server and PostgreSQL halves stay separate.
- *
- * **Lazy resolution** — the mssql config is built lazily on the first call
- * to {@link MSSQLConnection} instead of at module load. The previous
- * implementation destructured `configInfo` at module load time, capturing
- * empty/default values *before* `initializeConfig()` had a chance to
- * populate the live config (a real race when any caller does
- * `await import('@memberjunction/codegen-lib')` and then `initializeConfig()`
- * afterward). Lazy resolution fixes the race so `mj codegen` and `mj install`'s
- * codegen phase pick up the actual `.env` and `mj.config.cjs` values.
+ * Database connection configuration and management for MemberJunction CodeGen.
+ * Provides SQL Server connection setup using mssql package with configuration
+ * from the main config file.
  */
 
 import mssql from 'mssql';
 import { configInfo } from './config';
 
-/**
- * Build the mssql config object from the current `configInfo`. Called from
- * {@link MSSQLConnection} on each cold-start so it reflects the values that
- * are present *after* `initializeConfig()` has run, not the empty defaults
- * that may have been visible at module load time.
- */
-function buildSqlConfig(): mssql.config {
-  const {
-    dbDatabase,
-    dbHost,
-    codeGenPassword,
-    dbPort,
-    codeGenLogin,
-    dbInstanceName,
-    dbTrustServerCertificate,
-    dbRequestTimeout,
-  } = configInfo;
-
-  return {
-    user: codeGenLogin,
-    password: codeGenPassword,
-    server: dbHost,
-    database: dbDatabase,
-    port: dbPort,
-    options: {
-      /**
-       * Request timeout for long-running CodeGen queries. Defaults to 120000ms
-       * (2 min); override via `dbRequestTimeout` in mj.config.cjs or the
-       * MJ_CODEGEN_REQUEST_TIMEOUT environment variable when steps like
-       * spUpdateExistingEntityFieldsFromSchema run beyond the default.
-       */
-      requestTimeout: dbRequestTimeout ?? 120000,
-      encrypt: true,
-      instanceName: dbInstanceName && dbInstanceName.trim().length > 0 ? dbInstanceName : undefined,
-      trustServerCertificate: dbTrustServerCertificate === 'Y',
-    },
-  };
-}
+/** Extract database connection parameters from configuration */
+const { dbDatabase, dbHost, codeGenPassword, dbPort, codeGenLogin, dbInstanceName, dbTrustServerCertificate, dbRequestTimeout } = configInfo;
 
 /**
- * Module-internal cache for the resolved mssql config. Populated on first
- * call to {@link MSSQLConnection}. Read via the {@link getSqlConfig}
- * accessor — never exported directly so callers cannot observe (or depend
- * on) the mutable-`let` shape.
+ * SQL Server configuration object for mssql package.
+ * Configured with extended timeout for code generation operations
+ * which can involve long-running schema analysis queries.
  */
-let _sqlConfig: mssql.config | undefined;
+export const sqlConfig: mssql.config = {
+  /** Database username for authentication */
+  user: codeGenLogin,
+  /** Database password for authentication */
+  password: codeGenPassword,
+  /** Database server hostname or IP */
+  server: dbHost,
+  /** Target database name */
+  database: dbDatabase,
+  /** Database server port (typically 1433) */
+  port: dbPort,
+  options: {
+    /**
+     * Request timeout for long-running CodeGen queries. Defaults to 120000ms
+     * (2 min); override via `dbRequestTimeout` in mj.config.cjs or the
+     * MJ_CODEGEN_REQUEST_TIMEOUT environment variable when steps like
+     * spUpdateExistingEntityFieldsFromSchema run beyond the default.
+     */
+    requestTimeout: dbRequestTimeout ?? 120000,
+    /** Enable encrypted connections */
+    encrypt: true,
+    /** SQL Server instance name if using named instances */
+    instanceName: dbInstanceName && dbInstanceName.trim().length > 0 ? dbInstanceName : undefined,
+    /** Whether to trust the server certificate */
+    trustServerCertificate: dbTrustServerCertificate === 'Y',
+  },
+};
 
-/** Cached connection pool instance for reuse across code generation operations */
+/**
+ * Cached connection pool instance for reuse across code generation operations
+ */
 let _pool: mssql.ConnectionPool;
 
 /**
  * Gets or creates a SQL Server connection pool for database operations.
  * Uses singleton pattern to reuse the same connection pool across multiple
  * code generation operations for better performance.
- *
- * The mssql config is built **at first connection time** so that
- * `initializeConfig()` has had a chance to populate `configInfo` from the
- * user's `.env` and `mj.config.cjs`. Building it at module load (the prior
- * behavior) captured stale empty values and triggered
- * `"config.server property is required"` at codegen time.
- *
  * @returns Promise resolving to the mssql ConnectionPool instance
  * @throws Error if connection fails
  */
 export async function MSSQLConnection(): Promise<mssql.ConnectionPool> {
   if (!_pool) {
-    _sqlConfig = buildSqlConfig();
-    _pool = await mssql.connect(_sqlConfig);
+    _pool = await mssql.connect(sqlConfig);
   }
   return _pool;
-}
-
-/**
- * Returns the resolved mssql config used by the active connection pool, or
- * `undefined` if {@link MSSQLConnection} has not been called yet. Use this
- * when you need to read connection details (server, port, instance,
- * database) for logging or diagnostics.
- *
- * Always call {@link MSSQLConnection} before relying on this accessor in
- * the same code path — the config is populated as a side effect of opening
- * the pool. (`await MSSQLConnection()` followed by `getSqlConfig()` is
- * guaranteed to return the live config.)
- */
-export function getSqlConfig(): mssql.config | undefined {
-  return _sqlConfig;
 }

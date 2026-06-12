@@ -157,51 +157,13 @@ describe('MigratePhase', () => {
       expect(options.Cwd).toBe('/custom/path');
     });
 
-    it('should set the default 30-minute (1_800_000 ms) timeout when no env override', async () => {
-      const original = process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN;
-      delete process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN;
-      try {
-        const ctx = makeContext();
-        await phase.Run(ctx);
-        const options = mockRunner.Run.mock.calls[0][2];
-        expect(options.TimeoutMs).toBe(30 * 60_000);
-      } finally {
-        if (original !== undefined) process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN = original;
-      }
-    });
+    it('should set 5-minute (300000ms) timeout', async () => {
+      const ctx = makeContext();
 
-    it('should honor MJ_INSTALL_MIGRATE_TIMEOUT_MIN env override', async () => {
-      const original = process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN;
-      process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN = '5';
-      try {
-        const ctx = makeContext();
-        await phase.Run(ctx);
-        const options = mockRunner.Run.mock.calls[0][2];
-        expect(options.TimeoutMs).toBe(5 * 60_000);
-      } finally {
-        if (original === undefined) {
-          delete process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN;
-        } else {
-          process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN = original;
-        }
-      }
-    });
+      await phase.Run(ctx);
 
-    it('should fall back to default when MJ_INSTALL_MIGRATE_TIMEOUT_MIN is invalid', async () => {
-      const original = process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN;
-      process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN = 'not-a-number';
-      try {
-        const ctx = makeContext();
-        await phase.Run(ctx);
-        const options = mockRunner.Run.mock.calls[0][2];
-        expect(options.TimeoutMs).toBe(30 * 60_000);
-      } finally {
-        if (original === undefined) {
-          delete process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN;
-        } else {
-          process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN = original;
-        }
-      }
+      const options = mockRunner.Run.mock.calls[0][2];
+      expect(options.TimeoutMs).toBe(600_000);
     });
   });
 

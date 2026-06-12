@@ -125,13 +125,8 @@ export class DatabaseProvisionPhase {
       Message: 'Validating database connectivity...',
     });
 
-    // Resolution order matches PreflightPhase.checkSqlConnectivity:
-    //   1. .env in context.Dir (when present) — this is what the app will actually use.
-    //   2. Explicit config.DatabaseHost / DatabasePort.
-    //   3. Defaults (localhost:1433).
-    const envValues = await this.readEnvDbTarget(context.Dir);
-    const host = envValues?.host ?? config.DatabaseHost ?? 'localhost';
-    const port = envValues?.port ?? config.DatabasePort ?? 1433;
+    const host = config.DatabaseHost ?? 'localhost';
+    const port = config.DatabasePort ?? 1433;
     const connectivity = await this.sqlAdapter.CheckConnectivity(host, port);
 
     if (!connectivity.Reachable) {
@@ -158,81 +153,6 @@ export class DatabaseProvisionPhase {
   // ---------------------------------------------------------------------------
   // SQL script generation
   // ---------------------------------------------------------------------------
-
-  /**
-   * Returns true when `userName` is a SQL Server built-in sysadmin principal that
-   * cannot be the target of `CREATE LOGIN` / `CREATE USER` / role-grant statements.
-   *
-   * The only such principal we expect to see at this layer is `sa` — but case-
-   * insensitive because SQL Server itself treats logins as case-insensitive by
-   * default. Without this guard, an install that configures `sa` as the CodeGen
-   * or API user (a common pattern in dev / Docker / single-user setups) produces
-   * `Msg 15405, Cannot use the special principal 'sa'` errors throughout setup.
-   * The database itself still gets created (step 1 succeeds before any sa-specific
-   * statement runs), but the visible errors are confusing and the script reports
-   * partial failure.
-   */
-  private isBuiltInSysadmin(userName: string): boolean {
-    return userName.trim().toLowerCase() === 'sa';
-  }
-
-  /** SQL for the server-level CREATE LOGIN block, or a skip-comment for `sa`. */
-  private loginBlock(user: string, password: string): string {
-    if (this.isBuiltInSysadmin(user)) {
-      return `-- Skipping CREATE LOGIN [${user}] — sa is a built-in sysadmin and already exists in every SQL Server instance.
-PRINT 'Skipped CREATE LOGIN: ${user} (built-in sysadmin)';
-GO`;
-    }
-    return `IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '${user}')
-BEGIN
-    CREATE LOGIN [${user}] WITH PASSWORD = '${password}';
-    PRINT 'Created login: ${user}';
-END
-GO`;
-  }
-
-  /** SQL for the database-level CREATE USER block, or a skip-comment for `sa`. */
-  private userBlock(user: string): string {
-    if (this.isBuiltInSysadmin(user)) {
-      return `-- Skipping CREATE USER [${user}] — SQL Server rejects \`CREATE USER FOR LOGIN [sa]\` with Msg 15405 (special principal).
--- sa already has implicit sysadmin permissions in every database; no user-mapping is required.
-PRINT 'Skipped CREATE USER: ${user} (built-in sysadmin)';
-GO`;
-    }
-    return `IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '${user}')
-BEGIN
-    CREATE USER [${user}] FOR LOGIN [${user}];
-    PRINT 'Created user: ${user}';
-END
-GO`;
-  }
-
-  /** SQL for an `ALTER ROLE <role> ADD MEMBER [user]` block, or a skip-comment for `sa`. */
-  private roleGrantBlock(user: string, role: string): string {
-    if (this.isBuiltInSysadmin(user)) {
-      return `-- Skipping ALTER ROLE ${role} ADD MEMBER [${user}] — sa is sysadmin and has all permissions implicitly.
-GO`;
-    }
-    return `IF NOT EXISTS (SELECT 1 FROM sys.database_role_members rm
-    JOIN sys.database_principals rp ON rm.role_principal_id = rp.principal_id
-    JOIN sys.database_principals mp ON rm.member_principal_id = mp.principal_id
-    WHERE rp.name = '${role}' AND mp.name = '${user}')
-BEGIN
-    ALTER ROLE ${role} ADD MEMBER [${user}];
-    PRINT 'Granted ${role} to ${user}';
-END
-GO`;
-  }
-
-  /** SQL for a `GRANT EXECUTE TO [user]` block, or a skip-comment for `sa`. */
-  private grantExecuteBlock(user: string): string {
-    if (this.isBuiltInSysadmin(user)) {
-      return `-- Skipping GRANT EXECUTE TO [${user}] — sa is sysadmin and has EXECUTE permission implicitly.
-GO`;
-    }
-    return `GRANT EXECUTE TO [${user}];
-GO`;
-  }
 
   private generateSetupScript(config: PartialInstallConfig): string {
     const dbName = config.DatabaseName ?? 'MemberJunction';
@@ -279,9 +199,19 @@ GO
 USE [master];
 GO
 
-${this.loginBlock(codeGenUser, codeGenPassword)}
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '${codeGenUser}')
+BEGIN
+    CREATE LOGIN [${codeGenUser}] WITH PASSWORD = '${codeGenPassword}';
+    PRINT 'Created login: ${codeGenUser}';
+END
+GO
 
-${this.loginBlock(apiUser, apiPassword)}
+IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '${apiUser}')
+BEGIN
+    CREATE LOGIN [${apiUser}] WITH PASSWORD = '${apiPassword}';
+    PRINT 'Created login: ${apiUser}';
+END
+GO
 
 --============================================================================
 -- 4. Create database users
@@ -289,22 +219,57 @@ ${this.loginBlock(apiUser, apiPassword)}
 USE [${dbName}];
 GO
 
-${this.userBlock(codeGenUser)}
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '${codeGenUser}')
+BEGIN
+    CREATE USER [${codeGenUser}] FOR LOGIN [${codeGenUser}];
+    PRINT 'Created user: ${codeGenUser}';
+END
+GO
 
-${this.userBlock(apiUser)}
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '${apiUser}')
+BEGIN
+    CREATE USER [${apiUser}] FOR LOGIN [${apiUser}];
+    PRINT 'Created user: ${apiUser}';
+END
+GO
 
 --============================================================================
 -- 5. Grant roles
 --============================================================================
 -- CodeGen needs elevated permissions for schema modifications
-${this.roleGrantBlock(codeGenUser, 'db_owner')}
+IF NOT EXISTS (SELECT 1 FROM sys.database_role_members rm
+    JOIN sys.database_principals rp ON rm.role_principal_id = rp.principal_id
+    JOIN sys.database_principals mp ON rm.member_principal_id = mp.principal_id
+    WHERE rp.name = 'db_owner' AND mp.name = '${codeGenUser}')
+BEGIN
+    ALTER ROLE db_owner ADD MEMBER [${codeGenUser}];
+    PRINT 'Granted db_owner to ${codeGenUser}';
+END
+GO
 
 -- API user needs read/write + execute
-${this.roleGrantBlock(apiUser, 'db_datareader')}
+IF NOT EXISTS (SELECT 1 FROM sys.database_role_members rm
+    JOIN sys.database_principals rp ON rm.role_principal_id = rp.principal_id
+    JOIN sys.database_principals mp ON rm.member_principal_id = mp.principal_id
+    WHERE rp.name = 'db_datareader' AND mp.name = '${apiUser}')
+BEGIN
+    ALTER ROLE db_datareader ADD MEMBER [${apiUser}];
+    PRINT 'Granted db_datareader to ${apiUser}';
+END
+GO
 
-${this.roleGrantBlock(apiUser, 'db_datawriter')}
+IF NOT EXISTS (SELECT 1 FROM sys.database_role_members rm
+    JOIN sys.database_principals rp ON rm.role_principal_id = rp.principal_id
+    JOIN sys.database_principals mp ON rm.member_principal_id = mp.principal_id
+    WHERE rp.name = 'db_datawriter' AND mp.name = '${apiUser}')
+BEGIN
+    ALTER ROLE db_datawriter ADD MEMBER [${apiUser}];
+    PRINT 'Granted db_datawriter to ${apiUser}';
+END
+GO
 
-${this.grantExecuteBlock(apiUser)}
+GRANT EXECUTE TO [${apiUser}];
+GO
 
 PRINT '';
 PRINT '=== MemberJunction database setup complete ===';
@@ -369,54 +334,5 @@ PRINT '=== Validation complete ===';
         Resolve: resolve,
       });
     });
-  }
-
-  /**
-   * Best-effort read of `<targetDir>/.env` to extract `DB_HOST` and `DB_PORT`.
-   * Returns null when no `.env` exists or neither key is set, letting the
-   * caller fall back to config / defaults. Errors are swallowed silently —
-   * this is a diagnostic enhancement, not a hard requirement.
-   *
-   * Mirrors {@link PreflightPhase.readEnvDbTarget} — kept duplicated rather
-   * than extracted because the two phases shouldn't be coupled through a
-   * shared helper for a small piece of optional logic.
-   */
-  private async readEnvDbTarget(targetDir: string): Promise<{ host?: string; port?: number } | null> {
-    const envPath = path.join(targetDir, '.env');
-    try {
-      if (!(await this.fileSystem.FileExists(envPath))) return null;
-      const raw = await this.fileSystem.ReadText(envPath);
-      if (typeof raw !== 'string' || raw.length === 0) return null;
-      const host = this.parseDotenvValue(raw, 'DB_HOST');
-      const portStr = this.parseDotenvValue(raw, 'DB_PORT');
-      const port = portStr ? parseInt(portStr, 10) : undefined;
-
-      if (host || (port !== undefined && Number.isFinite(port))) {
-        return { host: host ?? undefined, port: Number.isFinite(port) ? port : undefined };
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Minimal dotenv-style key extractor — handles `KEY=value`, `KEY='value'`,
-   * `KEY="value"`, ignores `#` comments and blank lines.
-   */
-  private parseDotenvValue(content: string, key: string): string | undefined {
-    const lines = content.split(/\r?\n/);
-    const pattern = new RegExp(`^\\s*${key}\\s*=\\s*(.*?)\\s*$`);
-    for (const line of lines) {
-      if (line.trim().startsWith('#')) continue;
-      const match = line.match(pattern);
-      if (!match) continue;
-      let value = match[1];
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.slice(1, -1);
-      }
-      return value || undefined;
-    }
-    return undefined;
   }
 }
