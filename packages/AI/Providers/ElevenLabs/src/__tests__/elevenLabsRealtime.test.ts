@@ -238,7 +238,9 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
                 type: 'client',
                 name: 'get_weather',
                 description: 'Get the weather for a city',
-                parameters: { type: 'object', properties: { city: { type: 'string' } } },
+                // typed nodes without a description get one synthesized (their schema model
+                // requires a marker on every value-typed node, root object included)
+                parameters: { type: 'object', description: 'An object value.', properties: { city: { type: 'string', description: 'A string value.' } } },
                 expectsResponse: true,
                 responseTimeoutSecs: 120,
             },
@@ -643,5 +645,101 @@ describe('ElevenLabsRealtime server-bridged session (StartSession)', () => {
             expect(errors).toEqual([]);
             expect(driver.Socket.Closed).toBe(true);
         });
+    });
+});
+
+// ── Schema sanitization (ElevenLabs client-tool validator quirks) ──────────────
+import { SanitizeToolParametersForElevenLabs } from '../elevenLabsRealtime';
+
+describe('SanitizeToolParametersForElevenLabs', () => {
+    const fontSizeSchema = {
+        type: 'object',
+        properties: {
+            text: { type: 'string', description: 'The text.' },
+            fontSize: { type: 'number', enum: [12, 14, 18, 24, 32], description: 'Optional size.' }
+        },
+        required: ['text']
+    };
+
+    it('strips numeric enums and appends the allowed values to the description', () => {
+        const out = SanitizeToolParametersForElevenLabs(fontSizeSchema);
+        const fontSize = (out['properties'] as Record<string, Record<string, unknown>>)['fontSize'];
+        expect(fontSize['enum']).toBeUndefined();
+        expect(fontSize['description']).toContain('Optional size.');
+        expect(fontSize['description']).toContain('Allowed values: 12, 14, 18, 24, 32');
+    });
+
+    it('preserves STRING enums untouched', () => {
+        const out = SanitizeToolParametersForElevenLabs({
+            type: 'object',
+            properties: { shape: { type: 'string', enum: ['rect', 'ellipse', 'diamond'] } }
+        });
+        const shape = (out['properties'] as Record<string, Record<string, unknown>>)['shape'];
+        expect(shape['enum']).toEqual(['rect', 'ellipse', 'diamond']);
+    });
+
+    it('walks nested objects and array items', () => {
+        const out = SanitizeToolParametersForElevenLabs({
+            type: 'object',
+            properties: {
+                rows: { type: 'array', items: { type: 'object', properties: { size: { type: 'number', enum: [1, 2] } } } }
+            }
+        });
+        const size = ((((out['properties'] as Record<string, Record<string, unknown>>)['rows']['items'] as Record<string, unknown>)['properties'] as Record<string, Record<string, unknown>>))['size'];
+        expect(size['enum']).toBeUndefined();
+        expect(size['description']).toContain('Allowed values: 1, 2');
+    });
+
+    it('never mutates the input and is idempotent', () => {
+        const original = JSON.parse(JSON.stringify(fontSizeSchema));
+        const once = SanitizeToolParametersForElevenLabs(fontSizeSchema);
+        const twice = SanitizeToolParametersForElevenLabs(once);
+        expect(fontSizeSchema).toEqual(original);
+        expect(twice).toEqual(once);
+    });
+
+    it('MapToolToClientTool ships the SANITIZED schema to the agents API', () => {
+        const mapped = ElevenLabsRealtime.MapToolToClientTool({
+            Name: 'Whiteboard_AddText',
+            Description: 'Add text',
+            ParametersSchema: fontSizeSchema
+        });
+        const params = mapped.parameters as unknown as Record<string, Record<string, Record<string, unknown>>>;
+        expect(params['properties']['fontSize']['enum']).toBeUndefined();
+        expect(params['properties']['fontSize']['description']).toContain('Allowed values');
+    });
+
+    it('ToolSetFingerprint hashes the sanitized form (no PATCH-loop drift vs the remote)', () => {
+        const raw = [{ Name: 'T', Description: 'd', ParametersSchema: fontSizeSchema }];
+        const sanitized = [{ Name: 'T', Description: 'd', ParametersSchema: SanitizeToolParametersForElevenLabs(fontSizeSchema) }];
+        expect(ElevenLabsRealtime.ToolSetFingerprint(raw)).toBe(ElevenLabsRealtime.ToolSetFingerprint(sanitized));
+    });
+});
+
+describe('SanitizeToolParametersForElevenLabs — leaf descriptions', () => {
+    it('synthesizes a description on typed nodes lacking one (the Highlight itemIds.items 422)', () => {
+        const out = SanitizeToolParametersForElevenLabs({
+            type: 'object',
+            properties: {
+                itemIds: { type: 'array', items: { type: 'string' }, description: 'IDs of items.' }
+            }
+        });
+        const items = ((out['properties'] as Record<string, Record<string, unknown>>)['itemIds']['items']) as Record<string, unknown>;
+        expect(items['description']).toBe('A string value.');
+        // the parent already had one — untouched
+        expect((out['properties'] as Record<string, Record<string, unknown>>)['itemIds']['description']).toBe('IDs of items.');
+    });
+
+    it('leaves nodes with any accepted marker untouched', () => {
+        const out = SanitizeToolParametersForElevenLabs({
+            type: 'object',
+            properties: {
+                a: { type: 'string', description: 'has one' },
+                b: { type: 'number', constant_value: 5 }
+            }
+        });
+        const props = out['properties'] as Record<string, Record<string, unknown>>;
+        expect(props['a']['description']).toBe('has one');
+        expect(props['b']['description']).toBeUndefined();
     });
 });

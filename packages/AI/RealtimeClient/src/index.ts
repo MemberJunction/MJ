@@ -1,5 +1,6 @@
 export * from './generic/baseRealtimeClient';
 export * from './audio/pcmUtils';
+export * from './audio/audioMeter';
 export * from './audio/pcmPlayback';
 export * from './audio/micCapture';
 export * from './drivers/openAIRealtimeClient';

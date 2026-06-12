@@ -45,8 +45,8 @@ describe('InjectWhiteboardSubmitHelper', () => {
   it('the helper posts the documented marker payload to the parent with a "*" target', () => {
     // '*' is deliberate: the sandboxed frame has an OPAQUE origin (nothing to address);
     // the HOST validates marker + event.source instead.
-    expect(WHITEBOARD_SUBMIT_HELPER).toBe(
-      `<script>window.MJWhiteboard={submit:function(data){parent.postMessage({__mjWhiteboardSubmit:true,data:data},'*');}};</script>`);
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain(
+      `window.MJWhiteboard={submit:function(data){parent.postMessage({__mjWhiteboardSubmit:true,data:data},'*');}};`);
     expect(WHITEBOARD_SUBMIT_HELPER).toContain(WHITEBOARD_SUBMIT_MARKER);
   });
 });

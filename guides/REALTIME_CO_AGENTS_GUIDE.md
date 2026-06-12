@@ -26,6 +26,7 @@ This is the developer guide for the whole stack: the model primitive, the `Realt
 8. [Observability & Administration](#8-observability--administration)
 9. [Security Model](#9-security-model)
 10. [Known Gaps & Deferred Work](#10-known-gaps--deferred-work)
+11. [Audio-Reactive Call Visuals](#11-audio-reactive-call-visuals-audio-activity-metering)
 
 ---
 
@@ -455,6 +456,60 @@ Honest ledger of what is *not* done on this branch, so nobody reads aspiration i
 | Non-target server tools on the client-direct relay (action wiring through `executeNonTargetTool`) | **Later phase** — structured "not available" today; the server-bridged path already executes actions |
 | Channel-grained permissions, multi-party sessions, audio retention/consent | **Out of scope** for this iteration (see plan) |
 | `RealtimeClientSessionService` ↔ `BaseAgent` prepare-logic duplication | **Known debt** — the service's doc header calls for a future shared `RealtimeSessionPreparer`; until then the two are kept in sync intentionally (the shared `realtime-narration.ts` module is the first extracted piece) |
+
+---
+
+## 11. Audio-Reactive Call Visuals (Audio Activity Metering)
+
+The call overlay is a PROGRESSIVE-DISCLOSURE console (see `realtime-disclosure.ts` +
+`ng-conversations`' README): a first-ever call is **pure audio** — a breathing hero orb and
+three controls, with the caption thread / composer dock / surface panel / gear unlocking by
+level (0–4) as the user acts or across sessions via a per-user UserInfoEngine milestones
+ratchet (`mj.realtimeVoice.uxMilestones.v1`; the gear's Simple/Standard/Pro/Auto density
+control is the escape hatch). Content never flips the console open — the ONE auto-reveal is
+a channel's first agent activity (`ChannelActivity$`), which opens the surface panel as a
+peek with that channel's tab focused; finished artifacts arrive as unfocused, glowing tabs.
+
+That pure-audio hero orb doesn't *act out* speech — it **reacts to the actual
+waveform**, vibrating like a speaker cone with the agent's voice and flipping color when the
+user talks. Three layers, each degrading gracefully:
+
+### The capability contract (client drivers)
+
+`BaseRealtimeClient.GetAudioActivity(): RealtimeAudioActivity | null` is a **capability, not
+an obligation** (driver obligation #9): per-direction RMS levels (0..1) plus 9 normalized
+frequency bins, or `null` for any direction the driver couldn't meter — full `null` when no
+meters exist at all. Drivers attach meters through the protected
+`attachInputAudioMeter` / `attachOutputAudioMeter` hooks and MUST release them on disconnect
+(`closeAudioMeters()`).
+
+Metering sources per driver (all four currently meter BOTH directions):
+
+| Driver | Agent audio (output) | User mic (input) |
+|---|---|---|
+| OpenAI (WebRTC) | `RealtimeAudioMeter.ForStream` on the remote track's stream (attached in `ontrack`) | `ForStream` on the mic stream at Connect |
+| Gemini / ElevenLabs / AssemblyAI (client-owned audio) | `RealtimePcmPlayback.CreateMeter()` — an `AnalyserNode` on the playout engine's master gain | `ForStream` on the mic stream |
+
+`RealtimeAudioMeter` (in `packages/AI/RealtimeClient/src/audio/audioMeter.ts`) is defensive
+by contract: factories return `null` where Web Audio is unavailable (tests, SSR), and the DSP
+math (`ComputeRmsLevel`, `BucketizeFrequencyData`) is exported pure for unit testing.
+
+### The sampling loop (call overlay)
+
+`VoiceSessionService.GetAudioActivity()` is a plain passthrough; the overlay runs ONE
+`requestAnimationFrame` loop **outside Angular** that samples it, runs the frame through
+`RealtimeAudioVisualSmoother` (attack/decay envelopes + direction hysteresis — see
+`realtime-audio-visuals.ts` in ng-conversations), and writes CSS custom properties
+(`--voice-out`, `--voice-in`, `--eq-1..9`) plus `data-audio-live` / `data-voice-dir`
+attributes directly on the rendered overlay element. Zero change detection per frame.
+
+### The render gate (CSS)
+
+All audio-reactive rules key off `[data-audio-live='true']`: orb scale follows the smoothed
+output envelope, the EQ bars become a true spectrum, and `[data-voice-dir='user']` recolors
+orb + bars green (the established "user audio" palette). When a driver attaches no meters the
+attribute stays `false` and the original turn-state keyframe animations remain in charge —
+**the fallback is the pre-existing behavior, not a degraded new one**.
 
 ---
 

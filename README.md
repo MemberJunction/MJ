@@ -712,6 +712,12 @@ Packages at the top level of the `packages/` directory, not part of a multi-pack
 
 ---
 
+## Code Stats
+
+Curious how big the codebase is? Lines-of-code snapshots by language — with trend charts going back to the repo's first commit — live in [stats/](./stats/README.md). To record a fresh snapshot, run `node stats/repo-stats.mjs` (requires [cloc](https://github.com/AlDanial/cloc)).
+
+---
+
 <p align="center">
   <a href="https://docs.memberjunction.org">Documentation</a> · <a href="https://github.com/MemberJunction/MJ/issues">Issues</a> · <a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a> · <a href="mailto:support@memberjunction.org">Support</a>
 </p>
