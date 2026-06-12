@@ -484,6 +484,166 @@ describe('AgentClientSession — Session Lifecycle', () => {
             expect(errors).toHaveLength(1);
             expect(errors[0].Message).toContain('connection lost');
         });
+
+        // ────────────────────────────────────────────────────────────────────
+        // Cancel-enforcement: a synchronous ToolRequested$ subscriber can flip
+        // event.Cancel = true to veto dispatch. Handler does NOT run,
+        // ToolExecuted$ does NOT fire, server receives a failure response.
+        // ────────────────────────────────────────────────────────────────────
+
+        it('cancel-enforcement: when subscriber sets Cancel=true, handler does NOT run', async () => {
+            const handler = vi.fn().mockResolvedValue({ Success: true, Data: 'should not see this' });
+            session.RegisterTool({
+                Name: 'DeleteRecord',
+                Description: 'Destructive',
+                ParameterSchema: {},
+                Handler: handler,
+            });
+
+            // Veto every dispatch
+            session.ToolRequested$.subscribe((event) => {
+                event.Cancel = true;
+                event.CancelReason = 'User declined';
+            });
+
+            const executed: ClientToolResultEvent[] = [];
+            session.ToolExecuted$.subscribe(e => executed.push(e));
+
+            session.StartSession('sess-cancel');
+
+            mockProvider._toolRequestSubject.next({
+                ClientToolRequest: {
+                    RequestID: 'req-cancel-001',
+                    ToolName: 'DeleteRecord',
+                    Params: { recordId: 'abc' },
+                    TimeoutMs: 5000,
+                    AgentRunID: 'run-cancel-1',
+                }
+            });
+
+            // Wait for the cancel path's sendToolResponse() to fire (it's async).
+            await vi.waitFor(() => expect(mockProvider.ExecuteGQL).toHaveBeenCalledTimes(1));
+
+            expect(handler).not.toHaveBeenCalled();
+            expect(executed).toHaveLength(0);
+
+            const respVars = mockProvider.ExecuteGQL.mock.calls[0][1] as {
+                requestID: string;
+                success: boolean;
+                errorMessage: string;
+            };
+            expect(respVars.requestID).toBe('req-cancel-001');
+            expect(respVars.success).toBe(false);
+            expect(respVars.errorMessage).toBe('Tool dispatch canceled by host: User declined');
+        });
+
+        it('cancel-enforcement: Cancel=true without reason produces bare canceled message', async () => {
+            const handler = vi.fn().mockResolvedValue({ Success: true });
+            session.RegisterTool({
+                Name: 'SomeTool',
+                Description: 'X',
+                ParameterSchema: {},
+                Handler: handler,
+            });
+
+            session.ToolRequested$.subscribe((event) => {
+                event.Cancel = true;
+                // No CancelReason set
+            });
+
+            session.StartSession('sess-cancel-noreason');
+
+            mockProvider._toolRequestSubject.next({
+                ClientToolRequest: {
+                    RequestID: 'req-cancel-002',
+                    ToolName: 'SomeTool',
+                    Params: {},
+                    TimeoutMs: 5000,
+                    AgentRunID: 'run-cancel-2',
+                }
+            });
+
+            await vi.waitFor(() => expect(mockProvider.ExecuteGQL).toHaveBeenCalledTimes(1));
+
+            expect(handler).not.toHaveBeenCalled();
+            const respVars = mockProvider.ExecuteGQL.mock.calls[0][1] as { errorMessage: string };
+            expect(respVars.errorMessage).toBe('Tool dispatch canceled by host');
+        });
+
+        it('cancel-enforcement: Cancel=false (default) still runs the tool — no regression', async () => {
+            const handler = vi.fn().mockResolvedValue({ Success: true, Data: 'ran' });
+            session.RegisterTool({
+                Name: 'NoOpTool',
+                Description: 'Y',
+                ParameterSchema: {},
+                Handler: handler,
+            });
+
+            // Subscriber that observes but does NOT cancel
+            const observed: ClientToolRequestEvent[] = [];
+            session.ToolRequested$.subscribe((event) => {
+                observed.push(event);
+                // Cancel stays false
+            });
+
+            const executed: ClientToolResultEvent[] = [];
+            session.ToolExecuted$.subscribe(e => executed.push(e));
+
+            session.StartSession('sess-no-cancel');
+
+            mockProvider._toolRequestSubject.next({
+                ClientToolRequest: {
+                    RequestID: 'req-nocancel-001',
+                    ToolName: 'NoOpTool',
+                    Params: {},
+                    TimeoutMs: 5000,
+                    AgentRunID: 'run-nocancel-1',
+                }
+            });
+
+            await vi.waitFor(() => expect(executed).toHaveLength(1));
+
+            expect(observed).toHaveLength(1);
+            expect(observed[0].Cancel).toBe(false);
+            expect(handler).toHaveBeenCalledTimes(1);
+            expect(executed[0].Result.Data).toBe('ran');
+        });
+
+        it('cancel-enforcement: late mutation (after sync notify) is ignored', async () => {
+            // Defensive: an async subscriber that sets Cancel on a microtask
+            // shouldn't affect the already-decided dispatch — handleToolRequest
+            // reads event.Cancel synchronously after .next() returns.
+            const handler = vi.fn().mockResolvedValue({ Success: true });
+            session.RegisterTool({
+                Name: 'AsyncToolTest',
+                Description: 'Z',
+                ParameterSchema: {},
+                Handler: handler,
+            });
+
+            session.ToolRequested$.subscribe((event) => {
+                // Mutate on a microtask — too late for handleToolRequest's sync check.
+                Promise.resolve().then(() => {
+                    event.Cancel = true;
+                });
+            });
+
+            session.StartSession('sess-late');
+
+            mockProvider._toolRequestSubject.next({
+                ClientToolRequest: {
+                    RequestID: 'req-late-001',
+                    ToolName: 'AsyncToolTest',
+                    Params: {},
+                    TimeoutMs: 5000,
+                    AgentRunID: 'run-late-1',
+                }
+            });
+
+            await vi.waitFor(() => expect(handler).toHaveBeenCalled());
+            // Tool ran — cancel was too late.
+            expect(handler).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe('RunAgent', () => {

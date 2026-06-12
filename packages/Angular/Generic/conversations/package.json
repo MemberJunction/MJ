@@ -36,6 +36,7 @@
     "@memberjunction/ai-core-plus": "5.40.2",
     "@memberjunction/ai-engine-base": "5.40.2",
     "@memberjunction/ai-realtime-client": "5.40.2",
+    "@memberjunction/conversations-runtime": "5.40.2",
     "@memberjunction/core": "5.40.2",
     "@memberjunction/core-entities": "5.40.2",
     "@memberjunction/global": "5.40.2",
@@ -56,8 +57,7 @@
     "@memberjunction/ng-ui-components": "5.40.2",
     "@memberjunction/ng-whiteboard": "5.40.2",
     "rxjs": "^7.8.2",
-    "tslib": "^2.8.1",
-    "angular-split": "^20.0.0"
+    "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {

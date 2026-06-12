@@ -73,6 +73,13 @@
            [style.width.px]="preview.W" [style.height.px]="preview.H"></div>
     }
 
+    <!-- marquee (rubber-band) multi-selection rectangle -->
+    @if (MarqueeRect; as mq) {
+      <div class="wb-marquee"
+           [style.left.px]="mq.X" [style.top.px]="mq.Y"
+           [style.width.px]="mq.W" [style.height.px]="mq.H"></div>
+    }
+
     <!-- board items -->
     @for (item of BoxItems; track item.ID) {
       @switch (item.Kind) {
@@ -386,6 +393,10 @@
       }
     </div>
   }
+
+  <!-- page strip (OneNote-style tabs; switching works in ReadOnly, mutations don't) -->
+  <mj-realtime-whiteboard-pages [State]="State" [ReadOnly]="ReadOnly"
+                                (ChipContextMenu)="OnPageChipContextMenu($event)"/>
 
   <!-- minimap -->
   @if (MinimapOpen) {

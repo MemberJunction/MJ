@@ -1,12 +1,52 @@
 <div class="chat-area">
-  <!-- Fixed Header — also renders BEFORE a conversation exists when the
-       embedder has pre-conversation chrome to surface (currently just the
-       mode picker — agent / share / export / members / artifacts all
-       require a conversation row and stay hidden). Lets embedded surfaces
-       like the Form Builder cockpit show the mode picker above the
-       empty-state on a fresh chat instead of waiting for the first
-       message to round-trip. -->
-  @if (conversation || HasPreConversationHeader) {
+  <!-- agentPresence slot — sticky top, anchored with the header. Per Matt's
+       06-10 design: persistent presence indicator (Sid's face + live voice
+       state). Off by default; opt in via [showAgentCharacter]. When a
+       consumer projects an `mjChatSlot="agentPresence"` template, it
+       replaces the default presence component. -->
+  @if (showAgentCharacter) {
+    <div class="chat-agent-presence" [class.chat-agent-presence--prominent]="agentCharacterConfig?.voiceStateMode === 'prominent'">
+      @if (slotTemplate('agentPresence'); as t) {
+        <ng-container *ngTemplateOutlet="t; context: {
+          $implicit: agentCharacterConfig,
+          state: agentCharacterConfig?.state ?? 'idle',
+          agentName: agentCharacterConfig?.characterName,
+          avatarUrl: agentCharacterConfig?.avatarUrl,
+          mode: agentCharacterConfig?.voiceStateMode ?? 'subtle'
+        }"></ng-container>
+      } @else {
+        <mj-chat-agent-presence-default
+          [State]="agentCharacterConfig?.state ?? 'idle'"
+          [AgentName]="agentCharacterConfig?.characterName"
+          [AvatarUrl]="agentCharacterConfig?.avatarUrl"
+          [Mode]="agentCharacterConfig?.voiceStateMode ?? 'subtle'">
+        </mj-chat-agent-presence-default>
+      }
+    </div>
+  }
+
+  <!-- header slot — replaces the entire chat-header chrome (title, badges,
+       export/share/agent-picker buttons). When projected, the consumer owns
+       the entire header rendering; the default chrome below is bypassed
+       wholesale. Context exposes the minimal IMJChatHeaderComponent shape;
+       consumers needing more app state should bind to chat-area inputs
+       directly via @ViewChild or wrap the whole component. -->
+  @if (slotTemplate('header'); as t) {
+    <ng-container *ngTemplateOutlet="t; context: {
+      $implicit: conversation,
+      conversationTitle: conversation?.Name ?? null,
+      sharedBy: sharedByBadge?.display ?? null,
+      artifactCount: artifactCountDisplay,
+      showArtifactIndicator: showArtifactIndicator
+    }"></ng-container>
+  } @else if (conversation || HasPreConversationHeader) {
+    <!-- Default header — also renders BEFORE a conversation exists when the
+         embedder has pre-conversation chrome to surface (currently just the
+         mode picker — agent / share / export / members / artifacts all
+         require a conversation row and stay hidden). Lets embedded surfaces
+         like the Form Builder cockpit show the mode picker above the
+         empty-state on a fresh chat instead of waiting for the first
+         message to round-trip. -->
     <div class="chat-header">
       <div class="chat-info" [class.with-sidebar-toggle]="showSidebarToggle">
         @if (showSidebarToggle) {
@@ -100,8 +140,24 @@
     </div>
   }
 
-  <!-- Messages and Artifact Split Layout -->
-  <div class="chat-content-area">
+  <!-- Messages and Artifact Split Layout — restructures into [stage | rail]
+       when isDemonstrationActive (per Matt's 06-10 design). The .demonstration-mode
+       class drives the CSS Grid switch; the stage container renders only when the
+       slot is projected AND the host opts in via [showDemonstrationSurface]. -->
+  <div class="chat-content-area" [class.demonstration-mode]="isDemonstrationActive">
+    <!-- demonstrationSurface stage — takes the main pane; messages shrink to
+         a side rail (or move below on mobile). Off unless both
+         [showDemonstrationSurface] is true AND a slot template is projected. -->
+    @if (isDemonstrationActive) {
+      <div class="chat-demonstration-stage">
+        <ng-container *ngTemplateOutlet="slotTemplate('demonstrationSurface'); context: {
+          $implicit: demonstrationSurfaceContent,
+          content: demonstrationSurfaceContent,
+          visible: showDemonstrationSurface
+        }"></ng-container>
+      </div>
+    }
+
     <!-- Messages Pane -->
     <div class="chat-messages-pane"
       [class.full-width]="!showArtifactPanel"
@@ -112,21 +168,37 @@
           <mj-loading text="Loading conversation..." size="large"></mj-loading>
         </div>
       } @else if ((isNewConversation || !conversationId) && !suppressNewConversationEmptyState) {
-        <!-- Empty State - No conversation selected OR new unsaved conversation -->
-        <mj-conversation-empty-state
-          [currentUser]="currentUser"
-          [disabled]="isProcessing"
-          [showSidebarToggle]="showSidebarToggle"
-          [overlayMode]="overlayMode"
-          [greeting]="emptyStateGreeting"
-          [enableAttachments]="enableAttachments && allowAttachments"
-          [enableMentions]="allowMentions"
-          [maxAttachments]="maxAttachments"
-          [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
-          [acceptedFileTypes]="acceptedFileTypes"
-          (sidebarToggleClicked)="sidebarToggleClicked.emit()"
-          (messageSent)="onEmptyStateMessageSent($event)">
-        </mj-conversation-empty-state>
+        <!-- emptyState slot — when a consumer projects mjChatSlot="emptyState",
+             they take over the entire empty-state region (including any send
+             affordance — the slot interface doesn't include a sendMessage
+             output, so consumers handle send via their own input). When no
+             slot is projected, the rich built-in <mj-conversation-empty-state>
+             renders with its own greeting, prompt chips, and message input.
+             emptyStateConfig (when supplied) takes precedence over the legacy
+             [emptyStateGreeting] string for backwards compatibility. -->
+        @if (slotTemplate('emptyState'); as t) {
+          <ng-container *ngTemplateOutlet="t; context: {
+            $implicit: emptyStateConfig,
+            greeting: emptyStateConfig?.greeting ?? emptyStateGreeting,
+            subtext: emptyStateConfig?.subtext,
+            suggestedPrompts: emptyStateConfig?.suggestedPrompts ?? []
+          }"></ng-container>
+        } @else {
+          <mj-conversation-empty-state
+            [currentUser]="currentUser"
+            [disabled]="isProcessing"
+            [showSidebarToggle]="showSidebarToggle"
+            [overlayMode]="overlayMode"
+            [greeting]="emptyStateConfig?.greeting ?? emptyStateGreeting"
+            [enableAttachments]="enableAttachments && allowAttachments"
+            [enableMentions]="allowMentions"
+            [maxAttachments]="maxAttachments"
+            [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+            [acceptedFileTypes]="acceptedFileTypes"
+            (sidebarToggleClicked)="sidebarToggleClicked.emit()"
+            (messageSent)="onEmptyStateMessageSent($event)">
+          </mj-conversation-empty-state>
+        }
       } @else if ((isNewConversation || !conversationId) && suppressNewConversationEmptyState) {
         <!-- Pre-conversation normal-view: empty message list + emptyStateMode input.
              Used when host (e.g. Form Builder cockpit) wants the header + mode picker
@@ -170,6 +242,8 @@
               [ratingsMap]="ratingsByDetailId"
               [userAvatarMap]="userAvatarMap"
               [attachmentsMap]="attachmentsByDetailId"
+              [messageRendererTemplate]="slotTemplate('messageRenderer')"
+              [messageExtraTemplate]="slotTemplate('messageExtra')"
               [sessionMetaMap]="realtimeSessionMetaMap"
               (realtimeSessionOpenRequested)="OpenRealtimeSessionReview($event)"
               (replyInThread)="onReplyInThread($event)"
@@ -183,7 +257,9 @@
               (suggestedResponseSelected)="onSuggestedResponseSelected($event)"
               (attachmentClicked)="onAttachmentClicked($event)"
               (diagnosticRequested)="onDiagnosticRequested($event)"
-              (messagePinToggled)="onMessagePinToggled($event)">
+              (messagePinToggled)="onMessagePinToggled($event)"
+              (beforeResponseFormSubmitted)="beforeResponseFormSubmitted.emit($event)"
+              (afterResponseFormSubmitted)="afterResponseFormSubmitted.emit($event)">
             </mj-conversation-message-list>
 
             <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
@@ -223,6 +299,7 @@
                     [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
                     [appContext]="appContext"
+                    [applicationId]="applicationId"
                     [defaultAgentId]="defaultAgentId"
                     [conversationDefaultAgentId]="inputRef.conversationId === conversationId ? (conversation?.DefaultAgentID ?? null) : null"
                     [agentConfigurationPresetId]="inputRef.conversationId === conversationId ? ActiveAgentConfigurationPresetId : null"
@@ -244,6 +321,8 @@
                     (conversationRenamed)="onConversationRenamed($event)"
                     (intentCheckStarted)="onIntentCheckStarted()"
                     (intentCheckCompleted)="onIntentCheckCompleted()"
+                    (beforeAgentTurn)="beforeAgentTurn.emit($event)"
+                    (afterAgentTurn)="afterAgentTurn.emit($event)"
                     (uploadStateChanged)="onUploadStateChanged($event)">
                   </mj-message-input>
                 }

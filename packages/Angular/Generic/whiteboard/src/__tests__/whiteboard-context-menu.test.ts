@@ -3,7 +3,7 @@ import {
   WhiteboardChange, WhiteboardHtmlItem, WhiteboardInkItem, WhiteboardItem, WhiteboardState, WhiteboardStickyItem
 } from '../lib/whiteboard-state';
 import {
-  BuildWhiteboardContextMenu, WhiteboardContextMenuActionID
+  BuildWhiteboardContextMenu, BuildWhiteboardPageContextMenu, WhiteboardContextMenuActionID
 } from '../lib/whiteboard-context-menu';
 
 /**
@@ -38,8 +38,11 @@ describe('BuildWhiteboardContextMenu — model per target', () => {
     state = new WhiteboardState();
   });
 
-  it('empty canvas → the "add … here" actions only', () => {
-    expect(ids(null)).toEqual(['add-sticky', 'add-text', 'add-markdown', 'add-html']);
+  it('empty canvas → the "add … here" actions plus a separated "New page"', () => {
+    expect(ids(null)).toEqual(['add-sticky', 'add-text', 'add-markdown', 'add-html', 'add-page']);
+    const addPage = BuildWhiteboardContextMenu(null).find((a) => a.ID === 'add-page')!;
+    expect(addPage.SeparatorBefore).toBe(true);
+    expect(addPage.Danger).toBeUndefined();
   });
 
   it('highlight → Delete only (transient pointing chrome)', () => {
@@ -83,6 +86,49 @@ describe('BuildWhiteboardContextMenu — model per target', () => {
       expect(action.Label.length).toBeGreaterThan(0);
       expect(action.Icon).toContain('fa-');
     }
+  });
+});
+
+describe('BuildWhiteboardPageContextMenu — page-chip model', () => {
+  let state: WhiteboardState;
+
+  beforeEach(() => {
+    state = new WhiteboardState();
+  });
+
+  it('offers Rename + a separated, danger Delete when the page is deletable', () => {
+    state.AddPage('Practice');
+    const page = state.Pages[1];
+    const menu = BuildWhiteboardPageContextMenu(page, { CanDelete: true, ReadOnly: false });
+    expect(menu.map((a) => a.ID)).toEqual(['page-rename', 'page-delete']);
+    const del = menu.find((a) => a.ID === 'page-delete')!;
+    expect(del.Danger).toBe(true);
+    expect(del.SeparatorBefore).toBe(true);
+    expect(del.Label).toContain('Practice');
+    for (const action of menu) {
+      expect(action.Label.length).toBeGreaterThan(0);
+      expect(action.Icon).toContain('fa-');
+    }
+  });
+
+  it('omits Delete (rather than disabling it) under the last-page guard', () => {
+    const onlyPage = state.Pages[0];
+    const menu = BuildWhiteboardPageContextMenu(onlyPage, { CanDelete: false, ReadOnly: false });
+    expect(menu.map((a) => a.ID)).toEqual(['page-rename']);
+  });
+
+  it('offers NO menu at all in ReadOnly', () => {
+    state.AddPage('Two');
+    expect(BuildWhiteboardPageContextMenu(state.Pages[0], { CanDelete: true, ReadOnly: true })).toEqual([]);
+  });
+
+  it('clips very long page names inside the Delete label', () => {
+    const longName = 'An extremely long descriptive page name';
+    state.AddPage(longName);
+    const menu = BuildWhiteboardPageContextMenu(state.Pages[1], { CanDelete: true, ReadOnly: false });
+    const del = menu.find((a) => a.ID === 'page-delete')!;
+    expect(del.Label).toContain('…');
+    expect(del.Label).not.toContain(longName);
   });
 });
 

@@ -1,5 +1,5 @@
-<!-- SIZING IS EXTERNAL: the overlay hosts this panel inside an angular-split area and
-     owns its width (drag, persistence, default tiers) — the panel just fills the area. -->
+<!-- SIZING IS EXTERNAL: the overlay hosts this panel inside a fixed-width flex item and
+     owns its width (drag, persistence, default tiers) — the panel just fills it. -->
 <aside class="surface"
        [class.surface--collapsed]="Collapsed"
        [class.surface--fill]="Fill && !Collapsed"
@@ -26,11 +26,15 @@
                 role="tab"
                 [class.s-tab--active]="tab.Key === Model.ActiveKey"
                 [class.s-tab--flash]="tab.Key === Model.FlashKey"
+                [class.s-tab--unseen]="Model.IsUnseen(tab.Key)"
                 [attr.aria-selected]="tab.Key === Model.ActiveKey"
-                [title]="tab.Title"
+                [title]="Model.IsUnseen(tab.Key) ? tab.Title + ' (new)' : tab.Title"
                 (click)="Model.Focus(tab.Key)">
           <i [class]="tab.Icon" aria-hidden="true"></i>
           <span class="s-tab__title">{{ tab.Title }}</span>
+          @if (Model.IsUnseen(tab.Key)) {
+            <span class="s-tab__unseen-dot" aria-hidden="true"></span>
+          }
         </button>
       }
       <div class="tabs-end">

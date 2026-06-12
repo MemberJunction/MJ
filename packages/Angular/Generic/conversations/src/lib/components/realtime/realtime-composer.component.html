@@ -1,24 +1,90 @@
-<div class="composer">
-  <div class="composer__note">
-    <i class="fa-solid fa-arrow-turn-down" aria-hidden="true"></i>
-    Type here to join the live session — your text goes into this voice call
+@if (StripMode) {
+  <!-- Levels 0–1: phone-call strip — big round controls, nothing to configure.
+       Captions arrives at level 1 WITH the text it controls; Details peeks at the
+       surface panels on demand; End stays the deliberate rightmost action. -->
+  <div class="strip" role="group" aria-label="Call controls">
+    <div class="ctrl-group">
+      <button type="button" class="ctrl" [class.ctrl--muted]="IsMuted"
+              (click)="ToggleMute()"
+              [title]="IsMuted ? 'Unmute microphone' : 'Mute microphone'"
+              [attr.aria-pressed]="IsMuted">
+        <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
+      </button>
+      <span class="ctrl-label">{{ IsMuted ? 'Unmute' : 'Mute' }}</span>
+    </div>
+
+    @if (Level >= 1) {
+      <div class="ctrl-group">
+        <button type="button" class="ctrl" [class.ctrl--on]="CaptionsOn"
+                (click)="ToggleCaptions()"
+                [title]="CaptionsOn ? 'Hide captions' : 'Show captions'"
+                [attr.aria-pressed]="CaptionsOn">
+          <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+        </button>
+        <span class="ctrl-label">Captions</span>
+      </div>
+    }
+
+    @if (ShowDetails) {
+      <div class="ctrl-group">
+        <button type="button" class="ctrl" [class.ctrl--on]="DetailsOn"
+                (click)="DetailsToggled.emit()"
+                [title]="DetailsOn ? 'Hide the session panels' : 'Peek at the session panels'"
+                [attr.aria-pressed]="DetailsOn">
+          <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
+        </button>
+        <span class="ctrl-label">Details</span>
+      </div>
+    }
+
+    <div class="ctrl-group">
+      <button type="button" class="ctrl ctrl--end" (click)="EndRequested.emit()"
+              title="End call" aria-label="End call">
+        <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+      </button>
+      <span class="ctrl-label ctrl-label--end">End call</span>
+    </div>
+
+    @if (Level >= 1) {
+      <span class="thint"><i class="fa-regular fa-keyboard" aria-hidden="true"></i> press <kbd>T</kbd> to type</span>
+    }
   </div>
-  <div class="composer__box">
-    <input
-      type="text"
-      class="composer__input"
-      placeholder="Type a message into the live session…"
-      [(ngModel)]="Draft"
-      (keydown)="OnKeydown($event)"
-      aria-label="Type a message into the live voice session" />
-    <button
-      class="composer__send"
-      type="button"
-      [disabled]="!CanSend"
-      (click)="Send()"
-      title="Send into live session"
-      aria-label="Send">
-      <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
-    </button>
+} @else {
+  <!-- Level 2+: the fused dock — compact minis + the in-call composer in ONE bottom bar. -->
+  <div class="dock">
+    <div class="dock__minis">
+      <button type="button" class="mini" [class.mini--muted]="IsMuted"
+              (click)="ToggleMute()"
+              [title]="IsMuted ? 'Unmute microphone' : 'Mute microphone'"
+              [attr.aria-pressed]="IsMuted">
+        <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="mini" [class.mini--on]="CaptionsOn"
+              (click)="ToggleCaptions()"
+              [title]="CaptionsOn ? 'Hide captions' : 'Show captions'"
+              [attr.aria-pressed]="CaptionsOn">
+        <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="dock__box">
+      <input
+        #dockInput
+        type="text"
+        class="dock__input"
+        placeholder="Type into the live session — joins this same voice call…"
+        [(ngModel)]="Draft"
+        (keydown)="OnKeydown($event)"
+        aria-label="Type a message into the live voice session" />
+      <span class="dock__hint" aria-hidden="true">↵ send</span>
+      <button
+        class="dock__send"
+        type="button"
+        [disabled]="!CanSend"
+        (click)="Send()"
+        title="Send into live session"
+        aria-label="Send">
+        <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+      </button>
+    </div>
   </div>
-</div>
+}

@@ -22,12 +22,15 @@
   display: none;
 }
 
-/* MAIN column: banner (top) → scrolling thread → channel strip → composer → controls */
+/* MAIN column: banner (top) → scrolling thread → channel strip → composer → controls.
+   The 420px floor keeps the call column readable while the panel is dragged wide
+   (the drag clamp's 70% cap is the other guard). */
 .call-main {
   flex: 1;
-  min-width: 0;
+  min-width: 420px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .call-body {
@@ -52,6 +55,195 @@
   justify-content: center;
   height: 100%;
   min-height: 160px;
+}
+
+/* ---------- PURE-AUDIO HERO (disclosure level 0) ----------
+   The orb IS the interface: it breathes with the audio inside expanding sound-wave
+   rings, with a small voice equalizer underneath. Nothing to read, nothing to
+   configure — text, panels and the composer are revealed later (or peeked on demand). */
+.call-body--hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  animation: hero-in 420ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+@keyframes hero-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+.hero__stage {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 4px;
+}
+/* The hero orb mirrors the app-bar orb's visual language at stage scale. */
+.hero__orb {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  position: relative;
+  background: radial-gradient(circle at 35% 30%,
+    var(--mj-brand-accent, var(--mj-brand-primary)),
+    var(--mj-brand-primary) 60%,
+    var(--mj-brand-primary-active, var(--mj-brand-primary)));
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent),
+    0 0 48px color-mix(in srgb, var(--mj-brand-primary) 45%, transparent);
+}
+.hero__orb[data-state='speaking'] {
+  animation: hero-orb-bob 0.9s ease-in-out infinite;
+}
+.hero__orb[data-state='listening'] {
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--mj-status-success) 16%, transparent),
+    0 0 48px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-status-success) 60%, white), var(--mj-brand-primary) 65%);
+}
+.hero__orb[data-state='thinking'] {
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--mj-status-warning) 14%, transparent),
+    0 0 40px color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+}
+@keyframes hero-orb-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+/* Expanding sound-wave rings (staggered). */
+.hero__ring {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 55%, transparent);
+  opacity: 0;
+  animation: hero-wave 2.7s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+.hero__ring--2 { animation-delay: 0.9s; }
+.hero__ring--3 { animation-delay: 1.8s; }
+@keyframes hero-wave {
+  0% { transform: scale(1); opacity: 0.5; }
+  70% { opacity: 0.1; }
+  100% { transform: scale(1.85); opacity: 0; }
+}
+/* Voice equalizer: lively while the agent speaks, near-still otherwise. */
+.hero__eq {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  margin-bottom: 6px;
+}
+.hero__eq span {
+  width: 4px;
+  height: 8px;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--mj-brand-accent, var(--mj-brand-primary));
+  opacity: 0.55;
+}
+.hero[data-state='speaking'] .hero__eq span {
+  animation: hero-eq 1.05s ease-in-out infinite;
+}
+.hero__eq span:nth-child(1) { animation-delay: 0s; }
+.hero__eq span:nth-child(2) { animation-delay: 0.14s; }
+.hero__eq span:nth-child(3) { animation-delay: 0.28s; }
+.hero__eq span:nth-child(4) { animation-delay: 0.07s; }
+.hero__eq span:nth-child(5) { animation-delay: 0.21s; }
+.hero__eq span:nth-child(6) { animation-delay: 0.35s; }
+.hero__eq span:nth-child(7) { animation-delay: 0.1s; }
+.hero__eq span:nth-child(8) { animation-delay: 0.24s; }
+.hero__eq span:nth-child(9) { animation-delay: 0.03s; }
+@keyframes hero-eq {
+  0%, 100% { height: 7px; opacity: 0.6; }
+  50% { height: 28px; opacity: 1; }
+}
+.hero__name {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--mj-text-primary);
+}
+.hero__sub {
+  font-size: 12.5px;
+  color: var(--mj-text-muted);
+}
+/* ---------- AUDIO-REACTIVE MODE (data-audio-live, set by the rAF meter loop) ----------
+   With real audio metering the orb stops acting and starts REACTING: scale + glow follow
+   the smoothed output envelope (--voice-out) like a speaker cone, the EQ renders the true
+   spectrum (--eq-1..9), and [data-voice-dir] colors the visuals by who is speaking
+   (agent = brand, user = green). Without metering (driver attached no meters) the
+   attribute stays 'false' and the turn-state keyframe animations above stay in charge. */
+.call-overlay[data-audio-live='true'] .hero__orb {
+  animation: none;
+  transform: scale(calc(1 + var(--voice-out, 0) * 0.18));
+  transition: transform 70ms linear;
+}
+.call-overlay[data-audio-live='true'] .hero__ring {
+  opacity: calc(var(--voice-out, 0) * 0.55);
+  animation-duration: 2.1s;
+}
+.call-overlay[data-audio-live='true'][data-voice-dir='user'] .hero__orb {
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--mj-status-success) 16%, transparent),
+    0 0 48px color-mix(in srgb, var(--mj-status-success) 45%, transparent);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-status-success) 60%, white), var(--mj-brand-primary) 65%);
+}
+.call-overlay[data-audio-live='true'][data-voice-dir='user'] .hero__ring {
+  border-color: color-mix(in srgb, var(--mj-status-success) 55%, transparent);
+}
+/* True-spectrum EQ: per-bar heights from the meter's bins. */
+.call-overlay[data-audio-live='true'] .hero__eq span {
+  animation: none;
+  transition: height 70ms linear, opacity 120ms linear;
+}
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(1) { height: calc(6px + var(--eq-1, 0) * 24px); opacity: calc(0.45 + var(--eq-1, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(2) { height: calc(6px + var(--eq-2, 0) * 24px); opacity: calc(0.45 + var(--eq-2, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(3) { height: calc(6px + var(--eq-3, 0) * 24px); opacity: calc(0.45 + var(--eq-3, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(4) { height: calc(6px + var(--eq-4, 0) * 24px); opacity: calc(0.45 + var(--eq-4, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(5) { height: calc(6px + var(--eq-5, 0) * 24px); opacity: calc(0.45 + var(--eq-5, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(6) { height: calc(6px + var(--eq-6, 0) * 24px); opacity: calc(0.45 + var(--eq-6, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(7) { height: calc(6px + var(--eq-7, 0) * 24px); opacity: calc(0.45 + var(--eq-7, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(8) { height: calc(6px + var(--eq-8, 0) * 24px); opacity: calc(0.45 + var(--eq-8, 0) * 0.55); }
+.call-overlay[data-audio-live='true'] .hero__eq span:nth-child(9) { height: calc(6px + var(--eq-9, 0) * 24px); opacity: calc(0.45 + var(--eq-9, 0) * 0.55); }
+.call-overlay[data-audio-live='true'][data-voice-dir='user'] .hero__eq span {
+  background: var(--mj-status-success);
+}
+
+/* The quiet first reveal: show the conversation as text (raises disclosure to level 1). */
+.hero__reveal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 6px 14px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px dashed var(--mj-border-strong);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.hero__reveal:hover {
+  color: var(--mj-text-secondary);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+.hero__reveal i {
+  font-size: 11px;
 }
 
 /* Ephemeral narration shown under the banner when no working card anchors it */
@@ -185,34 +377,43 @@
   overflow: hidden;
 }
 
-/* ---------- angular-split layout (main column | surface panel) ---------- */
-.call-split {
-  flex: 1;
-  min-height: 0;
-}
-/* Token-styled gutter: invisible until hover, brand-tinted while interacting.
-   (angular-split's default gutter is a gray bar with a dotted icon — restyle.) */
-:host ::ng-deep .call-split > .as-split-gutter {
-  background: transparent !important;
+/* ---------- flex layout (main column | resize handle | surface panel) ---------- */
+/* Token-styled resize handle: invisible until hover, brand-tinted while interacting.
+   7px hit target, col-resize cursor; removed (not rendered) while collapsed / focus. */
+.call-resizer {
+  flex: 0 0 7px;
+  width: 7px;
+  cursor: col-resize;
+  background: transparent;
   transition: background 140ms ease;
 }
-:host ::ng-deep .call-split > .as-split-gutter:hover,
-:host ::ng-deep .call-split > .as-split-gutter.as-dragged {
-  background: color-mix(in srgb, var(--mj-brand-primary) 26%, transparent) !important;
+.call-resizer:hover,
+.call-resizer--active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 26%, transparent);
 }
-:host ::ng-deep .call-split > .as-split-gutter .as-split-gutter-icon {
-  display: none;
-}
-/* Areas CONTAIN their children (overflow hidden keeps the flex height chain intact
-   so the thread scrolls internally under a fixed banner — overflow:visible here let
-   the whole column overflow the area and broke scrolling). Children own their own
-   scrollbars via flex + min-height:0. */
-:host ::ng-deep .call-split > .as-split-area {
-  overflow: hidden;
+/* The surface panel: a plain fixed-width flex item (inline width set by the overlay;
+   collapsed = the slim strip width). flex-shrink lets it yield to the call column's
+   min-width on tight overlays; overflow hidden keeps the flex height chain intact so
+   the panel's content scrolls internally. */
+.call-panel {
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
+  overflow: hidden;
+  /* Disclosure-gated: the panel is CREATED when earned/peeked — its arrival slides in
+     from the right so the reveal doubles as the progress cue. */
+  animation: panel-in 420ms cubic-bezier(0.25, 0.8, 0.3, 1);
 }
-:host ::ng-deep .call-split > .as-split-area > * {
+@keyframes panel-in {
+  from { opacity: 0; transform: translateX(48px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.call-panel > * {
   flex: 1;
   min-width: 0;
   min-height: 0;
+}
+/* Board-focus fill: the panel owns the whole overlay (the main column is hidden). */
+.call-overlay.board-focus .call-panel {
+  flex: 1;
 }
