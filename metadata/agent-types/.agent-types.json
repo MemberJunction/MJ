@@ -138,14 +138,16 @@
   {
     "fields": {
       "Name": "Realtime",
-      "Description": "Real-time agent type — a first-class peer of Loop and Flow that drives a streaming, full-duplex BaseRealtimeModel session (voice today, video later) instead of an iterative reasoning loop. The model owns the listen-reason-speak loop; the agent delegates real work back to async (Loop/Flow) agents via tool calls. The first agent of this type is the Voice Co-Agent, which voices on behalf of any target agent. The system prompt is per-agent (assembled at session start), so there is no type-level SystemPromptID.",
+      "Description": "Real-time agent type \u2014 a first-class peer of Loop and Flow that drives a streaming, full-duplex BaseRealtimeModel session (voice today, video later) instead of an iterative reasoning loop. The model owns the listen-reason-speak loop; the agent delegates real work back to async (Loop/Flow) agents via tool calls. The first agent of this type is the Voice Co-Agent, which voices on behalf of any target agent. The system prompt is per-agent (assembled at session start), so there is no type-level SystemPromptID.",
       "SystemPromptID": null,
       "IsActive": true,
       "AgentPromptPlaceholder": null,
       "DriverClass": "RealtimeAgentType",
       "UIFormSectionKey": null,
       "UIFormKey": null,
-      "UIFormSectionExpandedByDefault": false
+      "UIFormSectionExpandedByDefault": false,
+      "ConfigSchema": "@file:schemas/realtime-type-config.schema.json",
+      "DefaultConfiguration": "@file:schemas/realtime-type-default-config.json"
     },
     "relatedEntities": {},
     "primaryKey": {
