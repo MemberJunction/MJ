@@ -39,7 +39,7 @@ import {
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { RealtimeClientSessionService, DelegatedRunArtifact } from '@memberjunction/ai-agents';
+import { RealtimeClientSessionService, DelegatedRunArtifact, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import { AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -629,11 +629,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * 2. Resolve the channel definition (`MJ: AI Agent Channels`) by `channelName`. When no
      *    active definition row exists (the deployment hasn't synced the channel seed yet),
      *    return `false` gracefully and log — never throw for a missing definition.
-     * 3. Upsert the session-channel row: create it (Status `Connected`) when missing, store
-     *    `stateJson` in its `Config` field, and stamp `LastActiveAt`.
-     *
-     * v1 NOTE: state is write-only from the session's perspective — a new session starts with a
-     * fresh board (no restore of a prior session's channel state). Restore is a later phase.
+     * 3. Offer the payload to the session's SERVER-SIDE channel plugin (the registry row's
+     *    `ServerPluginClass`, held per-session by {@link RealtimeChannelServerHost}) for
+     *    validation/normalization — strictly best-effort: no plugin, a plugin failure, or an
+     *    oversized replacement all fall back to persisting the original payload.
+     * 4. Upsert the session-channel row: create it (Status `Connected`) when missing, store
+     *    the (possibly normalized) state in its `Config` field, and stamp `LastActiveAt`.
      *
      * @returns `true` when the state was persisted; `false` on any tolerated failure (missing
      *   channel definition, oversized state, save failure) — all logged.
@@ -661,7 +662,35 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return false; // missing/inactive channel definition — logged in resolveChannelID
         }
 
-        return this.upsertSessionChannelState(session.ID, channelID, stateJson, contextUser, provider);
+        const stateToPersist = await this.applyChannelServerPlugin(session.ID, channelName, stateJson);
+        return this.upsertSessionChannelState(session.ID, channelID, stateToPersist, contextUser, provider);
+    }
+
+    /**
+     * Routes a landed channel-state save through the session's server-side channel plugin (when
+     * one resolved at session start) so it can validate/normalize the payload PRE-persistence.
+     * Strictly best-effort: any host/plugin problem — including a replacement that exceeds the
+     * channel-state size cap — falls back to the client's original payload, which already passed
+     * the cap. A plugin can transform a save; it can never lose or block one.
+     */
+    private async applyChannelServerPlugin(agentSessionID: string, channelName: string, stateJson: string): Promise<string> {
+        try {
+            const processed = await RealtimeChannelServerHost.Instance.OnChannelStateSave(agentSessionID, channelName, stateJson);
+            if (processed.length > MAX_CHANNEL_STATE_CHARS) {
+                LogError(
+                    `SaveSessionChannelState: server plugin for channel '${channelName}' returned an oversized replacement ` +
+                        `(${processed.length} chars > ${MAX_CHANNEL_STATE_CHARS}) — persisting the original state.`,
+                );
+                return stateJson;
+            }
+            return processed;
+        } catch (error) {
+            LogError(
+                `SaveSessionChannelState: channel server plugin hook failed for session ${agentSessionID} / ` +
+                    `channel '${channelName}' — persisting the original state: ${(error as Error).message}`,
+            );
+            return stateJson;
+        }
     }
 
     /**

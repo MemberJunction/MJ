@@ -67,20 +67,21 @@ This chain is how deployments give individual agents a distinct voice persona (a
 
 ## 2. The Triple-Registry Plugin Architecture
 
-Realtime is pluggable along **three independent axes**, all resolved through `MJGlobal.ClassFactory` + metadata. Nothing in the hosts (the session runner, the resolver, the Angular overlay) names a concrete provider or channel.
+Realtime is pluggable along **three independent axes**, all resolved through `MJGlobal.ClassFactory` + metadata. Nothing in the hosts (the session runner, the resolver, the Angular overlay) names a concrete provider or channel. The third axis — interactive channels — has **two halves**, one base class per side of the wire, resolved from the same registry row:
 
 | Registry | Base class | ClassFactory key comes from | Shipped implementations |
 |---|---|---|---|
 | **Server model drivers** | `BaseRealtimeModel` (`packages/AI/Core/src/generic/baseRealtime.ts`) | `MJ: AI Model Vendors.DriverClass` on a model of `AIModelType = 'Realtime'` | `OpenAIRealtime` (`packages/AI/Providers/OpenAI/src/models/openAIRealtime.ts`), `GeminiRealtime` (`packages/AI/Providers/Gemini/src/geminiRealtime.ts`), `ElevenLabsRealtime` (`packages/AI/Providers/ElevenLabs/src/elevenLabsRealtime.ts`), `AssemblyAIRealtime` (`packages/AI/Providers/AssemblyAI/src/assemblyAIRealtime.ts`) |
 | **Client model drivers** | `BaseRealtimeClient` (`packages/AI/RealtimeClient/src/generic/baseRealtimeClient.ts`) | `ClientRealtimeSessionConfig.Provider` — the string the server driver stamps when it mints (`'openai'`, `'gemini'`, `'elevenlabs'`, `'assemblyai'`) | `OpenAIRealtimeClient`, `GeminiRealtimeClient`, `ElevenLabsRealtimeClient`, `AssemblyAIRealtimeClient` (same package) |
-| **Client channel plugins** | `BaseRealtimeChannelClient` (`packages/Angular/Generic/conversations/src/lib/components/realtime/channels/base-realtime-channel-client.ts`) | `MJ: AI Agent Channels.ClientPluginClass` | `RealtimeWhiteboardChannel` (key `'RealtimeWhiteboardChannel'`) — a thin plugin over `@memberjunction/ng-whiteboard` |
+| **Channel plugins — client half** | `BaseRealtimeChannelClient` (`packages/Angular/Generic/conversations/src/lib/components/realtime/channels/base-realtime-channel-client.ts`) | `MJ: AI Agent Channels.ClientPluginClass` | `RealtimeWhiteboardChannel` (key `'RealtimeWhiteboardChannel'`) — a thin plugin over `@memberjunction/ng-whiteboard` |
+| **Channel plugins — server half** | `BaseRealtimeChannelServer` (`packages/AI/Core/src/generic/baseRealtimeChannelServer.ts`), resolved per session by `RealtimeChannelServerHost` (`packages/AI/Agents/src/realtime/realtime-channel-server-host.ts`) | `MJ: AI Agent Channels.ServerPluginClass` | `WhiteboardChannelServer` (key `'WhiteboardChannelServer'`, in `@memberjunction/ai-agents`) — validates/canonicalizes the board's persisted state of record |
 
 Server model drivers are resolved by `BaseAgent.resolveRealtimeModel()` (server-bridged) and `RealtimeClientSessionService.resolveVendorAndInstantiate()` (client-direct): highest-`PowerRank` active `Realtime` model → highest-`Priority` active vendor whose `DriverClass` has a resolvable API key (`GetAIAPIKey`, e.g. `AI_VENDOR_API_KEY__OpenAIRealtime`) → `ClassFactory.CreateInstance<BaseRealtimeModel>(BaseRealtimeModel, driverClass, apiKey)`. An explicit `preferredModelId` bypasses ranking and **fails with a specific reason** rather than silently falling back (`resolvePreferredRealtimeModel`).
 
 Client model drivers are resolved in `VoiceSessionService.createRealtimeClient()` by the server-reported `Provider` key. Channel plugins are resolved in `VoiceSessionService.loadActiveChannels()` from the active `MJ: AI Agent Channels` rows.
 
 > [!NOTE]
-> The channel registry also carries a `ServerPluginClass` column (seeded `'WhiteboardChannelServer'` for the Whiteboard) and a `TransportType` (`PubSub` / `WebRTC` / `WebSocket`). Server-side channel plugin *resolution* is not yet consumed by any code path — the server currently handles channel persistence generically (`SaveSessionChannelState` / `SaveSessionChannelArtifact`). The column is the registered seam for future server-side channel behavior.
+> The channel registry is the one registry with **two halves**: each row carries both a `ClientPluginClass` (resolved in the browser by `VoiceSessionService`) and a `ServerPluginClass` (resolved server-side by `RealtimeChannelServerHost` when `SessionManager.CreateSession` mints the session — one fresh instance per session, exactly mirroring the client half's resolution: ACTIVE rows only, ClassFactory registration checked first, unregistered keys skipped with a log, never fatal). The server half's lifecycle hooks are the durable session events — session started, channel state saved (pre-persistence, with normalization power), session closed (any provenance) — see [§5](#5-channels--the-heart-of-the-system) for the full contract. The registry also carries a `TransportType` (`PubSub` / `WebRTC` / `WebSocket`) for the future media-plane work.
 
 ### The four-provider capability matrix
 
@@ -145,8 +146,9 @@ Covered in depth in [§5](#5-channels--the-heart-of-the-system); the short versi
 
 1. Subclass `BaseRealtimeChannelClient<YourSurfaceComponent>`, implementing the channel contract (tools + perception + surface + state of record).
 2. `@RegisterClass(BaseRealtimeChannelClient, '<YourClientPluginClass>')` + a `Load...()` no-op called from a static code path (the Whiteboard's is called from `conversations.module.ts`).
-3. Seed an `MJ: AI Agent Channels` row (`Name`, `ClientPluginClass`, `ServerPluginClass`, `TransportType`, `IsActive: true`) in `metadata/ai-agent-channels/` and push with `mj sync`.
-4. Done — `VoiceSessionService.startChannels()` resolves every active registry row at session start, declares the plugin's tools to the model, registers its prefix-routed local executor, and the overlay registers a surface tab per plugin. The shell carries **zero** channel-specific wiring.
+3. *(Optional but recommended)* Subclass `BaseRealtimeChannelServer` for the **server half** — at minimum a state-of-record guard like `WhiteboardChannelServer`'s (validate/normalize each landed save in `OnChannelStateSave`). `@RegisterClass(BaseRealtimeChannelServer, '<YourServerPluginClass>')` + a `Load...Server()` no-op called from a static server path (the Whiteboard's is called from MJServer's `agentSessions/index.ts`). A row whose server key is unregistered simply runs with no server plugin — it is never an error.
+4. Seed an `MJ: AI Agent Channels` row (`Name`, `ClientPluginClass`, `ServerPluginClass`, `TransportType`, `IsActive: true`) in `metadata/ai-agent-channels/` and push with `mj sync`.
+5. Done — `VoiceSessionService.startChannels()` resolves every active registry row at session start in the browser, and `RealtimeChannelServerHost` resolves the same rows' server halves when the session mints. The model gets the plugin's tools, the overlay gets a surface tab, the server gets the lifecycle hooks. The shells carry **zero** channel-specific wiring.
 
 ---
 
@@ -250,11 +252,11 @@ Every interactive channel implements two directions:
 
 ### The definition registry
 
-`MJ: AI Agent Channels` rows define what channels exist (see [§4 schema](#4-session-lifecycle)). At session start `VoiceSessionService` reads the **active** rows and instantiates one plugin per row via the ClassFactory (`ClientPluginClass` key) — one fresh instance per session, never a singleton. Registry failures degrade to "no channels"; the voice session always proceeds.
+`MJ: AI Agent Channels` rows define what channels exist (see [§4 schema](#4-session-lifecycle)). At session start `VoiceSessionService` reads the **active** rows and instantiates one plugin per row via the ClassFactory (`ClientPluginClass` key) — one fresh instance per session, never a singleton. Registry failures degrade to "no channels"; the voice session always proceeds. The **server half** mirrors this exactly: when `SessionManager.CreateSession` mints the durable session, `RealtimeChannelServerHost` reads the same active rows and resolves each `ServerPluginClass` into one fresh `BaseRealtimeChannelServer` instance per session (unregistered keys skip with a log, never fatal).
 
 ### Per-session state of record
 
-Each attached channel gets an `AIAgentSessionChannel` row. Its `Config` column is the channel's **state of record** — written by the `SaveSessionChannelState` mutation through a client-side debounce (3 s, latest-state-wins, flushed at teardown with the session id captured while live so the final save lands even on the just-closed session). The model's perception feed is *derived* from this state, never the source of truth. A `Closed` session still accepts state saves (the final flush legitimately lands after `CloseAgentSession`).
+Each attached channel gets an `AIAgentSessionChannel` row. Its `Config` column is the channel's **state of record** — written by the `SaveSessionChannelState` mutation through a client-side debounce (3 s, latest-state-wins, flushed at teardown with the session id captured while live so the final save lands even on the just-closed session). The model's perception feed is *derived* from this state, never the source of truth. A `Closed` session still accepts state saves (the final flush legitimately lands after `CloseAgentSession`). Before persistence, each landed save routes through the channel's **server plugin** (when one resolved — see below), which may validate/normalize the payload; a plugin can transform a save but can never lose or block one.
 
 ### The `BaseRealtimeChannelClient` contract
 
@@ -272,6 +274,24 @@ A concrete plugin contributes everything its channel needs, so the host shell ca
 | `Initialize(ctx)` / `Dispose()` | Lifecycle bracket; `Context` is the plugin's **only** line to the session |
 
 The host context (`RealtimeChannelContext`) supplies: `SendContextNote` (the perception feed), `RequestSave` (debounced state-of-record persistence), `SaveAsArtifact` (snapshot to a first-class versioned `MJ: Artifacts` record), `SetFocusMode` (the focus-layout request), and `AgentName`.
+
+### The server half — `BaseRealtimeChannelServer`
+
+The same registry row's `ServerPluginClass` resolves a **server-side** plugin (`BaseRealtimeChannelServer` in `@memberjunction/ai`, beside `BaseRealtimeModel`), hosted per session by the `RealtimeChannelServerHost` singleton in `@memberjunction/ai-agents`. Because today's shipped topology is client-direct (channel tools execute in the browser), the server half's contract is the **durable lifecycle**, not socket ownership — a pragmatic adaptation of the plan's `IAgentChannelServer` (see the base class doc header for the deviation notes; socket/transport members are deferred with the unified-transport track):
+
+| Member | Role |
+|---|---|
+| `ChannelName` | Must match the registry row's `Name` (the host routes by the row name and warns on a mismatch) |
+| `Initialize(ctx)` / `Dispose()` | Lifecycle bracket; `ctx` is plain session facts (`AgentSessionID`, `AgentID`, `UserID`, `ConversationID`) |
+| `OnSessionStarted()` | Fired right after the durable session row persists (`SessionManager.CreateSession`) |
+| `OnChannelStateSave(stateJson)` | Fired when the client's debounced state save lands, **pre-persistence**; return a replacement string to normalize the persisted state of record, or `null` to keep the original. Throw/garbage → original persisted — a plugin can never lose or block a save |
+| `OnSessionClosed(closeReason)` | Fired from **every** close provenance — explicit hang-up, janitor sweeps, shutdown drain, error teardown all funnel through `SessionManager.CloseSession` |
+
+Hard rules baked into the host: **one fresh instance per session** (never a singleton); every hook is wrapped in try/catch (a throwing plugin is logged and the session/persistence proceeds untouched); resolution is skip-with-log for unregistered keys; and disposal is **deferred briefly** after close (15 s linger) so the client's legitimate post-close final state flush still routes through `OnChannelStateSave`.
+
+The reference implementation is `WhiteboardChannelServer` (`packages/AI/Agents/src/realtime/whiteboard-channel-server.ts`, key `'WhiteboardChannelServer'` — the value the Whiteboard row's `ServerPluginClass` has carried since the seed): it guards the persisted state of record by validating that each landed save parses as a JSON object (flagging corrupt payloads loudly *now* instead of at the next resume's `RestoreState`) and canonicalizing valid payloads to compact JSON. Register a new server half with `@RegisterClass(BaseRealtimeChannelServer, '<key>')` plus a `Load...Server()` no-op called from a static server path (the Whiteboard's is invoked from MJServer's `agentSessions/index.ts`).
+
+**Scope notes / deferred:** server-executed **tool contribution** from channel servers (feeding `RealtimeSessionRunner.ExtraTools`) is a documented TODO on the base class — no current code path gives the server-bridged runner per-session channel instances (server-bridged runs don't mint sessions through `SessionManager`, and client-direct sessions never construct a server-side runner). Socket/media members (`OnClientMessage`, `SendToClient`) remain deferred with the unified-transport track.
 
 ### The implicit voice/text channel
 
@@ -452,7 +472,7 @@ Honest ledger of what is *not* done on this branch, so nobody reads aspiration i
 | Collapsed session block inline in the conversation timeline | **UX direction only** — session review mode (see §8) ships the replay; the inline collapsed-block rendering in message history is not built |
 | Unified session transport (`SessionEnvelope` / `ISessionTransport`) | **Independent track** per the plan — voice deliberately does not depend on it |
 | Video channel / video modality | **Deferred** — `BaseRealtimeModel`'s contract anticipates it |
-| Server-side channel plugin execution (`ServerPluginClass` consumption) | **Seam only** — registered in metadata, not resolved by any code path |
+| Server-side channel plugin execution (`ServerPluginClass` consumption) | **Shipped with scope notes** — `BaseRealtimeChannelServer` (in `@memberjunction/ai`) is resolved per session by `RealtimeChannelServerHost` from the ACTIVE registry rows and wired into the durable lifecycle: session start (`SessionManager.CreateSession`), pre-persistence channel-state saves (`SaveSessionChannelState`), and session close from every provenance incl. the janitor (`SessionManager.CloseSession`); `WhiteboardChannelServer` ships as the reference (state-of-record validation/canonicalization). **Not** covered: socket/media members (deferred with the unified-transport track) and server-tool contribution to `RealtimeSessionRunner` (documented TODO — no code path gives the server-bridged runner per-session channel instances yet). See [§5](#5-channels--the-heart-of-the-system) |
 | Non-target server tools on the client-direct relay (action wiring through `executeNonTargetTool`) | **Later phase** — structured "not available" today; the server-bridged path already executes actions |
 | Channel-grained permissions, multi-party sessions, audio retention/consent | **Out of scope** for this iteration (see plan) |
 | `RealtimeClientSessionService` ↔ `BaseAgent` prepare-logic duplication | **Known debt** — the service's doc header calls for a future shared `RealtimeSessionPreparer`; until then the two are kept in sync intentionally (the shared `realtime-narration.ts` module is the first extracted piece) |
@@ -518,6 +538,7 @@ attribute stays `false` and the original turn-state keyframe animations remain i
 | Concern | Where |
 |---|---|
 | Model primitive + driver obligations | `packages/AI/Core/src/generic/baseRealtime.ts` |
+| Channel plugin contract — server half (+ host + reference impl) | `packages/AI/Core/src/generic/baseRealtimeChannelServer.ts`, `packages/AI/Agents/src/realtime/realtime-channel-server-host.ts`, `packages/AI/Agents/src/realtime/whiteboard-channel-server.ts` |
 | Server drivers | `packages/AI/Providers/OpenAI/src/models/openAIRealtime.ts`, `packages/AI/Providers/Gemini/src/geminiRealtime.ts`, `packages/AI/Providers/ElevenLabs/src/elevenLabsRealtime.ts`, `packages/AI/Providers/AssemblyAI/src/assemblyAIRealtime.ts` |
 | Browser drivers + shared PCM audio plane | `packages/AI/RealtimeClient/` ([README](../packages/AI/RealtimeClient/README.md)) — `src/drivers/*`, `src/audio/*` |
 | Agent type / runner / broker / client-session service / shared narration / memory builder | `packages/AI/Agents/src/agent-types/realtime-agent-type.ts`, `src/realtime/*` (incl. `realtime-narration.ts`), `src/agent-memory-context-builder.ts` |

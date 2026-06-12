@@ -50,6 +50,8 @@ export * from './realtime/realtime-session-runner';
 export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, DelegatedRunArtifact } from './realtime/realtime-tool-broker';
 export * from './realtime/realtime-client-session-service';
 export * from './realtime/realtime-narration';
+export * from './realtime/realtime-channel-server-host';
+export * from './realtime/whiteboard-channel-server';
 
 // Re-export from ai-reranker for backward compatibility
 export {

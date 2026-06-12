@@ -43,15 +43,24 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
-// --- Mock the client-direct service (prepare + relayed-tool execution + cancel registry) ---
+// --- Mock the client-direct service (prepare + relayed-tool execution + cancel registry) plus
+//     the channel-plugin host (SaveSessionChannelState's pre-persistence normalization hook) ---
 const prepareClientSessionMock = vi.fn();
 const executeRelayedToolMock = vi.fn();
 const cancelInFlightMock = vi.fn((_agentSessionID: string, _callID?: string): number => 0);
+const onChannelStateSaveMock = vi.fn(
+    async (_agentSessionID: string, _channelName: string, stateJson: string): Promise<string> => stateJson,
+);
 vi.mock('@memberjunction/ai-agents', () => ({
     RealtimeClientSessionService: class {
         PrepareClientSession = prepareClientSessionMock;
         ExecuteRelayedTool = executeRelayedToolMock;
         CancelInFlightDelegations = cancelInFlightMock;
+    },
+    RealtimeChannelServerHost: {
+        get Instance() {
+            return { OnChannelStateSave: onChannelStateSaveMock };
+        },
     },
 }));
 
@@ -130,6 +139,10 @@ beforeEach(() => {
     executeRelayedToolMock.mockReset();
     cancelInFlightMock.mockReset();
     cancelInFlightMock.mockReturnValue(0);
+    onChannelStateSaveMock.mockReset();
+    onChannelStateSaveMock.mockImplementation(
+        async (_agentSessionID: string, _channelName: string, stateJson: string) => stateJson,
+    );
     createSessionMock.mockReset();
     closeSessionMock.mockClear();
     heartbeatMock.mockClear();
@@ -1003,6 +1016,43 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelState', () => {
 
         const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
         expect(ok).toBe(false);
+    });
+
+    it('routes the payload through the channel server plugin host and persists its normalization', async () => {
+        onChannelStateSaveMock.mockResolvedValue('{"normalized":true}');
+        const { provider, newRow } = makeChannelProvider({ channelRows: [CHANNEL_ROW] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{ "raw" : true }', makeCtx());
+
+        expect(ok).toBe(true);
+        expect(onChannelStateSaveMock).toHaveBeenCalledWith('session-1', 'Whiteboard', '{ "raw" : true }');
+        expect(newRow.Config_).toBe('{"normalized":true}');
+    });
+
+    it('persists the ORIGINAL payload when the plugin host throws (plugins never block a save)', async () => {
+        onChannelStateSaveMock.mockRejectedValue(new Error('plugin boom'));
+        const { provider, newRow } = makeChannelProvider({ channelRows: [CHANNEL_ROW] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{"orig":1}', makeCtx());
+
+        expect(ok).toBe(true);
+        expect(newRow.Config_).toBe('{"orig":1}');
+    });
+
+    it('persists the ORIGINAL payload when the plugin returns an oversized replacement', async () => {
+        onChannelStateSaveMock.mockResolvedValue('x'.repeat(2_000_001));
+        const { provider, newRow } = makeChannelProvider({ channelRows: [CHANNEL_ROW] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{"orig":2}', makeCtx());
+
+        expect(ok).toBe(true);
+        expect(newRow.Config_).toBe('{"orig":2}');
     });
 });
 
