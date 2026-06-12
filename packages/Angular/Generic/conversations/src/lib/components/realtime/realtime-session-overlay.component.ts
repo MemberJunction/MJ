@@ -245,8 +245,15 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   /** Server-reported realtime model name for the active session — shown subtly in the banner. */
   public readonly ModelName$ = this.voice.ModelName$;
 
-  /** Whether caption bubbles are shown in the thread (toggled from the controls). */
-  public ShowCaptions = true;
+  /**
+   * Whether the conversation renders as TEXT (the thread) or stays voice-first (the
+   * orb hero). A PERSISTED per-user preference (`mj.realtimeVoice.captions.v1`) —
+   * default OFF: voice-first, the orb owns the screen until the user opts into text.
+   */
+  public ShowCaptions = false;
+
+  /** UserInfoEngine key for the persisted captions (text-vs-orb) preference. */
+  private static readonly CaptionsPrefKey = 'mj.realtimeVoice.captions.v1';
 
   /**
    * Whether developer affordances (open-record links) are revealed. Per-session view
@@ -335,6 +342,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   constructor() {
     this.loadPanelWidthPref();
     this.loadDisclosurePref();
+    this.loadCaptionsPref();
     this.State.Attach(this.voice);
     this.subs.push(
       // Re-render on merged-state changes; content arrival raises the disclosure level.
@@ -513,19 +521,29 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
 
   // ── Progressive disclosure (the console that grows with you) ────────────────
 
-  /** True while the PURE-AUDIO hero owns the main column (level 0, live, connected). */
+  /**
+   * True while the PURE-AUDIO hero (the orb) owns the main column. The captions
+   * preference IS the text-vs-orb switch: captions off (the voice-first default) shows
+   * the breathing orb at ANY disclosure level; captions on shows the thread. Review
+   * always shows the thread.
+   */
   public get ShowHero(): boolean {
-    return !this.IsReviewing && !this.Disclosure.ShowThread;
+    return !this.IsReviewing && !this.ShowCaptions;
   }
 
-  /** Whether the surface-panel area renders: earned (level 2+), peeked, or reviewing. */
+  /**
+   * Whether the surface-panel area renders. The tabs have their OWN control (the
+   * Details toggle, plus the board auto-reveal and artifact-view requests) — they are
+   * deliberately DECOUPLED from typing/disclosure levels: revealing the composer must
+   * never surprise the user with the whole tab panel.
+   */
   public get ShowPanelArea(): boolean {
-    return this.IsReviewing || this.Disclosure.ShowPanel || this.DetailsPeek;
+    return this.IsReviewing || this.DetailsPeek;
   }
 
-  /** Whether the strip offers the Details peek (only while the panel isn't earned). */
+  /** The Details (tabs) toggle is always offered while live — it's the panel's one door. */
   public get ShowDetailsControl(): boolean {
-    return !this.IsReviewing && !this.Disclosure.ShowPanel;
+    return !this.IsReviewing;
   }
 
   /** Reads the persisted disclosure milestones (tolerant; defaults to day one). */
@@ -535,6 +553,24 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     } catch {
       // UserInfoEngine not configured (plain-node tests / early bootstrap) — day-one defaults.
       this.Disclosure.Load(null);
+    }
+  }
+
+  /** Reads the persisted text-vs-orb preference (tolerant; default = voice-first OFF). */
+  private loadCaptionsPref(): void {
+    try {
+      this.ShowCaptions = UserInfoEngine.Instance.GetSetting(RealtimeSessionOverlayComponent.CaptionsPrefKey) === 'true';
+    } catch {
+      // UserInfoEngine not configured — voice-first default applies.
+    }
+  }
+
+  /** Persists the text-vs-orb preference (debounced, best-effort). */
+  private persistCaptionsPref(): void {
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(RealtimeSessionOverlayComponent.CaptionsPrefKey, String(this.ShowCaptions));
+    } catch {
+      // engine unavailable — the preference still applies for this session
     }
   }
 
@@ -694,9 +730,9 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.persistDisclosure(SerializeUxMilestones(this.Disclosure.Milestones));
   }
 
-  /** The hero's "Show the conversation" affordance — reveals the caption thread. */
+  /** The hero's "Show the conversation" affordance — turns the text preference on. */
   public OnTextReveal(): void {
-    this.Disclosure.Raise('text');
+    this.OnCaptionsToggled(true);
   }
 
   /**
@@ -797,9 +833,19 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     }
   }
 
-  /** A done delegation card / rail entry asked to view a produced artifact's tab. */
+  /**
+   * A done delegation card / rail entry asked to view a produced artifact's tab — an
+   * EXPLICIT user request, so it may open the (otherwise Details-controlled) panel.
+   */
   public OnOpenArtifactRequested(artifact: ParsedDelegationArtifact): void {
-    this.surfaceTabs?.FocusArtifact(artifact);
+    if (this.surfaceTabs) {
+      this.surfaceTabs.FocusArtifact(artifact);
+      return;
+    }
+    // Panel hidden — open it (Details mechanism) and focus once it exists.
+    this.DetailsPeek = true;
+    this.cdr.markForCheck();
+    setTimeout(() => this.surfaceTabs?.FocusArtifact(artifact));
   }
 
   /** Registers one surface tab per active channel plugin (key/title/icon from the plugin). */
@@ -848,9 +894,18 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     }
   }
 
-  /** Reflect the captions toggle from the controls into the thread. */
+  /**
+   * The captions toggle = the persisted text-vs-orb switch: on → the thread renders
+   * (raising the text disclosure milestone); off → the orb hero owns the screen again,
+   * at any level. Persisted per-user so the choice survives refresh and devices.
+   */
   public OnCaptionsToggled(on: boolean): void {
     this.ShowCaptions = on;
+    if (on) {
+      this.Disclosure.Raise('text');
+    }
+    this.persistCaptionsPref();
+    this.cdr.markForCheck();
   }
 
   /** Reflect the gear toggle from the controls into the dev affordances. */

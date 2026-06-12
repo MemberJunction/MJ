@@ -13,17 +13,15 @@
       <span class="ctrl-label">{{ IsMuted ? 'Unmute' : 'Mute' }}</span>
     </div>
 
-    @if (Level >= 1) {
-      <div class="ctrl-group">
-        <button type="button" class="ctrl" [class.ctrl--on]="CaptionsOn"
-                (click)="ToggleCaptions()"
-                [title]="CaptionsOn ? 'Hide captions' : 'Show captions'"
-                [attr.aria-pressed]="CaptionsOn">
-          <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
-        </button>
-        <span class="ctrl-label">Captions</span>
-      </div>
-    }
+    <div class="ctrl-group">
+      <button type="button" class="ctrl" [class.ctrl--on]="CaptionsOn"
+              (click)="ToggleCaptions()"
+              [title]="CaptionsOn ? 'Voice-first — back to the orb' : 'Show the conversation as text'"
+              [attr.aria-pressed]="CaptionsOn">
+        <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+      </button>
+      <span class="ctrl-label">Captions</span>
+    </div>
 
     @if (ShowDetails) {
       <div class="ctrl-group">
@@ -61,10 +59,18 @@
       </button>
       <button type="button" class="mini" [class.mini--on]="CaptionsOn"
               (click)="ToggleCaptions()"
-              [title]="CaptionsOn ? 'Hide captions' : 'Show captions'"
+              [title]="CaptionsOn ? 'Voice-first — back to the orb' : 'Show the conversation as text'"
               [attr.aria-pressed]="CaptionsOn">
         <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
       </button>
+      @if (ShowDetails) {
+        <button type="button" class="mini" [class.mini--on]="DetailsOn"
+                (click)="DetailsToggled.emit()"
+                [title]="DetailsOn ? 'Hide the session panels' : 'Show the session panels'"
+                [attr.aria-pressed]="DetailsOn">
+          <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
+        </button>
+      }
     </div>
     <div class="dock__box">
       <input
