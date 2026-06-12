@@ -465,11 +465,14 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('role', () => String) role: string,
         @Arg('text', () => String) text: string,
         @Ctx() { userPayload, providers }: AppContext,
+        @Arg('replacesPrevious', () => Boolean, { nullable: true }) replacesPrevious?: boolean,
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
 
-        const saved = await this.persistTranscriptTurn(session, role, text, contextUser, provider);
+        const saved = replacesPrevious
+            ? await this.replacePreviousTranscriptTurn(session, role, text, contextUser, provider)
+            : await this.persistTranscriptTurn(session, role, text, contextUser, provider);
         if (!saved) {
             return false;
         }
@@ -1744,6 +1747,46 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!saved) {
             LogError(
                 `RealtimeClientSessionResolver.persistTranscriptTurn save failed: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            );
+        }
+        return saved;
+    }
+
+    /**
+     * CORRECTION persistence (the client transcript's `ReplacesPrevious` marker — e.g.
+     * ElevenLabs' post-barge-in `agent_response_correction`): UPDATES the session's most
+     * recently persisted turn of the same role IN PLACE with the corrected text, instead of
+     * appending a near-duplicate. Falls back to a plain insert when no prior turn exists
+     * (the superseded turn may have failed to persist) — a correction is never dropped.
+     */
+    private async replacePreviousTranscriptTurn(
+        session: MJAIAgentSessionEntity,
+        role: string,
+        text: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        const mappedRole = this.mapTranscriptRole(role);
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<MJConversationDetailEntity>(
+            {
+                EntityName: CONVERSATION_DETAIL_ENTITY,
+                ExtraFilter: `AgentSessionID='${session.ID}' AND Role='${mappedRole}'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            },
+            contextUser,
+        );
+        const previous = result.Success ? (result.Results?.[0] ?? null) : null;
+        if (!previous) {
+            return this.persistTranscriptTurn(session, role, text, contextUser, provider);
+        }
+        previous.Message = text;
+        const saved = await previous.Save();
+        if (!saved) {
+            LogError(
+                `RealtimeClientSessionResolver.replacePreviousTranscriptTurn save failed: ${previous.LatestResult?.CompleteMessage ?? 'unknown error'}`,
             );
         }
         return saved;

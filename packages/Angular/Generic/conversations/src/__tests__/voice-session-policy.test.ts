@@ -344,3 +344,74 @@ describe('VoiceSessionService — SaveChannelState (explicit id + failure paths)
     expect(await service.SaveChannelState('Whiteboard', '{}', 'sess-1')).toBe(false);
   });
 });
+
+describe('VoiceSessionService — transcript correction (ReplacesPrevious)', () => {
+  let service: VoiceSessionService;
+  let executeGQL: ReturnType<typeof vi.fn>;
+
+  /** The private transcript entry point the client driver feeds. */
+  interface TranscriptInternals {
+    onClientTranscript(t: {
+      Role: 'User' | 'Assistant'; Text: string; IsFinal: boolean;
+      Kind: 'normal' | 'narration'; ReplacesPrevious?: boolean;
+    }): Promise<void>;
+  }
+
+  function transcriptInternals(s: VoiceSessionService): TranscriptInternals {
+    return s as unknown as TranscriptInternals;
+  }
+
+  function captionsOf(s: VoiceSessionService): VoiceCaption[] {
+    let captions: VoiceCaption[] = [];
+    s.Captions$.subscribe(c => (captions = c)).unsubscribe();
+    return captions;
+  }
+
+  beforeEach(() => {
+    service = new VoiceSessionService();
+    executeGQL = vi.fn(async () => ({}));
+    service.Provider = { ExecuteGQL: executeGQL } as unknown as IMetadataProvider;
+    internals(service).agentSessionId = 'sess-1';
+  });
+
+  it('a correction REPLACES the last assistant caption in place and relays update semantics', async () => {
+    const t = transcriptInternals(service);
+    await t.onClientTranscript({ Role: 'Assistant', Text: 'The answer is forty-two and', IsFinal: true, Kind: 'normal' });
+    await t.onClientTranscript({ Role: 'Assistant', Text: 'The answer is', IsFinal: true, Kind: 'normal', ReplacesPrevious: true });
+
+    expect(captionsOf(service)).toEqual([{ Role: 'Assistant', Text: 'The answer is' }]); // replaced, not appended
+    expect(executeGQL).toHaveBeenLastCalledWith(
+      expect.stringContaining('RelayRealtimeTranscript'),
+      expect.objectContaining({ role: 'assistant', text: 'The answer is', replacesPrevious: true })
+    );
+  });
+
+  it('a correction replaces the LAST assistant caption, leaving later user turns alone', async () => {
+    const t = transcriptInternals(service);
+    await t.onClientTranscript({ Role: 'Assistant', Text: 'truncated turn that', IsFinal: true, Kind: 'normal' });
+    await t.onClientTranscript({ Role: 'User', Text: 'wait, stop', IsFinal: true, Kind: 'normal' });
+    await t.onClientTranscript({ Role: 'Assistant', Text: 'truncated turn', IsFinal: true, Kind: 'normal', ReplacesPrevious: true });
+
+    expect(captionsOf(service)).toEqual([
+      { Role: 'Assistant', Text: 'truncated turn' },
+      { Role: 'User', Text: 'wait, stop' }
+    ]);
+  });
+
+  it('a correction with NO prior assistant caption appends (never lost)', async () => {
+    await transcriptInternals(service).onClientTranscript({
+      Role: 'Assistant', Text: 'orphan correction', IsFinal: true, Kind: 'normal', ReplacesPrevious: true
+    });
+    expect(captionsOf(service)).toEqual([{ Role: 'Assistant', Text: 'orphan correction' }]);
+  });
+
+  it('ordinary finals relay with replacesPrevious=false', async () => {
+    await transcriptInternals(service).onClientTranscript({
+      Role: 'Assistant', Text: 'normal turn', IsFinal: true, Kind: 'normal'
+    });
+    expect(executeGQL).toHaveBeenLastCalledWith(
+      expect.stringContaining('RelayRealtimeTranscript'),
+      expect.objectContaining({ replacesPrevious: false })
+    );
+  });
+});

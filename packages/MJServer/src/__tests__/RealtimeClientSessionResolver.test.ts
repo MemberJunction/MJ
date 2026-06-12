@@ -804,6 +804,70 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
         ).rejects.toThrow(/do not own/i);
         expect(heartbeatMock).not.toHaveBeenCalled();
     });
+
+    describe('replacesPrevious (correction update-in-place)', () => {
+        it('UPDATES the most recent same-role turn in place instead of appending', async () => {
+            const previous = makeSessionEntity({ ID: 'detail-prev', Message: 'truncated turn that', Role: 'AI' });
+            const session = makeSessionEntity();
+            currentProvider = makeProvider(() => session);
+            (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
+                Success: true,
+                Results: [previous],
+            }));
+            const resolver = makeResolver();
+
+            const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'truncated turn', makeCtx(), true);
+
+            expect(ok).toBe(true);
+            expect(previous.Message).toBe('truncated turn'); // corrected IN PLACE
+            expect(previous.Save).toHaveBeenCalled();
+            expect(previous.NewRecord).not.toHaveBeenCalled(); // no duplicate row
+            expect(heartbeatMock).toHaveBeenCalled();
+            // the lookup scoped to THIS session + the mapped role, newest first
+            const params = (currentProvider as { RunView: ReturnType<typeof vi.fn> }).RunView.mock.calls[0][0] as {
+                ExtraFilter: string; OrderBy: string; MaxRows: number;
+            };
+            expect(params.ExtraFilter).toContain("AgentSessionID='session-1'");
+            expect(params.ExtraFilter).toContain("Role='AI'");
+            expect(params.OrderBy).toContain('__mj_CreatedAt DESC');
+            expect(params.MaxRows).toBe(1);
+        });
+
+        it('falls back to a plain INSERT when no prior same-role turn exists (correction never dropped)', async () => {
+            const detail = makeSessionEntity({ ID: 'detail-new' });
+            const session = makeSessionEntity({ ConversationID: 'conv-9' });
+            currentProvider = makeProvider((name) =>
+                name === 'MJ: Conversation Details' ? detail : session,
+            );
+            (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({ Success: true, Results: [] }));
+            const resolver = makeResolver();
+
+            const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'orphan correction', makeCtx(), true);
+
+            expect(ok).toBe(true);
+            expect(detail.NewRecord).toHaveBeenCalled();
+            expect(detail.Message).toBe('orphan correction');
+        });
+
+        it('returns false WITHOUT heartbeating when the in-place save fails', async () => {
+            const previous = makeSessionEntity({
+                ID: 'detail-prev',
+                Save: vi.fn(async () => false),
+                LatestResult: { CompleteMessage: 'locked' },
+            });
+            currentProvider = makeProvider(() => makeSessionEntity());
+            (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
+                Success: true,
+                Results: [previous],
+            }));
+            const resolver = makeResolver();
+
+            const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'x', makeCtx(), true);
+
+            expect(ok).toBe(false);
+            expect(heartbeatMock).not.toHaveBeenCalled();
+        });
+    });
 });
 
 describe('RealtimeClientSessionResolver.StartRealtimeClientSession — clientToolsJson validation', () => {

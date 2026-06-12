@@ -1042,6 +1042,12 @@ export class VoiceSessionService {
         if (this.spokenNarrations.length > VoiceSessionService.MaxPriorNarrations) {
           this.spokenNarrations.shift();
         }
+      } else if (transcript.ReplacesPrevious) {
+        // CORRECTION (e.g. ElevenLabs post-barge-in re-finalization): this final
+        // SUPERSEDES the previous final assistant turn — replace the caption in place
+        // and tell the server to update the persisted turn instead of appending.
+        this.replaceLastCaption('Assistant', transcript.Text);
+        await this.relayTranscript('assistant', transcript.Text, true);
       } else {
         this.appendCaption({ Role: 'Assistant', Text: transcript.Text });
         await this.relayTranscript('assistant', transcript.Text);
@@ -1049,6 +1055,24 @@ export class VoiceSessionService {
     } else {
       await this.onUserTranscript(transcript.Text);
     }
+  }
+
+  /**
+   * Replaces the LAST caption of `role` in place (correction semantics); falls back to a
+   * plain append when no such caption exists yet (e.g. the superseded turn predates this
+   * client's caption window).
+   */
+  private replaceLastCaption(role: 'User' | 'Assistant', text: string): void {
+    const captions = this._captions$.value;
+    for (let i = captions.length - 1; i >= 0; i--) {
+      if (captions[i].Role === role) {
+        const next = [...captions];
+        next[i] = { Role: role, Text: text };
+        this._captions$.next(next);
+        return;
+      }
+    }
+    this.appendCaption({ Role: role, Text: text });
   }
 
   /** Finalizes the user turn: push a caption + relay the final transcript. */
@@ -1361,21 +1385,27 @@ export class VoiceSessionService {
 
   // ── Transcript relay (GraphQL) ─────────────────────────────────────────────
 
-  /** Relays a final transcript turn to MJ via `RelayRealtimeTranscript`. */
-  private async relayTranscript(role: 'user' | 'assistant', text: string): Promise<void> {
+  /**
+   * Relays a final transcript turn to MJ via `RelayRealtimeTranscript`.
+   * @param replacesPrevious CORRECTION semantics: the server updates the session's most
+   *   recent persisted turn of this role IN PLACE instead of appending (e.g. ElevenLabs'
+   *   post-barge-in `agent_response_correction`).
+   */
+  private async relayTranscript(role: 'user' | 'assistant', text: string, replacesPrevious: boolean = false): Promise<void> {
     if (!this.agentSessionId) {
       return;
     }
     try {
       const mutation = `
-        mutation RelayRealtimeTranscript($agentSessionId: String!, $role: String!, $text: String!) {
-          RelayRealtimeTranscript(agentSessionId: $agentSessionId, role: $role, text: $text)
+        mutation RelayRealtimeTranscript($agentSessionId: String!, $role: String!, $text: String!, $replacesPrevious: Boolean) {
+          RelayRealtimeTranscript(agentSessionId: $agentSessionId, role: $role, text: $text, replacesPrevious: $replacesPrevious)
         }
       `;
       await this.gql().ExecuteGQL(mutation, {
         agentSessionId: this.agentSessionId,
         role,
-        text
+        text,
+        replacesPrevious
       });
     } catch (error) {
       console.error('[VoiceSession] Failed to relay transcript:', error);
