@@ -38,7 +38,7 @@ import {
     MJConversationDetailEntity,
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
+import { AIAgentPermissionHelper, AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     RealtimeClientSessionService,
     DelegatedRunArtifact,
@@ -894,9 +894,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
-     * Loads the co-agent's pairing rows (`MJ: AI Agent Paired Agents`) ordered by `Sequence`.
-     * Tolerant — a failed query logs and returns `[]` (degrading to the universal behavior;
-     * pairing is a targeting constraint, `CanRun` remains the security gate), never throws.
+     * Loads the co-agent's pairing rows from {@link AIEngineBase}'s cached
+     * `MJ: AI Agent Paired Agents` metadata (provider-scoped engine instance, lazy `Config`),
+     * ordered by `Sequence`. Tolerant — a failed cache load logs and returns `[]` (degrading to
+     * the universal behavior; pairing is a targeting constraint, `CanRun` remains the security
+     * gate), never throws.
      */
     private async loadPairingRows(
         coAgentID: string,
@@ -904,33 +906,30 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         provider: IMetadataProvider,
     ): Promise<Array<{ TargetAgentID: string; IsDefault: boolean; Sequence: number }>> {
         try {
-            const safeID = coAgentID.replace(/'/g, "''");
-            const rv = RunView.FromMetadataProvider(provider);
-            const result = await rv.RunView<{ TargetAgentID: string; IsDefault: boolean; Sequence: number }>(
-                {
-                    EntityName: PAIRED_AGENT_ENTITY,
-                    ExtraFilter: `CoAgentID='${safeID}'`,
-                    Fields: ['ID', 'TargetAgentID', 'IsDefault', 'Sequence'],
-                    OrderBy: 'Sequence ASC',
-                    ResultType: 'simple',
-                },
-                contextUser,
-            );
-            if (!result.Success) {
-                LogError(
-                    `StartRealtimeClientSession: pairing-row query failed for co-agent ${coAgentID} ` +
-                        `(${result.ErrorMessage}) — treating the co-agent as universal.`,
-                );
-                return [];
-            }
-            return result.Results ?? [];
+            const engine = await this.configuredAIEngineBase(contextUser, provider);
+            return (engine.AgentPairedAgents ?? [])
+                .filter((r) => UUIDsEqual(r.CoAgentID, coAgentID))
+                .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0))
+                .map((r) => ({ TargetAgentID: r.TargetAgentID, IsDefault: r.IsDefault, Sequence: r.Sequence }));
         } catch (error) {
             LogError(
-                `StartRealtimeClientSession: pairing-row query failed for co-agent ${coAgentID} ` +
+                `StartRealtimeClientSession: ${PAIRED_AGENT_ENTITY} cache read failed for co-agent ${coAgentID} ` +
                     `(${(error as Error).message}) — treating the co-agent as universal.`,
             );
             return [];
         }
+    }
+
+    /**
+     * The provider-scoped {@link AIEngineBase} instance for this request's connection, lazily
+     * configured (`Config(false, ...)` is a no-op when the cache is already loaded). Pairing rows
+     * and channel definitions are small metadata tables the engine caches — reading them here
+     * replaces per-call RunViews.
+     */
+    private async configuredAIEngineBase(contextUser: UserInfo, provider: IMetadataProvider): Promise<AIEngineBase> {
+        const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(provider, AIEngineBase) as AIEngineBase;
+        await engine.Config(false, contextUser, provider);
+        return engine;
     }
 
     /**
@@ -1331,28 +1330,30 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
-     * Resolves an ACTIVE channel definition (`MJ: AI Agent Channels`) by name. Returns its id, or
-     * `null` (logged) when no active definition exists — the channel seed is deployed separately,
-     * so its absence is tolerated, never thrown.
+     * Resolves an ACTIVE channel definition (`MJ: AI Agent Channels`) by name from
+     * {@link AIEngineBase}'s cached `AgentChannels` (provider-scoped engine instance, lazy
+     * `Config` — no per-call RunView; name matching is trim + case-insensitive, parity with the
+     * previous SQL-collation lookup). Returns its id, or `null` (logged) when no active
+     * definition exists — the channel seed is deployed separately, so its absence is tolerated,
+     * never thrown.
      */
     private async resolveChannelID(
         channelName: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<string | null> {
-        const safeName = channelName.replace(/'/g, "''");
-        const rv = RunView.FromMetadataProvider(provider);
-        const result = await rv.RunView<{ ID: string; IsActive: boolean }>(
-            {
-                EntityName: CHANNEL_ENTITY,
-                ExtraFilter: `Name='${safeName}'`,
-                Fields: ['ID', 'IsActive'],
-                ResultType: 'simple',
-                MaxRows: 1,
-            },
-            contextUser,
-        );
-        const row = result.Success ? result.Results?.[0] : undefined;
+        const wanted = channelName.trim().toLowerCase();
+        let row: { ID: string; IsActive: boolean } | undefined;
+        try {
+            const engine = await this.configuredAIEngineBase(contextUser, provider);
+            row = (engine.AgentChannels ?? []).find((c) => c.Name?.trim().toLowerCase() === wanted);
+        } catch (error) {
+            LogError(
+                `RealtimeClientSessionResolver: ${CHANNEL_ENTITY} cache read failed while resolving channel ` +
+                    `'${channelName}' (${(error as Error).message}) — channel operation skipped.`,
+            );
+            return null;
+        }
         if (!row || !row.IsActive) {
             LogError(
                 `RealtimeClientSessionResolver: no active '${channelName}' channel definition found in ${CHANNEL_ENTITY} — ` +

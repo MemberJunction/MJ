@@ -15,26 +15,17 @@ import {
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
-import { RunView } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { REALTIME_ADVANCED_SESSION_CONTROLS, UserHoldsAuthorization } from '../../services/user-authorization';
 import {
+    BuildVoiceModelOptions,
     ConstrainTargetsToPairings,
     DefaultPairedTargetId,
     LoadCoAgentPairings,
+    VoiceModelOption,
     VoicePairedAgentRow,
 } from '../../services/voice-pairing';
-
-/**
- * A selectable realtime model option in the voice picker (narrow read-only projection of
- * `MJ: AI Models` — only the fields the dropdown renders).
- */
-export interface VoiceModelOption {
-    /** The `MJ: AI Models` row id. */
-    ID: string;
-    /** The model's display name. */
-    Name: string;
-}
 
 /**
  * The user's confirmed choice from the voice picker: the agent to call, an optional
@@ -368,22 +359,17 @@ export class VoiceAgentPickerComponent extends BaseAngularComponent implements O
     }
 
     /**
-     * Loads the "Voice model" options: active models whose type is `Realtime`, via a narrow,
-     * read-only RunView (`ResultType: 'simple'`, just ID + Name). Called ONLY for users who
-     * hold the advanced-session-controls authorization. Tolerant — a failure simply leaves
+     * Loads the "Voice model" options: active models whose type is `Realtime`, filtered from
+     * {@link AIEngineBase}'s already-cached `Models` (provider-scoped engine instance, lazy
+     * `Config` — no RunView round-trip). Called ONLY for users who hold the
+     * advanced-session-controls authorization. Tolerant — a failure simply leaves
      * the selector hidden (the server's automatic selection still applies).
      */
     private async loadVoiceModels(): Promise<void> {
         try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const result = await rv.RunView<VoiceModelOption>({
-                EntityName: 'MJ: AI Models',
-                Fields: ['ID', 'Name'],
-                ExtraFilter: `IsActive = 1 AND AIModelType = 'Realtime'`,
-                OrderBy: 'Name',
-                ResultType: 'simple'
-            });
-            this.Models = result.Success ? (result.Results ?? []) : [];
+            const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
+            await engine.Config(false, undefined, this.ProviderToUse);
+            this.Models = BuildVoiceModelOptions(engine.Models ?? []);
         } catch (error) {
             console.error('[VoiceAgentPicker] Failed to load realtime models:', error);
             this.Models = [];

@@ -32,12 +32,13 @@ import {
     RealtimeChannelCloseReason,
 } from '@memberjunction/ai';
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
-import { IMetadataProvider, UserInfo, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /** Entity name — kept in sync with the session machinery's `MJ:`-prefix convention. */
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
 
-/** Narrow, read-only registry row shape loaded at session start (simple results, narrowed fields). */
+/** Narrow, read-only registry row shape read at session start from {@link AIEngineBase}'s cached `AgentChannels`. */
 interface RealtimeChannelServerDefinitionRow {
     ID: string;
     Name: string;
@@ -229,29 +230,30 @@ export class RealtimeChannelServerHost extends BaseSingleton<RealtimeChannelServ
     }
 
     /**
-     * Reads the ACTIVE `MJ: AI Agent Channels` rows (read-only lookup: simple results, narrowed
-     * fields) — the server-side mirror of the client's `fetchChannelDefinitions`. Failures are
-     * logged and degrade to an empty list; channel availability must never block a session.
+     * Reads the ACTIVE `MJ: AI Agent Channels` rows from {@link AIEngineBase}'s cached
+     * `AgentChannels` (provider-scoped engine instance, lazy `Config` — no per-session RunView;
+     * the engine's BaseEntity-event reactivity keeps the registry fresh) — the server-side mirror
+     * of the client's `fetchChannelDefinitions`. Failures are logged and degrade to an empty
+     * list; channel availability must never block a session.
      */
     private async fetchChannelDefinitions(
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<RealtimeChannelServerDefinitionRow[]> {
-        const rv = RunView.FromMetadataProvider(provider);
-        const result = await rv.RunView<RealtimeChannelServerDefinitionRow>(
-            {
-                EntityName: CHANNEL_ENTITY,
-                ExtraFilter: 'IsActive = 1',
-                Fields: ['ID', 'Name', 'ServerPluginClass'],
-                ResultType: 'simple',
-            },
-            contextUser,
-        );
-        if (!result.Success) {
-            LogError(`[RealtimeChannelServerHost] Failed to load the channel registry: ${result.ErrorMessage}`);
+        try {
+            const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(provider, AIEngineBase) as AIEngineBase;
+            await engine.Config(false, contextUser, provider);
+            return (engine.AgentChannels ?? [])
+                .filter((c) => c.IsActive)
+                .map<RealtimeChannelServerDefinitionRow>((c) => ({
+                    ID: c.ID,
+                    Name: c.Name,
+                    ServerPluginClass: c.ServerPluginClass ?? null,
+                }));
+        } catch (error) {
+            LogError(`[RealtimeChannelServerHost] Failed to load the channel registry from ${CHANNEL_ENTITY}: ${this.message(error)}`);
             return [];
         }
-        return result.Results ?? [];
     }
 
     /** Resolves + start-brackets one fresh plugin instance per resolvable registry row. */

@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
-import { IMetadataProvider, RunViewParams } from '@memberjunction/core';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { IMetadataProvider } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
   BuildRealtimeConfigOverridesJson,
   ConstrainTargetsToPairings,
@@ -148,40 +149,80 @@ describe('FilterRealtimeCoAgents', () => {
 });
 
 describe('LoadCoAgentPairings', () => {
-  /** Fake provider whose RunView returns canned rows — the only surface the loader touches. */
-  function providerReturning(rows: VoicePairedAgentRow[] | Error): { provider: IMetadataProvider; runView: ReturnType<typeof vi.fn> } {
-    const runView = vi.fn(async (_params: RunViewParams) => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * Stubs the provider-scoped AIEngineBase the loader reads (suite convention: spy on the
+   * static `GetProviderInstance`, the way other suites spy `AIEngineBase.Instance`). The
+   * engine cache — not a RunView — is the only data surface the loader touches.
+   */
+  function engineReturning(rows: VoicePairedAgentRow[] | Error): {
+    provider: IMetadataProvider;
+    config: ReturnType<typeof vi.fn>;
+    getProviderInstance: ReturnType<typeof vi.spyOn>;
+  } {
+    const config = vi.fn(async () => {
       if (rows instanceof Error) {
         throw rows;
       }
-      return { Success: true, Results: rows };
     });
-    return { provider: { RunView: runView } as unknown as IMetadataProvider, runView };
+    const fakeEngine = {
+      Config: config,
+      get AgentPairedAgents(): VoicePairedAgentRow[] {
+        if (rows instanceof Error) {
+          throw rows;
+        }
+        return rows;
+      },
+    };
+    const getProviderInstance = vi
+      .spyOn(AIEngineBase, 'GetProviderInstance')
+      .mockReturnValue(fakeEngine as unknown as AIEngineBase);
+    return { provider: {} as IMetadataProvider, config, getProviderInstance };
   }
 
-  it('loads via a narrow simple-result RunView filtered to the co-agent and returns Sequence order', async () => {
-    const { provider, runView } = providerReturning([
-      pairing({ TargetAgentID: TARGET_B, Sequence: 2 }),
+  it('reads the engine cache filtered to the co-agent (UUID-casing safe) and returns Sequence order', async () => {
+    const { provider, config, getProviderInstance } = engineReturning([
+      pairing({ TargetAgentID: TARGET_B, Sequence: 2, CoAgentID: CO_AGENT.toLowerCase() }),
       pairing({ TargetAgentID: TARGET_A, Sequence: 1 }),
+      // Another co-agent's row — must be filtered out client-side.
+      pairing({ TargetAgentID: TARGET_C, Sequence: 0, CoAgentID: 'E0000000-0000-0000-0000-0000000000EE' }),
     ]);
     const rows = await LoadCoAgentPairings(provider, CO_AGENT);
     expect(rows.map(r => r.TargetAgentID)).toEqual([TARGET_A, TARGET_B]);
-    const params = runView.mock.calls[0][0] as RunViewParams;
-    expect(params.EntityName).toBe('MJ: AI Agent Paired Agents');
-    expect(params.ExtraFilter).toBe(`CoAgentID='${CO_AGENT}'`);
-    expect(params.ResultType).toBe('simple');
-    expect(params.Fields).toEqual(['ID', 'CoAgentID', 'TargetAgentID', 'TargetAgent', 'IsDefault', 'Sequence']);
+    // Provider-scoped engine instance, lazily configured against the SAME provider.
+    expect(getProviderInstance).toHaveBeenCalledWith(provider, AIEngineBase);
+    expect(config).toHaveBeenCalledWith(false, undefined, provider);
   });
 
-  it('degrades to an empty list (no constraint) when the lookup throws', async () => {
-    const { provider } = providerReturning(new Error('offline'));
+  it('returns plain projected rows carrying the pairing fields the UI consumes', async () => {
+    const { provider } = engineReturning([
+      pairing({ TargetAgentID: TARGET_A, Sequence: 3, IsDefault: true, TargetAgent: 'Alpha' }),
+    ]);
+    const rows = await LoadCoAgentPairings(provider, CO_AGENT);
+    expect(rows).toEqual([
+      {
+        ID: `P-${TARGET_A}`,
+        CoAgentID: CO_AGENT,
+        TargetAgentID: TARGET_A,
+        TargetAgent: 'Alpha',
+        IsDefault: true,
+        Sequence: 3,
+      },
+    ]);
+  });
+
+  it('degrades to an empty list (no constraint) when the engine load throws', async () => {
+    const { provider } = engineReturning(new Error('offline'));
     await expect(LoadCoAgentPairings(provider, CO_AGENT)).resolves.toEqual([]);
   });
 
-  it('returns an empty list without querying when the co-agent id is blank', async () => {
-    const { provider, runView } = providerReturning([]);
+  it('returns an empty list without touching the engine when the co-agent id is blank', async () => {
+    const { provider, getProviderInstance } = engineReturning([]);
     await expect(LoadCoAgentPairings(provider, '  ')).resolves.toEqual([]);
-    expect(runView).not.toHaveBeenCalled();
+    expect(getProviderInstance).not.toHaveBeenCalled();
   });
 });
 

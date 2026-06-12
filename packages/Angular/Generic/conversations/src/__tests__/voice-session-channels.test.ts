@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
-import { RunView } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RegisterClass } from '@memberjunction/global';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { VoiceSessionService, RealtimeChannelFocusEvent } from '../lib/services/voice-session.service';
@@ -91,15 +91,28 @@ class TestEchoChannel extends BaseRealtimeChannelClient<FakeSurface> {
   }
 }
 
-/** Builds a fake RunView whose RunView() resolves with the given registry rows. */
-function mockChannelRegistry(rows: Array<{ ID: string; Name: string; ClientPluginClass: string }>, success = true): ReturnType<typeof vi.fn> {
-  const runViewFn = vi.fn().mockResolvedValue({
-    Success: success,
-    ErrorMessage: success ? '' : 'boom',
-    Results: rows
+/**
+ * Stubs the provider-scoped AIEngineBase whose cached `AgentChannels` the service reads
+ * (rows default to ACTIVE; pass `IsActive: false` to exercise the active-only filter).
+ * `success = false` makes the engine load reject — the registry-failure degradation path.
+ */
+function mockChannelRegistry(
+  rows: Array<{ ID: string; Name: string; ClientPluginClass: string; IsActive?: boolean }>,
+  success = true
+): ReturnType<typeof vi.fn> {
+  const configFn = vi.fn(async () => {
+    if (!success) {
+      throw new Error('boom');
+    }
   });
-  vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewFn } as unknown as RunView);
-  return runViewFn;
+  const fakeEngine = {
+    Config: configFn,
+    get AgentChannels() {
+      return rows.map(r => ({ IsActive: true, ...r }));
+    }
+  };
+  vi.spyOn(AIEngineBase, 'GetProviderInstance').mockReturnValue(fakeEngine as unknown as AIEngineBase);
+  return configFn;
 }
 
 describe('VoiceSessionService — interactive-channel registry resolution', () => {
@@ -114,17 +127,16 @@ describe('VoiceSessionService — interactive-channel registry resolution', () =
   });
 
   it('resolves ACTIVE registry rows into per-session plugin instances via the ClassFactory', async () => {
-    const runViewFn = mockChannelRegistry([{ ID: 'c1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' }]);
+    const configFn = mockChannelRegistry([
+      { ID: 'c1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' },
+      // Inactive rows never become session plugins (parity with the old `IsActive = 1` filter).
+      { ID: 'c2', Name: 'Dormant', ClientPluginClass: 'TestEchoChannel', IsActive: false }
+    ]);
 
     await internals(service).startChannels();
 
-    expect(runViewFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        EntityName: 'MJ: AI Agent Channels',
-        ExtraFilter: 'IsActive = 1',
-        ResultType: 'simple'
-      })
-    );
+    // Lazily configures the provider-scoped engine before reading the cached registry.
+    expect(configFn).toHaveBeenCalledWith(false, undefined, service.Provider);
     expect(service.ActiveChannels).toHaveLength(1);
     expect(service.ActiveChannels[0]).toBeInstanceOf(TestEchoChannel);
   });
@@ -152,7 +164,7 @@ describe('VoiceSessionService — interactive-channel registry resolution', () =
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("No client plugin registered for channel 'Ghost'"));
   });
 
-  it('degrades to NO channels when the registry query fails (the voice session must proceed)', async () => {
+  it('degrades to NO channels when the registry load fails (the voice session must proceed)', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     mockChannelRegistry([], false);
 
@@ -162,9 +174,9 @@ describe('VoiceSessionService — interactive-channel registry resolution', () =
     expect(service.ActiveChannels).toEqual([]);
   });
 
-  it('degrades to NO channels when the registry query throws', async () => {
+  it('degrades to NO channels when the engine acquisition throws', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation(() => {
+    vi.spyOn(AIEngineBase, 'GetProviderInstance').mockImplementation(() => {
       throw new Error('no provider');
     });
 

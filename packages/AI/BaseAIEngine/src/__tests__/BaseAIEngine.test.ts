@@ -63,7 +63,7 @@ vi.mock('@memberjunction/core-entities', () => {
     const cls = () => class { ID = ''; Name = '' };
     return {
         ArtifactMetadataEngine: {
-            Instance: { ArtifactTypes: [] },
+            Instance: { ArtifactTypes: [], Config: vi.fn().mockResolvedValue(undefined) },
         },
         MJAIActionEntity: cls(), MJAIAgentActionEntity: cls(), MJAIAgentNoteEntity: cls(),
         MJAIAgentNoteTypeEntity: cls(), MJAIModelActionEntity: cls(), MJAIPromptModelEntity: cls(),
@@ -147,10 +147,49 @@ describe('AIEngineBase', () => {
                 'ModelCosts', 'ModelPriceTypes', 'ModelPriceUnitTypes',
                 'Configurations', 'ConfigurationParams', 'CredentialBindings',
                 'Modalities', 'AgentModalities', 'ModelModalities',
+                'AgentPairedAgents', 'AgentChannels',
             ];
             for (const p of props) {
                 expect((engine as Record<string, unknown>)[p]).toEqual([]);
             }
+        });
+    });
+
+    // -----------------------------------------------
+    // Config dataset registration
+    // -----------------------------------------------
+    describe('Config dataset registration', () => {
+        it('registers the paired-agent and channel registries as locally-cached datasets', async () => {
+            const engine = AIEngineBase.Instance;
+            const loadSpy = vi.spyOn(
+                engine as unknown as { Load: (params: Array<{ EntityName: string; CacheLocal?: boolean }>) => Promise<void> },
+                'Load',
+            );
+            await engine.Config(false);
+            const params = loadSpy.mock.calls[0][0];
+            const pairedConfig = params.find(p => p.EntityName === 'MJ: AI Agent Paired Agents');
+            const channelConfig = params.find(p => p.EntityName === 'MJ: AI Agent Channels');
+            expect(pairedConfig).toBeDefined();
+            expect(pairedConfig!.CacheLocal).toBe(true);
+            expect(channelConfig).toBeDefined();
+            expect(channelConfig!.CacheLocal).toBe(true);
+        });
+    });
+
+    // -----------------------------------------------
+    // New realtime metadata getters
+    // -----------------------------------------------
+    describe('AgentPairedAgents / AgentChannels', () => {
+        it('AgentPairedAgents returns the cached pairing junction rows', () => {
+            const rows = [{ ID: 'p1', CoAgentID: 'co-1', TargetAgentID: 't1', IsDefault: true, Sequence: 0 }];
+            set('_agentPairedAgents', rows);
+            expect(AIEngineBase.Instance.AgentPairedAgents).toBe(rows);
+        });
+
+        it('AgentChannels returns the cached channel registry rows', () => {
+            const rows = [{ ID: 'c1', Name: 'Whiteboard', IsActive: true }];
+            set('_agentChannels', rows);
+            expect(AIEngineBase.Instance.AgentChannels).toBe(rows);
         });
     });
 

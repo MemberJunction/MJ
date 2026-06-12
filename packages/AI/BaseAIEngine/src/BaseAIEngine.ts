@@ -28,6 +28,8 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIClientToolDefinitionEntity,
          MJAIAgentClientToolEntity,
          MJAIAgentCategoryEntity,
+         MJAIAgentPairedAgentEntity,
+         MJAIAgentChannelEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
@@ -111,6 +113,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _clientToolDefinitions: MJAIClientToolDefinitionEntity[] = [];
     private _agentClientTools: MJAIAgentClientToolEntity[] = [];
     private _agentCategories: MJAIAgentCategoryEntity[] = [];
+    private _agentPairedAgents: MJAIAgentPairedAgentEntity[] = [];
+    private _agentChannels: MJAIAgentChannelEntity[] = [];
 
     /**
      * Cache for configuration inheritance chains.
@@ -294,6 +298,16 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentCategories',
                 EntityName: 'MJ: AI Agent Categories',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentPairedAgents',
+                EntityName: 'MJ: AI Agent Paired Agents',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentChannels',
+                EntityName: 'MJ: AI Agent Channels',
                 CacheLocal: true
             }
         ];
@@ -558,6 +572,28 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] {
         return this._agentNoteTypes;
+    }
+
+    /**
+     * All `MJ: AI Agent Paired Agents` junction rows, cached during Config(). Each row pairs a
+     * Realtime-type co-agent (`CoAgentID`) with one target agent it may front (`TargetAgentID`),
+     * ordered for pickers via `Sequence` with at most one `IsDefault` row per co-agent. A co-agent
+     * with ZERO rows is universal (it can front any target). Small metadata table — filter
+     * client-side (e.g. `UUIDsEqual(row.CoAgentID, ...)`) rather than issuing RunViews.
+     */
+    public get AgentPairedAgents(): MJAIAgentPairedAgentEntity[] {
+        return this._agentPairedAgents;
+    }
+
+    /**
+     * All `MJ: AI Agent Channels` interactive-channel registry rows, cached during Config().
+     * Each row declares a realtime channel surface (e.g. Whiteboard) with its server/client
+     * plugin class keys and transport type; only rows with `IsActive` may be attached to a
+     * session. Small metadata table — filter client-side (e.g. `c => c.IsActive`) rather than
+     * issuing RunViews.
+     */
+    public get AgentChannels(): MJAIAgentChannelEntity[] {
+        return this._agentChannels;
     }
 
     public get AgentPermissions(): MJAIAgentPermissionEntity[] {

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
-import { Metadata, IMetadataProvider, RunView } from '@memberjunction/core';
+import { Metadata, IMetadataProvider } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
@@ -122,7 +123,7 @@ export interface RealtimeChannelFocusEvent {
 
 /**
  * The narrow projection of an ACTIVE `MJ: AI Agent Channels` registry row the service
- * loads at session start (read-only lookup — `ResultType: 'simple'`, narrowed Fields).
+ * reads at session start from {@link AIEngineBase}'s cached `AgentChannels`.
  */
 interface RealtimeChannelDefinitionRow {
   ID: string;
@@ -705,24 +706,19 @@ export class VoiceSessionService {
   }
 
   /**
-   * Reads the ACTIVE `MJ: AI Agent Channels` rows (read-only lookup: simple results,
-   * narrowed fields). Failures are logged and degrade to an empty list — channel
-   * availability must never block the voice session.
+   * Reads the ACTIVE `MJ: AI Agent Channels` rows from {@link AIEngineBase}'s cached
+   * `AgentChannels` (provider-scoped engine instance, lazy `Config` — no RunView
+   * round-trip; the engine's BaseEntity-event reactivity keeps the registry fresh).
+   * Failures are logged and degrade to an empty list — channel availability must
+   * never block the voice session.
    */
   private async fetchChannelDefinitions(): Promise<RealtimeChannelDefinitionRow[]> {
     try {
-      const rv = RunView.FromMetadataProvider(this.Provider);
-      const result = await rv.RunView<RealtimeChannelDefinitionRow>({
-        EntityName: 'MJ: AI Agent Channels',
-        ExtraFilter: 'IsActive = 1',
-        Fields: ['ID', 'Name', 'ClientPluginClass'],
-        ResultType: 'simple'
-      });
-      if (!result.Success) {
-        console.warn('[VoiceSession] Failed to load channel registry:', result.ErrorMessage);
-        return [];
-      }
-      return result.Results ?? [];
+      const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.Provider, AIEngineBase) as AIEngineBase;
+      await engine.Config(false, undefined, this.Provider);
+      return (engine.AgentChannels ?? [])
+        .filter(c => c.IsActive)
+        .map<RealtimeChannelDefinitionRow>(c => ({ ID: c.ID, Name: c.Name, ClientPluginClass: c.ClientPluginClass }));
     } catch (error) {
       console.warn('[VoiceSession] Channel registry unavailable — starting with no channels:', error);
       return [];

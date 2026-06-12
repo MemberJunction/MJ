@@ -1,11 +1,12 @@
-import { IMetadataProvider, RunView } from '@memberjunction/core';
+import { IMetadataProvider } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * The narrow read-only projection of an `MJ: AI Agent Paired Agents` row the voice UI
- * consumes (loaded via {@link LoadCoAgentPairings} — `ResultType: 'simple'`, narrowed
- * fields). Pairing semantics: a co-agent with ZERO rows is **universal** (it can front
- * any target agent — the zero-config default); a co-agent WITH rows may front exactly
+ * consumes (loaded via {@link LoadCoAgentPairings} from {@link AIEngineBase}'s cached
+ * `AgentPairedAgents`). Pairing semantics: a co-agent with ZERO rows is **universal** (it can
+ * front any target agent — the zero-config default); a co-agent WITH rows may front exactly
  * the listed targets, with the `IsDefault` row as its preselected target.
  */
 export interface VoicePairedAgentRow {
@@ -29,8 +30,10 @@ export interface VoiceAgentLike {
 }
 
 /**
- * Loads the pairing rows for one co-agent from `MJ: AI Agent Paired Agents`, in
- * `Sequence` order (read-only lookup: `ResultType: 'simple'`, narrowed fields).
+ * Loads the pairing rows for one co-agent from {@link AIEngineBase}'s cached
+ * `MJ: AI Agent Paired Agents` metadata (provider-scoped engine instance, lazy `Config`),
+ * in `Sequence` order. The engine's BaseEntity-event reactivity keeps the cache fresh —
+ * no per-call RunView round-trip.
  *
  * Tolerant by design: any failure degrades to an EMPTY list — i.e. "no pairing
  * constraint". The client gate is pure disclosure; the server independently validates
@@ -42,19 +45,19 @@ export async function LoadCoAgentPairings(provider: IMetadataProvider, coAgentId
     return [];
   }
   try {
-    const rv = RunView.FromMetadataProvider(provider);
-    const result = await rv.RunView<VoicePairedAgentRow>({
-      EntityName: 'MJ: AI Agent Paired Agents',
-      ExtraFilter: `CoAgentID='${id.replace(/'/g, "''")}'`,
-      Fields: ['ID', 'CoAgentID', 'TargetAgentID', 'TargetAgent', 'IsDefault', 'Sequence'],
-      OrderBy: 'Sequence, TargetAgent',
-      ResultType: 'simple'
-    });
-    if (!result.Success) {
-      console.warn('[VoicePairing] Failed to load co-agent pairings:', result.ErrorMessage);
-      return [];
-    }
-    return SortPairings(result.Results ?? []);
+    const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(provider, AIEngineBase) as AIEngineBase;
+    await engine.Config(false, undefined, provider);
+    const rows = (engine.AgentPairedAgents ?? [])
+      .filter(p => UUIDsEqual(p.CoAgentID, id))
+      .map<VoicePairedAgentRow>(p => ({
+        ID: p.ID,
+        CoAgentID: p.CoAgentID,
+        TargetAgentID: p.TargetAgentID,
+        TargetAgent: p.TargetAgent ?? null,
+        IsDefault: p.IsDefault,
+        Sequence: p.Sequence ?? null
+      }));
+    return SortPairings(rows);
   } catch (error) {
     console.warn('[VoicePairing] Co-agent pairing lookup unavailable — treating co-agent as universal:', error);
     return [];
@@ -147,6 +150,45 @@ export function PairingsAllowTarget(pairings: readonly VoicePairedAgentRow[], ta
  */
 export function FilterRealtimeCoAgents<T extends { Type: string | null }>(agents: readonly T[]): T[] {
   return agents.filter(a => (a.Type ?? '').trim().toLowerCase() === 'realtime');
+}
+
+/**
+ * A selectable realtime model option in the voice picker (narrow read-only projection of
+ * `MJ: AI Models` — only the fields the dropdown renders).
+ */
+export interface VoiceModelOption {
+  /** The `MJ: AI Models` row id. */
+  ID: string;
+  /** The model's display name. */
+  Name: string;
+}
+
+/**
+ * The minimal `MJ: AI Models` row shape {@link BuildVoiceModelOptions} consumes —
+ * structurally satisfied by `AIEngineBase`'s cached `Models` entities.
+ */
+export interface VoiceModelCandidate {
+  /** The `MJ: AI Models` row id. */
+  ID: string;
+  /** The model's display name. */
+  Name: string;
+  /** Denormalized model-type name (e.g. 'LLM', 'Realtime'). */
+  AIModelType: string | null;
+  /** Whether the model is active and selectable. */
+  IsActive: boolean;
+}
+
+/**
+ * Builds the "Voice model" dropdown options from a cached model list: ACTIVE models whose
+ * type is `Realtime` (trim + case-insensitive — SQL-collation parity with the previous
+ * `IsActive = 1 AND AIModelType = 'Realtime'` filter), projected to {@link VoiceModelOption}
+ * and sorted by Name. Pure; never mutates the input.
+ */
+export function BuildVoiceModelOptions(models: ReadonlyArray<VoiceModelCandidate>): VoiceModelOption[] {
+  return models
+    .filter(m => m.IsActive && (m.AIModelType ?? '').trim().toLowerCase() === 'realtime')
+    .map<VoiceModelOption>(m => ({ ID: m.ID, Name: m.Name }))
+    .sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
 }
 
 /**

@@ -12,23 +12,25 @@
  *    affects sibling plugins or persistence.
  *  - **Per-session instance isolation**: one fresh instance per session per channel.
  *
- * The DB layer is mocked the way the neighboring realtime suites mock it: `@memberjunction/core`
- * is partially module-mocked so `RunView.FromMetadataProvider` returns a controllable spy — no DB,
- * no network.
+ * The registry layer is mocked at the engine boundary: `@memberjunction/ai-engine-base` is
+ * module-mocked so the host's provider-scoped `AIEngineBase` reads controllable cached
+ * `AgentChannels` rows — no DB, no network.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// --- Mock RunView.FromMetadataProvider (registry reads) while leaving the rest of core intact ---
-const runViewMock = vi.fn();
-vi.mock('@memberjunction/core', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@memberjunction/core')>();
-    return {
-        ...actual,
-        RunView: {
-            FromMetadataProvider: () => ({ RunView: runViewMock }),
-        },
-    };
-});
+// --- Mock the provider-scoped AIEngineBase whose cached AgentChannels the host reads ---
+const agentChannelsMock = vi.fn((): Array<{ ID: string; Name: string; ServerPluginClass: string | null; IsActive: boolean }> => []);
+const engineConfigMock = vi.fn(async (): Promise<void> => undefined);
+vi.mock('@memberjunction/ai-engine-base', () => ({
+    AIEngineBase: {
+        GetProviderInstance: vi.fn(() => ({
+            Config: engineConfigMock,
+            get AgentChannels() {
+                return agentChannelsMock();
+            },
+        })),
+    },
+}));
 
 import { BaseRealtimeChannelServer, RealtimeChannelServerContext, RealtimeChannelCloseReason } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
@@ -143,10 +145,12 @@ interface RegistryRow {
     ID: string;
     Name: string;
     ServerPluginClass: string | null;
+    /** Defaults to true — pass false to exercise the active-only filter. */
+    IsActive?: boolean;
 }
 
 function setRegistryRows(rows: RegistryRow[]): void {
-    runViewMock.mockResolvedValue({ Success: true, Results: rows });
+    agentChannelsMock.mockReturnValue(rows.map((r) => ({ IsActive: true, ...r })));
 }
 
 const ALPHA_ROW: RegistryRow = { ID: 'ch-a', Name: 'Alpha', ServerPluginClass: 'HostTestAlphaServer' };
@@ -165,7 +169,10 @@ function freshHost(): RealtimeChannelServerHost {
 let host: RealtimeChannelServerHost;
 
 beforeEach(() => {
-    runViewMock.mockReset();
+    agentChannelsMock.mockReset();
+    agentChannelsMock.mockReturnValue([]);
+    engineConfigMock.mockReset();
+    engineConfigMock.mockResolvedValue(undefined);
     journals.clear();
     behavior.throwOnSessionStarted = false;
     behavior.throwOnStateSave = false;
@@ -184,21 +191,20 @@ afterEach(() => {
 
 describe('RealtimeChannelServerHost — resolution from the channel registry', () => {
     it('instantiates one plugin per ACTIVE row with a registered ServerPluginClass', async () => {
-        setRegistryRows([ALPHA_ROW, BETA_ROW]);
+        setRegistryRows([
+            ALPHA_ROW,
+            BETA_ROW,
+            // Inactive rows never become session plugins (parity with the old `IsActive = 1` filter).
+            { ID: 'ch-d', Name: 'Dormant', ServerPluginClass: 'HostTestAlphaServer', IsActive: false },
+        ]);
         await host.OnSessionStarted(ctx(), USER, PROVIDER);
 
         expect(host.GetSessionPlugin('session-1', 'Alpha')).toBeInstanceOf(AlphaChannelServer);
         expect(host.GetSessionPlugin('session-1', 'Beta')).toBeInstanceOf(BetaChannelServer);
+        expect(host.GetSessionPlugin('session-1', 'Dormant')).toBeNull();
         expect(host.ActiveSessionCount).toBe(1);
-        // The registry read filters to active rows with the narrowed read-only shape.
-        expect(runViewMock).toHaveBeenCalledWith(
-            expect.objectContaining({
-                EntityName: 'MJ: AI Agent Channels',
-                ExtraFilter: 'IsActive = 1',
-                ResultType: 'simple',
-            }),
-            USER,
-        );
+        // The registry comes from the provider-scoped engine cache, lazily configured per request.
+        expect(engineConfigMock).toHaveBeenCalledWith(false, USER, PROVIDER);
     });
 
     it('skips (never fatal) rows whose plugin class is unregistered, keeping registered siblings', async () => {
@@ -225,14 +231,16 @@ describe('RealtimeChannelServerHost — resolution from the channel registry', (
         expect(host.GetSessionPlugin('session-1', 'Alpha')).not.toBeNull();
     });
 
-    it('degrades to no plugins (never throws) when the registry read fails', async () => {
-        runViewMock.mockResolvedValue({ Success: false, ErrorMessage: 'registry down' });
+    it('degrades to no plugins (never throws) when the engine load rejects', async () => {
+        engineConfigMock.mockRejectedValue(new Error('registry down'));
         await expect(host.OnSessionStarted(ctx(), USER, PROVIDER)).resolves.toBeUndefined();
         expect(host.ActiveSessionCount).toBe(0);
     });
 
-    it('degrades to no plugins (never throws) when the registry read rejects', async () => {
-        runViewMock.mockRejectedValue(new Error('connection refused'));
+    it('degrades to no plugins (never throws) when the cached registry read throws', async () => {
+        agentChannelsMock.mockImplementation(() => {
+            throw new Error('connection refused');
+        });
         await expect(host.OnSessionStarted(ctx(), USER, PROVIDER)).resolves.toBeUndefined();
         expect(host.ActiveSessionCount).toBe(0);
     });

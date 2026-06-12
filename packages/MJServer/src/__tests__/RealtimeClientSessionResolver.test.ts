@@ -5,11 +5,41 @@ import 'reflect-metadata';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// --- Mock CanRun authorization (AIAgentPermissionHelper.HasPermission) ---
+// --- Mock CanRun authorization (AIAgentPermissionHelper.HasPermission) plus the
+//     provider-scoped AIEngineBase whose cached metadata serves the resolver's pairing-row
+//     and channel-definition reads (the engine replaced the per-call RunViews) ---
 const hasPermissionMock = vi.fn<[], Promise<boolean>>();
+/** Cached `MJ: AI Agent Paired Agents` rows the fake engine serves. */
+interface FakePairedAgentRow {
+    ID: string;
+    CoAgentID: string;
+    TargetAgentID: string;
+    IsDefault: boolean;
+    Sequence: number;
+}
+/** Cached `MJ: AI Agent Channels` rows the fake engine serves. */
+interface FakeChannelRow {
+    ID: string;
+    Name: string;
+    IsActive: boolean;
+}
+const enginePairedAgentsMock = vi.fn((): FakePairedAgentRow[] => []);
+const engineChannelsMock = vi.fn((): FakeChannelRow[] => []);
+const engineConfigMock = vi.fn(async (): Promise<void> => undefined);
 vi.mock('@memberjunction/ai-engine-base', () => ({
     AIAgentPermissionHelper: {
         HasPermission: (...args: unknown[]) => hasPermissionMock(...(args as [])),
+    },
+    AIEngineBase: {
+        GetProviderInstance: vi.fn(() => ({
+            Config: engineConfigMock,
+            get AgentPairedAgents() {
+                return enginePairedAgentsMock();
+            },
+            get AgentChannels() {
+                return engineChannelsMock();
+            },
+        })),
     },
 }));
 
@@ -162,6 +192,12 @@ function makeProvider(factory: (entityName: string) => FakeSession): unknown {
 
 beforeEach(() => {
     hasPermissionMock.mockReset();
+    enginePairedAgentsMock.mockReset();
+    enginePairedAgentsMock.mockReturnValue([]);
+    engineChannelsMock.mockReset();
+    engineChannelsMock.mockReturnValue([]);
+    engineConfigMock.mockReset();
+    engineConfigMock.mockResolvedValue(undefined);
     prepareClientSessionMock.mockReset();
     executeRelayedToolMock.mockReset();
     cancelInFlightMock.mockReset();
@@ -984,8 +1020,10 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelState', () => {
     const CHANNEL_ROW = { ID: 'channel-wb', IsActive: true };
 
     /**
-     * Provider with both GetEntityObject (session load + new session-channel rows) and RunView
-     * (channel definition + session-channel lookup) under test control.
+     * Provider with GetEntityObject (session load + new session-channel rows) and RunView
+     * (the session-channel upsert lookup — transactional, deliberately still RunView) under
+     * test control. Channel DEFINITIONS come from the mocked engine cache (`channelRows`,
+     * served as `MJ: AI Agent Channels` rows named 'Whiteboard').
      */
     function makeChannelProvider(opts: {
         session?: FakeSession;
@@ -994,12 +1032,10 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelState', () => {
         newSessionChannel?: FakeSession;
     }): { provider: unknown; runView: ReturnType<typeof vi.fn>; newRow: FakeSession } {
         const newRow = opts.newSessionChannel ?? makeSessionEntity({ ID: 'sc-new' });
-        const runView = vi.fn(async (params: { EntityName: string }) => {
-            if (params.EntityName === 'MJ: AI Agent Channels') {
-                return { Success: true, Results: opts.channelRows ?? [] };
-            }
-            return { Success: true, Results: opts.sessionChannelRows ?? [] };
-        });
+        engineChannelsMock.mockReturnValue(
+            (opts.channelRows ?? []).map((r) => ({ Name: 'Whiteboard', ...r })),
+        );
+        const runView = vi.fn(async () => ({ Success: true, Results: opts.sessionChannelRows ?? [] }));
         const provider = {
             GetEntityObject: vi.fn(async (name: string) =>
                 name === 'MJ: AI Agent Session Channels' ? newRow : (opts.session ?? makeSessionEntity()),
@@ -1164,7 +1200,9 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
 
     /**
      * Provider for the restore path: GetEntityObject serves the PRIOR session (the only entity
-     * the start flow loads directly), RunView serves the prior session-channel rows.
+     * the start flow loads directly), RunView serves the prior session-channel rows. Pairing
+     * rows come from the mocked engine cache (empty by default — universal co-agent, pairing
+     * not under test here).
      */
     function makeRestoreProvider(opts: {
         prior?: FakeSession;
@@ -1172,12 +1210,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         runViewResult?: { Success: boolean; ErrorMessage?: string; Results?: unknown[] };
     }): { provider: unknown; runView: ReturnType<typeof vi.fn>; prior: FakeSession } {
         const prior = opts.prior ?? makeSessionEntity({ ID: 'prior-1', UserID: 'user-1' });
-        const runView = vi.fn(async (params: { EntityName: string }) => {
-            if (params.EntityName === 'MJ: AI Agent Paired Agents') {
-                return { Success: true, Results: [] }; // universal co-agent — pairing not under test here
-            }
-            return opts.runViewResult ?? { Success: true, Results: opts.rows ?? [] };
-        });
+        const runView = vi.fn(async () => opts.runViewResult ?? { Success: true, Results: opts.rows ?? [] });
         return { provider: { GetEntityObject: vi.fn(async () => prior), RunView: runView }, runView, prior };
     }
 
@@ -1211,11 +1244,9 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         expect(createArg.lastSessionID).toBe('prior-1');
     });
 
-    /** RunView calls that hit the session-channel restore query (pairing-row lookups excluded). */
+    /** RunView calls that hit the session-channel restore query (the only RunView in the start flow). */
     function restoreQueryCalls(runView: ReturnType<typeof vi.fn>): unknown[] {
-        return runView.mock.calls.filter(
-            (call) => (call[0] as { EntityName: string }).EntityName !== 'MJ: AI Agent Paired Agents',
-        );
+        return runView.mock.calls;
     }
 
     it('omits the field when no lastSessionId is supplied (no restore query at all)', async () => {
@@ -1338,7 +1369,8 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
     /**
      * Provider for the artifact path: GetEntityObject routes by entity name (session / artifact /
      * version / junction), RunView routes by EntityName (artifact types / conversation details /
-     * channel definitions / session-channel rows).
+     * session-channel rows). Channel DEFINITIONS come from the mocked engine cache
+     * (`channelRows`, served as `MJ: AI Agent Channels` rows named 'Whiteboard').
      */
     function makeArtifactProvider(opts: {
         session?: FakeSession;
@@ -1360,14 +1392,15 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         const version = opts.version ?? makeSessionEntity({ ID: 'version-1' });
         const junction = opts.junction ?? makeSessionEntity({ ID: 'junction-1' });
         const session = opts.session ?? makeSessionEntity();
+        engineChannelsMock.mockReturnValue(
+            (opts.channelRows ?? []).map((r) => ({ Name: 'Whiteboard', ...r })),
+        );
         const runView = vi.fn(async (params: { EntityName: string }) => {
             switch (params.EntityName) {
                 case 'MJ: Artifact Types':
                     return { Success: true, Results: opts.typeRows ?? [] };
                 case 'MJ: Conversation Details':
                     return { Success: true, Results: opts.detailRows ?? [] };
-                case 'MJ: AI Agent Channels':
-                    return { Success: true, Results: opts.channelRows ?? [] };
                 default: // MJ: AI Agent Session Channels
                     return { Success: true, Results: opts.sessionChannelRows ?? [] };
             }
@@ -2251,20 +2284,26 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — pairing c
         },
     };
 
-    /** Provider whose RunView serves pairing rows for the paired-agent entity and [] elsewhere. */
+    /**
+     * Seeds the mocked engine cache with pairing rows for the resolved co-agent ('co-agent-1')
+     * — the resolver filters the cached `AgentPairedAgents` by `CoAgentID` itself, so the rows
+     * carry it (plus a stray other-co-agent row to prove the filter). `failPairingQuery` makes
+     * the engine load reject, exercising the degrade-to-universal path.
+     */
     function makePairingProvider(
         pairingRows: Array<{ TargetAgentID: string; IsDefault: boolean; Sequence: number }>,
         opts: { failPairingQuery?: boolean } = {},
-    ): { provider: unknown; runView: ReturnType<typeof vi.fn> } {
-        const runView = vi.fn(async (params: { EntityName: string }) => {
-            if (params.EntityName === 'MJ: AI Agent Paired Agents') {
-                return opts.failPairingQuery
-                    ? { Success: false, ErrorMessage: 'db down' }
-                    : { Success: true, Results: pairingRows };
-            }
-            return { Success: true, Results: [] };
-        });
-        return { provider: { GetEntityObject: vi.fn(async () => makeSessionEntity()), RunView: runView }, runView };
+    ): { provider: unknown } {
+        if (opts.failPairingQuery) {
+            engineConfigMock.mockRejectedValue(new Error('db down'));
+        } else {
+            enginePairedAgentsMock.mockReturnValue([
+                ...pairingRows.map((r, i) => ({ ID: `pair-${i}`, CoAgentID: 'co-agent-1', ...r })),
+                // Another co-agent's pairing — must never constrain THIS co-agent.
+                { ID: 'pair-other', CoAgentID: 'co-agent-other', TargetAgentID: 'target-elsewhere', IsDefault: true, Sequence: 0 },
+            ]);
+        }
+        return { provider: { GetEntityObject: vi.fn(async () => makeSessionEntity()), RunView: vi.fn(async () => ({ Success: true, Results: [] })) } };
     }
 
     function setupHappyStart(): void {
