@@ -32,6 +32,7 @@ import { MJAIAgentArtifactTypeFormComponent } from "./Entities/MJAIAgentArtifact
 import { MJAIAgentCategoryFormComponent } from "./Entities/MJAIAgentCategory/mjaiagentcategory.form.component";
 import { MJAIAgentChannelFormComponent } from "./Entities/MJAIAgentChannel/mjaiagentchannel.form.component";
 import { MJAIAgentClientToolFormComponent } from "./Entities/MJAIAgentClientTool/mjaiagentclienttool.form.component";
+import { MJAIAgentCoAgentFormComponent } from "./Entities/MJAIAgentCoAgent/mjaiagentcoagent.form.component";
 import { MJAIAgentConfigurationFormComponent } from "./Entities/MJAIAgentConfiguration/mjaiagentconfiguration.form.component";
 import { MJAIAgentDataSourceFormComponent } from "./Entities/MJAIAgentDataSource/mjaiagentdatasource.form.component";
 import { MJAIAgentExampleFormComponent } from "./Entities/MJAIAgentExample/mjaiagentexample.form.component";
@@ -40,7 +41,6 @@ import { MJAIAgentModalityFormComponent } from "./Entities/MJAIAgentModality/mja
 import { MJAIAgentModelFormComponent } from "./Entities/MJAIAgentModel/mjaiagentmodel.form.component";
 import { MJAIAgentNoteTypeFormComponent } from "./Entities/MJAIAgentNoteType/mjaiagentnotetype.form.component";
 import { MJAIAgentNoteFormComponent } from "./Entities/MJAIAgentNote/mjaiagentnote.form.component";
-import { MJAIAgentPairedAgentFormComponent } from "./Entities/MJAIAgentPairedAgent/mjaiagentpairedagent.form.component";
 import { MJAIAgentPermissionFormComponent } from "./Entities/MJAIAgentPermission/mjaiagentpermission.form.component";
 import { MJAIAgentPromptFormComponent } from "./Entities/MJAIAgentPrompt/mjaiagentprompt.form.component";
 import { MJAIAgentRelationshipFormComponent } from "./Entities/MJAIAgentRelationship/mjaiagentrelationship.form.component";
@@ -379,9 +379,9 @@ declarations: [
     MJAIAgentCategoryFormComponent,
     MJAIAgentChannelFormComponent,
     MJAIAgentClientToolFormComponent,
+    MJAIAgentCoAgentFormComponent,
     MJAIAgentConfigurationFormComponent,
-    MJAIAgentDataSourceFormComponent,
-    MJAIAgentExampleFormComponent],
+    MJAIAgentDataSourceFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -398,12 +398,12 @@ export class GeneratedForms_SubModule_0 { }
 
 @NgModule({
 declarations: [
+    MJAIAgentExampleFormComponent,
     MJAIAgentLearningCycleFormComponent,
     MJAIAgentModalityFormComponent,
     MJAIAgentModelFormComponent,
     MJAIAgentNoteTypeFormComponent,
     MJAIAgentNoteFormComponent,
-    MJAIAgentPairedAgentFormComponent,
     MJAIAgentPermissionFormComponent,
     MJAIAgentPromptFormComponent,
     MJAIAgentRelationshipFormComponent,

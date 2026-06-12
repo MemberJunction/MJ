@@ -126,54 +126,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Storage Settings Section -->
-    <mj-collapsible-panel
-        SectionKey="storageSettings"
-        SectionName="Storage Settings"
-        Icon="fa fa-sliders-h"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="DefaultStorageAccountID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Agent Integration Section -->
-    <mj-collapsible-panel
-        SectionKey="agentIntegration"
-        SectionName="Agent Integration"
-        Icon="fa fa-info-circle"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="DefaultCoAgentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Configuration Settings Section -->
-    <mj-collapsible-panel
-        SectionKey="configurationSettings"
-        SectionName="Configuration Settings"
-        Icon="fa fa-cogs"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -189,6 +141,25 @@
             Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Storage Settings Section -->
+    <mj-collapsible-panel
+        SectionKey="storageSettings"
+        SectionName="Storage Settings"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="DefaultStorageAccountID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -224,6 +195,31 @@
     <!-- ========================================
          RELATED ENTITY PANELS
          ======================================== -->
+
+    <!-- AI Agent Co Agents Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentCoAgents"
+        SectionName="AI Agent Co Agents"
+        Icon="fa fa-users"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentCoAgents')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Co Agents','TargetAgentTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Co Agents')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentCoAgents')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentCoAgents', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 
     <!-- AI Agents Section -->
     <mj-collapsible-panel
