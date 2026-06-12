@@ -270,6 +270,11 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   private set surfaceTabsRef(ref: RealtimeSurfaceTabsComponent | undefined) {
     this.surfaceTabs = ref;
     if (ref) {
+      // A (re)created panel starts with a FRESH tab model: artifact tabs self-recover
+      // (the panel re-scans the session state) but CHANNEL tabs only registered when
+      // ActiveChannels$ emitted at session start — re-register the live set here so
+      // hiding the panel (pure-audio return, Details off) never loses the Whiteboard.
+      this.registerChannelTabs([...this.voice.ActiveChannels]);
       this.flushPendingChannelTabs();
       const reveal = this.pendingRevealKey;
       if (reveal) {
