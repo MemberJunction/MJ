@@ -383,7 +383,7 @@ describe('tagToNpmVersion', () => {
   });
 
   it('falls back to "latest" for branch refs (the real-world bug)', () => {
-    expect(tagToNpmVersion('claude/add-claude-md-installer-WJ2OZ')).toBe('latest');
+    expect(tagToNpmVersion('feature/some-branch')).toBe('latest');
     expect(tagToNpmVersion('main')).toBe('latest');
     expect(tagToNpmVersion('next')).toBe('latest');
     expect(tagToNpmVersion('feature/some-thing')).toBe('latest');

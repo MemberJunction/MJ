@@ -33,10 +33,10 @@ import path from 'node:path';
  *   - `v5.38.0+meta` → `5.38.0+meta`
  *   - Anything else (branch ref, commit SHA, the literal string `latest`, etc.) → `latest`
  *
- * Without this guard, a branch ref like `claude/some-feature` lands in
- * package.json as `"@memberjunction/cli": "claude/some-feature"`, which npm
+ * Without this guard, a branch ref like `feature/some-branch` lands in
+ * package.json as `"@memberjunction/cli": "feature/some-branch"`, which npm
  * interprets as a GitHub shorthand and tries to ssh-clone
- * `github.com/claude/some-feature.git`. That hard-fails the install for
+ * `github.com/feature/some-branch.git`. That hard-fails the install for
  * anyone running `mj install --tag <branch>` (testing/dev scenarios, or
  * users picking a branch ref via the version picker post-fallback).
  *
