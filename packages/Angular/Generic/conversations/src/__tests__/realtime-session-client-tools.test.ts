@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { VoiceSessionService } from '../lib/services/voice-session.service';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 
 /**
  * CLIENT-EXECUTED UI TOOL routing (the live whiteboard's `Whiteboard_*` path).
@@ -10,7 +10,7 @@ import { VoiceSessionService } from '../lib/services/voice-session.service';
  */
 
 /** The private surface the tests drive — no `any`, just the members under test. */
-interface VoiceSessionInternals {
+interface RealtimeSessionInternals {
   client: FakeRealtimeClient | null;
   handleToolCall(call: { CallID: string; ToolName: string; ArgumentsJson: string }): Promise<void>;
 }
@@ -26,16 +26,16 @@ class FakeRealtimeClient {
   }
 }
 
-function internals(service: VoiceSessionService): VoiceSessionInternals {
-  return service as unknown as VoiceSessionInternals;
+function internals(service: RealtimeSessionService): RealtimeSessionInternals {
+  return service as unknown as RealtimeSessionInternals;
 }
 
-describe('VoiceSessionService — client-executed UI tool routing', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — client-executed UI tool routing', () => {
+  let service: RealtimeSessionService;
   let fakeClient: FakeRealtimeClient;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     fakeClient = new FakeRealtimeClient();
     internals(service).client = fakeClient;
   });
@@ -115,9 +115,9 @@ describe('VoiceSessionService — client-executed UI tool routing', () => {
   });
 });
 
-describe('VoiceSessionService — SendContextNote guard', () => {
+describe('RealtimeSessionService — SendContextNote guard', () => {
   it('is a no-op when no session is live (no client / closed state)', () => {
-    const service = new VoiceSessionService();
+    const service = new RealtimeSessionService();
     const fakeClient = new FakeRealtimeClient();
     internals(service).client = fakeClient;
 
@@ -127,7 +127,7 @@ describe('VoiceSessionService — SendContextNote guard', () => {
   });
 
   it('ignores empty / whitespace-only notes', () => {
-    const service = new VoiceSessionService();
+    const service = new RealtimeSessionService();
     const fakeClient = new FakeRealtimeClient();
     internals(service).client = fakeClient;
 
@@ -136,9 +136,9 @@ describe('VoiceSessionService — SendContextNote guard', () => {
   });
 });
 
-describe('VoiceSessionService — SaveChannelState guards', () => {
+describe('RealtimeSessionService — SaveChannelState guards', () => {
   it('returns false when no session id is available (live or explicit)', async () => {
-    const service = new VoiceSessionService();
+    const service = new RealtimeSessionService();
     const saved = await service.SaveChannelState('Whiteboard', '{"items":[]}');
     expect(saved).toBe(false);
   });

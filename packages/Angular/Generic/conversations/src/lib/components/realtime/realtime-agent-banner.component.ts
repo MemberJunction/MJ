@@ -1,6 +1,6 @@
 import { Component, EventEmitter, HostListener, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { VoiceConnectionState } from '../../services/voice-session.service';
+import { VoiceConnectionState } from '../../services/realtime-session.service';
 import { RealtimeUxDensity } from './realtime-disclosure';
 
 /**

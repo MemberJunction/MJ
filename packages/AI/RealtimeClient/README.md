@@ -31,7 +31,7 @@ BaseRealtimeModel driver                   BaseRealtimeClient driver
 **Division of responsibility** (from the `BaseRealtimeClient` doc header):
 
 - **Drivers own ALL provider wire concerns**: transport (WebRTC / WebSocket), event-name translation, the response state machine (a tool-result reply must never collide with an in-flight response), narration-kind tagging, and audible-playback tracking.
-- **Hosts own POLICY**: when to narrate, what instructions to speak, transcript persistence, and UI state. The reference host is `VoiceSessionService` in `@memberjunction/ng-conversations`.
+- **Hosts own POLICY**: when to narrate, what instructions to speak, transcript persistence, and UI state. The reference host is `RealtimeSessionService` in `@memberjunction/ng-conversations`.
 
 ## The contract (`BaseRealtimeClient`)
 
@@ -143,7 +143,7 @@ if (!client.IsBusy && !client.IsAudioPlaying) {
 await client.Disconnect();
 ```
 
-The production host is `VoiceSessionService` (`packages/Angular/Generic/conversations`) — read it for the full policy layer (caption/transcript routing, prefix-routed client tools, narration pacing, channel plugins).
+The production host is `RealtimeSessionService` (`packages/Angular/Generic/conversations`) — read it for the full policy layer (caption/transcript routing, prefix-routed client tools, narration pacing, channel plugins).
 
 ## Testing seams
 

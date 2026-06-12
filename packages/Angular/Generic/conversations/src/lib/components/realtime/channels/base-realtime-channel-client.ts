@@ -5,7 +5,7 @@ import { RealtimeToolDefinition } from '@memberjunction/ai';
  * Host services handed to a {@link BaseRealtimeChannelClient} at {@link BaseRealtimeChannelClient.Initialize}.
  *
  * The context is the plugin's ONLY line back to the live session — channels never talk to
- * `VoiceSessionService` (or any host component) directly, which is what keeps them drop-in
+ * `RealtimeSessionService` (or any host component) directly, which is what keeps them drop-in
  * plugins. Every member is host-implemented:
  *
  *  - the SESSION SERVICE supplies {@link SendContextNote} (perception feed into the live
