@@ -179,3 +179,34 @@ boots only ever loaded the 20-line stub (boot-order luck — verified: the long-
 schema contains NO generated resolvers). The canonical e2e boot after ApplyAll is therefore:
 `turbo build --filter=mj_api` + `npm run build` in packages/MJAPI + `node dist/index.js`
 (tsc emits full decorator metadata; the generated resolvers land in the schema — verified live).
+
+## 8. StartSync silently no-ops while `restartRequiredForGraphQL` is pending — misleading success (found 2026-06-12, ORCID + Path LMS hybrid-e2e)
+
+After a custom-column promotion flags `restartRequiredForGraphQL: true`, a subsequent
+`IntegrationStartSync` responds `{ Success: true, Message: "Sync started", RunID: null }` and then
+starts NOTHING — no CompanyIntegrationRun row, no run events. Both the Path LMS and ORCID e2e
+runs lost their second sync to this: the caller polls for a run that never existed. The response
+should be an explicit refusal (`Success:false, "restart required after schema update"`) or the
+sync should queue until restart — silent acceptance violates the framework's own
+no-silent-failure rule. Fix belongs in the StartSync resolver / engine gate.
+
+## 9. In-process CodeGen caches additionalSchemaInfo across runs in one MJAPI process — later connectors' soft-PKs invisible (found 2026-06-12, OpenWater hybrid-e2e)
+
+Within a single long-lived MJAPI process, the FIRST in-process CodeGen run loads
+`metadata/integrations/additionalSchemaInfo.json` and the SECOND run (a different connector's
+ApplyAll) reuses the cached copy: OpenWater's `WriteAdditionalSchemaInfo` landed its four
+PrimaryKey entries at 10:14:35.308 and `RunCodeGen` started the same millisecond — yet CodeGen
+reported "Skipping new entity Program ... No primary key found" for exactly those tables, while
+ORCID's earlier run in the same process (whose entries were in the file at first load) created
+its entities fine. Tables get created PK-less and entity/map creation silently yields
+`maps=0` with `Warnings: null` (a secondary defect: map-creation failure should be a WARNING in
+the ApplyAll response, not silence). Workaround: restart MJAPI between different connectors'
+ApplyAll calls. This is the third instance of in-process-CodeGen state staleness (see #6) —
+the family fix is to make each in-process run re-read its inputs (ASI, schema snapshot, sproc
+inventory) rather than trusting first-load caches.
+
+### Update to #6 (2026-06-12, ORCID evidence): the sproc-staleness in #6 correlates with the
+tsx-booted process — ORCID's 57-column promotion under the DIST-booted MJAPI regenerated
+`spUpdateemployments` etc. correctly in the same pass, and the post-restart sync spread
+populated every promoted column (orgName 2/2, Works title 7/7) with rows flat. The dist-boot
+runbook (#7) therefore also mitigates #6.
