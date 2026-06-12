@@ -101,6 +101,13 @@ export interface FixtureManifest {
      * path (file). Defaults: http → `BaseURL`, file → `storagePath`.
      */
     ConfigUrlKey?: string;
+    /**
+     * Additional Configuration keys whose values reference the mock base URL via a
+     * `{BASE}` placeholder — for connectors whose auth/token endpoint is a FULL URL
+     * on a different host than the data plane (e.g. ORCID's client_credentials
+     * tokenUrl): `{"tokenUrl": "{BASE}/oauth/token"}`.
+     */
+    ConfigUrlTemplates?: Record<string, string>;
     /** http transport: recorded routes. */
     Routes?: HttpRoute[];
     /** file transport: raw initial file content. */
@@ -145,6 +152,7 @@ export function loadFixtures(connector: string): FixtureLoadResult {
         Transport: transport,
         Configuration: raw.Configuration ?? {},
         ConfigUrlKey: raw.ConfigUrlKey ?? (transport === 'file' ? 'storagePath' : 'BaseURL'),
+        ConfigUrlTemplates: raw.ConfigUrlTemplates,
         Routes: (raw.Routes ?? []).map((r) => resolveRouteBody(r, fixturesDir, warnings)),
         FileContent: raw.FileContent,
         Objects: raw.Objects ?? [],

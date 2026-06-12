@@ -475,9 +475,15 @@ async function setupTransport(manifest) {
     s.listen(0, '127.0.0.1', () => resolveServer(s));
   });
   const baseURL = 'http://127.0.0.1:' + server.address().port;
+  // ConfigUrlTemplates: additional Configuration keys whose values reference the mock base URL via
+  // a {BASE} placeholder (e.g. {"tokenUrl": "{BASE}/oauth/token"} for connectors whose token
+  // endpoint is a FULL URL on a different host than the data plane — ORCID's client_credentials).
+  const urlTemplates = manifest.ConfigUrlTemplates || {};
+  const templatedCfg = { ...extra, [urlKey]: baseURL };
+  for (const [tk, tv] of Object.entries(urlTemplates)) templatedCfg[tk] = String(tv).split('{BASE}').join(baseURL);
   return {
     transport, baseURL,
-    configuration: JSON.stringify({ ...extra, [urlKey]: baseURL }),
+    configuration: JSON.stringify(templatedCfg),
     setRoutes(next) { routes = next || []; },
     setFileContent() {},
     wireBaseURL(connector) {
