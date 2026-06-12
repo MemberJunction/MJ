@@ -153,14 +153,26 @@ async function main(): Promise<void> {
         const supersededRow = written.noteId ? await loadNote(written.noteId, contextUser) : null;
         check('note text updated in place', supersededRow?.Note === supersedeText, supersededRow?.Note?.slice(0, 60));
 
-        // ── 4. Cross-run dedupe ─────────────────────────────────────────
-        LogStatus('\n4. Cross-run dedupe (new manager = new run)');
+        // ── 4. Cross-run dedupe (exact restatement) ─────────────────────
+        // Submits the IDENTICAL text, so this now specifically exercises the
+        // exact-restatement dedupe path (near-but-different text writes instead).
+        LogStatus('\n4. Cross-run dedupe (new manager = new run, exact restatement)');
         const accessBefore = supersededRow?.AccessCount || 0;
         const freshManager = new MemoryWriteManager();
         const crossRun = await freshManager.ExecuteWrite({ note: supersedeText, type: 'Preference' }, context);
         check('disposition is deduped', crossRun.disposition === 'deduped', crossRun.disposition);
         const dedupedRow = written.noteId ? await loadNote(written.noteId, contextUser) : null;
         check('AccessCount bumped', (dedupedRow?.AccessCount || 0) > accessBefore, `${accessBefore} -> ${dedupedRow?.AccessCount}`);
+
+        // ── 4b. Cross-run paraphrase writes (corrections preserved) ─────
+        // Live regression for the observed bug: a near-duplicate with different
+        // text must be WRITTEN, not absorbed into the pre-existing note.
+        LogStatus('\n4b. Cross-run paraphrase (ADD-only-strict: written, not deduped)');
+        const paraphraseText = `The user prefers crimson red dashboards for their quarterly reviews. ${SMOKE_MARKER}`;
+        const paraphrase = await freshManager.ExecuteWrite({ note: paraphraseText, type: 'Preference' }, context);
+        check('paraphrase disposition is written', paraphrase.disposition === 'written', paraphrase.disposition + (paraphrase.reason ? `: ${paraphrase.reason}` : ''));
+        check('paraphrase is a NEW note', !!paraphrase.noteId && paraphrase.noteId !== written.noteId);
+        if (paraphrase.noteId) createdNoteIds.push(paraphrase.noteId);
 
         // ── 5. Injection formatting ─────────────────────────────────────
         LogStatus('\n5. Injection (provisional-first, labeled, recency-wins policy)');
@@ -190,6 +202,28 @@ async function main(): Promise<void> {
             check('ExpiresAt cleared', hardenedRow?.ExpiresAt === null, String(hardenedRow?.ExpiresAt));
         } else {
             check('note available to harden', false);
+        }
+
+        // ── 6b. Within-batch hardening dedupe ───────────────────────────
+        // Verifies the emergent property the unit tests can't: sequential
+        // hardening + per-Save vector sync means a note hardened earlier in
+        // the SAME batch is visible (Active) to later items' dedupe checks —
+        // so the paraphrase duplicates that ADD-only-strict now produces are
+        // consolidated by the Memory Manager rather than accumulating.
+        // Requires the real dedupe prompt (LLM call) — uses the configured key.
+        LogStatus('\n6b. Within-batch hardening dedupe (paraphrase consolidated into hardened note)');
+        const dedupePrompt = AIEngine.Instance.Prompts.find(p =>
+            p.Name === 'Memory Manager - Deduplicate Note' && p.Category === 'MJ: System'
+        );
+        const paraphraseNote = paraphrase.noteId ? await loadNote(paraphrase.noteId, contextUser) : null;
+        if (paraphraseNote && dedupePrompt && written.noteId) {
+            const dedupeOutcome = await harness.HardenOne(paraphraseNote, dedupePrompt, new AIPromptRunner(), contextUser);
+            check('paraphrase hardening outcome is deduped', dedupeOutcome === 'deduped', dedupeOutcome);
+            const archivedRow = await loadNote(paraphraseNote.ID, contextUser);
+            check("paraphrase archived", archivedRow?.Status === 'Archived', String(archivedRow?.Status));
+            check('lineage points at the hardened note', archivedRow?.ConsolidatedIntoNoteID === written.noteId, String(archivedRow?.ConsolidatedIntoNoteID));
+        } else {
+            check('dedupe prompt + paraphrase note available', false, dedupePrompt ? 'note missing' : 'dedupe prompt not found');
         }
     } finally {
         // ── 7. Cleanup ──────────────────────────────────────────────────

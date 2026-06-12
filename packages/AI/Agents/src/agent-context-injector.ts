@@ -741,7 +741,7 @@ export class AgentContextInjector {
             lines.push('   the provisional one (recency wins)');
             lines.push('3) User-specific notes override company-level');
             lines.push('4) Company notes override global defaults');
-            lines.push('5) Within the same scope and status, prefer most recent by date');
+            lines.push('5) Within the same scope and status, prefer the most recent by recorded date (shown on each note)');
             lines.push('');
             lines.push('Conflict resolution:');
             lines.push('- Same level and neither provisional: prefer the more specific scope, then the more recent');
@@ -775,7 +775,8 @@ export class AgentContextInjector {
 
     /** Render one note (and its scope line) into the injection output. */
     private appendNoteLines(lines: string[], note: MJAIAgentNoteEntity, provisional: boolean): void {
-        lines.push(`[${note.Type}]${provisional ? ' (provisional)' : ''} ${note.Note}`);
+        const date = this.formatNoteDate(note);
+        lines.push(`[${note.Type}${date ? `, ${date}` : ''}]${provisional ? ' (provisional)' : ''} ${note.Note}`);
 
         const scope = this.determineNoteScope(note);
         const secondaryScope = this.determineSecondaryScope(note);
@@ -787,6 +788,20 @@ export class AgentContextInjector {
         }
 
         lines.push('');
+    }
+
+    /**
+     * Compact recorded date for a note line ('YYYY-MM-DD', '' when missing) so
+     * the memory policy's "prefer the most recent" tiebreaker is actually
+     * resolvable by the model — contradictory notes can coexist between the
+     * hardening pass and the (less frequent) contradiction-resolution phase.
+     * Absolute dates (not "2 days ago") keep the rendered message byte-stable
+     * between note-set changes; the prompt's Current Date/Time block gives the
+     * model what it needs for recency arithmetic. Kept private to this single
+     * consumer — promote to @memberjunction/global if a second consumer appears.
+     */
+    private formatNoteDate(note: MJAIAgentNoteEntity): string {
+        return note.__mj_CreatedAt ? new Date(note.__mj_CreatedAt).toISOString().slice(0, 10) : '';
     }
 
     /**

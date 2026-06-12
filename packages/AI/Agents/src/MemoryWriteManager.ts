@@ -19,7 +19,7 @@ export interface MemoryWriteRequest {
  * Outcome category for a single memory write. Every request gets exactly one disposition:
  * - written          — a new provisional note was persisted
  * - superseded-own   — the request near-duplicated a note written earlier in THIS run; that note's text was updated in place (last-write-wins within a run)
- * - deduped          — the request near-duplicated a pre-existing note; its AccessCount/LastAccessedAt were bumped instead of inserting
+ * - deduped          — the request EXACTLY restated a pre-existing note (after trim/lowercase/whitespace-collapse normalization); its AccessCount/LastAccessedAt were bumped instead of inserting. Near-but-textually-different matches are NOT deduped — they write a new note so corrections are never silently dropped
  * - skipped-duplicate — the exact same note text was already written this run (idempotency hash hit)
  * - skipped-cap      — the per-run write cap was reached
  * - rejected-type    — the request failed validation (bad type, empty/oversized note)
@@ -33,6 +33,13 @@ export type MemoryWriteDisposition =
   | 'skipped-cap'
   | 'rejected-type'
   | 'error';
+
+/** A vector-shortlisted near-duplicate candidate, carrying the matched note's text for exact-restatement comparison. */
+interface NearDupCandidate {
+  noteId: string;
+  similarity: number;
+  noteText: string;
+}
 
 /** Final scope a write landed with, after clamping. Never broader than Agent+User(+Company from context). */
 export interface MemoryWriteScope {
@@ -140,7 +147,7 @@ export class MemoryWriteManager {
   /**
    * Execute a single memory write through the guard pipeline:
    * type guard → within-run idempotency → per-run cap → scope clamp →
-   * near-dup guard (supersede-own / dedupe / fail-open) → persist provisional.
+   * near-dup guard (supersede-own / exact-restatement dedupe / fail-open) → persist provisional.
    */
   async ExecuteWrite(request: MemoryWriteRequest, context: MemoryWriteContext): Promise<MemoryWriteResult> {
     const startedAt = Date.now();
@@ -240,8 +247,23 @@ export class MemoryWriteManager {
   // ─── NEAR-DUP GUARD (overridable seam for tests) ───
 
   /**
-   * One in-memory vector check against injectable notes in the same scope.
-   * Returns the strongest hit at/above the threshold, or null.
+   * One in-memory vector check against injectable notes in the same scope,
+   * returning only ACTIONABLE hits:
+   *   - a note written earlier in THIS run (supersede-own candidate — checked
+   *     first because within-run last-write-wins is the stronger contract), or
+   *   - a pre-existing note whose normalized text EXACTLY equals the request's
+   *     (exact-restatement dedupe candidate).
+   *
+   * Near-but-textually-different matches are deliberately dropped so the write
+   * proceeds as a new provisional note. A textual difference may be a
+   * correction — live testing showed "I love pie charts" followed in a later
+   * run by "never use pie charts, bar charts only" being absorbed into the
+   * STALE note (reinforcing it) and the correction silently lost. ADD-only on
+   * mismatch preserves corrections; true paraphrase duplicates are reconciled
+   * by the Memory Manager's LLM hardening dedupe (bounded by the per-run cap
+   * and TTL). The vector query itself survives because it (a) detects own-note
+   * supersede targets and (b) shortlists exact-restatement candidates without
+   * a table scan — exact equality filters AFTER the vector shortlist.
    *
    * Fail-open by design: when the vector service is unavailable or errors, we
    * proceed with the write rather than dropping the user's stated fact — a rare
@@ -255,11 +277,16 @@ export class MemoryWriteManager {
   ): Promise<{ noteId: string; similarity: number } | null> {
     try {
       const matches = await this.queryVectorService(noteText, scope);
-      if (matches.length === 0) {
-        return null;
+      const ownHit = matches.find((m) => this.writtenNoteIds.has(m.noteId));
+      if (ownHit) {
+        return { noteId: ownHit.noteId, similarity: ownHit.similarity };
       }
-      const best = matches[0];
-      return { noteId: best.noteId, similarity: best.similarity };
+      const requestHash = this.normalizeAndHash(noteText);
+      const exactHit = matches.find((m) => this.normalizeAndHash(m.noteText) === requestHash);
+      if (exactHit) {
+        return { noteId: exactHit.noteId, similarity: exactHit.similarity };
+      }
+      return null;
     } catch (error) {
       LogErrorEx({
         message: 'MemoryWriteManager: near-dup check failed — proceeding fail-open with the write',
@@ -273,7 +300,7 @@ export class MemoryWriteManager {
   protected async queryVectorService(
     noteText: string,
     scope: MemoryWriteScope,
-  ): Promise<Array<{ noteId: string; similarity: number }>> {
+  ): Promise<NearDupCandidate[]> {
     const matches = await AIEngine.Instance.FindSimilarAgentNotes(
       noteText,
       scope.agentId,
@@ -282,7 +309,7 @@ export class MemoryWriteManager {
       3,
       this.nearDupSimilarity,
     );
-    return matches.map((m) => ({ noteId: m.note.ID, similarity: m.similarity }));
+    return matches.map((m) => ({ noteId: m.note.ID, similarity: m.similarity, noteText: m.note.Note || '' }));
   }
 
   // ─── PERSISTENCE (overridable seams for tests) ───
@@ -324,7 +351,7 @@ export class MemoryWriteManager {
   }
 
   /**
-   * The request near-duplicates a pre-existing note (from a prior run or the
+   * The request exactly restates a pre-existing note (from a prior run or the
    * Memory Manager). Bump its access stats instead of inserting a duplicate.
    */
   protected async touchExistingNote(
@@ -349,7 +376,7 @@ export class MemoryWriteManager {
     return {
       disposition: 'deduped',
       noteId,
-      reason: 'A very similar memory already exists — its relevance was reinforced instead of duplicating it.',
+      reason: 'This memory already exists verbatim — its relevance was reinforced instead of duplicating it.',
     };
   }
 

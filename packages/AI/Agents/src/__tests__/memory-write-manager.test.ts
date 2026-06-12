@@ -25,8 +25,11 @@ type Outcome = Omit<MemoryWriteResult, 'durationMs' | 'request'>;
  * Test double: overrides the I/O seams (vector search + persistence) while the
  * real guard pipeline and per-run bookkeeping run unmodified.
  */
+type StubNearDup = { noteId: string; similarity: number; noteText: string };
+
 class TestMemoryWriteManager extends MemoryWriteManager {
-  public NearDupResult: { noteId: string; similarity: number } | null = null;
+  /** Multi-match stub for the vector shortlist (rank order preserved). */
+  public NearDupResults: StubNearDup[] = [];
   public ThrowOnVectorQuery = false;
   public PersistedWrites: Array<{ request: MemoryWriteRequest; scope: MemoryWriteScope }> = [];
   public SupersededWrites: Array<{ noteId: string; request: MemoryWriteRequest }> = [];
@@ -34,13 +37,18 @@ class TestMemoryWriteManager extends MemoryWriteManager {
   public FailNextPersist = false;
   private nextNoteId = 1;
 
+  /** Single-match convenience setter (most tests stub one hit). */
+  public set NearDupResult(value: StubNearDup | null) {
+    this.NearDupResults = value ? [value] : [];
+  }
+
   // Overrides the raw vector lookup only — the production findNearDuplicate
-  // (threshold selection + fail-open catch) runs unmodified.
-  protected override async queryVectorService(): Promise<Array<{ noteId: string; similarity: number }>> {
+  // (own-note priority, exact-restatement filter, fail-open catch) runs unmodified.
+  protected override async queryVectorService(): Promise<StubNearDup[]> {
     if (this.ThrowOnVectorQuery) {
       throw new Error('vector service unavailable');
     }
-    return this.NearDupResult ? [this.NearDupResult] : [];
+    return this.NearDupResults;
   }
 
   protected override async persistNewNote(
@@ -144,8 +152,8 @@ describe('MemoryWriteManager', () => {
     it('does not count rejected or deduped requests against the cap', async () => {
       const capped = new TestMemoryWriteManager({ maxWritesPerRun: 1 });
       await capped.ExecuteWrite({ note: '', type: 'Context' }, baseContext); // rejected
-      capped.NearDupResult = { noteId: 'existing-1', similarity: 0.9 };
-      await capped.ExecuteWrite({ note: 'near dup of existing', type: 'Context' }, baseContext); // deduped
+      capped.NearDupResult = { noteId: 'existing-1', similarity: 0.9, noteText: 'exact restatement of existing' };
+      await capped.ExecuteWrite({ note: 'Exact restatement of existing', type: 'Context' }, baseContext); // deduped
       capped.NearDupResult = null;
       const write = await capped.ExecuteWrite({ note: 'a real new fact', type: 'Context' }, baseContext);
       expect(write.disposition).toBe('written');
@@ -177,11 +185,11 @@ describe('MemoryWriteManager', () => {
   });
 
   describe('near-dup guard', () => {
-    it('supersedes a note written earlier in the same run (last write wins)', async () => {
+    it('supersedes a note written earlier in the same run (last write wins, no exact text required)', async () => {
       const first = await manager.ExecuteWrite({ note: 'User loves blue charts', type: 'Preference' }, baseContext);
       expect(first.disposition).toBe('written');
 
-      manager.NearDupResult = { noteId: first.noteId as string, similarity: 0.92 };
+      manager.NearDupResult = { noteId: first.noteId as string, similarity: 0.92, noteText: 'User loves blue charts' };
       const second = await manager.ExecuteWrite({ note: 'User loves red charts, not blue', type: 'Preference' }, baseContext);
 
       expect(second.disposition).toBe('superseded-own');
@@ -190,17 +198,39 @@ describe('MemoryWriteManager', () => {
       expect(manager.PersistedWrites).toHaveLength(1);
     });
 
-    it('dedupes against a pre-existing note instead of inserting', async () => {
-      manager.NearDupResult = { noteId: 'preexisting-1', similarity: 0.88 };
+    it('dedupes only when the request exactly restates a pre-existing note (normalization applied)', async () => {
+      manager.NearDupResult = { noteId: 'preexisting-1', similarity: 0.88, noteText: '  user PREFERS dark   mode ' };
       const result = await manager.ExecuteWrite({ note: 'User prefers dark mode', type: 'Preference' }, baseContext);
       expect(result.disposition).toBe('deduped');
       expect(manager.TouchedNoteIds).toEqual(['preexisting-1']);
       expect(manager.PersistedWrites).toHaveLength(0);
     });
 
+    it('writes a near-duplicate with DIFFERENT text instead of deduping (corrections preserved)', async () => {
+      manager.NearDupResult = { noteId: 'preexisting-1', similarity: 0.9, noteText: 'User loves pie charts for sales data' };
+      const result = await manager.ExecuteWrite(
+        { note: 'User never wants pie charts for sales data; bar charts only', type: 'Preference' },
+        baseContext,
+      );
+      expect(result.disposition).toBe('written');
+      expect(manager.TouchedNoteIds).toHaveLength(0);
+      expect(manager.PersistedWrites).toHaveLength(1);
+    });
+
+    it('an own-note hit outranks an exact pre-existing hit regardless of rank order', async () => {
+      const first = await manager.ExecuteWrite({ note: 'User loves blue charts', type: 'Preference' }, baseContext);
+      manager.NearDupResults = [
+        { noteId: 'stranger-1', similarity: 0.95, noteText: 'User loves teal charts' },
+        { noteId: first.noteId as string, similarity: 0.9, noteText: 'User loves blue charts' },
+      ];
+      const second = await manager.ExecuteWrite({ note: 'User loves green charts now', type: 'Preference' }, baseContext);
+      expect(second.disposition).toBe('superseded-own');
+      expect(second.noteId).toBe(first.noteId);
+    });
+
     it('a superseded write is idempotency-tracked under its new text', async () => {
       const first = await manager.ExecuteWrite({ note: 'User loves blue charts', type: 'Preference' }, baseContext);
-      manager.NearDupResult = { noteId: first.noteId as string, similarity: 0.92 };
+      manager.NearDupResult = { noteId: first.noteId as string, similarity: 0.92, noteText: 'User loves blue charts' };
       await manager.ExecuteWrite({ note: 'User loves red charts', type: 'Preference' }, baseContext);
 
       manager.NearDupResult = null;

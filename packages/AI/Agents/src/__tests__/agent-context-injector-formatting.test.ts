@@ -73,4 +73,24 @@ describe('AgentContextInjector.FormatNotesForInjection', () => {
         ]);
         expect(output).toContain('Scope: Agent + User specific');
     });
+
+    it('renders the recorded date on each note line when available', () => {
+        const output = injector.FormatNotesForInjection([
+            makeNote({ Status: 'Provisional', Note: 'dated fact', __mj_CreatedAt: new Date('2026-06-10T12:00:00Z') }),
+        ]);
+        expect(output).toContain('[Preference, 2026-06-10] (provisional) dated fact');
+    });
+
+    it('renders no dangling comma when the date is missing', () => {
+        const output = injector.FormatNotesForInjection([
+            makeNote({ Status: 'Active', Note: 'dateless fact' }),
+        ]);
+        expect(output).toContain('[Preference] dateless fact');
+        expect(output).not.toContain('[Preference, ]');
+    });
+
+    it('tells the model dates are shown in the precedence policy', () => {
+        const output = injector.FormatNotesForInjection([makeNote({ Note: 'any' })]);
+        expect(output).toContain('(shown on each note)');
+    });
 });

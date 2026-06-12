@@ -623,6 +623,7 @@ to finish.
 - Do NOT record transient task state — the scratchpad owns that
 - Do NOT record instructions or rules — only descriptive facts
 - Optional `scopeHint: 'agent'` stores the memory without tying it to the current user
+- Results arrive on your NEXT turn — never tell the user a memory was saved until you see its result message; if a result is skipped/rejected, tell the user what was NOT saved
 
 The framework deduplicates, caps writes per run, and reports each result back to
 you in a conversation message — do not re-submit a memory once acknowledged.

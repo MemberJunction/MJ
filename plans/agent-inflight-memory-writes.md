@@ -149,7 +149,7 @@ Tool documentation added to the loop system prompt template, in the same style a
 3. **Scope clamp** — force scope to **≤ Agent + User** (+ Company if present in context). A `scopeHint` may *narrow* but never *broaden*. In-flight writes **never** land global/company-wide. Scope-widening is exclusively MM's judgment.
 4. **Near-dup guard** — one in-memory vector check via `AIEngine.FindSimilarAgentNotes` against injectable notes in the same scope. Two outcomes:
    - Hit on a note **written earlier in this same run** → **supersede-own**: update that provisional note's text in place (last-write-wins within a run — "I love blue charts!" then "actually, red charts!" yields one red-charts note, no stale row).
-   - Hit on a **pre-existing** note → bump `AccessCount`/`LastAccessedAt` on it instead of inserting. This kills trivial duplicate storms; *real* cross-run conflict resolution stays deferred to MM (plus recency-wins precedence at injection time in the interim).
+   - Hit on a **pre-existing** note → bump `AccessCount`/`LastAccessedAt` on it instead of inserting **only when the request exactly restates the note** (normalized text equality). Any textual difference writes a new provisional note (ADD-only-strict): live testing showed a correction ("never use pie charts, bar charts only") being absorbed into the stale opposite note by similarity-only dedupe — reinforcing exactly the fact the user just retracted. Paraphrase duplicates this admits are consolidated by MM's hardening dedupe; *real* cross-run conflict resolution stays deferred to MM (plus recency-wins precedence at injection time in the interim).
 5. **Provenance + flags** — `Status='Provisional'`, `AuthoredBy='Agent'`, `ProtectionTier='Standard'`, `SourceAgentRunID`/`SourceConversationID(/DetailID)` stamped, default `ExpiresAt = now + 7 days` (TTL safety net).
 6. **Per-run cap + within-run idempotency** — a run-scoped `MemoryWriteManager` (mirroring `ArtifactToolManager`'s run state) holds a hash set of memories written this run (dedup repeated emissions across turns) and enforces a small cap (a handful, not the MM's 1000) so a runaway loop cannot spam the store.
 7. **Trace** — each write recorded as an agent run step (success/skip/reason), same as artifact tool calls.
@@ -200,6 +200,8 @@ Net: the agent writes "user dislikes blue charts" at Agent+User scope, instantly
 6. **Sub-agent writes** — each agent reads its **own** `AllowMemoryWrite` flag; no inheritance (scope/identity differ).
 7. **Notes only for v1** — no in-flight `AIAgentExample` writes.
 8. **Near-dup threshold** — 0.85 at write time (tighter than MM's 0.60 clustering), constructor-configurable on `MemoryWriteManager`.
+9. **ADD-only-strict dedupe** *(post-implementation revision, from live edge-case testing)* — cross-run `deduped` requires exact normalized-text restatement; near-but-different text always writes. Rationale: similarity-only dedupe silently dropped corrections and reinforced the stale note (observed live), starving MM's contradiction detection of the very signal it needs.
+10. **Dates rendered in injection** *(post-implementation revision)* — each note line carries its recorded date (`[Preference, 2026-06-10] …`) so the memory policy's "prefer the most recent" tiebreaker is actually resolvable; contradictory Active notes can coexist between the every-cycle hardening pass and the less-frequent contradiction-resolution phase. Absolute dates (not relative) keep the injected message byte-stable between note-set changes.
 
 ---
 
