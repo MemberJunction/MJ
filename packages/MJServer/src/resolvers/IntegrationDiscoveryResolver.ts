@@ -1581,14 +1581,20 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     SourceFieldName: f.Name,
                     TargetColumnName: f.Name.replace(/[^A-Za-z0-9_]/g, '_'),
                     TargetSqlType: targetSqlType,
-                    // Synced shadow tables must NOT enforce NOT NULL on non-PK
-                    // columns. The external system (SF, HubSpot, etc.) is the
-                    // source of truth for business data, not for MJ's schema
-                    // constraints — and its describe output often declares
-                    // fields required when real records actually have nulls
-                    // (deprecated, calculated, or edge-case fields). Enforcing
-                    // NOT NULL here just aborts entire batches on one bad row.
-                    IsNullable: !f.IsPrimaryKey,
+                    // Synced shadow tables must NOT enforce NOT NULL on ANY
+                    // column — including the PK. The external system (SF, HubSpot,
+                    // GrowthZone, etc.) is the source of truth for business data,
+                    // not for MJ's schema constraints — and its describe output
+                    // often declares fields required when real records actually
+                    // have nulls (deprecated, calculated, or edge-case fields).
+                    // Integration PKs are SOFT (tracked via SchemaBuilder.SoftPrimaryKeys
+                    // for upsert/dedup; identity falls back to a content-hash when the
+                    // PK is null/partial — §4). Emitting the PK column NOT NULL breaks
+                    // that fallback: a source row with a null PK (e.g. nested/derived
+                    // records like event sponsors, contact phones) aborts the insert
+                    // before content-hash can save it. So the soft-PK column is nullable
+                    // too; uniqueness/identity is enforced logically, not by the DDL.
+                    IsNullable: true,
                     MaxLength: f.MaxLength,
                     Precision: f.Precision,
                     Scale: f.Scale,

@@ -985,7 +985,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const ios = this.GetIntegrationObjectsByIntegrationID(config.companyIntegration.IntegrationID);
         if (!ios || ios.length === 0) return null;
         const ioByName = new Map<string, string>();   // lower(IO.Name) → IO.ID (upper)
-        for (const io of ios) ioByName.set(io.Name.toLowerCase(), io.ID.toUpperCase());
+        const ioById = new Map<string, MJIntegrationObjectEntity>();   // IO.ID (upper) → IO
+        for (const io of ios) { ioByName.set(io.Name.toLowerCase(), io.ID.toUpperCase()); ioById.set(io.ID.toUpperCase(), io); }
 
         const mapToIoId = new Map<string, string>();   // entityMap.ID → IO.ID
         const selectedIoIds = new Set<string>();
@@ -998,9 +999,26 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const parentsByIoId = new Map<string, Set<string>>();
         for (const ioId of selectedIoIds) {
             const set = new Set<string>();
+            // (1) hard FK pointer on a field (RelatedIntegrationObjectID).
             for (const f of this.GetIntegrationObjectFields(ioId)) {
                 const parent = f.RelatedIntegrationObjectID?.toUpperCase();
                 if (parent && parent !== ioId && selectedIoIds.has(parent)) set.add(parent);
+            }
+            // (2) SOFT-FK form (parent-iterated children): the parent is named in the IO's
+            // Configuration (parentObjectName / ReferencedType), NOT via RelatedIntegrationObjectID —
+            // which is null for soft-FK connectors. Without this, nulling the FK pointer collapses the
+            // dependency graph → children run in layer 0 alongside their door → ZERO_PARENTS on the
+            // first sync (door not yet populated). Resolve the parent name → its IO id so doors are
+            // ordered before their children in a SINGLE pass.
+            const cfgRaw = ioById.get(ioId)?.Configuration;
+            if (cfgRaw) {
+                try {
+                    const cfg = JSON.parse(cfgRaw) as { parentObjectName?: string; ReferencedType?: string };
+                    for (const name of [cfg.parentObjectName, cfg.ReferencedType]) {
+                        const parent = name ? ioByName.get(name.toLowerCase()) : undefined;
+                        if (parent && parent !== ioId && selectedIoIds.has(parent)) set.add(parent);
+                    }
+                } catch { /* non-JSON Configuration → no soft-FK parent to add */ }
             }
             parentsByIoId.set(ioId, set);
         }
@@ -1475,6 +1493,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 CurrentOffset: currentOffset,
                 CurrentCursor: currentCursor,
                 AfterKeyValue: currentAfterKey ?? null,   // §7 keyset/seek resume (connector opt-in)
+                // §7: expose the per-credential adaptive AIMD bucket + concurrency cap so a connector's
+                // INNER request loop (second-layer / parent-iterated objects) is governed by the SAME
+                // adaptive rate as the object level, instead of a fixed self-throttle that defeats
+                // concurrency and ignores 429 back-off. Back-compat: connectors that ignore these are unchanged.
+                RateLimitAcquire: () => this.rateLimit(config),
+                RateLimitReport: (throttledErr?: unknown) => this.reportRateOutcome(config, throttledErr),
+                MaxConcurrency: Math.max(1, this.getConfigOverrides(config).maxConcurrency ?? config.connector.MaxConcurrencyHint ?? 4),
             };
 
             logger?.emit('sync.fetch.batch.start', {
