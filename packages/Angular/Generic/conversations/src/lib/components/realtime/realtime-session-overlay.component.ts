@@ -685,6 +685,18 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.Disclosure.Raise('text');
   }
 
+  /**
+   * The app-bar's "Return to pure audio": steps the volatile session level back to 0
+   * (the two-way door the one-way Raise deliberately isn't) and closes any Details peek
+   * so the orb truly owns the screen again. The cross-session ratchet is untouched —
+   * the gear's `simple` density makes pure audio durable instead.
+   */
+  public OnPureAudio(): void {
+    this.Disclosure.ReturnToPureAudio();
+    this.DetailsPeek = false;
+    this.cdr.markForCheck();
+  }
+
   /** App-bar Minimize: hide the call view (CSS) — the call stays fully live. */
   public OnMinimize(): void {
     this.voice.SetMinimized(true);

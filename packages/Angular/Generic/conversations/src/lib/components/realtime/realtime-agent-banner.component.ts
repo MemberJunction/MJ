@@ -80,6 +80,9 @@ export class RealtimeAgentBannerComponent {
   /** Whether the Minimize control renders (live sessions only). */
   @Input() ShowMinimize = false;
 
+  /** Whether the "Return to pure audio" control renders (live + disclosure level above 0). */
+  @Input() ShowPureAudio = false;
+
   /** The user's current interface-density override (selected state in the gear popover). */
   @Input() Density: RealtimeUxDensity = 'auto';
 
@@ -97,6 +100,9 @@ export class RealtimeAgentBannerComponent {
 
   /** Emitted when the user minimizes the call view (the call stays live). */
   @Output() MinimizeRequested = new EventEmitter<void>();
+
+  /** Emitted when the user asks to return to the pure-audio surface (level 0, this session). */
+  @Output() PureAudioRequested = new EventEmitter<void>();
 
   /** Emitted when the user ends the call from the app-bar's End pill. */
   @Output() EndRequested = new EventEmitter<void>();

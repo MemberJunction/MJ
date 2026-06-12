@@ -71,6 +71,13 @@
 
     <!-- Disclosure-gated app-bar action cluster (the overlay decides what renders). -->
     <div class="bar-actions">
+      @if (ShowPureAudio) {
+        <button type="button" class="iconb" (click)="PureAudioRequested.emit()"
+                title="Return to pure audio — just the orb and the voice"
+                aria-label="Return to the pure-audio view">
+          <i class="fa-regular fa-circle" aria-hidden="true"></i>
+        </button>
+      }
       @if (ShowCaptionsControl) {
         <button type="button" class="iconb" [class.iconb--on]="CaptionsOn"
                 (click)="ToggleCaptions()"

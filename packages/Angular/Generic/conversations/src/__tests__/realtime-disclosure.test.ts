@@ -157,6 +157,25 @@ describe('RealtimeDisclosureModel', () => {
     expect(m.SessionLevel).toBe(0);
   });
 
+  it('ReturnToPureAudio steps the volatile level back to 0 WITHOUT touching the ratchet', () => {
+    const m = new RealtimeDisclosureModel();
+    m.Load(SerializeUxMilestones({ Level: 2, Calls: 1, Density: 'auto' }));
+    m.Raise('power');
+    let emissions = 0;
+    m.Changed$.subscribe(() => emissions++);
+
+    m.ReturnToPureAudio();
+    expect(m.SessionLevel).toBe(0);
+    expect(m.ShowThread).toBe(false);
+    expect(m.Milestones.Level).toBe(2); // the cross-session ratchet is untouched
+    m.ReturnToPureAudio(); // already there — no extra emission
+    expect(emissions).toBe(1);
+
+    // the user can step back up afterward — the door swings both ways
+    expect(m.Raise('text')).toBe(true);
+    expect(m.SessionLevel).toBe(1);
+  });
+
   it('SetDensity applies immediately — simple retracts even a mid-call console', () => {
     const m = new RealtimeDisclosureModel();
     m.Load(SerializeUxMilestones({ Level: 4, Calls: 9, Density: 'auto' }));

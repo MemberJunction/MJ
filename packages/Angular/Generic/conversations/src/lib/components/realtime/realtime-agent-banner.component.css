@@ -126,6 +126,28 @@
 @keyframes orb-ring { 0% { transform: scale(1); opacity: .6 } 100% { transform: scale(1.5); opacity: 0 } }
 @keyframes orb-bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
 
+/* ---------- Audio-reactive mode ----------
+   The overlay's rAF meter loop writes --voice-out / --voice-in + data attributes on
+   .call-overlay; custom properties INHERIT into this component and :host-context()
+   reaches the ancestor's attributes — so the app-bar orb rides the SAME live signal as
+   the hero (scaled subtler at app-bar size). Un-metered sessions keep the keyframes. */
+:host-context(.call-overlay[data-audio-live='true']) .agent-orb:not(.agent-orb--review) {
+  animation: none;
+  transform: scale(calc(1 + var(--voice-out, 0) * 0.14));
+  transition: transform 70ms linear;
+}
+:host-context(.call-overlay[data-audio-live='true']) .agent-orb:not(.agent-orb--review)::after {
+  animation: none;
+  opacity: calc(0.15 + var(--voice-out, 0) * 0.85);
+}
+:host-context(.call-overlay[data-audio-live='true'][data-voice-dir='user']) .agent-orb:not(.agent-orb--review) {
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--mj-status-success) 16%, transparent),
+    0 0 30px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-status-success) 60%, white), var(--mj-brand-primary) 65%);
+}
+
 /* ---------- Voice activity waveform ---------- */
 .waveform {
   display: flex;

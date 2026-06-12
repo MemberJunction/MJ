@@ -190,6 +190,21 @@ export class RealtimeDisclosureModel {
   }
 
   /**
+   * EXPLICIT step back down to the pure-audio surface (level 0) for THIS session —
+   * the inverse door of the hero's "Show the conversation" / T-to-type reveals. Volatile
+   * only: the cross-session milestones ratchet is untouched (use the gear's `simple`
+   * density to make pure audio the durable default). Raising is one-way for CONTENT;
+   * the USER may always walk back down.
+   */
+  public ReturnToPureAudio(): void {
+    if (this.SessionLevel === 0) {
+      return;
+    }
+    this.SessionLevel = 0;
+    this.Changed$.next();
+  }
+
+  /**
    * Applies the gear's manual density override. Takes effect immediately — `simple`
    * returns even a mid-call console to the day-one surface (content tabs keep their
    * content; only the chrome retracts). The caller persists the serialized milestones.
