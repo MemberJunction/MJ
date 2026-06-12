@@ -1,0 +1,65 @@
+{
+  "runID": "connector-openwater-1781167742688-9bdbe4c8",
+  "vendor": "openwater",
+  "date": "2026-06-11",
+  "mode": "credential-free",
+  "branch": "connectors/openwater_growthzone",
+  "verdict": "connector-complete-credential-free; full floor-check blocked by branch build defect",
+  "floorCheckPass": false,
+  "floorCheckBlockedReason": "hybrid-e2e through MJAPI could not run: MJ runtime does not build from source on this branch (botched rebase 333836b39d dropped GenericDatabaseProvider.ComputeRunViewRLSWhereClause + LocalCacheManager.GenerateRunViewFingerprint signature + RLS return type, which origin/next has)",
+  "connector": {
+    "file": "packages/Integration/connectors/src/OpenWaterConnector.ts",
+    "linesOfCode": 1067,
+    "compiles": true,
+    "testFile": "packages/Integration/connectors/src/__tests__/OpenWaterConnector.test.ts",
+    "testsPassed": 34,
+    "genericCRUDIOs": 6,
+    "overriddenCRUDIOs": 3,
+    "overrides": ["Session (typeId)", "JudgeAssignment (judgeUserId+roundId)", "ScheduleTimeSlot (scheduleDayIds, create+update)"]
+  },
+  "metadata": {
+    "file": "metadata/integrations/openwater/.openwater.integration.json",
+    "objects": 25,
+    "fields": 165,
+    "doors": 8,
+    "nestedIOsWithAccessPath": 12,
+    "deployReady": true,
+    "credentialTypeAuthored": "OpenWater API"
+  },
+  "source": {
+    "kind": "REST+OpenAPI",
+    "specVersion": "OpenAPI 2.0",
+    "specPaths": 92, "specOps": 110, "specSchemas": 231, "specTags": 18,
+    "specFile": "packages/Integration/connectors-registry/openwater/sources/openwater-openapi-v2.json"
+  },
+  "verification": {
+    "planReview": "approved (round 2, Sonnet, 0 blocking)",
+    "extractReviewGate": "clean (0 blocking after convergence 4->2->1->0)",
+    "ladder": {
+      "T0_StaticValidation": "pass",
+      "T1_InvariantValidator": "pass (6/6)",
+      "T2_CrossProgrammaticConsistency": "pass",
+      "T3_DocStructureSelfCheck": "pass (after framework fix)",
+      "T4_MockedFixture": "pass (34/34)",
+      "T5_MockHTTPServer": "skipped (no-fixtures)",
+      "T6_LocalSQLiteBackend": "skipped (no-fixtures)",
+      "T7_OpenAPIValidation": "pass (46/46 requests vs spec; 9 advisory orphan-GETs = out-of-scope)"
+    },
+    "dbMigrate": "succeeded (fresh MJ_OW_E2E on sql-ow:1446; full __mj schema; 324 entities)",
+    "achievedCeiling": "format-verified-no-creds + mock-floor + db-migrate-proven",
+    "residualGap": "live-data round-trip + write side-effects (RequiresLiveVerification, no credential); hybrid-e2e through MJAPI (env-blocked)"
+  },
+  "frameworkFixes": [
+    {"file": "packages/Integration/engine/src/RecordFlatten.ts", "what": "recovered helper dropped by rebase (flattenRecord/hasNestedObject)", "validated": "442/442 engine tests pass"},
+    {"file": "packages/Integration/engine/src/KeySerialization.ts", "what": "recovered helper dropped by rebase (serializeKeyValue)", "validated": "442/442 engine tests pass"},
+    {"file": "packages/Integration/connector-builder-workshop/scripts/enforce-finding-floor.mjs", "what": "deterministically stamp non-nullable + deploy slots the extractor omits (Status, SupportsPagination, PaginationType, IntegrationID, IntegrationObjectID, MetadataSource)", "validated": "215+381 slots stamped on openwater; durable for all connectors"},
+    {"file": "packages/MCP/mj-test-runner/src/tiers/t3DocSelfCheck.ts", "what": "MetadataSource-aware: Declared objects not a false structure-drift", "validated": "T3 now PASS"},
+    {"file": "packages/MCP/mj-test-runner/src/tiers/t7OpenApi.ts", "what": "broaden spec-file matcher to *openapi*.json/*swagger*.json", "validated": "T7 now PASS 46/46"}
+  ],
+  "envWorkaroundsLocalUncommitted": [
+    "renamed duplicate-version migration V202606021200__...Widen... -> V202606021201 (Flyway/Skyway rejected the dup)",
+    "synced fresh sql-dialect dist into schema-builder nested stale 5.40.2 copy",
+    "created .env + mj.config.cjs enableAdvancedGeneration:false for isolated infra (sql-ow:1446 / MJ_OW_E2E / :4012)"
+  ],
+  "commitMadeOrPR": false
+}

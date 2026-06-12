@@ -1,0 +1,197 @@
+{
+  "Entries": [
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing the GraphQL endpoint URL and REST utility endpoint base URL for the Path LMS Reporting API",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.GraphQLEndpoint",
+      "Excerpt": "Base URL: https://data-api.pathlms.com. GraphQL Query Endpoint: POST {{baseURL}}/graphql"
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing the token endpoint URL for the two-step auth flow",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenEndpoint",
+      "Excerpt": "Generate Access Token Endpoint: POST {{baseURL}}/api/v1/getToken"
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing the two-step-token auth flow: POST x-www-form-urlencoded {applicationId, applicationSecret} to /api/v1/getToken returns a 12-hour bearer token",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "curl --location '{{baseURL}}/api/v1/getToken' --header 'Content-Type: application/x-www-form-urlencoded' --data-urlencode 'applicationId={{ClientID}}' --data-urlencode 'applicationSecret={{ClientSecret}}'. Response: {\"token\": \"Bearer yourBearerToken\"}"
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing the exact Authorization header format for all GraphQL requests",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "--header 'Authorization: Bearer yourBearerToken'"
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing that token payload uses x-www-form-urlencoded content type",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenRequestContentType",
+      "Excerpt": "Note: Your request should contain a x-www-form-urlencoded payload with an applicationId and an applicationSecret key."
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing the token request parameter names: applicationId and applicationSecret",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenRequestParams",
+      "Excerpt": "--data-urlencode 'applicationId={{ClientID}}' --data-urlencode 'applicationSecret={{ClientSecret}}'"
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing token lifetime of 12 hours with no refresh token — must re-mint on expiry",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": [
+        "integration.Configuration.TokenLifetimeHours",
+        "integration.Configuration.RefreshSupported"
+      ],
+      "Excerpt": "Note: The bearer token that is returned is valid for 12 hours from the time you generate the token. Once the token has expired, you will need to generate a new token."
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing offset/limit pagination as the vendor-wide pagination model",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "limit: Defines how many records are returned. offset: Defines an offset value. For example, if you define offset as 50 and limit as 50, the response will return records 51-101."
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Confirming zero mutations and zero subscriptions in the SDL — pull-only API, no write capability",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteCapability",
+      "Excerpt": "SpectaQL HTML at https://data-api.pathlms.com/ renders the full GraphQL SDL: 17 Query-type fields, 0 mutation fields, 0 subscription fields. Confirmed by schema_extracted.json: mutationCount=0, subscriptionCount=0."
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Confirming DefaultSyncDirection=Pull — the Reporting API is read-only",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DefaultSyncDirection",
+      "Excerpt": "The Path LMS Reporting API is a GraphQL-based API designed to provide efficient data processing and flexible querying capabilities. [No mutations documented]"
+    },
+    {
+      "URL": "file:connectors-registry/path-lms/sources/schema_extracted.json",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Confirming schema statistics: 17 queries (1 utility root + 16 operative), 93 object types, 0 mutations, 0 subscriptions. Source: SpectaQL HTML extraction.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.SDLStats",
+      "Excerpt": "{\"queryCount\": 17, \"typeCount\": 93, \"mutationCount\": 0, \"subscriptionCount\": 0}"
+    },
+    {
+      "URL": "file:connectors-registry/path-lms/sources/schema_extracted.json",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing universalPK hint: 'id' field present as primary identifier on all concrete types with identity fields (Assessment, Assignment, Course, Webinar, Order, User, BaseTeam, etc.) — >95% coverage across named object types",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.Configuration.universalPK",
+      "Excerpt": "Assessment.id, Assignment.id, Certificate.id, Course.id, Webinar.id, Order.id, User.id, BaseTeam.id, BaseAccount.id — 'id' field consistent across all concrete types in the SDL. userId appears on result/report types referencing the User entity."
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "GAP DOCUMENTED: No rate limit documentation found in any credential-free source. BatchMaxRequestCount and BatchRequestWaitTime set to -1 (unknown). Verify with Blue Sky eLearn support.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "No rate limit documentation found in SpectaQL docs page at data-api.pathlms.com/. No X-RateLimit-* headers mentioned. Gap documented; -1 = unknown."
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing IncrementalSyncCapability=false at the integration level. The SDL exposes startDate/endDate filter arguments but these are event-date filters, not modification-time watermarks. No updatedAt/modifiedSince cursor documented anywhere in the SDL.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "startDate: Start date to filter report (String YYYY-MM-DD). endDate: End date to filter report (String YYYY-MM-DD). These filter by event activity date, not by record modification time. No updatedSince or modifiedAfter parameter documented in any query in the SDL."
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Establishing GraphQL nested-container query model: account and teams are L1 scope containers; all sub-reports are accessed as fields within them with per-field arguments",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.GraphQLQueryModel",
+      "Excerpt": "This query will allow you access to account data. Users can call this query with a valid authorization access token. All queries under this top level query will report data with account data. [Account type has 63 sub-fields, all with offset/limit pagination arguments]"
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-10T00:00:00.000Z",
+      "UsedFor": "Documenting the out-of-scope admin/content API at pathlms.com/api/v1 — separate REST API for course/user/enrollment management, NOT part of the Reporting API connector scope",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "The Path LMS Reporting API is distinct from the admin API at pathlms.com/api/v1. The 'OutOfScopeObjectFamilies' list captures the admin/content object surface (users, courses, enrollments, etc.) and the task-provided scope decision that these are deferred in favor of the GraphQL Reporting API surface."
+    },
+    {
+      "URL": "packages/Integration/connectors-registry/path-lms/scripts/fix-oos-spec-mandated.ts",
+      "AccessedAt": "2026-06-10T22:23:45.072Z",
+      "UsedFor": "Setting OutOfScopeObjectFamilies to the EXACT spec-mandated list from the workflow task prompt. These 19 items are the admin/content API object families in the broader Path LMS product (pathlms.com/api/v1) that are not part of the Reporting GraphQL API surface (data-api.pathlms.com/graphql). Scope decision: defer to Reporting-only connector for analytics use case.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.OutOfScopeObjectFamilies",
+      "Excerpt": "Spec-mandated list (workflow task prompt, exact): [\"users\",\"courses\",\"course_presentations\",\"enrollments\",\"assignments\",\"assessments\",\"surveys\",\"certificates\",\"certified_credits\",\"credits\",\"events\",\"in_person_events\",\"live_web_events\",\"event_registrations\",\"live_web_event_registrations\",\"scorm_content\",\"transactions\",\"badges\"]. These object families exist in the Path LMS admin/content REST API (pathlms.com/api/v1) but are not exposed via the Reporting GraphQL API. OutOfScopeReason: \"MJ clients consume Path LMS analytics via the GraphQL Reporting API (data-api.pathlms.com/graphql); the broader Path LMS admin/content product + the CSV-export egress are real but not the reachable/useful object surface for this use case. Reporting query set modelled deeply from the SpectaQL SDL; the rest deferred-with-reason.\""
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-11T00:16:35.595Z",
+      "UsedFor": "Establishing the public credential-free schema URL. The SpectaQL-rendered page at https://data-api.pathlms.com/ embeds the complete GraphQL SDL and is the schema-of-record for the Path LMS Reporting API connector. Live GraphQL introspection at /graphql is auth-gated (JWT required at Apollo context()). The SpectaQL page is the sole credential-free, machine-parseable schema surface.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.SchemaURL",
+      "Excerpt": "SpectaQL docs page at https://data-api.pathlms.com/ — HTTP 200, 1,196,184 bytes, credential-free. Embeds full GraphQL SDL: 93 OBJECT types, 17 Query operations, 0 mutations, 0 subscriptions. Live /graphql endpoint confirms auth gate via HTTP 500 \"Context creation failed: JsonWebTokenError: jwt must be provided\"."
+    },
+    {
+      "URL": "https://data-api.pathlms.com/",
+      "AccessedAt": "2026-06-11T00:16:35.595Z",
+      "UsedFor": "Establishing the TotalCount companion-field pattern on Account and Team types. The SpectaQL SDL documents <subReportName>TotalCount: Int! fields alongside each paginated sub-report array on Account (e.g. usersTotalCount, coursesTotalCount, ordersTotalCount, assessmentsTotalCount, etc.) and Team. The connector reads these companion fields to compute total pages without an extra round-trip.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults.TotalCountFieldPattern",
+      "Excerpt": "From SpectaQL Account type definition: \"usersTotalCount: Int!\" — \"This query will return a total count of users for an account.\" \"coursesTotalCount: Int!\", \"assessmentsTotalCount: Int!\", \"assignmentsTotalCount: Int!\", \"certificatesTotalCount: Int!\", \"certifiedCreditsTotalCount: Int!\", \"coursePresentationsTotalCount: Int!\", \"eventsTotalCount: Int!\", \"inPersonEventsTotalCount: Int!\", \"liveWebEventsTotalCount: Int!\", \"scormTotalCount: Int!\", \"surveysTotalCount: Int!\", \"ordersTotalCount: Int!\", \"orderItemsTotalCount: Int!\", \"refundsTotalCount: Int!\", \"refundsDetailsTotalCount: Int!\", \"salesByCategoryTotalCount: Int!\", \"salesByUserTotalCount: Int!\", \"salesByBundleTotalCount: Int!\", \"commerceSalesByContentTotalCount: Int!\", \"couponsTotalCount: Int!\", \"discountsTotalCount: Int!\", \"externalActivityTotalCount: Int!\" — 24 TotalCount companion fields documented in Account type. Pattern: <subReportName>TotalCount."
+    }
+  ]
+}

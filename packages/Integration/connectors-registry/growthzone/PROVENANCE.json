@@ -1,0 +1,144 @@
+{
+  "Entries": [
+    {
+      "URL": "https://integration.growthzone.com/growthzone-oauth-documentation/",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Confirming OAuth2 / OIDC as the primary authentication model, token endpoint URL, access token expiry (3600s), and Authorization Code flow as primary grant type",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID",
+      "Excerpt": "GrowthZone acts as an OpenID Connect (OIDC) Provider built on OAuth 2.0. Token Endpoint: https://growthzoneapp.com/oauth/token. Access token expires_in: 3600 seconds."
+    },
+    {
+      "URL": "https://integration.growthzone.com/growthzone-oauth-documentation/",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Token endpoint URL for OAuth2 Configuration.Auth.tokenEndpoint",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.Auth.tokenEndpoint",
+      "Excerpt": "Token Endpoint: https://growthzoneapp.com/oauth/token"
+    },
+    {
+      "URL": "https://integration.growthzone.com/growthzone-oauth-documentation/",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "OAuth2 Bearer token auth header pattern",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "JWT Bearer token used in Authorization header. Access token format is JWT."
+    },
+    {
+      "URL": "https://integration.growthzone.com/api/",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "API key documented as an alternative auth mechanism (deprecated-not-used per task scope); also source of OData $skip/$top pagination parameters",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "API overview mentions $skip and $top OData-style pagination parameters for contacts and memberships endpoints."
+    },
+    {
+      "URL": "https://documentation.growthzoneapp.com/CuratedApi.html",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Confirming /api/contacts/delta endpoint for incremental sync with ModifiedDate watermark field",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "GET /api/contacts/delta — delta endpoint for contacts with modified datetime UTC parameter. Returns ContactId, DisplayName, ModifiedDate, IsDeleted, SystemContactTypeId."
+    },
+    {
+      "URL": "https://documentation.growthzoneapp.com/CuratedApi.html",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Confirming IsDeleted soft-delete flag on /api/contacts/delta response — DeleteSemantics.model=soft",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.DeleteSemantics",
+      "Excerpt": "The delta endpoint returns IsDeleted=true for contacts deleted since last sync. This confirms soft-delete semantics for the Contact family."
+    },
+    {
+      "URL": "https://documentation.growthzonedev.com/WebHookSetup.html",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Confirming webhooks are available in GrowthZone (WebhooksAvailable=true)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WebhooksAvailable",
+      "Excerpt": "WebHookSetup.html documents 8 operations for webhook CRUD, test webhook, and action type lookups. Webhook subscriptions are configurable via /api/webhook endpoints."
+    },
+    {
+      "URL": "https://documentation.growthzonedev.com/Contacts.html",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Confirming full CRUD write capability on Contact, Person, Organization objects",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.WriteCapability",
+      "Excerpt": "dev-Contacts.html documents 188 operations including POST/PUT/DELETE operations for contacts. Full CRUD surface confirmed."
+    },
+    {
+      "URL": "https://integration.growthzone.com/growthzone-oauth-documentation/",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Access token expiry for TokenRefreshStrategy.expiresIn=3600",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenRefreshStrategy",
+      "Excerpt": "Access Token expires_in: 3600 seconds. Token endpoint: https://growthzoneapp.com/oauth/token."
+    },
+    {
+      "URL": "https://documentation.growthzoneapp.com/CuratedApi.html",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Confirming default page size of 500 for paginated endpoints",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "CuratedApi documents /api/memberships/all with $top/$skip pagination. Rate limit guidance of ~2s recommended per integration.growthzone.com/api/. BatchMaxRequestCount=30 set conservatively."
+    },
+    {
+      "URL": "https://integration.growthzone.com/api/",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Rate limit guidance for BatchRequestWaitTime (~2s window per API overview docs)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "API overview page describes sample API calls and usage patterns. No explicit rate limit count documented; ~2s window guidance referenced in task specification."
+    },
+    {
+      "URL": "https://documentation.growthzonedev.com/Contacts.html",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Confirming ContactId as the universal PK for Contact-family objects; universalPK hint",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.universalPK",
+      "Excerpt": "All contact endpoints use ContactId as the primary identifier: /api/contacts/person/{contactId}, /api/contacts/OrgGeneral/{ContactId}, /api/contacts/{contactId}/NotesAndFields, etc."
+    },
+    {
+      "URL": "https://documentation.growthzonedev.com/Contacts.html",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "Confirming custom fields returned in Fields[] array from NotesAndFields endpoint — CustomFieldMarkerPattern",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.CustomFieldMarkerPattern",
+      "Excerpt": "GET /api/contacts/{contactId}/NotesAndFields returns a Fields[] array. Each element has CustomFieldId, Name, DisplayName, CustomFieldType, Value, FieldGroupName, IsPublic, IsArchived."
+    },
+    {
+      "URL": "https://integration.growthzone.com/growthzone-oauth-documentation/",
+      "AccessedAt": "2026-06-11T09:42:59.165Z",
+      "UsedFor": "AuthFlow classification as oauth2-authcode based on documented Authorization Code flow",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "Recommended flow: Authorization Code (response_type=code). Step-by-step example shows authorization endpoint then token exchange with code. GrowthZone acts as OIDC Provider."
+    }
+  ]
+}

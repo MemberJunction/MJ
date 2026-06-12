@@ -1,0 +1,165 @@
+{
+  "SourcesMetadata": {
+    "VendorName": "PropFuel",
+    "AuditedAt": "2026-06-08T23:58:50.844Z",
+    "AuditScope": "Discover authoritative documentation for PropFuel's API surface, particularly the data export file-feed integration",
+    "FindingSummary": "PropFuel's official documentation is dispersed across a support portal with limited machine-readable specs. No OpenAPI/Swagger specification, Postman collection, or comprehensive API reference discovered. All documented sources are HTML-based help articles with operational (not technical) focus."
+  },
+  "Sources": [
+    {
+      "URL": "https://help.propfuel.com/en/categories/1371649",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "PropFuel Connectors & Fields (Help Center Category)",
+      "Description": "Official help center category covering 57+ articles on connector setup, field mapping, and integration instructions. Primary official documentation for third-party system integrations.",
+      "CoversTaxonomies": ["DataExportFileList", "DataExportFileDownload", "DataExportFileAcknowledge", "ConnectorAuthentication"],
+      "AccessNotes": "Publicly accessible; no authentication required. Full category listing verified 2026-06-08.",
+      "EvidenceStrength": "ExplicitStatement",
+      "RefreshFrequency": "Appears to be updated regularly (product updates referenced)"
+    },
+    {
+      "URL": "https://help.propfuel.com/en/articles/5714945",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "PropFuel Connectors: How to Integrate PropFuel With Other Systems",
+      "Description": "Official help article explaining PropFuel's integration architecture. Covers 50+ connectors, field mapping, bidirectional data sync, and general integration setup. Directs to individual connector docs for specific API details.",
+      "CoversTaxonomies": ["ConnectorOverview", "ConnectorAuthentication", "FieldMapping", "BidirectionalSync"],
+      "AccessNotes": "Publicly accessible. This is the landing article for all integration documentation.",
+      "EvidenceStrength": "ExplicitStatement",
+      "Note": "Does NOT contain specific API endpoint documentation; points to per-connector articles instead"
+    },
+    {
+      "URL": "https://help.propfuel.com/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "PropFuel Help Center (Main Portal)",
+      "Description": "Official support portal hosting all PropFuel documentation. Organized into: Getting Started (23 articles), Connectors & Fields (57 articles), Email Campaigns (31), Website Engagement (9), SMS Campaigns (10), Analysis & Reporting (16), Campaign Guides (15), and Additional Resources (31).",
+      "CoversTaxonomies": ["ConnectorOverview"],
+      "AccessNotes": "Publicly accessible portal. No developer/API section discovered.",
+      "EvidenceStrength": "ImpliedFromExample",
+      "Gap": "No dedicated API reference, developer portal, or machine-readable schema available at this location"
+    },
+    {
+      "URL": "https://help.propfuel.com/en/articles/5718977",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "iMIS & iMIS EMS (Cloud) — Connector Documentation",
+      "Description": "Specific connector documentation for iMIS integration. Specifies three required credentials: Username, Password, and API URL. Documents the GetParty REST API endpoint. References IQA (Inquiry/Query Approach) for data pulling and custom table write-backs.",
+      "CoversTaxonomies": ["ConnectorAuthentication", "ConnectorWriteBack"],
+      "AccessNotes": "Publicly accessible. Limited to iMIS specifics; shows pattern for other connectors.",
+      "EvidenceStrength": "ExplicitStatement",
+      "Note": "Write-back details deferred to 'talk to your account manager' — not documented in help center"
+    },
+    {
+      "URL": "https://www.propfuel.com/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Title": "PropFuel Marketing Website",
+      "Description": "Official product website. Describes PropFuel as an AI-powered member insights and engagement platform. Mentions integration with major AMS platforms (Nimble AMS, Fonteva, iMIS, YourMembership, MemberClicks). Focuses on business value, not technical specifications.",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Publicly accessible; marketing-focused, not technical documentation.",
+      "EvidenceStrength": "ImpliedFromExample",
+      "Gap": "No technical API documentation on marketing site"
+    },
+    {
+      "URL": "https://www.propfuel.com/capabilities",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "PropFuel Capabilities",
+      "Description": "High-level overview of PropFuel's feature set: Insights Engine, Automation Engine (70+ templates), Engagement Engine (email/web/SMS), AI-powered personalization, bidirectional AMS sync.",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Publicly accessible; marketing content, not technical reference.",
+      "EvidenceStrength": "ImpliedFromExample",
+      "Gap": "No API endpoint or integration technical details"
+    },
+    {
+      "URL": "https://help.propfuel.com/en/articles/5717441",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Title": "Types of Workflow Actions in PropFuel",
+      "Description": "Help article documenting PropFuel's workflow action types and automation capabilities. Relevant for understanding what actions connectors can trigger.",
+      "CoversTaxonomies": ["WorkflowActions"],
+      "AccessNotes": "Publicly accessible.",
+      "EvidenceStrength": "ImpliedFromExample"
+    }
+  ],
+  "SourceGaps": [
+    {
+      "Area": "Machine-Readable API Schema",
+      "Reason": "No OpenAPI/Swagger specification, GraphQL SDL, or Postman collection discovered in public sources. PropFuel does not appear to publish a formal machine-readable contract for third-party API consumers.",
+      "Severity": "HIGH",
+      "Workaround": "Connector must implement discovery dynamically (via introspection endpoints if available) or rely on human-compiled help articles for endpoint/field information."
+    },
+    {
+      "Area": "API Endpoint Reference",
+      "Reason": "No comprehensive API endpoint documentation. Individual connector help articles (like iMIS) show examples, but a canonical API reference is absent. The data export file-feed context (provided by user) is the most specific documented API surface.",
+      "Severity": "HIGH",
+      "Workaround": "Connector must derive endpoints from help articles, user-provided context, or reverse-engineer from live system behavior if credentials available."
+    },
+    {
+      "Area": "Response Schema & Data Types",
+      "Reason": "Help articles do not document request/response payload schemas, field types, constraints (max length, required vs optional), or value enumerations.",
+      "Severity": "HIGH",
+      "Workaround": "Schema inference from live data samples or live introspection at runtime."
+    },
+    {
+      "Area": "Authentication & Authorization",
+      "Reason": "Individual connectors specify their own auth requirements (OAuth, API keys, username/password). No unified AuthN/AuthZ spec or scope/permission documentation for PropFuel's own API.",
+      "Severity": "MEDIUM",
+      "Workaround": "Per-connector help articles document auth details; data export context specifies Bearer token. Assume each connector/surface has its own auth scheme."
+    },
+    {
+      "Area": "Error Handling & Retry Semantics",
+      "Reason": "No documented error codes, HTTP status interpretations, or recommended retry strategies.",
+      "Severity": "MEDIUM",
+      "Workaround": "Implement standard REST error handling; derive specifics from live error responses."
+    },
+    {
+      "Area": "Rate Limiting & Throughput",
+      "Reason": "No documented rate limits, batch operation limits, or request/second budgets.",
+      "Severity": "MEDIUM",
+      "Workaround": "Implement adaptive rate limiting based on live 429 / rate-limit headers; start conservative."
+    },
+    {
+      "Area": "Pagination & Cursor Semantics",
+      "Reason": "No documented pagination strategies (offset, cursor, keyset) or default/max page sizes.",
+      "Severity": "MEDIUM",
+      "Workaround": "Infer from live responses; user-provided data export context suggests file-based pagination (list/download by filename)."
+    }
+  ],
+  "ResearchSummary": {
+    "DiscoveryMethod": "Systematic web search + WebFetch of PropFuel's official portal, marketing site, and connector help articles",
+    "TierBreakdown": {
+      "Tier1Sources": 4,
+      "Tier2Sources": 3,
+      "Tier3Sources": 0
+    },
+    "MachineReadableSchemas": 0,
+    "AvailableSources": [
+      "Official help center (HTML articles, no machine-readable schema)",
+      "User-provided data export API context (JSON file-feed specifics, highest technical detail)"
+    ],
+    "AbsentSources": [
+      "OpenAPI specification",
+      "Swagger/Postman collection",
+      "GraphQL SDL",
+      "TypeScript/Python SDK type definitions",
+      "Developer portal with API reference",
+      "GitHub public repositories with API docs"
+    ],
+    "CredentialRequirement": "All public documentation is credential-free and accessible. Live API introspection would require vendor credentials (bearer token for data export, AMS-specific credentials for connectors).",
+    "RecommendedNextSteps": [
+      "Use user-provided data export context as primary technical source (most specific documented API surface)",
+      "Request official API documentation from PropFuel support if available (may be gated or require partnership agreement)",
+      "Implement runtime discovery/introspection if PropFuel data export endpoints support schema introspection",
+      "Plan connector architecture to support dynamic field discovery at sync time (custom column capture via full-record pass-through)"
+    ]
+  }
+}

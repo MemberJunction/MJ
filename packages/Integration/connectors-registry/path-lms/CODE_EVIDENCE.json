@@ -1,0 +1,4227 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "connectors-registry/path-lms/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-10T20:08:42.633Z",
+      "StructuredOutput": {
+        "IOCreated": 16,
+        "IOFCreated": 104,
+        "mutations": 0,
+        "source": "SpectaQL HTML (docs_page.html) — credential-free schema-of-record",
+        "perObjectFieldCounts": {
+          "account": 0,
+          "teams": 5,
+          "teamsList": 2,
+          "courseItemViewsReport": 2,
+          "courseUserVisits": 2,
+          "liveWebEventArchiveViewersReport": 2,
+          "liveWebEventAttendeesReport": 10,
+          "liveWebEventCancellationsReport": 2,
+          "liveWebEventGuestsReport": 2,
+          "liveWebEventRegistrationsReport": 10,
+          "metadata": 11,
+          "metadataTemplates": 11,
+          "userItemWithVisitsReport": 14,
+          "userMetadata": 14,
+          "userMetadataTemplates": 15,
+          "userPresentationsReport": 2
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.account",
+        "io.teams",
+        "io.teamsList",
+        "io.courseItemViewsReport",
+        "io.courseUserVisits",
+        "io.liveWebEventArchiveViewersReport",
+        "io.liveWebEventAttendeesReport",
+        "io.liveWebEventCancellationsReport",
+        "io.liveWebEventGuestsReport",
+        "io.liveWebEventRegistrationsReport",
+        "io.metadata",
+        "io.metadataTemplates",
+        "io.userItemWithVisitsReport",
+        "io.userMetadata",
+        "io.userMetadataTemplates",
+        "io.userPresentationsReport"
+      ]
+    },
+    {
+      "ScriptPath": "connectors-registry/path-lms/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-10T20:11:56.945Z",
+      "StructuredOutput": {
+        "IOCreated": 16,
+        "IOFCreated": 180,
+        "mutations": 0,
+        "source": "SpectaQL HTML (docs_page.html) — credential-free schema-of-record",
+        "perObjectFieldCounts": {
+          "account": 51,
+          "teams": 29,
+          "teamsList": 2,
+          "courseItemViewsReport": 2,
+          "courseUserVisits": 3,
+          "liveWebEventArchiveViewersReport": 2,
+          "liveWebEventAttendeesReport": 10,
+          "liveWebEventCancellationsReport": 2,
+          "liveWebEventGuestsReport": 2,
+          "liveWebEventRegistrationsReport": 10,
+          "metadata": 11,
+          "metadataTemplates": 11,
+          "userItemWithVisitsReport": 14,
+          "userMetadata": 14,
+          "userMetadataTemplates": 15,
+          "userPresentationsReport": 2
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.account",
+        "io.teams",
+        "io.teamsList",
+        "io.courseItemViewsReport",
+        "io.courseUserVisits",
+        "io.liveWebEventArchiveViewersReport",
+        "io.liveWebEventAttendeesReport",
+        "io.liveWebEventCancellationsReport",
+        "io.liveWebEventGuestsReport",
+        "io.liveWebEventRegistrationsReport",
+        "io.metadata",
+        "io.metadataTemplates",
+        "io.userItemWithVisitsReport",
+        "io.userMetadata",
+        "io.userMetadataTemplates",
+        "io.userPresentationsReport"
+      ]
+    },
+    {
+      "ScriptPath": "connectors-registry/path-lms/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-10T20:13:34.979Z",
+      "StructuredOutput": {
+        "IOCreated": 16,
+        "IOFCreated": 180,
+        "mutations": 0,
+        "source": "SpectaQL HTML (docs_page.html) — credential-free schema-of-record",
+        "perObjectFieldCounts": {
+          "account": 51,
+          "teams": 29,
+          "teamsList": 2,
+          "courseItemViewsReport": 2,
+          "courseUserVisits": 3,
+          "liveWebEventArchiveViewersReport": 2,
+          "liveWebEventAttendeesReport": 10,
+          "liveWebEventCancellationsReport": 2,
+          "liveWebEventGuestsReport": 2,
+          "liveWebEventRegistrationsReport": 10,
+          "metadata": 11,
+          "metadataTemplates": 11,
+          "userItemWithVisitsReport": 14,
+          "userMetadata": 14,
+          "userMetadataTemplates": 15,
+          "userPresentationsReport": 2
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.account",
+        "io.teams",
+        "io.teamsList",
+        "io.courseItemViewsReport",
+        "io.courseUserVisits",
+        "io.liveWebEventArchiveViewersReport",
+        "io.liveWebEventAttendeesReport",
+        "io.liveWebEventCancellationsReport",
+        "io.liveWebEventGuestsReport",
+        "io.liveWebEventRegistrationsReport",
+        "io.metadata",
+        "io.metadataTemplates",
+        "io.userItemWithVisitsReport",
+        "io.userMetadata",
+        "io.userMetadataTemplates",
+        "io.userPresentationsReport"
+      ]
+    },
+    {
+      "ScriptPath": "connectors-registry/path-lms/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-10T22:31:14.586Z",
+      "StructuredOutput": {
+        "IOCreated": 16,
+        "IOFCreated": 180,
+        "queries": 16
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.account",
+        "io.courseItemViewsReport",
+        "io.courseUserVisits",
+        "io.liveWebEventArchiveViewersReport",
+        "io.liveWebEventAttendeesReport",
+        "io.liveWebEventCancellationsReport",
+        "io.liveWebEventGuestsReport",
+        "io.liveWebEventRegistrationsReport",
+        "io.metadata",
+        "io.metadataTemplates",
+        "io.teams",
+        "io.teamsList",
+        "io.userItemWithVisitsReport",
+        "io.userMetadata",
+        "io.userMetadataTemplates",
+        "io.userPresentationsReport"
+      ]
+    },
+    {
+      "ScriptPath": "connectors-registry/path-lms/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-10T22:32:14.479Z",
+      "StructuredOutput": {
+        "IOCreated": 16,
+        "IOFCreated": 180,
+        "queries": 16
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.account",
+        "io.courseItemViewsReport",
+        "io.courseUserVisits",
+        "io.liveWebEventArchiveViewersReport",
+        "io.liveWebEventAttendeesReport",
+        "io.liveWebEventCancellationsReport",
+        "io.liveWebEventGuestsReport",
+        "io.liveWebEventRegistrationsReport",
+        "io.metadata",
+        "io.metadataTemplates",
+        "io.teams",
+        "io.teamsList",
+        "io.userItemWithVisitsReport",
+        "io.userMetadata",
+        "io.userMetadataTemplates",
+        "io.userPresentationsReport"
+      ]
+    },
+    {
+      "ScriptPath": "connectors-registry/path-lms/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-10T22:32:23.891Z",
+      "StructuredOutput": {
+        "IOCreated": 16,
+        "IOFCreated": 180,
+        "queries": 16
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.account",
+        "io.courseItemViewsReport",
+        "io.courseUserVisits",
+        "io.liveWebEventArchiveViewersReport",
+        "io.liveWebEventAttendeesReport",
+        "io.liveWebEventCancellationsReport",
+        "io.liveWebEventGuestsReport",
+        "io.liveWebEventRegistrationsReport",
+        "io.metadata",
+        "io.metadataTemplates",
+        "io.teams",
+        "io.teamsList",
+        "io.userItemWithVisitsReport",
+        "io.userMetadata",
+        "io.userMetadataTemplates",
+        "io.userPresentationsReport"
+      ]
+    },
+    {
+      "ScriptPath": "connectors-registry/path-lms/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-11T00:25:15.275Z",
+      "StructuredOutput": {
+        "IOCreated": 84,
+        "IOFCreated": 1175,
+        "FKEmitted": 42,
+        "priorOrphansCleared": 0,
+        "canonical": 84
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.Account",
+        "io.Assessment",
+        "io.AssessmentQuestion",
+        "io.AssessmentScore",
+        "io.AssessmentSubmission",
+        "io.Assignment",
+        "io.AssignmentSubmission",
+        "io.AssignmentUserView",
+        "io.CategorySale",
+        "io.Certificate",
+        "io.CertificateForUser",
+        "io.CertificateItem",
+        "io.CertificateUser",
+        "io.CertifiedCredit",
+        "io.Completion",
+        "io.ContentSale",
+        "io.ContentSaleOrderItem",
+        "io.Coupon",
+        "io.Course",
+        "io.CourseItem",
+        "io.CourseItemView",
+        "io.CoursePresentation",
+        "io.CourseUser",
+        "io.CourseUserVisits",
+        "io.CreditTypeForCompletedValue",
+        "io.CreditTypeForCreditCertified",
+        "io.CreditsAssignedValues",
+        "io.CreditsCertifiedValues",
+        "io.CreditsCompletedUser",
+        "io.CreditsCompletedValue",
+        "io.Discount",
+        "io.Event",
+        "io.EventPresentation",
+        "io.EventUser",
+        "io.ExternalActivity",
+        "io.Group",
+        "io.GuestUser",
+        "io.InPersonEvent",
+        "io.InPersonEventCancellation",
+        "io.InPersonEventRegistrationUser",
+        "io.InPersonEventUser",
+        "io.ItemVisit",
+        "io.Metadata",
+        "io.MetadataLabel",
+        "io.MetadataTemplate",
+        "io.MetadataValue",
+        "io.Order",
+        "io.OrderDiscount",
+        "io.OrderItem",
+        "io.ProductCatalog",
+        "io.Refund",
+        "io.RefundOrder",
+        "io.RefundOrderItem",
+        "io.SaleByBundle",
+        "io.SaleByCategory",
+        "io.Scorm",
+        "io.ScormUser",
+        "io.SimpleUser",
+        "io.Survey",
+        "io.SurveyCompletion",
+        "io.SurveyMatrixQuestion",
+        "io.SurveyMatrixQuestionColumn",
+        "io.SurveyMatrixQuestionRow",
+        "io.SurveyMultipleChoiceQuestion",
+        "io.SurveyOpenEndedQuestion",
+        "io.SurveyQuestionChoice",
+        "io.Team",
+        "io.User",
+        "io.UserCertificate",
+        "io.UserCourseItemView",
+        "io.UserItem",
+        "io.UserItemVisits",
+        "io.UserMetadata",
+        "io.UserMetadataTemplate",
+        "io.UserPresentation",
+        "io.UserSale",
+        "io.UserView",
+        "io.VideoVisit",
+        "io.Webinar",
+        "io.WebinarArchiveViewerUser",
+        "io.WebinarAttendee",
+        "io.WebinarCancellationUser",
+        "io.WebinarLiveAttendeeReport",
+        "io.WebinarRegistrationReport"
+      ]
+    },
+    {
+      "ScriptPath": "connectors-registry/path-lms/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-11T00:26:01.975Z",
+      "StructuredOutput": {
+        "IOCreated": 84,
+        "IOFCreated": 1175,
+        "FKEmitted": 42,
+        "priorOrphansCleared": 84,
+        "canonical": 84
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "io.Account",
+        "io.Assessment",
+        "io.AssessmentQuestion",
+        "io.AssessmentScore",
+        "io.AssessmentSubmission",
+        "io.Assignment",
+        "io.AssignmentSubmission",
+        "io.AssignmentUserView",
+        "io.CategorySale",
+        "io.Certificate",
+        "io.CertificateForUser",
+        "io.CertificateItem",
+        "io.CertificateUser",
+        "io.CertifiedCredit",
+        "io.Completion",
+        "io.ContentSale",
+        "io.ContentSaleOrderItem",
+        "io.Coupon",
+        "io.Course",
+        "io.CourseItem",
+        "io.CourseItemView",
+        "io.CoursePresentation",
+        "io.CourseUser",
+        "io.CourseUserVisits",
+        "io.CreditTypeForCompletedValue",
+        "io.CreditTypeForCreditCertified",
+        "io.CreditsAssignedValues",
+        "io.CreditsCertifiedValues",
+        "io.CreditsCompletedUser",
+        "io.CreditsCompletedValue",
+        "io.Discount",
+        "io.Event",
+        "io.EventPresentation",
+        "io.EventUser",
+        "io.ExternalActivity",
+        "io.Group",
+        "io.GuestUser",
+        "io.InPersonEvent",
+        "io.InPersonEventCancellation",
+        "io.InPersonEventRegistrationUser",
+        "io.InPersonEventUser",
+        "io.ItemVisit",
+        "io.Metadata",
+        "io.MetadataLabel",
+        "io.MetadataTemplate",
+        "io.MetadataValue",
+        "io.Order",
+        "io.OrderDiscount",
+        "io.OrderItem",
+        "io.ProductCatalog",
+        "io.Refund",
+        "io.RefundOrder",
+        "io.RefundOrderItem",
+        "io.SaleByBundle",
+        "io.SaleByCategory",
+        "io.Scorm",
+        "io.ScormUser",
+        "io.SimpleUser",
+        "io.Survey",
+        "io.SurveyCompletion",
+        "io.SurveyMatrixQuestion",
+        "io.SurveyMatrixQuestionColumn",
+        "io.SurveyMatrixQuestionRow",
+        "io.SurveyMultipleChoiceQuestion",
+        "io.SurveyOpenEndedQuestion",
+        "io.SurveyQuestionChoice",
+        "io.Team",
+        "io.User",
+        "io.UserCertificate",
+        "io.UserCourseItemView",
+        "io.UserItem",
+        "io.UserItemVisits",
+        "io.UserMetadata",
+        "io.UserMetadataTemplate",
+        "io.UserPresentation",
+        "io.UserSale",
+        "io.UserView",
+        "io.VideoVisit",
+        "io.Webinar",
+        "io.WebinarArchiveViewerUser",
+        "io.WebinarAttendee",
+        "io.WebinarCancellationUser",
+        "io.WebinarLiveAttendeeReport",
+        "io.WebinarRegistrationReport"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.235Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "assessmentsReport",
+        "sdlFieldType": "[Assessment]!",
+        "resolvedTarget": "Assessment",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'assessmentsReport: [Assessment]!' is a typed reference to emitted IO 'Assessment'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.assessmentsReport.IsForeignKey",
+        "iof.Account.assessmentsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.244Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "assignmentsReport",
+        "sdlFieldType": "[Assignment]!",
+        "resolvedTarget": "Assignment",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'assignmentsReport: [Assignment]!' is a typed reference to emitted IO 'Assignment'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.assignmentsReport.IsForeignKey",
+        "iof.Account.assignmentsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.252Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "certificatesReport",
+        "sdlFieldType": "[Certificate]!",
+        "resolvedTarget": "Certificate",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'certificatesReport: [Certificate]!' is a typed reference to emitted IO 'Certificate'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.certificatesReport.IsForeignKey",
+        "iof.Account.certificatesReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.259Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "certifiedCreditsReport",
+        "sdlFieldType": "[CertifiedCredit]!",
+        "resolvedTarget": "CertifiedCredit",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'certifiedCreditsReport: [CertifiedCredit]!' is a typed reference to emitted IO 'CertifiedCredit'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.certifiedCreditsReport.IsForeignKey",
+        "iof.Account.certifiedCreditsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.266Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "courses",
+        "sdlFieldType": "[Course]!",
+        "resolvedTarget": "Course",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'courses: [Course]!' is a typed reference to emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.courses.IsForeignKey",
+        "iof.Account.courses.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.274Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "coursePresentations",
+        "sdlFieldType": "[CoursePresentation]!",
+        "resolvedTarget": "CoursePresentation",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'coursePresentations: [CoursePresentation]!' is a typed reference to emitted IO 'CoursePresentation'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.coursePresentations.IsForeignKey",
+        "iof.Account.coursePresentations.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.283Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "creditsCompletedReport",
+        "sdlFieldType": "[CreditsCompletedUser]!",
+        "resolvedTarget": "CreditsCompletedUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'creditsCompletedReport: [CreditsCompletedUser]!' is a typed reference to emitted IO 'CreditsCompletedUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.creditsCompletedReport.IsForeignKey",
+        "iof.Account.creditsCompletedReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.290Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "events",
+        "sdlFieldType": "[Event]!",
+        "resolvedTarget": "Event",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'events: [Event]!' is a typed reference to emitted IO 'Event'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.events.IsForeignKey",
+        "iof.Account.events.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.297Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "inPersonEventsReport",
+        "sdlFieldType": "[InPersonEvent]!",
+        "resolvedTarget": "InPersonEvent",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'inPersonEventsReport: [InPersonEvent]!' is a typed reference to emitted IO 'InPersonEvent'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.inPersonEventsReport.IsForeignKey",
+        "iof.Account.inPersonEventsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.304Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "liveWebEventsReport",
+        "sdlFieldType": "[Webinar]!",
+        "resolvedTarget": "Webinar",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'liveWebEventsReport: [Webinar]!' is a typed reference to emitted IO 'Webinar'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.liveWebEventsReport.IsForeignKey",
+        "iof.Account.liveWebEventsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.310Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "scormReport",
+        "sdlFieldType": "[Scorm]!",
+        "resolvedTarget": "Scorm",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'scormReport: [Scorm]!' is a typed reference to emitted IO 'Scorm'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.scormReport.IsForeignKey",
+        "iof.Account.scormReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.316Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "surveysReport",
+        "sdlFieldType": "[Survey]!",
+        "resolvedTarget": "Survey",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'surveysReport: [Survey]!' is a typed reference to emitted IO 'Survey'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.surveysReport.IsForeignKey",
+        "iof.Account.surveysReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.323Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "users",
+        "sdlFieldType": "[User]!",
+        "resolvedTarget": "User",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'users: [User]!' is a typed reference to emitted IO 'User'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.users.IsForeignKey",
+        "iof.Account.users.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.330Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "coupons",
+        "sdlFieldType": "[Coupon]!",
+        "resolvedTarget": "Coupon",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'coupons: [Coupon]!' is a typed reference to emitted IO 'Coupon'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.coupons.IsForeignKey",
+        "iof.Account.coupons.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.337Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "discounts",
+        "sdlFieldType": "[Discount]!",
+        "resolvedTarget": "Discount",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'discounts: [Discount]!' is a typed reference to emitted IO 'Discount'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.discounts.IsForeignKey",
+        "iof.Account.discounts.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.343Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "externalActivityReport",
+        "sdlFieldType": "[ExternalActivity]!",
+        "resolvedTarget": "ExternalActivity",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'externalActivityReport: [ExternalActivity]!' is a typed reference to emitted IO 'ExternalActivity'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.externalActivityReport.IsForeignKey",
+        "iof.Account.externalActivityReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.350Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "ordersReport",
+        "sdlFieldType": "[Order]!",
+        "resolvedTarget": "Order",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'ordersReport: [Order]!' is a typed reference to emitted IO 'Order'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.ordersReport.IsForeignKey",
+        "iof.Account.ordersReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.357Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "orderItemsReport",
+        "sdlFieldType": "[OrderItem]!",
+        "resolvedTarget": "OrderItem",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'orderItemsReport: [OrderItem]!' is a typed reference to emitted IO 'OrderItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.orderItemsReport.IsForeignKey",
+        "iof.Account.orderItemsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.363Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "productCatalogReport",
+        "sdlFieldType": "[ProductCatalog]!",
+        "resolvedTarget": "ProductCatalog",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'productCatalogReport: [ProductCatalog]!' is a typed reference to emitted IO 'ProductCatalog'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.productCatalogReport.IsForeignKey",
+        "iof.Account.productCatalogReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.369Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "refundsDetailsReport",
+        "sdlFieldType": "[RefundOrderItem]!",
+        "resolvedTarget": "RefundOrderItem",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'refundsDetailsReport: [RefundOrderItem]!' is a typed reference to emitted IO 'RefundOrderItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.refundsDetailsReport.IsForeignKey",
+        "iof.Account.refundsDetailsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.376Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "refundsReport",
+        "sdlFieldType": "[RefundOrder]!",
+        "resolvedTarget": "RefundOrder",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'refundsReport: [RefundOrder]!' is a typed reference to emitted IO 'RefundOrder'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.refundsReport.IsForeignKey",
+        "iof.Account.refundsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.382Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "salesByCategoryReport",
+        "sdlFieldType": "[SaleByCategory]!",
+        "resolvedTarget": "SaleByCategory",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'salesByCategoryReport: [SaleByCategory]!' is a typed reference to emitted IO 'SaleByCategory'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.salesByCategoryReport.IsForeignKey",
+        "iof.Account.salesByCategoryReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.389Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "salesByUserReport",
+        "sdlFieldType": "[UserSale]!",
+        "resolvedTarget": "UserSale",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'salesByUserReport: [UserSale]!' is a typed reference to emitted IO 'UserSale'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.salesByUserReport.IsForeignKey",
+        "iof.Account.salesByUserReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.396Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "commerceSalesByContentReport",
+        "sdlFieldType": "[ContentSale]",
+        "resolvedTarget": "ContentSale",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'commerceSalesByContentReport: [ContentSale]' is a typed reference to emitted IO 'ContentSale'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.commerceSalesByContentReport.IsForeignKey",
+        "iof.Account.commerceSalesByContentReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.402Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "commerceSalesByContentDetailsReport",
+        "sdlFieldType": "[ContentSaleOrderItem]",
+        "resolvedTarget": "ContentSaleOrderItem",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'commerceSalesByContentDetailsReport: [ContentSaleOrderItem]' is a typed reference to emitted IO 'ContentSaleOrderItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.commerceSalesByContentDetailsReport.IsForeignKey",
+        "iof.Account.commerceSalesByContentDetailsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.409Z",
+      "StructuredOutput": {
+        "owningIO": "Account",
+        "field": "salesByBundleReport",
+        "sdlFieldType": "[SaleByBundle]!",
+        "resolvedTarget": "SaleByBundle",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'salesByBundleReport: [SaleByBundle]!' is a typed reference to emitted IO 'SaleByBundle'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Account.salesByBundleReport.IsForeignKey",
+        "iof.Account.salesByBundleReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.416Z",
+      "StructuredOutput": {
+        "owningIO": "Assessment",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assessment.accountId.IsForeignKey",
+        "iof.Assessment.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.423Z",
+      "StructuredOutput": {
+        "owningIO": "Assessment",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assessment.teamId.IsForeignKey",
+        "iof.Assessment.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.430Z",
+      "StructuredOutput": {
+        "owningIO": "Assessment",
+        "field": "courseId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Course",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseId: Int' matches <Type>Id convention for emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assessment.courseId.IsForeignKey",
+        "iof.Assessment.courseId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.436Z",
+      "StructuredOutput": {
+        "owningIO": "Assessment",
+        "field": "courseItemId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "CourseItem",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseItemId: Int' matches <Type>Id convention for emitted IO 'CourseItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assessment.courseItemId.IsForeignKey",
+        "iof.Assessment.courseItemId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.442Z",
+      "StructuredOutput": {
+        "owningIO": "Assessment",
+        "field": "assessmentQuestions",
+        "sdlFieldType": "[AssessmentQuestion]",
+        "resolvedTarget": "AssessmentQuestion",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'assessmentQuestions: [AssessmentQuestion]' is a typed reference to emitted IO 'AssessmentQuestion'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assessment.assessmentQuestions.IsForeignKey",
+        "iof.Assessment.assessmentQuestions.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.451Z",
+      "StructuredOutput": {
+        "owningIO": "Assessment",
+        "field": "assessmentScores",
+        "sdlFieldType": "[AssessmentScore]",
+        "resolvedTarget": "AssessmentScore",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'assessmentScores: [AssessmentScore]' is a typed reference to emitted IO 'AssessmentScore'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assessment.assessmentScores.IsForeignKey",
+        "iof.Assessment.assessmentScores.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.457Z",
+      "StructuredOutput": {
+        "owningIO": "AssessmentScore",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.AssessmentScore.groups.IsForeignKey",
+        "iof.AssessmentScore.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.463Z",
+      "StructuredOutput": {
+        "owningIO": "AssessmentScore",
+        "field": "userAssessmentSubmissions",
+        "sdlFieldType": "[AssessmentSubmission]!",
+        "resolvedTarget": "AssessmentSubmission",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userAssessmentSubmissions: [AssessmentSubmission]!' is a typed reference to emitted IO 'AssessmentSubmission'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.AssessmentScore.userAssessmentSubmissions.IsForeignKey",
+        "iof.AssessmentScore.userAssessmentSubmissions.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.470Z",
+      "StructuredOutput": {
+        "owningIO": "Assignment",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assignment.accountId.IsForeignKey",
+        "iof.Assignment.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.476Z",
+      "StructuredOutput": {
+        "owningIO": "Assignment",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assignment.teamId.IsForeignKey",
+        "iof.Assignment.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.483Z",
+      "StructuredOutput": {
+        "owningIO": "Assignment",
+        "field": "courseId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Course",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseId: Int' matches <Type>Id convention for emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assignment.courseId.IsForeignKey",
+        "iof.Assignment.courseId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.489Z",
+      "StructuredOutput": {
+        "owningIO": "Assignment",
+        "field": "submissions",
+        "sdlFieldType": "[AssignmentSubmission!]!",
+        "resolvedTarget": "AssignmentSubmission",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'submissions: [AssignmentSubmission!]!' is a typed reference to emitted IO 'AssignmentSubmission'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assignment.submissions.IsForeignKey",
+        "iof.Assignment.submissions.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.497Z",
+      "StructuredOutput": {
+        "owningIO": "Assignment",
+        "field": "passedSubmissions",
+        "sdlFieldType": "[AssignmentSubmission!]!",
+        "resolvedTarget": "AssignmentSubmission",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'passedSubmissions: [AssignmentSubmission!]!' is a typed reference to emitted IO 'AssignmentSubmission'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assignment.passedSubmissions.IsForeignKey",
+        "iof.Assignment.passedSubmissions.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.503Z",
+      "StructuredOutput": {
+        "owningIO": "Assignment",
+        "field": "failedSubmissions",
+        "sdlFieldType": "[AssignmentSubmission!]!",
+        "resolvedTarget": "AssignmentSubmission",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'failedSubmissions: [AssignmentSubmission!]!' is a typed reference to emitted IO 'AssignmentSubmission'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assignment.failedSubmissions.IsForeignKey",
+        "iof.Assignment.failedSubmissions.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.510Z",
+      "StructuredOutput": {
+        "owningIO": "Assignment",
+        "field": "userVisits",
+        "sdlFieldType": "[AssignmentUserView!]!",
+        "resolvedTarget": "AssignmentUserView",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userVisits: [AssignmentUserView!]!' is a typed reference to emitted IO 'AssignmentUserView'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Assignment.userVisits.IsForeignKey",
+        "iof.Assignment.userVisits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.519Z",
+      "StructuredOutput": {
+        "owningIO": "AssignmentSubmission",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.AssignmentSubmission.groups.IsForeignKey",
+        "iof.AssignmentSubmission.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.526Z",
+      "StructuredOutput": {
+        "owningIO": "AssignmentSubmission",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.AssignmentSubmission.teamId.IsForeignKey",
+        "iof.AssignmentSubmission.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.533Z",
+      "StructuredOutput": {
+        "owningIO": "AssignmentUserView",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.AssignmentUserView.groups.IsForeignKey",
+        "iof.AssignmentUserView.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.539Z",
+      "StructuredOutput": {
+        "owningIO": "AssignmentUserView",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.AssignmentUserView.teamId.IsForeignKey",
+        "iof.AssignmentUserView.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.548Z",
+      "StructuredOutput": {
+        "owningIO": "CategorySale",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CategorySale.groups.IsForeignKey",
+        "iof.CategorySale.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.555Z",
+      "StructuredOutput": {
+        "owningIO": "CategorySale",
+        "field": "orderId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Order",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'orderId: Int!' matches <Type>Id convention for emitted IO 'Order'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CategorySale.orderId.IsForeignKey",
+        "iof.CategorySale.orderId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.561Z",
+      "StructuredOutput": {
+        "owningIO": "Certificate",
+        "field": "courseId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Course",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseId: Int' matches <Type>Id convention for emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Certificate.courseId.IsForeignKey",
+        "iof.Certificate.courseId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.568Z",
+      "StructuredOutput": {
+        "owningIO": "Certificate",
+        "field": "metadataValues",
+        "sdlFieldType": "[MetadataValue]",
+        "resolvedTarget": "MetadataValue",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'metadataValues: [MetadataValue]' is a typed reference to emitted IO 'MetadataValue'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Certificate.metadataValues.IsForeignKey",
+        "iof.Certificate.metadataValues.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.577Z",
+      "StructuredOutput": {
+        "owningIO": "Certificate",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Certificate.accountId.IsForeignKey",
+        "iof.Certificate.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.583Z",
+      "StructuredOutput": {
+        "owningIO": "Certificate",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Certificate.teamId.IsForeignKey",
+        "iof.Certificate.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.590Z",
+      "StructuredOutput": {
+        "owningIO": "Certificate",
+        "field": "items",
+        "sdlFieldType": "[CertificateItem]",
+        "resolvedTarget": "CertificateItem",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'items: [CertificateItem]' is a typed reference to emitted IO 'CertificateItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Certificate.items.IsForeignKey",
+        "iof.Certificate.items.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.596Z",
+      "StructuredOutput": {
+        "owningIO": "Certificate",
+        "field": "userCertificates",
+        "sdlFieldType": "[UserCertificate]",
+        "resolvedTarget": "UserCertificate",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userCertificates: [UserCertificate]' is a typed reference to emitted IO 'UserCertificate'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Certificate.userCertificates.IsForeignKey",
+        "iof.Certificate.userCertificates.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.603Z",
+      "StructuredOutput": {
+        "owningIO": "Certificate",
+        "field": "credits",
+        "sdlFieldType": "[CreditsAssignedValues]",
+        "resolvedTarget": "CreditsAssignedValues",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'credits: [CreditsAssignedValues]' is a typed reference to emitted IO 'CreditsAssignedValues'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Certificate.credits.IsForeignKey",
+        "iof.Certificate.credits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.610Z",
+      "StructuredOutput": {
+        "owningIO": "CertificateForUser",
+        "field": "courseId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Course",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseId: Int' matches <Type>Id convention for emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CertificateForUser.courseId.IsForeignKey",
+        "iof.CertificateForUser.courseId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.617Z",
+      "StructuredOutput": {
+        "owningIO": "CertificateForUser",
+        "field": "metadataValues",
+        "sdlFieldType": "[MetadataValue]",
+        "resolvedTarget": "MetadataValue",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'metadataValues: [MetadataValue]' is a typed reference to emitted IO 'MetadataValue'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CertificateForUser.metadataValues.IsForeignKey",
+        "iof.CertificateForUser.metadataValues.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.623Z",
+      "StructuredOutput": {
+        "owningIO": "CertificateItem",
+        "field": "courseItemId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "CourseItem",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseItemId: Int' matches <Type>Id convention for emitted IO 'CourseItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CertificateItem.courseItemId.IsForeignKey",
+        "iof.CertificateItem.courseItemId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.630Z",
+      "StructuredOutput": {
+        "owningIO": "CertificateItem",
+        "field": "credits",
+        "sdlFieldType": "[CreditsAssignedValues]",
+        "resolvedTarget": "CreditsAssignedValues",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'credits: [CreditsAssignedValues]' is a typed reference to emitted IO 'CreditsAssignedValues'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CertificateItem.credits.IsForeignKey",
+        "iof.CertificateItem.credits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.638Z",
+      "StructuredOutput": {
+        "owningIO": "CertificateUser",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CertificateUser.groups.IsForeignKey",
+        "iof.CertificateUser.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.645Z",
+      "StructuredOutput": {
+        "owningIO": "CertificateUser",
+        "field": "accountId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CertificateUser.accountId.IsForeignKey",
+        "iof.CertificateUser.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.652Z",
+      "StructuredOutput": {
+        "owningIO": "CertifiedCredit",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CertifiedCredit.groups.IsForeignKey",
+        "iof.CertifiedCredit.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.660Z",
+      "StructuredOutput": {
+        "owningIO": "CertifiedCredit",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CertifiedCredit.teamId.IsForeignKey",
+        "iof.CertifiedCredit.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.667Z",
+      "StructuredOutput": {
+        "owningIO": "CertifiedCredit",
+        "field": "creditTypesForCreditsCertified",
+        "sdlFieldType": "[CreditTypeForCreditCertified]!",
+        "resolvedTarget": "CreditTypeForCreditCertified",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'creditTypesForCreditsCertified: [CreditTypeForCreditCertified]!' is a typed reference to emitted IO 'CreditTypeForCreditCertified'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CertifiedCredit.creditTypesForCreditsCertified.IsForeignKey",
+        "iof.CertifiedCredit.creditTypesForCreditsCertified.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.674Z",
+      "StructuredOutput": {
+        "owningIO": "CertifiedCredit",
+        "field": "certificates",
+        "sdlFieldType": "[CertificateForUser]!",
+        "resolvedTarget": "CertificateForUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'certificates: [CertificateForUser]!' is a typed reference to emitted IO 'CertificateForUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CertifiedCredit.certificates.IsForeignKey",
+        "iof.CertifiedCredit.certificates.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.683Z",
+      "StructuredOutput": {
+        "owningIO": "ContentSaleOrderItem",
+        "field": "user",
+        "sdlFieldType": "User",
+        "resolvedTarget": "User",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'user: User' is a typed reference to emitted IO 'User'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.ContentSaleOrderItem.user.IsForeignKey",
+        "iof.ContentSaleOrderItem.user.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.690Z",
+      "StructuredOutput": {
+        "owningIO": "Coupon",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Coupon.accountId.IsForeignKey",
+        "iof.Coupon.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.697Z",
+      "StructuredOutput": {
+        "owningIO": "Course",
+        "field": "accountId",
+        "sdlFieldType": "ID!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: ID!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Course.accountId.IsForeignKey",
+        "iof.Course.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.704Z",
+      "StructuredOutput": {
+        "owningIO": "Course",
+        "field": "courseItems",
+        "sdlFieldType": "[CourseItem]!",
+        "resolvedTarget": "CourseItem",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'courseItems: [CourseItem]!' is a typed reference to emitted IO 'CourseItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Course.courseItems.IsForeignKey",
+        "iof.Course.courseItems.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.710Z",
+      "StructuredOutput": {
+        "owningIO": "Course",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Course.teamId.IsForeignKey",
+        "iof.Course.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.717Z",
+      "StructuredOutput": {
+        "owningIO": "Course",
+        "field": "metadata",
+        "sdlFieldType": "[Metadata]",
+        "resolvedTarget": "Metadata",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'metadata: [Metadata]' is a typed reference to emitted IO 'Metadata'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Course.metadata.IsForeignKey",
+        "iof.Course.metadata.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.724Z",
+      "StructuredOutput": {
+        "owningIO": "CourseItemView",
+        "field": "credits",
+        "sdlFieldType": "[CreditsAssignedValues]",
+        "resolvedTarget": "CreditsAssignedValues",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'credits: [CreditsAssignedValues]' is a typed reference to emitted IO 'CreditsAssignedValues'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CourseItemView.credits.IsForeignKey",
+        "iof.CourseItemView.credits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.732Z",
+      "StructuredOutput": {
+        "owningIO": "CoursePresentation",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CoursePresentation.accountId.IsForeignKey",
+        "iof.CoursePresentation.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.739Z",
+      "StructuredOutput": {
+        "owningIO": "CoursePresentation",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CoursePresentation.teamId.IsForeignKey",
+        "iof.CoursePresentation.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.745Z",
+      "StructuredOutput": {
+        "owningIO": "CoursePresentation",
+        "field": "courseId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Course",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseId: Int' matches <Type>Id convention for emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CoursePresentation.courseId.IsForeignKey",
+        "iof.CoursePresentation.courseId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.755Z",
+      "StructuredOutput": {
+        "owningIO": "CoursePresentation",
+        "field": "userVisits",
+        "sdlFieldType": "[UserView]!",
+        "resolvedTarget": "UserView",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userVisits: [UserView]!' is a typed reference to emitted IO 'UserView'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CoursePresentation.userVisits.IsForeignKey",
+        "iof.CoursePresentation.userVisits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.761Z",
+      "StructuredOutput": {
+        "owningIO": "CourseUser",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CourseUser.groups.IsForeignKey",
+        "iof.CourseUser.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.769Z",
+      "StructuredOutput": {
+        "owningIO": "CourseUser",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CourseUser.teamId.IsForeignKey",
+        "iof.CourseUser.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.779Z",
+      "StructuredOutput": {
+        "owningIO": "CourseUser",
+        "field": "courseItemViewsDetail",
+        "sdlFieldType": "[UserCourseItemView]",
+        "resolvedTarget": "UserCourseItemView",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'courseItemViewsDetail: [UserCourseItemView]' is a typed reference to emitted IO 'UserCourseItemView'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CourseUser.courseItemViewsDetail.IsForeignKey",
+        "iof.CourseUser.courseItemViewsDetail.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.785Z",
+      "StructuredOutput": {
+        "owningIO": "CourseUser",
+        "field": "courseUserCertificate",
+        "sdlFieldType": "UserCertificate",
+        "resolvedTarget": "UserCertificate",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'courseUserCertificate: UserCertificate' is a typed reference to emitted IO 'UserCertificate'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CourseUser.courseUserCertificate.IsForeignKey",
+        "iof.CourseUser.courseUserCertificate.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.792Z",
+      "StructuredOutput": {
+        "owningIO": "CourseUserVisits",
+        "field": "courseId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Course",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseId: Int!' matches <Type>Id convention for emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CourseUserVisits.courseId.IsForeignKey",
+        "iof.CourseUserVisits.courseId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.802Z",
+      "StructuredOutput": {
+        "owningIO": "CourseUserVisits",
+        "field": "details",
+        "sdlFieldType": "[CourseUser]",
+        "resolvedTarget": "CourseUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'details: [CourseUser]' is a typed reference to emitted IO 'CourseUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CourseUserVisits.details.IsForeignKey",
+        "iof.CourseUserVisits.details.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.809Z",
+      "StructuredOutput": {
+        "owningIO": "CreditTypeForCompletedValue",
+        "field": "creditsCompletedValues",
+        "sdlFieldType": "[CreditsCompletedValue]!",
+        "resolvedTarget": "CreditsCompletedValue",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'creditsCompletedValues: [CreditsCompletedValue]!' is a typed reference to emitted IO 'CreditsCompletedValue'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CreditTypeForCompletedValue.creditsCompletedValues.IsForeignKey",
+        "iof.CreditTypeForCompletedValue.creditsCompletedValues.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.819Z",
+      "StructuredOutput": {
+        "owningIO": "CreditTypeForCreditCertified",
+        "field": "creditsCertifiedDetails",
+        "sdlFieldType": "[CreditsCertifiedValues]",
+        "resolvedTarget": "CreditsCertifiedValues",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'creditsCertifiedDetails: [CreditsCertifiedValues]' is a typed reference to emitted IO 'CreditsCertifiedValues'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CreditTypeForCreditCertified.creditsCertifiedDetails.IsForeignKey",
+        "iof.CreditTypeForCreditCertified.creditsCertifiedDetails.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.826Z",
+      "StructuredOutput": {
+        "owningIO": "CreditsCertifiedValues",
+        "field": "userCertificate",
+        "sdlFieldType": "UserCertificate",
+        "resolvedTarget": "UserCertificate",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userCertificate: UserCertificate' is a typed reference to emitted IO 'UserCertificate'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CreditsCertifiedValues.userCertificate.IsForeignKey",
+        "iof.CreditsCertifiedValues.userCertificate.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.834Z",
+      "StructuredOutput": {
+        "owningIO": "CreditsCompletedUser",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CreditsCompletedUser.groups.IsForeignKey",
+        "iof.CreditsCompletedUser.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.841Z",
+      "StructuredOutput": {
+        "owningIO": "CreditsCompletedUser",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CreditsCompletedUser.teamId.IsForeignKey",
+        "iof.CreditsCompletedUser.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.849Z",
+      "StructuredOutput": {
+        "owningIO": "CreditsCompletedUser",
+        "field": "creditTypesForCompletedValues",
+        "sdlFieldType": "[CreditTypeForCompletedValue]!",
+        "resolvedTarget": "CreditTypeForCompletedValue",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'creditTypesForCompletedValues: [CreditTypeForCompletedValue]!' is a typed reference to emitted IO 'CreditTypeForCompletedValue'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CreditsCompletedUser.creditTypesForCompletedValues.IsForeignKey",
+        "iof.CreditsCompletedUser.creditTypesForCompletedValues.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.856Z",
+      "StructuredOutput": {
+        "owningIO": "Discount",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Discount.accountId.IsForeignKey",
+        "iof.Discount.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.865Z",
+      "StructuredOutput": {
+        "owningIO": "Discount",
+        "field": "details",
+        "sdlFieldType": "[OrderDiscount]",
+        "resolvedTarget": "OrderDiscount",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'details: [OrderDiscount]' is a typed reference to emitted IO 'OrderDiscount'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Discount.details.IsForeignKey",
+        "iof.Discount.details.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.873Z",
+      "StructuredOutput": {
+        "owningIO": "Event",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Event.accountId.IsForeignKey",
+        "iof.Event.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.880Z",
+      "StructuredOutput": {
+        "owningIO": "Event",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Event.teamId.IsForeignKey",
+        "iof.Event.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.888Z",
+      "StructuredOutput": {
+        "owningIO": "Event",
+        "field": "presentations",
+        "sdlFieldType": "[EventPresentation]",
+        "resolvedTarget": "EventPresentation",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'presentations: [EventPresentation]' is a typed reference to emitted IO 'EventPresentation'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Event.presentations.IsForeignKey",
+        "iof.Event.presentations.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.897Z",
+      "StructuredOutput": {
+        "owningIO": "Event",
+        "field": "userVisitsDetail",
+        "sdlFieldType": "[EventUser]!",
+        "resolvedTarget": "EventUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userVisitsDetail: [EventUser]!' is a typed reference to emitted IO 'EventUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Event.userVisitsDetail.IsForeignKey",
+        "iof.Event.userVisitsDetail.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.904Z",
+      "StructuredOutput": {
+        "owningIO": "EventPresentation",
+        "field": "userVisits",
+        "sdlFieldType": "[UserView]!",
+        "resolvedTarget": "UserView",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userVisits: [UserView]!' is a typed reference to emitted IO 'UserView'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.EventPresentation.userVisits.IsForeignKey",
+        "iof.EventPresentation.userVisits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.911Z",
+      "StructuredOutput": {
+        "owningIO": "EventUser",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.EventUser.groups.IsForeignKey",
+        "iof.EventUser.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.918Z",
+      "StructuredOutput": {
+        "owningIO": "EventUser",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.EventUser.teamId.IsForeignKey",
+        "iof.EventUser.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.925Z",
+      "StructuredOutput": {
+        "owningIO": "ExternalActivity",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.ExternalActivity.accountId.IsForeignKey",
+        "iof.ExternalActivity.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.932Z",
+      "StructuredOutput": {
+        "owningIO": "ExternalActivity",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.ExternalActivity.groups.IsForeignKey",
+        "iof.ExternalActivity.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.941Z",
+      "StructuredOutput": {
+        "owningIO": "InPersonEvent",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEvent.accountId.IsForeignKey",
+        "iof.InPersonEvent.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.947Z",
+      "StructuredOutput": {
+        "owningIO": "InPersonEvent",
+        "field": "attendeesDetails",
+        "sdlFieldType": "[InPersonEventUser]",
+        "resolvedTarget": "InPersonEventUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'attendeesDetails: [InPersonEventUser]' is a typed reference to emitted IO 'InPersonEventUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEvent.attendeesDetails.IsForeignKey",
+        "iof.InPersonEvent.attendeesDetails.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.954Z",
+      "StructuredOutput": {
+        "owningIO": "InPersonEvent",
+        "field": "cancellations",
+        "sdlFieldType": "[InPersonEventCancellation]",
+        "resolvedTarget": "InPersonEventCancellation",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'cancellations: [InPersonEventCancellation]' is a typed reference to emitted IO 'InPersonEventCancellation'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEvent.cancellations.IsForeignKey",
+        "iof.InPersonEvent.cancellations.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.964Z",
+      "StructuredOutput": {
+        "owningIO": "InPersonEvent",
+        "field": "credits",
+        "sdlFieldType": "[CreditsAssignedValues]",
+        "resolvedTarget": "CreditsAssignedValues",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'credits: [CreditsAssignedValues]' is a typed reference to emitted IO 'CreditsAssignedValues'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEvent.credits.IsForeignKey",
+        "iof.InPersonEvent.credits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.971Z",
+      "StructuredOutput": {
+        "owningIO": "InPersonEvent",
+        "field": "registrantDetails",
+        "sdlFieldType": "[InPersonEventRegistrationUser]",
+        "resolvedTarget": "InPersonEventRegistrationUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'registrantDetails: [InPersonEventRegistrationUser]' is a typed reference to emitted IO 'InPersonEventRegistrationUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEvent.registrantDetails.IsForeignKey",
+        "iof.InPersonEvent.registrantDetails.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.978Z",
+      "StructuredOutput": {
+        "owningIO": "InPersonEventCancellation",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEventCancellation.groups.IsForeignKey",
+        "iof.InPersonEventCancellation.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.988Z",
+      "StructuredOutput": {
+        "owningIO": "InPersonEventRegistrationUser",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEventRegistrationUser.groups.IsForeignKey",
+        "iof.InPersonEventRegistrationUser.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:49.995Z",
+      "StructuredOutput": {
+        "owningIO": "InPersonEventUser",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEventUser.groups.IsForeignKey",
+        "iof.InPersonEventUser.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.002Z",
+      "StructuredOutput": {
+        "owningIO": "Metadata",
+        "field": "metadataTemplate",
+        "sdlFieldType": "MetadataTemplate!",
+        "resolvedTarget": "MetadataTemplate",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'metadataTemplate: MetadataTemplate!' is a typed reference to emitted IO 'MetadataTemplate'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Metadata.metadataTemplate.IsForeignKey",
+        "iof.Metadata.metadataTemplate.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.009Z",
+      "StructuredOutput": {
+        "owningIO": "MetadataTemplate",
+        "field": "accountId",
+        "sdlFieldType": "ID!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: ID!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.MetadataTemplate.accountId.IsForeignKey",
+        "iof.MetadataTemplate.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.016Z",
+      "StructuredOutput": {
+        "owningIO": "MetadataTemplate",
+        "field": "metadata",
+        "sdlFieldType": "[Metadata]",
+        "resolvedTarget": "Metadata",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'metadata: [Metadata]' is a typed reference to emitted IO 'Metadata'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.MetadataTemplate.metadata.IsForeignKey",
+        "iof.MetadataTemplate.metadata.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.023Z",
+      "StructuredOutput": {
+        "owningIO": "MetadataValue",
+        "field": "metadataLabel",
+        "sdlFieldType": "MetadataLabel",
+        "resolvedTarget": "MetadataLabel",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'metadataLabel: MetadataLabel' is a typed reference to emitted IO 'MetadataLabel'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.MetadataValue.metadataLabel.IsForeignKey",
+        "iof.MetadataValue.metadataLabel.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.032Z",
+      "StructuredOutput": {
+        "owningIO": "Order",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Order.accountId.IsForeignKey",
+        "iof.Order.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.039Z",
+      "StructuredOutput": {
+        "owningIO": "Order",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Order.groups.IsForeignKey",
+        "iof.Order.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.046Z",
+      "StructuredOutput": {
+        "owningIO": "Order",
+        "field": "orderItemDetails",
+        "sdlFieldType": "[OrderItem]",
+        "resolvedTarget": "OrderItem",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'orderItemDetails: [OrderItem]' is a typed reference to emitted IO 'OrderItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Order.orderItemDetails.IsForeignKey",
+        "iof.Order.orderItemDetails.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.054Z",
+      "StructuredOutput": {
+        "owningIO": "OrderDiscount",
+        "field": "orderId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Order",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'orderId: Int' matches <Type>Id convention for emitted IO 'Order'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.OrderDiscount.orderId.IsForeignKey",
+        "iof.OrderDiscount.orderId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.060Z",
+      "StructuredOutput": {
+        "owningIO": "OrderDiscount",
+        "field": "order",
+        "sdlFieldType": "Order!",
+        "resolvedTarget": "Order",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'order: Order!' is a typed reference to emitted IO 'Order'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.OrderDiscount.order.IsForeignKey",
+        "iof.OrderDiscount.order.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.067Z",
+      "StructuredOutput": {
+        "owningIO": "OrderItem",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.OrderItem.accountId.IsForeignKey",
+        "iof.OrderItem.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.074Z",
+      "StructuredOutput": {
+        "owningIO": "OrderItem",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.OrderItem.groups.IsForeignKey",
+        "iof.OrderItem.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.083Z",
+      "StructuredOutput": {
+        "owningIO": "OrderItem",
+        "field": "order",
+        "sdlFieldType": "Order!",
+        "resolvedTarget": "Order",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'order: Order!' is a typed reference to emitted IO 'Order'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.OrderItem.order.IsForeignKey",
+        "iof.OrderItem.order.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.090Z",
+      "StructuredOutput": {
+        "owningIO": "OrderItem",
+        "field": "refund",
+        "sdlFieldType": "Refund",
+        "resolvedTarget": "Refund",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'refund: Refund' is a typed reference to emitted IO 'Refund'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.OrderItem.refund.IsForeignKey",
+        "iof.OrderItem.refund.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.097Z",
+      "StructuredOutput": {
+        "owningIO": "OrderItem",
+        "field": "revokedBy",
+        "sdlFieldType": "User",
+        "resolvedTarget": "User",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'revokedBy: User' is a typed reference to emitted IO 'User'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.OrderItem.revokedBy.IsForeignKey",
+        "iof.OrderItem.revokedBy.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.105Z",
+      "StructuredOutput": {
+        "owningIO": "ProductCatalog",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.ProductCatalog.accountId.IsForeignKey",
+        "iof.ProductCatalog.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.112Z",
+      "StructuredOutput": {
+        "owningIO": "Refund",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Refund.accountId.IsForeignKey",
+        "iof.Refund.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.119Z",
+      "StructuredOutput": {
+        "owningIO": "Refund",
+        "field": "user",
+        "sdlFieldType": "User",
+        "resolvedTarget": "User",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'user: User' is a typed reference to emitted IO 'User'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Refund.user.IsForeignKey",
+        "iof.Refund.user.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.129Z",
+      "StructuredOutput": {
+        "owningIO": "RefundOrder",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.RefundOrder.accountId.IsForeignKey",
+        "iof.RefundOrder.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.137Z",
+      "StructuredOutput": {
+        "owningIO": "RefundOrder",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.RefundOrder.groups.IsForeignKey",
+        "iof.RefundOrder.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.144Z",
+      "StructuredOutput": {
+        "owningIO": "RefundOrder",
+        "field": "order",
+        "sdlFieldType": "Order!",
+        "resolvedTarget": "Order",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'order: Order!' is a typed reference to emitted IO 'Order'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.RefundOrder.order.IsForeignKey",
+        "iof.RefundOrder.order.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.155Z",
+      "StructuredOutput": {
+        "owningIO": "RefundOrderItem",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.RefundOrderItem.groups.IsForeignKey",
+        "iof.RefundOrderItem.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.162Z",
+      "StructuredOutput": {
+        "owningIO": "RefundOrderItem",
+        "field": "refundedBy",
+        "sdlFieldType": "SimpleUser!",
+        "resolvedTarget": "SimpleUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'refundedBy: SimpleUser!' is a typed reference to emitted IO 'SimpleUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.RefundOrderItem.refundedBy.IsForeignKey",
+        "iof.RefundOrderItem.refundedBy.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.169Z",
+      "StructuredOutput": {
+        "owningIO": "RefundOrderItem",
+        "field": "revokedBy",
+        "sdlFieldType": "SimpleUser",
+        "resolvedTarget": "SimpleUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'revokedBy: SimpleUser' is a typed reference to emitted IO 'SimpleUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.RefundOrderItem.revokedBy.IsForeignKey",
+        "iof.RefundOrderItem.revokedBy.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.176Z",
+      "StructuredOutput": {
+        "owningIO": "RefundOrderItem",
+        "field": "order",
+        "sdlFieldType": "Order!",
+        "resolvedTarget": "Order",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'order: Order!' is a typed reference to emitted IO 'Order'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.RefundOrderItem.order.IsForeignKey",
+        "iof.RefundOrderItem.order.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.183Z",
+      "StructuredOutput": {
+        "owningIO": "SaleByBundle",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.SaleByBundle.accountId.IsForeignKey",
+        "iof.SaleByBundle.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.190Z",
+      "StructuredOutput": {
+        "owningIO": "SaleByBundle",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.SaleByBundle.groups.IsForeignKey",
+        "iof.SaleByBundle.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.198Z",
+      "StructuredOutput": {
+        "owningIO": "SaleByCategory",
+        "field": "salesReport",
+        "sdlFieldType": "[CategorySale]!",
+        "resolvedTarget": "CategorySale",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'salesReport: [CategorySale]!' is a typed reference to emitted IO 'CategorySale'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.SaleByCategory.salesReport.IsForeignKey",
+        "iof.SaleByCategory.salesReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.213Z",
+      "StructuredOutput": {
+        "owningIO": "Scorm",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Scorm.accountId.IsForeignKey",
+        "iof.Scorm.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.223Z",
+      "StructuredOutput": {
+        "owningIO": "Scorm",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Scorm.teamId.IsForeignKey",
+        "iof.Scorm.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.230Z",
+      "StructuredOutput": {
+        "owningIO": "Scorm",
+        "field": "courseId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Course",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseId: Int' matches <Type>Id convention for emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Scorm.courseId.IsForeignKey",
+        "iof.Scorm.courseId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.239Z",
+      "StructuredOutput": {
+        "owningIO": "Scorm",
+        "field": "userVisits",
+        "sdlFieldType": "[ScormUser]!",
+        "resolvedTarget": "ScormUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userVisits: [ScormUser]!' is a typed reference to emitted IO 'ScormUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Scorm.userVisits.IsForeignKey",
+        "iof.Scorm.userVisits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.246Z",
+      "StructuredOutput": {
+        "owningIO": "Scorm",
+        "field": "credits",
+        "sdlFieldType": "[CreditsAssignedValues]!",
+        "resolvedTarget": "CreditsAssignedValues",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'credits: [CreditsAssignedValues]!' is a typed reference to emitted IO 'CreditsAssignedValues'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Scorm.credits.IsForeignKey",
+        "iof.Scorm.credits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.253Z",
+      "StructuredOutput": {
+        "owningIO": "ScormUser",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.ScormUser.groups.IsForeignKey",
+        "iof.ScormUser.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.260Z",
+      "StructuredOutput": {
+        "owningIO": "ScormUser",
+        "field": "scormId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Scorm",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'scormId: Int!' matches <Type>Id convention for emitted IO 'Scorm'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.ScormUser.scormId.IsForeignKey",
+        "iof.ScormUser.scormId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.267Z",
+      "StructuredOutput": {
+        "owningIO": "SimpleUser",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.SimpleUser.groups.IsForeignKey",
+        "iof.SimpleUser.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.275Z",
+      "StructuredOutput": {
+        "owningIO": "SimpleUser",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.SimpleUser.teamId.IsForeignKey",
+        "iof.SimpleUser.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.284Z",
+      "StructuredOutput": {
+        "owningIO": "Survey",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Survey.accountId.IsForeignKey",
+        "iof.Survey.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.291Z",
+      "StructuredOutput": {
+        "owningIO": "Survey",
+        "field": "courseId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Course",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseId: Int' matches <Type>Id convention for emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Survey.courseId.IsForeignKey",
+        "iof.Survey.courseId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.298Z",
+      "StructuredOutput": {
+        "owningIO": "Survey",
+        "field": "completions",
+        "sdlFieldType": "[SurveyCompletion]!",
+        "resolvedTarget": "SurveyCompletion",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'completions: [SurveyCompletion]!' is a typed reference to emitted IO 'SurveyCompletion'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Survey.completions.IsForeignKey",
+        "iof.Survey.completions.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.305Z",
+      "StructuredOutput": {
+        "owningIO": "SurveyCompletion",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.SurveyCompletion.groups.IsForeignKey",
+        "iof.SurveyCompletion.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.314Z",
+      "StructuredOutput": {
+        "owningIO": "SurveyMatrixQuestion",
+        "field": "rows",
+        "sdlFieldType": "[SurveyMatrixQuestionRow]!",
+        "resolvedTarget": "SurveyMatrixQuestionRow",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'rows: [SurveyMatrixQuestionRow]!' is a typed reference to emitted IO 'SurveyMatrixQuestionRow'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.SurveyMatrixQuestion.rows.IsForeignKey",
+        "iof.SurveyMatrixQuestion.rows.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.321Z",
+      "StructuredOutput": {
+        "owningIO": "SurveyMatrixQuestionRow",
+        "field": "columns",
+        "sdlFieldType": "[SurveyMatrixQuestionColumn]!",
+        "resolvedTarget": "SurveyMatrixQuestionColumn",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'columns: [SurveyMatrixQuestionColumn]!' is a typed reference to emitted IO 'SurveyMatrixQuestionColumn'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.SurveyMatrixQuestionRow.columns.IsForeignKey",
+        "iof.SurveyMatrixQuestionRow.columns.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.328Z",
+      "StructuredOutput": {
+        "owningIO": "SurveyMultipleChoiceQuestion",
+        "field": "choices",
+        "sdlFieldType": "[SurveyQuestionChoice]!",
+        "resolvedTarget": "SurveyQuestionChoice",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'choices: [SurveyQuestionChoice]!' is a typed reference to emitted IO 'SurveyQuestionChoice'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.SurveyMultipleChoiceQuestion.choices.IsForeignKey",
+        "iof.SurveyMultipleChoiceQuestion.choices.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.340Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "assessmentsReport",
+        "sdlFieldType": "[Assessment]!",
+        "resolvedTarget": "Assessment",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'assessmentsReport: [Assessment]!' is a typed reference to emitted IO 'Assessment'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.assessmentsReport.IsForeignKey",
+        "iof.Team.assessmentsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.349Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "assignmentsReport",
+        "sdlFieldType": "[Assignment]!",
+        "resolvedTarget": "Assignment",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'assignmentsReport: [Assignment]!' is a typed reference to emitted IO 'Assignment'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.assignmentsReport.IsForeignKey",
+        "iof.Team.assignmentsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.358Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "certificatesReport",
+        "sdlFieldType": "[Certificate]!",
+        "resolvedTarget": "Certificate",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'certificatesReport: [Certificate]!' is a typed reference to emitted IO 'Certificate'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.certificatesReport.IsForeignKey",
+        "iof.Team.certificatesReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.367Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "certifiedCreditsReport",
+        "sdlFieldType": "[CertifiedCredit]!",
+        "resolvedTarget": "CertifiedCredit",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'certifiedCreditsReport: [CertifiedCredit]!' is a typed reference to emitted IO 'CertifiedCredit'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.certifiedCreditsReport.IsForeignKey",
+        "iof.Team.certifiedCreditsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.376Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "courses",
+        "sdlFieldType": "[Course]!",
+        "resolvedTarget": "Course",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'courses: [Course]!' is a typed reference to emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.courses.IsForeignKey",
+        "iof.Team.courses.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.384Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "coursePresentations",
+        "sdlFieldType": "[CoursePresentation]!",
+        "resolvedTarget": "CoursePresentation",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'coursePresentations: [CoursePresentation]!' is a typed reference to emitted IO 'CoursePresentation'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.coursePresentations.IsForeignKey",
+        "iof.Team.coursePresentations.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.391Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "creditsCompletedReport",
+        "sdlFieldType": "[CreditsCompletedUser]!",
+        "resolvedTarget": "CreditsCompletedUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'creditsCompletedReport: [CreditsCompletedUser]!' is a typed reference to emitted IO 'CreditsCompletedUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.creditsCompletedReport.IsForeignKey",
+        "iof.Team.creditsCompletedReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.399Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "events",
+        "sdlFieldType": "[Event]!",
+        "resolvedTarget": "Event",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'events: [Event]!' is a typed reference to emitted IO 'Event'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.events.IsForeignKey",
+        "iof.Team.events.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.407Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "inPersonEventsReport",
+        "sdlFieldType": "[InPersonEvent]!",
+        "resolvedTarget": "InPersonEvent",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'inPersonEventsReport: [InPersonEvent]!' is a typed reference to emitted IO 'InPersonEvent'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.inPersonEventsReport.IsForeignKey",
+        "iof.Team.inPersonEventsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.414Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "liveWebEventsReport",
+        "sdlFieldType": "[Webinar]!",
+        "resolvedTarget": "Webinar",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'liveWebEventsReport: [Webinar]!' is a typed reference to emitted IO 'Webinar'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.liveWebEventsReport.IsForeignKey",
+        "iof.Team.liveWebEventsReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.421Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "scormReport",
+        "sdlFieldType": "[Scorm]!",
+        "resolvedTarget": "Scorm",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'scormReport: [Scorm]!' is a typed reference to emitted IO 'Scorm'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.scormReport.IsForeignKey",
+        "iof.Team.scormReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.427Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "surveysReport",
+        "sdlFieldType": "[Survey]!",
+        "resolvedTarget": "Survey",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'surveysReport: [Survey]!' is a typed reference to emitted IO 'Survey'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.surveysReport.IsForeignKey",
+        "iof.Team.surveysReport.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.435Z",
+      "StructuredOutput": {
+        "owningIO": "Team",
+        "field": "users",
+        "sdlFieldType": "[User]!",
+        "resolvedTarget": "User",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'users: [User]!' is a typed reference to emitted IO 'User'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Team.users.IsForeignKey",
+        "iof.Team.users.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.442Z",
+      "StructuredOutput": {
+        "owningIO": "User",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.User.groups.IsForeignKey",
+        "iof.User.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.449Z",
+      "StructuredOutput": {
+        "owningIO": "User",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.User.teamId.IsForeignKey",
+        "iof.User.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.456Z",
+      "StructuredOutput": {
+        "owningIO": "User",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.User.accountId.IsForeignKey",
+        "iof.User.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.465Z",
+      "StructuredOutput": {
+        "owningIO": "User",
+        "field": "completions",
+        "sdlFieldType": "[Completion]!",
+        "resolvedTarget": "Completion",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'completions: [Completion]!' is a typed reference to emitted IO 'Completion'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.User.completions.IsForeignKey",
+        "iof.User.completions.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.472Z",
+      "StructuredOutput": {
+        "owningIO": "User",
+        "field": "creditTypesForCreditsCertified",
+        "sdlFieldType": "[CreditTypeForCreditCertified]!",
+        "resolvedTarget": "CreditTypeForCreditCertified",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'creditTypesForCreditsCertified: [CreditTypeForCreditCertified]!' is a typed reference to emitted IO 'CreditTypeForCreditCertified'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.User.creditTypesForCreditsCertified.IsForeignKey",
+        "iof.User.creditTypesForCreditsCertified.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.479Z",
+      "StructuredOutput": {
+        "owningIO": "User",
+        "field": "creditTypesForCompletedValues",
+        "sdlFieldType": "[CreditTypeForCompletedValue]!",
+        "resolvedTarget": "CreditTypeForCompletedValue",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'creditTypesForCompletedValues: [CreditTypeForCompletedValue]!' is a typed reference to emitted IO 'CreditTypeForCompletedValue'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.User.creditTypesForCompletedValues.IsForeignKey",
+        "iof.User.creditTypesForCompletedValues.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.486Z",
+      "StructuredOutput": {
+        "owningIO": "User",
+        "field": "userMetadata",
+        "sdlFieldType": "[UserMetadata!]!",
+        "resolvedTarget": "UserMetadata",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userMetadata: [UserMetadata!]!' is a typed reference to emitted IO 'UserMetadata'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.User.userMetadata.IsForeignKey",
+        "iof.User.userMetadata.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.493Z",
+      "StructuredOutput": {
+        "owningIO": "UserCertificate",
+        "field": "certificate",
+        "sdlFieldType": "Certificate",
+        "resolvedTarget": "Certificate",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'certificate: Certificate' is a typed reference to emitted IO 'Certificate'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserCertificate.certificate.IsForeignKey",
+        "iof.UserCertificate.certificate.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.500Z",
+      "StructuredOutput": {
+        "owningIO": "UserCertificate",
+        "field": "course",
+        "sdlFieldType": "Course",
+        "resolvedTarget": "Course",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'course: Course' is a typed reference to emitted IO 'Course'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserCertificate.course.IsForeignKey",
+        "iof.UserCertificate.course.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.507Z",
+      "StructuredOutput": {
+        "owningIO": "UserCertificate",
+        "field": "user",
+        "sdlFieldType": "CertificateUser",
+        "resolvedTarget": "CertificateUser",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'user: CertificateUser' is a typed reference to emitted IO 'CertificateUser'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserCertificate.user.IsForeignKey",
+        "iof.UserCertificate.user.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.515Z",
+      "StructuredOutput": {
+        "owningIO": "UserCertificate",
+        "field": "credits",
+        "sdlFieldType": "[CreditsCertifiedValues]!",
+        "resolvedTarget": "CreditsCertifiedValues",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'credits: [CreditsCertifiedValues]!' is a typed reference to emitted IO 'CreditsCertifiedValues'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserCertificate.credits.IsForeignKey",
+        "iof.UserCertificate.credits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.523Z",
+      "StructuredOutput": {
+        "owningIO": "UserCertificate",
+        "field": "userId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "User",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'userId: Int' matches <Type>Id convention for emitted IO 'User'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserCertificate.userId.IsForeignKey",
+        "iof.UserCertificate.userId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.530Z",
+      "StructuredOutput": {
+        "owningIO": "UserItem",
+        "field": "visits",
+        "sdlFieldType": "[ItemVisit!]!",
+        "resolvedTarget": "ItemVisit",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'visits: [ItemVisit!]!' is a typed reference to emitted IO 'ItemVisit'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserItem.visits.IsForeignKey",
+        "iof.UserItem.visits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.538Z",
+      "StructuredOutput": {
+        "owningIO": "UserItemVisits",
+        "field": "userItems",
+        "sdlFieldType": "[UserItem!]!",
+        "resolvedTarget": "UserItem",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userItems: [UserItem!]!' is a typed reference to emitted IO 'UserItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserItemVisits.userItems.IsForeignKey",
+        "iof.UserItemVisits.userItems.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.546Z",
+      "StructuredOutput": {
+        "owningIO": "UserMetadata",
+        "field": "accountId",
+        "sdlFieldType": "ID!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: ID!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserMetadata.accountId.IsForeignKey",
+        "iof.UserMetadata.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.553Z",
+      "StructuredOutput": {
+        "owningIO": "UserMetadata",
+        "field": "userId",
+        "sdlFieldType": "ID!",
+        "resolvedTarget": "User",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'userId: ID!' matches <Type>Id convention for emitted IO 'User'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserMetadata.userId.IsForeignKey",
+        "iof.UserMetadata.userId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.559Z",
+      "StructuredOutput": {
+        "owningIO": "UserMetadata",
+        "field": "user",
+        "sdlFieldType": "User!",
+        "resolvedTarget": "User",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'user: User!' is a typed reference to emitted IO 'User'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserMetadata.user.IsForeignKey",
+        "iof.UserMetadata.user.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.568Z",
+      "StructuredOutput": {
+        "owningIO": "UserMetadata",
+        "field": "userMetadataTemplateId",
+        "sdlFieldType": "ID!",
+        "resolvedTarget": "UserMetadataTemplate",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'userMetadataTemplateId: ID!' matches <Type>Id convention for emitted IO 'UserMetadataTemplate'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserMetadata.userMetadataTemplateId.IsForeignKey",
+        "iof.UserMetadata.userMetadataTemplateId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.576Z",
+      "StructuredOutput": {
+        "owningIO": "UserMetadata",
+        "field": "userMetadataTemplate",
+        "sdlFieldType": "UserMetadataTemplate!",
+        "resolvedTarget": "UserMetadataTemplate",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userMetadataTemplate: UserMetadataTemplate!' is a typed reference to emitted IO 'UserMetadataTemplate'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserMetadata.userMetadataTemplate.IsForeignKey",
+        "iof.UserMetadata.userMetadataTemplate.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.583Z",
+      "StructuredOutput": {
+        "owningIO": "UserMetadataTemplate",
+        "field": "accountId",
+        "sdlFieldType": "ID!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: ID!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserMetadataTemplate.accountId.IsForeignKey",
+        "iof.UserMetadataTemplate.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.590Z",
+      "StructuredOutput": {
+        "owningIO": "UserMetadataTemplate",
+        "field": "userMetadata",
+        "sdlFieldType": "[UserMetadata!]!",
+        "resolvedTarget": "UserMetadata",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'userMetadata: [UserMetadata!]!' is a typed reference to emitted IO 'UserMetadata'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserMetadataTemplate.userMetadata.IsForeignKey",
+        "iof.UserMetadataTemplate.userMetadata.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.596Z",
+      "StructuredOutput": {
+        "owningIO": "UserPresentation",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserPresentation.accountId.IsForeignKey",
+        "iof.UserPresentation.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.603Z",
+      "StructuredOutput": {
+        "owningIO": "UserSale",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserSale.groups.IsForeignKey",
+        "iof.UserSale.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.614Z",
+      "StructuredOutput": {
+        "owningIO": "UserSale",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserSale.teamId.IsForeignKey",
+        "iof.UserSale.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.621Z",
+      "StructuredOutput": {
+        "owningIO": "UserSale",
+        "field": "accountId",
+        "sdlFieldType": "Int!",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int!' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserSale.accountId.IsForeignKey",
+        "iof.UserSale.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.631Z",
+      "StructuredOutput": {
+        "owningIO": "UserView",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserView.groups.IsForeignKey",
+        "iof.UserView.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.638Z",
+      "StructuredOutput": {
+        "owningIO": "UserView",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserView.teamId.IsForeignKey",
+        "iof.UserView.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.645Z",
+      "StructuredOutput": {
+        "owningIO": "UserView",
+        "field": "videoVisits",
+        "sdlFieldType": "[VideoVisit]!",
+        "resolvedTarget": "VideoVisit",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'videoVisits: [VideoVisit]!' is a typed reference to emitted IO 'VideoVisit'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserView.videoVisits.IsForeignKey",
+        "iof.UserView.videoVisits.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.652Z",
+      "StructuredOutput": {
+        "owningIO": "VideoVisit",
+        "field": "user",
+        "sdlFieldType": "User!",
+        "resolvedTarget": "User",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'user: User!' is a typed reference to emitted IO 'User'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.VideoVisit.user.IsForeignKey",
+        "iof.VideoVisit.user.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.658Z",
+      "StructuredOutput": {
+        "owningIO": "Webinar",
+        "field": "accountId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Account",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'accountId: Int' matches <Type>Id convention for emitted IO 'Account'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Webinar.accountId.IsForeignKey",
+        "iof.Webinar.accountId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.665Z",
+      "StructuredOutput": {
+        "owningIO": "Webinar",
+        "field": "teamId",
+        "sdlFieldType": "Int",
+        "resolvedTarget": "Team",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'teamId: Int' matches <Type>Id convention for emitted IO 'Team'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.Webinar.teamId.IsForeignKey",
+        "iof.Webinar.teamId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.675Z",
+      "StructuredOutput": {
+        "owningIO": "WebinarArchiveViewerUser",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarArchiveViewerUser.groups.IsForeignKey",
+        "iof.WebinarArchiveViewerUser.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.684Z",
+      "StructuredOutput": {
+        "owningIO": "WebinarAttendee",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarAttendee.groups.IsForeignKey",
+        "iof.WebinarAttendee.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.692Z",
+      "StructuredOutput": {
+        "owningIO": "WebinarCancellationUser",
+        "field": "groups",
+        "sdlFieldType": "[Group]",
+        "resolvedTarget": "Group",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'groups: [Group]' is a typed reference to emitted IO 'Group'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarCancellationUser.groups.IsForeignKey",
+        "iof.WebinarCancellationUser.groups.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.703Z",
+      "StructuredOutput": {
+        "owningIO": "WebinarLiveAttendeeReport",
+        "field": "courseItemId",
+        "sdlFieldType": "ID",
+        "resolvedTarget": "CourseItem",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseItemId: ID' matches <Type>Id convention for emitted IO 'CourseItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarLiveAttendeeReport.courseItemId.IsForeignKey",
+        "iof.WebinarLiveAttendeeReport.courseItemId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.710Z",
+      "StructuredOutput": {
+        "owningIO": "WebinarLiveAttendeeReport",
+        "field": "attendees",
+        "sdlFieldType": "[WebinarAttendee]!",
+        "resolvedTarget": "WebinarAttendee",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'attendees: [WebinarAttendee]!' is a typed reference to emitted IO 'WebinarAttendee'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarLiveAttendeeReport.attendees.IsForeignKey",
+        "iof.WebinarLiveAttendeeReport.attendees.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.717Z",
+      "StructuredOutput": {
+        "owningIO": "WebinarRegistrationReport",
+        "field": "courseItemId",
+        "sdlFieldType": "ID",
+        "resolvedTarget": "CourseItem",
+        "fkKind": "scalar-typeId",
+        "signal": "SDL scalar field 'courseItemId: ID' matches <Type>Id convention for emitted IO 'CourseItem'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarRegistrationReport.courseItemId.IsForeignKey",
+        "iof.WebinarRegistrationReport.courseItemId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/parse-sdl-fk.mjs + scripts/apply-fk-edges.mjs",
+      "ScriptRunAt": "2026-06-11T01:22:50.728Z",
+      "StructuredOutput": {
+        "owningIO": "WebinarRegistrationReport",
+        "field": "registrations",
+        "sdlFieldType": "[WebinarAttendee]!",
+        "resolvedTarget": "WebinarAttendee",
+        "fkKind": "typed-reference",
+        "signal": "SDL field 'registrations: [WebinarAttendee]!' is a typed reference to emitted IO 'WebinarAttendee'"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarRegistrationReport.registrations.IsForeignKey",
+        "iof.WebinarRegistrationReport.registrations.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-fixes.mjs",
+      "ScriptRunAt": "2026-06-11T02:01:26.058Z",
+      "StructuredOutput": {
+        "value": true,
+        "source": "packages/Integration/connectors-registry/path-lms/sources/schema.spectaql.html — section id='definition-AssessmentScore': id: Int! is the canonical record PK by SDL definition and vendor-wide convention",
+        "narrowExtraction": "[0]=id [1]=Int!; userId is a FK to the user who completed the assessment, not the record identity",
+        "amendmentRound": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.AssessmentScore.id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-fixes.mjs",
+      "ScriptRunAt": "2026-06-11T02:01:26.058Z",
+      "StructuredOutput": {
+        "value": false,
+        "source": "packages/Integration/connectors-registry/path-lms/sources/schema.spectaql.html — section id='definition-AssessmentScore': userId is a FK reference, not the record identity",
+        "narrowExtraction": "[0]=id [1]=Int!; userId is a FK to the user who completed the assessment, not the record identity",
+        "amendmentRound": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.AssessmentScore.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-fixes.mjs",
+      "ScriptRunAt": "2026-06-11T02:01:26.058Z",
+      "StructuredOutput": {
+        "value": true,
+        "source": "packages/Integration/connectors-registry/path-lms/sources/schema.spectaql.html — section id='definition-Order': id: Int! is the canonical record PK by SDL definition and vendor-wide convention",
+        "narrowExtraction": "[0]=id [1]=Int! [2]=accountId [3]=Int! [4]=userId [5]=Int!; userId is purchaser FK — multiple orders share a userId",
+        "amendmentRound": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Order.id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-fixes.mjs",
+      "ScriptRunAt": "2026-06-11T02:01:26.058Z",
+      "StructuredOutput": {
+        "value": false,
+        "source": "packages/Integration/connectors-registry/path-lms/sources/schema.spectaql.html — section id='definition-Order': userId is a FK reference, not the record identity",
+        "narrowExtraction": "[0]=id [1]=Int! [2]=accountId [3]=Int! [4]=userId [5]=Int!; userId is purchaser FK — multiple orders share a userId",
+        "amendmentRound": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Order.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-fixes.mjs",
+      "ScriptRunAt": "2026-06-11T02:01:26.058Z",
+      "StructuredOutput": {
+        "value": true,
+        "source": "packages/Integration/connectors-registry/path-lms/sources/schema.spectaql.html — section id='definition-OrderItem': id: Int! is the canonical record PK by SDL definition and vendor-wide convention",
+        "narrowExtraction": "[0]=id [1]=Int! [2]=accountId [3]=Int! [4]=userId [5]=Int!; userId is purchaser FK; id is the order item identity",
+        "amendmentRound": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.OrderItem.id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-fixes.mjs",
+      "ScriptRunAt": "2026-06-11T02:01:26.058Z",
+      "StructuredOutput": {
+        "value": false,
+        "source": "packages/Integration/connectors-registry/path-lms/sources/schema.spectaql.html — section id='definition-OrderItem': userId is a FK reference, not the record identity",
+        "narrowExtraction": "[0]=id [1]=Int! [2]=accountId [3]=Int! [4]=userId [5]=Int!; userId is purchaser FK; id is the order item identity",
+        "amendmentRound": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.OrderItem.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-fixes.mjs",
+      "ScriptRunAt": "2026-06-11T02:01:26.058Z",
+      "StructuredOutput": {
+        "value": true,
+        "source": "packages/Integration/connectors-registry/path-lms/sources/schema.spectaql.html — section id='definition-RefundOrder': id: Int! is the canonical record PK by SDL definition and vendor-wide convention",
+        "narrowExtraction": "[0]=id [1]=Int! [2]=accountId [3]=Int! [4]=userId [5]=Int!; userId is refund-recipient FK; id is the refund identity",
+        "amendmentRound": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.RefundOrder.id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-fixes.mjs",
+      "ScriptRunAt": "2026-06-11T02:01:26.058Z",
+      "StructuredOutput": {
+        "value": false,
+        "source": "packages/Integration/connectors-registry/path-lms/sources/schema.spectaql.html — section id='definition-RefundOrder': userId is a FK reference, not the record identity",
+        "narrowExtraction": "[0]=id [1]=Int! [2]=accountId [3]=Int! [4]=userId [5]=Int!; userId is refund-recipient FK; id is the refund identity",
+        "amendmentRound": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.RefundOrder.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-fixes.mjs",
+      "ScriptRunAt": "2026-06-11T02:01:26.058Z",
+      "StructuredOutput": {
+        "value": true,
+        "source": "packages/Integration/connectors-registry/path-lms/sources/schema.spectaql.html — section id='definition-RefundOrderItem': id: Int! is the canonical record PK by SDL definition and vendor-wide convention",
+        "narrowExtraction": "[0]=id [1]=Int! [2]=userId [3]=Int!; userId is the user FK; id is the refund order item identity",
+        "amendmentRound": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.RefundOrderItem.id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-fixes.mjs",
+      "ScriptRunAt": "2026-06-11T02:01:26.058Z",
+      "StructuredOutput": {
+        "value": false,
+        "source": "packages/Integration/connectors-registry/path-lms/sources/schema.spectaql.html — section id='definition-RefundOrderItem': userId is a FK reference, not the record identity",
+        "narrowExtraction": "[0]=id [1]=Int! [2]=userId [3]=Int!; userId is the user FK; id is the refund order item identity",
+        "amendmentRound": 1
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.RefundOrderItem.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "CategorySale",
+        "field": "userId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. CategorySale has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.CategorySale.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "CategorySale",
+        "field": "userId",
+        "change": "IsForeignKey=true, RelatedIntegrationObjectID -> User",
+        "reason": "Naming-convention FK: 'userId' references the emitted 'User' IO (the demoted *Id is a foreign key to User.id)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.CategorySale.userId.IsForeignKey",
+        "iof.CategorySale.userId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "InPersonEventCancellation",
+        "field": "userId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. InPersonEventCancellation has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.InPersonEventCancellation.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "InPersonEventCancellation",
+        "field": "userId",
+        "change": "IsForeignKey=true, RelatedIntegrationObjectID -> User",
+        "reason": "Naming-convention FK: 'userId' references the emitted 'User' IO (the demoted *Id is a foreign key to User.id)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEventCancellation.userId.IsForeignKey",
+        "iof.InPersonEventCancellation.userId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "InPersonEventRegistrationUser",
+        "field": "userId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. InPersonEventRegistrationUser has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.InPersonEventRegistrationUser.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "InPersonEventRegistrationUser",
+        "field": "userId",
+        "change": "IsForeignKey=true, RelatedIntegrationObjectID -> User",
+        "reason": "Naming-convention FK: 'userId' references the emitted 'User' IO (the demoted *Id is a foreign key to User.id)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEventRegistrationUser.userId.IsForeignKey",
+        "iof.InPersonEventRegistrationUser.userId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "InPersonEventUser",
+        "field": "userId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. InPersonEventUser has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.InPersonEventUser.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "InPersonEventUser",
+        "field": "userId",
+        "change": "IsForeignKey=true, RelatedIntegrationObjectID -> User",
+        "reason": "Naming-convention FK: 'userId' references the emitted 'User' IO (the demoted *Id is a foreign key to User.id)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.InPersonEventUser.userId.IsForeignKey",
+        "iof.InPersonEventUser.userId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "ProductCatalog",
+        "field": "sellableApiId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. ProductCatalog has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.ProductCatalog.sellableApiId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "SaleByBundle",
+        "field": "userId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. SaleByBundle has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.SaleByBundle.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "SaleByBundle",
+        "field": "userId",
+        "change": "IsForeignKey=true, RelatedIntegrationObjectID -> User",
+        "reason": "Naming-convention FK: 'userId' references the emitted 'User' IO (the demoted *Id is a foreign key to User.id)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.SaleByBundle.userId.IsForeignKey",
+        "iof.SaleByBundle.userId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "UserItemVisits",
+        "field": "userId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. UserItemVisits has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.UserItemVisits.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "UserItemVisits",
+        "field": "userId",
+        "change": "IsForeignKey=true, RelatedIntegrationObjectID -> User",
+        "reason": "Naming-convention FK: 'userId' references the emitted 'User' IO (the demoted *Id is a foreign key to User.id)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.UserItemVisits.userId.IsForeignKey",
+        "iof.UserItemVisits.userId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "WebinarArchiveViewerUser",
+        "field": "userId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. WebinarArchiveViewerUser has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.WebinarArchiveViewerUser.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "WebinarArchiveViewerUser",
+        "field": "userId",
+        "change": "IsForeignKey=true, RelatedIntegrationObjectID -> User",
+        "reason": "Naming-convention FK: 'userId' references the emitted 'User' IO (the demoted *Id is a foreign key to User.id)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarArchiveViewerUser.userId.IsForeignKey",
+        "iof.WebinarArchiveViewerUser.userId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "WebinarCancellationUser",
+        "field": "userId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. WebinarCancellationUser has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.WebinarCancellationUser.userId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "WebinarCancellationUser",
+        "field": "userId",
+        "change": "IsForeignKey=true, RelatedIntegrationObjectID -> User",
+        "reason": "Naming-convention FK: 'userId' references the emitted 'User' IO (the demoted *Id is a foreign key to User.id)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarCancellationUser.userId.IsForeignKey",
+        "iof.WebinarCancellationUser.userId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "WebinarLiveAttendeeReport",
+        "field": "webinarId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. WebinarLiveAttendeeReport has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.WebinarLiveAttendeeReport.webinarId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "WebinarLiveAttendeeReport",
+        "field": "webinarId",
+        "change": "IsForeignKey=true, RelatedIntegrationObjectID -> Webinar",
+        "reason": "Naming-convention FK: 'webinarId' references the emitted 'Webinar' IO (the demoted *Id is a foreign key to Webinar.id)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarLiveAttendeeReport.webinarId.IsForeignKey",
+        "iof.WebinarLiveAttendeeReport.webinarId.RelatedIntegrationObjectID"
+      ]
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "WebinarRegistrationReport",
+        "field": "webinarId",
+        "change": "IsPrimaryKey true->false",
+        "reason": "id-less IO with a *Id field marked PK. A *Id field references another object, never the row's own identity. WebinarRegistrationReport has no 'id' column, so it is PK-less and identity is carried by the engine content-hash (correct for a keyless projection/report row)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.WebinarRegistrationReport.webinarId.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/path-lms/scripts/fix-idless-starid-pk.ts",
+      "ScriptRunAt": "2026-06-11T02:49:12.745Z",
+      "StructuredOutput": {
+        "io": "WebinarRegistrationReport",
+        "field": "webinarId",
+        "change": "IsForeignKey=true, RelatedIntegrationObjectID -> Webinar",
+        "reason": "Naming-convention FK: 'webinarId' references the emitted 'Webinar' IO (the demoted *Id is a foreign key to Webinar.id)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": [
+        "iof.WebinarRegistrationReport.webinarId.IsForeignKey",
+        "iof.WebinarRegistrationReport.webinarId.RelatedIntegrationObjectID"
+      ]
+    }
+  ]
+}
