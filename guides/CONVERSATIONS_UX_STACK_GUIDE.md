@@ -84,7 +84,7 @@ interfaces and register them at bootstrap:
 |---|---|---|---|
 | `INotificationAdapter` | `Notify(level, message, ttlMs?)` | Bridges to `MJNotificationService.CreateSimpleNotification` | `ConsoleNotificationAdapter` (console.log/warn/error) |
 | `IActiveTaskTracker` | `RemoveByAgentRunId(agentRunId)` | Bridges to `ActiveTasksService.removeByAgentRunId` | `NoOpActiveTaskTracker` (no-op) |
-| `ISessionsAdapter` | (observable) `SessionLifecycle$` | `VoiceSessionsAdapter` bridges `VoiceSessionService`'s `SessionStarted$` / `ActiveChannels$` / `SessionEnded$` | `NoOpSessionsAdapter` (EMPTY observable) |
+| `ISessionsAdapter` | (observable) `SessionLifecycle$` | `RealtimeSessionsAdapter` bridges `RealtimeSessionService`'s `SessionStarted$` / `ActiveChannels$` / `SessionEnded$` | `NoOpSessionsAdapter` (EMPTY observable) |
 
 ### Registration (Angular host)
 
@@ -363,13 +363,13 @@ onSessionEnded(e: SessionEndedEventArgs) {
 
 These re-broadcast from `ConversationsRuntime.Instance.Sessions.SessionLifecycle$`,
 which is fed by whichever `ISessionsAdapter` the host registered. In Angular,
-that's `VoiceSessionsAdapter` (auto-registered by `ConversationsRuntimeBootstrap`),
-which bridges `VoiceSessionService`'s native observables.
+that's `RealtimeSessionsAdapter` (auto-registered by `ConversationsRuntimeBootstrap`),
+which bridges `RealtimeSessionService`'s native observables.
 
 ### What's NOT surfaced
 
 - **Channel `'opening'`/`'closing'` transitions.** Only `'open'`/`'closed'` —
-  `VoiceSessionService` only exposes the full channel array, not per-channel
+  `RealtimeSessionService` only exposes the full channel array, not per-channel
   transitions. Future widening is non-breaking.
 - **Server-only close reasons** (`'Janitor'`, `'Shutdown'`). Those happen
   out-of-process while the user's tab is gone; no client push channel today.
@@ -513,7 +513,7 @@ async function main() {
 | Slot directive + name union | `packages/Angular/Generic/conversations/src/lib/directives/chat-slot.directive.ts` |
 | Slot interfaces + defaults | `packages/Angular/Generic/conversations/src/lib/components/slots/` |
 | Event arg classes | `packages/Angular/Generic/conversations/src/lib/events/chat-events.ts` |
-| Voice → runtime sessions bridge | `packages/Angular/Generic/conversations/src/lib/services/voice-sessions-adapter.ts` |
+| Voice → runtime sessions bridge | `packages/Angular/Generic/conversations/src/lib/services/realtime-sessions-adapter.ts` |
 | chat-area component | `packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts` |
 
 ---

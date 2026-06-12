@@ -1,12 +1,12 @@
 import { Observable, Subject, Subscription } from 'rxjs';
 import {
   VoiceCaption, VoiceDelegationProgress, VoiceDelegationResult, VoiceDelegationNarration
-} from '../../services/voice-session.service';
+} from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 
 /**
  * The four reactive session streams {@link RealtimeSessionState} merges — structurally
- * satisfied by `VoiceSessionService`. Narrowed to an interface so the state (and its unit
+ * satisfied by `RealtimeSessionService`. Narrowed to an interface so the state (and its unit
  * tests) depend only on the streams, not on the full service / GraphQL import chain.
  */
 export interface RealtimeSessionStreams {
@@ -133,7 +133,7 @@ export function FormatElapsed(ms: number): string {
  * thread and the activity rail — so the per-CallID card bookkeeping and subscription
  * logic exists exactly once.
  *
- * Merges FOUR reactive streams from {@link VoiceSessionService}:
+ * Merges FOUR reactive streams from {@link RealtimeSessionService}:
  *  - `Captions$`            — growing user/assistant caption list → appended to {@link Items}.
  *  - `DelegationProgress$`  — first event per `CallID` inserts a working card at the thread
  *                             tail; later events REPLACE the card immutably (new object +

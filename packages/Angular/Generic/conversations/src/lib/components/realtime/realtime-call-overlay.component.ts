@@ -2,12 +2,12 @@ import { Component, EventEmitter, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { VoiceSessionService, VoiceConnectionState } from '../../services/voice-session.service';
+import { RealtimeSessionService, VoiceConnectionState } from '../../services/realtime-session.service';
 
 /**
  * Focused "call" overlay for a live real-time voice session. Shows the
  * connection / turn state, toggleable live captions, and mute + end-call
- * controls. All session state is sourced reactively from {@link VoiceSessionService}.
+ * controls. All session state is sourced reactively from {@link RealtimeSessionService}.
  *
  * MVP scope: a fixed panel (Matt / LXT own the visual polish later — see the
  * "Real-Time UX in Explorer" plan section). Renders only while a session is
@@ -15,13 +15,13 @@ import { VoiceSessionService, VoiceConnectionState } from '../../services/voice-
  */
 @Component({
   standalone: true,
-  selector: 'mj-voice-overlay',
+  selector: 'mj-realtime-call-overlay',
   imports: [CommonModule, MJButtonDirective, SharedGenericModule],
-  templateUrl: './voice-overlay.component.html',
-  styleUrl: './voice-overlay.component.css'
+  templateUrl: './realtime-call-overlay.component.html',
+  styleUrl: './realtime-call-overlay.component.css'
 })
-export class VoiceOverlayComponent {
-  private voice = inject(VoiceSessionService);
+export class RealtimeCallOverlayComponent {
+  private voice = inject(RealtimeSessionService);
 
   /** Emitted after the user ends the call (so the host can hide the overlay). */
   @Output() Ended = new EventEmitter<void>();

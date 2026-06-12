@@ -280,7 +280,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
  * Tree-shaking prevention: the whiteboard channel is resolved dynamically through the
  * ClassFactory (by the registry row's `ClientPluginClass` key), so this static call is
  * what keeps its `@RegisterClass` side effect from being eliminated by the bundler.
- * Called by `VoiceSessionService` alongside the realtime-client driver Load calls.
+ * Called by `RealtimeSessionService` alongside the realtime-client driver Load calls.
  */
 export function LoadRealtimeWhiteboardChannel(): void {
   // intentional no-op — the import side effect performs the registration
