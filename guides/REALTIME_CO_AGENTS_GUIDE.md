@@ -461,7 +461,16 @@ Honest ledger of what is *not* done on this branch, so nobody reads aspiration i
 
 ## 11. Audio-Reactive Call Visuals (Audio Activity Metering)
 
-The call overlay's pure-audio hero orb doesn't *act out* speech — it **reacts to the actual
+The call overlay is a PROGRESSIVE-DISCLOSURE console (see `realtime-disclosure.ts` +
+`ng-conversations`' README): a first-ever call is **pure audio** — a breathing hero orb and
+three controls, with the caption thread / composer dock / surface panel / gear unlocking by
+level (0–4) as the user acts or across sessions via a per-user UserInfoEngine milestones
+ratchet (`mj.realtimeVoice.uxMilestones.v1`; the gear's Simple/Standard/Pro/Auto density
+control is the escape hatch). Content never flips the console open — the ONE auto-reveal is
+a channel's first agent activity (`ChannelActivity$`), which opens the surface panel as a
+peek with that channel's tab focused; finished artifacts arrive as unfocused, glowing tabs.
+
+That pure-audio hero orb doesn't *act out* speech — it **reacts to the actual
 waveform**, vibrating like a speaker cone with the agent's voice and flipping color when the
 user talks. Three layers, each degrading gracefully:
 
