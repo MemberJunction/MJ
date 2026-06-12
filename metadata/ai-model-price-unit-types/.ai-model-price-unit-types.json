@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Per Minute",
+      "Description": "Time-based pricing billed per minute of session/audio time — the unit realtime voice and speech models (e.g. GPT-Realtime-Translate, GPT-Realtime-Whisper, conversational-agent platforms) publish their rates in. Cost rows using this unit express the price per ONE minute; consumers multiply by elapsed minutes (fractional minutes pro-rate).",
+      "DriverClass": "TimePerMinute"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Per Hour",
+      "Description": "Time-based pricing billed per hour — for hourly-billed model capacity (e.g. dedicated/provisioned realtime endpoints). Cost rows using this unit express the price per ONE hour; consumers pro-rate fractional hours.",
+      "DriverClass": "TimePerHour"
+    }
+  }
+]
