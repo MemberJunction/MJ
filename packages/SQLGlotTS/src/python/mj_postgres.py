@@ -338,38 +338,110 @@ def _collect_bit_columns(sql: str) -> set[tuple[str, str]]:
     return out
 
 
-def _rewrite_boolean_int_checks(stmt: exp.Expression) -> exp.Expression:
-    """`CHECK (BitCol = 1/0)` → `CHECK (BitCol = TRUE/FALSE)`. After BIT→BOOLEAN, a
-    `boolean = integer` comparison is a PG type error that aborts the CREATE/ALTER.
-    Type-aware: rewrites equality only against a column known to be BIT/BOOLEAN — either
-    declared in this same statement or, via the file-level `_BIT_COLS` registry, on the
-    table this statement targets — so genuine integer checks (`Priority = 1`) are untouched."""
-    bool_cols = {
+def _boolean_columns_for(stmt: exp.Expression) -> set[str]:
+    """Lower-cased names of columns in scope for `stmt` that are BIT/BOOLEAN: those declared
+    in the statement itself, plus the `_BIT_COLS` registry entries (file-level declarations +
+    cross-file baselines) for the statement's target table. Shared by the coercion pass and
+    the residual self-check so both reason about the same type set."""
+    cols = {
         cd.name.lower()
         for cd in stmt.find_all(exp.ColumnDef)
         if cd.kind is not None and cd.kind.this in (exp.DataType.Type.BIT, exp.DataType.Type.BOOLEAN)
     }
     tbl = _table_name_of(stmt)
     if tbl:
-        bool_cols |= {col for (t, col) in _BIT_COLS if t == tbl}
+        cols |= {col for (t, col) in _BIT_COLS if t == tbl}
+    return cols
+
+
+def _unwrap_paren(x: exp.Expression) -> exp.Expression:
+    while isinstance(x, exp.Paren):  # SS wraps the literal in parens: `IsActive = (1)`
+        x = x.this
+    return x
+
+
+def _bool_literal(node: exp.Expression):
+    """The paren-unwrapped node as exp.true()/false() if it is a `0`/`1` integer literal,
+    else None. Used to decide whether a comparand should be coerced to a PG boolean."""
+    node = _unwrap_paren(node)
+    if isinstance(node, exp.Literal) and not node.is_string and node.name in ("0", "1"):
+        return exp.true() if node.name == "1" else exp.false()
+    return None
+
+
+def _is_bool_col(node: exp.Expression, bool_cols: set[str]) -> bool:
+    node = _unwrap_paren(node)
+    return isinstance(node, exp.Column) and node.name.lower() in bool_cols
+
+
+def _rewrite_boolean_int_comparisons(stmt: exp.Expression) -> exp.Expression:
+    """Coerce `<bitcol> <op> 0/1` → `<bitcol> <op> TRUE/FALSE` for any column known to be
+    BIT/BOOLEAN, in ANY syntactic context — CHECK, WHERE, SET assignment, JOIN ON — and across
+    `=`, `<>`/`!=`, and `IN (…)`. After BIT→BOOLEAN, a `boolean = integer` comparison/assignment
+    is a PG type error that aborts the statement; this is the single type-driven pass that
+    prevents it everywhere rather than per-construct. Type-aware via `_boolean_columns_for`, so
+    genuine integer columns (`Priority = 1`) are never touched."""
+    bool_cols = _boolean_columns_for(stmt)
     if not bool_cols:
         return stmt
 
-    def unwrap(x: exp.Expression) -> exp.Expression:
-        while isinstance(x, exp.Paren):  # SS wraps the literal in parens: `IsActive = (1)`
-            x = x.this
-        return x
-
     def fix(node: exp.Expression) -> exp.Expression:
-        if isinstance(node, exp.EQ):
-            left, right = unwrap(node.this), unwrap(node.expression)
-            col, lit = (left, right) if isinstance(left, exp.Column) else (right, left)
-            if (isinstance(col, exp.Column) and col.name.lower() in bool_cols
-                    and isinstance(lit, exp.Literal) and not lit.is_string and lit.name in ("0", "1")):
-                return exp.EQ(this=col, expression=exp.true() if lit.name == "1" else exp.false())
+        # Equality / inequality, either operand order: `col = 1`, `0 <> col`, `col != 1`.
+        if isinstance(node, (exp.EQ, exp.NEQ)):
+            left, right = node.this, node.expression
+            if _is_bool_col(left, bool_cols):
+                lit = _bool_literal(right)
+                if lit is not None:
+                    return node.__class__(this=left, expression=lit)
+            elif _is_bool_col(right, bool_cols):
+                lit = _bool_literal(left)
+                if lit is not None:
+                    return node.__class__(this=lit, expression=right)
+            return node
+        # Set membership: `col IN (0, 1)` → `col IN (FALSE, TRUE)` (coerce only the 0/1 elems).
+        if isinstance(node, exp.In) and _is_bool_col(node.this, bool_cols):
+            exprs = node.args.get("expressions")
+            if exprs:
+                node.set("expressions", [(_bool_literal(e) or e) for e in exprs])
+            return node
         return node
 
     return stmt.transform(fix)
+
+
+def _residual_boolean_int(stmt: exp.Expression) -> list[str]:
+    """Self-check: after coercion + the full rewrite pipeline, find any surviving
+    `<bitcol> <op> 0/1` comparison/membership the coercion pass did not eliminate (e.g. an
+    operator/shape it doesn't model — CASE switch, BETWEEN). These are exactly the
+    `boolean = integer` errors that abort a PG migration, so they are surfaced as conversion
+    gaps rather than emitted silently — making the converter's gap count behavioral, not just
+    syntactic. Returns SQL snippets of each offending node."""
+    bool_cols = _boolean_columns_for(stmt)
+    if not bool_cols:
+        return []
+    hits: list[str] = []
+    for node in stmt.walk():
+        # Comparisons + membership the coercion pass targets (defence-in-depth — should be
+        # empty after coercion, but proves it).
+        if isinstance(node, (exp.EQ, exp.NEQ)):
+            if (_is_bool_col(node.this, bool_cols) and _bool_literal(node.expression) is not None) or (
+                _is_bool_col(node.expression, bool_cols) and _bool_literal(node.this) is not None
+            ):
+                hits.append(node.sql(dialect=MJPostgres))
+        elif isinstance(node, exp.In) and _is_bool_col(node.this, bool_cols):
+            if any(_bool_literal(e) is not None for e in (node.args.get("expressions") or [])):
+                hits.append(node.sql(dialect=MJPostgres))
+        # Shapes the coercion pass intentionally does NOT model — surface them so they are
+        # hand-resolved instead of silently emitted as `boolean = integer`:
+        #   CASE switch: `CASE bitcol WHEN 1 THEN …`  (implicit equality, no EQ node)
+        elif isinstance(node, exp.Case) and node.this is not None and _is_bool_col(node.this, bool_cols):
+            if any(_bool_literal(w.this) is not None for w in node.args.get("ifs", [])):
+                hits.append(node.sql(dialect=MJPostgres))
+        #   BETWEEN: `bitcol BETWEEN 0 AND 1`
+        elif isinstance(node, exp.Between) and _is_bool_col(node.this, bool_cols):
+            if _bool_literal(node.args.get("low")) is not None or _bool_literal(node.args.get("high")) is not None:
+                hits.append(node.sql(dialect=MJPostgres))
+    return hits
 
 
 def _strip_national(node: exp.Expression) -> exp.Expression:
@@ -1123,7 +1195,7 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
                     continue
         if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "NONCLUSTERED INDEX":
             stmt.set("kind", "INDEX")  # PG has no NONCLUSTERED qualifier
-        stmt = _rewrite_boolean_int_checks(stmt)
+        stmt = _rewrite_boolean_int_comparisons(stmt)
         stmt = (
             stmt.transform(_rewrite_update_from_alias)  # restructures UPDATE before other rewrites
             .transform(_rewrite_insert_booleans)  # seed-INSERT 1/0 → TRUE/FALSE for bit cols
@@ -1143,6 +1215,13 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
         # An ALTER TABLE whose only action was dropped (e.g. an ISJSON ADD CONSTRAINT)
         # is left actionless — emitting bare `ALTER TABLE x` is a PG syntax error. Skip.
         if isinstance(stmt, exp.Alter) and not stmt.args.get("actions"):
+            continue
+        # Behavioral self-check: any `boolean = integer` comparison the coercion pass didn't
+        # eliminate would abort on PG. Surface it as a gap (not silent output) so the gap
+        # count reflects type-correctness, not just parseability.
+        residual = _residual_boolean_int(stmt)
+        if residual:
+            unhandled.append({"kind": "BOOL-INT-RESIDUAL", "snippet": "; ".join(residual)[:120]})
             continue
         out.append(stmt.sql(dialect=MJPostgres, pretty=pretty, identify=True))
     return (";\n".join(out) + (";" if out else "")), unhandled
@@ -1351,8 +1430,8 @@ def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dic
     out: list[str] = []
     unhandled: list[dict] = []
 
-    # File-level pass: register every BIT column so boolean CHECKs in separate ALTER
-    # statements can be resolved (see `_rewrite_boolean_int_checks`). Augment with
+    # File-level pass: register every BIT column so boolean comparisons in separate
+    # statements can be resolved (see `_rewrite_boolean_int_comparisons`). Augment with
     # boolean columns of tables declared OUTSIDE this file (the baseline / earlier
     # migrations), supplied as JSON [["table","col"],…] in MJ_EXTRA_BIT_COLS — needed to
     # coerce 1/0 → TRUE/FALSE in seed INSERTs that target core tables (e.g. User.IsActive).

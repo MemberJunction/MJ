@@ -14,9 +14,20 @@ from mj_postgres import mj_transpile  # noqa: E402
 _failures = 0
 
 
-def check(name, sql, must_contain=(), must_not_contain=(), expect_unhandled=0):
+def check(name, sql, must_contain=(), must_not_contain=(), expect_unhandled=0, extra_bit_cols=None):
     global _failures
-    r = mj_transpile(sql)
+    import os as _os, json as _json
+    _prev = _os.environ.get("MJ_EXTRA_BIT_COLS")
+    if extra_bit_cols is not None:
+        _os.environ["MJ_EXTRA_BIT_COLS"] = _json.dumps(extra_bit_cols)
+    try:
+        r = mj_transpile(sql)
+    finally:
+        if extra_bit_cols is not None:
+            if _prev is None:
+                _os.environ.pop("MJ_EXTRA_BIT_COLS", None)
+            else:
+                _os.environ["MJ_EXTRA_BIT_COLS"] = _prev
     joined = "\n".join(r["sql"])
     # Whitespace-insensitive substring match so assertions survive pretty-printing
     # (sqlglot may wrap a statement across lines, e.g. `DEFAULT (\n  CURRENT_USER\n)`).
@@ -126,6 +137,33 @@ check("DELETE WHERE on BIT column → TRUE/FALSE; integer column untouched",
       "DELETE FROM ${flyway:defaultSchema}.Foo WHERE IsActive = 0 AND Priority = 1;",
       must_contain=['"IsActive" = FALSE', '"Priority" = 1'],
       must_not_contain=['"IsActive" = 0'])
+
+check("BIT column with <> / != → TRUE/FALSE (not just =); both operand orders",
+      "CREATE TABLE ${flyway:defaultSchema}.Foo (IsActive BIT NOT NULL);\nGO\n"
+      "UPDATE ${flyway:defaultSchema}.Foo SET IsActive = 1 WHERE IsActive <> 0;\nGO\n"
+      "DELETE FROM ${flyway:defaultSchema}.Foo WHERE 1 <> IsActive;",
+      must_contain=['"IsActive" <> FALSE', '"IsActive" = TRUE'],
+      must_not_contain=['<> 0', '1 <>', '<> 1'])
+
+check("BIT column IN (0, 1) → IN (FALSE, TRUE); integer column's IN untouched",
+      "CREATE TABLE ${flyway:defaultSchema}.Foo (IsActive BIT NOT NULL, Priority INT NOT NULL);\nGO\n"
+      "DELETE FROM ${flyway:defaultSchema}.Foo WHERE IsActive IN (0, 1) AND Priority IN (0, 1);",
+      must_contain=['"IsActive" IN (FALSE, TRUE)', '"Priority" IN (0, 1)'],
+      must_not_contain=['"IsActive" IN (0, 1)'])
+
+check("cross-file BIT registry (MJ_EXTRA_BIT_COLS) coerces UPDATE to a table NOT declared in-file",
+      "UPDATE ${flyway:defaultSchema}.EntityField SET IsNameField = 1 WHERE AutoUpdateIsNameField = 1;",
+      must_contain=['SET "IsNameField" = TRUE', '"AutoUpdateIsNameField" = TRUE'],
+      must_not_contain=['= 1'],
+      extra_bit_cols=[["entityfield", "isnamefield"], ["entityfield", "autoupdateisnamefield"]])
+
+# Residual self-check: a bool-vs-int shape the coercion pass does NOT model (CASE switch
+# form, `CASE col WHEN 1`) must be surfaced as a gap, never emitted as `boolean = integer`.
+check("unmodeled bool-vs-int shape is reported as a gap, not silently emitted",
+      "CREATE TABLE ${flyway:defaultSchema}.Foo (IsActive BIT NOT NULL, Label NVARCHAR(10));\nGO\n"
+      "UPDATE ${flyway:defaultSchema}.Foo SET Label = CASE IsActive WHEN 1 THEN 'y' ELSE 'n' END;",
+      must_not_contain=['WHEN 1 THEN'],
+      expect_unhandled=1)
 
 check("SET NOCOUNT/XACT_ABORT/QUOTED_IDENTIFIER batch-control dropped",
       "SET NOCOUNT ON;\nSET XACT_ABORT ON;\nSET QUOTED_IDENTIFIER ON;\nCREATE TABLE ${flyway:defaultSchema}.Foo (ID UNIQUEIDENTIFIER NOT NULL);",
