@@ -244,9 +244,11 @@ board.ItemRemoving$.subscribe((e) => {
 
 HTML widgets are self-contained documents (inline CSS/JS) rendered inside an iframe whose `sandbox` attribute is **`allow-scripts` only**:
 
-- The frame runs in a unique **opaque origin** — its scripts cannot reach the parent document, the app session, cookies, or any storage. `allow-same-origin` is deliberately ruled out (it would let the frame script remove its own sandbox).
-- Angular's sanitizer is bypassed *only* for the iframe `srcdoc` (the payload never touches the app's DOM); the trusted value is memoized per item so frames don't reload every change-detection pass.
-- Off-screen widgets render as placeholders — live frames are only instantiated near the viewport.
+- The frame runs in a unique **opaque origin** — its scripts cannot reach the parent document, the app session, cookies, or any storage. `allow-same-origin` is deliberately ruled out (it would let the frame script remove its own sandbox). By design there is **no DOM sanitization inside the sandbox** — the sandbox is the boundary, so SVG/script-heavy widget documents pass through byte-for-byte.
+- Angular's sanitizer is bypassed *only* for the iframe `srcdoc` (the payload never touches the app's DOM). The trusted value is produced by the view-scoped `wbWidgetSrcdoc` pure pipe (`WhiteboardWidgetSrcdocPipe`), which fixes the lifecycle contract:
+  - **Widget documents are rebuilt per mount.** Every time a frame is (re)created — switching whiteboard pages away and back, the viewport-lazy toggle, panel collapse/expand, whole-board re-creation — the new view gets a new pipe instance and a freshly built document, so a re-mounted widget always renders exactly what the first mount rendered. (Do not reintroduce a component-level per-item `SafeHtml` cache: a stale instance handed to a re-created frame means no `srcdoc` write and a blank widget.)
+  - **Still-mounted widgets never reload on unrelated board activity.** For an unchanged `Html` source the pipe returns the identical `SafeHtml` instance, so whole-scene `'replace'` ops (page rename, undo/redo of other items, `LoadFromJSON` restores) cause no `srcdoc` rewrite and no iframe reload — widget runtime state survives. Only an actual content edit reloads the frame.
+- Off-screen widgets render as placeholders — live frames are only instantiated near the viewport. Re-entering the viewport re-creates the frame from a freshly built document (internal widget state resets — acceptable for board decorations).
 
 The only way data flows out is `postMessage`, governed by the **input bridge**:
 

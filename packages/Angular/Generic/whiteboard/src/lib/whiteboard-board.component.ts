@@ -3,7 +3,6 @@ import {
   Input, OnDestroy, OnInit, Output, ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
@@ -17,10 +16,11 @@ import {
 } from './whiteboard-state';
 import { WhiteboardTool, WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import {
-  EvaluateWidgetInteractionMessage, EvaluateWidgetSubmitMessage, InjectWhiteboardSubmitHelper,
+  EvaluateWidgetInteractionMessage, EvaluateWidgetSubmitMessage,
   WHITEBOARD_WIDGET_INTERACTION_MAX_CHARS, WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS,
   WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
 } from './whiteboard-widget-bridge';
+import { WhiteboardWidgetSrcdocPipe } from './whiteboard-srcdoc.pipe';
 import {
   BuildWhiteboardContextMenu, BuildWhiteboardPageContextMenu,
   WhiteboardContextMenuAction, WhiteboardContextMenuActionID
@@ -157,7 +157,7 @@ const POP_IN_MS = 3200;
 @Component({
   standalone: true,
   selector: 'mj-realtime-whiteboard',
-  imports: [CommonModule, MarkdownModule, CodeEditorModule, RealtimeWhiteboardPagesComponent],
+  imports: [CommonModule, MarkdownModule, CodeEditorModule, RealtimeWhiteboardPagesComponent, WhiteboardWidgetSrcdocPipe],
   templateUrl: './whiteboard-board.component.html',
   styleUrl: './whiteboard-board.component.css'
 })
@@ -265,14 +265,6 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   private pendingFocus = false;
   private userStickyCount = 0;
 
-  /**
-   * Per-item memoized `srcdoc` payloads for HTML widgets. The SafeHtml instance MUST be
-   * stable across change-detection cycles — handing the iframe a fresh object every CD
-   * pass would reload (and reset) the widget continuously.
-   */
-  private htmlSrcdocCache = new Map<string, { Html: string; Safe: SafeHtml }>();
-  private sanitizer = inject(DomSanitizer);
-
   /** Agent items that just popped in (drive the .pop-in violet flash). */
   public PopInIDs = new Set<string>();
   private popInTimers: ReturnType<typeof setTimeout>[] = [];
@@ -293,12 +285,10 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
           this.cdr.markForCheck();
         }, POP_IN_MS));
       }
-      if (change.Op === 'remove') {
-        this.htmlSrcdocCache.delete(change.ItemID);
-      }
-      else if (change.Op === 'replace') {
-        this.htmlSrcdocCache.clear(); // whole scene swapped (undo/redo/load)
-      }
+      // NOTE: HTML-widget srcdoc payloads need no invalidation here — the
+      // `wbWidgetSrcdoc` pipe is view-scoped (rebuilt per mount, memoized per source),
+      // so journal ops can neither leave a re-mounted frame a stale document nor
+      // force-reload a still-mounted widget whose Html didn't change.
       // close the rich editor when its target item no longer exists (erased / undone)
       if (this.RichEditor && !this.State.GetItem(this.RichEditor.ItemID)) {
         this.RichEditor = null;
@@ -1035,30 +1025,9 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   // ────────────────────────────────────────────── rich widgets (markdown / html)
-
-  /**
-   * The sandboxed iframe's `srcdoc` for an HTML widget.
-   *
-   * SECURITY — why `bypassSecurityTrustHtml` is correct here: Angular's sanitizer would
-   * strip the scripts/styles that make the widget interactive, but the payload NEVER
-   * touches the app's DOM — it only becomes the `srcdoc` of an iframe whose `sandbox`
-   * attribute is `allow-scripts` ONLY. Without `allow-same-origin` the frame runs in a
-   * unique opaque origin: its scripts cannot reach the parent document, the MJ session,
-   * cookies, or any storage, and adding `allow-same-origin` (which would let the frame
-   * script remove its own sandbox) is deliberately ruled out. The trusted value is
-   * memoized per item so the iframe doesn't reload on every change-detection pass.
-   */
-  public HtmlSrcdoc(item: WhiteboardHtmlItem): SafeHtml {
-    const cached = this.htmlSrcdocCache.get(item.ID);
-    if (cached && cached.Html === item.Html) {
-      return cached.Safe;
-    }
-    // Every widget gets the MJWhiteboard.submit input-bridge helper, prepended exactly
-    // once (idempotent) — see whiteboard-widget-bridge.ts for the postMessage contract.
-    const safe = this.sanitizer.bypassSecurityTrustHtml(InjectWhiteboardSubmitHelper(item.Html));
-    this.htmlSrcdocCache.set(item.ID, { Html: item.Html, Safe: safe });
-    return safe;
-  }
+  // The sandboxed iframe's `srcdoc` is produced by the view-scoped `wbWidgetSrcdoc`
+  // pipe (see whiteboard-srcdoc.pipe.ts for the per-mount lifecycle contract and the
+  // full security rationale for bypassing Angular's sanitizer into the sandbox).
 
   // ────────────────────────────────────────────── widget input bridge (MJWhiteboard.submit)
 
