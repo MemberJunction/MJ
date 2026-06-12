@@ -12,6 +12,7 @@ export { BettyConnector } from './BettyConnector.js';
 export { MJToMJConnector } from './MJToMJConnector.js';
 export { GrowthZoneConnector } from './GrowthZoneConnector.js';
 export { ORCIDConnector, LoadORCIDConnector, type ORCIDConnectionConfig } from './ORCIDConnector.js';
+export { OpenWaterConnector, type OpenWaterConnectionConfig } from './OpenWaterConnector.js';
 export { IMISConnector } from './IMISConnector.js';
 export { ConstantContactConnector } from './ConstantContactConnector.js';
 export { MailchimpConnector } from './MailchimpConnector.js';
