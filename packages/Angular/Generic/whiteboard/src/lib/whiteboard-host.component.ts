@@ -9,7 +9,10 @@ import {
   WhiteboardItemRemovedEventArgs, WhiteboardItemRemovingEventArgs,
   WhiteboardItemUpdatedEventArgs, WhiteboardItemUpdatingEventArgs, WhiteboardState
 } from './whiteboard-state';
-import { BuildWhiteboardExportHtml, BuildWhiteboardExportSvg } from './whiteboard-export';
+import {
+  BuildWhiteboardExportHtml, BuildWhiteboardExportHtmlAllPages, BuildWhiteboardExportSvg,
+  BuildWhiteboardExportSvgPages
+} from './whiteboard-export';
 import { ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_NAMES, WhiteboardToolResult } from './whiteboard-tools';
 import {
   RealtimeWhiteboardBoardComponent, WhiteboardAgentPresence,
@@ -283,10 +286,36 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     this.ExportOpen = false;
   }
 
-  /** Download the board as a standalone SVG document. */
+  /** Download ONE self-contained HTML document containing EVERY page (titled sections). */
+  public ExportDownloadHtmlAllPages(): void {
+    const html = BuildWhiteboardExportHtmlAllPages(this.State, this.exportOptions());
+    this.downloadBlob(html, 'text/html', `whiteboard-all-pages-${RealtimeWhiteboardHostComponent.exportDateStamp()}.html`);
+    this.ExportOpen = false;
+  }
+
+  /** Download the ACTIVE page as a standalone SVG document. */
   public ExportDownloadSvg(): void {
     this.downloadBlob(BuildWhiteboardExportSvg(this.State), 'image/svg+xml', `whiteboard-${RealtimeWhiteboardHostComponent.exportDateStamp()}.svg`);
     this.ExportOpen = false;
+  }
+
+  /**
+   * Download EVERY page as its own standalone SVG document (SVG is single-image, so
+   * "all pages" is one file per page, downloaded sequentially with the page name
+   * slug-suffixed into each filename).
+   */
+  public ExportDownloadSvgAllPages(): void {
+    const stamp = RealtimeWhiteboardHostComponent.exportDateStamp();
+    for (const page of BuildWhiteboardExportSvgPages(this.State)) {
+      const slug = RealtimeWhiteboardHostComponent.fileNameSlug(page.PageName) || page.PageID;
+      this.downloadBlob(page.Content, 'image/svg+xml', `whiteboard-${stamp}-${slug}.svg`);
+    }
+    this.ExportOpen = false;
+  }
+
+  /** Whether the board has more than one page (gates the "all pages" export entries). */
+  public get HasMultiplePages(): boolean {
+    return this.State.Pages.length > 1;
   }
 
   /**
@@ -309,11 +338,21 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   }
 
   private buildExportHtml(): string {
-    return BuildWhiteboardExportHtml(this.State, {
+    return BuildWhiteboardExportHtml(this.State, this.exportOptions());
+  }
+
+  /** Shared options for the HTML export builders (single page + all pages). */
+  private exportOptions(): { Title: string; AgentName: string; GeneratedAt: string } {
+    return {
       Title: this.BoardTitle,
       AgentName: this.AgentName,
       GeneratedAt: new Date().toLocaleString()
-    });
+    };
+  }
+
+  /** Safe filename fragment from a page name (lowercased, non-alphanumerics collapse to '-'). */
+  private static fileNameSlug(name: string): string {
+    return (name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
   }
 
   private downloadBlob(content: string, mimeType: string, fileName: string): void {
@@ -373,9 +412,10 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
         break;
       case 'Delete':
       case 'Backspace':
-        if (this.State.SelectedID) {
+        if (this.State.SelectedIDs.length > 0) {
           event.preventDefault();
-          this.State.RemoveItem(this.State.SelectedID, 'user');
+          // removes the WHOLE (single or multi) selection as one undo step
+          this.State.RemoveSelected('user');
         }
         break;
       default: {

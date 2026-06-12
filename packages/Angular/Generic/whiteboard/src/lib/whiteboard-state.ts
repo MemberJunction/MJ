@@ -1,4 +1,5 @@
 import { Observable, Subject } from 'rxjs';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * WHITEBOARD — typed board model + state engine.
@@ -378,17 +379,20 @@ export interface WhiteboardContentChangedEventArgs {
 }
 
 /**
- * AFTER-event args for {@link WhiteboardState.SelectionChanged$} — the single selection
- * moved to a different item (or cleared). Selection is UI state: it is not journaled, not
- * undoable and not persisted, so this event is a notification only (not cancelable).
- * Fires for explicit {@link WhiteboardState.Select} calls AND for implicit clears (the
- * selected item was removed, or a restore dropped it).
+ * AFTER-event args for {@link WhiteboardState.SelectionChanged$} — the selection changed
+ * (single OR multi). Selection is UI state: it is not journaled, not undoable and not
+ * persisted, so this event is a notification only (not cancelable). Fires for explicit
+ * {@link WhiteboardState.Select} / {@link WhiteboardState.ToggleSelect} /
+ * {@link WhiteboardState.SelectMany} calls AND for implicit clears (a selected item was
+ * removed, the page switched, or a restore dropped it).
  */
 export interface WhiteboardSelectionChangedEventArgs {
-  /** The newly selected item's ID, or null when the selection was cleared. */
+  /** The PRIMARY selected item's ID (last added to the selection), or null when cleared. */
   SelectedID: string | null;
-  /** The previously selected item's ID, or null when nothing was selected. */
+  /** The previously primary item's ID, or null when nothing was selected. */
   PreviousID: string | null;
+  /** The full multi-selection (selection order, last = primary). Empty when cleared. */
+  SelectedIDs: string[];
 }
 
 /**
@@ -431,6 +435,12 @@ export interface WhiteboardPageInfo {
   ItemCount: number;
   /** Whether this is the board's active page. */
   Active: boolean;
+  /**
+   * Who CREATED the page. Drives the page strip's delegated-violet garnish for
+   * agent-created pages (mirroring the item-level agent treatment). Persisted in the
+   * v2 JSON as an additive `author` field; payloads without it rehydrate as `'user'`.
+   */
+  Author: WhiteboardAuthor;
 }
 
 /**
@@ -677,6 +687,11 @@ interface WhiteboardPageJSON {
   id: string;
   name: string;
   items: WhiteboardItem[];
+  /**
+   * Who created the page (additive, v2-tolerant: absent in pre-authorship payloads and
+   * treated as `'user'` on load). Drives the agent-page chip garnish.
+   */
+  author?: WhiteboardAuthor;
 }
 
 /**
@@ -702,6 +717,8 @@ interface WhiteboardStateJSON {
 interface PageRecord {
   ID: string;
   Name: string;
+  /** Who created the page (drives the agent-page garnish; persisted). */
+  Author: WhiteboardAuthor;
   Items: Map<string, WhiteboardItem>;
 }
 
@@ -746,7 +763,7 @@ export class WhiteboardState {
    * operation reads/writes the ACTIVE page's map through the `items` accessor below, so
    * the entire pre-pages mutation surface is page-scoped without per-call changes.
    */
-  private pages: PageRecord[] = [{ ID: 'page-1', Name: 'Page 1', Items: new Map<string, WhiteboardItem>() }];
+  private pages: PageRecord[] = [{ ID: 'page-1', Name: 'Page 1', Author: 'user', Items: new Map<string, WhiteboardItem>() }];
   /** ID of the active page (always present in {@link pages}). */
   private activePageId = 'page-1';
   /** Monotonic page counter — mints page IDs and the "Page N" auto-names. */
@@ -762,7 +779,7 @@ export class WhiteboardState {
 
   /** The active page record (defensive fallback to the first page — never undefined). */
   private get activePage(): PageRecord {
-    return this.pages.find((p) => p.ID === this.activePageId) ?? this.pages[0];
+    return this.pages.find((p) => UUIDsEqual(p.ID, this.activePageId)) ?? this.pages[0];
   }
 
   private idCounter = 0;
@@ -890,8 +907,26 @@ export class WhiteboardState {
   /** AFTER event: a page (and all of its items) was removed from the board. */
   public readonly PageRemoved$: Observable<WhiteboardPageRemovedEventArgs> = this.pageRemoved.asObservable();
 
-  /** The single selected item's ID, or null. Selection is UI state — not persisted. */
-  public SelectedID: string | null = null;
+  /**
+   * The MULTI-selection, in selection order (last entry is the primary selection).
+   * Selection is volatile UI state — never journaled, never undoable, never persisted,
+   * and cleared on page switches and whole-scene restores.
+   */
+  private selectedIds: string[] = [];
+
+  /**
+   * The PRIMARY selected item's ID (the most recently selected member of the
+   * multi-selection), or null when nothing is selected. Selection is UI state — not
+   * persisted. For the full multi-selection see {@link SelectedIDs}.
+   */
+  public get SelectedID(): string | null {
+    return this.selectedIds.length > 0 ? this.selectedIds[this.selectedIds.length - 1] : null;
+  }
+
+  /** All selected item IDs in selection order (last = primary). Returns a copy. */
+  public get SelectedIDs(): string[] {
+    return [...this.selectedIds];
+  }
 
   // ────────────────────────────────────────────── reads
 
@@ -1054,21 +1089,81 @@ export class WhiteboardState {
   // ────────────────────────────────────────────── selection
 
   /**
-   * Set (or clear) the single selection. Unknown IDs clear the selection. Fires
-   * {@link SelectionChanged$} when the effective selection actually changes.
+   * Set (or clear) the selection to a SINGLE item. Unknown IDs clear the selection.
+   * Fires {@link SelectionChanged$} when the effective selection actually changes.
    */
   public Select(id: string | null): void {
-    this.changeSelection(id != null && this.items.has(id) ? id : null);
+    this.applySelection(id != null && this.items.has(id) ? [id] : []);
   }
 
-  /** Apply a selection change and fire {@link SelectionChanged$} when it differs. */
+  /**
+   * Toggle one item's membership in the multi-selection WITHOUT clearing the rest —
+   * the shift-click semantics. A newly added item becomes the primary selection
+   * ({@link SelectedID}); unknown IDs are a no-op.
+   */
+  public ToggleSelect(id: string): void {
+    if (!this.items.has(id)) {
+      return;
+    }
+    this.applySelection(this.selectedIds.includes(id)
+      ? this.selectedIds.filter((s) => s !== id)
+      : [...this.selectedIds, id]);
+  }
+
+  /**
+   * Replace the selection with a set of items (the marquee result). Unknown IDs are
+   * dropped and duplicates collapse to their first occurrence; order is preserved
+   * (the last surviving entry becomes the primary selection). An empty / fully-unknown
+   * list clears the selection.
+   */
+  public SelectMany(ids: string[]): void {
+    const seen = new Set<string>();
+    const next: string[] = [];
+    for (const id of ids) {
+      if (id != null && this.items.has(id) && !seen.has(id)) {
+        seen.add(id);
+        next.push(id);
+      }
+    }
+    this.applySelection(next);
+  }
+
+  /** Whether an item is part of the current (single or multi) selection. */
+  public IsItemSelected(id: string): boolean {
+    return this.selectedIds.includes(id);
+  }
+
+  /**
+   * All ACTIVE-page items whose axis-aligned bounds intersect the given rectangle —
+   * the marquee (rubber-band) hit test, in render order. Transient highlight regions
+   * are excluded: they are "pointing" chrome dismissed by click, never selected.
+   * Edge-touching items (zero overlap area) do NOT count as intersecting.
+   */
+  public ItemsIntersecting(rect: WhiteboardBounds): WhiteboardItem[] {
+    return this.Items.filter((item) => {
+      if (item.Kind === 'highlight') {
+        return false;
+      }
+      const b = this.ItemBounds(item);
+      return b.X < rect.X + rect.W && b.X + b.W > rect.X
+        && b.Y < rect.Y + rect.H && b.Y + b.H > rect.Y;
+    });
+  }
+
+  /** Apply a SINGLE-or-clear selection change (legacy internal path). */
   protected changeSelection(next: string | null): void {
-    if (next === this.SelectedID) {
+    this.applySelection(next != null ? [next] : []);
+  }
+
+  /** Swap the multi-selection and fire {@link SelectionChanged$} when it differs. */
+  protected applySelection(next: string[]): void {
+    const current = this.selectedIds;
+    if (next.length === current.length && next.every((id, i) => id === current[i])) {
       return;
     }
     const previous = this.SelectedID;
-    this.SelectedID = next;
-    this.selectionChanged.next({ SelectedID: next, PreviousID: previous });
+    this.selectedIds = next;
+    this.selectionChanged.next({ SelectedID: this.SelectedID, PreviousID: previous, SelectedIDs: [...next] });
   }
 
   // ────────────────────────────────────────────── mutations
@@ -1219,8 +1314,8 @@ export class WhiteboardState {
       }
     }
     this.items.delete(id);
-    if (this.SelectedID === id) {
-      this.changeSelection(null);
+    if (this.selectedIds.includes(id)) {
+      this.applySelection(this.selectedIds.filter((s) => s !== id));
     }
     this.record('remove', id, author, `removed ${WhiteboardState.describe(item)}`);
     this.itemRemoved.next({ Item: item, Author: author });
@@ -1336,11 +1431,65 @@ export class WhiteboardState {
     return true;
   }
 
+  /**
+   * Move EVERY selected item by the same delta as ONE undo step (the multi-select group
+   * drag). Internally one {@link RunBatch} of per-item {@link MoveItem} calls, so each
+   * member still raises its own cancelable `'move'` BEFORE event (a veto skips just that
+   * member) and journals normally — but a single Undo reverts the whole group move.
+   * Returns how many items actually moved (0 when nothing is selected or the delta is 0).
+   */
+  public MoveSelectedBy(dx: number, dy: number, author: WhiteboardAuthor): number {
+    const ids = this.selectedIds.filter((id) => this.items.has(id));
+    if (ids.length === 0 || (dx === 0 && dy === 0)) {
+      return 0;
+    }
+    return this.RunBatch(() => {
+      // capture every member's bounds BEFORE any member moves, so anchored-connector
+      // bounds (which follow their endpoints) don't skew later members' targets
+      const targets = ids
+        .map((id) => {
+          const item = this.items.get(id);
+          return item ? { id, bounds: this.ItemBounds(item) } : null;
+        })
+        .filter((t): t is { id: string; bounds: WhiteboardBounds } => t !== null);
+      let moved = 0;
+      for (const t of targets) {
+        if (this.MoveItem(t.id, t.bounds.X + dx, t.bounds.Y + dy, author)) {
+          moved++;
+        }
+      }
+      return moved;
+    });
+  }
+
+  /**
+   * Remove EVERY selected item as ONE undo step (the multi-select Delete key). One
+   * {@link RunBatch} of per-item {@link RemoveItem} calls — each member still raises its
+   * cancelable {@link ItemRemoving$} BEFORE event (a veto keeps just that member), and a
+   * single Undo restores the whole group. The selection empties as items are removed.
+   * Returns how many items were actually removed.
+   */
+  public RemoveSelected(author: WhiteboardAuthor): number {
+    const ids = this.selectedIds.filter((id) => this.items.has(id));
+    if (ids.length === 0) {
+      return 0;
+    }
+    return this.RunBatch(() => {
+      let removed = 0;
+      for (const id of ids) {
+        if (this.RemoveItem(id, author)) {
+          removed++;
+        }
+      }
+      return removed;
+    });
+  }
+
   // ────────────────────────────────────────────── pages
 
   /** Project a live page record to its public read-only descriptor. */
   protected pageInfo(page: PageRecord): WhiteboardPageInfo {
-    return { ID: page.ID, Name: page.Name, ItemCount: page.Items.size, Active: page.ID === this.activePageId };
+    return { ID: page.ID, Name: page.Name, ItemCount: page.Items.size, Active: UUIDsEqual(page.ID, this.activePageId), Author: page.Author };
   }
 
   /** Resolve a page by exact ID first, then case-insensitive trimmed name. */
@@ -1349,7 +1498,7 @@ export class WhiteboardState {
     if (key.length === 0) {
       return undefined;
     }
-    return this.pages.find((p) => p.ID === key)
+    return this.pages.find((p) => UUIDsEqual(p.ID, key))
       ?? this.pages.find((p) => p.Name.trim().toLowerCase() === key.toLowerCase());
   }
 
@@ -1376,6 +1525,7 @@ export class WhiteboardState {
     const page: PageRecord = {
       ID: `page-${this.pageCounter}`,
       Name: (adding.Name ?? '').trim() || autoName,
+      Author: author,
       Items: new Map<string, WhiteboardItem>()
     };
     this.pages.push(page);
@@ -1402,7 +1552,7 @@ export class WhiteboardState {
     if (!target) {
       return false;
     }
-    if (target.ID === this.activePageId) {
+    if (UUIDsEqual(target.ID, this.activePageId)) {
       return true; // already there — successful no-op
     }
     const from = this.pageInfo(this.activePage);
@@ -1479,7 +1629,7 @@ export class WhiteboardState {
     const index = this.pages.indexOf(target);
     this.pages.splice(index, 1);
     let activated: WhiteboardPageInfo | null = null;
-    if (target.ID === this.activePageId) {
+    if (UUIDsEqual(target.ID, this.activePageId)) {
       // activate the neighbor: the page that slid into the removed slot, else the new last
       const neighbor = this.pages[Math.min(index, this.pages.length - 1)];
       this.activePageId = neighbor.ID;
@@ -1642,7 +1792,7 @@ export class WhiteboardState {
     return this.pages.map((p) => ({
       id: p.ID,
       name: p.Name,
-      active: p.ID === this.activePageId,
+      active: UUIDsEqual(p.ID, this.activePageId),
       items: p.Items.size
     }));
   }
@@ -1704,6 +1854,8 @@ export class WhiteboardState {
         pages.push({
           id: typeof p['id'] === 'string' && (p['id'] as string).length > 0 ? (p['id'] as string) : `page-${pages.length + 1}`,
           name,
+          // additive authorship field — tolerated absent (pre-garnish payloads → 'user')
+          author: p['author'] === 'agent' ? 'agent' : 'user',
           items: Array.isArray(p['items']) ? (p['items'] as WhiteboardItem[]) : []
         });
       }
@@ -1816,6 +1968,7 @@ export class WhiteboardState {
       pages: this.pages.map((p) => ({
         id: p.ID,
         name: p.Name,
+        author: p.Author,
         items: JSON.parse(JSON.stringify(Array.from(p.Items.values()).sort((a, b) => a.Z - b.Z))) as WhiteboardItem[]
       }))
     };
@@ -1830,19 +1983,22 @@ export class WhiteboardState {
     this.pages = (snap.pages ?? []).map((p) => ({
       ID: p.id,
       Name: p.name,
+      Author: p.author === 'agent' ? 'agent' : 'user',
       Items: new Map((JSON.parse(JSON.stringify(p.items ?? [])) as WhiteboardItem[])
         .filter((i) => !!i && typeof i === 'object' && typeof i.ID === 'string')
         .map((i) => [i.ID, i]))
     }));
     if (this.pages.length === 0) {
-      this.pages = [{ ID: 'page-1', Name: 'Page 1', Items: new Map<string, WhiteboardItem>() }];
+      this.pages = [{ ID: 'page-1', Name: 'Page 1', Author: 'user', Items: new Map<string, WhiteboardItem>() }];
     }
-    this.activePageId = this.pages.some((p) => p.ID === snap.activePageId) ? snap.activePageId : this.pages[0].ID;
+    this.activePageId = this.pages.some((p) => UUIDsEqual(p.ID, snap.activePageId)) ? snap.activePageId : this.pages[0].ID;
     this.idCounter = snap.idCounter ?? 0;
     this.zCounter = snap.zCounter ?? 0;
     this.pageCounter = Math.max(snap.pageCounter ?? this.pages.length, this.pages.length);
-    if (this.SelectedID && !this.items.has(this.SelectedID)) {
-      this.changeSelection(null);
+    // drop selection members the restored active page no longer contains
+    const surviving = this.selectedIds.filter((id) => this.items.has(id));
+    if (surviving.length !== this.selectedIds.length) {
+      this.applySelection(surviving);
     }
   }
 
@@ -1994,7 +2150,7 @@ export class WhiteboardState {
       return `Active page "${active.Name}" (the only page) has ${counts}.`;
     }
     const others = this.pages
-      .filter((p) => p.ID !== active.ID)
+      .filter((p) => !UUIDsEqual(p.ID, active.ID))
       .map((p) => `"${p.Name}" (${p.Items.size})`)
       .join(', ');
     return `Active page "${active.Name}" (${index} of ${this.pages.length}) has ${counts}. Other pages: ${others}.`;

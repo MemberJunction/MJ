@@ -13,9 +13,14 @@
     } @else {
       <button type="button" class="wb-page-chip"
               [class.active]="page.Active"
-              [title]="page.Name + ' · ' + page.ItemCount + (page.ItemCount === 1 ? ' item' : ' items') + (ReadOnly ? '' : ' — double-click to rename')"
+              [class.wb-page-chip--agent]="page.Author === 'agent'"
+              [title]="page.Name + ' · ' + page.ItemCount + (page.ItemCount === 1 ? ' item' : ' items') + (page.Author === 'agent' ? ' · created by the agent' : '') + (ReadOnly ? '' : ' — double-click to rename')"
               (click)="OnChipClick(page)"
-              (dblclick)="OnChipDblClick($event, page)">
+              (dblclick)="OnChipDblClick($event, page)"
+              (contextmenu)="OnChipContextMenu($event, page)">
+        @if (page.Author === 'agent') {
+          <span class="wb-page-chip__agent-dot" aria-hidden="true"></span>
+        }
         <span class="wb-page-chip__name">{{ page.Name }}</span>
         @if (CanDelete) {
           <span class="wb-page-chip__close" role="button" title="Delete page"

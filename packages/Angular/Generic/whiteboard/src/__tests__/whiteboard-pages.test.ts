@@ -21,7 +21,10 @@ import {
   WhiteboardState,
   WhiteboardStickyItem
 } from '../lib/whiteboard-state';
-import { ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_NAMES, WhiteboardToolResult } from '../lib/whiteboard-tools';
+import {
+  ApplyWhiteboardAgentTool, WHITEBOARD_ACTIVE_PAGE_NOTE, WHITEBOARD_TOOL_DEFINITIONS,
+  WHITEBOARD_TOOL_NAMES, WhiteboardToolResult
+} from '../lib/whiteboard-tools';
 
 function parseResult(json: string): WhiteboardToolResult {
   return JSON.parse(json) as WhiteboardToolResult;
@@ -494,5 +497,102 @@ describe('page agent tools (ApplyWhiteboardAgentTool)', () => {
       expect(result.error).toContain('canceled');
       expect(state.ActivePageName).toBe('Page 1');
     });
+  });
+});
+
+describe('page authorship (the agent-page chip garnish flag)', () => {
+  let state: WhiteboardState;
+
+  beforeEach(() => {
+    state = new WhiteboardState();
+  });
+
+  it('a fresh board\'s "Page 1" and user-added pages are user-authored', () => {
+    state.AddPage('Mine'); // default author = 'user'
+    expect(state.Pages.map((p) => p.Author)).toEqual(['user', 'user']);
+  });
+
+  it('AddPage stamps the caller author — the agent tool path yields Author "agent"', () => {
+    const direct = state.AddPage('Direct', 'agent');
+    expect(direct!.Author).toBe('agent');
+    parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddPage,
+      JSON.stringify({ name: 'Via tool' })));
+    expect(state.Pages.find((p) => p.Name === 'Via tool')!.Author).toBe('agent');
+  });
+
+  it('round-trips through ToJSON → FromJSON and LoadFromJSON', () => {
+    state.AddPage('Agent page', 'agent');
+    state.AddPage('User page', 'user');
+    const json = state.ToJSON();
+
+    const restored = WhiteboardState.FromJSON(json);
+    expect(restored.Pages.map((p) => p.Author)).toEqual(['user', 'agent', 'user']);
+
+    const target = new WhiteboardState();
+    expect(target.LoadFromJSON(json)).toBe(true);
+    expect(target.Pages.map((p) => p.Author)).toEqual(['user', 'agent', 'user']);
+  });
+
+  it('tolerates v2 payloads WITHOUT the additive author field (pre-garnish → "user")', () => {
+    const preGarnish = JSON.stringify({
+      version: 2,
+      seq: 3,
+      idCounter: 1,
+      zCounter: 1,
+      pageCounter: 2,
+      activePageId: 'page-2',
+      pages: [
+        { id: 'page-1', name: 'Page 1', items: [] },
+        { id: 'page-2', name: 'Two', items: [] }
+      ]
+    });
+    expect(state.LoadFromJSON(preGarnish)).toBe(true);
+    expect(state.Pages.map((p) => p.Author)).toEqual(['user', 'user']);
+    // garbage author values normalize to 'user' too
+    const garbage = JSON.stringify({
+      version: 2, pages: [{ id: 'page-1', name: 'Page 1', items: [], author: 'martian' }], activePageId: 'page-1'
+    });
+    expect(state.LoadFromJSON(garbage)).toBe(true);
+    expect(state.Pages[0].Author).toBe('user');
+  });
+
+  it('legacy v1 flat payloads migrate as a user-authored "Page 1"', () => {
+    const legacy = JSON.stringify({ version: 1, seq: 0, idCounter: 0, zCounter: 0, items: [] });
+    const restored = WhiteboardState.FromJSON(legacy);
+    expect(restored.Pages[0].Author).toBe('user');
+  });
+
+  it('authorship survives undo/redo snapshots', () => {
+    state.AddPage('Agent page', 'agent');
+    state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'x' }, 'user');
+    state.Undo(); // un-add the sticky — page list restored from a snapshot
+    expect(state.Pages.find((p) => p.Name === 'Agent page')!.Author).toBe('agent');
+  });
+});
+
+describe('item-tool descriptions — the shared active-page sentence', () => {
+  const pageToolNames: string[] = [
+    WHITEBOARD_TOOL_NAMES.AddPage,
+    WHITEBOARD_TOOL_NAMES.SwitchPage,
+    WHITEBOARD_TOOL_NAMES.RenamePage
+  ];
+
+  it('every ITEM tool carries the note exactly once; page tools never do', () => {
+    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(14);
+    for (const def of WHITEBOARD_TOOL_DEFINITIONS) {
+      const occurrences = def.Description.split(WHITEBOARD_ACTIVE_PAGE_NOTE.trim()).length - 1;
+      if (pageToolNames.includes(def.Name)) {
+        expect(occurrences, def.Name).toBe(0);
+      }
+      else {
+        expect(occurrences, def.Name).toBe(1);
+        expect(def.Description.endsWith(WHITEBOARD_ACTIVE_PAGE_NOTE), def.Name).toBe(true);
+      }
+    }
+  });
+
+  it('the note names the switch tool so the model can route itself', () => {
+    expect(WHITEBOARD_ACTIVE_PAGE_NOTE).toContain('ACTIVE page');
+    expect(WHITEBOARD_ACTIVE_PAGE_NOTE).toContain(WHITEBOARD_TOOL_NAMES.SwitchPage);
   });
 });

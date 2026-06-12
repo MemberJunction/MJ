@@ -27,9 +27,20 @@
           <button type="button" class="export-item" (click)="ExportDownloadHtml()">
             <i class="fa-solid fa-file-code"></i> Download HTML
           </button>
+          @if (HasMultiplePages) {
+            <button type="button" class="export-item" (click)="ExportDownloadHtmlAllPages()">
+              <i class="fa-solid fa-file-code"></i> Download HTML — all pages
+            </button>
+          }
           <button type="button" class="export-item" (click)="ExportDownloadSvg()">
             <i class="fa-solid fa-bezier-curve"></i> Download SVG
           </button>
+          @if (HasMultiplePages) {
+            <button type="button" class="export-item" title="One SVG file per page"
+                    (click)="ExportDownloadSvgAllPages()">
+              <i class="fa-solid fa-bezier-curve"></i> Download SVG — all pages
+            </button>
+          }
           <button type="button" class="export-item" (click)="ExportPrint()">
             <i class="fa-solid fa-print"></i> Print
           </button>

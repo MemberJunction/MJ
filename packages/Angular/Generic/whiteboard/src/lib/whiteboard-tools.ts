@@ -92,10 +92,25 @@ export const WHITEBOARD_MARKDOWN_MAX_CHARS = 32_000;
 export const WHITEBOARD_HTML_MAX_CHARS = 64_000;
 
 /**
- * The full `Whiteboard_*` tool set, ready for registration with an agent/automation
- * runtime (shape-compatible with `RealtimeToolDefinition` from `@memberjunction/ai`).
+ * The PAGE-level tools (they navigate/manage pages rather than items, so the shared
+ * "targets the ACTIVE page" item-tool sentence is not appended to their descriptions).
  */
-export const WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
+const WHITEBOARD_PAGE_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
+  WHITEBOARD_TOOL_NAMES.AddPage,
+  WHITEBOARD_TOOL_NAMES.SwitchPage,
+  WHITEBOARD_TOOL_NAMES.RenamePage
+]);
+
+/**
+ * The shared sentence appended (once, programmatically — see
+ * {@link WHITEBOARD_TOOL_DEFINITIONS}) to every ITEM tool's description, so the model
+ * always knows item operations are scoped to the page that is currently active.
+ */
+export const WHITEBOARD_ACTIVE_PAGE_NOTE =
+  ' This tool targets the ACTIVE page only — use Whiteboard_SwitchPage first to work with items on another page.';
+
+/** The raw tool definitions, before the shared active-page sentence is appended. */
+const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
   {
     Name: WHITEBOARD_TOOL_NAMES.AddNote,
     Description: 'Add a sticky note to the shared whiteboard. Your notes render in your reserved violet style so the user always knows they came from you.',
@@ -293,6 +308,20 @@ export const WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
     }
   }
 ];
+
+/**
+ * The full `Whiteboard_*` tool set, ready for registration with an agent/automation
+ * runtime (shape-compatible with `RealtimeToolDefinition` from `@memberjunction/ai`).
+ *
+ * Every ITEM tool's description carries the shared {@link WHITEBOARD_ACTIVE_PAGE_NOTE}
+ * sentence (appended programmatically here — ONE mechanism, not eleven hand edits);
+ * the three page tools keep their page-navigation descriptions unmodified.
+ */
+export const WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] =
+  RAW_WHITEBOARD_TOOL_DEFINITIONS.map((def) =>
+    WHITEBOARD_PAGE_TOOL_NAMES.has(def.Name)
+      ? def
+      : { ...def, Description: `${def.Description}${WHITEBOARD_ACTIVE_PAGE_NOTE}` });
 
 /** Padding added around item bounds when highlighting by itemIds. */
 const HIGHLIGHT_PAD = 18;

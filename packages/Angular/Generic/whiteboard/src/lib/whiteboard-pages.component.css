@@ -9,6 +9,8 @@
   z-index: 10;
   /* leave room for the bottom-right zoom cluster */
   max-width: calc(100% - 240px);
+  /* agent (violet) accent — same derivation as the board's item-level treatment */
+  --sage: var(--mj-color-violet-400, #a78bfa);
 }
 
 .wb-pages {
@@ -57,6 +59,26 @@
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Delegated-violet garnish for AGENT-created pages: a violet dot + a soft violet ring,
+   mirroring the violet authorship treatment on agent-authored board items. */
+.wb-page-chip--agent {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sage) 45%, transparent);
+}
+.wb-page-chip__agent-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sage);
+}
+.wb-page-chip.active.wb-page-chip--agent {
+  /* keep the garnish legible on the filled active chip */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mj-color-violet-300, #c4b5fd) 80%, transparent);
+}
+.wb-page-chip.active .wb-page-chip__agent-dot {
+  background: var(--mj-color-violet-300, #c4b5fd);
 }
 
 .wb-page-chip__close {
