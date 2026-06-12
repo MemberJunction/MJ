@@ -269,8 +269,8 @@ ConversationsRuntime (pure TS, framework-agnostic)
   └── Sessions: SessionsObserver
         └── subscribes to ← ISessionsAdapter (interface in conversations-runtime)
               ├── Default: NoOpSessionsAdapter (EMPTY observable, headless-friendly)
-              └── Angular impl: VoiceSessionsAdapter (in ng-conversations)
-                    └── bridges → VoiceSessionService (PR #2787)
+              └── Angular impl: RealtimeSessionsAdapter (in ng-conversations)
+                    └── bridges → RealtimeSessionService (PR #2787)
                           ├── SessionStarted$  → 'session-started' event
                           ├── ActiveChannels$  → diff into 'session-channel' open/close
                           └── SessionEnded$    → 'session-ended' event
@@ -289,10 +289,10 @@ type SessionLifecycleEvent =
                                   reason: 'explicit' | 'error' | 'unknown'; }  // narrowed from server's 4
 ```
 
-- `'opening'`/`'closing'` channel states were dropped because `VoiceSessionService`'s only channel observable (`ActiveChannels$`) only carries the full plugin array — no per-channel transition observable exists today. Future widening (adding `Status$` to `BaseRealtimeChannelClient`) is non-breaking.
+- `'opening'`/`'closing'` channel states were dropped because `RealtimeSessionService`'s only channel observable (`ActiveChannels$`) only carries the full plugin array — no per-channel transition observable exists today. Future widening (adding `Status$` to `BaseRealtimeChannelClient`) is non-breaking.
 - `'janitor'`/`'shutdown'` reasons happen out-of-process on the server (janitor sweep while the tab is gone, host shutdown) and have no client push channel today. They're observability concerns, not orchestration.
 
-**Cross-package change — minimal addition to `VoiceSessionService` (`@memberjunction/ng-conversations`):**
+**Cross-package change — minimal addition to `RealtimeSessionService` (`@memberjunction/ng-conversations`):**
 
 Two new `Observable<...>` exports emitted at deterministic points:
 
@@ -301,7 +301,7 @@ Two new `Observable<...>` exports emitted at deterministic points:
 
 This is analogous to the `beforeToolInvoked` cancel-enforcement addition to `AgentClientSession` — small, surgical, additive contract additions to PR-#2787-owned code so the runtime layer can bridge without race conditions.
 
-**Scope cut — server-only events.** The `MJ: AI Agent Sessions` row is the durable truth (`Status`, `CloseReason`, `ClosedAt` columns), but server-side close events that fire while the user's tab is gone do NOT propagate to the runtime today (no GraphQL subscription on `AIAgentSession` rows). Admin/observability tooling polls the entity for those. Adding a subscription is out of scope; if a future PR adds one, the runtime can layer a second adapter that merges with `VoiceSessionsAdapter`.
+**Scope cut — server-only events.** The `MJ: AI Agent Sessions` row is the durable truth (`Status`, `CloseReason`, `ClosedAt` columns), but server-side close events that fire while the user's tab is gone do NOT propagate to the runtime today (no GraphQL subscription on `AIAgentSession` rows). Admin/observability tooling polls the entity for those. Adding a subscription is out of scope; if a future PR adds one, the runtime can layer a second adapter that merges with `RealtimeSessionsAdapter`.
 
 **`RealtimeSessionReviewService` is unrelated.** It loads past sessions for replay; it doesn't observe live lifecycle. Not bridged.
 
@@ -311,7 +311,7 @@ This is analogous to the `beforeToolInvoked` cancel-enforcement addition to `Age
 - `ConversationsRuntime.Instance.UseSessionsAdapter(adapter)` — hosts register at bootstrap.
 - `<mj-conversation-chat-area>`'s `(sessionStarted)`, `(sessionChannelStateChanged)`, `(sessionEnded)` outputs — Angular consumers subscribe through the widget's existing event surface.
 
-**Net cost of the real wiring:** ~250 lines across `ISessionsAdapter` (new file in `ConversationsRuntime`), the enhanced `SessionsObserver`, `VoiceSessionsAdapter` (new file in `ng-conversations`), 2 new observables on `VoiceSessionService`, chat-area's subscription, plus 18 unit tests covering the round-trip.
+**Net cost of the real wiring:** ~250 lines across `ISessionsAdapter` (new file in `ConversationsRuntime`), the enhanced `SessionsObserver`, `RealtimeSessionsAdapter` (new file in `ng-conversations`), 2 new observables on `RealtimeSessionService`, chat-area's subscription, plus 18 unit tests covering the round-trip.
 
 ### 4e. Widget extension surface
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
-import { VoiceSessionService } from '../lib/services/voice-session.service';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 
 /**
  * Session-mint passthrough — verifies the `StartRealtimeClientSession` mutation variables the
@@ -13,7 +13,7 @@ import { VoiceSessionService } from '../lib/services/voice-session.service';
  */
 
 /** The private surface under test — no `any`, just the member driven by the suite. */
-interface VoiceSessionInternals {
+interface RealtimeSessionInternals {
   mintSession(
     targetAgentId: string,
     conversationId?: string | null,
@@ -24,8 +24,8 @@ interface VoiceSessionInternals {
   ): Promise<unknown>;
 }
 
-function internals(service: VoiceSessionService): VoiceSessionInternals {
-  return service as unknown as VoiceSessionInternals;
+function internals(service: RealtimeSessionService): RealtimeSessionInternals {
+  return service as unknown as RealtimeSessionInternals;
 }
 
 const OK_RESULT = {
@@ -40,12 +40,12 @@ const OK_RESULT = {
   }
 };
 
-describe('VoiceSessionService — mintSession variable passthrough', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — mintSession variable passthrough', () => {
+  let service: RealtimeSessionService;
   let executeGQL: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     executeGQL = vi.fn(async () => OK_RESULT);
     // The service's gql() seam is just `this.Provider as GraphQLDataProvider` — a fake with
     // ExecuteGQL is all the mint path touches.

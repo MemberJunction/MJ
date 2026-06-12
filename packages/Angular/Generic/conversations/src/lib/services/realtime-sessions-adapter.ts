@@ -1,5 +1,5 @@
 /**
- * @fileoverview Angular host's bridge from {@link VoiceSessionService} to
+ * @fileoverview Angular host's bridge from {@link RealtimeSessionService} to
  * `@memberjunction/conversations-runtime`'s framework-agnostic
  * `SessionsObserver`.
  *
@@ -9,13 +9,13 @@
  * `SessionEnded$` — and emitting a single discriminated-union stream the
  * runtime re-broadcasts as `ConversationsRuntime.Instance.Sessions.SessionLifecycle$`.
  *
- * **Why not subscribe to `VoiceSessionService` from the runtime directly?**
+ * **Why not subscribe to `RealtimeSessionService` from the runtime directly?**
  * The runtime is pure TypeScript and must remain Angular-free so non-Angular
  * consumers (React, Vue, Node workers) can use it. This adapter is the
  * Angular-specific code that bridges Angular DI's voice service into the
  * framework-agnostic adapter contract.
  *
- * **Multi-source-ready.** Today this is a 1:1 bridge for `VoiceSessionService`.
+ * **Multi-source-ready.** Today this is a 1:1 bridge for `RealtimeSessionService`.
  * A future Angular host that also has a video-session service would either
  * extend this adapter with `merge(voice.SessionLifecycle$, video.SessionLifecycle$)`
  * or register a sibling adapter — the runtime contract doesn't change.
@@ -28,10 +28,10 @@ import type {
     ISessionsAdapter,
     SessionLifecycleEvent,
 } from '@memberjunction/conversations-runtime';
-import { VoiceSessionService } from './voice-session.service';
+import { RealtimeSessionService } from './realtime-session.service';
 
 /**
- * Bridges `VoiceSessionService`'s native lifecycle observables to the generic
+ * Bridges `RealtimeSessionService`'s native lifecycle observables to the generic
  * `SessionLifecycleEvent` shape the runtime expects.
  *
  * **Lifecycle.** Construct once at host bootstrap (see
@@ -43,13 +43,13 @@ import { VoiceSessionService } from './voice-session.service';
  * Call {@link Dispose} when tearing down the host (typically only in tests —
  * production hosts run for the lifetime of the page).
  */
-export class VoiceSessionsAdapter implements ISessionsAdapter {
+export class RealtimeSessionsAdapter implements ISessionsAdapter {
     public readonly SessionLifecycle$: Observable<SessionLifecycleEvent>;
 
     private readonly _events$ = new Subject<SessionLifecycleEvent>();
     private readonly _subs: Subscription[] = [];
 
-    constructor(private readonly voice: VoiceSessionService) {
+    constructor(private readonly voice: RealtimeSessionService) {
         this.SessionLifecycle$ = this._events$.asObservable();
         this.wireUp();
     }
@@ -67,12 +67,12 @@ export class VoiceSessionsAdapter implements ISessionsAdapter {
     }
 
     private wireUp(): void {
-        // session-started — bridge VoiceSessionService.SessionStarted$ verbatim.
+        // session-started — bridge RealtimeSessionService.SessionStarted$ verbatim.
         // That service emits ONLY after both agentSessionId is set AND the
         // realtime client is connected, so we don't need any correlation here.
         //
         // We ALSO synthesize session-channel:open events for each initial
-        // channel listed in channelNames. Reason: VoiceSessionService's
+        // channel listed in channelNames. Reason: RealtimeSessionService's
         // StartVoiceSession calls startChannels() (which emits to
         // ActiveChannels$) BEFORE mintSession() resolves and sets
         // agentSessionId. By the time our ActiveChannels$ diff handler runs for
@@ -154,7 +154,7 @@ export class VoiceSessionsAdapter implements ISessionsAdapter {
                 })
         );
 
-        // session-ended — bridge VoiceSessionService.SessionEnded$ verbatim
+        // session-ended — bridge RealtimeSessionService.SessionEnded$ verbatim
         // (the service narrows the reason union to what's actually
         // distinguishable client-side; the runtime widens to include 'unknown'
         // for adapters that can't tell, which we don't need here).

@@ -4,7 +4,7 @@ import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { VoiceConnectionState, VoiceSessionService } from '../../services/voice-session.service';
+import { VoiceConnectionState, RealtimeSessionService } from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 import { BuildReviewThreadItems, RealtimeSessionReview } from '../../services/realtime-session-review.service';
 import { RealtimeSessionState } from './realtime-session-state';
@@ -71,11 +71,11 @@ export interface RealtimeStartLiveRequest {
  *    the `MJ: AI Agent Channels` registry. Collapsible to a slim strip at the panel level.
  *
  * INTERACTIVE CHANNELS ARE PLUGINS — this shell is channel-agnostic. It subscribes
- * {@link VoiceSessionService.ActiveChannels$} and registers one surface tab per
+ * {@link RealtimeSessionService.ActiveChannels$} and registers one surface tab per
  * {@link BaseRealtimeChannelClient} (key/title/icon from the plugin); the tab pane creates
  * the plugin's surface component dynamically and the PLUGIN wires its own inputs/outputs.
  * The only channel-generic affordance the shell owns is the FOCUS layout: any channel may
- * request it (via its context's `SetFocusMode` → {@link VoiceSessionService.ChannelFocus$}),
+ * request it (via its context's `SetFocusMode` → {@link RealtimeSessionService.ChannelFocus$}),
  * which collapses the main call column (`.board-focus`) and shows the floating call pill.
  *
  * Owns the shared {@link RealtimeSessionState} — the SINGLE merge of the service's
@@ -85,7 +85,7 @@ export interface RealtimeStartLiveRequest {
  * DEVELOPER MODE: the controls row's gear toggles {@link DevMode} (per-session, off by
  * default, never persisted), revealing "Open run" links on delegation cards / rail items
  * and an "Open session" link in the banner. Clicking one emits {@link NavigateRequest}
- * and MINIMIZES the call (via {@link VoiceSessionService.SetMinimized}) — the session
+ * and MINIMIZES the call (via {@link RealtimeSessionService.SetMinimized}) — the session
  * stays live while the host navigates to the record.
  *
  * SESSION REVIEW MODE: when the host supplies {@link ReviewData} (a loaded
@@ -184,7 +184,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   /** Review mode's Close: the host clears its review state, returning to the conversation. */
   @Output() ReviewClosed = new EventEmitter<void>();
 
-  private voice = inject(VoiceSessionService);
+  private voice = inject(RealtimeSessionService);
   private cdr = inject(ChangeDetectorRef);
 
   private _reviewData: RealtimeSessionReview | null = null;
@@ -593,7 +593,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   // ── Audio-reactive visuals (the orb that vibrates like a speaker cone) ──────
   //
   // A requestAnimationFrame loop OUTSIDE Angular samples the client's audio meters
-  // (VoiceSessionService.GetAudioActivity → driver AnalyserNodes), runs the frame through
+  // (RealtimeSessionService.GetAudioActivity → driver AnalyserNodes), runs the frame through
   // the smoothing state machine, and writes CSS custom properties + data attributes
   // straight onto the rendered overlay element — zero change detection per frame. CSS
   // gates on [data-audio-live]: with real metering the orb/EQ follow the waveform; when

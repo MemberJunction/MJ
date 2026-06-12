@@ -6,7 +6,7 @@
  * co-agent session started, a channel within it opened or closed, the session
  * ended) without depending on any specific UI library or session implementation.
  * Hosts implement this adapter to bridge their internal session source
- * (Angular's `VoiceSessionService` today; future server-bridged voice host,
+ * (Angular's `RealtimeSessionService` today; future server-bridged voice host,
  * video-only host, etc.) into a single push stream the runtime exposes.
  *
  * Default (when no adapter is registered): {@link NoOpSessionsAdapter} emits
@@ -31,7 +31,7 @@ import { EMPTY, Observable } from 'rxjs';
 /**
  * Per-channel state surfaced for `session-channel` events.
  *
- * **Why only two values?** `VoiceSessionService`'s only channel observable is
+ * **Why only two values?** `RealtimeSessionService`'s only channel observable is
  * `ActiveChannels$` (the full plugin set), which fires once on resolve and again
  * with `[]` on teardown. There's no `opening` / `closing` transition observable
  * at the channel-plugin level today. Narrowing here is honest about what's
@@ -69,8 +69,8 @@ export type SessionLifecycleEvent =
  * Boundary the runtime subscribes to for session lifecycle.
  *
  * Hosts supply an implementation that pushes events from their realtime
- * session source — the Angular host's `VoiceSessionsAdapter` bridges
- * `VoiceSessionService`'s `SessionStarted$` / `ActiveChannels$` / `SessionEnded$`
+ * session source — the Angular host's `RealtimeSessionsAdapter` bridges
+ * `RealtimeSessionService`'s `SessionStarted$` / `ActiveChannels$` / `SessionEnded$`
  * observables; a Node CLI or React app would write a different implementation.
  *
  * **Single-observable contract.** One `SessionLifecycle$` stream carries all
@@ -79,7 +79,7 @@ export type SessionLifecycleEvent =
  *
  * @example Angular host bootstrap
  * ```typescript
- * runtime.UseSessionsAdapter(new VoiceSessionsAdapter(voiceSessionService));
+ * runtime.UseSessionsAdapter(new RealtimeSessionsAdapter(voiceSessionService));
  * ```
  *
  * @example Multi-source adapter (future)
@@ -91,7 +91,7 @@ export type SessionLifecycleEvent =
  *         this.voice.SessionLifecycle$,
  *         this.video.SessionLifecycle$,
  *     );
- *     constructor(private voice: VoiceSessionsAdapter, private video: VideoSessionsAdapter) {}
+ *     constructor(private voice: RealtimeSessionsAdapter, private video: VideoSessionsAdapter) {}
  * }
  * ```
  */

@@ -2,7 +2,7 @@
  * Pure parsing of the serialized realtime tool result (`ResultJson`) the server's
  * `RealtimeToolBroker` produces — `{ success, output, runId?, artifacts? }` on success or
  * `{ success: false, error }` on failure. Kept framework-free (no Angular / GraphQL
- * imports) so it is unit-testable in isolation and the {@link VoiceSessionService}
+ * imports) so it is unit-testable in isolation and the {@link RealtimeSessionService}
  * stays focused on session orchestration.
  */
 
