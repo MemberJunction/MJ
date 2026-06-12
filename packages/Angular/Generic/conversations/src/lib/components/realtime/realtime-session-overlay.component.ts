@@ -239,6 +239,13 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
    */
   public DetailsPeek = false;
 
+  /**
+   * Whether the typed-input dock is open — a TWO-WAY user door (the strip's Type
+   * control / the T hotkey open it; the dock's hide control closes it), volatile and
+   * reset per session. Typing never becomes permanent chrome.
+   */
+  public ComposerOpen = false;
+
   /** Live turn-state from the session service — drives the banner + connecting screen. */
   public readonly ConnectionState$ = this.voice.ConnectionState$;
 
@@ -624,6 +631,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     if (active && !this.prevActive) {
       this.Disclosure.BeginSession();
       this.DetailsPeek = false;
+      this.ComposerOpen = false; // typing is opt-in per session (voice-first)
       this.revealedChannelKeys.clear();
       this.pendingRevealKey = null;
       this.startAudioVisualLoop();
@@ -800,9 +808,23 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       return;
     }
     event.preventDefault();
-    this.Disclosure.Raise('engaged');
-    // The dock may have just been created by the raise — focus after this CD pass.
+    this.OnComposerOpenChanged(true);
+    // The dock may have just been created — focus after this CD pass.
     setTimeout(() => this.composer?.FocusInput());
+  }
+
+  /**
+   * The composer dock opened (strip Type control / T hotkey) or closed (the dock's hide
+   * control). Opening raises the 'engaged' milestone for the cross-session ratchet —
+   * but the dock itself stays a per-session, user-owned toggle either way.
+   */
+  public OnComposerOpenChanged(open: boolean): void {
+    this.ComposerOpen = open;
+    if (open) {
+      this.Disclosure.Raise('engaged');
+      setTimeout(() => this.composer?.FocusInput());
+    }
+    this.cdr.markForCheck();
   }
 
   ngOnDestroy(): void {
