@@ -36,9 +36,9 @@ import { ParsedDelegationArtifact } from '../../services/delegation-result-parse
  * The whole panel collapses to a slim strip via the chevron at the tab strip's end —
  * the collapse-to-strip behavior that used to live on the rail, lifted to the panel.
  *
- * SIZING IS EXTERNAL: the overlay shell hosts this panel in an `angular-split` area
- * and owns the width (user drag + persisted preference + default tiers). This panel
- * just fills its area and REPORTS the layout signals the shell sizes from:
+ * SIZING IS EXTERNAL: the overlay shell hosts this panel in a fixed-width flex item
+ * and owns the width (user drag via the resize handle + persisted preference +
+ * default tiers). This panel just fills it and REPORTS the layout signals the shell sizes from:
  * {@link CollapsedChange} (slim-strip toggle) and {@link WideChanged} (a content tab
  * is focused → the default width tier widens).
  */
@@ -179,6 +179,19 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * AUTO-REVEALS a channel surface the moment the agent first acts on it: expands the
+   * panel if collapsed, focuses the channel's tab and flashes it violet — so the user
+   * discovers the whiteboard (or any channel) exists the instant it comes alive,
+   * instead of having to find the tab themselves. No-op for unknown keys.
+   */
+  public RevealChannel(key: string): void {
+    this.setCollapsed(false);
+    this.Model.Focus(key);
+    this.Model.FlashTab(key);
+    this.cdr.markForCheck();
+  }
+
+  /**
    * Removes a tab from the panel (Activity is irremovable; focus falls back to Activity —
    * see {@link RealtimeSurfaceTabsModel.RemoveTab}). Used by the overlay shell on a
    * review→live continuation whose live channel set resolved WITHOUT the channel a stale
@@ -203,7 +216,8 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    */
   public RegisterArtifactTab(artifact: ParsedDelegationArtifact, focus: boolean = false): void {
     this.tabbedVersionIds.add(artifact.ArtifactVersionID);
-    this.Model.OpenArtifactTab(artifact, focus);
+    // History carryover is context, not news — never marked unseen (no glow).
+    this.Model.OpenArtifactTab(artifact, focus, false);
     this.cdr.markForCheck();
   }
 
@@ -222,8 +236,10 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
 
   /**
    * Scans the session's delegation cards for artifacts that don't have a tab yet and
-   * auto-opens one per artifact — focused on arrival, with the brief violet flash —
-   * expanding the panel if it was collapsed so the new tab is actually visible.
+   * adds one per artifact — UNFOCUSED, with the brief violet flash plus the persistent
+   * unseen glow. Per product direction a finished artifact never steals the screen
+   * (only the agent's first channel activity auto-reveals); the glowing tab is the
+   * invitation, the user opens it when they want it.
    */
   private syncArtifactTabs(): void {
     for (const card of this.State.Cards) {
@@ -235,9 +251,20 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
           continue;
         }
         this.tabbedVersionIds.add(artifact.ArtifactVersionID);
-        this.Model.OpenArtifactTab(artifact, true);
-        this.Collapsed = false;
+        this.Model.OpenArtifactTab(artifact, false);
       }
+    }
+  }
+
+  /**
+   * Focuses the FIRST tab in the strip — channels lead, so a Details peek lands on the
+   * marquee surface (e.g. the Whiteboard) when one exists, else on Activity.
+   */
+  public FocusFirstTab(): void {
+    const first = this.Model.Tabs[0];
+    if (first) {
+      this.Model.Focus(first.Key);
+      this.cdr.markForCheck();
     }
   }
 

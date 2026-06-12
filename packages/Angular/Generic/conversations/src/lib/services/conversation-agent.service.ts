@@ -1,18 +1,20 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata, RunView, IMetadataProvider } from '@memberjunction/core';
+import { Observable } from 'rxjs';
+import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility } from '@memberjunction/ai-core-plus';
-import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
-import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { MJConversationDetailEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { RunAgentFromConversationDetailParams } from '@memberjunction/ai-agent-client';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
 import { MentionParserService } from './mention-parser.service';
 import { UUIDsEqual } from '@memberjunction/global';
+
+import { ConversationsRuntimeBootstrap } from './conversations-runtime-bootstrap.service';
 
 /**
  * Context for artifact lookups - provides pre-loaded data from conversation
@@ -34,8 +36,25 @@ export interface IntentCheckResult {
 }
 
 /**
- * Service for managing agent interactions within conversations.
- * Handles communication with the ambient Sage Agent and other agents.
+ * Angular DI service for conversation-level agent orchestration.
+ *
+ * After PR 2 of the conversations-runtime extraction, the core
+ * `processMessage` flow and the conversation-manager-agent resolution are
+ * delegated to `@memberjunction/conversations-runtime`. This service is
+ * primarily a shim for those operations PLUS the holder of the helpers
+ * that haven't been ported yet:
+ *
+ * - `invokeSubAgent(...)` — used by Sage's routing decisions in
+ *   `message-input.component`.
+ * - `checkAgentContinuityIntent(...)` — fast intent classification when the
+ *   user replies to a previous-agent thread.
+ * - `findConfigurationPresetFromHistory(...)` — locates an agent's preset
+ *   from prior @mentions in the conversation.
+ * - `clearSession(...)` — per-conversation session-id bookkeeping.
+ *
+ * These can move to the runtime in a follow-up; they aren't strictly needed
+ * to invoke an agent end-to-end and stay here so the shim has zero behavior
+ * difference vs. the original.
  */
 @Injectable({
   providedIn: 'root'
@@ -43,27 +62,29 @@ export interface IntentCheckResult {
 export class ConversationAgentService {
   /** GraphQL AI client - retained for RunAIPrompt (intent checking) which AgentClientService doesn't wrap */
   private _aiClient: GraphQLAIClient | null = null;
+  /** Cached resolution of the conversation manager agent (default agent). */
   private _conversationManagerAgent: MJAIAgentEntityExtended | null = null;
-  private _sessionIds: Map<string, string> = new Map(); // conversationId -> sessionId
-  private _isProcessing$ = new BehaviorSubject<boolean>(false);
+  private _sessionIds: Map<string, string> = new Map();
 
-  /**
-   * Observable indicating if the ambient agent is currently processing
-   */
-  public readonly isProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
+  /** Observable indicating if the ambient agent is currently processing — delegated to the runtime's AgentRunner. */
+  public readonly isProcessing$: Observable<boolean>;
 
   private _provider: IMetadataProvider | null = null;
 
   constructor(
+    _bootstrap: ConversationsRuntimeBootstrap,
     private mentionParser: MentionParserService,
     private agentClientService: AgentClientService
   ) {
+    // Injecting `_bootstrap` forces the runtime's INotificationAdapter +
+    // IActiveTaskTracker adapters to register before any shim method runs.
+    this.isProcessing$ = ConversationsRuntime.Instance.AgentRunner.isProcessing$;
     this.initializeAIClient();
   }
 
   /**
    * The metadata provider this service uses. When unset, falls back to Metadata.Provider.
-   * Setting it re-initializes the AI client to bind to the supplied provider.
+   * Setting it re-initializes the AI client and forwards the provider to the runtime's runner.
    */
   public get Provider(): IMetadataProvider {
       return this._provider ?? Metadata.Provider;
@@ -71,12 +92,13 @@ export class ConversationAgentService {
   public set Provider(value: IMetadataProvider | null) {
     this._provider = value;
     this.initializeAIClient();
+    ConversationsRuntime.Instance.AgentRunner.Provider = value;
   }
 
   /**
    * Initialize the GraphQL AI Client.
    * Retained for RunAIPrompt calls (intent checking) which the AgentClientService doesn't wrap.
-   * Agent execution (RunAIAgentFromConversationDetail) now goes through AgentClientService.
+   * Agent execution (RunAIAgentFromConversationDetail) now goes through ConversationsRuntime.AgentRunner.
    */
   private initializeAIClient(): void {
     try {
@@ -92,7 +114,15 @@ export class ConversationAgentService {
   }
 
   /**
-   * Get or load the Sage Agent (formerly Conversation Manager Agent)
+   * Resolve the conversation manager agent via the runtime's 4-step
+   * DefaultAgentResolver chain (explicit input → app-scoped Application
+   * Setting → global Application Setting → code-const Sage fallback). The
+   * result is cached on this service for use by the synchronous
+   * {@link ConversationManagerAgentName} getter.
+   *
+   * Existing callers expect a Promise<MJAIAgentEntityExtended | null> — we
+   * preserve that shape (returning null on failure rather than throwing)
+   * so the call sites don't need to change.
    */
   public async getConversationManagerAgent(): Promise<MJAIAgentEntityExtended | null> {
     if (this._conversationManagerAgent) {
@@ -100,44 +130,52 @@ export class ConversationAgentService {
     }
 
     try {
-      // Ensure AIEngineBase is configured
-      await AIEngineBase.Instance.Config(false);
-
-      // Find the Sage Agent
-      const agents = AIEngineBase.Instance.Agents;
-      this._conversationManagerAgent = agents.find(
-        (agent: MJAIAgentEntityExtended) => agent.Name === 'Sage'
-      ) || null;
-
-      if (!this._conversationManagerAgent) {
-        const errorMsg = 'Sage Agent not found in AIEngineBase.Agents';
-        console.warn(errorMsg);
-        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
-      }
-
-      return this._conversationManagerAgent;
+      const provider = this.Provider;
+      const agent = await ConversationsRuntime.Instance.DefaultAgent.resolve({
+        contextUser: provider.CurrentUser ?? undefined,
+        provider,
+      });
+      this._conversationManagerAgent = agent;
+      return agent;
     } catch (error) {
-      const errorMsg = 'Error loading Sage Agent: ' + (error instanceof Error ? error.message : String(error));
-      console.error('Error loading Sage Agent:', error);
+      const errorMsg = 'Error resolving conversation manager agent: ' + (error instanceof Error ? error.message : String(error));
+      console.error(errorMsg);
       MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
       return null;
     }
   }
 
+  /**
+   * Synchronous read of the cached conversation-manager-agent name. Returns
+   * `null` until {@link getConversationManagerAgent} has been called at least
+   * once and resolved successfully. Used by `MessageItemComponent.isConversationManager`
+   * to flag messages from the routing agent without hardcoding `'Sage'`.
+   */
+  public get ConversationManagerAgentName(): string | null {
+    return this._conversationManagerAgent?.Name ?? null;
+  }
 
   /**
-   * Process a message through the ambient Sage Agent.
-   * This should be called for every message sent in a conversation.
+   * Returns `true` if the supplied agent identifier (UUID or name) matches the
+   * currently cached conversation manager agent. Robust to either input.
+   */
+  public IsConversationManagerAgent(agentIdOrName: string | null | undefined): boolean {
+    if (!agentIdOrName || !this._conversationManagerAgent) return false;
+    return (
+      UUIDsEqual(this._conversationManagerAgent.ID, agentIdOrName) ||
+      this._conversationManagerAgent.Name === agentIdOrName
+    );
+  }
+
+  /**
+   * Process a message through the conversation manager agent. Delegates to
+   * `ConversationsRuntime.Instance.AgentRunner.processMessage(...)`.
    *
-   * Uses the optimized RunAIAgentFromConversationDetail mutation which loads
-   * conversation history (including attachments) server-side for better performance.
-   *
-   * @param conversationId The conversation ID
-   * @param message The message that was just sent
-   * @param conversationHistory Recent messages in the conversation for context (kept for backwards compatibility but not used)
-   * @param conversationDetailId The ID of the conversation detail record to link to the agent run
-   * @param onProgress Optional callback for receiving progress updates during execution
-   * @returns The agent's response, or null if the agent chooses not to respond
+   * Signature is preserved verbatim from the original service so existing
+   * call sites continue to compile. The unused `conversationHistory`
+   * parameter is kept for backwards compatibility (it was already
+   * documented as "kept for backwards compatibility but not used" in the
+   * original).
    */
   async processMessage(
     conversationId: string,
@@ -147,100 +185,18 @@ export class ConversationAgentService {
     onProgress?: AgentExecutionProgressCallback,
     appContext?: Record<string, unknown> | null
   ): Promise<ExecuteAgentResult | null> {
-    // Don't process if user is tagging someone else (future enhancement)
-    // For now, we'll always send to the ambient agent
-
-    const agent = await this.getConversationManagerAgent();
-    if (!agent || !agent.ID) {
-      const errorMsg = 'Sage Agent not available';
-      console.warn(errorMsg);
-      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'warning', 5000);
-      return null;
+    // Warm the cached default-agent name for any synchronous consumers
+    // before the runtime resolves on its own.
+    if (!this._conversationManagerAgent) {
+      await this.getConversationManagerAgent();
     }
-
-    try {
-      // Indicate agent is processing
-      this._isProcessing$.next(true);
-
-      // Get current user for permission filtering
-      const currentUser = this.Provider.CurrentUser;
-      if (!currentUser) {
-        console.warn('⚠️ No current user available for permission filtering, using unfiltered agents');
-      }
-
-      // Filter agents by status and hierarchy first
-      const candidateAgents = AIEngineBase.Instance.Agents.filter(
-        a => !UUIDsEqual(a.ID, agent.ID) &&
-             !a.ParentID &&
-             a.Status === 'Active' &&
-             a.InvocationMode !== 'Sub-Agent' // ensure that the agent is intended to run as top-level
-      );
-
-      // Filter by user permissions if user context available
-      const availAgents = currentUser
-        ? await this.filterAgentsByPermissions(candidateAgents, currentUser)
-        : candidateAgents;
-
-      console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
-
-      // Use AgentClientService which wraps GraphQLAIClient.RunAIAgentFromConversationDetail
-      // and automatically integrates with client tool request handling
-      const agentParams: RunAgentFromConversationDetailParams = {
-        ConversationDetailId: conversationDetailId,
-        AgentId: agent.ID,
-        MaxHistoryMessages: 20,
-        Data: {
-          ALL_AVAILABLE_AGENTS: availAgents.map(a => ({
-            ID: a.ID,
-            Name: a.Name,
-            Description: a.Description
-          })),
-          conversationId: conversationId,
-          latestMessageId: message.ID,
-          ...(appContext ? { appContext } : {}),
-          // Include all registered client tools so the LLM sees them in the prompt.
-          // These are ephemeral tools registered by the client app (CopyToClipboard, etc.)
-          // that supplement the metadata-defined tools from the junction table.
-          clientTools: this.agentClientService.GetRegisteredTools().map(t => ({
-            Name: t.Name,
-            Description: t.Description,
-            InputSchema: t.ParameterSchema
-          }))
-        },
-        CreateArtifacts: true,
-        CreateNotification: true,
-        OnProgress: onProgress ? (progress) => {
-          onProgress({
-            step: progress.CurrentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
-            percentage: progress.Percentage,
-            message: progress.Message,
-            metadata: progress.Metadata
-          });
-        } : undefined
-      };
-
-      const runResult = await this.agentClientService.RunAgentFromConversationDetail(agentParams);
-
-      // Unwrap RunAgentResult to get the original ExecuteAgentResult
-      if (runResult.Success && runResult.Result) {
-        return runResult.Result as ExecuteAgentResult;
-      } else if (!runResult.Success) {
-        const errorMsg = runResult.ErrorMessage || 'Agent execution failed';
-        console.error('Agent execution failed:', errorMsg);
-        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
-        return null;
-      }
-
-      return null;
-    } catch (error) {
-      const errorMsg = 'Error processing message through agent: ' + (error instanceof Error ? error.message : String(error));
-      console.error('Error processing message through agent:', error);
-      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
-      return null;
-    } finally {
-      // Always clear processing state
-      this._isProcessing$.next(false);
-    }
+    return ConversationsRuntime.Instance.AgentRunner.processMessage({
+      conversationId,
+      message,
+      conversationDetailId,
+      appContext,
+      onProgress,
+    });
   }
 
   /**
@@ -262,7 +218,6 @@ export class ConversationAgentService {
       .reverse()
       .find(msg => {
         if (msg.Role !== 'User' || !msg.Message) return false;
-        // Parse the message to check for an @mention of this agent with a configId
         const mentionResult = this.mentionParser.parseMentions(
           msg.Message,
           AIEngineBase.Instance.Agents,
@@ -287,154 +242,18 @@ export class ConversationAgentService {
   }
 
   /**
-   * Build the message array for the agent from conversation history.
-   * Note: conversationHistory already includes the current message, so we don't add it separately.
-   * IMPORTANT: This method loads artifacts and attachments for each message.
-   *
-   * @deprecated This method is no longer used by processMessage() which now uses the optimized
-   * RunAIAgentFromConversationDetail mutation that loads history server-side. Kept for backwards
-   * compatibility with other callers that may need client-side message building.
+   * Clear the session for a conversation (useful when starting a new topic)
    */
-  private async buildAgentMessages(
-    history: MJConversationDetailEntity[]
-  ): Promise<ChatMessage[]> {
-    const messages: ChatMessage[] = [];
-
-    // Add historical messages (limit to recent context, e.g., last 20 messages)
-    // History already includes the current message from the caller
-    const recentHistory = history.slice(-20);
-
-    // Get IDs of all messages in history
-    const messageIds = recentHistory.map(msg => msg.ID).filter(id => id); // Filter out any undefined IDs
-
-    // Create lookup maps
-    const artifactsByDetailId = new Map<string, string[]>(); // DetailID -> array of artifact JSON strings
-    // attachmentsByDetailId removed — artifact junction is the single source of truth
-    // after the backfill migration. Multimodal content handled server-side.
-
-    if (messageIds.length > 0) {
-      const rv = RunView.FromMetadataProvider(this.Provider);
-
-      // Load artifacts for messages. Since the backfill migration
-      // (V202605271400__Backfill_Attachment_Artifacts) converted all legacy
-      // ConversationDetailAttachment rows to artifact pairs, the artifact
-      // junction is the single source of truth. Multimodal content (images,
-      // audio, video) is handled server-side by the resolver's artifact path.
-      const artifactsLoaded = await this.loadArtifactsForMessages(rv, messageIds, artifactsByDetailId);
-
-      if (artifactsLoaded) {
-        console.log(`📦 Loaded ${artifactsByDetailId.size} artifact groups for ${messageIds.length} messages`);
-      }
-    }
-
-    // Build messages with artifact context
-    for (const msg of recentHistory) {
-      const messageText = msg.Message || '';
-      const artifacts = artifactsByDetailId.get(msg.ID);
-
-      let content: ChatMessageContent = messageText;
-
-      if (artifacts && artifacts.length > 0) {
-        for (const artifactJson of artifacts) {
-          content += `\n\n# Artifact\n${artifactJson}\n`;
-        }
-      }
-
-      messages.push({
-        role: this.mapRoleToAgentRole(msg.Role) as 'system' | 'user' | 'assistant',
-        content: content
-      });
-    }
-
-    return messages;
-  }
-
-  /**
-   * Load artifacts for messages (OUTPUT direction only)
-   */
-  private async loadArtifactsForMessages(
-    rv: RunView,
-    messageIds: string[],
-    artifactsByDetailId: Map<string, string[]>
-  ): Promise<boolean> {
-    try {
-      const junctionResult = await rv.RunView<MJConversationDetailArtifactEntity>({
-        EntityName: 'MJ: Conversation Detail Artifacts',
-        ExtraFilter: `ConversationDetailID IN ('${messageIds.join("','")}') AND Direction='Output'`,
-        ResultType: 'entity_object'
-      });
-
-      if (junctionResult.Success && junctionResult.Results && junctionResult.Results.length > 0) {
-        // Collect unique version IDs
-        const versionIds = new Set<string>();
-        for (const junction of junctionResult.Results) {
-          versionIds.add(junction.ArtifactVersionID);
-        }
-
-        // Batch load all artifact versions
-        const versionResult = await rv.RunView<MJArtifactVersionEntity>({
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
-          ResultType: 'entity_object'
-        });
-
-        if (versionResult.Success && versionResult.Results) {
-          const versionMap = new Map(versionResult.Results.map(v => [v.ID, v]));
-
-          for (const junction of junctionResult.Results) {
-            const version = versionMap.get(junction.ArtifactVersionID);
-            if (version && version.Content) {
-              const existing = artifactsByDetailId.get(junction.ConversationDetailID) || [];
-              existing.push(version.Content);
-              artifactsByDetailId.set(junction.ConversationDetailID, existing);
-            }
-          }
-          return true;
-        }
-      }
-    } catch (error) {
-      console.error('Error loading artifacts for conversation context:', error);
-    }
-    return false;
-  }
-
-  /**
-   * Map ConversationDetail Role to agent message role
-   */
-  private mapRoleToAgentRole(role: string): string {
-    const roleLower = (role || '').toLowerCase();
-    if (roleLower === 'user') return 'user';
-    if (roleLower === 'assistant' || roleLower === 'agent') return 'assistant';
-    return 'user'; // Default to user
-  }
-
-  /**
-   * Check if a message is tagging another user or agent.
-   * Returns true if the message contains @mentions that are NOT the ambient agent.
-   * Future enhancement: parse @mentions and determine if ambient agent should process.
-   */
-  private isTaggingOthers(message: string): boolean {
-    // Future implementation: check for @mentions
-    // For now, always return false (always process through ambient agent)
-    return false;
+  clearSession(conversationId: string): void {
+    this._sessionIds.delete(conversationId);
   }
 
   /**
    * Invoke a sub-agent based on Sage Agent's payload.
    * This is called when Sage decides to delegate to a specialist agent.
    *
-   * @param agentName Name of the agent to invoke
-   * @param conversationId The conversation ID
-   * @param message The user message that triggered this
-   * @param conversationHistory Recent conversation history for context
-   * @param reasoning Why this agent is being invoked
-   * @param conversationDetailId The ID of the conversation detail record to link to the agent run
-   * @param payload Optional payload to pass to the agent (e.g., previous OUTPUT artifact for continuity)
-   * @param onProgress Optional callback for receiving progress updates during execution
-   * @param sourceArtifactId Optional source artifact ID for versioning
-   * @param sourceArtifactVersionId Optional source artifact version ID for versioning
-   * @param agentConfigurationPresetId Optional ID of the AIAgentConfiguration preset (will be mapped to AIConfigurationID)
-   * @returns The agent's execution result, or null if agent not found
+   * Stays on the Angular shim because it directly uses AgentClientService.
+   * Could move to the runtime in a follow-up if needed.
    */
   async invokeSubAgent(
     agentName: string,
@@ -469,10 +288,7 @@ export class ConversationAgentService {
       // Map AIAgentConfiguration preset ID to actual AIConfiguration ID
       let aiConfigurationId: string | undefined = undefined;
       if (agentConfigurationPresetId) {
-        // Get the preset from AIEngineBase to extract the AIConfigurationID
         const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agent.ID, false);
-        // check by preset ID or AIConfigurationID - since sometimes we have the actual
-        // configuration ID. Since both UUID no collisions should ever be possible.
         const preset = presets.find(p => UUIDsEqual(p.ID, agentConfigurationPresetId) || UUIDsEqual(p.AIConfigurationID, agentConfigurationPresetId));
 
         if (preset) {
@@ -483,8 +299,6 @@ export class ConversationAgentService {
         }
       }
 
-      // Use AgentClientService which wraps GraphQLAIClient.RunAIAgentFromConversationDetail
-      // and integrates with client tool request handling
       const agentParams: RunAgentFromConversationDetailParams = {
         ConversationDetailId: conversationDetailId,
         AgentId: agent.ID,
@@ -493,12 +307,6 @@ export class ConversationAgentService {
           conversationId: conversationId,
           latestMessageId: message.ID,
           invocationReason: reasoning,
-          // Pass the embedder's appContext through to the agent runtime
-          // so direct-routed sub-agents (e.g. Form Builder invoked via the
-          // cockpit's `defaultAgentId`) see the same `appContext` block in
-          // their system prompt that Sage-routed agents do. Without this,
-          // the ActiveForm/Schema/OverrideID context the embedder
-          // assembles is dropped on the floor for direct routing.
           ...(appContext ? { appContext } : {}),
         },
         ...(payload ? { Payload: payload as Record<string, unknown> } : {}),
@@ -519,7 +327,6 @@ export class ConversationAgentService {
 
       const runResult = await this.agentClientService.RunAgentFromConversationDetail(agentParams);
 
-      // Unwrap RunAgentResult to get the original ExecuteAgentResult
       if (runResult.Success && runResult.Result) {
         return runResult.Result as ExecuteAgentResult;
       } else if (!runResult.Success) {
@@ -542,11 +349,8 @@ export class ConversationAgentService {
    * Check if user's latest message should continue with the previous agent or route through Sage.
    * Uses fast inference (<500ms) to determine intent and avoid unnecessary Sage overhead.
    *
-   * @param agentId The ID of the previous agent
-   * @param latestMessage The user's new message
-   * @param conversationHistory Recent conversation history for context (last 10 messages)
-   * @param context Pre-loaded artifact and agent run data to avoid database queries
-   * @returns IntentCheckResult with decision, reasoning, and optional target artifact version
+   * Stays on the Angular shim because it directly uses GraphQLAIClient.
+   * Could move to the runtime in a follow-up.
    */
   async checkAgentContinuityIntent(
     agentId: string,
@@ -560,7 +364,6 @@ export class ConversationAgentService {
     }
 
     try {
-      // Load the Check Sage Intent prompt
       await AIEngineBase.Instance.Config(false);
       const prompt = AIEngineBase.Instance.Prompts.find(p => p.Name === 'Check Sage Intent');
       if (!prompt) {
@@ -568,21 +371,18 @@ export class ConversationAgentService {
         return { decision: 'UNSURE', reasoning: 'Check Sage Intent prompt not found' };
       }
 
-      // Get agent details
       const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
       if (!agent) {
         console.warn('⚠️ Previous agent not found, defaulting to UNSURE');
         return { decision: 'UNSURE', reasoning: 'Previous agent not found' };
       }
 
-      // Find all artifacts from this agent in this conversation
       const agentArtifacts = this.findAllAgentArtifacts(
         agentId,
         conversationHistory,
         context
       );
 
-      // Build compact conversation history (last 10 messages)
       const recentHistory = conversationHistory.slice(-10);
       const compactHistory = recentHistory.map((msg, idx) => {
         const role = msg.Role === 'User' ? 'User' : agent.Name || 'Agent';
@@ -590,7 +390,6 @@ export class ConversationAgentService {
         return `${idx + 1}. ${role}: ${content.substring(0, 150)}${content.length > 150 ? '...' : ''}`;
       }).join('\n');
 
-      // Build artifact context if available
       let artifactContext = '';
       if (agentArtifacts.length > 0) {
         artifactContext = '\n\n**Prior Artifacts Created by This Agent**:\n';
@@ -607,7 +406,6 @@ export class ConversationAgentService {
         });
       }
 
-      // Build user message with context
       const userMessage = `**Previous Agent**: ${agent.Name} - ${agent.Description || 'No description'}
 
 **Conversation History** (last ${recentHistory.length} messages):
@@ -621,7 +419,6 @@ ${compactHistory}${artifactContext}
         artifactCount: agentArtifacts.length
       });
 
-      // Run the prompt with artifact data included
       const result = await this._aiClient.RunAIPrompt({
         promptId: prompt.ID,
         messages: [{ role: 'user', content: userMessage }],
@@ -646,7 +443,6 @@ ${compactHistory}${artifactContext}
             latency: result.executionTimeMs || 'unknown'
           });
 
-          // Validate the response
           if (decision === 'YES' || decision === 'NO' || decision === 'UNSURE') {
             return {
               decision: decision as 'YES' | 'NO' | 'UNSURE',
@@ -661,52 +457,11 @@ ${compactHistory}${artifactContext}
       return { decision: 'UNSURE', reasoning: 'Invalid format from intent check prompt' };
     } catch (error) {
       console.error('❌ Error checking agent continuity intent:', error);
-      // On error, default to UNSURE (safer to let Sage evaluate)
       return {
         decision: 'UNSURE',
         reasoning: `Error during intent check: ${error instanceof Error ? error.message : String(error)}`
       };
     }
-  }
-
-  /**
-   * Clear the session for a conversation (useful when starting a new topic)
-   */
-  clearSession(conversationId: string): void {
-    this._sessionIds.delete(conversationId);
-  }
-
-  /**
-   * Filter agents based on user's 'run' permission.
-   * Only returns agents that the user has permission to run.
-   *
-   * @param agents List of candidate agents to filter
-   * @param user User to check permissions for
-   * @returns Filtered list of agents the user can run
-   */
-  private async filterAgentsByPermissions(
-    agents: MJAIAgentEntityExtended[],
-    user: any
-  ): Promise<MJAIAgentEntityExtended[]> {
-    const permittedAgents: MJAIAgentEntityExtended[] = [];
-
-    for (const agent of agents) {
-      try {
-        const hasPermission = await AIAgentPermissionHelper.HasPermission(
-          agent.ID,
-          user,
-          'run'
-        );
-        if (hasPermission) {
-          permittedAgents.push(agent);
-        }
-      } catch (error) {
-        console.error(`Error checking permission for agent ${agent.Name}:`, error);
-        // On error, exclude agent (fail closed)
-      }
-    }
-
-    return permittedAgents;
   }
 
   /**
@@ -749,28 +504,22 @@ ${compactHistory}${artifactContext}
       }>;
     }>();
 
-    // Iterate backwards through conversation details (most recent first)
     for (let i = conversationDetails.length - 1; i >= 0; i--) {
       const detail = conversationDetails[i];
 
-      // Skip non-AI messages and errors
       if (detail.Role !== 'AI' || detail.Status === 'Error') continue;
 
-      // O(1) lookup for agent run from pre-loaded data
       const agentRun = context.agentRunsByDetailId.get(detail.ID);
       if (!agentRun || !UUIDsEqual(agentRun.AgentID, agentId) || agentRun.Status !== 'Completed') {
         continue;
       }
 
-      // O(1) lookup for artifacts from pre-loaded data
       const artifacts = context.artifactsByDetailId.get(detail.ID);
       if (!artifacts || artifacts.length === 0) continue;
 
-      // Process each artifact
       for (const lazyArtifact of artifacts) {
         const mainArtifactId = lazyArtifact.artifactId;
 
-        // Get or create artifact entry
         if (!artifactMap.has(mainArtifactId)) {
           artifactMap.set(mainArtifactId, {
             artifactId: mainArtifactId,
@@ -781,7 +530,6 @@ ${compactHistory}${artifactContext}
           });
         }
 
-        // Add version to artifact
         const artifactEntry = artifactMap.get(mainArtifactId)!;
         artifactEntry.versions.push({
           runId: agentRun.ID,
@@ -794,7 +542,6 @@ ${compactHistory}${artifactContext}
       }
     }
 
-    // Convert map to array (most recent artifacts first based on their latest version)
     return Array.from(artifactMap.values()).sort((a, b) => {
       const aLatest = a.versions[0]?.createdAt || new Date(0);
       const bLatest = b.versions[0]?.createdAt || new Date(0);

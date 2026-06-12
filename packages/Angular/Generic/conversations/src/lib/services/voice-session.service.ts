@@ -10,6 +10,7 @@ import {
   LoadElevenLabsRealtimeClient,
   LoadGeminiRealtimeClient,
   LoadOpenAIRealtimeClient,
+  RealtimeAudioActivity,
   RealtimeClientError,
   RealtimeClientState,
   RealtimeClientToolCall,
@@ -220,6 +221,15 @@ export class VoiceSessionService {
   private _minimized$ = new BehaviorSubject<boolean>(false);
   private _activeChannels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
   private _channelFocus$ = new Subject<RealtimeChannelFocusEvent>();
+  // ─── Generic session-lifecycle events (consumed by VoiceSessionsAdapter to
+  // bridge into @memberjunction/conversations-runtime's framework-agnostic
+  // SessionsObserver). Why not derive from Active$ + agentSessionId? Because
+  // Active$ flips true before mintSession resolves and sets agentSessionId —
+  // a naive Active$ subscription would emit session-started with sessionId === null.
+  // Emitting explicitly avoids the race entirely. ───
+  private _sessionStarted$ = new Subject<{ sessionId: string; channelNames: string[] }>();
+  private _sessionEnded$ = new Subject<{ sessionId: string; reason: 'explicit' | 'error' }>();
+  private _channelActivity$ = new Subject<BaseRealtimeChannelClient>();
 
   /** Current connection / turn state. */
   public readonly ConnectionState$: Observable<VoiceConnectionState> = this._connectionState$.asObservable();
@@ -271,6 +281,41 @@ export class VoiceSessionService {
    */
   public readonly ChannelFocus$: Observable<RealtimeChannelFocusEvent> = this._channelFocus$.asObservable();
 
+  /**
+   * Fired EXACTLY ONCE per session after both `agentSessionId` is set AND the
+   * realtime client is connected. Carries the server-issued `sessionId` and the
+   * `ChannelName` of each plugin resolved at session mint. Consumed by
+   * `VoiceSessionsAdapter` (in this package) to feed
+   * `@memberjunction/conversations-runtime`'s `SessionsObserver`.
+   *
+   * **Why this exists separately from `Active$`:** `Active$` flips `true` BEFORE
+   * `mintSession` resolves, so `agentSessionId` is still `null` at that moment.
+   * Subscribers correlating `(Active$, agentSessionId)` would race; this event
+   * removes the race.
+   */
+  public readonly SessionStarted$: Observable<{ sessionId: string; channelNames: string[] }> =
+    this._sessionStarted$.asObservable();
+
+  /**
+   * Fired EXACTLY ONCE per session as teardown begins, with the prior
+   * `agentSessionId` (so subscribers can correlate against `SessionStarted$`'s
+   * sessionId) and the client-distinguishable reason — `'explicit'` when the
+   * user called `EndVoiceSession`, `'error'` when teardown ran from a catch
+   * block. Server-side close paths (janitor, shutdown) do NOT propagate here —
+   * they happen out-of-process and have no client push channel today.
+   */
+  public readonly SessionEnded$: Observable<{ sessionId: string; reason: 'explicit' | 'error' }> =
+    this._sessionEnded$.asObservable();
+
+  /**
+   * Fires with the channel PLUGIN every time the agent ACTS on that channel (a tool call
+   * was routed to its local executor — e.g. the agent drew on the whiteboard). The overlay
+   * uses the FIRST emission per channel to auto-reveal + focus the channel's surface tab,
+   * so the user discovers the surface the moment the agent starts using it. Finer-grained
+   * than {@link SessionStarted$}/{@link SessionEnded$} (per tool call, not per session).
+   */
+  public readonly ChannelActivity$: Observable<BaseRealtimeChannelClient> = this._channelActivity$.asObservable();
+
   /** Synchronous access to the session's active interactive-channel plugins. */
   public get ActiveChannels(): readonly BaseRealtimeChannelClient[] {
     return this._activeChannels$.value;
@@ -286,6 +331,27 @@ export class VoiceSessionService {
    * session is open / the session hasn't been minted yet. Powers the overlay's gear-gated
    * "Open session" dev link.
    */
+  /** Conversation id the SERVER created for this session (null when the host supplied one). */
+  private createdConversationId: string | null = null;
+  /** The session's conversation id (supplied or server-created). */
+  private sessionConversationId: string | null = null;
+  /** First final user utterance of the live session (the naming seed). */
+  private firstUserTranscript: string | null = null;
+
+  /**
+   * When the active/last session CREATED its conversation (started without one), the new
+   * conversation's id — the host uses it to refresh the cached list, conditionally select
+   * it on close, and auto-name it. Null when the session joined an existing conversation.
+   */
+  public get SessionCreatedConversationId(): string | null {
+    return this.createdConversationId;
+  }
+
+  /** The first final user utterance of the session (naming seed); null before the user speaks. */
+  public get FirstUserTranscript(): string | null {
+    return this.firstUserTranscript;
+  }
+
   public get CurrentAgentSessionId(): string | null {
     return this.agentSessionId;
   }
@@ -466,6 +532,12 @@ export class VoiceSessionService {
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
       const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId);
       this.agentSessionId = session.AgentSessionId;
+      // A null input conversationId means the SERVER created a fresh conversation for
+      // this session — track it so the host can fold it into the cached list, select
+      // it on close, and auto-name it (via the shared naming helper).
+      this.createdConversationId = !conversationId && session.ConversationId ? session.ConversationId : null;
+      this.sessionConversationId = session.ConversationId ?? conversationId ?? null;
+      this.firstUserTranscript = null;
       this.narrationTemplate = session.NarrationInstructionsTemplate ?? null;
       this._modelName$.next(session.ModelName ?? null);
       // Resume continuity: rehydrate channel plugins from the PRIOR session's saved states
@@ -482,6 +554,15 @@ export class VoiceSessionService {
       this.subscribeDelegationProgress();
       // State advances to 'listening' once the provider control channel opens
       // (driven by the client's OnStateChange events).
+
+      // Surface a generic session-started event for the conversations runtime
+      // SessionsObserver bridge. Emitting AFTER Connect() guarantees both that
+      // agentSessionId is set (line ~468) AND the realtime client is connected,
+      // so consumers can act on it without re-checking either condition.
+      this._sessionStarted$.next({
+        sessionId: this.agentSessionId,
+        channelNames: this._activeChannels$.value.map(c => c.ChannelName),
+      });
     } catch (error) {
       console.error('[VoiceSession] Failed to start session:', error);
       this._connectionState$.next('error');
@@ -567,6 +648,16 @@ export class VoiceSessionService {
       return;
     }
     this.client.SendContextNote(trimmed);
+  }
+
+  /**
+   * The active client's current audio activity (per-direction RMS levels + spectrum
+   * bins), or `null` when no session is live or the driver attached no audio meters.
+   * Sampled by the overlay's animation-frame loop to drive the audio-reactive orb/EQ —
+   * a cheap analyser read, never provider traffic.
+   */
+  public GetAudioActivity(): RealtimeAudioActivity | null {
+    return this.client?.GetAudioActivity() ?? null;
   }
 
   // ── Interactive channels (registry-driven plugins) ─────────────────────────
@@ -663,9 +754,12 @@ export class VoiceSessionService {
    */
   private initializeChannel(plugin: BaseRealtimeChannelClient): void {
     plugin.Initialize(this.buildChannelContext(plugin));
-    this.RegisterClientToolHandler(plugin.ToolNamePrefix, (toolName, argsJson) =>
-      plugin.ApplyAgentTool(toolName, argsJson)
-    );
+    this.RegisterClientToolHandler(plugin.ToolNamePrefix, (toolName, argsJson) => {
+      // The agent is ACTING on this channel — surface-discovery signal for the overlay
+      // (first activity auto-reveals + focuses the channel tab) before the tool applies.
+      this._channelActivity$.next(plugin);
+      return plugin.ApplyAgentTool(toolName, argsJson);
+    });
   }
 
   /** Builds the host-services context one channel plugin sees (its only line to the session). */
@@ -961,6 +1055,10 @@ export class VoiceSessionService {
   private async onUserTranscript(transcript: string): Promise<void> {
     if (transcript.trim().length === 0) {
       return;
+    }
+    if (this.firstUserTranscript === null) {
+      // First spoken user utterance — the naming seed for a session-created conversation.
+      this.firstUserTranscript = transcript;
     }
     this.appendCaption({ Role: 'User', Text: transcript });
     await this.relayTranscript('user', transcript);
@@ -1571,6 +1669,10 @@ export class VoiceSessionService {
       await this.closeServerSession(this.agentSessionId);
     }
 
+    // Capture the session id BEFORE we null it so the lifecycle emit carries it.
+    // Skip emitting when there was no live session (defensive — teardown is safe
+    // to call without an active session).
+    const closedSessionId = this.agentSessionId;
     this.agentSessionId = null;
     this.narrationTemplate = null;
     this.clientToolHandlers.clear();
@@ -1579,6 +1681,16 @@ export class VoiceSessionService {
     this._active$.next(false);
     if (this._connectionState$.value !== 'error') {
       this._connectionState$.next('closed');
+    }
+
+    // Surface generic session-ended for the conversations runtime bridge.
+    // `closeServerSession=true` means the user explicitly called EndVoiceSession;
+    // `false` means teardown ran from a catch block (start path error path).
+    if (closedSessionId) {
+      this._sessionEnded$.next({
+        sessionId: closedSessionId,
+        reason: closeServerSession ? 'explicit' : 'error',
+      });
     }
   }
 

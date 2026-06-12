@@ -1,4 +1,5 @@
 import { pcm16ToFloat32 } from './pcmUtils';
+import { IRealtimeAudioMeter, RealtimeAudioMeter } from './audioMeter';
 
 /**
  * The playback contract for a client-owned realtime audio plane: schedules raw PCM16 chunks
@@ -19,6 +20,13 @@ export interface IRealtimePcmPlayback {
     readonly IsPlaying: boolean;
     /** Flushes and releases the underlying audio context. */
     Close(): void;
+    /**
+     * OPTIONAL: creates an {@link IRealtimeAudioMeter} tapping this engine's output — the
+     * AGENT-audio side of the call UI's audio-reactive visuals. Drivers feed it to
+     * `BaseRealtimeClient`'s audio-activity surface. Optional so test fakes (and minimal
+     * implementations) stay valid; callers use `playback.CreateMeter?.() ?? null`.
+     */
+    CreateMeter?(): IRealtimeAudioMeter | null;
 }
 
 /**
@@ -39,6 +47,11 @@ export interface IRealtimePcmPlayback {
 export class RealtimePcmPlayback implements IRealtimePcmPlayback {
     private context: AudioContext;
     private sampleRate: number;
+    /**
+     * Master gain every source routes through (instead of the destination directly) —
+     * the single tap point {@link CreateMeter} analyses without altering the audio path.
+     */
+    private masterGain: GainNode;
     /** The absolute context time up to which audio has been scheduled. */
     private playheadTime = 0;
     /** Sources scheduled and not yet ended (so Flush can stop them). */
@@ -52,6 +65,8 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
     constructor(sampleRate: number) {
         this.sampleRate = sampleRate;
         this.context = new AudioContext({ sampleRate });
+        this.masterGain = this.context.createGain();
+        this.masterGain.connect(this.context.destination);
     }
 
     /** @inheritdoc */
@@ -64,7 +79,7 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
         buffer.copyToChannel(samples, 0);
         const source = this.context.createBufferSource();
         source.buffer = buffer;
-        source.connect(this.context.destination);
+        source.connect(this.masterGain);
         source.onended = () => this.activeSources.delete(source);
         this.activeSources.add(source);
         const startAt = Math.max(this.playheadTime, this.context.currentTime);
@@ -88,6 +103,11 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
     /** @inheritdoc */
     public get IsPlaying(): boolean {
         return this.activeSources.size > 0 && this.playheadTime > this.context.currentTime;
+    }
+
+    /** @inheritdoc */
+    public CreateMeter(): IRealtimeAudioMeter | null {
+        return RealtimeAudioMeter.ForContextNode(this.context, this.masterGain);
     }
 
     /** @inheritdoc */
