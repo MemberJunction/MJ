@@ -32,6 +32,7 @@ export * from './lib/services/conversation-attachment.service';
 export * from './lib/services/ui-command-handler.service';
 export * from './lib/services/conversation-bridge.service';
 export * from './lib/services/voice-session.service';
+export * from './lib/services/voice-sessions-adapter';
 export * from './lib/services/realtime-session-review.service';
 export * from './lib/services/delegation-result-parser';
 
@@ -70,6 +71,20 @@ export * from './lib/components/toast/toast.component';
 export * from './lib/components/global-tasks/global-tasks-panel.component';
 export * from './lib/components/attachment/image-viewer.component';
 export * from './lib/components/overlay/chat-overlay.component';
+
+// PR 2c — Widget extension surface (slots, events, design tokens)
+export * from './lib/services/conversations-runtime-bootstrap.service';
+export * from './lib/directives/chat-slot.directive';
+export * from './lib/components/slots/slot-interfaces';
+export * from './lib/components/slots/mj-chat-empty-state-default.component';
+export * from './lib/components/slots/mj-chat-agent-presence-default.component';
+export * from './lib/components/slots/mj-chat-header-default.component';
+export * from './lib/components/slots/mj-chat-message-extra-default.component';
+export * from './lib/components/slots/mj-chat-demonstration-surface-default.component';
+export * from './lib/components/slots/mj-chat-message-bubble-default.component';
+export * from './lib/events/chat-events';
+
+// Realtime / voice (PR #2787 — co-agent realtime sessions)
 export * from './lib/components/voice/voice-overlay.component';
 export * from './lib/components/voice/voice-agent-picker.component';
 // Real-time "call mode" overlay + its componentized parts

@@ -2,6 +2,20 @@
 
 A comprehensive Angular component library for building conversation-based interfaces in MemberJunction, including messaging, artifact management, collections, projects, tasks, agent interaction panels, and collaboration features.
 
+> **Layering note.** The orchestration logic (agent dispatch, default-agent resolution, mention parsing, bridge state, streaming, client tools, sessions observability) lives in **`@memberjunction/conversations-runtime`** — a pure-TS, framework-agnostic package. This widget is one consumer of the runtime; React/Vue/Node hosts are also intended consumers. The widget is automatically wired to the runtime via `ConversationsRuntimeBootstrap` (registered `providedIn: 'root'`), which injects adapters for notifications, active-task tracking, and realtime sessions. See [`guides/CONVERSATIONS_UX_STACK_GUIDE.md`](../../../../guides/CONVERSATIONS_UX_STACK_GUIDE.md) for the full architecture.
+
+## Customization without forking
+
+The widget exposes three layers of extension:
+
+| Surface | What it lets you do |
+|---|---|
+| **6 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
+| **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
+
+Slot interfaces + cloneable default components + the `ChatSlotDirective` are exported — see the public API.
+
 ## Overview
 
 The `@memberjunction/ng-conversations` package is a large, feature-rich module that powers MemberJunction's conversation UI. It provides 40+ components covering the entire conversation lifecycle: message composition and rendering (with markdown, mentions, code blocks, and artifacts), conversation navigation and history, threaded discussions, artifact collections and libraries, project/task management, agent execution panels, sharing/permission modals, search, notifications, and export.

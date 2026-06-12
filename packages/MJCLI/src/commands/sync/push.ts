@@ -54,6 +54,7 @@ export default class Push extends Command {
     const { flags } = await this.parse(Push);
     const spinner = ora();
     const startTime = Date.now();
+    let exitCode = 0;
 
     try {
       // Load configurations
@@ -263,8 +264,8 @@ export default class Push extends Command {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.log(chalk.red(`\n❌ Error: ${errorMessage}\n`));
 
-      // Exit with error code but don't show stack trace again (already logged by handlers)
-      this.exit(1);
+      // Set error exit code — actual process.exit() happens in the finally block
+      exitCode = 1;
     } finally {
       // Reset singletons + close DB pool so the process can exit cleanly.
       // Without cleanupProvider, the pg.Pool / mssql.ConnectionPool keep the
@@ -281,9 +282,8 @@ export default class Push extends Command {
       // event loop open (e.g. @huggingface/transformers ONNX worker threads
       // spawned for embedding compute, or pg.Pool clients that didn't release
       // cleanly). Without this the CLI hangs indefinitely after a successful
-      // push when local embedding generation ran. Use exit code 0 here because
-      // any error path above has already called this.exit(1).
-      process.exit(0);
+      // push when local embedding generation ran.
+      process.exit(exitCode);
     }
   }
 }

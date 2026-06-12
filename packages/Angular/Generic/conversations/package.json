@@ -36,6 +36,7 @@
     "@memberjunction/ai-core-plus": "5.40.2",
     "@memberjunction/ai-engine-base": "5.40.2",
     "@memberjunction/ai-realtime-client": "5.40.2",
+    "@memberjunction/conversations-runtime": "5.40.2",
     "@memberjunction/core": "5.40.2",
     "@memberjunction/core-entities": "5.40.2",
     "@memberjunction/global": "5.40.2",
