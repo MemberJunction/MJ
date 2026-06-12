@@ -2,19 +2,32 @@
 
 Testing is the crux. The objective is one number: **maximize the assurance a connector is real and correct — with or without a live credential** — and state the residual gap honestly, never launder "format-verified" as "sync-verified".
 
-> **⏱️ CREDENTIAL TIMING — TEST-TIME ONLY (hard rule).** The credential (and the broker) is used ONLY at the
-> testing tiers (`verification-ladder` T8-live, `hybrid-e2e` live). It is NEVER used during the build phases —
-> research, source-audit, metadata authoring, IO/IOF extraction, contract freeze, or code generation all run
-> **credential-free**. This is not just credential *safety* (the agent never sees the bytes); it is decision
-> *hygiene*: if the agent can reach live data while building, it sample-discovers once and **bakes the concrete
-> result into a static `DiscoverObjects` instead of authoring the discovery mechanism** (the PropFuel 3-stream
-> freeze). The credential serves no purpose before testing and actively corrupts discovery design. With no
-> live access at build time, discovery MUST be written from the **docs** — the mechanism (e.g. "GET `/list`,
-> parse the data type from each filename"), not the answer — and the credential first reaches the source at the
-> live e2e, where the dynamic method runs and populates `Discovered`. So: build = docs-only Declared metadata +
-> dynamic discovery code; test-time = the credential exercises that code for real. (Self-obtainable credentials
-> are still *triaged + reported* early per §0 — but they are *exercised* only at test time, never folded into
-> build-phase discovery.)
+> **⏱️ CREDENTIAL TIMING — AUTHORSHIP NEVER, VERDICTS REQUIRED (v2 — replaces the v1 "test-time only" rule).**
+> The v1 rule existed to stop sample-discovery being baked into static catalogs (the PropFuel 3-stream
+> freeze). That half stays absolute: **no build phase may AUTHOR metadata — catalogs, objects, fields,
+> paths — from live data.** But v1 over-rotated: by also forbidding *checking* docs-derived claims against
+> the live system before code was built on them, it shipped GrowthZone with 17 wrong API paths, dead
+> pagination (`skip` vs `$skip` — every object silently capped at one page), PKs declared on always-null
+> fields, and a pull-only connector for a bidirectional vendor — **all green** (GZ PROBLEMS_LOG #1–#5, §B,
+> #30; full audit in `connector-builder-workshop/ARCHITECTURE_REFACTOR.md`). The v2 rule splits authorship
+> from verification:
+>
+> - **AUTHORSHIP from live data: forbidden, always** (unchanged). The extractor seeds Declared metadata
+>   from credential-free docs only; discovery code expresses the MECHANISM, never a baked answer.
+> - **VERDICTS from live data: REQUIRED, via the Reality Probe stage (S7) — after extraction, BEFORE
+>   code-build.** The probe is read-only and emits ONLY pass/fail verdicts on already-declared claims:
+>   per-object path status + records-present, pagination-param-advances (declared form vs alternates),
+>   per-declared-PK populated/null over the probe page, watermark param accepted/rejected, write-surface
+>   existence (OPTIONS/405/401 evidence — **never a write call**), observed rate-limit headers. Verdicts
+>   feed ONE mandatory amendment round (corrections come from the docs, confirmed by re-probe).
+>   Floor-check rejects any metadata DELTA that *originates* from the probe — verdicts in, authorship out.
+> - **No credential → the probe DEGRADES, never disappears:** unauthenticated status-code probing of every
+>   declared door (401/403 = path real + auth-gated; 404 = path wrong) plus param probing where the
+>   endpoint tolerates it, and the report's ceiling is `format-verified-no-creds` with every un-probed
+>   claim enumerated BY NAME — never a blanket green.
+>
+> Credential *custody* is unchanged: broker-held, the agent never sees credential bytes; the probe runs
+> through the broker / credential-isolated runner exactly like T8.
 
 > **🥇 Credentialed testing is strictly the best, and self-obtainable credentials must be surfaced EARLY.**
 > A live round-trip against real (or vendor-sandbox) data proves things no credential-free technique can. So

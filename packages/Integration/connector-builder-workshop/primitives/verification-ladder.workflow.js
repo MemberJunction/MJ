@@ -44,6 +44,15 @@
 // have caught, that's a gate-placement bug — add the check at the lower rung, do
 // not silently re-run. The in-order ascent gate (break on first red) is kept.
 //
+// v2 RUNG — T7d/T12_IdempotencyReplay (ARCHITECTURE_REFACTOR.md P3) — IMPLEMENTED
+// (packages/MCP/mj-test-runner/src/tiers/t12IdempotencyReplay.ts). Replays every fixture set TWICE
+// through the connector — pass 2 with a volatile field injected into every record object (the GZ
+// #22 trigger that doubled 9 tables) — and asserts the per-object ExternalID multisets are
+// byte-flat across passes (and counts don't grow). No single-pass tier can catch identity drift on
+// unchanged-but-noisy input; GZ shipped it green through T0–T8. Credential-free; ordered before
+// the live rung. The live counterpart (two-pass zero-growth on a real DB) lives in hybrid-e2e +
+// floor-check `second-sync-grew`.
+//
 // Credential safety: T8 is the only rung needing credentials. The credential
 // reference is an opaque path that this workflow NEVER reads; the MCP runner
 // subprocess reads the credential file in isolation and returns results without
@@ -161,6 +170,17 @@ const tiers = [
     { tier: 'T5', label: 'MockHTTPServer', runnerTier: 'T5_MockHTTPServer', cred: false },
     { tier: 'T6', label: 'LocalSQLiteBackend', runnerTier: 'T6_LocalSQLiteBackend', cred: false },
     { tier: 'T7', label: 'OpenAPIValidation', runnerTier: 'T7_OpenAPIValidation', cred: false },
+    // New credential-free probes — placed BEFORE the live rung so the full credential-free
+    // battery gates first (execution = THIS array order, NOT tier number). Their short-ids
+    // are T7a/b/c so `parseInt` keeps them at 7 (below the live rung's 8) — this preserves
+    // the `achievedTier` numeric semantics: a skipped-live run yields achievedTier<8 and
+    // correctly fails floor-check's e2e-tier-met. Their REAL runner names are T9/T10/T11.
+    { tier: 'T7a', label: 'EndpointReality', runnerTier: 'T9_EndpointReality', cred: false },
+    { tier: 'T7b', label: 'TransportSmoke', runnerTier: 'T10_TransportSmoke', cred: false },
+    { tier: 'T7c', label: 'SandboxProbe', runnerTier: 'T11_SandboxProbe', cred: false },
+    // v2 P3 idempotency rung: two-pass volatile-field fixture replay; identity drift = red.
+    { tier: 'T7d', label: 'IdempotencyReplay', runnerTier: 'T12_IdempotencyReplay', cred: false },
+    // Live rung LAST and HIGHEST-numbered — the only credentialed tier (READ-ONLY).
     { tier: 'T8', label: 'AuthenticatedEndpoint', runnerTier: 'T8_AuthenticatedEndpoint', cred: true },
 ];
 
@@ -179,7 +199,7 @@ function isRunnerResult(obj, expectedRunnerTier) {
 // tier is real and ran, but had nothing to validate (no spec, no API paths, no
 // fixtures). These surface as warnings, never as capability gaps. Any OTHER skip
 // reason is treated as a genuine missing capability.
-const ALLOWED_SKIP_REASONS = ['no-openapi-spec', 'no-api-paths', 'no-fixtures'];
+const ALLOWED_SKIP_REASONS = ['no-openapi-spec', 'no-api-paths', 'no-fixtures', 'no-public-sandbox', 'no-network-endpoints', 'network-unreachable', 'discovery-requires-credentials'];
 function isAllowedSkip(reason) {
     const r = String(reason ?? '').toLowerCase();
     return ALLOWED_SKIP_REASONS.some((allowed) => r.includes(allowed));
@@ -199,8 +219,11 @@ let achievedTier = 'none';
 for (const t of tiers) {
     const tierNum = parseInt(t.tier.slice(1), 10);
 
-    // Above the declared ceiling — not part of this run's contract.
-    if (tierNum > maxTierNum) {
+    // The maxTier ceiling gates ONLY the live rung. Credential-free tiers are the
+    // comprehensive workhorse battery and ALWAYS run (never number-gated) — their tier
+    // numbers are unique IDs, not an execution-order ceiling. Only the credentialed live
+    // rung respects maxTier (so a maxTier below it legitimately skips live).
+    if (t.cred && tierNum > maxTierNum) {
         tierResults.push({ tier: t.tier, label: t.label, status: 'skipped', skipReason: 'above-maxTier' });
         continue;
     }

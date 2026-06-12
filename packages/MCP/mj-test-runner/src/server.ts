@@ -61,6 +61,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                             'T6_LocalSQLiteBackend',
                             'T7_OpenAPIValidation',
                             'T8_AuthenticatedEndpoint',
+                            'T9_EndpointReality',
+                            'T10_TransportSmoke',
+                            'T11_SandboxProbe',
+                            'T12_IdempotencyReplay',
                         ],
                     },
                     CredentialFilePath: {

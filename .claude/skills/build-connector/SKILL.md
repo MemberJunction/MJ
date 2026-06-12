@@ -200,6 +200,29 @@ Before Stage 1 spawns, verify:
 - `packages/Integration/connector-builder-workshop/` + `packages/Integration/connectors-registry/` exist.
 - Spec digest regeneration: `node packages/Integration/connector-builder-workshop/scripts/regenerate-spec-digest.mjs`. Exit non-zero = digest drift; halt and surface the drift evidence as an architecture finding (the bijection is supposed to stay in lockstep; drift means the agentic doc or Phase 0 doc moved without the slot table catching up).
 
+**v2 environment gates (S0 `EnvPreflight` — the workflow's FIRST phase; ARCHITECTURE_REFACTOR.md P7).**
+The GrowthZone marathon lost hours to environment defects no stage checked: a **stale nested
+`@memberjunction/integration-*` dist** under `packages/MJServer/node_modules` silently disabling
+custom-column capture framework-wide (GZ #31), stale turbo dists masking fixes (#13), churned
+generated trees + stale class manifests killing MJAPI boot (#11/#19/#33), zombie runs from mid-sync
+restarts (#14). The planner-emitted workflow MUST begin with `EnvPreflight` and abort cheap on:
+- DB unreachable / wrong migration level; MJAPI not bootable from the current tree.
+- Generated tree (generated.ts, entity_subclasses, class manifests) churned vs HEAD and unaccounted.
+- **Stale-nested-dist scan**: any real-directory `@memberjunction/integration-*` copy under a
+  package's `node_modules` whose dist hash differs from the workspace dist.
+- Turbo dist staleness for the packages under test (src newer than dist).
+`floor-check` fails any run whose journal lacks `envPreflight` (`env-preflight-missing`) or carries
+unresolved `staleNestedDists` (`stale-nested-dist`).
+
+**v2 empiricism contract (ARCHITECTURE_REFACTOR.md — binding on every run).** The plan must contain a
+**`RealityProbe` phase (S7)** — read-only verdicts on declared claims (paths / pagination-advances /
+PK-populated / watermark / write-surface existence / rate headers) BEFORE CodeBuild, degraded to the
+unauthenticated per-claim status probe when no credential exists — plus ONE `ProbeAmend` round. And
+when intake chose **[A] (credential)**, the `HybridE2E` stage runs **live — mock mode cannot satisfy
+it** (`e2e-mock-dodge` floor rule); a multi-secret credential is a harness deficiency to fix, never a
+reason to skip live. Reports state the EMPIRICAL vs LINT split of every gate — a lint-green is never
+presented as verification.
+
 If any prerequisite is missing, error to the user with the specific missing piece.
 
 ## Failure response

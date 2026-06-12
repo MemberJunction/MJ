@@ -642,6 +642,70 @@ if (!hybridE2E) {
     failures.push({ rule: 'hybrid-e2e-not-pass', detail: `hybrid-e2e did not pass: ${JSON.stringify(hybridE2E.failures ?? [])}` });
 }
 
+// ── v2 EMPIRICAL gates (ARCHITECTURE_REFACTOR.md §3). Consistency lint alone is NOT verification; ──
+// ── these rules require that real-system signal entered the build and survived. ──
+
+// P6 `e2e-mock-dodge`: a credential existed but the deep e2e ran mock — the one stage with real
+// engine-level empirical content was routed around (the GrowthZone dodge: maxTier=T8 declared while
+// hybrid-e2e ran mock). Mock mode satisfies the e2e requirement ONLY on credential-free builds.
+if (hybridE2E && journal.credentialReference && hybridE2E.mode !== 'live') {
+    failures.push({ rule: 'e2e-mock-dodge', detail: `a credential reference exists but hybrid-e2e ran mode='${hybridE2E.mode}' — live e2e is MANDATORY when a credential is available. A multi-secret credential is a harness deficiency to FIX, never a reason to skip live.` });
+}
+
+// P2 `reality-probe-*`: the RealityProbe stage (S7) must run on EVERY build (degraded unauth probe
+// when no credential); no declared-claim verdict may be left falsified/unresolved at floor time; and
+// probe-originated metadata DELTAS are authorship from live data → fail (verdicts in, authorship out).
+const probe = journal.realityProbe ?? null;
+if (!probe) {
+    failures.push({ rule: 'reality-probe-missing', detail: 'RealityProbe (S7) did not run. Required on every v2 build — with a credential it emits read-only verdicts on declared claims (paths/pagination/PKs/watermark/write-surface); without one it degrades to the unauthenticated per-claim status probe. ARCHITECTURE_REFACTOR.md P2.' });
+} else {
+    const falsified = Array.isArray(probe.verdicts) ? probe.verdicts.filter(v => v && (v.verdict === 'wrong' || v.verdict === 'falsified') && v.resolved !== true) : [];
+    if (falsified.length > 0) {
+        failures.push({ rule: 'reality-probe-verdicts-unresolved', detail: `${falsified.length} probe-falsified claim(s) unresolved at floor time (first: ${JSON.stringify(falsified[0]).slice(0, 200)}). Verdicts feed ProbeAmend; reality outranks the frozen contract.` });
+    }
+    if (probe.metadataDelta === true) {
+        failures.push({ rule: 'reality-probe-authored-metadata', detail: 'the RealityProbe stage originated a metadata delta — the probe emits VERDICTS only; authorship from live data is forbidden (the anti-baking firewall).' });
+    }
+}
+
+// P5 `capability-dishonest`: the brand study's WriteCapability is BINDING. A vendor whose study says
+// read-write/bidirectional with ZERO write-capable IOs emitted needs an explicit, evidenced scope
+// decision — never a silent pull-only ship (GZ #30: bidirectional vendor shipped read-only, green).
+const brandWrite = (journal.brand && journal.brand.WriteCapability) || null;
+if (brandWrite && /read-write|bidirectional/i.test(String(brandWrite))) {
+    const writeIOs = Number.isInteger(journal.writeCapableIOCount) ? journal.writeCapableIOCount : null;
+    const scopedOut = !!(journal.outOfScopeFamilies && JSON.stringify(journal.outOfScopeFamilies).match(/write/i)) || !!journal.writeScopeDecision;
+    if (writeIOs === 0 && !scopedOut) {
+        failures.push({ rule: 'capability-dishonest', detail: `brand study reports WriteCapability='${brandWrite}' but the emission has 0 write-capable IOs and no evidenced write scope decision (OutOfScopeObjectFamilies / writeScopeDecision). Capability honesty is a gate, not a vibe.` });
+    }
+}
+
+// P7 `env-preflight-*`: stage-0 environment gates. The GZ #31 class — a stale nested
+// @memberjunction/integration-* dist under a package's node_modules silently disabling a framework
+// feature (custom-column capture) for EVERY connector — must be detected BEFORE stages burn.
+const preflight = journal.envPreflight ?? null;
+if (!preflight) {
+    failures.push({ rule: 'env-preflight-missing', detail: 'EnvPreflight (S0) did not run — DB/MJAPI/generated-tree/nested-dist/turbo-freshness gates are required before any build stage (ARCHITECTURE_REFACTOR.md P7).' });
+} else if (Array.isArray(preflight.staleNestedDists) && preflight.staleNestedDists.length > 0 && preflight.resolved !== true) {
+    failures.push({ rule: 'stale-nested-dist', detail: `stale nested integration dist copies detected and unresolved: ${JSON.stringify(preflight.staleNestedDists).slice(0, 300)} — the GZ #31 silent-kill class.` });
+}
+
+// P3/P6 outcome-shaped e2e evidence: a table that GROWS on the second pass is a dupe defect (GZ #22:
+// 127→254); an object that lands rows only on a later pass is an ORDERING defect, not a self-heal
+// (GZ #21/#28: ContactWebsite 40→57); capture must have ENGAGED (GZ #29/#31 silent no-op class).
+if (hybridE2E && hybridE2E.assertions) {
+    const a = hybridE2E.assertions;
+    if (a.idempotentZeroWork === false || a.secondSyncGrew === true) {
+        failures.push({ rule: 'second-sync-grew', detail: 'second full sync grew at least one table — non-idempotent identity (GZ #22/#23 class). Two-pass zero-growth is a hard gate.' });
+    }
+    if (a.firstSyncComplete === false) {
+        failures.push({ rule: 'first-sync-incomplete', detail: 'at least one object reached its full rowcount only on a later pass — door-before-child ordering defect on the fresh DB (GZ #21/#28 class). Second-sync self-heal is a FAIL, not a footnote.' });
+    }
+    if (a.captureEngaged === false) {
+        failures.push({ rule: 'capture-not-engaged', detail: 'custom-column capture did not engage (overflow column absent on created tables, or zero customs captured while custom-marker fields were observed) — the GZ #29/#31 silent no-op class. Waivable only with vendor-confirmed-no-customs evidence.' });
+    }
+}
+
 // ── EXTRACTION_REPORT_MATRIX.csv coverage + PK-defer rate (JS over cat'd bytes). ──
 const emittedIOCount = Number.isInteger(extractStats.objectsExtracted)
     ? extractStats.objectsExtracted

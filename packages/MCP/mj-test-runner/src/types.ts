@@ -27,6 +27,19 @@ import { z } from 'zod';
  * - `T8_AuthenticatedEndpoint` — **READ-ONLY live**. Instantiates the connector and runs
  *   only non-mutating ops (TestConnection, DiscoverObjects, one FetchChanges page). There is
  *   NO write/bidirectional tier and NO `allowWrite`; the live tier never Creates/Updates/Deletes.
+ * - `T9_EndpointReality` — CREDENTIAL-FREE observe-only network probe of the connector's OWN
+ *   declared endpoints: a `401/403` proves the endpoint+auth-scheme are real, `404` wrong path,
+ *   `405` wrong verb; introspects `WWW-Authenticate` / `X-RateLimit-*` / `Retry-After`; OPTIONS/HEAD
+ *   for verbs; TLS/DNS reachability. Sends NO credentials. `Skipped` when endpoints aren't reachable.
+ * - `T10_TransportSmoke` — CREDENTIAL-FREE. Points the connector's HTTP layer at public zero-auth
+ *   utility APIs (HTTPBin echo, JSONPlaceholder) to prove the generic transport machinery (auth-header
+ *   injection, content-type, pagination cursor, JSON parse, non-2xx handling) over a real socket.
+ * - `T11_SandboxProbe` — CREDENTIAL-FREE. When the connector declares a public sandbox/demo base URL
+ *   (`Configuration.SandboxBaseURL`), runs read-only discovery+fetch against it; else `Skipped`.
+ *
+ * EXECUTION ORDER NOTE: the verification ladder runs tiers in its OWN array order (the whole
+ * credential-free battery FIRST, the live `T8_AuthenticatedEndpoint` LAST), NOT by tier number.
+ * Tier numbers are unique IDs only; T9–T11 are credential-free and execute before the live rung.
  *
  * Every tier returns an HONEST status: `Pass`/`Fail` with the specific missing input, or
  * `Skipped` with a real not-applicable reason (e.g. `no-openapi-spec`). No tier returns a
@@ -41,7 +54,11 @@ export type TierID =
     | 'T5_MockHTTPServer'
     | 'T6_LocalSQLiteBackend'
     | 'T7_OpenAPIValidation'
-    | 'T8_AuthenticatedEndpoint';
+    | 'T8_AuthenticatedEndpoint'
+    | 'T9_EndpointReality'
+    | 'T10_TransportSmoke'
+    | 'T11_SandboxProbe'
+    | 'T12_IdempotencyReplay';
 
 /**
  * Canonical `not-implemented` marker token. NO tier emits this anymore — every tier is
@@ -67,6 +84,10 @@ export const RunTierRequestSchema = z.object({
         'T6_LocalSQLiteBackend',
         'T7_OpenAPIValidation',
         'T8_AuthenticatedEndpoint',
+        'T9_EndpointReality',
+        'T10_TransportSmoke',
+        'T11_SandboxProbe',
+        'T12_IdempotencyReplay',
     ]),
     /**
      * Only relevant for T8 (read-only live). Path on disk to the credential JSON file. The file is

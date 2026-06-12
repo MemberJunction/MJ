@@ -164,6 +164,34 @@ export interface SpawnChildOptions {
     env: Record<string, string>;
     /** Wall-clock timeout for the child in ms. */
     timeoutMs?: number;
+    /**
+     * Connector registry slug (e.g. `growthzone`). When provided, the spawn resolves the
+     * connector's Declared metadata file and passes it to the child as MJ_TIER_METADATA_FILE;
+     * the child preamble then SEEDS IntegrationEngineBase from it — so METADATA-DRIVEN
+     * connectors (whose discovery/fetch/capability getters resolve IOs from the engine cache)
+     * run their REAL paths in the replay tiers instead of silently no-opping (the v1
+     * harness-reality gap; ARCHITECTURE_REFACTOR.md).
+     */
+    connector?: string;
+}
+
+/** Resolve the connector's Declared metadata file: registry candidates first, then the repo metadata tree. */
+export function resolveMetadataFilePath(connector: string): string | null {
+    const connectorDir = resolve(REGISTRY_ROOT, connector);
+    const candidates = [
+        resolve(connectorDir, 'metadata/integrations', `.${connector}.json`),
+        resolve(connectorDir, 'metadata/integrations', `.${connector}.integration.json`),
+        resolve(connectorDir, 'metadata/integrations', connector, `.${connector}.integration.json`),
+        resolve(connectorDir, `.${connector}.integration.json`),
+        resolve(connectorDir, `.${connector}.json`),
+        // The repo's canonical metadata tree (what mj-sync deploys from).
+        resolve(REPO_ROOT, 'metadata/integrations', connector, `.${connector}.integration.json`),
+        resolve(REPO_ROOT, 'metadata/integrations', `.${connector}.json`),
+    ];
+    for (const path of candidates) {
+        if (existsSync(path)) return path;
+    }
+    return null;
 }
 
 /** Outcome of a child spawn, before tier-specific interpretation. */
@@ -210,6 +238,9 @@ export function spawnChildRunner<TData = Record<string, unknown>>(
                 MJ_TIER_CONNECTOR_CLASS: opts.identity.ClassName,
                 MJ_TIER_INTEGRATION_NAME: opts.identity.IntegrationName ?? opts.identity.ClassName,
                 MJ_TIER_RESULT_SENTINEL: OFFLINE_RESULT_SENTINEL,
+                ...(opts.connector
+                    ? (() => { const p = resolveMetadataFilePath(opts.connector); return p ? { MJ_TIER_METADATA_FILE: p } : {}; })()
+                    : {}),
                 ...opts.env,
             },
         });
@@ -286,6 +317,71 @@ function makeCompanyIntegration(configuration) {
   return ci;
 }
 
+// Seed IntegrationEngineBase from the connector's Declared metadata file (v2 harness fix —
+// ARCHITECTURE_REFACTOR.md). Metadata-driven connectors resolve their IOs/IOFs/capabilities
+// from the engine cache; without seeding they silently no-op in the replay tiers (discover 0
+// objects / throw on GetCachedObject). Best-effort: no metadata file → no seed → unchanged
+// behaviour for config-driven connectors. Same-process singleton (BaseSingleton global store)
+// guarantees the connector sees the seeded instance.
+async function seedEngineCache(companyIntegration) {
+  const file = process.env.MJ_TIER_METADATA_FILE;
+  if (!file) return false;
+  try {
+    const { readFileSync } = await import('node:fs');
+    const raw = JSON.parse(readFileSync(file, 'utf-8'));
+    const root = Array.isArray(raw) ? raw[0] : raw;
+    if (!root || !root.fields) return false;
+    // Offline @lookup/@parent refs can't resolve — null them (FK pointers etc.), but keep the
+    // structural parent wiring via the synthetic IDs below.
+    const scrubRefs = (row) => {
+      for (const k of Object.keys(row)) {
+        const v = row[k];
+        if (typeof v === 'string' && (v.startsWith('@lookup:') || v.startsWith('@parent:'))) row[k] = null;
+      }
+      return row;
+    };
+    const integ = scrubRefs({ ...root.fields });
+    integ.ID = companyIntegration.IntegrationID; // align with the in-memory CI so GetCachedObject resolves
+    const ios = []; const iofs = [];
+    const ioRecs = (root.relatedEntities && root.relatedEntities['MJ: Integration Objects']) || [];
+    let i = 0;
+    for (const ioRec of ioRecs) {
+      i++;
+      const io = scrubRefs({ ...((ioRec && ioRec.fields) || {}) });
+      io.ID = 'seed-io-' + i;
+      io.IntegrationID = integ.ID;
+      ios.push(io);
+      const iofRecs = (ioRec && ioRec.relatedEntities && ioRec.relatedEntities['MJ: Integration Object Fields']) || [];
+      let j = 0;
+      for (const fr of iofRecs) {
+        j++;
+        const iof = scrubRefs({ ...((fr && fr.fields) || {}) });
+        iof.ID = 'seed-iof-' + i + '-' + j;
+        iof.IntegrationObjectID = io.ID;
+        iofs.push(iof);
+      }
+    }
+    // The child script lives in a temp dir, so a BARE specifier can't resolve from here —
+    // resolve the package FROM THE CONNECTOR SOURCE's location (same node_modules the
+    // connector itself uses, which also guarantees the SAME singleton instance).
+    const { createRequire } = await import('node:module');
+    const req = createRequire(SOURCE);
+    const ebPath = req.resolve('@memberjunction/integration-engine-base');
+    const { IntegrationEngineBase } = await import(ebPath);
+    IntegrationEngineBase.Instance.SeedForTesting({
+      Integrations: [integ],
+      IntegrationObjects: ios,
+      IntegrationObjectFields: iofs,
+      CompanyIntegrations: [companyIntegration],
+    });
+    return true;
+  } catch (e) {
+    // Seeding is best-effort; a malformed metadata file must not mask the tier's real result.
+    process.stderr.write('seedEngineCache skipped: ' + clip(e && e.message ? e.message : e, 160) + '\\n');
+    return false;
+  }
+}
+
 async function loadConnector(configuration) {
   if (!SOURCE || !CLASS) throw new Error('missing connector source/class env');
   const mod = await import(SOURCE);
@@ -294,7 +390,8 @@ async function loadConnector(configuration) {
   const connector = new Ctor();
   const companyIntegration = makeCompanyIntegration(configuration);
   const contextUser = { ID: 'tier-test', Email: 'tier-test@local', Name: 'tier-test' };
-  return { connector, companyIntegration, contextUser };
+  const cacheSeeded = await seedEngineCache(companyIntegration);
+  return { connector, companyIntegration, contextUser, cacheSeeded };
 }
 `;
 

@@ -25,33 +25,80 @@ export const meta = {
     name: '<vendor>-build',
     description: 'Workshop dynamic-workflow build for <vendor>. Locked primitives + bijection floor-check.',
     phases: [
-        { title: 'BrandResearch', detail: 'Resolve canonical brand + ProductTaxonomy' },
+        { title: 'EnvPreflight', detail: 'S0 (v2 P7): DB reachable @ expected migration, MJAPI bootable, generated tree clean-or-accounted, NO stale nested @memberjunction/integration-* dists (GZ #31 detector), turbo dist freshness. Abort cheap.' },
+        { title: 'BrandResearch', detail: 'Resolve canonical brand + ProductTaxonomy. WriteCapability + custom-field findings are BINDING (v2 P5).' },
         { title: 'Identity', detail: 'Fill Integration row identity slots' },
         { title: 'SourceAudit', detail: 'Audit + rank sources, build SOURCE_STUDY' },
         { title: 'MetadataWrite', detail: 'Integration row non-identity slots + Configuration JSON' },
-        { title: 'IOIOFExtract', detail: 'Per-object extract-iiof-pipeline (verify + adversarial + write-back)' },
-        { title: 'FreezeContract', detail: 'Adversarial-verify the assembled contract; persist with hash' },
-        { title: 'IndependentReview', detail: 'Different-model adversarial review of EXTRACTION_REPORT' },
-        { title: 'CodeBuild', detail: 'Connector class + tests' },
-        { title: 'VerificationLadder', detail: 'T0..maxTier' },
-        { title: 'HybridE2E', detail: 'Deep §1→§7 e2e: real MJ engine → real Postgres (ApplyAll/upsert/contentHash/incremental/delta-CRUD/idempotent). Env bring-up per HYBRID_E2E_ENV_RUNBOOK.md (no guessing).' },
-        { title: 'FloorCheck', detail: 'Bijection slot table + manifest declarations + hybrid-e2e pass' },
+        { title: 'IOIOFExtract', detail: 'Per-object extract-iiof-pipeline (verify + write-back)' },
+        { title: 'IndependentReview', detail: 'ONE round, refocused charter (coverage-vs-script / bijection / capability-honesty / naming). LINT — cannot certify model-vs-world.' },
+        { title: 'RealityProbe', detail: 'S7 (v2 P2, EMPIRICAL): read-only VERDICTS on declared claims — paths, pagination-advances, PK populated/null, watermark accepted, write-surface existence, rate headers. Degraded unauth probe when no credential. NEVER authors metadata.' },
+        { title: 'ProbeAmend', detail: 'ONE amendment round from probe verdicts (corrections from docs, confirmed by re-probe). Reality outranks the contract.' },
+        { title: 'FreezeContract', detail: 'Recording artifact (hash for resume/provenance) — must never block probe-driven amendments.' },
+        { title: 'CodeBuild', detail: 'Connector class + tests. Fixtures descend from reality (probe captures or vendor-published) — provenance-tagged (v2 P4).' },
+        { title: 'VerificationLadder', detail: 'T0..maxTier + two-pass volatile-field idempotency rung (v2 P3).' },
+        { title: 'HybridE2E', detail: 'Deep §1→§7 e2e: real MJ engine → real SQL Server, FRESH DB. LIVE MANDATORY when credential exists (mock cannot satisfy — v2 P6). Outcome gates: rowcounts vs ground truth, two-pass zero-growth, first-sync completeness, capture engaged, bounded typing. Env per HYBRID_E2E_ENV_RUNBOOK.md.' },
+        { title: 'FloorCheck', detail: 'Bijection + manifest + v2 EMPIRICAL gates (reality-probe, e2e-mock-dodge, capability-honesty, env-preflight, second-sync-grew, first-sync-incomplete, capture-engaged). Verdict states the EMPIRICAL/LINT split.' },
     ],
 };
 
-const VENDOR = args?.vendor ?? '(unknown)';
+// The Workflow runtime may deliver `args` as a JSON-encoded STRING (the model→Workflow-tool
+// path does), not an object. Normalize FIRST so every `A?.x` read works either way — without
+// this, runID/credentialReference/brokerPlans/maxTier silently default (runID='unknown' →
+// artifacts scatter to runs/unknown). Every top-level plan MUST do this before reading args.
+const A = (typeof args === 'string') ? (() => { try { return JSON.parse(args); } catch { return {}; } })() : (args ?? {});
+const VENDOR = A?.vendor ?? '(unknown)';
 const VENDOR_SLUG = String(VENDOR).toLowerCase();
 const REGISTRY_DIR = `packages/Integration/connectors-registry/${VENDOR_SLUG}`;
 const METADATA_FILE = `metadata/integrations/${VENDOR_SLUG}/.${VENDOR_SLUG}.integration.json`;
-const RUNS_DIR = `${REGISTRY_DIR}/runs/${args?.runID ?? 'unknown'}`;
+const RUNS_DIR = `${REGISTRY_DIR}/runs/${A?.runID ?? 'unknown'}`;
 
 const MANIFEST = {
     extractEveryIO: true,
     verifyEveryClaim: true,
     sourceDiffMustClose: true,
-    e2eTier: args?.maxTier ?? 'T9',
+    e2eTier: A?.maxTier ?? 'T9',
     adversarialVerifyMinReviewers: 2,
 };
+
+// ── EnvPreflight (S0 — v2 P7; ARCHITECTURE_REFACTOR.md) ──────────────
+// Environment gates BEFORE any build stage burns tokens. The GZ marathon lost hours to: a stale
+// nested @memberjunction/integration-* dist silently disabling custom-column capture framework-wide
+// (#31), stale turbo dists masking fixes (#13), stale class manifests + churned generated.ts killing
+// MJAPI boot (#11/#19/#33), and zombie runs from mid-sync restarts (#14). All are detectable up front.
+phase('EnvPreflight');
+const ENV_PREFLIGHT_SCHEMA = {
+    type: 'object', required: ['ok'],
+    properties: {
+        ok: { type: 'boolean' },
+        dbReachable: { type: 'boolean' },
+        migrationLevel: { type: 'string' },
+        mjapiBootable: { type: 'boolean' },
+        generatedTreeClean: { type: 'boolean' },
+        staleNestedDists: { type: 'array' },   // entries: { package, nestedPath, reason } — GZ #31 detector
+        turboDistFresh: { type: 'boolean' },
+        resolved: { type: 'boolean' },          // true when detected issues were fixed before proceeding
+        notes: { type: 'array' },
+    },
+};
+const envPreflight = await agent(
+    `EnvPreflight (S0) for the ${VENDOR} build — DETERMINISTIC FINDER (P9: you RUN the script; you never eyeball-check).
+` +
+    `1. Run: node packages/Integration/connector-builder-workshop/scripts/env-preflight.mjs --repo . --gql-url <the MJAPI url if one is expected> --out ${RUNS_DIR}/preflight
+` +
+    `   It scans stale nested @memberjunction/integration-* dists (the GZ #31 silent-kill class), generated-tree churn (#11/#19/#33), turbo dist staleness (#13), and probes MJAPI. Return its JSON verbatim into this schema.
+` +
+    `2. DB reachable + highest applied migration version (env-specific — per the runbook's sqlcmd probe); fill dbReachable/migrationLevel.
+` +
+    `3. If the script reports staleNestedDists: SYNC each nested dist from its workspace dist (rm -rf nested/dist && cp -R workspace/dist), RE-RUN the script, and set resolved=true ONLY when the re-run is clean. If generated churn is unaccounted: restore per the runbook before proceeding.
+` +
+    `Abort-cheap contract: if ok=false and unresolved, the workflow stops here — 10 stages must never burn on a broken env.`,
+    { schema: ENV_PREFLIGHT_SCHEMA, phase: 'EnvPreflight', label: 'env:preflight' }
+);
+log(`EnvPreflight: ok=${envPreflight.ok} staleNestedDists=${(envPreflight.staleNestedDists ?? []).length} generatedClean=${envPreflight.generatedTreeClean}`);
+if (!envPreflight.ok) {
+    return { runID: A?.runID, vendor: VENDOR, status: 'EnvPreflightFailed', envPreflight };
+}
 
 // ── BrandResearch ────────────────────────────────────────────────────
 phase('BrandResearch');
@@ -171,7 +218,7 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
             objectList: sources.TaxonomyLeaves,
             writeBackPath: METADATA_FILE,
             outputDir: `${RUNS_DIR}/output`,
-            runID: args?.runID,
+            runID: A?.runID,
             adversarialN: MANIFEST.adversarialVerifyMinReviewers,
             // Multi-source PK/FK detection inputs (Gap 10 revised 2026-05-30).
             // Producer MUST consult each of these where it exists.
@@ -232,7 +279,7 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
     if (previousReviewFingerprint === reviewFingerprint) {
         log(`Amendment loop deadlock at round ${amendmentRound}: reviewer findings byte-identical to prior round → escalate`);
         return {
-            runID: args?.runID,
+            runID: A?.runID,
             vendor: VENDOR,
             brand, identity, sources, metadataResult, extractStats, frozen, review,
             amendmentRound,
@@ -247,7 +294,7 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
 if (review.ConfirmedGapsBlocking > 0 && amendmentRound >= MAX_AMENDMENT_ROUNDS) {
     log(`Amendment loop exhausted ${MAX_AMENDMENT_ROUNDS} rounds with ${review.ConfirmedGapsBlocking} unresolved blocking gaps`);
     return {
-        runID: args?.runID,
+        runID: A?.runID,
         vendor: VENDOR,
         brand, identity, sources, metadataResult, extractStats, frozen, review,
         amendmentRound,
@@ -276,7 +323,7 @@ if (sourceDiff.missing.length > 0) {
     );
     const recovered = await workflow(
         { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/extract-iiof-pipeline.workflow.js' },
-        { vendor: VENDOR, sourceID: sources.SourcesFile, objectList: sourceDiff.missing, writeBackPath: METADATA_FILE, outputDir: `${RUNS_DIR}/output`, runID: args?.runID, adversarialN: MANIFEST.adversarialVerifyMinReviewers }
+        { vendor: VENDOR, sourceID: sources.SourcesFile, objectList: sourceDiff.missing, writeBackPath: METADATA_FILE, outputDir: `${RUNS_DIR}/output`, runID: A?.runID, adversarialN: MANIFEST.adversarialVerifyMinReviewers }
     );
     extractStats.extractedObjects = [...(extractStats.extractedObjects ?? []), ...(recovered.extractedObjects ?? [])];
     extractStats.fieldsExtracted = (extractStats.fieldsExtracted ?? 0) + (recovered.fieldsExtracted ?? 0);
@@ -285,6 +332,64 @@ if (sourceDiff.missing.length > 0) {
         { universe: sources.TaxonomyLeaves ?? [], extracted: extractStats.extractedObjects ?? [] }
     );
     log(`SourceDiff after gap-fill: ${sourceDiff.missing.length} missing`);
+}
+
+// ── RealityProbe (S7 — v2 P2, EMPIRICAL; ARCHITECTURE_REFACTOR.md) ───
+// Read-only VERDICTS on the declared claims BEFORE code is built on them. This is the stage that
+// would have caught the majority of the GrowthZone repair before a line of connector code existed:
+// 17 wrong paths (§B), skip-vs-$skip dead pagination (#1), the 100-row page cap (#2/#3), PKs on
+// always-null fields (#5), and the missing write surface (#30). VERDICTS IN, AUTHORSHIP OUT: the
+// probe may never add objects/fields/paths to the metadata (floor-check `reality-probe-authored-
+// metadata` rejects deltas). With no credential it DEGRADES to the unauthenticated per-claim status
+// probe (401/403=path real, 404=path wrong) — it never disappears.
+phase('RealityProbe');
+const PROBE_SCHEMA = {
+    type: 'object', required: ['ran', 'mode', 'verdicts'],
+    properties: {
+        ran: { type: 'boolean' },
+        mode: { type: 'string' },               // 'credentialed-readonly' | 'unauthenticated'
+        verdicts: { type: 'array' },            // { claim, kind: path|pagination|pk|watermark|writeSurface|rate, verdict: confirmed|wrong|unverified, evidence, resolved? }
+        capturedPages: { type: 'array' },       // scrubbed real response pages → canonical fixtures (P4), PROVENANCE: live-capture
+        metadataDelta: { type: 'boolean' },     // MUST be false — verdicts only
+        rateHeaders: { type: 'object' },
+    },
+};
+const realityProbe = await agent(
+    `RealityProbe (S7) for ${VENDOR}. READ-ONLY. ${A?.credentialReference ? `Credentialed mode via the broker (reference: ${A.credentialReference}) — credential bytes never enter your context; submit read-only jobs only.` : 'NO credential — degraded unauthenticated mode.'}
+` +
+    `For EVERY declared claim in ${METADATA_FILE}, emit a VERDICT (confirmed | wrong | unverified + evidence):
+` +
+    `• per-object APIPath → HTTP status + records-present (one GET, first page only)
+` +
+    `• pagination → does the DECLARED param form advance past page 1 (different records)? Probe the obvious alternate form (e.g. $-prefixed OData) when the declared form does not advance. Observed server page cap.
+` +
+    `• per-declared-PK → populated | null | absent over the probe page (a declared PK that is null in real records is verdict=wrong).
+` +
+    `• incremental watermark param → accepted (200) or rejected.
+` +
+    `• write surface → existence evidence ONLY (OPTIONS / 405 / 401 on documented write endpoints) — NEVER issue a write.
+` +
+    `• rate-limit headers observed (X-RateLimit-*, Retry-After).
+` +
+    `Scrub + save captured pages to ${RUNS_DIR}/probe-captures/ (PROVENANCE: live-capture) — these become the canonical mock fixtures (P4). You may NOT add objects/fields/paths to the metadata: metadataDelta MUST be false.`,
+    { schema: PROBE_SCHEMA, phase: 'RealityProbe', label: 'probe:verdicts' }
+);
+const probeWrong = (realityProbe.verdicts ?? []).filter(v => v && (v.verdict === 'wrong' || v.verdict === 'falsified'));
+log(`RealityProbe (${realityProbe.mode}): ${(realityProbe.verdicts ?? []).length} verdicts, ${probeWrong.length} falsified`);
+
+// ── ProbeAmend (S8 — ONE mandatory round; reality outranks the contract) ──
+if (probeWrong.length > 0) {
+    phase('ProbeAmend');
+    const amendOut = await agent(
+        `ProbeAmend for ${VENDOR}: ${probeWrong.length} declared claim(s) were FALSIFIED by the read-only RealityProbe:
+${JSON.stringify(probeWrong).slice(0, 4000)}
+` +
+        `Correct each in ${METADATA_FILE} — corrections are sourced from the DOCS (re-read the cited source; pick the docs-supported alternative the probe confirmed, e.g. the $-prefixed param form, the corrected path, demote a null PK to content-hash identity). Then RE-PROBE just the corrected claims (read-only) to confirm, and mark each verdict resolved=true. Never invent values the docs + probe don't support; an uncorrectable claim stays falsified and escalates.`,
+        { agentType: 'ioiof-extractor', schema: PROBE_SCHEMA, phase: 'ProbeAmend', label: 'probe:amend' }
+    );
+    // carry resolved verdicts forward for the floor-check
+    realityProbe.verdicts = (amendOut?.verdicts && amendOut.verdicts.length > 0) ? amendOut.verdicts : realityProbe.verdicts;
+    log(`ProbeAmend: ${(realityProbe.verdicts ?? []).filter(v => v && (v.verdict === 'wrong' || v.verdict === 'falsified') && v.resolved !== true).length} still unresolved`);
 }
 
 // ── CodeBuild + ladder amendment loop (max 3 rounds) ────────────────
@@ -381,7 +486,7 @@ while (codeRound < MAX_CODE_BUILD_ROUNDS) {
             // ClassName from the metadata file. (Finding A — ClassName≠slug deadlocks T1.)
             connectorName: VENDOR_SLUG,
             manifest: MANIFEST,
-            credentialReference: args?.credentialReference ?? null,
+            credentialReference: A?.credentialReference ?? null,
             maxTier: MANIFEST.e2eTier,
         }
     );
@@ -400,7 +505,7 @@ while (codeRound < MAX_CODE_BUILD_ROUNDS) {
     if (previousCodeFingerprint === codeFingerprint) {
         log(`Code+Ladder deadlock at round ${codeRound}: identical failures to prior round → escalate`);
         return {
-            runID: args?.runID,
+            runID: A?.runID,
             vendor: VENDOR,
             brand, identity, sources, metadataResult, extractStats, frozen, review, codeResult, ladder,
             amendmentRound, codeRound,
@@ -415,7 +520,7 @@ while (codeRound < MAX_CODE_BUILD_ROUNDS) {
 if ((!codeResult?.BuildClean || (ladder?.tierResults ?? []).some(r => r?.status === 'red')) && codeRound >= MAX_CODE_BUILD_ROUNDS) {
     log(`Code+Ladder loop exhausted ${MAX_CODE_BUILD_ROUNDS} rounds`);
     return {
-        runID: args?.runID,
+        runID: A?.runID,
         vendor: VENDOR,
         brand, identity, sources, metadataResult, extractStats, frozen, review, codeResult, ladder,
         amendmentRound, codeRound,
@@ -435,34 +540,44 @@ phase('HybridE2E');
 const hybridE2E = await workflow(
     { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/hybrid-e2e.workflow.js' },
     {
-        runID: args?.runID,
+        runID: A?.runID,
         vendor: VENDOR,
         // registry SLUG, not ClassName (Finding A) — the runner/e2e resolve by slug dir.
         connectorName: VENDOR_SLUG,
         integrationName: brand?.CanonicalName ?? identity.Identity.ClassName,
-        mode: args?.credentialReference ? 'live' : 'mock',
-        credentialReference: args?.credentialReference ?? null,
-        brokerPlans: args?.brokerPlans ?? null,
+        mode: A?.credentialReference ? 'live' : 'mock',
+        credentialReference: A?.credentialReference ?? null,
+        brokerPlans: A?.brokerPlans ?? null,
     }
 );
-log(`HybridE2E: pass=${hybridE2E?.pass} (mock floor + ${args?.credentialReference ? 'live' : 'live-skipped'})`);
+log(`HybridE2E: pass=${hybridE2E?.pass} (mock floor + ${A?.credentialReference ? 'live' : 'live-skipped'})`);
 
 // ── FloorCheck (final gate) ──────────────────────────────────────────
 phase('FloorCheck');
 const verdict = await workflow(
     { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/floor-check.workflow.js' },
     {
-        runID: args?.runID,
+        runID: A?.runID,
         vendor: VENDOR,
-        slotsPath: args?.slotsPath ?? 'packages/Integration/connector-builder-workshop/floor/phase0-slots.json',
+        slotsPath: A?.slotsPath ?? 'packages/Integration/connector-builder-workshop/floor/phase0-slots.json',
         manifest: MANIFEST,
         hybridE2E,
-        journal: { extractStats, sourceDiff, frozen, review, codeResult, ladder, hybridE2E },
+        journal: {
+            extractStats, sourceDiff, frozen, review, codeResult, ladder, hybridE2E,
+            // v2 EMPIRICAL-gate evidence (ARCHITECTURE_REFACTOR.md §3):
+            envPreflight,                                    // P7 env-preflight-* / stale-nested-dist
+            realityProbe,                                    // P2 reality-probe-* rules
+            credentialReference: A?.credentialReference ?? null, // P6 e2e-mock-dodge
+            brand,                                           // P5 capability-dishonest (brand.WriteCapability)
+            writeCapableIOCount: extractStats.writeCapableIOCount ?? null,
+            outOfScopeFamilies: extractStats.outOfScopeFamilies ?? null,
+            writeScopeDecision: extractStats.writeScopeDecision ?? null,
+        },
     }
 );
 
 return {
-    runID: args?.runID,
+    runID: A?.runID,
     vendor: VENDOR,
     brand,
     identity,

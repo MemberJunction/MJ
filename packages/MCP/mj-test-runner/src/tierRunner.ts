@@ -52,6 +52,10 @@ import { runT3DocSelfCheck } from './tiers/t3DocSelfCheck.js';
 import { runT5MockHttp } from './tiers/t5MockHttp.js';
 import { runT6Sqlite } from './tiers/t6Sqlite.js';
 import { runT7OpenApi } from './tiers/t7OpenApi.js';
+import { runT9EndpointReality } from './tiers/t9EndpointReality.js';
+import { runT10TransportSmoke } from './tiers/t10TransportSmoke.js';
+import { runT11SandboxProbe } from './tiers/t11SandboxProbe.js';
+import { runT12IdempotencyReplay } from './tiers/t12IdempotencyReplay.js';
 
 /** Portion of a {@link TierResult} produced by an individual tier handler. */
 type TierHandlerResult = Omit<TierResult, 'Tier' | 'Connector' | 'DurationMs'>;
@@ -96,6 +100,14 @@ export async function RunTier(request: RunTierRequest): Promise<TierResult> {
                 return finish(base, withIdentity(request.Connector, (id) => runT7OpenApi(request.Connector, id)), start);
             case 'T8_AuthenticatedEndpoint':
                 return finish(base, runReadOnlyLive(request.Connector, request.CredentialFilePath), start);
+            case 'T9_EndpointReality':
+                return finish(base, await withIdentityAsync(request.Connector, (id) => runT9EndpointReality(request.Connector, id)), start);
+            case 'T10_TransportSmoke':
+                return finish(base, withIdentity(request.Connector, (id) => runT10TransportSmoke(request.Connector, id)), start);
+            case 'T11_SandboxProbe':
+                return finish(base, withIdentity(request.Connector, (id) => runT11SandboxProbe(request.Connector, id)), start);
+            case 'T12_IdempotencyReplay':
+                return finish(base, withIdentity(request.Connector, (id) => runT12IdempotencyReplay(request.Connector, id)), start);
             default:
                 return {
                     ...base,
@@ -128,6 +140,20 @@ function finish(base: TierResultBase, r: TierHandlerResult, start: number): Tier
  * all need to instantiate or read the connector.
  */
 function withIdentity(connector: string, handler: (identity: ConnectorIdentity) => TierHandlerResult): TierHandlerResult {
+    const identity = resolveConnectorIdentityShared(connector);
+    if (!identity) {
+        return {
+            Status: 'Fail',
+            Output: '',
+            Errors: [`Could not resolve a connector class for "${connector}" (no registry ClassName and no matching <name>Connector.ts under ${CONNECTORS_SRC_DIR}).`],
+            Details: { connector },
+        };
+    }
+    return handler(identity);
+}
+
+/** Async variant of {@link withIdentity} for network-touching credential-free tiers (T9/T11). */
+async function withIdentityAsync(connector: string, handler: (identity: ConnectorIdentity) => Promise<TierHandlerResult>): Promise<TierHandlerResult> {
     const identity = resolveConnectorIdentityShared(connector);
     if (!identity) {
         return {
