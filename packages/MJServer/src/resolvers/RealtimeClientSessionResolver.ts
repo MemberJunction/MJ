@@ -67,8 +67,9 @@ const SIGNIFICANT_PROGRESS_STEPS = ['prompt_execution', 'action_execution', 'sub
  * The seeded name of the internal orchestration agent that fronts a target agent in realtime
  * sessions (voice + interactive channels). This is the GLOBAL DEFAULT co-agent — the final step of
  * the co-agent resolution chain (see {@link RealtimeClientSessionResolver.resolveCoAgentID}).
- * Deployments can override it per agent (`AIAgent.DefaultCoAgentID`), per agent type
- * (`AIAgentType.DefaultCoAgentID`), or per call (the `coAgentId` mutation argument) without
+ * Deployments can override it per agent (`AIAgent.DefaultCoAgentID`), per agent type (an
+ * `AIAgentCoAgent` row with `TargetAgentTypeID` + `IsDefault`), or per call (the `coAgentId`
+ * mutation argument) without
  * touching this seed.
  */
 const REALTIME_CO_AGENT_NAME = 'Realtime Co-Agent';
@@ -90,7 +91,7 @@ const REALTIME_AGENT_TYPE_NAME = 'Realtime';
 
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
-const PAIRED_AGENT_ENTITY = 'MJ: AI Agent Paired Agents';
+const CO_AGENT_ENTITY = 'MJ: AI Agent Co Agents';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
 const PROMPT_RUN_ENTITY = 'MJ: AI Prompt Runs';
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
@@ -300,7 +301,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * 1. Authorize — the caller must have `CanRun` on the **target** agent; denial throws and no
      *    session is created.
      * 2. Resolve the co-agent id via the metadata-driven resolution chain (runtime `coAgentId` →
-     *    agent's `DefaultCoAgentID` → agent type's `DefaultCoAgentID` → global Realtime Co-Agent) —
+     *    agent's `DefaultCoAgentID` → type-level `AIAgentCoAgent` default row → global Realtime Co-Agent) —
      *    see {@link RealtimeClientSessionResolver.resolveCoAgentID} for the full contract.
      * 3. Create the durable `AIAgentSession` (run by the co-agent), storing `targetAgentID` in its
      *    config server-side — this is the authoritative target for all later relays.
@@ -316,14 +317,14 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * (count cap, size cap, per-tool shape) so a hostile client can't bloat the session config.
      *
      * @param targetAgentId The agent the co-agent voices. OPTIONAL when the resolved co-agent
-     *   has pairing rows with an `IsDefault` target (`MJ: AI Agent Paired Agents`) — the default
+     *   has pairing rows with an `IsDefault` target (`MJ: AI Agent Co Agents`) — the default
      *   pairing stands in. Required for a universal co-agent (zero pairing rows). When the
      *   co-agent HAS pairing rows, a supplied target must be in that list (clear error otherwise).
      * @param coAgentId Optional EXPLICIT co-agent choice (`MJ: AI Agents.ID` of an Active,
      *   Realtime-type agent). When set, the server uses exactly that co-agent and FAILS with a
      *   clear reason if it can't (no silent fallback — mirroring `preferredModelId`'s contract).
-     *   Omit to let metadata drive the choice: the target agent's `DefaultCoAgentID`, then its
-     *   agent type's `DefaultCoAgentID`, then the global Realtime Co-Agent.
+     *   Omit to let metadata drive the choice: the target agent's `DefaultCoAgentID`, then the
+     *   type-level `AIAgentCoAgent` default row for its agent type, then the global Realtime Co-Agent.
      * @param configOverridesJson Optional RUNTIME configuration-override layer (the most-specific
      *   layer of the effective-config merge: type `DefaultConfiguration` ← agent
      *   `TypeConfiguration` ← this). **Authorization-gated**: requires the
@@ -834,7 +835,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
     /**
      * Resolves the AUTHORITATIVE target agent id under the co-agent's PAIRING CONSTRAINTS
-     * (`MJ: AI Agent Paired Agents`, ordered by `Sequence`):
+     * (`MJ: AI Agent Co Agents`, ordered by `Sequence`):
      *
      * - **Zero pairing rows (universal co-agent)** — today's behavior untouched: the runtime
      *   `targetAgentId` is required (clear error when absent) and used as-is. Pairings are NEVER
@@ -895,10 +896,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
     /**
      * Loads the co-agent's pairing rows from {@link AIEngineBase}'s cached
-     * `MJ: AI Agent Paired Agents` metadata (provider-scoped engine instance, lazy `Config`),
-     * ordered by `Sequence`. Tolerant — a failed cache load logs and returns `[]` (degrading to
-     * the universal behavior; pairing is a targeting constraint, `CanRun` remains the security
-     * gate), never throws.
+     * `MJ: AI Agent Co Agents` metadata (provider-scoped engine instance, lazy `Config`),
+     * ordered by `Sequence`. Only **Active** rows of relationship **Type `'CoAgent'`** with a
+     * SPECIFIC agent target participate — type-level rows (`TargetAgentTypeID`) express the
+     * type-default in the resolution chain, not a target restriction, and reserved relationship
+     * types are ignored until their features ship. Tolerant — a failed cache load logs and
+     * returns `[]` (degrading to the universal behavior; pairing is a targeting constraint,
+     * `CanRun` remains the security gate), never throws.
      */
     private async loadPairingRows(
         coAgentID: string,
@@ -907,13 +911,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<Array<{ TargetAgentID: string; IsDefault: boolean; Sequence: number }>> {
         try {
             const engine = await this.configuredAIEngineBase(contextUser, provider);
-            return (engine.AgentPairedAgents ?? [])
-                .filter((r) => UUIDsEqual(r.CoAgentID, coAgentID))
+            return (engine.AgentCoAgents ?? [])
+                .filter((r) =>
+                    r.Type === 'CoAgent' &&
+                    r.Status === 'Active' &&
+                    r.TargetAgentID != null &&
+                    UUIDsEqual(r.CoAgentID, coAgentID))
                 .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0))
-                .map((r) => ({ TargetAgentID: r.TargetAgentID, IsDefault: r.IsDefault, Sequence: r.Sequence }));
+                .map((r) => ({ TargetAgentID: r.TargetAgentID!, IsDefault: r.IsDefault, Sequence: r.Sequence }));
         } catch (error) {
             LogError(
-                `StartRealtimeClientSession: ${PAIRED_AGENT_ENTITY} cache read failed for co-agent ${coAgentID} ` +
+                `StartRealtimeClientSession: ${CO_AGENT_ENTITY} cache read failed for co-agent ${coAgentID} ` +
                     `(${(error as Error).message}) — treating the co-agent as universal.`,
             );
             return [];
@@ -1057,8 +1065,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * 2. **Per-agent persona** — the target agent's `AIAgent.DefaultCoAgentID`. An invalid
      *    reference logs a warning and **falls through** to the next step (stale metadata should
      *    degrade gracefully, never break calls).
-     * 3. **Per-type default** — the target agent's TYPE's `AIAgentType.DefaultCoAgentID`. Same
-     *    tolerant warn-and-fall-through semantics as step 2.
+     * 3. **Per-type default** — an Active `AIAgentCoAgent` row of Type `'CoAgent'` whose
+     *    `TargetAgentTypeID` is the target agent's type and `IsDefault = 1` (lowest `Sequence`
+     *    wins a tie). Same tolerant warn-and-fall-through semantics as step 2.
      * 4. **Global default** — the seeded {@link REALTIME_CO_AGENT_NAME} agent, looked up by name
      *    (with a deprecated fallback to {@link LEGACY_REALTIME_CO_AGENT_NAME}). Throws when absent
      *    entirely (the realtime feature is unconfigured in this deployment).
@@ -1101,13 +1110,16 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return fromAgent;
         }
 
-        // Step 3 — the target agent's TYPE's DefaultCoAgentID (per-type default): warn + fall through.
+        // Step 3 — the type-level AIAgentCoAgent default row (per-type default): warn + fall through.
         const agentType = targetAgent?.TypeID
             ? (AIEngine.Instance.AgentTypes ?? []).find(t => UUIDsEqual(t.ID, targetAgent.TypeID))
             : undefined;
+        const typeDefaultCoAgentID = agentType
+            ? this.findTypeDefaultCoAgentID(agentType.ID, contextUser, provider)
+            : undefined;
         const fromType = this.resolveMetadataDefault(
-            agentType?.DefaultCoAgentID,
-            `agent type '${agentType?.Name}' (DefaultCoAgentID)`,
+            await typeDefaultCoAgentID,
+            `agent type '${agentType?.Name}' (AIAgentCoAgent type-default row)`,
         );
         if (fromType) {
             return fromType;
@@ -1115,6 +1127,40 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
         // Step 4 — global default: the seeded Realtime Co-Agent, by name (original behavior).
         return this.resolveGlobalCoAgentID();
+    }
+
+    /**
+     * Chain step 3 lookup: the TYPE-LEVEL default co-agent for an agent type — the Active
+     * `AIAgentCoAgent` row of Type `'CoAgent'` whose `TargetAgentTypeID` matches, with
+     * `IsDefault = 1` preferred and the lowest `Sequence` breaking ties (so a deployment can
+     * stage multiple type-level candidates deterministically). Reads {@link AIEngineBase}'s
+     * cached rows — no RunView. Tolerant: a failed cache read logs and returns `undefined`
+     * (the chain falls through to the global default).
+     */
+    private async findTypeDefaultCoAgentID(
+        agentTypeID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | undefined> {
+        try {
+            const engine = await this.configuredAIEngineBase(contextUser, provider);
+            const candidates = (engine.AgentCoAgents ?? [])
+                .filter((r) =>
+                    r.Type === 'CoAgent' &&
+                    r.Status === 'Active' &&
+                    r.TargetAgentTypeID != null &&
+                    UUIDsEqual(r.TargetAgentTypeID, agentTypeID))
+                .sort((a, b) =>
+                    (a.IsDefault === b.IsDefault ? 0 : a.IsDefault ? -1 : 1) ||
+                    (a.Sequence ?? 0) - (b.Sequence ?? 0));
+            return candidates[0]?.CoAgentID;
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: ${CO_AGENT_ENTITY} cache read failed while resolving the type-level ` +
+                    `default co-agent for agent type ${agentTypeID} (${(error as Error).message}) — falling through.`,
+            );
+            return undefined;
+        }
     }
 
     /**

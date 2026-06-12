@@ -3,11 +3,14 @@ import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
- * The narrow read-only projection of an `MJ: AI Agent Paired Agents` row the voice UI
- * consumes (loaded via {@link LoadCoAgentPairings} from {@link AIEngineBase}'s cached
- * `AgentPairedAgents`). Pairing semantics: a co-agent with ZERO rows is **universal** (it can
- * front any target agent — the zero-config default); a co-agent WITH rows may front exactly
- * the listed targets, with the `IsDefault` row as its preselected target.
+ * The narrow read-only projection of an `MJ: AI Agent Co Agents` row the voice UI consumes
+ * (loaded via {@link LoadCoAgentPairings} from {@link AIEngineBase}'s cached `AgentCoAgents`;
+ * only **Active** rows of relationship **Type `'CoAgent'`** with a specific agent target —
+ * type-level rows express the resolution-chain default, not a target restriction, and
+ * reserved relationship types are ignored until their features ship). Pairing semantics: a
+ * co-agent with ZERO such rows is **universal** (it can front any target agent — the
+ * zero-config default); a co-agent WITH rows may front exactly the listed targets, with the
+ * `IsDefault` row as its preselected target.
  */
 export interface VoicePairedAgentRow {
   /** The pairing row id. */
@@ -31,7 +34,7 @@ export interface VoiceAgentLike {
 
 /**
  * Loads the pairing rows for one co-agent from {@link AIEngineBase}'s cached
- * `MJ: AI Agent Paired Agents` metadata (provider-scoped engine instance, lazy `Config`),
+ * `MJ: AI Agent Co Agents` metadata (provider-scoped engine instance, lazy `Config`),
  * in `Sequence` order. The engine's BaseEntity-event reactivity keeps the cache fresh —
  * no per-call RunView round-trip.
  *
@@ -47,12 +50,16 @@ export async function LoadCoAgentPairings(provider: IMetadataProvider, coAgentId
   try {
     const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(provider, AIEngineBase) as AIEngineBase;
     await engine.Config(false, undefined, provider);
-    const rows = (engine.AgentPairedAgents ?? [])
-      .filter(p => UUIDsEqual(p.CoAgentID, id))
+    const rows = (engine.AgentCoAgents ?? [])
+      .filter(p =>
+        p.Type === 'CoAgent' &&
+        p.Status === 'Active' &&
+        p.TargetAgentID != null &&
+        UUIDsEqual(p.CoAgentID, id))
       .map<VoicePairedAgentRow>(p => ({
         ID: p.ID,
         CoAgentID: p.CoAgentID,
-        TargetAgentID: p.TargetAgentID,
+        TargetAgentID: p.TargetAgentID!,
         TargetAgent: p.TargetAgent ?? null,
         IsDefault: p.IsDefault,
         Sequence: p.Sequence ?? null

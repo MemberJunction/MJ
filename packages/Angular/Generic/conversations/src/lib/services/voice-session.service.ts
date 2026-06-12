@@ -505,7 +505,7 @@ export class VoiceSessionService {
    *   Realtime-type agent) — the highest-precedence step of the server's co-agent resolution
    *   chain. When set, the server uses exactly that co-agent and FAILS with a clear reason if
    *   it can't (no silent fallback). Omit to let server metadata drive the choice: the target
-   *   agent's `DefaultCoAgentID`, then its agent type's, then the global Realtime Co-Agent.
+   *   agent's `DefaultCoAgentID`, then the type-level `AIAgentCoAgent` default row, then the global Realtime Co-Agent.
    * @param configOverridesJson Optional JSON payload of SESSION CONFIG overrides (e.g.
    *   `{"realtime":{"modelPreference":"<modelId>"}}`), forwarded verbatim on the mint
    *   mutation. The server enforces the `Realtime: Advanced Session Controls`

@@ -9,11 +9,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 //     provider-scoped AIEngineBase whose cached metadata serves the resolver's pairing-row
 //     and channel-definition reads (the engine replaced the per-call RunViews) ---
 const hasPermissionMock = vi.fn<[], Promise<boolean>>();
-/** Cached `MJ: AI Agent Paired Agents` rows the fake engine serves. */
-interface FakePairedAgentRow {
+/** Cached `MJ: AI Agent Co Agents` rows the fake engine serves. */
+interface FakeCoAgentRow {
     ID: string;
     CoAgentID: string;
-    TargetAgentID: string;
+    TargetAgentID: string | null;
+    TargetAgentTypeID?: string | null;
+    Type: 'CoAgent' | 'Delegate' | 'Fallback' | 'Observer' | 'Peer' | 'Reviewer';
+    Status: 'Active' | 'Disabled';
     IsDefault: boolean;
     Sequence: number;
 }
@@ -23,7 +26,7 @@ interface FakeChannelRow {
     Name: string;
     IsActive: boolean;
 }
-const enginePairedAgentsMock = vi.fn((): FakePairedAgentRow[] => []);
+const engineCoAgentsMock = vi.fn((): FakeCoAgentRow[] => []);
 const engineChannelsMock = vi.fn((): FakeChannelRow[] => []);
 const engineConfigMock = vi.fn(async (): Promise<void> => undefined);
 vi.mock('@memberjunction/ai-engine-base', () => ({
@@ -33,8 +36,8 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
     AIEngineBase: {
         GetProviderInstance: vi.fn(() => ({
             Config: engineConfigMock,
-            get AgentPairedAgents() {
-                return enginePairedAgentsMock();
+            get AgentCoAgents() {
+                return engineCoAgentsMock();
             },
             get AgentChannels() {
                 return engineChannelsMock();
@@ -192,8 +195,8 @@ function makeProvider(factory: (entityName: string) => FakeSession): unknown {
 
 beforeEach(() => {
     hasPermissionMock.mockReset();
-    enginePairedAgentsMock.mockReset();
-    enginePairedAgentsMock.mockReturnValue([]);
+    engineCoAgentsMock.mockReset();
+    engineCoAgentsMock.mockReturnValue([]);
     engineChannelsMock.mockReset();
     engineChannelsMock.mockReturnValue([]);
     engineConfigMock.mockReset();
@@ -495,7 +498,10 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent 
 
     it("uses the agent TYPE's DefaultCoAgentID (step 3 beats 4) when the agent has none", async () => {
         setupHappyStart();
-        agentTypesMock.mockReturnValue([REALTIME_TYPE, { ...LOOP_TYPE, DefaultCoAgentID: 'co-type-default' }]);
+        agentTypesMock.mockReturnValue([REALTIME_TYPE, LOOP_TYPE]);
+        engineCoAgentsMock.mockReturnValue([
+            { ID: 'pair-typedef', CoAgentID: 'co-type-default', TargetAgentID: null, TargetAgentTypeID: 'type-loop', Type: 'CoAgent' as const, Status: 'Active' as const, IsDefault: true, Sequence: 0 },
+        ]);
         agentsMock.mockReturnValue([
             { ID: 'target-1', Name: 'Target', Status: 'Active', TypeID: 'type-loop', DefaultCoAgentID: null },
             TYPE_CO, GLOBAL_CO,
@@ -507,7 +513,10 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent 
 
     it('falls through (warn, no throw) past an INVALID agent-level default to the type default', async () => {
         setupHappyStart();
-        agentTypesMock.mockReturnValue([REALTIME_TYPE, { ...LOOP_TYPE, DefaultCoAgentID: 'co-type-default' }]);
+        agentTypesMock.mockReturnValue([REALTIME_TYPE, LOOP_TYPE]);
+        engineCoAgentsMock.mockReturnValue([
+            { ID: 'pair-typedef', CoAgentID: 'co-type-default', TargetAgentID: null, TargetAgentTypeID: 'type-loop', Type: 'CoAgent' as const, Status: 'Active' as const, IsDefault: true, Sequence: 0 },
+        ]);
         agentsMock.mockReturnValue([
             // Agent-level default points at a Disabled co-agent — tolerated, falls through.
             { ID: 'target-1', Name: 'Target', Status: 'Active', TypeID: 'type-loop', DefaultCoAgentID: 'co-disabled' },
@@ -521,7 +530,10 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent 
 
     it('falls through past an INVALID type-level default (dangling reference) to the global Realtime Co-Agent', async () => {
         setupHappyStart();
-        agentTypesMock.mockReturnValue([REALTIME_TYPE, { ...LOOP_TYPE, DefaultCoAgentID: 'co-deleted' }]);
+        agentTypesMock.mockReturnValue([REALTIME_TYPE, LOOP_TYPE]);
+        engineCoAgentsMock.mockReturnValue([
+            { ID: 'pair-typedef', CoAgentID: 'co-deleted', TargetAgentID: null, TargetAgentTypeID: 'type-loop', Type: 'CoAgent' as const, Status: 'Active' as const, IsDefault: true, Sequence: 0 },
+        ]);
         agentsMock.mockReturnValue([
             { ID: 'target-1', Name: 'Target', Status: 'Active', TypeID: 'type-loop', DefaultCoAgentID: null },
             GLOBAL_CO,
@@ -2272,7 +2284,7 @@ describe('RealtimeClientSessionResolver.RelayRealtimeUsage', () => {
     });
 });
 
-describe('RealtimeClientSessionResolver.StartRealtimeClientSession — pairing constraints (MJ: AI Agent Paired Agents)', () => {
+describe('RealtimeClientSessionResolver.StartRealtimeClientSession — pairing constraints (MJ: AI Agent Co Agents)', () => {
     const okPrep = {
         Success: true,
         ClientConfig: {
@@ -2286,8 +2298,10 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — pairing c
 
     /**
      * Seeds the mocked engine cache with pairing rows for the resolved co-agent ('co-agent-1')
-     * — the resolver filters the cached `AgentPairedAgents` by `CoAgentID` itself, so the rows
-     * carry it (plus a stray other-co-agent row to prove the filter). `failPairingQuery` makes
+     * — the resolver filters the cached `AgentCoAgents` by `CoAgentID`, relationship Type
+     * ('CoAgent'), Status ('Active') and agent-target presence itself, so the rows carry the
+     * full new-entity shape (plus stray rows — another co-agent's, a Disabled row, a reserved
+     * Peer-type row, and a type-level row — to prove every filter). `failPairingQuery` makes
      * the engine load reject, exercising the degrade-to-universal path.
      */
     function makePairingProvider(
@@ -2297,10 +2311,16 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — pairing c
         if (opts.failPairingQuery) {
             engineConfigMock.mockRejectedValue(new Error('db down'));
         } else {
-            enginePairedAgentsMock.mockReturnValue([
-                ...pairingRows.map((r, i) => ({ ID: `pair-${i}`, CoAgentID: 'co-agent-1', ...r })),
+            engineCoAgentsMock.mockReturnValue([
+                ...pairingRows.map((r, i) => ({ ID: `pair-${i}`, CoAgentID: 'co-agent-1', Type: 'CoAgent' as const, Status: 'Active' as const, ...r })),
                 // Another co-agent's pairing — must never constrain THIS co-agent.
-                { ID: 'pair-other', CoAgentID: 'co-agent-other', TargetAgentID: 'target-elsewhere', IsDefault: true, Sequence: 0 },
+                { ID: 'pair-other', CoAgentID: 'co-agent-other', TargetAgentID: 'target-elsewhere', Type: 'CoAgent' as const, Status: 'Active' as const, IsDefault: true, Sequence: 0 },
+                // Disabled row for THIS co-agent — must be ignored by resolution.
+                { ID: 'pair-disabled', CoAgentID: 'co-agent-1', TargetAgentID: 'target-disabled', Type: 'CoAgent' as const, Status: 'Disabled' as const, IsDefault: false, Sequence: 99 },
+                // Reserved relationship type — must be ignored until its feature ships.
+                { ID: 'pair-peer', CoAgentID: 'co-agent-1', TargetAgentID: 'target-peer-only', Type: 'Peer' as const, Status: 'Active' as const, IsDefault: false, Sequence: 0 },
+                // Type-level row — expresses the type default, never a target restriction.
+                { ID: 'pair-type', CoAgentID: 'co-agent-1', TargetAgentID: null, TargetAgentTypeID: 'type-loop', Type: 'CoAgent' as const, Status: 'Active' as const, IsDefault: false, Sequence: 0 },
             ]);
         }
         return { provider: { GetEntityObject: vi.fn(async () => makeSessionEntity()), RunView: vi.fn(async () => ({ Success: true, Results: [] })) } };

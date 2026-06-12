@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
          MJAIModelActionEntity,
@@ -28,7 +28,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIClientToolDefinitionEntity,
          MJAIAgentClientToolEntity,
          MJAIAgentCategoryEntity,
-         MJAIAgentPairedAgentEntity,
+         MJAIAgentCoAgentEntity,
          MJAIAgentChannelEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
@@ -113,7 +113,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _clientToolDefinitions: MJAIClientToolDefinitionEntity[] = [];
     private _agentClientTools: MJAIAgentClientToolEntity[] = [];
     private _agentCategories: MJAIAgentCategoryEntity[] = [];
-    private _agentPairedAgents: MJAIAgentPairedAgentEntity[] = [];
+    private _agentCoAgents: MJAIAgentCoAgentEntity[] = [];
     private _agentChannels: MJAIAgentChannelEntity[] = [];
 
     /**
@@ -300,25 +300,61 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 EntityName: 'MJ: AI Agent Categories',
                 CacheLocal: true
             },
-            {
-                PropertyName: '_agentPairedAgents',
-                EntityName: 'MJ: AI Agent Paired Agents',
-                CacheLocal: true
-            },
+            // NOTE: the realtime registry datasets below are CONDITIONAL — appended by
+            // appendRealtimeRegistryConfigs() only when their entities exist in metadata.
+            // They are NEW in the v5.41 schema, and CodeGen itself boots this engine for
+            // advanced generation BEFORE it has generated the new entities on a clean
+            // database — a hard reference here would deadlock the bootstrap (BaseEngine
+            // rightly throws on unknown entity names). Skipped datasets leave their
+            // getters returning [] — for pairings that means every co-agent resolves as
+            // UNIVERSAL, and for channels that no channel surfaces attach — both safe
+            // degraded defaults until the next engine refresh after CodeGen completes.
+        ];
+        this.appendRealtimeRegistryConfigs(params, provider);
+
+        // make sure engines we depend on downstream are loaded up before we load
+        await Promise.all([
+            TemplateEngineBase.Instance.Config(false, contextUser),
+            ArtifactMetadataEngine.Instance.Config(false, contextUser)
+        ]);
+
+        return await this.Load(params, provider, forceRefresh, contextUser);
+    }
+
+    /**
+     * Appends the realtime registry datasets (interactive channels; co-agent pairings once
+     * the renamed `MJ: AI Agent Co Agents` entity ships) to the Config() dataset list — but
+     * ONLY when the entity actually exists in the provider's metadata. See the note at the
+     * call site: these entities are created by CodeGen, and CodeGen boots this engine, so a
+     * hard reference would deadlock a clean-database bootstrap.
+     */
+    private appendRealtimeRegistryConfigs(
+        params: Array<Partial<BaseEnginePropertyConfig>>,
+        provider?: IMetadataProvider
+    ): void {
+        const md = provider ?? Metadata.Provider;
+        const conditional: Array<Partial<BaseEnginePropertyConfig>> = [
             {
                 PropertyName: '_agentChannels',
                 EntityName: 'MJ: AI Agent Channels',
                 CacheLocal: true
+            },
+            {
+                PropertyName: '_agentCoAgents',
+                EntityName: 'MJ: AI Agent Co Agents',
+                CacheLocal: true
             }
         ];
-
-        // make sure engines we depend on downstream are loaded up before we load
-        await Promise.all([
-            TemplateEngineBase.Instance.Config(false, contextUser), 
-            ArtifactMetadataEngine.Instance.Config(false, contextUser)
-        ]);
-        
-        return await this.Load(params, provider, forceRefresh, contextUser);
+        for (const config of conditional) {
+            if (md?.EntityByName?.(config.EntityName!)) {
+                params.push(config);
+            } else {
+                LogStatus(
+                    `AIEngineBase: entity '${config.EntityName}' not found in metadata — dataset skipped ` +
+                    `(expected only during a clean-install CodeGen bootstrap; the registry loads on the next engine refresh).`
+                );
+            }
+        }
     }
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
@@ -575,14 +611,20 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
-     * All `MJ: AI Agent Paired Agents` junction rows, cached during Config(). Each row pairs a
-     * Realtime-type co-agent (`CoAgentID`) with one target agent it may front (`TargetAgentID`),
-     * ordered for pickers via `Sequence` with at most one `IsDefault` row per co-agent. A co-agent
-     * with ZERO rows is universal (it can front any target). Small metadata table — filter
-     * client-side (e.g. `UUIDsEqual(row.CoAgentID, ...)`) rather than issuing RunViews.
+     * All `MJ: AI Agent Co Agents` affinity rows, cached during Config(). Each row relates an
+     * owning agent (`CoAgentID` — for Type='CoAgent', a Realtime-type co-agent) to EITHER a
+     * specific paired agent (`TargetAgentID`) or a whole agent type (`TargetAgentTypeID`),
+     * with `Type` naming the relationship nature (only 'CoAgent' is implemented today; the
+     * other values are reserved). Ordered for pickers via `Sequence`; `IsDefault` marks the
+     * co-agent's default target (agent rows) or the type's default co-agent (type rows);
+     * `Status='Disabled'` rows are kept for audit but must be ignored by resolution. A
+     * co-agent with ZERO Active 'CoAgent' rows is universal (it can front any target).
+     * Small metadata table — filter client-side (e.g. `UUIDsEqual(row.CoAgentID, ...)`)
+     * rather than issuing RunViews. NOTE: the dataset is registered conditionally (see
+     * Config()); on a clean-install CodeGen bootstrap this is [] until the entity exists.
      */
-    public get AgentPairedAgents(): MJAIAgentPairedAgentEntity[] {
-        return this._agentPairedAgents;
+    public get AgentCoAgents(): MJAIAgentCoAgentEntity[] {
+        return this._agentCoAgents;
     }
 
     /**

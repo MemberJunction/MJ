@@ -1,5 +1,5 @@
 /**
- * Unit tests for the PURE invariant cores behind `MJAIAgentPairedAgentEntityServer.ValidateAsync`:
+ * Unit tests for the PURE invariant cores behind `MJAIAgentCoAgentEntityServer.ValidateAsync`:
  * self-pairing defense, the Active+Realtime co-agent requirement, and the
  * at-most-one-default-per-co-agent rule.
  */
@@ -9,7 +9,8 @@ import {
     BuildSelfPairingError,
     BuildCoAgentInvariantErrors,
     BuildDuplicateDefaultError,
-} from '../custom/MJAIAgentPairedAgentEntityServer.server';
+    BuildDuplicateRelationshipError,
+} from '../custom/MJAIAgentCoAgentEntityServer.server';
 
 describe('BuildSelfPairingError', () => {
     it('rejects a co-agent paired to itself', () => {
@@ -84,5 +85,19 @@ describe('BuildDuplicateDefaultError', () => {
         expect(error!.Source).toBe('IsDefault');
         expect(error!.Type).toBe(ValidationErrorType.Failure);
         expect(error!.Message).toMatch(/already has a default/i);
+    });
+});
+
+describe('BuildDuplicateRelationshipError', () => {
+    it('allows the first relationship of a kind (no duplicates)', () => {
+        expect(BuildDuplicateRelationshipError('co-1', 'CoAgent', 0)).toBeNull();
+    });
+
+    it('rejects a duplicate (CoAgentID, target, Type) relationship, naming the type', () => {
+        const err = BuildDuplicateRelationshipError('co-1', 'CoAgent', 1);
+        expect(err).not.toBeNull();
+        expect(err!.Source).toBe('TargetAgentID');
+        expect(err!.Message).toContain("'CoAgent'");
+        expect(err!.Message).toContain('co-1');
     });
 });

@@ -62,7 +62,7 @@ export interface VoiceAgentPick {
  *   narrow RunView) — loaded and rendered ONLY when the current user holds
  *   the `Realtime: Advanced Session Controls` authorization (pure UX
  *   disclosure; the server enforces the authorization on the mint), and
- * - the chosen co-agent's pairing rows (`MJ: AI Agent Paired Agents`): a
+ * - the chosen co-agent's pairing rows (`MJ: AI Agent Co Agents`, Active 'CoAgent'-type rows): a
  *   co-agent with pairing rows may only front its paired targets, so the
  *   agent list constrains to those rows (Sequence order) with the IsDefault
  *   row preselected; a co-agent with zero rows is universal and the list is

@@ -13,7 +13,7 @@ import {
 } from '../lib/services/voice-pairing';
 
 /**
- * Pure co-agent pairing helpers — the client side of the `MJ: AI Agent Paired Agents`
+ * Pure co-agent pairing helpers — the client side of the `MJ: AI Agent Co Agents`
  * semantics: a co-agent with ZERO rows is universal (today's flow untouched); with rows,
  * its allowed targets are exactly those rows (Sequence order, IsDefault preselected).
  * Also covers the pinned `configOverridesJson` envelope builder and the Realtime-type
@@ -22,13 +22,22 @@ import {
 
 const CO_AGENT = 'C0000000-0000-0000-0000-000000000001';
 
-function pairing(overrides: Partial<VoicePairedAgentRow> & { TargetAgentID: string }): VoicePairedAgentRow {
+/** The engine-cache row shape LoadCoAgentPairings filters on (the new AIAgentCoAgent contract). */
+interface FakeCoAgentEngineRow extends VoicePairedAgentRow {
+  Type: 'CoAgent' | 'Peer';
+  Status: 'Active' | 'Disabled';
+  TargetAgentTypeID?: string | null;
+}
+
+function pairing(overrides: Partial<FakeCoAgentEngineRow> & { TargetAgentID: string }): FakeCoAgentEngineRow {
   return {
     ID: `P-${overrides.TargetAgentID}`,
     CoAgentID: CO_AGENT,
     TargetAgent: null,
     IsDefault: false,
     Sequence: 0,
+    Type: 'CoAgent',
+    Status: 'Active',
     ...overrides,
   };
 }
@@ -158,7 +167,7 @@ describe('LoadCoAgentPairings', () => {
    * static `GetProviderInstance`, the way other suites spy `AIEngineBase.Instance`). The
    * engine cache — not a RunView — is the only data surface the loader touches.
    */
-  function engineReturning(rows: VoicePairedAgentRow[] | Error): {
+  function engineReturning(rows: FakeCoAgentEngineRow[] | Error): {
     provider: IMetadataProvider;
     config: ReturnType<typeof vi.fn>;
     getProviderInstance: ReturnType<typeof vi.spyOn>;
@@ -170,7 +179,7 @@ describe('LoadCoAgentPairings', () => {
     });
     const fakeEngine = {
       Config: config,
-      get AgentPairedAgents(): VoicePairedAgentRow[] {
+      get AgentCoAgents(): FakeCoAgentEngineRow[] {
         if (rows instanceof Error) {
           throw rows;
         }
@@ -189,6 +198,10 @@ describe('LoadCoAgentPairings', () => {
       pairing({ TargetAgentID: TARGET_A, Sequence: 1 }),
       // Another co-agent's row — must be filtered out client-side.
       pairing({ TargetAgentID: TARGET_C, Sequence: 0, CoAgentID: 'E0000000-0000-0000-0000-0000000000EE' }),
+      // Disabled row — ignored by resolution/pickers.
+      pairing({ TargetAgentID: TARGET_C, Sequence: 0, Status: 'Disabled' }),
+      // Reserved relationship type — ignored until its feature ships.
+      pairing({ TargetAgentID: TARGET_C, Sequence: 0, Type: 'Peer' }),
     ]);
     const rows = await LoadCoAgentPairings(provider, CO_AGENT);
     expect(rows.map(r => r.TargetAgentID)).toEqual([TARGET_A, TARGET_B]);

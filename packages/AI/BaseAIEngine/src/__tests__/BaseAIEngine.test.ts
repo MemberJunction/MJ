@@ -51,7 +51,17 @@ vi.mock('@memberjunction/core', () => {
         BaseEnginePropertyConfig: class {},
         IMetadataProvider: class {},
         LogError: vi.fn(),
-        Metadata: class { GetEntityObject = vi.fn() },
+        LogStatus: vi.fn(),
+        Metadata: class {
+            GetEntityObject = vi.fn();
+            // The conditional realtime-registry datasets probe Metadata.Provider.EntityByName
+            // before registering (clean-install CodeGen bootstrap guard). Default: the
+            // channels entity exists, so the dataset registers in tests.
+            static Provider = {
+                EntityByName: (name: string) =>
+                    name === 'MJ: AI Agent Channels' || name === 'MJ: AI Agent Co Agents' ? { Name: name } : undefined,
+            };
+        },
         RunView: class { RunView = vi.fn() },
         UserInfo: class { ID = 'u1'; Name = 'T' },
         RegisterForStartup: () => () => {},
@@ -147,7 +157,7 @@ describe('AIEngineBase', () => {
                 'ModelCosts', 'ModelPriceTypes', 'ModelPriceUnitTypes',
                 'Configurations', 'ConfigurationParams', 'CredentialBindings',
                 'Modalities', 'AgentModalities', 'ModelModalities',
-                'AgentPairedAgents', 'AgentChannels',
+                'AgentCoAgents', 'AgentChannels',
             ];
             for (const p of props) {
                 expect((engine as Record<string, unknown>)[p]).toEqual([]);
@@ -159,7 +169,7 @@ describe('AIEngineBase', () => {
     // Config dataset registration
     // -----------------------------------------------
     describe('Config dataset registration', () => {
-        it('registers the paired-agent and channel registries as locally-cached datasets', async () => {
+        it('registers the co-agent and channel registries as locally-cached datasets when their entities exist', async () => {
             const engine = AIEngineBase.Instance;
             const loadSpy = vi.spyOn(
                 engine as unknown as { Load: (params: Array<{ EntityName: string; CacheLocal?: boolean }>) => Promise<void> },
@@ -167,23 +177,45 @@ describe('AIEngineBase', () => {
             );
             await engine.Config(false);
             const params = loadSpy.mock.calls[0][0];
-            const pairedConfig = params.find(p => p.EntityName === 'MJ: AI Agent Paired Agents');
+            const coAgentConfig = params.find(p => p.EntityName === 'MJ: AI Agent Co Agents');
             const channelConfig = params.find(p => p.EntityName === 'MJ: AI Agent Channels');
-            expect(pairedConfig).toBeDefined();
-            expect(pairedConfig!.CacheLocal).toBe(true);
+            expect(coAgentConfig).toBeDefined();
+            expect(coAgentConfig!.CacheLocal).toBe(true);
             expect(channelConfig).toBeDefined();
             expect(channelConfig!.CacheLocal).toBe(true);
+        });
+
+        it('skips a registry dataset whose entity is missing (clean-install CodeGen bootstrap)', async () => {
+            const coreModule = await import('@memberjunction/core');
+            const metadataClass = coreModule.Metadata as unknown as { Provider: { EntityByName: (name: string) => unknown } };
+            const originalProvider = metadataClass.Provider;
+            metadataClass.Provider = { EntityByName: () => undefined };
+            try {
+                const engine = AIEngineBase.Instance;
+                const loadSpy = vi.spyOn(
+                    engine as unknown as { Load: (params: Array<{ EntityName: string; CacheLocal?: boolean }>) => Promise<void> },
+                    'Load',
+                );
+                await engine.Config(false);
+                const params = loadSpy.mock.calls[0][0];
+                expect(params.find(p => p.EntityName === 'MJ: AI Agent Co Agents')).toBeUndefined();
+                expect(params.find(p => p.EntityName === 'MJ: AI Agent Channels')).toBeUndefined();
+                // the unconditional datasets still register
+                expect(params.find(p => p.EntityName === 'MJ: AI Models')).toBeDefined();
+            } finally {
+                metadataClass.Provider = originalProvider;
+            }
         });
     });
 
     // -----------------------------------------------
     // New realtime metadata getters
     // -----------------------------------------------
-    describe('AgentPairedAgents / AgentChannels', () => {
-        it('AgentPairedAgents returns the cached pairing junction rows', () => {
-            const rows = [{ ID: 'p1', CoAgentID: 'co-1', TargetAgentID: 't1', IsDefault: true, Sequence: 0 }];
-            set('_agentPairedAgents', rows);
-            expect(AIEngineBase.Instance.AgentPairedAgents).toBe(rows);
+    describe('AgentCoAgents / AgentChannels', () => {
+        it('AgentCoAgents returns the cached co-agent affinity rows', () => {
+            const rows = [{ ID: 'p1', CoAgentID: 'co-1', TargetAgentID: 't1', Type: 'CoAgent', Status: 'Active', IsDefault: true, Sequence: 0 }];
+            set('_agentCoAgents', rows);
+            expect(AIEngineBase.Instance.AgentCoAgents).toBe(rows);
         });
 
         it('AgentChannels returns the cached channel registry rows', () => {
