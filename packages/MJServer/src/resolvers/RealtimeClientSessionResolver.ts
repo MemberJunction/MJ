@@ -26,7 +26,7 @@
  */
 import { Resolver, Mutation, Arg, Ctx, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
+import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
@@ -39,7 +39,16 @@ import {
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { RealtimeClientSessionService, DelegatedRunArtifact, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
+import {
+    RealtimeClientSessionService,
+    DelegatedRunArtifact,
+    RealtimeChannelServerHost,
+    RealtimeCoAgentConfig,
+    EvaluateRuntimeOverrideAuthorization,
+    ParseRealtimeTypeConfiguration,
+    ResolveEffectiveRealtimeConfig,
+    REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
+} from '@memberjunction/ai-agents';
 import { AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -81,6 +90,7 @@ const REALTIME_AGENT_TYPE_NAME = 'Realtime';
 
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
+const PAIRED_AGENT_ENTITY = 'MJ: AI Agent Paired Agents';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
 const PROMPT_RUN_ENTITY = 'MJ: AI Prompt Runs';
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
@@ -196,6 +206,25 @@ export class StartRealtimeClientSessionResult {
      */
     @Field(() => String, { nullable: true })
     PriorChannelStatesJson?: string;
+
+    /**
+     * The effective narration pace (`realtime.narration.paceMs` from the co-agent's effective
+     * configuration) — minimum gap in ms between spoken progress updates. Null when not
+     * configured (the browser uses its built-in pacing default). In the client-direct topology
+     * narration pacing is enforced CLIENT-side, so the server surfaces the configured value here.
+     */
+    @Field(() => Int, { nullable: true })
+    NarrationPaceMs?: number;
+
+    /**
+     * JSON of the RESOLVED effective realtime configuration for this session (type
+     * `DefaultConfiguration` ← agent `TypeConfiguration` ← authorized runtime overrides,
+     * deep-merged + normalized server-side). The browser uses it to apply client-side concerns
+     * (e.g. per-provider voice settings consumed by client drivers, narration pacing). Null only
+     * when the prepare service did not resolve a config (back-compat).
+     */
+    @Field(() => String, { nullable: true })
+    EffectiveConfigJson?: string;
 }
 
 /**
@@ -286,30 +315,48 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * (`invoke-target-agent` + future action wiring). The declarations are still validated
      * (count cap, size cap, per-tool shape) so a hostile client can't bloat the session config.
      *
+     * @param targetAgentId The agent the co-agent voices. OPTIONAL when the resolved co-agent
+     *   has pairing rows with an `IsDefault` target (`MJ: AI Agent Paired Agents`) — the default
+     *   pairing stands in. Required for a universal co-agent (zero pairing rows). When the
+     *   co-agent HAS pairing rows, a supplied target must be in that list (clear error otherwise).
      * @param coAgentId Optional EXPLICIT co-agent choice (`MJ: AI Agents.ID` of an Active,
      *   Realtime-type agent). When set, the server uses exactly that co-agent and FAILS with a
      *   clear reason if it can't (no silent fallback — mirroring `preferredModelId`'s contract).
      *   Omit to let metadata drive the choice: the target agent's `DefaultCoAgentID`, then its
      *   agent type's `DefaultCoAgentID`, then the global Realtime Co-Agent.
+     * @param configOverridesJson Optional RUNTIME configuration-override layer (the most-specific
+     *   layer of the effective-config merge: type `DefaultConfiguration` ← agent
+     *   `TypeConfiguration` ← this). **Authorization-gated**: requires the
+     *   `Realtime: Advanced Session Controls` authorization — unauthorized callers receive a
+     *   structured rejection (never a silent ignore). Must be a JSON object.
      *
      * @returns The ephemeral config + session linkage the browser needs to open its socket.
      */
     @Mutation(() => StartRealtimeClientSessionResult)
     async StartRealtimeClientSession(
-        @Arg('targetAgentId', () => String) targetAgentId: string,
+        @Arg('targetAgentId', () => String, { nullable: true }) targetAgentId: string | undefined,
         @Ctx() { userPayload, providers }: AppContext,
         @Arg('conversationId', () => String, { nullable: true }) conversationId?: string,
         @Arg('lastSessionId', () => String, { nullable: true }) lastSessionId?: string,
         @Arg('preferredModelId', () => String, { nullable: true }) preferredModelId?: string,
         @Arg('clientToolsJson', () => String, { nullable: true }) clientToolsJson?: string,
         @Arg('coAgentId', () => String, { nullable: true }) coAgentId?: string,
+        @Arg('configOverridesJson', () => String, { nullable: true }) configOverridesJson?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
 
-        await this.assertCanRunTarget(targetAgentId, contextUser, provider);
         const coAgentID = await this.resolveCoAgentID(targetAgentId, coAgentId, contextUser, provider);
+        // PAIRING CONSTRAINTS: a co-agent with pairing rows is restricted to that target list
+        // (with the IsDefault row standing in when no runtime target was supplied); zero rows =
+        // universal, today's behavior untouched. Resolves the AUTHORITATIVE target id.
+        const effectiveTargetId = await this.resolveConstrainedTargetAgentID(coAgentID, targetAgentId, contextUser, provider);
+        await this.assertCanRunTarget(effectiveTargetId, contextUser, provider);
+        // RUNTIME-OVERRIDE GATE: configOverridesJson and a DEVIATING explicit model both require
+        // the 'Realtime: Advanced Session Controls' authorization (structured rejection, never a
+        // silent ignore). Plain starts and within-pairing target selection are never gated here.
+        await this.assertRuntimeOverridesAuthorized(coAgentID, configOverridesJson, preferredModelId, contextUser, provider);
 
-        const config: RealtimeSessionConfig = { targetAgentID: targetAgentId };
+        const config: RealtimeSessionConfig = { targetAgentID: effectiveTargetId };
         const session = await this.sessionManager.CreateSession(
             {
                 agentID: coAgentID,
@@ -328,7 +375,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // Strictly tolerant — any problem yields no hydration, never a failed start.
         const priorTranscript = await this.loadPriorTranscript(lastSessionId, contextUser, provider);
         const result = await this.prepareClientSessionOrClose(
-            session, coAgentID, targetAgentId, contextUser, provider, preferredModelId, clientTools, priorTranscript,
+            session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, priorTranscript,
+            configOverridesJson,
         );
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
@@ -785,6 +833,221 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
+     * Resolves the AUTHORITATIVE target agent id under the co-agent's PAIRING CONSTRAINTS
+     * (`MJ: AI Agent Paired Agents`, ordered by `Sequence`):
+     *
+     * - **Zero pairing rows (universal co-agent)** — today's behavior untouched: the runtime
+     *   `targetAgentId` is required (clear error when absent) and used as-is. Pairings are NEVER
+     *   mandated; zero-config deployments keep working with zero metadata.
+     * - **Rows + runtime target** — the supplied target must be IN the paired list; a target
+     *   outside the list is a clear structured error (the UX builds its picker from the same rows).
+     * - **Rows + no runtime target** — the `IsDefault` row stands in; when no default row exists,
+     *   a clear error asks for an explicit target.
+     *
+     * Pairing rows are a TARGETING constraint layered on top of — never a replacement for — the
+     * `CanRun` security gate, which the caller applies to the resolved target id immediately
+     * after. A failed/erroring pairing query therefore degrades to the universal behavior
+     * (logged), it never breaks session starts.
+     *
+     * @param coAgentID The resolved co-agent id.
+     * @param requestedTargetId The runtime `targetAgentId` argument, when supplied.
+     * @returns The effective target agent id (canonical casing from the pairing row when matched).
+     */
+    private async resolveConstrainedTargetAgentID(
+        coAgentID: string,
+        requestedTargetId: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string> {
+        const rows = await this.loadPairingRows(coAgentID, contextUser, provider);
+
+        if (rows.length === 0) {
+            if (!requestedTargetId) {
+                throw new Error(
+                    'targetAgentId is required: this co-agent has no paired targets ' +
+                        '(it is universal), so there is no default target to fall back to.',
+                );
+            }
+            return requestedTargetId;
+        }
+
+        if (requestedTargetId) {
+            const match = rows.find((r) => UUIDsEqual(r.TargetAgentID, requestedTargetId));
+            if (!match) {
+                throw new Error(
+                    `Invalid targetAgentId '${requestedTargetId}': this co-agent is paired to a specific ` +
+                        'target list and the requested agent is not in it. Pick one of the paired targets ' +
+                        'or use a co-agent without pairings.',
+                );
+            }
+            return match.TargetAgentID;
+        }
+
+        const defaultRow = rows.find((r) => r.IsDefault);
+        if (!defaultRow) {
+            throw new Error(
+                'targetAgentId is required: this co-agent is paired to a target list but no pairing is ' +
+                    'marked IsDefault, so there is no default target to fall back to.',
+            );
+        }
+        return defaultRow.TargetAgentID;
+    }
+
+    /**
+     * Loads the co-agent's pairing rows (`MJ: AI Agent Paired Agents`) ordered by `Sequence`.
+     * Tolerant — a failed query logs and returns `[]` (degrading to the universal behavior;
+     * pairing is a targeting constraint, `CanRun` remains the security gate), never throws.
+     */
+    private async loadPairingRows(
+        coAgentID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<Array<{ TargetAgentID: string; IsDefault: boolean; Sequence: number }>> {
+        try {
+            const safeID = coAgentID.replace(/'/g, "''");
+            const rv = RunView.FromMetadataProvider(provider);
+            const result = await rv.RunView<{ TargetAgentID: string; IsDefault: boolean; Sequence: number }>(
+                {
+                    EntityName: PAIRED_AGENT_ENTITY,
+                    ExtraFilter: `CoAgentID='${safeID}'`,
+                    Fields: ['ID', 'TargetAgentID', 'IsDefault', 'Sequence'],
+                    OrderBy: 'Sequence ASC',
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            if (!result.Success) {
+                LogError(
+                    `StartRealtimeClientSession: pairing-row query failed for co-agent ${coAgentID} ` +
+                        `(${result.ErrorMessage}) — treating the co-agent as universal.`,
+                );
+                return [];
+            }
+            return result.Results ?? [];
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: pairing-row query failed for co-agent ${coAgentID} ` +
+                    `(${(error as Error).message}) — treating the co-agent as universal.`,
+            );
+            return [];
+        }
+    }
+
+    /**
+     * The RUNTIME-OVERRIDE AUTHORIZATION GATE: `configOverridesJson` and a DEVIATING explicit
+     * `preferredModelId` both require the `Realtime: Advanced Session Controls` authorization
+     * (evaluated hierarchy-aware over the caller's roles); a deviating model is additionally
+     * subject to the effective `realtime.allowUserModelOverride` policy (which blocks even
+     * authorized callers when `false`). Denial THROWS a structured reason — never a silent
+     * ignore. Plain starts (no overrides, no explicit model) pass through untouched; an explicit
+     * model EQUAL to the co-agent's metadata-configured preference is not a deviation.
+     *
+     * Judgment calls baked in (per the approved product rules): co-agent selection (`coAgentId`)
+     * and target selection within a pairing list / for a universal co-agent are NORMAL user flow
+     * — they stay behind the existing `CanRun` gate only and are not touched here.
+     */
+    private async assertRuntimeOverridesAuthorized(
+        coAgentID: string,
+        configOverridesJson: string | undefined,
+        preferredModelId: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<void> {
+        if (!configOverridesJson && !preferredModelId) {
+            return;
+        }
+        if (configOverridesJson && !ParseRealtimeTypeConfiguration(configOverridesJson)) {
+            throw new Error('Invalid configOverridesJson: expected a JSON object.');
+        }
+
+        const baseline = this.resolveBaselineEffectiveConfig(coAgentID);
+        const decision = EvaluateRuntimeOverrideAuthorization({
+            HasConfigOverrides: !!configOverridesJson,
+            RequestedModelID: preferredModelId ?? null,
+            MetadataPreferredModelID: this.resolveMetadataPreferredModelID(baseline),
+            AllowUserModelOverride: baseline.realtime?.allowUserModelOverride,
+            CallerHasAdvancedControls: this.userHasAdvancedSessionControls(contextUser, provider),
+        });
+        if (!decision.Allowed) {
+            throw new Error(`Not authorized: ${decision.DenialReason}`);
+        }
+    }
+
+    /**
+     * The co-agent's BASELINE effective configuration — type `DefaultConfiguration` ← agent
+     * `TypeConfiguration`, WITHOUT the runtime layer (this feeds the gate that decides whether
+     * the runtime layer is even allowed). Tolerant of an unloaded metadata cache.
+     */
+    private resolveBaselineEffectiveConfig(coAgentID: string): RealtimeCoAgentConfig {
+        try {
+            const agent = (AIEngine.Instance.Agents ?? []).find((a) => UUIDsEqual(a.ID, coAgentID));
+            let typeDefault: string | null = null;
+            if (agent?.TypeID) {
+                const type = (AIEngine.Instance.AgentTypes ?? []).find((t) => UUIDsEqual(t.ID, agent.TypeID!));
+                typeDefault = type?.DefaultConfiguration ?? null;
+            }
+            return ResolveEffectiveRealtimeConfig(typeDefault, agent?.TypeConfiguration ?? null, null);
+        } catch {
+            return {};
+        }
+    }
+
+    /**
+     * Resolves the baseline config's `realtime.modelPreference` (Name or ID) to an
+     * `MJ: AI Models.ID`, so a `preferredModelId` equal to it is recognized as a NON-deviation.
+     * When the preference matches no cached model (or the cache is unavailable), the RAW
+     * preference string is returned — an ID-style preference then still compares equal to the
+     * matching `preferredModelId` (case-insensitive), while a name-style preference simply won't
+     * match an id (and the gate treats the request as a deviation — the fail-safe direction).
+     * `null` only when no preference is configured at all.
+     */
+    private resolveMetadataPreferredModelID(baseline: RealtimeCoAgentConfig): string | null {
+        const preference = baseline.realtime?.modelPreference;
+        if (!preference) {
+            return null;
+        }
+        try {
+            const models = AIEngine.Instance.Models ?? [];
+            const wanted = preference.trim().toLowerCase();
+            const matched =
+                models.find((m) => UUIDsEqual(m.ID, preference)) ??
+                models.find((m) => m.Name?.trim().toLowerCase() === wanted);
+            return matched?.ID ?? preference;
+        } catch {
+            return preference;
+        }
+    }
+
+    /**
+     * Hierarchy-aware check for the `Realtime: Advanced Session Controls` authorization against
+     * the request provider's cached Authorizations + the caller's roles. FAIL-CLOSED: an absent
+     * authorization row (un-synced seed) or an evaluation error denies — runtime overrides are a
+     * privileged path, and unauthorized callers still get a fully working session without them.
+     */
+    private userHasAdvancedSessionControls(contextUser: UserInfo, provider: IMetadataProvider): boolean {
+        try {
+            const auths = provider.Authorizations ?? [];
+            const wanted = REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION.trim().toLowerCase();
+            const auth = auths.find((a) => a.Name?.trim().toLowerCase() === wanted);
+            if (!auth) {
+                LogError(
+                    `StartRealtimeClientSession: the '${REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION}' ` +
+                        'authorization is not present in metadata — runtime overrides are denied (fail closed). ' +
+                        'Sync the authorization seed metadata to enable them.',
+                );
+                return false;
+            }
+            return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, contextUser, auths);
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: authorization evaluation failed (${(error as Error).message}) — ` +
+                    'runtime overrides are denied (fail closed).',
+            );
+            return false;
+        }
+    }
+
+    /**
      * Resolves the co-agent (the Realtime-type agent that voices the target agent) for a new
      * client-direct session via the metadata-driven **CO-AGENT RESOLUTION CHAIN** — first match
      * wins, evaluated in precedence order:
@@ -810,7 +1073,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * @returns The resolved co-agent's id (canonical casing from the metadata cache).
      */
     private async resolveCoAgentID(
-        targetAgentId: string,
+        targetAgentId: string | undefined,
         explicitCoAgentId: string | undefined,
         contextUser: UserInfo,
         provider: IMetadataProvider,
@@ -826,7 +1089,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return agent.ID;
         }
 
-        const targetAgent = (AIEngine.Instance.Agents ?? []).find(a => UUIDsEqual(a.ID, targetAgentId));
+        const targetAgent = targetAgentId
+            ? (AIEngine.Instance.Agents ?? []).find(a => UUIDsEqual(a.ID, targetAgentId))
+            : undefined;
 
         // Step 2 — the target agent's own DefaultCoAgentID (per-agent persona): warn + fall through.
         const fromAgent = this.resolveMetadataDefault(
@@ -952,6 +1217,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         preferredModelId?: string,
         clientTools?: RealtimeToolDefinition[],
         priorTranscript?: string,
+        configOverridesJson?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -970,6 +1236,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 ExtraTools: clientTools,
                 // Resume continuity: the prior leg(s)' transcript, framed into the system prompt.
                 PriorTranscript: priorTranscript,
+                // Pre-authorized runtime override layer (assertRuntimeOverridesAuthorized gated it).
+                ConfigOverridesJson: configOverridesJson,
             },
             contextUser,
             provider,
@@ -994,6 +1262,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             SessionConfigJson: JSON.stringify(cfg.SessionConfig),
             ModelName: prep.ModelName,
             NarrationInstructionsTemplate: prep.NarrationInstructionsTemplate,
+            NarrationPaceMs: prep.NarrationPaceMs,
+            EffectiveConfigJson: prep.EffectiveConfig ? JSON.stringify(prep.EffectiveConfig) : undefined,
         };
     }
 

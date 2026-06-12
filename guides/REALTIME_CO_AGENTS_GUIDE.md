@@ -63,6 +63,8 @@ Every candidate from steps 1–3 is validated by `findValidCoAgent()`: it must e
 
 This chain is how deployments give individual agents a distinct voice persona (a different co-agent with a different prompt/voice) without touching code or the global seed.
 
+Two further metadata layers refine *which target a co-agent fronts* and *how it sounds/behaves* — **pairing rows** and the **effective configuration** merge. Both are opt-in with zero-config defaults identical to the pre-feature behavior; see [§4 — Co-agent pairing & effective configuration](#co-agent-pairing--effective-configuration).
+
 ---
 
 ## 2. The Triple-Registry Plugin Architecture
@@ -238,6 +240,66 @@ Continuity is real, not cosmetic — a `lastSessionId` on `StartRealtimeClientSe
 - **Model memory**: `loadPriorTranscript()` walks the prior session **chain** (up to 5 legs, cycle-guarded) and frames the newest 30 turns / 8,000 chars of persisted captions into the new session's system prompt, so the model remembers what was said on the previous leg(s) — not just what was drawn.
 
 Both are **strictly best-effort and ownership-checked**: a prior session owned by another user, an oversized state (> 2,000,000 chars per state and in total), or a malformed payload is logged and skipped — a session start never fails because of restore.
+
+### Co-agent pairing & effective configuration
+
+Migration `V202606121100__v5.41.x__Realtime_CoAgent_Pairing_And_TypeConfig.sql` adds two opt-in metadata layers on top of the co-agent resolution chain.
+
+#### Pairing semantics — universal vs constrained
+
+**`AIAgentPairedAgent`** (`MJ: AI Agent Paired Agents`) is an OPT-IN junction between a Realtime-type co-agent and the targets it can front (`CoAgentID`, `TargetAgentID`, `IsDefault`, `Sequence`). **Pairings are never mandated:**
+
+| Co-agent state | Runtime `targetAgentId` supplied | Behavior |
+|---|---|---|
+| **Zero pairing rows (universal)** | yes | Today's behavior, untouched — fronts the supplied agent. Zero-config deployments need zero metadata. |
+| Zero pairing rows | no | Clear error — a universal co-agent has no default target to fall back to. |
+| **Has pairing rows (constrained)** | yes, in the list | Accepted (canonical row casing wins). |
+| Has pairing rows | yes, NOT in the list | Clear structured error — the rows RESTRICT the co-agent to its prebuilt target list. |
+| Has pairing rows | no | The `IsDefault` row stands in; no default row → clear error asking for an explicit target. |
+
+Resolution lives in `RealtimeClientSessionResolver.resolveConstrainedTargetAgentID()` (rows loaded by `Sequence`). Pairing is a **targeting** constraint, not a security boundary — `CanRun` on the *resolved* target remains the security gate, applied immediately after; a failed pairing query therefore degrades to the universal behavior (logged) rather than breaking calls. Server-side write invariants (`MJAIAgentPairedAgentEntityServer.ValidateAsync` in `MJCoreEntitiesServer`): the co-agent must be an **Active** agent of the **Realtime** type, at most **one `IsDefault = 1` row per co-agent**, and `CoAgentID ≠ TargetAgentID` (defense in depth over the CHECK constraint).
+
+#### The effective-configuration merge
+
+Realtime behavior is configured in three JSON layers, **deep-merged per key (later wins; plain objects merge, arrays/primitives replace)**:
+
+```
+AIAgentType.DefaultConfiguration  ←  AIAgent.TypeConfiguration  ←  runtime overrides (configOverridesJson)
+(type-level defaults)                 (per-agent layer)              (per-session, authorization-gated)
+```
+
+The pure implementation is `packages/AI/Agents/src/realtime/realtime-coagent-config.ts` (`DeepMergeConfigs`, `ParseRealtimeTypeConfiguration` — tolerant, malformed layers contribute nothing — and `ResolveEffectiveRealtimeConfig`, which normalizes into the typed `RealtimeCoAgentConfig`). The canonical shape (the Realtime type's `ConfigSchema` is seeded to it):
+
+```jsonc
+{ "realtime": {
+    "modelPreference": "<AI Model name or ID>",
+    "voice": { "default": { "tone": "…", "speakingStyle": "…" },
+               "providers": { "openai": { "voice": "alloy" }, "elevenlabs": { "voiceId": "…" },
+                              "gemini": { "voice": "…" }, "assemblyai": { "voice": "…" } } },
+    "allowUserModelOverride": true,
+    "narration": { "paceMs": 8000 } } }
+```
+
+**How each knob is applied at mint** (`RealtimeClientSessionService.PrepareClientSession`, mirrored on the server-bridged path in `BaseAgent`):
+
+- **`modelPreference`** (Name or ID) participates in realtime-model selection *between* the explicit runtime choice and the default: explicit `preferredModelId` (strict, fails loud, authorization-gated when deviating) → configured preference (**tolerant** — an unsatisfiable metadata preference logs and falls through, mirroring the chain's metadata steps) → highest-PowerRank default.
+- **`voice.default` (tone / speakingStyle)** is appended to the server-built companion system prompt as a short **"Voice & manner"** section, right after the co-agent's own prompt.
+- **`voice.providers.<provider>`** is matched to the resolved vendor's `DriverClass` by normalized prefix (`openai` ↔ `OpenAIRealtime`, …) and merged into the session's open **`Config` bag** — the same opaque per-driver pact every other config entry rides (a caller-supplied runtime `Config` wins per key). Server-bridged reach today: **OpenAI** spreads the bag into `session.update`; **Gemini** merges it last; **AssemblyAI** maps `voice` → `output.voice`. **ElevenLabs** provisions voice on its managed agent and does not consume a per-session bag (per-driver TODO). **Client-direct reach**: `OpenAIRealtime.CreateClientSession` does not yet fold `params.Config` into the minted session (per-driver TODO) — the resolver instead surfaces the full resolved config as **`EffectiveConfigJson`** on `StartRealtimeClientSessionResult` so client drivers can apply provider voice settings browser-side.
+- **`narration.paceMs`** drives spoken-progress spacing: server-bridged, it feeds `RealtimeSessionRunnerDeps.NarrationPaceMs` (replacing the built-in 8 s spacing floor); client-direct, pacing is enforced client-side, so the value is surfaced as **`NarrationPaceMs`** on the start result.
+
+**Runtime override precedence & authorization** (`configOverridesJson` on `StartRealtimeClientSession`):
+
+| Request | Gate | Outcome |
+|---|---|---|
+| Plain start (no overrides, no explicit model) | `CanRun` on the target only | Never touches the new gate. |
+| Target selection (within a pairing list / universal) and `coAgentId` choice | `CanRun` only | Normal user flow — deliberately ungated. |
+| `configOverridesJson` | **`Realtime: Advanced Session Controls`** authorization (hierarchy-aware, fail-closed when the seed is absent) | Unauthorized → structured rejection (never a silent ignore). Must be a JSON object. |
+| `preferredModelId` **equal** to the metadata `modelPreference` | none (not a deviation) | Allowed for everyone. |
+| `preferredModelId` **deviating** from metadata | the authorization **AND** effective `allowUserModelOverride ≠ false` (the policy blocks even authorized callers) | Denial is a structured rejection naming the reason. |
+
+Gate implementation: `RealtimeClientSessionResolver.assertRuntimeOverridesAuthorized()` → the pure `EvaluateRuntimeOverrideAuthorization()` decision (unit-tested matrix) + `AuthorizationEvaluator.UserCanExecuteWithAncestors` over the request provider's cached Authorizations. The authorization is seeded in `metadata/authorizations/.realtime.json`.
+
+**Write-side schema enforcement**: when an agent type publishes `ConfigSchema`, `MJAIAgentEntityServer.ValidateAsync` (in `MJCoreEntitiesServer`) validates `TypeConfiguration` against it with a dependency-free JSON-Schema-subset validator (`json-schema-lite.ts`: type / required / properties / enum / items / additionalProperties). Non-object configuration always fails; a malformed `ConfigSchema` only WARNS (a metadata bug on the type row must not brick agent saves).
 
 ---
 
@@ -447,6 +509,7 @@ The plan's complementary timeline treatment — the conversation rendering a com
 Authorization is overwhelmingly reuse of existing primitives, plus a small number of session-specific gates:
 
 - **`CanRun` on the *target* agent gates session creation** — `AIAgentPermissionHelper.HasPermission(targetAgentId, user, 'run')` in both `SessionManager.CreateSession` and `RealtimeClientSessionResolver.assertCanRunTarget`. The co-agent is internal orchestration; the meaningful permission is on the agent doing real work. Denial throws before any row is written.
+- **Runtime overrides are authorization-gated** — `configOverridesJson` and a *deviating* explicit `preferredModelId` require the seeded **`Realtime: Advanced Session Controls`** authorization (hierarchy-aware via `AuthorizationEvaluator`; fail-closed when the seed is absent); a deviating model is additionally subject to the effective `allowUserModelOverride` policy. Denial is a structured rejection, never a silent ignore — unauthorized users still get a fully working session on the co-agent's configured defaults. Pairing rows restrict *which* targets a constrained co-agent fronts, but they are a targeting constraint layered on top of `CanRun`, never a replacement for it (see [§4](#co-agent-pairing--effective-configuration)).
 - **Session ownership on every inbound operation** — every relay (`ExecuteRealtimeSessionTool`, `RelayRealtimeTranscript`, `SaveSessionChannelState`, `SaveSessionChannelArtifact`, `CancelRealtimeSessionTool`, `RelayRealtimeUsage`) loads the session and enforces `UUIDsEqual(session.UserID, contextUser.ID)`; tool/transcript relays additionally reject `Closed` sessions, while state/artifact saves, the cancel channel, and usage relay accept them (the final flush legitimately lands post-close, and a cancel can legitimately race teardown). Channel-state **restore** and **prior-transcript hydration** are ownership-checked too — another user's prior session never leaks state *or* words.
 - **The target agent cannot be swapped mid-session** — it is stored server-side in the session's config at start and read back on every relay; the browser never re-supplies it.
 - **Tools execute under the session's `contextUser`** with the request-scoped provider — a realtime model calling a tool can do exactly what the user could do, no more. The provider owning the conversation is never an authorization bypass.
@@ -475,7 +538,8 @@ Honest ledger of what is *not* done on this branch, so nobody reads aspiration i
 | Server-side channel plugin execution (`ServerPluginClass` consumption) | **Shipped with scope notes** — `BaseRealtimeChannelServer` (in `@memberjunction/ai`) is resolved per session by `RealtimeChannelServerHost` from the ACTIVE registry rows and wired into the durable lifecycle: session start (`SessionManager.CreateSession`), pre-persistence channel-state saves (`SaveSessionChannelState`), and session close from every provenance incl. the janitor (`SessionManager.CloseSession`); `WhiteboardChannelServer` ships as the reference (state-of-record validation/canonicalization). **Not** covered: socket/media members (deferred with the unified-transport track) and server-tool contribution to `RealtimeSessionRunner` (documented TODO — no code path gives the server-bridged runner per-session channel instances yet). See [§5](#5-channels--the-heart-of-the-system) |
 | Non-target server tools on the client-direct relay (action wiring through `executeNonTargetTool`) | **Later phase** — structured "not available" today; the server-bridged path already executes actions |
 | Channel-grained permissions, multi-party sessions, audio retention/consent | **Out of scope** for this iteration (see plan) |
-| `RealtimeClientSessionService` ↔ `BaseAgent` prepare-logic duplication | **Known debt** — the service's doc header calls for a future shared `RealtimeSessionPreparer`; until then the two are kept in sync intentionally (the shared `realtime-narration.ts` module is the first extracted piece) |
+| `RealtimeClientSessionService` ↔ `BaseAgent` prepare-logic duplication | **Known debt** — the service's doc header calls for a future shared `RealtimeSessionPreparer`; until then the two are kept in sync intentionally (the shared `realtime-narration.ts` and `realtime-coagent-config.ts` modules are the first extracted pieces — both paths consume the same effective-config merge) |
+| Per-driver voice plumbing for the effective config (`realtime.voice.providers`) | **Partially shipped** — provider-matched settings flow into the open `Config` bag (server-bridged: OpenAI spread, Gemini merge-last, AssemblyAI `voice` mapping). **TODOs**: `OpenAIRealtime.CreateClientSession` does not fold `params.Config` into the minted client-direct session (clients apply `EffectiveConfigJson` instead); the ElevenLabs server driver provisions voice on its managed agent and consumes no per-session bag |
 
 ---
 

@@ -62,6 +62,15 @@ import {
     LEGACY_NARRATION_PROMPT_NAME,
     ResolveNarrationInstructionsTemplate
 } from './realtime-narration';
+import {
+    BuildVoiceMannerSection,
+    DeepMergeConfigs,
+    GetNarrationPaceMs,
+    GetProviderVoiceSettings,
+    JSONObjectLike,
+    RealtimeCoAgentConfig,
+    ResolveEffectiveRealtimeConfig
+} from './realtime-coagent-config';
 
 /**
  * Input for {@link RealtimeClientSessionService.PrepareClientSession}.
@@ -109,6 +118,14 @@ export interface PrepareClientSessionInput {
      * the default highest-PowerRank resolution applies.
      */
     PreferredModelID?: string;
+    /**
+     * Optional RUNTIME configuration-override layer (the most-specific layer of the effective
+     * configuration merge: type `DefaultConfiguration` ← agent `TypeConfiguration` ← this).
+     * **Pre-authorized by the transport layer** — the MJServer resolver gates it behind the
+     * `Realtime: Advanced Session Controls` authorization BEFORE threading it here; the service
+     * trusts the input. Malformed JSON is tolerated (it simply contributes nothing to the merge).
+     */
+    ConfigOverridesJson?: string;
 }
 
 /**
@@ -161,6 +178,21 @@ export interface RealtimeClientSessionPrepResult {
      * built-in narration instruction text.
      */
     NarrationInstructionsTemplate?: string;
+    /**
+     * The RESOLVED effective realtime configuration for this session (type defaults ← agent
+     * config ← runtime overrides, deep-merged + normalized). Present on success — `{}` when no
+     * layer configured anything. Surfaced so the transport layer can echo it to the client
+     * (client drivers apply provider voice settings client-side in the client-direct topology).
+     */
+    EffectiveConfig?: RealtimeCoAgentConfig;
+    /**
+     * The effective narration pace (`realtime.narration.paceMs`) — minimum gap in ms between
+     * spoken progress updates. `undefined` when not configured (clients/runners use their
+     * built-in default). In the CLIENT-DIRECT topology narration pacing is enforced client-side,
+     * so this is surfaced for the browser; the server-bridged runner consumes it directly via
+     * `RealtimeSessionRunnerDeps.NarrationPaceMs`.
+     */
+    NarrationPaceMs?: number;
 }
 
 /**
@@ -224,6 +256,12 @@ export interface RealtimeModelResolution {
     APIName: string;
     /** The model's display name (`MJ: AI Models.Name`). Optional for back-compat with test seams. */
     ModelName?: string;
+    /**
+     * The chosen vendor's `DriverClass` (e.g. `OpenAIRealtime`). Used to match the effective
+     * config's per-provider voice settings (`realtime.voice.providers`) onto the driver's open
+     * `Config` bag. Optional for back-compat with test seams.
+     */
+    DriverClass?: string;
 }
 
 /**
@@ -306,7 +344,12 @@ export class RealtimeClientSessionService {
             return { Success: false, ErrorMessage: 'The Realtime Co-Agent could not be resolved from the supplied id or entity.' };
         }
 
-        const outcome = await this.resolveModelForSession(input, coAgent);
+        // Effective config: type DefaultConfiguration ← agent TypeConfiguration ← runtime
+        // overrides (already authorization-gated upstream). Drives model preference, voice
+        // persona/provider settings, and narration pacing below.
+        const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson);
+
+        const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
         if (!outcome.Resolution) {
             return { Success: false, ErrorMessage: outcome.ErrorMessage ?? this.noModelMessage() };
         }
@@ -319,7 +362,9 @@ export class RealtimeClientSessionService {
             };
         }
 
-        const sessionParams = await this.buildSessionParams(input, coAgent, resolution.APIName, contextUser, provider);
+        const sessionParams = await this.buildSessionParams(
+            input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+        );
 
         let clientConfig: ClientRealtimeSessionConfig;
         try {
@@ -349,7 +394,43 @@ export class RealtimeClientSessionService {
             ModelID: resolution.ModelID,
             ModelName: resolution.ModelName,
             NarrationInstructionsTemplate: this.resolveNarrationInstructionsTemplate() ?? undefined,
+            EffectiveConfig: effectiveConfig,
+            NarrationPaceMs: GetNarrationPaceMs(effectiveConfig) ?? undefined,
         };
+    }
+
+    /**
+     * Resolves the EFFECTIVE realtime configuration for a co-agent: the agent TYPE's
+     * `DefaultConfiguration` (base) ← the agent's `TypeConfiguration` ← the (pre-authorized)
+     * runtime overrides — deep-merged per key and normalized. Tolerant end-to-end: malformed
+     * layers contribute nothing and an unloaded metadata cache yields no type defaults.
+     *
+     * @param coAgent The resolved co-agent.
+     * @param overridesJson The pre-authorized runtime override layer, when present.
+     * @returns The normalized effective configuration (possibly empty, never `null`).
+     */
+    protected resolveEffectiveConfig(coAgent: MJAIAgentEntityExtended, overridesJson?: string): RealtimeCoAgentConfig {
+        return ResolveEffectiveRealtimeConfig(
+            this.getAgentTypeDefaultConfiguration(coAgent),
+            coAgent.TypeConfiguration ?? null,
+            overridesJson ?? null
+        );
+    }
+
+    /**
+     * Reads the co-agent's TYPE-level `DefaultConfiguration` from {@link AIEngine}'s cached agent
+     * types. **Overridable seam**; tolerant — an absent type or unloaded cache returns `null`.
+     */
+    protected getAgentTypeDefaultConfiguration(coAgent: MJAIAgentEntityExtended): string | null {
+        try {
+            if (!coAgent.TypeID) {
+                return null;
+            }
+            const type = (AIEngine.Instance.AgentTypes ?? []).find(t => UUIDsEqual(t.ID, coAgent.TypeID!));
+            return type?.DefaultConfiguration ?? null;
+        } catch {
+            return null;
+        }
     }
 
     /**
@@ -753,23 +834,95 @@ export class RealtimeClientSessionService {
      *
      * - With {@link PrepareClientSessionInput.PreferredModelID}: resolve THAT model strictly via
      *   {@link resolvePreferredRealtimeModel} — failures return a specific reason and never fall
-     *   back to another model (the user explicitly chose).
-     * - Without: the existing default behavior via {@link resolveRealtimeModel} (highest-PowerRank
-     *   active Realtime model), with the generic {@link noModelMessage} on failure.
+     *   back to another model (the user explicitly chose). (The transport layer has already
+     *   authorization-gated a deviating explicit choice.)
+     * - Else, with an effective-config `realtime.modelPreference` (name or id): resolve it via
+     *   {@link resolveConfiguredModelPreference}. METADATA preferences degrade gracefully — an
+     *   unsatisfiable preference logs and FALLS THROUGH to the default (mirroring the co-agent
+     *   resolution chain's tolerant metadata steps), it never breaks calls.
+     * - Without either: the existing default behavior via {@link resolveRealtimeModel}
+     *   (highest-PowerRank active Realtime model), with the generic {@link noModelMessage} on failure.
      *
      * @param input The prepare-session input (carries the optional preferred model id).
      * @param coAgent The resolved co-agent (threaded to the default-resolution seam).
+     * @param effectiveConfig The resolved effective configuration (carries `modelPreference`).
      * @returns The resolution outcome (resolution or failure reason).
      */
     protected async resolveModelForSession(
         input: PrepareClientSessionInput,
-        coAgent: MJAIAgentEntityExtended
+        coAgent: MJAIAgentEntityExtended,
+        effectiveConfig?: RealtimeCoAgentConfig
     ): Promise<RealtimeModelResolutionOutcome> {
         if (input.PreferredModelID) {
             return this.resolvePreferredRealtimeModel(input.PreferredModelID);
         }
+        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig);
+        if (fromConfig) {
+            return { Resolution: fromConfig };
+        }
         const resolution = await this.resolveRealtimeModel(coAgent);
         return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
+    }
+
+    /**
+     * Resolves the effective config's `realtime.modelPreference` (an `MJ: AI Models` Name OR ID)
+     * into a usable realtime model. TOLERANT by design — this is a METADATA preference, so any
+     * failure (unknown model, inactive, wrong type, no vendor/key) logs a warning and returns
+     * `null`, falling through to the default highest-PowerRank resolution. Contrast with the
+     * explicit runtime choice ({@link resolvePreferredRealtimeModel}), which fails loud.
+     *
+     * @param effectiveConfig The resolved effective configuration.
+     * @returns The resolution, or `null` when no preference is configured or it can't be satisfied.
+     */
+    protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig): RealtimeModelResolution | null {
+        const preference = effectiveConfig?.realtime?.modelPreference;
+        if (!preference) {
+            return null;
+        }
+        const model = this.findModelByIDOrName(preference);
+        if (!model) {
+            LogError(
+                `RealtimeClientSessionService: configured realtime model preference '${preference}' matches no model in ` +
+                'AI model metadata — falling through to default realtime model resolution.'
+            );
+            return null;
+        }
+        if (!model.IsActive || !this.isRealtimeModel(model)) {
+            LogError(
+                `RealtimeClientSessionService: configured realtime model preference '${preference}' resolved to ` +
+                `'${model.Name}' but it is not an Active Realtime model — falling through to default resolution.`
+            );
+            return null;
+        }
+        const resolution = this.resolveVendorAndInstantiate(model);
+        if (!resolution) {
+            LogError(
+                `RealtimeClientSessionService: configured realtime model preference '${model.Name}' has no usable ` +
+                'vendor DriverClass/API key — falling through to default resolution.'
+            );
+        }
+        return resolution;
+    }
+
+    /**
+     * Looks up a model by ID (UUID-insensitive) or, failing that, by case/whitespace-insensitive
+     * Name in {@link AIEngine}'s cached models. **Overridable seam**; tolerant of an unloaded cache.
+     *
+     * @param preference The `MJ: AI Models` ID or Name.
+     * @returns The model entity, or `null`.
+     */
+    protected findModelByIDOrName(preference: string): MJAIModelEntityExtended | null {
+        try {
+            const models = AIEngine.Instance.Models ?? [];
+            const wanted = preference.trim().toLowerCase();
+            return (
+                models.find(m => UUIDsEqual(m.ID, preference)) ??
+                models.find(m => m.Name?.trim().toLowerCase() === wanted) ??
+                null
+            );
+        } catch {
+            return null;
+        }
     }
 
     /**
@@ -865,7 +1018,8 @@ export class RealtimeClientSessionService {
             ModelID: model.ID,
             VendorID: vendor.VendorID,
             APIName: vendor.APIName,
-            ModelName: model.Name
+            ModelName: model.Name,
+            DriverClass: vendor.DriverClass
         };
     }
 
@@ -952,6 +1106,8 @@ export class RealtimeClientSessionService {
      * @param modelApiName The vendor API name of the resolved realtime model.
      * @param contextUser The calling user.
      * @param provider The request-scoped metadata provider.
+     * @param effectiveConfig The resolved effective configuration (voice persona + provider settings).
+     * @param driverClass The resolved vendor's DriverClass — matches per-provider voice settings.
      * @returns The assembled session params.
      */
     protected async buildSessionParams(
@@ -959,9 +1115,11 @@ export class RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         modelApiName: string,
         contextUser: UserInfo,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        effectiveConfig?: RealtimeCoAgentConfig,
+        driverClass?: string
     ): Promise<RealtimeSessionParams> {
-        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider);
+        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
 
         return {
@@ -969,8 +1127,36 @@ export class RealtimeClientSessionService {
             SystemPrompt: systemPrompt,
             Tools: this.buildStableToolSet(input.ExtraTools),
             InitialContext: memoryContext || undefined,
-            Config: input.Config
+            Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass)
         };
+    }
+
+    /**
+     * Builds the provider-pact `Config` bag for the session: the effective config's matching
+     * per-provider voice settings (`realtime.voice.providers.<provider>`) merged UNDER any
+     * caller-supplied {@link PrepareClientSessionInput.Config} (the runtime bag wins per key).
+     * The settings objects are OPAQUE driver pacts — each server driver consumes its own keys
+     * exactly as it consumes any other entry of the open config bag (OpenAI spreads it into
+     * `session.update`, AssemblyAI reads `voice`, Gemini merges it last). Returns the original
+     * `input.Config` (possibly `undefined`) when no provider settings match, preserving the
+     * pre-config behavior byte-for-byte.
+     *
+     * @param input The prepare-session input (carries the runtime config bag).
+     * @param effectiveConfig The resolved effective configuration.
+     * @param driverClass The resolved vendor's DriverClass.
+     * @returns The merged config bag, or `undefined` when nothing contributes.
+     */
+    protected buildSessionConfigBag(
+        input: PrepareClientSessionInput,
+        effectiveConfig?: RealtimeCoAgentConfig,
+        driverClass?: string
+    ): JSONObject | undefined {
+        const providerVoice = GetProviderVoiceSettings(effectiveConfig, driverClass ?? null);
+        if (!providerVoice) {
+            return input.Config;
+        }
+        const merged = DeepMergeConfigs(providerVoice, input.Config as JSONObjectLike | undefined);
+        return merged as JSONObject;
     }
 
     /**
@@ -978,17 +1164,23 @@ export class RealtimeClientSessionService {
      * co-agent's own system prompt text, the TARGET agent's identity/capabilities (Name +
      * Description), the conversation history, and the same memory/context a loop agent assembles.
      *
+     * When the effective configuration carries a voice persona (`realtime.voice.default`), a
+     * short "Voice & manner" section (tone / speaking style) is appended after the co-agent's
+     * own prompt so the model speaks in the configured manner.
+     *
      * @param input The prepare-session input.
      * @param coAgent The resolved co-agent.
      * @param contextUser The calling user.
      * @param provider The request-scoped metadata provider.
+     * @param effectiveConfig The resolved effective configuration (voice persona source).
      * @returns The concatenated system prompt (never empty — the framing is always present).
      */
     protected async buildCompanionSystemPrompt(
         input: PrepareClientSessionInput,
         coAgent: MJAIAgentEntityExtended,
         contextUser: UserInfo,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        effectiveConfig?: RealtimeCoAgentConfig
     ): Promise<string> {
         const target = this.resolveTargetAgent(input.TargetAgentID);
         const targetName = target?.Name ?? 'the configured target agent';
@@ -1001,12 +1193,13 @@ export class RealtimeClientSessionService {
             `tool and narrate progress while it runs — do not attempt to do the work yourself.`;
 
         const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);
+        const voiceManner = BuildVoiceMannerSection(effectiveConfig);
         const targetIdentity = this.formatTargetIdentity(target);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
 
-        return [framing, coAgentPrompt, targetIdentity, priorTranscript, history, memoryContext]
+        return [framing, coAgentPrompt, voiceManner, targetIdentity, priorTranscript, history, memoryContext]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
     }

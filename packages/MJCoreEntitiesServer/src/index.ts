@@ -18,6 +18,9 @@ export * from './custom/MJTagEntityServer.server';
 export * from './custom/MJSearchScopeEntityServer.server';
 export * from './custom/MJTagScopeEntityServer.server';
 export * from './custom/MJCompanyIntegrationEntityServer.server';
+export * from './custom/MJAIAgentEntityServer.server';
+export * from './custom/MJAIAgentPairedAgentEntityServer.server';
+export * from './custom/json-schema-lite';
 export * from './custom/IntegrationLLMPKCallback';
 export * from './custom/util';
 
