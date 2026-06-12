@@ -352,3 +352,170 @@ invariants that let 23 vendor bugs ship green.
     - **Net:** idempotency goal MET (no duplication anywhere). Residual: one small table needs a 2nd sync to
       reach full completeness — the known #21 ordering pattern, surfacing narrowly here. Logged for the
       arch-fix list (invariant #1: door-before-child ordering must hold for EVERY child, incl. ContactWebsite).
+
+---
+
+## I. THE TWO BIG MISSES — custom-column capture never engaged + write-back never built  [MUST ADDRESS]
+
+These are NOT polish. They are the two things that make GrowthZone an AMS connector, and BOTH were
+silently absent while the build (and I) repeatedly called the connector "done / pull-only." User caught
+both. Logged here because they MUST be addressed before this connector is actually complete.
+
+29. **Custom-column capture SILENTLY no-opped on every sync — 0 custom fields captured, 0 promoted.**
+    The framework's custom-column feature EXISTS and is fully built + tested: `CustomOverflow.ts` +
+    `CustomColumnPromotion.ts` (`__mj_integration_CustomOverflow` staging column, `computeUnmappedFields`,
+    `planPromotions`, `inferColumnTypeFromSamples`, with `CustomOverflow.test.ts` / `CustomColumnPromotion.test.ts`).
+    `DDLGenerator.ts:276/291` adds the overflow column to EVERY integration CREATE TABLE, and the engine
+    parks unmapped source keys into it each sync (`IntegrationEngine.ts:3531`).
+    - **ROOT CAUSE:** the GrowthZone tables were created **WITHOUT** the `__mj_integration_CustomOverflow`
+      column. Verified: `0` growthzone tables have it (they DO have the other 11 `__mj_integration_*`
+      columns — ContentHash/SyncStatus/LastSynced/etc. — but not this one). The engine's capture is gated
+      `if (hasField(CUSTOM_OVERFLOW_COLUMN))` → with the column absent it **silently skips, no error, no
+      log**. So every custom field GrowthZone returned in the full passthrough was dropped on the floor.
+    - **WHY the column is missing (needs confirm):** DDLGenerator emits it, yet the tables lack it →
+      most likely a stale schema-builder dist at ApplyAll time (the #13 turbo-cache class of bug bit the
+      engine already), OR the tables were created by a path/older builder that predated the column and
+      `SchemaEvolution` never back-added it. MUST investigate which, then ensure ApplyAll creates the
+      column (and SchemaEvolution back-adds it to existing integration tables).
+    - **ALSO:** I never ran a verified `DiscoverFields`/capture pass. The connector implements
+      `DiscoverObjects`/`DiscoverFields` (delegating to the base/runtime-seed), but the sync ran on the
+      seeded Declared metadata only; I checked row counts + idempotency and never checked that customs
+      were captured. The 0 overflow columns are the proof it never happened.
+    - **TO ADDRESS:** (a) make the overflow column actually exist on the GrowthZone tables; (b) re-sync
+      and confirm `__mj_integration_CustomOverflow` is populated for records that carry custom fields;
+      (c) run/verify the post-sync promotion (`planPromotions`) mints real columns; (d) add a verification
+      rung that FAILS if an integration table lacks the overflow column or if capture/promotion didn't run.
+
+30. **Write-back NEVER BUILT — connector shipped read-only for a bidirectional product.** GrowthZone has
+    a real write surface in the docs (`POST /api/contacts`, `POST /api/contacts/{contactid}/representatives`,
+    `POST /api/events/{eventdetailid}/eventexhibitor/save`, `POST /api/directory/directories/{directoryid}`,
+    `DELETE /api/directory/directories/{directoryid}`, `DELETE /api/calendars/{calendarid}/{auditid}`, …).
+    The connector is `SupportsCreate/Update/Delete=false` on ALL 38 objects; metadata has `0` objects with
+    any `CreateAPIPath`/`UpdateAPIPath`/`DeleteAPIPath`.
+    - **ROOT CAUSE (agent under-reach):** the build's `SOURCE_STUDY.md` marked the write-capable families
+      "out-of-scope" and shipped pull-only — the PropFuel-as-3-streams failure: scoped the connector to a
+      read slice of a bidirectional system, then I repeated "pull-only" as if it were GrowthZone's nature
+      rather than a build gap, and even declared write-back testing "moot."
+    - **TO ADDRESS:** extract the real write endpoints per object from the docs; populate the per-operation
+      CRUD metadata columns (`CreateAPIPath`/`CreateMethod`/`CreateBodyShape`/`CreateBodyKey`/`CreateIDLocation`,
+      `Update*`, `Delete*`); set the capability flags true on writable objects; the generic
+      `BaseRESTIntegrationConnector` per-operation CRUD path handles execution (route create through
+      `BuildCreatedResult`). Test writes OFF-LIVE (mock) per the standing instruction — never against the
+      real tenant — and notify before any live write.
+
+### I.1 — arch-fix map additions (which stage should have caught each)
+| # | Defect | Owning stage | Why it passed green | MISSING INVARIANT |
+|---|---|---|---|---|
+| 29 | Custom-column capture no-opped (tables lack overflow col) | `ApplyAll`/schema-builder + `verification-ladder` | capture silently no-ops when column absent; no tier checks the column exists or that customs were captured | A verification rung that FAILS if any integration table lacks `__mj_integration_CustomOverflow`, OR if a sync of a custom-field-bearing source captured/promoted zero customs. Capture must not silent-no-op — log when the column is absent. |
+| 30 | Write-back never built (read-only for bidirectional product) | `source-auditor`/`connector-creator` scope | "study the full nature" violated — write families marked out-of-scope, shipped as the connector's truth | Connector-nature study must record write capability as IN-scope-by-default for a documented write API; an OutOfScope decision on write must be explicit + justified, never silent. "pull-only" must be evidenced, not assumed. |
+
+---
+
+## J. THE REAL CUSTOM-COLUMN BUG — stale nested schema-builder strips the overflow column on EVERY connector  [FW — CRITICAL]
+
+31. **`packages/MJServer/node_modules/@memberjunction/integration-schema-builder` was a STALE 11-column
+    copy** (pre-`__mj_integration_CustomOverflow`), and MJServer/MJAPI's in-process RSU loads THAT nested
+    copy — not the workspace symlink — so EVERY integration table the RSU creates comes out missing the
+    `__mj_integration_CustomOverflow` staging column. The engine's capture is gated
+    `if (hasField(CUSTOM_OVERFLOW_COLUMN))`, so with the column absent it **silently no-ops** → zero
+    custom-field capture, zero promotion, no error. This is the actual root of #29, and it is **NOT
+    GrowthZone-specific** — it silently disables custom-column capture for **every connector on every DB**.
+    - **Why it hid:** the workspace dist (`packages/Integration/schema-builder/dist`) AND the source DO
+      include the overflow column (DDLGenerator line 276, SchemaBuilder line 334 — 12 columns). Only the
+      nested `MJServer/node_modules` copy was stale (11 columns). Grepping the workspace dist showed
+      "overflow present" → looked fine; the nested copy is what actually executes. The 38 tables had
+      exactly 11 of the 12 system columns — missing only overflow — the fingerprint of this stale copy.
+    - **Why ApplyAll evolution didn't back-add it:** SchemaEvolution computes desired-vs-existing from the
+      SAME stale 11-col builder → desired==existing==11 → no diff → never adds overflow. (Once the nested
+      copy is fixed to 12-col, evolution's desired=12 vs existing=11 → it ADDS the column. Verified: a
+      re-ApplyAll after the fix put overflow on all 38 tables + registered the EntityField.)
+    - **FIX (this DB):** synced the nested copy's dist with the current 12-col workspace dist; restarted
+      MJAPI; re-ApplyAll → overflow on 38/38 tables + 38 EntityFields; sync → **capture PROVEN**: Contact
+      200/200 rows have `__mj_integration_CustomOverflow` populated with the unmapped source fields
+      (`SelectionId`, `OrganizationContactId`, `ContactType`, `ContactName`, `MembershipStatusTypeId`, …).
+    - **DURABLE FIX (framework, separate PR):** the nested stale copy is a workspace-hoisting/version-pin
+      artifact. The framework must guarantee MJServer resolves the CURRENT integration-schema-builder (dedupe
+      the nested copy, or align the version pin so npm hoists to root). A CI check should assert no stale
+      nested `@memberjunction/integration-*` copies exist under any package's `node_modules`. Until then,
+      custom-column capture is silently dead wherever this stale copy is present.
+    - **ARCH-MAP:** owning stage = framework build/deploy + `verification-ladder`. Missing invariant: a rung
+      that FAILS if a synced integration table lacks `__mj_integration_CustomOverflow`, OR if a sync of a
+      custom-field-bearing source captured 0 customs. Capture must LOG when the column is absent, never
+      silent-no-op (a silent no-op is how a CRITICAL framework regression shipped invisibly).
+
+### J.1 — Promotion runs but per-entity gate no-ops (capture proven, minting not yet)  [FW]
+
+32. **Custom-column CAPTURE is PROVEN end-to-end; PROMOTION is wired + invoked but mints 0 columns.**
+    After fixing #31 (stale nested schema-builder), a full sync captured the unmapped source fields into
+    `__mj_integration_CustomOverflow` on **452/452 Contact rows** (keys: SelectionId, OrganizationContactId,
+    ContactType, ContactName, MembershipStatusTypeId, ImageUrl, …). The post-sync promotion hook
+    (`registerIntegrationCustomColumnPromoter` → `IntegrationEngine.invokePostSyncPromotionSafe`, line 497) is
+    invoked unconditionally at sync end (verified: only skipped on abort; engine dist current; callback
+    registered at boot). Yet two consecutive full syncs minted **0** columns (Contact stayed 60 cols) and
+    emitted **no** promotion log.
+    - **Narrowed:** `PromoteForSync` loops `syncedEntityNames` and `promoteEntity` returns `[]` at one of the
+      SILENT gates (no LogError fired, so it's NOT the entity-map gate): (a) `scanOverflow` returns 0 despite
+      452 populated rows — a RunView **server-cache** stale-read is the prime suspect (the cache may hold the
+      pre-sync empty Contact result; integration writes go through sprocs that don't fire BaseEntity cache
+      invalidation — see CACHING guide); (b) `syncedEntityNames` entity-name format (`"Contacts"`) vs what
+      `result.EntityMapResults` emits; (c) `resolveWorkItems` filters all passing keys as already-present.
+      Coverage threshold (≥0.5) is NOT the gate — the keys are in 100% of rows.
+    - **To pin:** one instrumentation cycle — add a `LogStatus` at each `promoteEntity` early-return (which
+      entity, overflowRowCount, passing.length, work.length) → rebuild MJServer → restart → re-sync. ~15 min.
+      Most likely fix: `scanOverflow` must bypass the RunView cache (`BypassCache:true`) so it reads the
+      freshly-written overflow, OR the post-sync hook must invalidate the entity cache before scanning.
+    - **Status:** capture (the half that was silently DEAD framework-wide) is FIXED + PROVEN; promotion is the
+      remaining half — invoked, not yet minting. Bounded next-step, not an open hunt.
+
+    Also observed this run: the fresh-DB sync was INCOMPLETE (Contact 452 but per-contact/per-event children
+    0) — the #21 door-before-child ordering residual on a first sync (the engine ordering fix didn't fully
+    hold on this rebuild). Separate from promotion; logged for the same instrumentation pass.
+
+### J.2 — CORRECTION to #32 + promotion PROVEN minting; backfill (M3 spread) is the narrowed remainder  [FW]
+
+33. **#32 was WRONG: promotion was never "gating" — it never RAN CLEANLY because the environment was
+    broken.** Once a clean MJAPI boot + a clean Contact-only sync (no mid-sync restart) was achieved,
+    promotion fired on the FIRST try. Diag proof: `PromoteForSync syncedEntities=[Contacts]` →
+    `overflowRows=452 passing=14 work=14` → **Contact 60→74 columns**. RSU log: `Promote 14 custom
+    column(s) on Contacts`. So CAPTURE **and** PROMOTION-MINT both work end-to-end: 14 pervasive captured
+    keys (ContactName, ContactType, SelectionId, OrganizationContactId, MembershipStatusTypeId, …) became
+    REAL columns + 106 IOFs + field maps. The custom-column feature — silently dead framework-wide before
+    #31 — now captures and promotes.
+    - **What blocked the earlier passes (not promotion logic):** (a) the churned `generated.ts` crashed
+      MJAPI boot with `Parameter decorators only work when experimental decorators enabled` (905 errors) —
+      the regenerated growthzone resolvers break the tsx/esbuild transform where the committed-clean file
+      doesn't (NOT a tsconfig fix — adding experimentalDecorators directly did NOT help; it's content/cache,
+      keep generated.ts clean to boot, ApplyAll/promotion RSU re-dirties it each time); (b) **zombie runs**
+      from restarting MJAPI mid-sync (#14) blocked new syncs; (c) the post-sync hook only runs on a
+      *completed* run. The fix was sequencing: restore generated.ts clean → restart → sync → observe, with
+      NO restart during the sync.
+    - **NARROWED REMAINDER — backfill (M3 spread) doesn't populate the minted columns from EXISTING
+      overflow.** After mint, the 14 columns are NULL and the 452 overflow blobs are not cleared. The
+      promoter's M3 "spread staged values into the real columns" step did not fire/log. A plain re-sync
+      does NOT fix it — content-hash skip sees the records as unchanged and skips the re-map. So historical
+      rows' values stay in overflow; only future CHANGED records would populate the new columns via normal
+      mapping. **To pin:** the M3 spread needs the post-DDL metadata refresh to land before `row.Save()`
+      (the code's own comment warns of "spread-save failures" from a stale field list) — instrument the
+      spread block, or force-backfill by nulling `__mj_integration_ContentHash` on the rows so the next sync
+      re-writes them through the now-mapped columns. Bounded, separate from the (now-proven) mint path.
+    - **NET:** custom-columns went from SILENTLY DEAD (capture no-op, #31) → CAPTURE proven (452/452) →
+      PROMOTION-MINT proven (14 real columns). Backfill of historical values is the one remaining narrowed
+      item. The forward path (capture → promote → map) is whole.
+
+### J.3 — CORRECTION to #33's "backfill remainder": empty-columns-after-promotion is BY DESIGN (not a bug)
+
+34. **Retraction of the "backfill / M3-spread" framing in #33.** Per the design (confirmed by the user):
+    promotion is supposed to **(a) register that the new columns exist** (IOFs + field maps) and
+    **(b) run RSU to CREATE the columns (DDL)** — and **deliberately does NOT save the historical values
+    into them**. The user must then **restart the server** so the new columns are live, after which they
+    **sync in on subsequent runs** via normal field mapping (the captured values stay safe in
+    `__mj_integration_CustomOverflow` until then). So the 14 minted-but-empty columns I observed are the
+    **CORRECT intended behavior**, not a defect — I mischaracterized it as an open "M3-spread failed"
+    remainder. There is no immediate value-spread by design.
+    - The only true observation: a plain re-sync of UNCHANGED records won't fill the new columns because
+      content-hash skips them — they populate as records change/re-fetch going forward. That's
+      change-detection behavior, not a promotion gap.
+    - **Net (final, accurate):** custom-columns is WORKING end-to-end per design — CAPTURE (452/452) →
+      PROMOTION registers + RSU-creates 14 real columns + maps → restart → values sync in on subsequent
+      runs. The only actual BUG in this whole area was #31 (the stale nested schema-builder that made
+      capture silently no-op framework-wide), which is fixed.
