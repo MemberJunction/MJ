@@ -189,6 +189,36 @@
       "EvidenceStrength": "ExplicitStatement",
       "TargetField": "io.JudgeAssignment.DeleteIDLocation",
       "Excerpt": "/v2/JudgeAssignments/Round post.responses {200:{description:Success},204:{description:Assigned successfully}}; delete.parameters [judgeUserId(query),roundId(query)]; delete has no requestBody."
+    },
+    {
+      "URL": "https://www.getopenwater.com",
+      "AccessedAt": "2026-06-12T10:10:34.011Z",
+      "UsedFor": "Product nature from the vendor site + connector source-study",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Description",
+      "Excerpt": "OpenWater is an awards / grants / abstracts management platform"
+    },
+    {
+      "URL": "https://api.getopenwater.com",
+      "AccessedAt": "2026-06-12T10:10:34.011Z",
+      "UsedFor": "Default API host hard-coded as DEFAULT_BASE_URL in the OpenAPI-documented v2 surface",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "https://api.getopenwater.com (OpenWater Public API v2 base)"
+    },
+    {
+      "URL": "https://api.getopenwater.com",
+      "AccessedAt": "2026-06-12T10:10:34.011Z",
+      "UsedFor": "OpenWater authenticates with the X-ClientKey + X-ApiKey header pair; matches the seeded \"OpenWater API\" credential type",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID",
+      "Excerpt": "ClientKey / ApiKey header pair (OpenWater API credential type)"
     }
   ]
 }

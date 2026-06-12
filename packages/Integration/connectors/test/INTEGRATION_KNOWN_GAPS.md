@@ -150,3 +150,32 @@ a missing feature.
 
 > Optimizations in §3–§5 must be **correctness-equivalent** (same output, faster) and wired
 > one-at-a-time + A/B-measured, so they don't force per-connector re-testing.
+
+## 6. Custom-column promoter: minted columns don't reach the entity's UPDATE sproc in the same pass — FRAMEWORK DEFECT (found 2026-06-12, Path LMS mock-floor hybrid-e2e)
+
+The post-sync `CustomColumnPromoter` correctly detects overflow keys, mints typed columns via its
+own RSU migration (`ALTER TABLE ... ADD [endDate] DATETIMEOFFSET NULL`), and the EntityField
+metadata rows appear — but `spUpdate<Entity>` is NOT regenerated with the new parameters by the
+promoter's own in-process CodeGen pass. Every subsequent spread-save then fails with
+`@endDate is not a parameter for procedure spUpdateCourseItemView` until a FULL `mj codegen`
+is run out-of-band (after which the very next sync spreads cleanly — proven: PLMS e2e sync went
+`updated:3, spreadEnd=3/3` immediately after the repair codegen). Repro evidence:
+`/tmp/plms-mjapi*.log` runs of 2026-06-12; the promoter's RSU step list shows
+`RunCodeGen:success` yet `sys.parameters` for the update sproc lacks the minted columns.
+Suspected cause: the promoter's in-process CodeGen scopes regeneration to a diff that misses the
+just-ALTERed table (ordering or schema-cache staleness within the same process). Workaround in
+e2e: run `mj codegen` + rebuild + restart after first promotion. Fix belongs in the RSU/CodeGen
+in-process runner, NOT in any connector.
+
+## 7. Dev-mode MJAPI (tsx) cannot load a populated `src/generated/generated.ts` — run from DIST after any RSU codegen (found 2026-06-12)
+
+tsx/esbuild supports neither parameter decorators without cwd-discovered tsconfig nor
+`emitDecoratorMetadata` at all. A freshly RSU-regenerated `generated.ts` (TypeGraphQL resolvers
+with `@Arg` parameter decorators + reflection-inferred `@Field` types) therefore CANNOT be
+imported by a tsx-booted MJAPI: root-cwd boots die at transform ("Parameter decorators only work
+when experimental decorators are enabled"); packages/MJAPI-cwd boots die at runtime
+(`NoExplicitTypeError ... 'createdAt' of 'pathlmsCourseItemView_'`). Historical "working" tsx
+boots only ever loaded the 20-line stub (boot-order luck — verified: the long-running GZ MJAPI's
+schema contains NO generated resolvers). The canonical e2e boot after ApplyAll is therefore:
+`turbo build --filter=mj_api` + `npm run build` in packages/MJAPI + `node dist/index.js`
+(tsc emits full decorator metadata; the generated resolvers land in the schema — verified live).
