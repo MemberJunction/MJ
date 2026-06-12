@@ -7,8 +7,8 @@
   --sage-border: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 38%, transparent);
 }
 
-/* The surface panel fills its angular-split AREA — the overlay owns the width
-   (user drag via the split gutter, persisted per-user, default tiers). */
+/* The surface panel fills the overlay's `.call-panel` flex item — the overlay owns
+   the width (user drag via the resize handle, persisted per-user, default tiers). */
 .surface {
   position: relative;
   width: 100%;
@@ -134,6 +134,25 @@
   100% {
     background: var(--mj-bg-surface);
   }
+}
+
+/* PERSISTENT unseen glow: content arrived without stealing focus (e.g. a finished
+   artifact) — the tab breathes violet until the user visits it. */
+.s-tab--unseen {
+  color: var(--mj-color-violet-300, var(--mj-text-secondary));
+  animation: tab-unseen 2.2s ease-in-out infinite;
+}
+@keyframes tab-unseen {
+  0%, 100% { background: color-mix(in srgb, var(--sage) 6%, transparent); }
+  50% { background: color-mix(in srgb, var(--sage) 18%, transparent); }
+}
+.s-tab__unseen-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--sage);
+  box-shadow: 0 0 6px var(--sage);
 }
 
 .tabs-end {

@@ -57,8 +57,7 @@
     "@memberjunction/ng-ui-components": "5.40.2",
     "@memberjunction/ng-whiteboard": "5.40.2",
     "rxjs": "^7.8.2",
-    "tslib": "^2.8.1",
-    "angular-split": "^20.0.0"
+    "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {

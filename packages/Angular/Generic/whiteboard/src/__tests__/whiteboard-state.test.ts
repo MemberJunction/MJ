@@ -639,8 +639,8 @@ describe('user resize gesture — gate + per-kind commit (board chrome contract)
 });
 
 describe('WHITEBOARD_TOOL_DEFINITIONS', () => {
-  it('should describe all eleven channel tools with parameter schemas', () => {
-    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(11);
+  it('should describe all fourteen channel tools with parameter schemas', () => {
+    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(14);
     const names = WHITEBOARD_TOOL_DEFINITIONS.map((d) => d.Name);
     expect(names).toEqual(Object.values(WHITEBOARD_TOOL_NAMES));
     for (const def of WHITEBOARD_TOOL_DEFINITIONS) {

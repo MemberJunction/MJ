@@ -1,14 +1,16 @@
 // The whiteboard channel imports its Angular surface component (partial-compiled Angular
 // libs require the JIT compiler in this node test environment), so load the compiler FIRST.
 import '@angular/compiler';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
-import { RealtimeWhiteboardChannel } from '../lib/components/realtime/whiteboard/whiteboard-channel';
+import {
+  RealtimeWhiteboardChannel, WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS
+} from '../lib/components/realtime/whiteboard/whiteboard-channel';
 import {
   RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_PREFIX,
-  WhiteboardToolResult, WhiteboardWidgetSubmitEvent
+  WhiteboardToolResult, WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
 } from '@memberjunction/ng-whiteboard';
 
 /**
@@ -29,6 +31,7 @@ class FakeWhiteboardHost {
   public FocusModeChange = new EventEmitter<boolean>();
   public SaveToArtifactsRequested = new EventEmitter<void>();
   public WidgetSubmitted = new EventEmitter<WhiteboardWidgetSubmitEvent>();
+  public WidgetInteraction = new EventEmitter<WhiteboardWidgetInteractionEvent>();
   public AppliedTools: Array<{ ToolName: string; ArgsJson: string }> = [];
 
   public ApplyAgentTool(toolName: string, argsJson: string): string {
@@ -145,6 +148,106 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     channel.UnbindSurface();
     fake.WidgetSubmitted.emit({ ItemID: 'html-2', Title: 'Quick quiz', DataJson: '{"stale":true}' });
     expect(log.Notes).toHaveLength(2);
+  });
+
+  describe('ambient widget-interaction notes — per-widget throttle (latest wins)', () => {
+    function interaction(itemId: string, summary: string, title = 'Vibe picker'): WhiteboardWidgetInteractionEvent {
+      return { ItemID: itemId, Title: title, Summary: summary };
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('first activity in a widget sends a note IMMEDIATELY with the ambient framing', () => {
+      const fake = new FakeWhiteboardHost();
+      channel.BindSurface(asHost(fake));
+
+      fake.WidgetInteraction.emit(interaction('html-2', 'clicked "Playful pink"; changed "vibe" to "pink"'));
+      expect(log.Notes).toHaveLength(1);
+      expect(log.Notes[0]).toBe(
+        '[whiteboard] ambient activity in widget "Vibe picker" ' +
+        '(background — do NOT respond unless it is significant or you are asked; ' +
+        'explicit submissions arrive separately): clicked "Playful pink"; changed "vibe" to "pink"');
+    });
+
+    it('untitled widgets fall back to the item ID in the framing', () => {
+      const fake = new FakeWhiteboardHost();
+      channel.BindSurface(asHost(fake));
+
+      fake.WidgetInteraction.emit(interaction('html-7', 'typing in "email"', ''));
+      expect(log.Notes[0]).toContain('ambient activity in widget "html-7"');
+    });
+
+    it('within the window further activity coalesces — ONE trailing note, LATEST summary wins', () => {
+      const fake = new FakeWhiteboardHost();
+      channel.BindSurface(asHost(fake));
+
+      fake.WidgetInteraction.emit(interaction('html-2', 'first'));
+      fake.WidgetInteraction.emit(interaction('html-2', 'second'));
+      fake.WidgetInteraction.emit(interaction('html-2', 'third'));
+      expect(log.Notes).toHaveLength(1); // only the immediate first note so far
+
+      vi.advanceTimersByTime(WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS);
+      expect(log.Notes).toHaveLength(2);
+      expect(log.Notes[1]).toContain(': third'); // latest summary won
+      expect(log.Notes.some((n) => n.includes(': second'))).toBe(false);
+    });
+
+    it('the trailing send opens a NEW window — chatty widgets stay at ≤1 note per window', () => {
+      const fake = new FakeWhiteboardHost();
+      channel.BindSurface(asHost(fake));
+
+      fake.WidgetInteraction.emit(interaction('html-2', 'a'));      // sent immediately
+      fake.WidgetInteraction.emit(interaction('html-2', 'b'));      // deferred
+      vi.advanceTimersByTime(WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS); // 'b' sent
+      fake.WidgetInteraction.emit(interaction('html-2', 'c'));      // inside b's window → deferred
+      expect(log.Notes).toHaveLength(2);
+      vi.advanceTimersByTime(WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS);
+      expect(log.Notes).toHaveLength(3);
+      expect(log.Notes[2]).toContain(': c');
+    });
+
+    it('after a QUIET window expires, the next activity sends immediately again', () => {
+      const fake = new FakeWhiteboardHost();
+      channel.BindSurface(asHost(fake));
+
+      fake.WidgetInteraction.emit(interaction('html-2', 'early'));
+      vi.advanceTimersByTime(WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS + 1);
+      fake.WidgetInteraction.emit(interaction('html-2', 'late'));
+      expect(log.Notes).toHaveLength(2);
+      expect(log.Notes[1]).toContain(': late');
+    });
+
+    it('throttles PER WIDGET — concurrent widgets do not share a window', () => {
+      const fake = new FakeWhiteboardHost();
+      channel.BindSurface(asHost(fake));
+
+      fake.WidgetInteraction.emit(interaction('html-2', 'in widget two'));
+      fake.WidgetInteraction.emit(interaction('html-3', 'in widget three', 'Other'));
+      expect(log.Notes).toHaveLength(2);
+      expect(log.Notes[0]).toContain('"Vibe picker"');
+      expect(log.Notes[1]).toContain('"Other"');
+    });
+
+    it('UnbindSurface cancels pending trailing notes (nothing stale reaches the agent)', () => {
+      const fake = new FakeWhiteboardHost();
+      channel.BindSurface(asHost(fake));
+
+      fake.WidgetInteraction.emit(interaction('html-2', 'sent'));
+      fake.WidgetInteraction.emit(interaction('html-2', 'pending'));
+      channel.UnbindSurface();
+      vi.advanceTimersByTime(WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS * 2);
+      expect(log.Notes).toHaveLength(1); // the pending trailing note was canceled
+
+      // and the released surface's emitter no longer reaches the channel at all
+      fake.WidgetInteraction.emit(interaction('html-2', 'stale'));
+      expect(log.Notes).toHaveLength(1);
+    });
   });
 
   it('UnbindSurface flips back to the engine fallback and stops listening to old outputs', () => {
