@@ -6,8 +6,11 @@
 import { describe, it, expect } from 'vitest';
 import { RealtimeAudioActivity } from '@memberjunction/ai-realtime-client';
 import {
+  GateLevel,
   RealtimeAudioVisualSmoother,
   SmoothLevel,
+  AUDIO_INPUT_NOISE_GATE,
+  AUDIO_OUTPUT_NOISE_GATE,
   AUDIO_DIRECTION_HOLD_MS,
   AUDIO_PRESENCE_FLOOR,
   AUDIO_VISUAL_BIN_COUNT
@@ -102,5 +105,43 @@ describe('RealtimeAudioVisualSmoother', () => {
     const frame = s.Next(activity({ OutputLevel: AUDIO_PRESENCE_FLOOR / 10 }), 1);
     expect(frame!.Direction).toBe('none');
     expect(frame!.OutputLevel).toBeLessThan(0.1);
+  });
+});
+
+describe('noise gating (idle mic must not animate the visuals)', () => {
+  it('GateLevel: at/below the gate is TRUE silence; above it rescales soft-knee to 0..1', () => {
+    expect(GateLevel(0, AUDIO_INPUT_NOISE_GATE)).toBe(0);
+    expect(GateLevel(AUDIO_INPUT_NOISE_GATE, AUDIO_INPUT_NOISE_GATE)).toBe(0);
+    expect(GateLevel(NaN, AUDIO_INPUT_NOISE_GATE)).toBe(0);
+    expect(GateLevel(1, AUDIO_INPUT_NOISE_GATE)).toBe(1);
+    const mid = GateLevel(0.5, AUDIO_INPUT_NOISE_GATE);
+    expect(mid).toBeGreaterThan(0.4);
+    expect(mid).toBeLessThan(0.5);
+  });
+
+  it('idle mic noise (below the input gate) renders as silence: levels decay, bins decay, direction releases', () => {
+    const s = new RealtimeAudioVisualSmoother();
+    let frame = s.Next(activity({ InputLevel: 0.6, InputBins: new Array(9).fill(0.8) }), 0)!;
+    expect(frame.Direction).toBe('user');
+
+    // Mic falls back to its idle room-noise floor (non-zero, but under the gate) —
+    // the analyser keeps reporting it forever; the visuals must come to rest anyway.
+    for (let t = 1; t <= 60; t++) {
+      frame = s.Next(activity({ InputLevel: 0.05, InputBins: new Array(9).fill(0.3) }), t * 100)!;
+    }
+    expect(frame.InputLevel).toBeLessThan(0.01);
+    expect(Math.max(...frame.Bins)).toBeLessThan(0.01);
+    expect(frame.Direction).toBe('none');
+  });
+
+  it('the mic gate sits ABOVE the output gate (playback silence is true zero; mic silence is not)', () => {
+    expect(AUDIO_INPUT_NOISE_GATE).toBeGreaterThan(AUDIO_OUTPUT_NOISE_GATE);
+  });
+
+  it('real speech still passes the gate untouched in feel (fast attack from rest)', () => {
+    const s = new RealtimeAudioVisualSmoother();
+    const frame = s.Next(activity({ InputLevel: 0.5, InputBins: new Array(9).fill(0.6) }), 0)!;
+    expect(frame.InputLevel).toBeGreaterThan(0.15);
+    expect(frame.Direction).toBe('user');
   });
 });

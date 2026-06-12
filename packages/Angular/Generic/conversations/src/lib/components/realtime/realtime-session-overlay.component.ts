@@ -699,13 +699,15 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   }
 
   /**
-   * The app-bar's "Return to pure audio": steps the volatile session level back to 0
-   * (the two-way door the one-way Raise deliberately isn't) and closes any Details peek
-   * so the orb truly owns the screen again. The cross-session ratchet is untouched —
-   * the gear's `simple` density makes pure audio durable instead.
+   * The app-bar's "Pure audio": returns to the orb-only surface AND makes it stick —
+   * it sets the persisted interface density to `simple` (the same setting the gear
+   * writes), so a refresh / next call still opens pure audio. In-session reveals
+   * ("Show the conversation", T-to-type, Details) remain available and stay ephemeral;
+   * the gear's density control switches back to Standard/Pro/Auto whenever wanted.
    */
   public OnPureAudio(): void {
-    this.Disclosure.ReturnToPureAudio();
+    this.Disclosure.SetDensity('simple');
+    this.persistDisclosure(SerializeUxMilestones(this.Disclosure.Milestones));
     this.DetailsPeek = false;
     this.cdr.markForCheck();
   }
