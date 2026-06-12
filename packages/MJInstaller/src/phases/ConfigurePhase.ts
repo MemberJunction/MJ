@@ -125,7 +125,7 @@ export class ConfigurePhase {
       const patchedRootEnv = this.ensureEnvVar(
         existingRootEnv,
         'MJ_BASE_ENCRYPTION_KEY',
-        config.BaseEncryptionKey ?? ''
+        config.BaseEncryptionKey
       );
 
       if (patchedRootEnv !== existingRootEnv) {
@@ -142,10 +142,15 @@ export class ConfigurePhase {
         filesWritten.push(mjapiEnvPath);
       } else if (await this.fileSystem.FileExists(mjapiEnvPath)) {
         const existingMjapiEnv = await this.fileSystem.ReadText(mjapiEnvPath);
-        const patchedMjapiEnv = this.ensureEnvVar(
-          existingMjapiEnv,
+        // Sync DB/auth fields from root to MJAPI — root is the canonical source
+        // of database settings (anyone editing them edits root). Without this,
+        // MJAPI keeps the original values from initial install and silently
+        // fails to connect when the user updates root .env.
+        let patchedMjapiEnv = this.syncEnvFieldsFromRoot(existingMjapiEnv, patchedRootEnv);
+        patchedMjapiEnv = this.ensureEnvVar(
+          patchedMjapiEnv,
           'MJ_BASE_ENCRYPTION_KEY',
-          config.BaseEncryptionKey ?? ''
+          config.BaseEncryptionKey
         );
 
         if (patchedMjapiEnv !== existingMjapiEnv) {
@@ -206,6 +211,15 @@ export class ConfigurePhase {
     const envFilesResult = await this.updateExplorerEnvironments(context.Dir, config, emitter, overwrite);
     filesWritten.push(...envFilesResult.Written);
     filesPreserved.push(...envFilesResult.Preserved);
+
+    // Step 4b: Explorer ng serve port — patch the start script if ExplorerPort
+    // differs from Angular's default (4200). Without this, `ng serve` ignores
+    // the user's configured port and the dev server collides with anything
+    // else on 4200.
+    const explorerPortPatched = await this.patchExplorerNgServePort(context.Dir, config);
+    if (explorerPortPatched) {
+      filesWritten.push(explorerPortPatched);
+    }
 
     // Auth-not-configured warning — more specific than the generic defaults warning
     if (config.AuthProvider === 'none') {
@@ -402,6 +416,14 @@ export class ConfigurePhase {
    */
   private async writeEnvFile(envPath: string, config: InstallConfig): Promise<void> {
     const trustCert = config.DatabaseTrustCert ? 'DB_TRUST_SERVER_CERTIFICATE=1' : '';
+    // Accept both internal-shape (`ClientID`, `TenantID`, ...) and user-facing
+    // shape (`CLIENT_ID`, `TENANT_ID`, ...) keys in AuthProviderValues — see
+    // generateEnvironmentFile() for rationale.
+    const authValues = config.AuthProviderValues ?? {};
+    const clientId = authValues.CLIENT_ID ?? authValues.ClientID ?? '';
+    const tenantId = authValues.TENANT_ID ?? authValues.TenantID ?? '';
+    const clientSecret = authValues.AUTH0_CLIENT_SECRET ?? authValues.ClientSecret ?? '';
+    const auth0Domain = authValues.AUTH0_DOMAIN ?? authValues.Domain ?? '';
 
     const content = `#Database Setup
 DB_HOST='${config.DatabaseHost}'
@@ -420,7 +442,7 @@ OUTPUT_CODE='${config.DatabaseName}'
 MJ_CORE_SCHEMA='__mj'
 
 # Encryption key for MJ field-level encryption (base64-encoded, 256-bit)
-MJ_BASE_ENCRYPTION_KEY='${config.BaseEncryptionKey ?? ''}'
+MJ_BASE_ENCRYPTION_KEY='${config.BaseEncryptionKey}'
 
 # AI API Keys
 AI_VENDOR_API_KEY__OpenAILLM='${config.OpenAIKey ?? ''}'
@@ -433,13 +455,13 @@ UPDATE_USER_CACHE_WHEN_NOT_FOUND=1
 UPDATE_USER_CACHE_WHEN_NOT_FOUND_DELAY=5000
 
 # AUTHENTICATION SECTION
-WEB_CLIENT_ID=${config.AuthProviderValues?.ClientID ?? ''}
-TENANT_ID=${config.AuthProviderValues?.TenantID ?? ''}
+WEB_CLIENT_ID=${clientId}
+TENANT_ID=${tenantId}
 
 # Auth0 Section
-AUTH0_CLIENT_ID=${config.AuthProviderValues?.ClientID ?? ''}
-AUTH0_CLIENT_SECRET=${config.AuthProviderValues?.ClientSecret ?? ''}
-AUTH0_DOMAIN=${config.AuthProviderValues?.Domain ?? ''}
+AUTH0_CLIENT_ID=${clientId}
+AUTH0_CLIENT_SECRET=${clientSecret}
+AUTH0_DOMAIN=${auth0Domain}
 
 # Skip API
 ASK_SKIP_API_URL='http://localhost:8000'
@@ -457,12 +479,17 @@ ASK_SKIP_ORGANIZATION_ID=1
    * @param config - Fully resolved config.
    */
   private async writeMjConfigCjs(configPath: string, config: InstallConfig, resolvedVersion?: string): Promise<void> {
+    // codegen-lib's newUserSetupSchema requires PascalCase keys
+    // (UserName/FirstName/LastName/Email). Writing camelCase here causes the
+    // entire mj.config.cjs to fail schema validation in codegen-lib, leaving
+    // configInfo as {} — which then surfaces as "config.server is required"
+    // when codegen tries to build the SQL connection.
     const newUserSection = config.CreateNewUser
       ? `  newUserSetup: {
-    userName: '${config.CreateNewUser.Username}',
-    firstName: '${config.CreateNewUser.FirstName}',
-    lastName: '${config.CreateNewUser.LastName}',
-    email: '${config.CreateNewUser.Email}',
+    UserName: '${config.CreateNewUser.Username}',
+    FirstName: '${config.CreateNewUser.FirstName}',
+    LastName: '${config.CreateNewUser.LastName}',
+    Email: '${config.CreateNewUser.Email}',
   },
 `
       : '';
@@ -506,10 +533,10 @@ ${versionSection}${newUserSection}  output: [],
     newUser: NonNullable<InstallConfig['CreateNewUser']>
   ): string {
     const newUserBlock = `newUserSetup: {
-    userName: '${newUser.Username}',
-    firstName: '${newUser.FirstName}',
-    lastName: '${newUser.LastName}',
-    email: '${newUser.Email}',
+    UserName: '${newUser.Username}',
+    FirstName: '${newUser.FirstName}',
+    LastName: '${newUser.LastName}',
+    Email: '${newUser.Email}',
   }`;
 
     // Try to replace existing newUserSetup block
@@ -612,6 +639,143 @@ ${versionSection}${newUserSection}  output: [],
 
     const suffix = content.endsWith('\n') ? '' : '\n';
     return `${content}${suffix}${name}='${value}'\n`;
+  }
+
+  /**
+   * Patch `apps/MJExplorer/package.json` (or `packages/MJExplorer/package.json`)
+   * to inject `--port <ExplorerPort>` into the `start` script when ExplorerPort
+   * differs from Angular's default (4200). Without this patch, `ng serve`
+   * always binds to 4200 regardless of what the user configured.
+   *
+   * Returns the path of the patched file when a write occurred, otherwise null.
+   */
+  private async patchExplorerNgServePort(
+    dir: string,
+    config: PartialInstallConfig
+  ): Promise<string | null> {
+    const explorerPort = config.ExplorerPort;
+    if (explorerPort === undefined || explorerPort === 4200) return null;
+
+    const candidates = [
+      path.join(dir, 'apps', 'MJExplorer', 'package.json'),
+      path.join(dir, 'packages', 'MJExplorer', 'package.json'),
+    ];
+    const pkgPath = await this.firstExisting(candidates);
+    if (!pkgPath) return null;
+
+    const raw = await this.fileSystem.ReadText(pkgPath);
+    const pkg: { scripts?: Record<string, string> } = JSON.parse(raw);
+
+    if (!pkg.scripts) return null;
+    const portArg = `--port ${explorerPort}`;
+    // Match `ng serve` as a whole-word token so `echo "ng serve"` or
+    // `do-not-ng-serve` don't get falsely patched. The `\b` on the right
+    // accepts space, end-of-string, or any non-word character.
+    const ngServeRe = /\bng\s+serve\b/;
+    // Match `--port <token>` (numeric OR non-numeric) so a script that
+    // already declares any --port (even a typo'd one) is left alone — the
+    // user's explicit choice wins over our override.
+    const explicitPortRe = /--port[\s=]+\S+/;
+    let touched = false;
+    for (const scriptName of Object.keys(pkg.scripts)) {
+      const script = pkg.scripts[scriptName];
+      if (typeof script !== 'string') continue;
+      if (!ngServeRe.test(script)) continue;
+      if (explicitPortRe.test(script)) continue;
+      pkg.scripts[scriptName] = `${script} ${portArg}`;
+      touched = true;
+    }
+    if (!touched) return null;
+
+    // Preserve the original file's indentation (2-space, 4-space, or tab).
+    // Without this, repeated writes would normalize the file's whitespace.
+    const indent = this.detectJsonIndent(raw);
+    const trailingNewline = raw.endsWith('\n') ? '\n' : '';
+    await this.fileSystem.WriteText(pkgPath, JSON.stringify(pkg, null, indent) + trailingNewline);
+    return pkgPath;
+  }
+
+  /**
+   * Detect the indentation a JSON file uses by inspecting the first
+   * indented line. Returns the raw indent string (e.g., `"  "`, `"    "`,
+   * `"\t"`). Falls back to two spaces when no indentation can be detected.
+   */
+  private detectJsonIndent(content: string): string {
+    const match = content.match(/\n([ \t]+)/);
+    return match ? match[1] : '  ';
+  }
+
+  /** Return the first path in the list that exists on disk, or null. */
+  private async firstExisting(candidates: string[]): Promise<string | null> {
+    for (const candidate of candidates) {
+      if (await this.fileSystem.FileExists(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  /**
+   * Keys that should be kept in sync between the root `.env` and
+   * `apps/MJAPI/.env` (or `packages/MJAPI/.env`). The user typically edits
+   * the root file when adjusting database credentials post-install; without
+   * propagating those edits to the MJAPI-local copy, MJAPI silently keeps
+   * connecting to the original (often wrong) target.
+   *
+   * Keep this list focused on cross-file invariants — anything truly
+   * MJAPI-specific (e.g., GRAPHQL_PORT overrides, MJAPI-only auth keys)
+   * should stay where it is.
+   */
+  private static readonly ROOT_TO_MJAPI_SYNC_KEYS: ReadonlyArray<string> = Object.freeze([
+    'DB_HOST', 'DB_PORT', 'DB_DATABASE',
+    'DB_USERNAME', 'DB_PASSWORD',
+    'CODEGEN_DB_USERNAME', 'CODEGEN_DB_PASSWORD',
+    'DB_TRUST_SERVER_CERTIFICATE',
+    'MJ_CORE_SCHEMA',
+  ]);
+
+  /**
+   * Update the MJAPI .env's shared keys (database credentials, schema) to
+   * match the root .env. Returns the patched MJAPI content. Keys not present
+   * in the root are left untouched; keys present in root but not in MJAPI
+   * are appended. Keys MJAPI-only (e.g., ASK_SKIP_API_URL) are preserved.
+   */
+  private syncEnvFieldsFromRoot(mjapiContent: string, rootContent: string): string {
+    let result = mjapiContent;
+    for (const key of ConfigurePhase.ROOT_TO_MJAPI_SYNC_KEYS) {
+      const rootValue = this.extractEnvValue(rootContent, key);
+      if (rootValue === undefined) continue;
+      result = this.replaceOrAppendEnvVar(result, key, rootValue);
+    }
+    return result;
+  }
+
+  /**
+   * Extract a single env var's raw value from dotenv-style content.
+   * Returns the value with surrounding quotes stripped, or undefined if absent.
+   */
+  private extractEnvValue(content: string, name: string): string | undefined {
+    const pattern = new RegExp(`^\\s*${name}\\s*=\\s*(.*?)\\s*$`, 'm');
+    const match = content.match(pattern);
+    if (!match) return undefined;
+    let value = match[1];
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    return value;
+  }
+
+  /**
+   * Replace an existing `NAME=...` line with the new value, or append it
+   * if absent. Preserves the rest of the file as-is. Uses single-quoted
+   * form to match the rest of the .env file's convention.
+   */
+  private replaceOrAppendEnvVar(content: string, name: string, value: string): string {
+    const pattern = new RegExp(`^\\s*${name}\\s*=.*$`, 'm');
+    const newLine = `${name}='${value}'`;
+    if (pattern.test(content)) {
+      return content.replace(pattern, newLine);
+    }
+    const suffix = content.endsWith('\n') ? '' : '\n';
+    return `${content}${suffix}${newLine}\n`;
   }
 
   // ---------------------------------------------------------------------------
@@ -725,12 +889,19 @@ ${versionSection}${newUserSection}  output: [],
    */
   private generateEnvironmentFile(config: InstallConfig, production: boolean): string {
     const authType = this.mapAuthType(config.AuthProvider);
-    const clientId = config.AuthProviderValues?.ClientID ?? '';
-    const tenantId = config.AuthProviderValues?.TenantID ?? '';
+    // Accept both internal-shape keys (`ClientID`, `TenantID`, `Domain`) and
+    // user-facing shape keys (`CLIENT_ID`, `TENANT_ID`, `AUTH0_DOMAIN`).
+    // Interactive prompts and env vars populate the internal shape; an
+    // install.config.json author would naturally type the underscored shape
+    // that matches `.env` and `environment.ts` conventions, so we have to
+    // read either.
+    const values = config.AuthProviderValues ?? {};
+    const clientId = values.CLIENT_ID ?? values.ClientID ?? '';
+    const tenantId = values.TENANT_ID ?? values.TenantID ?? '';
     const authority = tenantId
       ? `https://login.microsoftonline.com/${tenantId}`
       : '';
-    const auth0Domain = config.AuthProviderValues?.Domain ?? '';
+    const auth0Domain = values.AUTH0_DOMAIN ?? values.Domain ?? '';
     const apiPort = config.APIPort ?? 4000;
     const explorerPort = config.ExplorerPort ?? 4200;
     const redirectUri = `http://localhost:${explorerPort}`;
@@ -854,12 +1025,16 @@ ${versionSection}${newUserSection}  output: [],
     let content = await this.fileSystem.ReadText(filePath);
     const original = content;
 
-    const clientId = config.AuthProviderValues?.ClientID ?? '';
-    const tenantId = config.AuthProviderValues?.TenantID ?? '';
+    // Accept both internal-shape keys (`ClientID`, `TenantID`, `Domain`) and
+    // user-facing shape keys (`CLIENT_ID`, `TENANT_ID`, `AUTH0_DOMAIN`) — see
+    // generateEnvironmentFile() for the rationale.
+    const values = config.AuthProviderValues ?? {};
+    const clientId = values.CLIENT_ID ?? values.ClientID ?? '';
+    const tenantId = values.TENANT_ID ?? values.TenantID ?? '';
     const authority = tenantId
       ? `https://login.microsoftonline.com/${tenantId}`
       : '';
-    const auth0Domain = config.AuthProviderValues?.Domain ?? '';
+    const auth0Domain = values.AUTH0_DOMAIN ?? values.Domain ?? '';
     const apiPort = config.APIPort ?? 4000;
     const explorerPort = config.ExplorerPort ?? 4200;
     const authType = this.mapAuthType(config.AuthProvider);
@@ -877,15 +1052,42 @@ ${versionSection}${newUserSection}  output: [],
       AUTH0_CLIENTID: clientId,
     };
 
+    // URL fields where the scaffold writes a non-empty default (`localhost:4000`
+    // for GraphQL, `localhost:4200` for the Explorer redirect). When the user
+    // configures a different port, those scaffold defaults need to be
+    // overwritten — not just empty-string patched. Any OTHER existing value
+    // (custom hostname, https://, etc.) is presumed dev-customized and is
+    // preserved.
+    const scaffoldDefaultURLs: Record<string, RegExp> = {
+      GRAPHQL_URI:    /^https?:\/\/localhost:4000\/?$/,
+      GRAPHQL_WS_URI: /^wss?:\/\/localhost:4000\/?$/,
+      REDIRECT_URI:   /^https?:\/\/localhost:4200\/?$/,
+    };
+
     for (const [field, value] of Object.entries(patches)) {
       if (!value) continue;
-      // Match: "FIELD": "" or "FIELD": '' or FIELD: "" or FIELD: ''
-      // Only patches empty values — preserves any dev-customized values.
+
+      // 1. Empty-value patch — fills in fields the scaffold left blank.
       const emptyPattern = new RegExp(
         `(["']?${field}["']?\\s*[:=]\\s*)(?:["']{2}|["']\\s*["'])`,
       );
       if (emptyPattern.test(content)) {
         content = content.replace(emptyPattern, `$1'${value}'`);
+        continue;
+      }
+
+      // 2. Scaffold-default URL overwrite — replaces only the precise
+      //    `localhost:4000` / `localhost:4200` defaults, never user-edited
+      //    URLs (different host, https, etc.).
+      const scaffoldDefault = scaffoldDefaultURLs[field];
+      if (scaffoldDefault) {
+        const valuedPattern = new RegExp(
+          `(["']?${field}["']?\\s*[:=]\\s*["'])([^"']*)(["'])`,
+        );
+        const match = content.match(valuedPattern);
+        if (match && scaffoldDefault.test(match[2])) {
+          content = content.replace(valuedPattern, `$1${value}$3`);
+        }
       }
     }
 

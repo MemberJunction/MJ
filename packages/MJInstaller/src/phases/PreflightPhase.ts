@@ -24,6 +24,7 @@
 
 import os from 'node:os';
 import net from 'node:net';
+import path from 'node:path';
 import type { InstallerEventEmitter, DiagnosticEvent } from '../events/InstallerEvents.js';
 import type { PartialInstallConfig } from '../models/InstallConfig.js';
 import { InstallerError } from '../errors/InstallerError.js';
@@ -142,7 +143,7 @@ export class PreflightPhase {
 
     if (!context.SkipDB) {
       emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: 'Checking SQL Server connectivity...' });
-      const sqlCheck = await this.checkSqlConnectivity(context.Config);
+      const sqlCheck = await this.checkSqlConnectivity(context.Config, context.TargetDir);
       diagnostics.AddCheck(sqlCheck);
       this.emitDiagnostic(emitter, sqlCheck);
       if (sqlCheck.Status === 'fail') hardFailures.push(sqlCheck.Message);
@@ -343,9 +344,19 @@ export class PreflightPhase {
     });
   }
 
-  private async checkSqlConnectivity(config: PartialInstallConfig): Promise<DiagnosticCheck> {
-    const host = config.DatabaseHost ?? 'localhost';
-    const port = config.DatabasePort ?? 1433;
+  /**
+   * Check SQL Server connectivity at the target host/port.
+   *
+   * Resolution order for host/port:
+   *   1. `.env` in `targetDir` (when present) — this is what MJAPI will actually use at runtime.
+   *      Reading .env here keeps `mj doctor` honest: it reports on the same SQL Server the app talks to.
+   *   2. Explicit `config.DatabaseHost` / `config.DatabasePort` from `--config` or env vars.
+   *   3. Defaults (`localhost:1433`).
+   */
+  private async checkSqlConnectivity(config: PartialInstallConfig, targetDir?: string): Promise<DiagnosticCheck> {
+    const envValues = targetDir ? await this.readEnvDbTarget(targetDir) : null;
+    const host = envValues?.host ?? config.DatabaseHost ?? 'localhost';
+    const port = envValues?.port ?? config.DatabasePort ?? 1433;
 
     const result = await this.sqlAdapter.CheckConnectivity(host, port);
 
@@ -363,6 +374,52 @@ export class PreflightPhase {
       Message: result.ErrorMessage ?? `Cannot reach SQL Server at ${host}:${port}`,
       SuggestedFix: `Ensure SQL Server is running and accessible at ${host}:${port}. Use --skip-db to skip database checks.`,
     };
+  }
+
+  /**
+   * Best-effort read of `<targetDir>/.env` to extract `DB_HOST` and `DB_PORT`.
+   * Returns null when no `.env` exists, isn't readable, or neither key is set;
+   * this lets the caller fall back to config defaults without special-casing
+   * failures. Any read or parse error is treated as "no override available."
+   */
+  private async readEnvDbTarget(targetDir: string): Promise<{ host?: string; port?: number } | null> {
+    const envPath = path.join(targetDir, '.env');
+    try {
+      if (!(await this.fileSystem.FileExists(envPath))) return null;
+      const raw = await this.fileSystem.ReadText(envPath);
+      if (typeof raw !== 'string' || raw.length === 0) return null;
+      const host = this.parseDotenvValue(raw, 'DB_HOST');
+      const portStr = this.parseDotenvValue(raw, 'DB_PORT');
+      const port = portStr ? parseInt(portStr, 10) : undefined;
+
+      if (host || (port !== undefined && Number.isFinite(port))) {
+        return { host: host ?? undefined, port: Number.isFinite(port) ? port : undefined };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Minimal dotenv-style key extractor — handles `KEY=value`, `KEY='value'`,
+   * `KEY="value"`, ignores `#` comments and blank lines. Sufficient for the
+   * small handful of keys we read here; we don't pull in a full dotenv parser.
+   */
+  private parseDotenvValue(content: string, key: string): string | undefined {
+    const lines = content.split(/\r?\n/);
+    const pattern = new RegExp(`^\\s*${key}\\s*=\\s*(.*?)\\s*$`);
+    for (const line of lines) {
+      if (line.trim().startsWith('#')) continue;
+      const match = line.match(pattern);
+      if (!match) continue;
+      let value = match[1];
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      return value || undefined;
+    }
+    return undefined;
   }
 
   private detectOS(): 'windows' | 'macos' | 'linux' | 'other' {

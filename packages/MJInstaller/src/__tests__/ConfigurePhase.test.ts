@@ -252,6 +252,57 @@ describe('ConfigurePhase', () => {
       expect(mjapiEnvContent).toContain("MJ_BASE_ENCRYPTION_KEY='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='");
     });
 
+    it('should sync DB_HOST/DB_PORT from root .env into existing MJAPI .env (Bug 5 fix)', async () => {
+      // Both root and MJAPI .env exist; MJAPI has stale DB values
+      mockFs.FileExists.mockResolvedValue(true);
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const rootEnv = [
+        "DB_HOST='docker-sql'",
+        'DB_PORT=1444',
+        "DB_USERNAME='sa'",
+        "DB_PASSWORD='Strong!Pass'",
+        "MJ_BASE_ENCRYPTION_KEY='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='",
+        '',
+      ].join('\n');
+      const mjapiEnv = [
+        "DB_HOST='localhost'",
+        'DB_PORT=1433',
+        "DB_USERNAME='MJ_Connect'",
+        "DB_PASSWORD=''",
+        "ASK_SKIP_API_URL='http://localhost:8000'",  // MJAPI-only key — must survive
+        '',
+      ].join('\n');
+
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (p.includes('MJAPI') && p.endsWith('.env')) return mjapiEnv;
+        if (p.endsWith('.env')) return rootEnv;
+        return '';
+      });
+
+      const ctx = makeContext({ Yes: true });
+      const result = await phase.Run(ctx);
+
+      const mjapiEnvWritten = result.FilesWritten.find((f: string) => f.includes('MJAPI') && f.endsWith('.env'));
+      expect(mjapiEnvWritten).toBeDefined();
+
+      const writtenContent = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.includes('MJAPI') && p.endsWith('.env')
+      )?.[1] as string;
+
+      // DB fields should match root .env, not the original MJAPI values
+      expect(writtenContent).toContain("DB_HOST='docker-sql'");
+      expect(writtenContent).toContain("DB_PORT='1444'");
+      expect(writtenContent).toContain("DB_USERNAME='sa'");
+      expect(writtenContent).toContain("DB_PASSWORD='Strong!Pass'");
+      // MJAPI-only key should survive
+      expect(writtenContent).toContain("ASK_SKIP_API_URL='http://localhost:8000'");
+      // Original wrong DB values should be gone
+      expect(writtenContent).not.toContain("DB_HOST='localhost'");
+      expect(writtenContent).not.toContain("DB_USERNAME='MJ_Connect'");
+    });
+
     it('should not overwrite existing mj.config.cjs', async () => {
       mockFs.FileExists.mockImplementation(async (path: string) => {
         if (path.endsWith('mj.config.cjs')) return true;
@@ -340,10 +391,10 @@ describe('ConfigurePhase', () => {
       );
       expect(configWriteCall).toBeDefined();
       const patchedContent = configWriteCall![1];
-      expect(patchedContent).toContain("userName: 'jdoe'");
-      expect(patchedContent).toContain("email: 'jdoe@example.com'");
-      expect(patchedContent).toContain("firstName: 'John'");
-      expect(patchedContent).toContain("lastName: 'Doe'");
+      expect(patchedContent).toContain("UserName: 'jdoe'");
+      expect(patchedContent).toContain("Email: 'jdoe@example.com'");
+      expect(patchedContent).toContain("FirstName: 'John'");
+      expect(patchedContent).toContain("LastName: 'Doe'");
     });
   });
 
@@ -385,8 +436,8 @@ describe('ConfigurePhase', () => {
       );
       expect(configWriteCall).toBeDefined();
       const content = configWriteCall![1];
-      expect(content).toContain("userName: 'new@example.com'");
-      expect(content).not.toContain("userName: 'old@example.com'");
+      expect(content).toContain("UserName: 'new@example.com'");
+      expect(content).not.toContain("UserName: 'old@example.com'");
     });
 
     it('should insert newUserSetup before closing }; when no existing block', async () => {
@@ -418,7 +469,7 @@ describe('ConfigurePhase', () => {
       );
       expect(configWriteCall).toBeDefined();
       const content = configWriteCall![1];
-      expect(content).toContain("userName: 'inserted@example.com'");
+      expect(content).toContain("UserName: 'inserted@example.com'");
       expect(content).toContain('};'); // closing still present
     });
   });
@@ -463,6 +514,87 @@ describe('ConfigurePhase', () => {
       // Existing environment files should NOT be in FilesWritten
       const envTsWritten = result.FilesWritten.some(f => f.endsWith('environment.ts'));
       expect(envTsWritten).toBe(false);
+    });
+
+    it('should patch MJExplorer package.json start script with --port when ExplorerPort != 4200 (Bug 7 fix)', async () => {
+      const startScriptBefore = 'cross-env NODE_OPTIONS=--max-old-space-size=16384 ng serve';
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockImplementation(async (p: string) => p.includes('MJExplorer') && p.endsWith('package.json'));
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (p.includes('MJExplorer') && p.endsWith('package.json')) {
+          return JSON.stringify({
+            name: 'mj_explorer',
+            scripts: {
+              start: startScriptBefore,
+              'start:stage': `${startScriptBefore} --configuration staging`,
+              build: 'ng build',
+            },
+          });
+        }
+        return '';
+      });
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const ctx = makeContext({
+        Config: { ...sampleConfig(), ExplorerPort: 4210 },
+        Yes: true,
+      });
+      const result = await phase.Run(ctx);
+
+      const writeCall = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.includes('MJExplorer') && p.endsWith('package.json')
+      );
+      expect(writeCall).toBeDefined();
+      const written = JSON.parse(writeCall![1]);
+      expect(written.scripts.start).toContain('--port 4210');
+      expect(written.scripts['start:stage']).toContain('--port 4210');
+      // Non-ng-serve scripts should NOT be touched
+      expect(written.scripts.build).toBe('ng build');
+      expect(result.FilesWritten.some((f: string) => f.includes('MJExplorer') && f.endsWith('package.json'))).toBe(true);
+    });
+
+    it('should NOT patch start script when ExplorerPort is 4200 (default)', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockResolvedValue(false);
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const ctx = makeContext({
+        Config: { ...sampleConfig(), ExplorerPort: 4200 },
+        Yes: true,
+      });
+      await phase.Run(ctx);
+
+      // No package.json should have been written for MJExplorer
+      const explorerPkgWrite = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.includes('MJExplorer') && p.endsWith('package.json')
+      );
+      expect(explorerPkgWrite).toBeUndefined();
+    });
+
+    it('should NOT patch when start script already declares --port', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockImplementation(async (p: string) => p.includes('MJExplorer') && p.endsWith('package.json'));
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (p.includes('MJExplorer') && p.endsWith('package.json')) {
+          return JSON.stringify({
+            name: 'mj_explorer',
+            scripts: { start: 'ng serve --port 9999' },
+          });
+        }
+        return '';
+      });
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const ctx = makeContext({
+        Config: { ...sampleConfig(), ExplorerPort: 4210 },
+        Yes: true,
+      });
+      await phase.Run(ctx);
+
+      const writeCall = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.includes('MJExplorer') && p.endsWith('package.json')
+      );
+      expect(writeCall).toBeUndefined();
     });
 
     it('should emit warn when Explorer directory cannot be found', async () => {
