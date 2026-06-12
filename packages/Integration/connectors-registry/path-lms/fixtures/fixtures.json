@@ -1,0 +1,74 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "Token": "fixture-token"
+  },
+  "Objects": [
+    {
+      "Name": "CourseItemView"
+    }
+  ],
+  "Routes": [
+    {
+      "Path": "/graphql",
+      "Method": "POST",
+      "BodyContains": "courseItemViewsReport",
+      "Status": 200,
+      "Body": {
+        "data": {
+          "courseItemViewsReport": [
+            {
+              "courseId": "course-1",
+              "itemViews": [
+                {
+                  "id": "iv-1001",
+                  "name": "Module 1 Video",
+                  "type": "Video",
+                  "createdAt": "2026-01-10",
+                  "userVisitsCount": 14,
+                  "startDate": "2026-01-01",
+                  "endDate": "2026-02-01",
+                  "credits": null
+                },
+                {
+                  "id": "iv-1002",
+                  "name": "Module 1 Quiz",
+                  "type": "Assessment",
+                  "createdAt": "2026-01-12",
+                  "userVisitsCount": 9,
+                  "startDate": "2026-01-01",
+                  "endDate": "2026-02-01",
+                  "credits": null
+                }
+              ]
+            },
+            {
+              "courseId": "course-2",
+              "itemViews": [
+                {
+                  "id": "iv-2001",
+                  "name": "Welcome Deck",
+                  "type": "Presentation",
+                  "createdAt": "2026-02-03",
+                  "userVisitsCount": 3,
+                  "startDate": "2026-02-01",
+                  "endDate": "2026-03-01",
+                  "credits": null
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "Path": "/graphql",
+      "Method": "POST",
+      "Status": 200,
+      "Body": {
+        "data": {}
+      }
+    }
+  ]
+}
