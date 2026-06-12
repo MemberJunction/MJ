@@ -101,6 +101,9 @@ function readClassNameFromRegistry(connector: string): RegistryIdentity | null {
         resolve(connectorDir, 'metadata/integrations', connector, `.${connector}.integration.json`),
         resolve(connectorDir, `.${connector}.integration.json`),
         resolve(connectorDir, `.${connector}.json`),
+        // The curated metadata tree is the actual SOT — registry dirs may carry only
+        // build artifacts (provenance/fixtures) without duplicating the integration file.
+        resolve(REPO_ROOT, 'metadata', 'integrations', connector, `.${connector}.integration.json`),
     ];
     for (const path of candidates) {
         if (!existsSync(path)) continue;
@@ -337,6 +340,10 @@ async function seedEngineCache(companyIntegration) {
       for (const k of Object.keys(row)) {
         const v = row[k];
         if (typeof v === 'string' && (v.startsWith('@lookup:') || v.startsWith('@parent:'))) row[k] = null;
+        // Metadata files may carry Configuration as a JSON OBJECT; the entity column (and every
+        // connector's parser) expects a STRING. Without this, AccessPath/door configs silently
+        // vanish in replay and embedded objects fall back to their non-fetchable APIPath.
+        else if (k === 'Configuration' && v != null && typeof v === 'object') row[k] = JSON.stringify(v);
       }
       return row;
     };
@@ -465,7 +472,11 @@ async function setupTransport(manifest) {
             ?? pathMatches.find((r) => !r.BodyContains);
         if (route == null && pathMatches.length === 0) route = _matchRoute(routes, u.pathname, req.method);
         res.setHeader('content-type', 'application/json');
-        if (!route) { res.statusCode = 404; res.end(JSON.stringify({ error: 'no fixture for ' + u.pathname })); return; }
+        if (!route) {
+          // Surface mismatches: a 404 here is ALWAYS a fixture/path divergence worth seeing.
+          process.stderr.write('[tier-mock] 404 ' + req.method + ' ' + u.pathname + '\\n');
+          res.statusCode = 404; res.end(JSON.stringify({ error: 'no fixture for ' + u.pathname })); return;
+        }
         res.statusCode = route.Status || 200;
         const headers = route.Headers || {};
         for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
@@ -487,7 +498,23 @@ async function setupTransport(manifest) {
     setRoutes(next) { routes = next || []; },
     setFileContent() {},
     wireBaseURL(connector) {
-      if (typeof connector.GetBaseURL === 'function') { const orig = connector.GetBaseURL; connector.GetBaseURL = function () { return baseURL; }; return orig; }
+      // Swap only the ORIGIN (scheme+host) to the mock, PRESERVING the connector's own
+      // path construction — e.g. PropFuel's GetBaseURL returns <host>/dataexport/<acct>;
+      // the old blunt override (return baseURL verbatim) silently amputated that tenant
+      // segment and the child then hit bare /list (or worse, fell through to the REAL host).
+      if (typeof connector.GetBaseURL === 'function') {
+        const orig = connector.GetBaseURL;
+        connector.GetBaseURL = function (...args) {
+          let origResult;
+          try { origResult = orig.apply(this, args); } catch (e) { return baseURL; }
+          try {
+            const u = new URL(String(origResult));
+            const mock = new URL(baseURL);
+            return mock.origin + (u.pathname === '/' ? '' : u.pathname) + u.search;
+          } catch (e) { return baseURL; }
+        };
+        return orig;
+      }
       return null;
     },
     teardown() { try { server.close(); } catch (e) {} },

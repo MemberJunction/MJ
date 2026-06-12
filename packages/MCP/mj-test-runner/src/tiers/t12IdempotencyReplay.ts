@@ -97,7 +97,13 @@ export function runT12IdempotencyReplay(connector: string, identity: ConnectorId
         };
     }
 
-    return evaluateT12(connector, identity, outcome.parsed.data ?? {}, Warnings, Source);
+    const result = evaluateT12(connector, identity, outcome.parsed.data ?? {}, Warnings, Source);
+    // Failure observability: the child's stderr carries the tier-mock 404 log and any
+    // connector console noise — without it a failing replay is undiagnosable from the verdict.
+    if (result.Status === 'Fail' && outcome.stderr.trim()) {
+        result.Errors = [...(result.Errors ?? []), `child stderr: ${clipStderr(outcome.stderr)}`];
+    }
+    return result;
 }
 
 /** Build the pass/fail verdict from the child's per-object two-pass outcomes. */
