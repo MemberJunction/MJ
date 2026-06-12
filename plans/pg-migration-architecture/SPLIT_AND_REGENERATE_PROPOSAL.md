@@ -1,10 +1,86 @@
-# Split-and-Regenerate: a deterministic PG migration path
+# Driving PG migrations: the split-and-regenerate path
 
-**Status:** Proposal — for review by the build engineer, Amith, and whoever owns the release pipeline.
-**Supersedes:** the conversion strategy in `ARCHITECTURE_PLAN.md` for *new* migrations. Does **not** touch already-committed `.pg.sql` files.
-**One-line thesis:** Stop regex-translating the 80–100% of every migration that a machine generated. Regenerate it natively on PG instead, and translate only the small, regular hand-written remainder.
+Replaces the `/pg-migrate` skill. Same goal — a fresh PostgreSQL database matching SQL Server — but instead of regex-converting 100% of every migration in a Docker pipeline: classify each migration, regenerate the ~98% that's machine-generated (CodeGen objects + mj-sync metadata) natively on PG, transpile only the ~2% of hand-written DDL through a sqlglot AST dialect. ~5 min vs ~8h, deterministic, no Docker.
+
+§1–§3 below are how to drive it. The Addendum is how/why it works.
 
 ---
+
+## What changed from `/pg-migrate`
+
+| You used to… | Now you… |
+|---|---|
+| Run the 6-phase Docker skill with nested Claude + `__DONE__` polling | Run plain CLI commands on the host |
+| `mj sql-convert` (regex, 28 rules) on every file | `mj migrate convert --split` (classify → AST dialect → surface gaps) |
+| Treat any `-- TODO:` as a converter bug to fix forever | Get a structured gap report; finish the small hand-written residue yourself (or LLM-assisted) |
+| Gate on "zero TODO comments" | Gate on **`mj migrate` applying cleanly to a fresh DB** (see warning below) |
+
+Committed `.pg.sql` files are untouched — they're the deployed historical ledger. This flow only affects **new** migrations.
+
+---
+
+## 1) Convert new migrations → `.pg.sql`
+
+Run after new SQL Server migrations land. Prereq: Python 3 + `sqlglot` (`export MJ_SQLGLOT_PYTHON=/path/to/python3` if yours isn't `python3`).
+
+```bash
+mj migrate convert --split          # converts every SS migration lacking a .pg.sql/.pg-only.sql
+#   --file V2026..__x.sql   one file      --dry-run   classify only, write nothing
+#   --verbose   per-file progress         --allow-gaps   exit 0 despite gaps (default: gaps FAIL)
+```
+
+Emits into `migrations-pg/v5/`:
+- **`<name>.pg.sql`** — converted, ready to commit.
+- **`<name>.pg.sql.needs-hand`** — hand-written PROC/FUNCTION/TRIGGER it won't auto-translate. Has the DDL it *could* do + a `NEEDS HAND-AUTHORING` block. Deliberately **not** a discoverable `.pg.sql` (so Flyway won't apply a half-migration). Finish the PL/pgSQL, then rename to `.pg.sql`.
+- **`conversion-gaps.report.json`** — consolidated gaps (needs-hand routines + `UNHANDLED {kind, snippet}`). Drive any LLM finishing from this; there's no built-in LLM command.
+
+The run exits non-zero on any gap unless `--allow-gaps`.
+
+> **⚠️ The real gate is `mj migrate` on a clean DB — not the converter's "0 gaps" summary.** "0 gaps / 0 unhandled" is a *structural* count (what it couldn't classify/parse); it does **not** prove the SQL applies. Always apply the converted set to a fresh PG database (step 2) before trusting it — that apply is the acceptance test.
+
+## 2) Deploy a fresh PG install
+
+Three supported CLI commands against the committed `migrations-pg/` artifacts. The only config switch is `dbPlatform: 'postgresql'` in `mj.config.cjs`; everything else is connection env (`DB_*`, `CODEGEN_DB_*`, `MJ_CORE_SCHEMA=__mj`).
+
+```bash
+mj migrate --verbose              # 1. apply schema (auto-swaps source dir to migrations-pg/)
+mj codegen                        # 2. regenerate views/sprocs/perms natively on PG
+mj sync push --dir metadata --ci  # 3. seed metadata to current state (--ci = non-interactive)
+```
+
+Lands at ~340 entities / ~350 views / ~1800 routines, post-CodeGen CRUD validation passing. (This is the two-pass `migrate → codegen → seed` flow, §3, via supported commands instead of the old skill.)
+
+> **`mj codegen` await caveat:** the bare CLI can fire CodeGen without awaiting it and exit-0 as a silent no-op. In scripts/CI use `scripts/pg-codegen-await.mjs`. (Track as a CLI bug.)
+
+## 3) Verify
+
+```bash
+node scripts/check-pg-migration-parity.mjs            # conversion: zero-diff + file parity
+EQUIV_DB=<db>  node scripts/ss-pg-view-equivalence.mjs # views: semantic equivalence vs SS
+ORACLE_DB=<db> node scripts/pg-crud-oracle.mjs         # generated CRUD: behavioral round-trip
+```
+
+All exit non-zero on real failure (CI-ready; not yet wired into `pg-migrations.yml` — deliberate). Reports: `/tmp/ss-pg-view-equiv-report.json`, `/tmp/pg-crud-oracle-report.json`. Known-benign buckets to skip are in §6.7.
+
+**To reproduce a full parity build from scratch** (workbench `postgres-claude:5433`, venv `/tmp/sqlglot-venv`):
+```bash
+node scripts/pgdiff-convert-ast.mjs migrations/v5 /tmp/pgbuild/ast   # convert whole corpus
+./scripts/pgdiff-bootstrap.sh pg_build /tmp/pgbuild/ast              # build codegen-complete DB
+```
+
+## What's left for you
+
+1. **Hand-author the Category-C residue** (`.needs-hand` files; 11 enumerated in §4). Do the 3 with confirmed runtime impact first — `spAcquireScheduledJobLock`, `spSweepStaleAIAgentRuns`, `spStampAIAgentRunHeartbeat`. Several already exist converted in the committed ledger and can be lifted.
+2. **Decide CI cutover** — wire the two harnesses into `pg-migrations.yml` (snippet in §6.7); flip the idempotency step off `continue-on-error`.
+3. **Migrate the 3 legacy `converts:` regression tests** to exercise `convertMigration` instead of the retired regex path.
+4. **Architect decision**: is `mj codegen` at install time acceptable, or should `mj migrate` alone produce a complete PG deploy? (`publish.yml` is SS-only today.) §6.7 open item 4.
+
+---
+---
+
+# Addendum: how it works & why
+
+Rationale, measurements, and evidence behind the pipeline above.
 
 ## 1. The problem, stated honestly
 
@@ -174,9 +250,9 @@ set `MJ_SQLGLOT_PYTHON` if the interpreter isn't `python3` on PATH).
 | mj-sync re-seed viability (does `mj sync push` reproduce metadata on PG?) | ✅ answered — **yes** for mj-sync-owned data; Entity/Field catalog comes from CodeGen; `Backfill_*` is plain DML (already routed to transpile) |
 | **AST MJ dialect** (`SQLGlotTS/src/python/mj_postgres.py`) — Category-B transpile, AST-native | ✅ built, 7 regression tests. Encodes types/functions/boolean-defaults/`${flyway}` round-trip + `sp_addextendedproperty`→`COMMENT ON` + `IF…BEGIN`→`DO $$`. Lifts 7→37 fully-clean of 78 Category-B hand regions |
 | **Live-PG validation** (codegen regenerates Category A on PG) | ✅ run — see §6.6 |
-| `mj migrate convert --split` end-to-end on live PG (apply DDL + reseed M) | ⏳ partial — codegen-A proven; full new-way build not assembled |
-| Hand-author the 11 Category-C `.pg.sql` files | ⏳ not done — manual, one-time |
-| Retire the 6-phase Docker `/pg-migrate` skill | ⏳ pending cutover after parallel-run |
+| **Full repo-only fresh build** (`pgdiff-convert-ast` → `pgdiff-bootstrap` → `mj codegen`) | ✅ done — codegen-complete (339 entities, CRUD-validated), **0 missing tables/cols/types/views/comments** vs oracle; ~5 min end-to-end |
+| Hand-author the 11 Category-C `.pg.sql` files | ⏳ partial — 3 runtime-impacting (scheduling/watchdog sprocs) prioritized; see "What's left for you" / §6.7 |
+| Retire the 6-phase Docker `/pg-migrate` skill | ⏳ this handoff is the cutover; flip CI when comfortable |
 | **PG metadata-introspection stack** (5 routines + `vwSQLColumnsAndEntityFields`) — self-ensured by CodeGen | ✅ built + self-heal validated — see §6.7 |
 | **View semantic-equivalence harness** (`scripts/ss-pg-view-equivalence.mjs`) | ✅ built, `realDiffers: []` on current build — see §6.7 |
 | **CRUD behavioral oracle** (`scripts/pg-crud-oracle.mjs`) | ✅ built, 335 pass / 0 fail — see §6.7 |
