@@ -54,7 +54,7 @@
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
             "IncrementalWatermarkField": "modifiedSince",
-            "Configuration": "{\"listPath\":\"/api/contacts\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"WatermarkIncremental\",\"contentHashApplicable\":false,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"watermark\":{\"param\":\"modifiedSince\",\"format\":\"utc-datetime\"}}"
+            "Configuration": "{\"listPath\":\"/api/contacts\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"WatermarkIncremental\",\"contentHashApplicable\":false,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"watermark\":{\"param\":\"modifiedSince\",\"format\":\"utc-datetime\"}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -558,7 +558,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/person/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"person\"]}}"
+            "Configuration": "{\"listPath\":\"/api/contacts/person/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"person\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -863,7 +863,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/OrgGeneral/{ContactId}\",\"pathParams\":[\"ContactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"OrgGeneral\"]}}"
+            "Configuration": "{\"listPath\":\"/api/contacts/OrgGeneral/{ContactId}\",\"pathParams\":[\"ContactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"OrgGeneral\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1279,7 +1279,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/ContactAddresses/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"ContactAddresses\"]}}"
+            "Configuration": "{\"listPath\":\"/api/contacts/ContactAddresses/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"ContactAddresses\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1399,7 +1399,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/lookup/{contactId}/contactwebsites\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"lookup\",\"contactwebsites\"]}}"
+            "Configuration": "{\"listPath\":\"/api/contacts/lookup/{contactId}/contactwebsites\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"lookup\",\"contactwebsites\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1455,7 +1455,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/PrimaryContact/Emails/{primaryContactId}\",\"pathParams\":[\"primaryContactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"PrimaryContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"PrimaryContactId\",\"segments\":[\"PrimaryContact\",\"Emails\"]}}"
+            "Configuration": "{\"listPath\":\"/api/contacts/PrimaryContact/Emails/{primaryContactId}\",\"pathParams\":[\"primaryContactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"PrimaryContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"PrimaryContactId\",\"segments\":[\"PrimaryContact\",\"Emails\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1513,7 +1513,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/phones/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"phones\"]}}"
+            "Configuration": "{\"listPath\":\"/api/contacts/phones/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"phones\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1652,7 +1652,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/person/{contactId}/categorySummary\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"person\",\"categorySummary\"]}}"
+            "Configuration": "{\"listPath\":\"/api/contacts/person/{contactId}/categorySummary\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"person\",\"categorySummary\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1758,7 +1758,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/{contactId}/NotesAndFields\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"NotesAndFields\"]}}"
+            "Configuration": "{\"listPath\":\"/api/contacts/{contactId}/NotesAndFields\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"NotesAndFields\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -2167,7 +2167,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/{contactid}/editnotes\",\"pathParams\":[\"contactid\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"editnotes\"]}}"
+            "Configuration": "{\"listPath\":\"/api/contacts/{contactid}/editnotes\",\"pathParams\":[\"contactid\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"editnotes\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -2215,7 +2215,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/{contactid}/engagement\",\"pathParams\":[\"contactid\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"engagement\"]}}"
+            "Configuration": "{\"listPath\":\"/api/contacts/{contactid}/engagement\",\"pathParams\":[\"contactid\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"engagement\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -2733,7 +2733,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/memberships/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -2946,7 +2946,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/types\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/memberships/types\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -3253,7 +3253,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/types\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"MembershipType\",\"parentObjectIDFieldName\":\"MembershipTypeId\",\"accessPath\":{\"door\":\"MembershipType\",\"doorIdField\":\"MembershipTypeId\",\"segments\":[\"types\",\"levels\"]}}"
+            "Configuration": "{\"listPath\":\"/api/memberships/types\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"MembershipType\",\"parentObjectIDFieldName\":\"MembershipTypeId\",\"accessPath\":{\"door\":\"MembershipType\",\"doorIdField\":\"MembershipTypeId\",\"segments\":[\"types\",\"levels\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -3486,12 +3486,12 @@
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Membership",
-            "SupportsPagination": true,
+            "SupportsPagination": false,
             "PaginationType": "Offset",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/lookup/status/Active\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/memberships/lookup/status/Active\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -3567,7 +3567,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/change?membershipId={membershipId}\",\"pathParams\":[\"membershipId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Membership\",\"parentObjectIDFieldName\":\"MembershipId\",\"accessPath\":{\"door\":\"Membership\",\"doorIdField\":\"MembershipId\",\"segments\":[\"change\"]}}"
+            "Configuration": "{\"listPath\":\"/api/memberships/change?membershipId={membershipId}\",\"pathParams\":[\"membershipId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Membership\",\"parentObjectIDFieldName\":\"MembershipId\",\"accessPath\":{\"door\":\"Membership\",\"doorIdField\":\"MembershipId\",\"segments\":[\"change\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4239,7 +4239,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/groups/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/groups/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4335,7 +4335,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/groups/{groupId}/members\",\"pathParams\":[\"groupId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Group\",\"parentObjectIDFieldName\":\"GroupId\",\"accessPath\":{\"door\":\"Group\",\"doorIdField\":\"GroupId\",\"segments\":[\"members\"]}}"
+            "Configuration": "{\"listPath\":\"/api/groups/{groupId}/members\",\"pathParams\":[\"groupId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Group\",\"parentObjectIDFieldName\":\"GroupId\",\"accessPath\":{\"door\":\"Group\",\"doorIdField\":\"GroupId\",\"segments\":[\"members\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4544,12 +4544,12 @@
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Group",
-            "SupportsPagination": true,
+            "SupportsPagination": false,
             "PaginationType": "Offset",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/groups/categories\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/groups/categories\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4617,7 +4617,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed\",\"pathParams\":[\"certificationContactId\",\"certificationComponentId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed\",\"pathParams\":[\"certificationContactId\",\"certificationComponentId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4789,7 +4789,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed\",\"pathParams\":[\"certificationContactId\",\"certificationComponentId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Certification\",\"parentObjectIDFieldName\":\"CertificationContactId\",\"accessPath\":{\"door\":\"Certification\",\"doorIdField\":\"CertificationContactId\",\"segments\":[\"Components\"]}}"
+            "Configuration": "{\"listPath\":\"/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed\",\"pathParams\":[\"certificationContactId\",\"certificationComponentId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Certification\",\"parentObjectIDFieldName\":\"CertificationContactId\",\"accessPath\":{\"door\":\"Certification\",\"doorIdField\":\"CertificationContactId\",\"segments\":[\"Components\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4908,7 +4908,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/events/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -5214,7 +5214,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/attendees?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"attendees\"]}}"
+            "Configuration": "{\"listPath\":\"/api/events/attendees?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"attendees\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -5506,7 +5506,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/registrationtypes?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"registrationtypes\"]}}"
+            "Configuration": "{\"listPath\":\"/api/events/registrationtypes?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"registrationtypes\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -5765,7 +5765,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/sponsors?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"sponsors\"]}}"
+            "Configuration": "{\"listPath\":\"/api/events/sponsors?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"sponsors\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -5987,7 +5987,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/sponsorshipbenefits?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"sponsorshipbenefits\"]}}"
+            "Configuration": "{\"listPath\":\"/api/events/sponsorshipbenefits?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"sponsorshipbenefits\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -6163,7 +6163,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/exhibitors?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"exhibitors\"]}}"
+            "Configuration": "{\"listPath\":\"/api/events/exhibitors?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"exhibitors\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -6421,7 +6421,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/exhibitortypes?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"exhibitortypes\"]}}"
+            "Configuration": "{\"listPath\":\"/api/events/exhibitortypes?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"exhibitortypes\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -6600,7 +6600,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/sessions?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"sessions\"]}}"
+            "Configuration": "{\"listPath\":\"/api/events/sessions?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"sessions\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -6799,7 +6799,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/tasks?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"tasks\"]}}"
+            "Configuration": "{\"listPath\":\"/api/events/tasks?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"tasks\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -7081,7 +7081,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/calendars?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"calendars\"]}}"
+            "Configuration": "{\"listPath\":\"/api/events/calendars?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"calendars\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -7387,7 +7387,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/venues?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"venues\"]}}"
+            "Configuration": "{\"listPath\":\"/api/events/venues?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"venues\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -7563,7 +7563,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/store/items\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/store/items\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -7769,7 +7769,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/store/orders\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/store/orders\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -8015,7 +8015,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/store/storedownloads\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/store/storedownloads\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -8050,7 +8050,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/scheduledbilling?membershipId={membershipId}\",\"pathParams\":[\"membershipId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Membership\",\"parentObjectIDFieldName\":\"MembershipId\",\"accessPath\":{\"door\":\"Membership\",\"doorIdField\":\"MembershipId\",\"segments\":[\"scheduledbilling\"]}}"
+            "Configuration": "{\"listPath\":\"/api/memberships/scheduledbilling?membershipId={membershipId}\",\"pathParams\":[\"membershipId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Membership\",\"parentObjectIDFieldName\":\"MembershipId\",\"accessPath\":{\"door\":\"Membership\",\"doorIdField\":\"MembershipId\",\"segments\":[\"scheduledbilling\"]}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -8159,7 +8159,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/directories\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/directories\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -8285,7 +8285,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/directories/listingtypes\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"skip\",\"topParam\":\"top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"listPath\":\"/api/directories/listingtypes\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
