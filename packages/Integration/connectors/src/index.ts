@@ -11,6 +11,7 @@ export { AptifyConnector, type AptifyConnectionConfig } from './AptifyConnector.
 export { BettyConnector } from './BettyConnector.js';
 export { MJToMJConnector } from './MJToMJConnector.js';
 export { GrowthZoneConnector } from './GrowthZoneConnector.js';
+export { ORCIDConnector, LoadORCIDConnector, type ORCIDConnectionConfig } from './ORCIDConnector.js';
 export { IMISConnector } from './IMISConnector.js';
 export { ConstantContactConnector } from './ConstantContactConnector.js';
 export { MailchimpConnector } from './MailchimpConnector.js';
