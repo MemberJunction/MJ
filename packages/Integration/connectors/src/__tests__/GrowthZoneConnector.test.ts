@@ -11,6 +11,8 @@ import type {
     CreateRecordContext,
     UpdateRecordContext,
     DeleteRecordContext,
+    GetRecordContext,
+    ExternalRecord,
     CRUDResult,
 } from '@memberjunction/integration-engine';
 import { GrowthZoneConnector } from '../GrowthZoneConnector.js';
@@ -79,6 +81,11 @@ class TestGrowthZoneConnector extends GrowthZoneConnector {
     public callCreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> { return this.CreateRecord(ctx); }
     public callUpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> { return this.UpdateRecord(ctx); }
     public callDeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> { return this.DeleteRecord(ctx); }
+    /** Canned GetRecord result for the audit-token delete path (ResolveAuditToken). */
+    public NextGetRecord: ExternalRecord | null = null;
+    public override async GetRecord(_ctx: GetRecordContext): Promise<ExternalRecord | null> {
+        return this.NextGetRecord;
+    }
 
     // Capture the API HTTP layer (the token endpoint is mocked separately via global.fetch).
     protected override async MakeHTTPRequest(
@@ -467,7 +474,7 @@ describe('GrowthZoneConnector', () => {
             expect(c.RequestedBodies[0]).toEqual({ Name: 'Members Directory' });
         });
 
-        it('DeleteRecord substitutes {id} into DeleteAPIPath and uses the metadata-driven DeleteMethod (not assumed DELETE)', async () => {
+        it('DeleteRecord (single-ID idiom) substitutes {id} and uses the metadata-driven DeleteMethod (not assumed DELETE)', async () => {
             mockTokenEndpoint({ access_token: 'tok', token_type: 'Bearer' });
             const c = new TestGrowthZoneConnector();
             c.TestObj = obj({ Name: 'Directory', DeleteAPIPath: '/api/directory/directories/{id}', DeleteMethod: 'DELETE', DeleteIDLocation: 'path' });
@@ -476,6 +483,29 @@ describe('GrowthZoneConnector', () => {
             expect(c.RequestedMethods[0]).toBe('DELETE');
             expect(c.RequestedURLs[0]).toContain('/api/directory/directories/99');
             expect(res.Success).toBe(true);
+        });
+
+        it('DeleteRecord (AUDIT-TOKEN idiom) fetches the audit token and substitutes BOTH {id} and {auditid}', async () => {
+            mockTokenEndpoint({ access_token: 'tok', token_type: 'Bearer' });
+            const c = new TestGrowthZoneConnector();
+            c.TestObj = obj({ Name: 'EventCalendar', DeleteAPIPath: '/api/calendars/{calendarid}/{auditid}', DeleteMethod: 'DELETE', DeleteIDLocation: 'path' });
+            c.NextGetRecord = { ExternalID: '1000', ObjectType: 'EventCalendar', Fields: { AuditId: '7777' } };
+            c.NextAPIResponse = { Status: 204, Body: null, Headers: {} };
+            const res = await c.callDeleteRecord({ CompanyIntegration: writeCI(), ObjectName: 'EventCalendar', ContextUser: USER, ExternalID: '1000' });
+            expect(c.RequestedMethods[0]).toBe('DELETE');
+            expect(c.RequestedURLs[0]).toContain('/api/calendars/1000/7777');
+            expect(res.Success).toBe(true);
+        });
+
+        it('DeleteRecord (AUDIT-TOKEN idiom) fails loudly when no audit token is resolvable on the record', async () => {
+            mockTokenEndpoint({ access_token: 'tok', token_type: 'Bearer' });
+            const c = new TestGrowthZoneConnector();
+            c.TestObj = obj({ Name: 'EventCalendar', DeleteAPIPath: '/api/calendars/{calendarid}/{auditid}', DeleteMethod: 'DELETE', DeleteIDLocation: 'path' });
+            c.NextGetRecord = { ExternalID: '1000', ObjectType: 'EventCalendar', Fields: {} }; // no AuditId
+            const res = await c.callDeleteRecord({ CompanyIntegration: writeCI(), ObjectName: 'EventCalendar', ContextUser: USER, ExternalID: '1000' });
+            expect(res.Success).toBe(false);
+            expect(res.ErrorMessage).toContain('audit token');
+            expect(c.RequestedMethods).toHaveLength(0); // never issued the DELETE
         });
     });
 });

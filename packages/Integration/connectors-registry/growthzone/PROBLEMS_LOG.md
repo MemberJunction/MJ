@@ -543,3 +543,20 @@ both. Logged here because they MUST be addressed before this connector is actual
     - **Testing:** off-live (mock) only — never live-tenant writes (standing instruction). The base generic
       CRUD path is already engine-unit-tested; per-object overrides get their own mock fixtures asserting
       the exact wizard request shape before any broker/live exercise.
+
+### K.1 — Write-back WIRED (delete idioms + generic CRUD), mock-proven  [C]
+
+36. **GrowthZone's two delete idioms are now both handled + tested.** The connector overrides
+    `DeleteRecord` to detect the **audit-token** shape (`/calendars/{id}/{auditid}`,
+    `/directorylistingtypes/{id}/{auditid}`, `/roles/{id}/{auditid}`) — it `GetRecord`s the record,
+    reads its `AuditId`/`{Object}AuditId` optimistic-concurrency token, and substitutes BOTH path vars;
+    the **single-ID** shape (`/storeitems/{id}`, `/directories/{id}`, `/signatures/{id}`, …) falls
+    through to the base generic delete. Fails loudly when the audit token isn't resolvable (never issues
+    a tokenless DELETE). Create/Update ride the base generic per-operation path. 7 off-live mock tests
+    cover create (flat/wrapped/loud-fail-on-empty-id), update ({id}+body), delete (single-ID +
+    audit-token success + audit-token loud-fail). 296 connector tests green.
+    - **Genuinely remaining:** GrowthZone **creates** are multi-step WIZARDS (`/contacts/import/wizard`,
+      `/contacts/{id}/representatives`, `/contacts/contactactivity/create`) whose exact request bodies
+      vary per wizard and aren't doc-pinnable to a single flat/wrapped shape — those need a per-wizard
+      `CreateRecord` override modeled against live behavior, which the no-live-writes rule defers. The
+      delete + generic-update paths are complete; wizard-create is the honest residual.

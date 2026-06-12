@@ -67,6 +67,8 @@ import {
     type IntegrationObjectInfo,
     type IntegrationFieldInfo,
     type ActionGeneratorConfig,
+    type DeleteRecordContext,
+    type CRUDResult,
 } from '@memberjunction/integration-engine';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 
@@ -207,6 +209,72 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         const integration = IntegrationEngineBase.Instance.GetIntegrationByName(INTEGRATION_NAME);
         if (!integration) return false;
         return IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integration.ID).some(pred);
+    }
+
+    // ── Write: GrowthZone audit-token DELETE idiom (override) ─────────
+    //
+    // GrowthZone splits deletes into two shapes:
+    //   • single-ID   `DELETE /api/store/storeitems/{id}`, `/directory/directories/{id}`,
+    //                 `/memberships/benefititem/{id}`, `/signatures/{id}`, `/webhooks/setup/{id}` →
+    //                 ride the BASE generic DeleteRecord ({id} substitution) unchanged.
+    //   • audit-token `DELETE /api/calendars/{id}/{auditid}`, `/directorylistingtypes/{id}/{auditid}`,
+    //                 `/roles/{id}/{auditid}` → need the record's CURRENT optimistic-concurrency audit
+    //                 token, which DeleteRecordContext (ExternalID only) doesn't carry. We fetch the
+    //                 record, read its audit token, and substitute BOTH path vars.
+    // Doc-derived shape; the live byte-shape is unverified per the no-live-writes rule (PROBLEMS_LOG #35).
+    public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        // Not an audit-token path → the base generic single-{id} delete handles it.
+        if (!obj.DeleteAPIPath || !/\{audit/i.test(obj.DeleteAPIPath)) {
+            return super.DeleteRecord(ctx);
+        }
+        const auditToken = await this.ResolveAuditToken(ctx);
+        if (auditToken == null) {
+            return {
+                Success: false,
+                StatusCode: 0,
+                ErrorMessage:
+                    `DeleteRecord("${ctx.ObjectName}"): ${obj.DeleteAPIPath} requires a GrowthZone audit ` +
+                    `token, but none was resolvable for ExternalID "${ctx.ExternalID}".`,
+            };
+        }
+        const auth = await this.Authenticate(ci, ctx.ContextUser as UserInfo);
+        // Resource id → the FIRST {…id} var; audit token → the {audit…} var.
+        const path = obj.DeleteAPIPath
+            .replace(/\{[A-Za-z]*[iI]d\}/, encodeURIComponent(ctx.ExternalID))
+            .replace(/\{audit[A-Za-z]*\}/i, encodeURIComponent(auditToken));
+        const baseURL = this.GetBaseURL(ci, auth);
+        const url = `${baseURL.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+        const response = await this.MakeHTTPRequest(auth, url, obj.DeleteMethod ?? 'DELETE', this.BuildHeaders(auth));
+        if (response.Status >= 200 && response.Status < 300) {
+            return { Success: true, StatusCode: response.Status, ExternalID: ctx.ExternalID };
+        }
+        return {
+            Success: false,
+            StatusCode: response.Status,
+            ErrorMessage: this.ExtractErrorMessage(response) ?? `HTTP ${response.Status} on delete`,
+        };
+    }
+
+    /**
+     * Resolves a record's current GrowthZone audit token (optimistic-concurrency) for an audit-token
+     * delete. GrowthZone exposes it as `AuditId` / `{Object}AuditId` on the record; we GetRecord and
+     * return the first match. Returns null when the record or token cannot be found.
+     */
+    private async ResolveAuditToken(ctx: DeleteRecordContext): Promise<string | null> {
+        const rec = await this.GetRecord({
+            CompanyIntegration: ctx.CompanyIntegration,
+            ObjectName: ctx.ObjectName,
+            ContextUser: ctx.ContextUser,
+            ExternalID: ctx.ExternalID,
+        });
+        if (!rec) return null;
+        for (const k of ['AuditId', 'auditId', 'AuditID', `${ctx.ObjectName}AuditId`]) {
+            const v = rec.Fields[k];
+            if (v != null && String(v).length > 0) return String(v);
+        }
+        return null;
     }
 
     // ── Action-object surfacing: METADATA-DRIVEN (no hardcoded catalog) ──
