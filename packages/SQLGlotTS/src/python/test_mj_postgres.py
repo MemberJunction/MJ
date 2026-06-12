@@ -109,6 +109,24 @@ check("boolean CHECK in SEPARATE ALTER resolves via file-level BIT registry",
       must_contain=['CHECK ("EnableContextCompression" = FALSE)'],
       must_not_contain=['= (0)', '= 0)'])
 
+check("UPDATE SET + WHERE on BIT column → TRUE/FALSE via file-level registry; INT column untouched",
+      "CREATE TABLE ${flyway:defaultSchema}.EntityField (IsNameField BIT NOT NULL, "
+      "AutoUpdateIsNameField BIT NOT NULL, Sequence INT NOT NULL);\nGO\n"
+      "UPDATE ${flyway:defaultSchema}.EntityField SET IsNameField = 1 "
+      "WHERE AutoUpdateIsNameField = 1 AND Sequence = 1;\nGO\n"
+      "UPDATE ${flyway:defaultSchema}.EntityField SET IsNameField = 0 WHERE AutoUpdateIsNameField = 0;",
+      must_contain=['SET "IsNameField" = TRUE', '"AutoUpdateIsNameField" = TRUE',
+                    'SET "IsNameField" = FALSE', '"AutoUpdateIsNameField" = FALSE',
+                    '"Sequence" = 1'],
+      must_not_contain=['"IsNameField" = 1', '"IsNameField" = 0',
+                        '"AutoUpdateIsNameField" = 1', '"AutoUpdateIsNameField" = 0'])
+
+check("DELETE WHERE on BIT column → TRUE/FALSE; integer column untouched",
+      "CREATE TABLE ${flyway:defaultSchema}.Foo (IsActive BIT NOT NULL, Priority INT NOT NULL);\nGO\n"
+      "DELETE FROM ${flyway:defaultSchema}.Foo WHERE IsActive = 0 AND Priority = 1;",
+      must_contain=['"IsActive" = FALSE', '"Priority" = 1'],
+      must_not_contain=['"IsActive" = 0'])
+
 check("SET NOCOUNT/XACT_ABORT/QUOTED_IDENTIFIER batch-control dropped",
       "SET NOCOUNT ON;\nSET XACT_ABORT ON;\nSET QUOTED_IDENTIFIER ON;\nCREATE TABLE ${flyway:defaultSchema}.Foo (ID UNIQUEIDENTIFIER NOT NULL);",
       must_contain=['CREATE TABLE'],

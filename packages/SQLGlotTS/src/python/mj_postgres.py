@@ -298,10 +298,16 @@ _BIT_COLS: set[tuple[str, str]] = set()
 
 
 def _table_name_of(stmt: exp.Expression) -> str | None:
-    """Lower-cased name of the table a CREATE/ALTER statement targets, if any."""
+    """Lower-cased name of the table a CREATE/ALTER/UPDATE/DELETE statement targets, if any.
+
+    DML (UPDATE/DELETE) is included so the boolean-int rewriter can resolve a statement's
+    target table against the BIT-column registry and coerce `bitcol = 1/0` → `TRUE/FALSE`
+    in SET assignments and WHERE predicates — not just in CREATE/ALTER CHECK constraints.
+    For UPDATE/DELETE the target lives in `stmt.this`; if that is an aliased subtree we fall
+    back to the first Table node."""
     if isinstance(stmt, exp.Create):
         t = stmt.this.find(exp.Table) if stmt.this else None
-    elif isinstance(stmt, exp.Alter):
+    elif isinstance(stmt, (exp.Alter, exp.Update, exp.Delete)):
         t = stmt.this if isinstance(stmt.this, exp.Table) else stmt.find(exp.Table)
     else:
         t = None
