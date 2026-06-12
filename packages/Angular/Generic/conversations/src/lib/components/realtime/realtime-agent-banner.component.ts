@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { VoiceConnectionState } from '../../services/voice-session.service';
+import { VoiceConnectionState } from '../../services/realtime-session.service';
 
 /**
  * Identity header for the live call overlay (mirrors `.call-header` in live-session.html):

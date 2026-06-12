@@ -47,7 +47,7 @@ export class RealtimeDelegationCardComponent {
    * Emitted with the call's ID when the WORKING card's ✕ cancel affordance is clicked —
    * EXPLICIT user intent to kill the in-flight delegated run (by deliberate host policy,
    * barge-in alone never cancels delegations; only this button does). The overlay routes
-   * it to `VoiceSessionService.CancelDelegation`, which flips this card to a failed
+   * it to `RealtimeSessionService.CancelDelegation`, which flips this card to a failed
    * "Cancelled by user" result.
    */
   @Output() CancelRequested = new EventEmitter<string>();

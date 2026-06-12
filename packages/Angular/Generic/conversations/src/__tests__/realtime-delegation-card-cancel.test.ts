@@ -7,7 +7,7 @@ import { RealtimeDelegationCardVM } from '../lib/components/realtime/realtime-se
 
 /**
  * The WORKING card's ✕ cancel affordance — the first hop of the explicit-cancel event
- * chain (card ✕ → thread re-emit → overlay → `VoiceSessionService.CancelDelegation`).
+ * chain (card ✕ → thread re-emit → overlay → `RealtimeSessionService.CancelDelegation`).
  * Class-level tests (no TestBed): the card's emission contract is what the chain depends
  * on — the thread/overlay hops are template re-emits ((CancelRequested)="….emit($event)").
  */

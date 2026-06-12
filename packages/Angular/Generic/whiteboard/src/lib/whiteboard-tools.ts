@@ -61,7 +61,7 @@ export interface WhiteboardToolResult {
 /**
  * The shared name prefix of every whiteboard tool — the key an integration layer uses to
  * route all `Whiteboard_*` tool calls locally to {@link ApplyWhiteboardAgentTool} (e.g.
- * MJ's realtime sessions register it with `VoiceSessionService.RegisterClientToolHandler`
+ * MJ's realtime sessions register it with `RealtimeSessionService.RegisterClientToolHandler`
  * so calls execute in the browser instead of the server relay).
  */
 export const WHITEBOARD_TOOL_PREFIX = 'Whiteboard_';

@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { VoiceSessionService } from '../lib/services/voice-session.service';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 
-describe('VoiceSessionService — Minimized$ presentation state', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — Minimized$ presentation state', () => {
+  let service: RealtimeSessionService;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
   });
 
   it('starts NOT minimized', () => {

@@ -21,8 +21,8 @@ import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
-import { VoiceSessionService } from '../../services/voice-session.service';
-import { VoiceAgentPick } from '../voice/voice-agent-picker.component';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
+import { VoiceAgentPick } from '../realtime/realtime-agent-picker.component';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
@@ -230,7 +230,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     private mentionAutocomplete: MentionAutocompleteService,
     private attachmentService: ConversationAttachmentService,
     private bridge: ConversationBridgeService,
-    private voiceSession: VoiceSessionService
+    private voiceSession: RealtimeSessionService
   ) {
   super();}
 
@@ -336,7 +336,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Display name of the agent the voice session fronts. Resolved here (this component
-   * owns the conversation's routing context) and passed to VoiceSessionService at
+   * owns the conversation's routing context) and passed to RealtimeSessionService at
    * session start so the chat-area-hosted overlay can read it from the service.
    */
   private resolveVoiceAgentName(): string {
@@ -371,7 +371,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Start a real-time voice session fronting the conversation's current agent.
-   * Client-direct: the VoiceSessionService mints an ephemeral token and connects
+   * Client-direct: the RealtimeSessionService mints an ephemeral token and connects
    * the browser straight to the realtime provider over WebRTC. The "call mode"
    * overlay itself is hosted by the conversation chat area (driven by Active$).
    *
@@ -438,7 +438,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /**
    * Shared session-start path for both the immediate (existing conversation)
    * and picker (new conversation / caret options) flows. The agent NAME is passed
-   * through to VoiceSessionService so the chat-area-hosted overlay banner (AgentName$)
+   * through to RealtimeSessionService so the chat-area-hosted overlay banner (AgentName$)
    * shows who the call fronts without re-resolving. An explicit voice-model choice
    * (picker only) rides along as `preferredModelId` — the server uses exactly that
    * model or fails with a clear reason (no silent fallback).

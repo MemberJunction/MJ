@@ -1,12 +1,12 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { VoiceSessionService } from '../../services/voice-session.service';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
 
 /**
  * In-session text composer (mirrors `.call-composer` in live-session.html). Makes it clear
  * the typed text joins the SAME live voice call — a brand-accented note + a focused pill
- * input. On submit it calls {@link VoiceSessionService.SendText}, which injects the text as
+ * input. On submit it calls {@link RealtimeSessionService.SendText}, which injects the text as
  * a user turn into the realtime session (the model then responds aloud + the turn persists).
  */
 @Component({
@@ -20,7 +20,7 @@ export class RealtimeComposerComponent {
   /** Current draft text in the composer. */
   public Draft = '';
 
-  private voice = inject(VoiceSessionService);
+  private voice = inject(RealtimeSessionService);
 
   /** True when there's non-whitespace text to send. */
   public get CanSend(): boolean {

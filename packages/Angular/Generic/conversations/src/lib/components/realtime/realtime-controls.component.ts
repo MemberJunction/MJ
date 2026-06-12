@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { VoiceSessionService } from '../../services/voice-session.service';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
 
 /**
  * Call controls for the overlay (mirrors `.call-controls` in live-session.html): Mute,
@@ -8,7 +8,7 @@ import { VoiceSessionService } from '../../services/voice-session.service';
  * action and is placed rightmost following MJ conventions (affirmative/neutral actions lead;
  * destructive trails the row as the deliberate, last control).
  *
- * Mute drives {@link VoiceSessionService.ToggleMute} directly; Captions, Dev mode + End are
+ * Mute drives {@link RealtimeSessionService.ToggleMute} directly; Captions, Dev mode + End are
  * emitted up so the overlay shell owns that state (captions visibility, dev affordances) and
  * lifecycle (ending the call). The gear mirrors the main UX convention: developer affordances
  * stay hidden until explicitly asked for, per session, never persisted.
@@ -49,7 +49,7 @@ export class RealtimeControlsComponent {
   /** Local mic mute state, reflected from the service. */
   public IsMuted = false;
 
-  private voice = inject(VoiceSessionService);
+  private voice = inject(RealtimeSessionService);
 
   /** Toggle the local microphone mute. */
   public ToggleMute(): void {

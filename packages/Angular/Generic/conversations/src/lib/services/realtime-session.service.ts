@@ -56,7 +56,7 @@ export interface VoiceCaption {
 }
 
 /**
- * A delegated-run progress update surfaced to the UI, emitted on {@link VoiceSessionService.DelegationProgress$}.
+ * A delegated-run progress update surfaced to the UI, emitted on {@link RealtimeSessionService.DelegationProgress$}.
  * These originate server-side during an `invoke-target-agent` delegation (e.g. while Sage works) and let a
  * future overlay render a "working" card while the realtime model narrates the same progress aloud.
  */
@@ -72,7 +72,7 @@ export interface VoiceDelegationProgress {
 }
 
 /**
- * The terminal result of a delegated tool call, emitted on {@link VoiceSessionService.DelegationResult$}
+ * The terminal result of a delegated tool call, emitted on {@link RealtimeSessionService.DelegationResult$}
  * when the delegation finishes so the overlay can flip the "working" card into a result card with real
  * content + provenance.
  */
@@ -98,16 +98,16 @@ export interface VoiceDelegationResult {
 
 /**
  * Handler for a CLIENT-EXECUTED UI tool (e.g. the live whiteboard's `Whiteboard_*` surface),
- * registered via {@link VoiceSessionService.RegisterClientToolHandler}. Receives the tool name +
+ * registered via {@link RealtimeSessionService.RegisterClientToolHandler}. Receives the tool name +
  * raw arguments JSON from the realtime model and returns the result JSON string fed back as the
  * `tool_response`. May be sync or async; thrown errors are wrapped into a
  * `{ success: false, error }` payload by the service so the model can narrate the failure.
  */
-export type VoiceClientToolHandler = (toolName: string, argsJson: string) => string | Promise<string>;
+export type RealtimeClientToolHandler = (toolName: string, argsJson: string) => string | Promise<string>;
 
 /**
  * A channel's request to enter / leave the FOCUS layout, emitted on
- * {@link VoiceSessionService.ChannelFocus$} when a plugin calls its context's
+ * {@link RealtimeSessionService.ChannelFocus$} when a plugin calls its context's
  * `SetFocusMode`. The overlay shell subscribes: it collapses/restores the main call column
  * and remembers which channel holds focus (so the floating pill's "exit" can be routed
  * back via {@link BaseRealtimeChannelClient.RequestFocusExit}).
@@ -131,7 +131,7 @@ interface RealtimeChannelDefinitionRow {
 
 /**
  * One EPHEMERAL spoken narration of delegated-run progress, emitted on
- * {@link VoiceSessionService.DelegationNarration$}. These are the interim "here's what's
+ * {@link RealtimeSessionService.DelegationNarration$}. These are the interim "here's what's
  * happening" utterances the realtime model speaks while a delegation runs. By product
  * decision they are NOT captions and NOT persisted as ConversationDetails — they exist
  * only as a live note in the overlay, replaced by each newer narration.
@@ -207,7 +207,7 @@ interface StartRealtimeClientSessionResult {
  * Lifecycle: {@link StartVoiceSession} → live duplex → {@link EndVoiceSession}.
  */
 @Injectable({ providedIn: 'root' })
-export class VoiceSessionService {
+export class RealtimeSessionService {
   // ── Reactive UI state ──────────────────────────────────────────────────────
   private _connectionState$ = new BehaviorSubject<VoiceConnectionState>('closed');
   private _captions$ = new BehaviorSubject<VoiceCaption[]>([]);
@@ -220,7 +220,7 @@ export class VoiceSessionService {
   private _minimized$ = new BehaviorSubject<boolean>(false);
   private _activeChannels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
   private _channelFocus$ = new Subject<RealtimeChannelFocusEvent>();
-  // ─── Generic session-lifecycle events (consumed by VoiceSessionsAdapter to
+  // ─── Generic session-lifecycle events (consumed by RealtimeSessionsAdapter to
   // bridge into @memberjunction/conversations-runtime's framework-agnostic
   // SessionsObserver). Why not derive from Active$ + agentSessionId? Because
   // Active$ flips true before mintSession resolves and sets agentSessionId —
@@ -283,7 +283,7 @@ export class VoiceSessionService {
    * Fired EXACTLY ONCE per session after both `agentSessionId` is set AND the
    * realtime client is connected. Carries the server-issued `sessionId` and the
    * `ChannelName` of each plugin resolved at session mint. Consumed by
-   * `VoiceSessionsAdapter` (in this package) to feed
+   * `RealtimeSessionsAdapter` (in this package) to feed
    * `@memberjunction/conversations-runtime`'s `SessionsObserver`.
    *
    * **Why this exists separately from `Active$`:** `Active$` flips `true` BEFORE
@@ -365,7 +365,7 @@ export class VoiceSessionService {
   private static readonly MaxPriorNarrations = 3;
   /**
    * Aggregation buffer: distinct progress messages since the last spoken update (oldest
-   * first, capped at {@link VoiceSessionService.MaxDigestMessages}). A flood of small
+   * first, capped at {@link RealtimeSessionService.MaxDigestMessages}). A flood of small
    * updates becomes ONE digest; the buffer is discarded when the result lands first.
    */
   private pendingNarrationMessages: string[] = [];
@@ -415,7 +415,7 @@ export class VoiceSessionService {
    * handler (never relayed to the server); everything else takes the standard server-relay path.
    * Cleared at teardown.
    */
-  private clientToolHandlers = new Map<string, VoiceClientToolHandler>();
+  private clientToolHandlers = new Map<string, RealtimeClientToolHandler>();
 
   // ── Interactive channels (registry-resolved plugins) ───────────────────────
   /** Debounce window for persisting a channel's state of record after a change burst. */
@@ -590,7 +590,7 @@ export class VoiceSessionService {
    * back to the model as the `tool_response`. Re-registering the same prefix replaces the
    * handler. The registry is cleared at session teardown.
    */
-  public RegisterClientToolHandler(toolNamePrefix: string, handler: VoiceClientToolHandler): void {
+  public RegisterClientToolHandler(toolNamePrefix: string, handler: RealtimeClientToolHandler): void {
     this.clientToolHandlers.set(toolNamePrefix, handler);
   }
 
@@ -816,7 +816,7 @@ export class VoiceSessionService {
       clearTimeout(pending.Timer);
     }
     this.pendingChannelSaves.set(channelName, {
-      Timer: setTimeout(() => this.flushChannelSave(channelName), VoiceSessionService.ChannelSaveDebounceMs),
+      Timer: setTimeout(() => this.flushChannelSave(channelName), RealtimeSessionService.ChannelSaveDebounceMs),
       StateJson: stateJson,
       SessionID: this.agentSessionId ?? pending?.SessionID ?? null
     });
@@ -988,7 +988,7 @@ export class VoiceSessionService {
         this._delegationNarration$.next({ Text: transcript.Text });
         // Remember what was actually SAID so later updates build on it instead of repeating.
         this.spokenNarrations.push(transcript.Text);
-        if (this.spokenNarrations.length > VoiceSessionService.MaxPriorNarrations) {
+        if (this.spokenNarrations.length > RealtimeSessionService.MaxPriorNarrations) {
           this.spokenNarrations.shift();
         }
       } else {
@@ -1059,7 +1059,7 @@ export class VoiceSessionService {
   }
 
   /** Finds the registered client-tool handler whose prefix matches `toolName`, or `null`. */
-  private findClientToolHandler(toolName: string): VoiceClientToolHandler | null {
+  private findClientToolHandler(toolName: string): RealtimeClientToolHandler | null {
     for (const [prefix, handler] of this.clientToolHandlers) {
       if (toolName.startsWith(prefix)) {
         return handler;
@@ -1073,7 +1073,7 @@ export class VoiceSessionService {
    * `{ success: false, error }` JSON payload so the model can narrate the failure instead of
    * the call going silent.
    */
-  private async executeClientTool(handler: VoiceClientToolHandler, call: RealtimeClientToolCall): Promise<string> {
+  private async executeClientTool(handler: RealtimeClientToolHandler, call: RealtimeClientToolCall): Promise<string> {
     try {
       return await handler(call.ToolName, call.ArgumentsJson);
     } catch (error) {
@@ -1346,7 +1346,7 @@ export class VoiceSessionService {
       this.usageFlushTimer = setTimeout(() => {
         this.usageFlushTimer = null;
         void this.flushPendingUsage();
-      }, VoiceSessionService.UsageFlushDebounceMs);
+      }, RealtimeSessionService.UsageFlushDebounceMs);
     }
   }
 
@@ -1490,7 +1490,7 @@ export class VoiceSessionService {
       return;
     }
     this.pendingNarrationMessages.push(message);
-    if (this.pendingNarrationMessages.length > VoiceSessionService.MaxDigestMessages) {
+    if (this.pendingNarrationMessages.length > RealtimeSessionService.MaxDigestMessages) {
       this.pendingNarrationMessages.shift();
     }
   }
@@ -1504,10 +1504,10 @@ export class VoiceSessionService {
   private nextNarrationDelayMs(): number {
     const now = Date.now();
     const firstAnchor = this.narrationCount === 0
-      ? this.delegationBurstStartedAt + VoiceSessionService.FirstNarrationDelayMs
+      ? this.delegationBurstStartedAt + RealtimeSessionService.FirstNarrationDelayMs
       : 0;
     const spacingFloor = this.lastDelegationNarrationAt > 0
-      ? this.lastDelegationNarrationAt + VoiceSessionService.NarrationIntervalMs
+      ? this.lastDelegationNarrationAt + RealtimeSessionService.NarrationIntervalMs
       : 0;
     return Math.max(250, Math.max(firstAnchor, spacingFloor) - now);
   }
@@ -1525,7 +1525,7 @@ export class VoiceSessionService {
       return;
     }
     if (client.IsBusy || client.IsAudioPlaying) {
-      this.narrationTimer = setTimeout(() => this.fireDeferredNarration(), VoiceSessionService.NarrationBusyRetryMs);
+      this.narrationTimer = setTimeout(() => this.fireDeferredNarration(), RealtimeSessionService.NarrationBusyRetryMs);
       return;
     }
     const digest = this.pendingNarrationMessages.join(' → ');
@@ -1556,7 +1556,7 @@ export class VoiceSessionService {
    */
   private buildNarrationInstructions(digest: string): string {
     return BuildNarrationInstructions(this.narrationTemplate, digest, {
-      PriorNarrations: this.spokenNarrations.slice(-VoiceSessionService.MaxPriorNarrations),
+      PriorNarrations: this.spokenNarrations.slice(-RealtimeSessionService.MaxPriorNarrations),
       UpdateNumber: this.narrationCount
     });
   }
