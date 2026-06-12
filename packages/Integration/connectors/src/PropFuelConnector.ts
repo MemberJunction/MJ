@@ -86,7 +86,7 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
         contextUser: UserInfo
     ): Promise<PropFuelAuthContext> {
         const creds = await this.LoadCredentials(companyIntegration, contextUser);
-        return { Token: creds.Token, AccountID: creds.AccountID };
+        return { Token: creds.Token, AccountID: creds.AccountID, BaseHost: creds.BaseHost };
     }
 
     /** Static Bearer header. No crypto/signing is required for a static token, so no auth-helper is used. */
@@ -99,7 +99,7 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
 
     /** Base URL for the data-export feed, tenant-scoped by the resolved AccountID. */
     protected GetBaseURL(_companyIntegration: MJCompanyIntegrationEntity, auth: PropFuelAuthContext): string {
-        return `${PROPFUEL_HOST}/dataexport/${encodeURIComponent(auth.AccountID)}`;
+        return `${auth.BaseHost ?? PROPFUEL_HOST}/dataexport/${encodeURIComponent(auth.AccountID)}`;
     }
 
     /**
@@ -382,6 +382,7 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
     ): Promise<PropFuelCredentials> {
         let token: string | undefined;
         let accountID: string | undefined;
+        let baseHost: string | undefined;
 
         const credentialID = companyIntegration.CredentialID;
         if (credentialID) {
@@ -399,6 +400,7 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
             if (fromConfig) {
                 token = token ?? fromConfig.Token;
                 accountID = accountID ?? fromConfig.AccountID;
+                baseHost = baseHost ?? fromConfig.BaseHost;
             }
         }
 
@@ -408,7 +410,7 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
         if (!accountID) {
             throw new Error('No PropFuel AccountID found — set "AccountID" on the credential or Configuration JSON (it is per-tenant, never hardcoded).');
         }
-        return { Token: token, AccountID: accountID };
+        return { Token: token, AccountID: accountID, BaseHost: baseHost };
     }
 
     /** Loads Token/AccountID from a Credential entity's Values JSON. */
@@ -429,7 +431,8 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
             const token = p.Token ?? p.token ?? p.apiKey ?? p.ApiKey;
             const accountID = p.AccountID ?? p.accountId ?? p.accountID;
             if (!token && accountID == null) return null;
-            return { Token: token ?? '', AccountID: accountID != null ? String(accountID) : '' } as PropFuelCredentials;
+            const baseHost = p.apiBaseUrl ?? p.BaseURL;
+            return { Token: token ?? '', AccountID: accountID != null ? String(accountID) : '', BaseHost: baseHost } as PropFuelCredentials;
         } catch {
             return null;
         }
@@ -448,12 +451,16 @@ const MICROTIME_ORDERING_KEY = 'microtime';
 interface PropFuelAuthContext extends RESTAuthContext {
     Token: string;
     AccountID: string;
+    /** Non-secret host override (e.g. a local mock for replay testing). Defaults to PROPFUEL_HOST. */
+    BaseHost?: string;
 }
 
 /** Resolved PropFuel credentials. */
 interface PropFuelCredentials {
     Token: string;
     AccountID: string;
+    /** Optional non-secret host override from Configuration (apiBaseUrl/BaseURL). */
+    BaseHost?: string;
 }
 
 /** Parsed `[microtime]-[datatype].json` filename. */
@@ -471,6 +478,8 @@ const PropFuelCredentialSchema = z.object({
     AccountID: z.union([z.string(), z.number()]).optional(),
     accountId: z.union([z.string(), z.number()]).optional(),
     accountID: z.union([z.string(), z.number()]).optional(),
+    apiBaseUrl: z.string().optional(),
+    BaseURL: z.string().optional(),
 }).passthrough();
 
 /** Narrows an unknown value to a plain record. */

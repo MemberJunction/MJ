@@ -57,6 +57,12 @@ export interface ORCIDConnectionConfig {
     MaxRetries?: number;
     /** Minimum interval between outbound requests (ms). Default: 100 (~10 req/s, well under the 40/s burst cap). */
     MinRequestIntervalMs?: number;
+    /**
+     * Non-secret API host override (e.g. a local mock for replay testing). When unset, the
+     * production/sandbox host is selected by UseSandbox. Same pattern as Path LMS / GrowthZone —
+     * required for mock-floor e2e testability.
+     */
+    ApiBaseUrl?: string;
 }
 
 /** Authenticated context carried through one FetchChanges cycle. */
@@ -554,7 +560,7 @@ export class ORCIDConnector extends BaseRESTIntegrationConnector {
         const state: ORCIDAuthContext = {
             Token: token.access_token,
             ExpiresAt: new Date(Date.now() + (token.expires_in * 1000)),
-            BaseUrl: config.UseSandbox ? SANDBOX_API_HOST : PROD_API_HOST,
+            BaseUrl: config.ApiBaseUrl ?? (config.UseSandbox ? SANDBOX_API_HOST : PROD_API_HOST),
             Config: config,
         };
         this.authState = state;
@@ -672,7 +678,7 @@ export class ORCIDConnector extends BaseRESTIntegrationConnector {
                     const refreshedState: ORCIDAuthContext = {
                         Token: refreshed.access_token,
                         ExpiresAt: new Date(Date.now() + (refreshed.expires_in * 1000)),
-                        BaseUrl: cfg.UseSandbox ? SANDBOX_API_HOST : PROD_API_HOST,
+                        BaseUrl: cfg.ApiBaseUrl ?? (cfg.UseSandbox ? SANDBOX_API_HOST : PROD_API_HOST),
                         Config: cfg,
                     };
                     this.authState = refreshedState;
@@ -808,6 +814,12 @@ export class ORCIDConnector extends BaseRESTIntegrationConnector {
         if (typeof parsed['maxSearchResults'] === 'number') out.MaxSearchResults = parsed['maxSearchResults'] as number;
         // Allow non-secret OAuth host overrides from Configuration (secrets never live here).
         out.TokenURL = str(parsed['tokenUrl']);
+        out.ApiBaseUrl = str(parsed['apiBaseUrl'] ?? parsed['BaseURL']);
+        // Fallback client credentials from Configuration — the credential store remains preferred
+        // (the parseConfig merge gives fromCredential precedence). This matches the GrowthZone /
+        // Path LMS pattern and is what makes credential-free replay harnesses possible.
+        out.ClientID = str(parsed['ClientID'] ?? parsed['clientId']);
+        out.ClientSecret = str(parsed['ClientSecret'] ?? parsed['clientSecret']);
         out.Scope = str(parsed['scope']);
         if (typeof parsed['requestTimeoutMs'] === 'number') out.RequestTimeoutMs = parsed['requestTimeoutMs'] as number;
         if (typeof parsed['maxRetries'] === 'number') out.MaxRetries = parsed['maxRetries'] as number;
