@@ -519,3 +519,27 @@ both. Logged here because they MUST be addressed before this connector is actual
       PROMOTION registers + RSU-creates 14 real columns + maps → restart → values sync in on subsequent
       runs. The only actual BUG in this whole area was #31 (the stale nested schema-builder that made
       capture silently no-op framework-wide), which is fixed.
+
+### K. WRITE-BACK — capability now metadata-driven; full per-object write is a wizard-shape effort  [C/M]
+
+35. **Write capability is now METADATA-DRIVEN (foundational fix), not hardcoded read-only.** The
+    connector's `SupportsCreate/Update/Delete` previously returned a hardcoded `false`; they now follow
+    the per-operation CRUD columns on the cached IntegrationObjects (create-capable ⇔ an object declares
+    `CreateAPIPath`+`CreateMethod`, etc.) — consistent with the connector's metadata-driven object
+    surfacing. So authoring a writable object's per-operation columns flips capability on and the base
+    `BaseRESTIntegrationConnector` generic CRUD path executes it. Verified: full vitest suite green
+    (289 passed); a `$top`/`$skip` clamp test (stale from #1/#3) was corrected in the same pass.
+    - **The remaining real work (per-object) — GrowthZone writes are WIZARD/OPERATION-based, NOT flat
+      REST CRUD.** `POST /api/contacts` is a *filtered search*, not create; real writes are wizards/ops
+      (`POST /api/contacts/import/wizard`, `POST /api/contacts/{id}/representatives`,
+      `POST /api/contacts/contactactivity/create`, …). The cleanest generic-path-compatible writes are
+      the **DELETE** endpoints (path-templated ID, no body): `DELETE /api/calendars/{id}/{auditid}`,
+      `DELETE /api/directory/directories/{id}`, `DELETE /api/store/storeitems/{id}` — but several of those
+      modules are tenant-disabled here. So a full write-back needs, per writable object: (a) author the
+      per-operation columns where the shape fits the generic flat/wrapped body, and (b) override
+      `CreateRecord`/`UpdateRecord`/`DeleteRecord` for the wizard-shaped writes (multi-field wizard
+      payloads the generic path can't model). The metadata flag alone is necessary but not sufficient for
+      the wizard objects.
+    - **Testing:** off-live (mock) only — never live-tenant writes (standing instruction). The base generic
+      CRUD path is already engine-unit-tested; per-object overrides get their own mock fixtures asserting
+      the exact wizard request shape before any broker/live exercise.

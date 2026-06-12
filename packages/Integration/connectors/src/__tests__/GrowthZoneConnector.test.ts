@@ -140,7 +140,10 @@ describe('GrowthZoneConnector', () => {
         it('IntegrationName getter returns the canonical name', () => {
             expect(new GrowthZoneConnector().IntegrationName).toBe('GrowthZone');
         });
-        it('declares a read-only (pull) capability surface', () => {
+        it('write capability is METADATA-DRIVEN — read-only until per-operation write columns are authored', () => {
+            // No hardcoded false: SupportsCreate/Update/Delete follow the per-operation CRUD columns on
+            // the cached IntegrationObjects. With no engine cache (and no write metadata authored), the
+            // surface is read-only — but authoring CreateAPIPath+CreateMethod on an object flips it on.
             const c = new GrowthZoneConnector();
             expect(c.SupportsCreate).toBe(false);
             expect(c.SupportsUpdate).toBe(false);
@@ -283,12 +286,14 @@ describe('GrowthZoneConnector', () => {
     describe('BuildPaginatedURL (OData skip/top + delta watermark)', () => {
         const c = new TestGrowthZoneConnector();
 
-        it('emits OData top on the first page and skip on later pages', () => {
+        it('emits OData $top (clamped to the 100 server cap) on the first page and $skip on later pages', () => {
+            // GrowthZone is OData: only the $-prefixed params work, and the server caps the page at 100
+            // even when a larger size is requested (PROBLEMS_LOG #1/#3). $ is URL-encoded to %24.
             const o = obj({ APIPath: '/api/store/items' });
             expect(c.callBuildPaginatedURL('https://h/api/store/items', o, 1, 0, undefined, 500))
-                .toBe('https://h/api/store/items?top=500');
+                .toBe('https://h/api/store/items?%24top=100');
             expect(c.callBuildPaginatedURL('https://h/api/store/items', o, 2, 500, undefined, 500))
-                .toBe('https://h/api/store/items?top=500&skip=500');
+                .toBe('https://h/api/store/items?%24top=100&%24skip=500');
         });
 
         it('adds the IncrementalWatermarkField param on an incremental IO (metadata-driven)', () => {

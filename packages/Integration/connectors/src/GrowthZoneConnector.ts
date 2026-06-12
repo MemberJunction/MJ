@@ -178,11 +178,36 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
     // T1 ThreeWayName invariant can statically parse the getter's returned value from connector source.
     public override get IntegrationName(): string { return 'GrowthZone'; }
 
-    // ── Capability getters: curated AMS surface is read-only ─────────
+    // ── Capability getters: METADATA-DRIVEN (no hardcoded answer) ─────
+    //
+    // Write capability FOLLOWS the per-operation CRUD columns on the cached IntegrationObjects
+    // (Declared metadata), exactly like GetIntegrationObjects surfaces the object universe from
+    // metadata rather than a baked catalog. An object is create-capable when it declares both
+    // CreateAPIPath + CreateMethod; same for update/delete. With no write metadata authored the
+    // surface is read-only (returns false) — but the moment a writable object's per-operation
+    // columns are populated, the capability flips on, and the base BaseRESTIntegrationConnector
+    // generic CRUD path executes it. (NB: GrowthZone's writes are largely wizard/operation-based,
+    // so an object whose write does NOT fit the generic flat/wrapped body must additionally
+    // override CreateRecord/UpdateRecord/DeleteRecord — the metadata flag alone is not enough for
+    // those. See PROBLEMS_LOG #30/#35 for the per-object wizard-write roadmap.)
 
-    public override get SupportsCreate(): boolean { return false; }
-    public override get SupportsUpdate(): boolean { return false; }
-    public override get SupportsDelete(): boolean { return false; }
+    public override get SupportsCreate(): boolean {
+        return this.anyObjectDeclares(o => !!o.CreateAPIPath && !!o.CreateMethod);
+    }
+    public override get SupportsUpdate(): boolean {
+        return this.anyObjectDeclares(o => !!o.UpdateAPIPath && !!o.UpdateMethod);
+    }
+    public override get SupportsDelete(): boolean {
+        return this.anyObjectDeclares(o => !!o.DeleteAPIPath && !!o.DeleteMethod);
+    }
+
+    /** True when any cached IntegrationObject satisfies the predicate. []→false when the engine
+     *  cache is unavailable (e.g. capability probed before configuration) — fail-safe read-only. */
+    private anyObjectDeclares(pred: (o: MJIntegrationObjectEntity) => boolean): boolean {
+        const integration = IntegrationEngineBase.Instance.GetIntegrationByName(INTEGRATION_NAME);
+        if (!integration) return false;
+        return IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integration.ID).some(pred);
+    }
 
     // ── Action-object surfacing: METADATA-DRIVEN (no hardcoded catalog) ──
 
