@@ -452,13 +452,25 @@ async function setupTransport(manifest) {
   const server = await new Promise((resolveServer) => {
     const s = _http.createServer((req, res) => {
       const u = new URL(req.url || '/', 'http://127.0.0.1');
-      const route = _matchRoute(routes, u.pathname, req.method);
-      res.setHeader('content-type', 'application/json');
-      if (!route) { res.statusCode = 404; res.end(JSON.stringify({ error: 'no fixture for ' + u.pathname })); return; }
-      res.statusCode = route.Status || 200;
-      const headers = route.Headers || {};
-      for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
-      res.end(typeof route.Body === 'string' ? route.Body : JSON.stringify(route.Body == null ? [] : route.Body));
+      // Read the request body first: single-endpoint transports (GraphQL — every door POSTs the
+      // SAME /graphql path) need BODY-aware route selection. A route may declare BodyContains; among
+      // path-matched routes, the first whose BodyContains substring appears in the request body wins
+      // (a path-matched route WITHOUT BodyContains is the fallback). Path-only fixtures unchanged.
+      let bodyChunks = [];
+      req.on('data', (c) => bodyChunks.push(c));
+      req.on('end', () => {
+        const reqBody = Buffer.concat(bodyChunks).toString('utf-8');
+        const pathMatches = routes.filter((r) => u.pathname === r.Path || u.pathname.startsWith(r.Path));
+        let route = pathMatches.find((r) => r.BodyContains && reqBody.includes(r.BodyContains))
+            ?? pathMatches.find((r) => !r.BodyContains);
+        if (route == null && pathMatches.length === 0) route = _matchRoute(routes, u.pathname, req.method);
+        res.setHeader('content-type', 'application/json');
+        if (!route) { res.statusCode = 404; res.end(JSON.stringify({ error: 'no fixture for ' + u.pathname })); return; }
+        res.statusCode = route.Status || 200;
+        const headers = route.Headers || {};
+        for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
+        res.end(typeof route.Body === 'string' ? route.Body : JSON.stringify(route.Body == null ? [] : route.Body));
+      });
     });
     s.listen(0, '127.0.0.1', () => resolveServer(s));
   });

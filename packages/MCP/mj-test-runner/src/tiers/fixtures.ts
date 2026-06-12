@@ -28,7 +28,7 @@
  * If no fixtures exist, the loader returns `null` and the caller MUST surface a
  * visible `no-fixtures` failure — NOT a silent skip.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { REGISTRY_ROOT } from './childRunner.js';
 
@@ -41,6 +41,8 @@ export interface HttpRoute {
     Path: string;
     /** HTTP method to match (default: any). */
     Method?: string;
+    /** Single-endpoint transports (GraphQL): match when the REQUEST BODY contains this substring (e.g. the door/query name). Path-matched routes without BodyContains act as the fallback. */
+    BodyContains?: string;
     /** HTTP status to return (default: 200). */
     Status?: number;
     /**
@@ -153,6 +155,154 @@ export function loadFixtures(connector: string): FixtureLoadResult {
     };
 
     return { Manifest: manifest, FixturesDir: fixturesDir, Warnings: warnings };
+}
+
+/** Where a synthesized/loaded manifest came from (reported by the tier). */
+export type FixtureSource = 'fixtures' | 'postman' | 'openapi' | 'none';
+
+/** {@link loadFixtures} plus a recorded provenance of where the manifest came from. */
+export interface FixtureLoadResultWithSource extends FixtureLoadResult {
+    Source: FixtureSource;
+}
+
+/**
+ * Load a connector's fixtures, falling back to SYNTHESIZING a mock from credential-free
+ * docs when no hand-written `fixtures/fixtures.json` exists:
+ *   1. `fixtures/fixtures.json` (authored fixtures) — preferred.
+ *   2. a published **Postman collection** (`*.postman_collection.json` under sources/) →
+ *      Routes from each request's saved example responses.
+ *   3. an **OpenAPI/Swagger spec** → Routes from `paths.*.<method>.responses.*.content.*.example(s)`.
+ * The synthesized manifest reuses the exact {@link FixtureManifest} shape, so T5's replay
+ * engine + T6's apply engine consume it unchanged. Returns `Source:'none'` when nothing exists.
+ */
+export function loadFixturesOrSynthesize(connector: string): FixtureLoadResultWithSource {
+    const direct = loadFixtures(connector);
+    if (direct.Manifest) return { ...direct, Source: 'fixtures' };
+
+    const fromPostman = synthesizeFromPostman(connector);
+    if (fromPostman.Manifest) return { ...fromPostman, Source: 'postman' };
+
+    const fromOpenApi = synthesizeFromOpenAPI(connector);
+    if (fromOpenApi.Manifest) return { ...fromOpenApi, Source: 'openapi' };
+
+    return { ...direct, Source: 'none' };
+}
+
+/** Directories under a connector's registry dir where docs/specs/collections are cached. */
+function specSearchDirs(connector: string): string[] {
+    return [
+        resolve(REGISTRY_ROOT, connector, 'sources'),
+        resolve(REGISTRY_ROOT, connector, 'source-cache'),
+        resolve(REGISTRY_ROOT, connector),
+    ];
+}
+
+/** Find the first file in the search dirs whose name matches a predicate. */
+function findSpecFile(connector: string, match: (name: string) => boolean): string | null {
+    for (const dir of specSearchDirs(connector)) {
+        if (!existsSync(dir)) continue;
+        let entries: string[] = [];
+        try { entries = readdirSync(dir); } catch { continue; }
+        const hit = entries.find((n) => match(n.toLowerCase()));
+        if (hit) return resolve(dir, hit);
+    }
+    return null;
+}
+
+/** Build a `{Routes}` http manifest from a published Postman collection's saved responses. */
+function synthesizeFromPostman(connector: string): FixtureLoadResult {
+    const fixturesDir = resolve(REGISTRY_ROOT, connector, 'fixtures');
+    const warnings: string[] = [];
+    const file = findSpecFile(connector, (n) => n.endsWith('.postman_collection.json') || n === 'postman.json');
+    if (!file) return { Manifest: null, FixturesDir: fixturesDir, Warnings: warnings };
+
+    let parsed: unknown;
+    try { parsed = JSON.parse(readFileSync(file, 'utf-8')); } catch { warnings.push(`Postman collection ${file} is not valid JSON.`); return { Manifest: null, FixturesDir: fixturesDir, Warnings: warnings }; }
+
+    const routes: HttpRoute[] = [];
+    const visit = (items: unknown): void => {
+        if (!Array.isArray(items)) return;
+        for (const it of items as Array<Record<string, unknown>>) {
+            if (Array.isArray(it.item)) { visit(it.item); continue; } // folder
+            const req = it.request as Record<string, unknown> | undefined;
+            if (!req) continue;
+            const method = typeof req.method === 'string' ? req.method.toUpperCase() : 'GET';
+            const path = postmanUrlPath(req.url);
+            if (!path) continue;
+            const responses = Array.isArray(it.response) ? (it.response as Array<Record<string, unknown>>) : [];
+            const saved = responses.find((r) => r && r.body != null);
+            const status = saved && typeof saved.code === 'number' ? (saved.code as number) : 200;
+            let body: unknown = [];
+            if (saved && typeof saved.body === 'string') { try { body = JSON.parse(saved.body); } catch { body = saved.body; } }
+            routes.push({ Path: path, Method: method, Status: status, Body: body });
+        }
+    };
+    visit((parsed as Record<string, unknown>).item);
+    if (routes.length === 0) { warnings.push('Postman collection had no resolvable request paths.'); return { Manifest: null, FixturesDir: fixturesDir, Warnings: warnings }; }
+
+    return {
+        Manifest: { Transport: 'http', Configuration: {}, ConfigUrlKey: 'BaseURL', Routes: routes, Objects: [], DeltaPasses: [] },
+        FixturesDir: fixturesDir,
+        Warnings: warnings,
+    };
+}
+
+/** Extract a path (leading-slash) from a Postman `url` field (string or {path:[...]}/{raw}). */
+function postmanUrlPath(url: unknown): string | null {
+    if (typeof url === 'string') { try { return new URL(url).pathname; } catch { return url.startsWith('/') ? url : null; } }
+    if (url && typeof url === 'object') {
+        const u = url as Record<string, unknown>;
+        if (Array.isArray(u.path)) return '/' + (u.path as unknown[]).map((s) => String(s)).join('/');
+        if (typeof u.raw === 'string') { try { return new URL(u.raw).pathname; } catch { return null; } }
+    }
+    return null;
+}
+
+/** Build a `{Routes}` http manifest from an OpenAPI/Swagger spec's response examples. */
+function synthesizeFromOpenAPI(connector: string): FixtureLoadResult {
+    const fixturesDir = resolve(REGISTRY_ROOT, connector, 'fixtures');
+    const warnings: string[] = [];
+    const file = findSpecFile(connector, (n) => n.endsWith('.openapi.json') || n.endsWith('.swagger.json') || n === 'openapi.json' || n === 'swagger.json');
+    if (!file) return { Manifest: null, FixturesDir: fixturesDir, Warnings: warnings };
+
+    let spec: Record<string, unknown>;
+    try { spec = JSON.parse(readFileSync(file, 'utf-8')) as Record<string, unknown>; } catch { warnings.push(`OpenAPI spec ${file} is not valid JSON.`); return { Manifest: null, FixturesDir: fixturesDir, Warnings: warnings }; }
+
+    const paths = (spec.paths ?? {}) as Record<string, Record<string, unknown>>;
+    const routes: HttpRoute[] = [];
+    for (const [p, ops] of Object.entries(paths)) {
+        for (const [method, op] of Object.entries(ops)) {
+            if (!['get', 'post', 'put', 'patch', 'delete'].includes(method.toLowerCase())) continue;
+            const example = extractOpenApiExample(op as Record<string, unknown>);
+            if (example === undefined) continue;
+            routes.push({ Path: p.replace(/\{[^}]+\}/g, '0'), Method: method.toUpperCase(), Status: 200, Body: example });
+        }
+    }
+    if (routes.length === 0) { warnings.push('OpenAPI spec had no response examples to synthesize from.'); return { Manifest: null, FixturesDir: fixturesDir, Warnings: warnings }; }
+
+    return {
+        Manifest: { Transport: 'http', Configuration: {}, ConfigUrlKey: 'BaseURL', Routes: routes, Objects: [], DeltaPasses: [] },
+        FixturesDir: fixturesDir,
+        Warnings: warnings,
+    };
+}
+
+/** Pull the first 2xx response example out of an OpenAPI operation object. */
+function extractOpenApiExample(op: Record<string, unknown>): unknown {
+    const responses = (op.responses ?? {}) as Record<string, Record<string, unknown>>;
+    for (const code of ['200', '201', '2XX', 'default']) {
+        const resp = responses[code];
+        if (!resp) continue;
+        const content = (resp.content ?? {}) as Record<string, Record<string, unknown>>;
+        for (const media of Object.values(content)) {
+            if (media.example !== undefined) return media.example;
+            const examples = media.examples as Record<string, { value?: unknown }> | undefined;
+            if (examples) { const first = Object.values(examples)[0]; if (first && first.value !== undefined) return first.value; }
+            const schema = media.schema as Record<string, unknown> | undefined;
+            if (schema && schema.example !== undefined) return schema.example;
+        }
+    }
+    return undefined;
 }
 
 /** Marker for a body stored in a sibling file under `fixtures/`. */
