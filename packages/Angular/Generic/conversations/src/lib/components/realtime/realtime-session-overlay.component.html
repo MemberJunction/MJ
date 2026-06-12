@@ -83,6 +83,7 @@
           <mj-realtime-session-thread
             [State]="State"
             [AgentName]="AgentName"
+            [UserName]="CurrentUser?.Name || 'You'"
             [ShowCaptions]="ShowCaptions"
             [DevMode]="DevMode"
             (OpenRunRequested)="OnOpenRunRequested($event)"

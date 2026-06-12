@@ -284,9 +284,10 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
         if (reveal) {
           // The agent's first channel activity caused this creation — land ON the board.
           ref.RevealChannel(reveal);
-        } else if (!this.IsReviewing) {
-          // LIVE default for a fresh panel: the marquee surface (channels lead the
-          // strip), NOT the Activity rail — agent-run plumbing is the power-user tab.
+        } else {
+          // Default for a fresh panel (live AND review): the marquee surface — channels
+          // lead the strip — NOT the Activity rail; agent-run plumbing is opt-in only.
+          // (Review channel tabs register a beat later and take focus themselves.)
           ref.FocusFirstTab();
         }
       });
@@ -921,10 +922,14 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.reviewArtifacts = review.Artifacts ?? [];
     if (this.viewReady) {
       // Let this CD pass create/refresh the surface panel before registering the tabs.
-      setTimeout(() => {
+      // ngZone.run is REQUIRED: review often opens through the deep-link/query-param
+      // path (a plain RxJS stream outside Angular's zone) — without re-entering the
+      // zone, the registration's markForCheck never gets a change-detection pass and
+      // the Whiteboard tab stays invisible until the user's next click.
+      setTimeout(() => this.ngZone.run(() => {
         this.registerReviewBoardTab();
         this.registerReviewArtifactTabs();
-      }, 0);
+      }), 0);
     }
     this.cdr.markForCheck();
   }
@@ -977,7 +982,11 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     }
   }
 
-  /** Registers the read-only review whiteboard tab (no-op without a board / template). */
+  /**
+   * Registers the read-only review whiteboard tab (no-op without a board / template) —
+   * FOCUSED: the session's channel surface is what the reviewer came to see; the
+   * Activity rail stays available but is never the default focus.
+   */
   private registerReviewBoardTab(): void {
     if (!this.ReviewWhiteboard || !this.reviewBoardTpl) {
       return;
@@ -986,7 +995,8 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       Key: 'Whiteboard',
       Title: 'Whiteboard',
       Icon: 'fa-solid fa-chalkboard',
-      Content: this.reviewBoardTpl
+      Content: this.reviewBoardTpl,
+      Focus: true
     });
     this.reviewWhiteboardTabRegistered = true;
     this.cdr.markForCheck();
