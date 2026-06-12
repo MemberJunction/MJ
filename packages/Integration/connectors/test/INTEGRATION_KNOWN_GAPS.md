@@ -210,3 +210,17 @@ tsx-booted process — ORCID's 57-column promotion under the DIST-booted MJAPI r
 `spUpdateemployments` etc. correctly in the same pass, and the post-restart sync spread
 populated every promoted column (orgName 2/2, Works title 7/7) with rows flat. The dist-boot
 runbook (#7) therefore also mitigates #6.
+
+## 10. Content-hash compare-path vs persist-path canonicalization mismatch on deeply-nested shapes (found 2026-06-12, ORCID hybrid-e2e — deterministic, mock-replayable)
+
+The ORCID `record` object (the giant flattened shape: 26 promoted columns + large
+CustomOverflow) re-classifies as "updated" on EVERY sync pass against a byte-identical mock
+payload — while its sibling objects (works ×7, employments ×2, peer-reviews ×1) converge to
+`skipped` correctly, AND the STORED `__mj_integration_ContentHash` is byte-stable across the
+redundant updates. Stored-hash-stable + always-updates ⇒ the hash computed at COMPARE time
+differs deterministically from the hash computed at PERSIST time for this shape (suspect:
+promoted-key removal from overflow happening on one path but not the other, or
+post-process value coercion ordering). Bounded impact: no growth, no error, content converges —
+cost is one redundant UPDATE per sync per affected record. Repro: MJ_PLMS_E2E env, ORCID CI
+FB560BE8-…, fullSync twice against the fixture mock on :4915 — `record upd:1, others skip`.
+Fix belongs in the engine's hash canonicalization (single shared function for both paths).
