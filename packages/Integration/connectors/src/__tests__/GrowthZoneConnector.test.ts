@@ -8,6 +8,10 @@ import type {
     RESTAuthContext,
     RESTResponse,
     PaginationType,
+    CreateRecordContext,
+    UpdateRecordContext,
+    DeleteRecordContext,
+    CRUDResult,
 } from '@memberjunction/integration-engine';
 import { GrowthZoneConnector } from '../GrowthZoneConnector.js';
 
@@ -62,12 +66,28 @@ class TestGrowthZoneConnector extends GrowthZoneConnector {
         (this as unknown as { currentWatermark: string | undefined }).currentWatermark = value;
     }
 
+    // ── Write-path capture (the generic CRUD path reads write columns off the IO) ──
+    public RequestedMethods: string[] = [];
+    public RequestedBodies: unknown[] = [];
+    /** The IO the write methods resolve via GetCachedObject — set per write test. */
+    public TestObj: MJIntegrationObjectEntity | null = null;
+
+    protected override GetCachedObject(integrationID: string, objectName: string): MJIntegrationObjectEntity {
+        if (this.TestObj) return this.TestObj;
+        return super.GetCachedObject(integrationID, objectName);
+    }
+    public callCreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> { return this.CreateRecord(ctx); }
+    public callUpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> { return this.UpdateRecord(ctx); }
+    public callDeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> { return this.DeleteRecord(ctx); }
+
     // Capture the API HTTP layer (the token endpoint is mocked separately via global.fetch).
     protected override async MakeHTTPRequest(
-        _auth: RESTAuthContext, url: string, _method: string, headers: Record<string, string>
+        _auth: RESTAuthContext, url: string, method: string, headers: Record<string, string>, body?: unknown
     ): Promise<RESTResponse> {
         this.RequestedURLs.push(url);
         this.RequestedHeaders.push(headers);
+        this.RequestedMethods.push(method);
+        this.RequestedBodies.push(body);
         return this.NextAPIResponse;
     }
 }
@@ -394,6 +414,68 @@ describe('GrowthZoneConnector', () => {
             // Mirrors the empty-cache case; the config is gated on a non-empty object set.
             const cfg = new GrowthZoneConnector().GetActionGeneratorConfig();
             expect(cfg === null || (cfg && cfg.IntegrationName === 'GrowthZone')).toBeTruthy();
+        });
+    });
+
+    // ── Write-back (generic per-operation CRUD path, metadata-driven, OFF-LIVE) ──
+    // These prove the connector executes write operations purely from the per-operation IO columns —
+    // no live tenant writes. The clean-shape GrowthZone writes (simple POST create/update, path-
+    // templated DELETE) ride the base generic path; wizard/{id}-{auditid} shapes need per-object
+    // overrides (PROBLEMS_LOG #35) and are out of this block's scope.
+    describe('Write-back (generic per-operation CRUD path — off-live)', () => {
+        const writeCI = () => ciWithConfig(REFRESH_CONFIG);
+
+        it('CreateRecord POSTs to CreateAPIPath with a flat body and extracts the new ID from the body', async () => {
+            mockTokenEndpoint({ access_token: 'tok', token_type: 'Bearer' });
+            const c = new TestGrowthZoneConnector();
+            c.TestObj = obj({ Name: 'DirectoryListingType', CreateAPIPath: '/api/directory/directorylistingtypes', CreateMethod: 'POST', CreateBodyShape: 'flat', CreateIDLocation: 'body' });
+            c.NextAPIResponse = { Status: 201, Body: { id: '7788' }, Headers: {} };
+            const res = await c.callCreateRecord({ CompanyIntegration: writeCI(), ObjectName: 'DirectoryListingType', ContextUser: USER, Attributes: { Name: 'Gold Tier' } });
+            expect(c.RequestedMethods[0]).toBe('POST');
+            expect(c.RequestedURLs[0]).toContain('/api/directory/directorylistingtypes');
+            expect(c.RequestedBodies[0]).toEqual({ Name: 'Gold Tier' });
+            expect(res.Success).toBe(true);
+            expect(res.ExternalID).toBe('7788');
+        });
+
+        it('CreateRecord wraps the body under CreateBodyKey when CreateBodyShape=wrapped', async () => {
+            mockTokenEndpoint({ access_token: 'tok', token_type: 'Bearer' });
+            const c = new TestGrowthZoneConnector();
+            c.TestObj = obj({ Name: 'StoreItem', CreateAPIPath: '/api/store/storeitems', CreateMethod: 'POST', CreateBodyShape: 'wrapped', CreateBodyKey: 'storeItem', CreateIDLocation: 'body' });
+            c.NextAPIResponse = { Status: 200, Body: { id: '42' }, Headers: {} };
+            await c.callCreateRecord({ CompanyIntegration: writeCI(), ObjectName: 'StoreItem', ContextUser: USER, Attributes: { Title: 'T-Shirt' } });
+            expect(c.RequestedBodies[0]).toEqual({ storeItem: { Title: 'T-Shirt' } });
+        });
+
+        it('CreateRecord FAILS LOUDLY when a 2xx response carries no usable ID (BuildCreatedResult invariant)', async () => {
+            mockTokenEndpoint({ access_token: 'tok', token_type: 'Bearer' });
+            const c = new TestGrowthZoneConnector();
+            c.TestObj = obj({ Name: 'StoreItem', CreateAPIPath: '/api/store/storeitems', CreateMethod: 'POST', CreateBodyShape: 'flat', CreateIDLocation: 'body' });
+            c.NextAPIResponse = { Status: 200, Body: {}, Headers: {} };
+            const res = await c.callCreateRecord({ CompanyIntegration: writeCI(), ObjectName: 'StoreItem', ContextUser: USER, Attributes: { Title: 'X' } });
+            expect(res.Success).toBe(false);
+        });
+
+        it('UpdateRecord substitutes {id} into UpdateAPIPath and sends the body with the metadata-driven method', async () => {
+            mockTokenEndpoint({ access_token: 'tok', token_type: 'Bearer' });
+            const c = new TestGrowthZoneConnector();
+            c.TestObj = obj({ Name: 'Directory', UpdateAPIPath: '/api/directory/directories/{id}', UpdateMethod: 'POST', UpdateBodyShape: 'flat', UpdateIDLocation: 'path' });
+            c.NextAPIResponse = { Status: 200, Body: { id: '55' }, Headers: {} };
+            await c.callUpdateRecord({ CompanyIntegration: writeCI(), ObjectName: 'Directory', ContextUser: USER, ExternalID: '55', Attributes: { Name: 'Members Directory' } });
+            expect(c.RequestedMethods[0]).toBe('POST');
+            expect(c.RequestedURLs[0]).toContain('/api/directory/directories/55');
+            expect(c.RequestedBodies[0]).toEqual({ Name: 'Members Directory' });
+        });
+
+        it('DeleteRecord substitutes {id} into DeleteAPIPath and uses the metadata-driven DeleteMethod (not assumed DELETE)', async () => {
+            mockTokenEndpoint({ access_token: 'tok', token_type: 'Bearer' });
+            const c = new TestGrowthZoneConnector();
+            c.TestObj = obj({ Name: 'Directory', DeleteAPIPath: '/api/directory/directories/{id}', DeleteMethod: 'DELETE', DeleteIDLocation: 'path' });
+            c.NextAPIResponse = { Status: 204, Body: null, Headers: {} };
+            const res = await c.callDeleteRecord({ CompanyIntegration: writeCI(), ObjectName: 'Directory', ContextUser: USER, ExternalID: '99' });
+            expect(c.RequestedMethods[0]).toBe('DELETE');
+            expect(c.RequestedURLs[0]).toContain('/api/directory/directories/99');
+            expect(res.Success).toBe(true);
         });
     });
 });
