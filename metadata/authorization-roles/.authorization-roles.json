@@ -32,6 +32,13 @@
       "AuthorizationID": "@lookup:MJ: Authorizations.Name=Realtime: Advanced Session Controls",
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
       "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "E083C425-4BFF-47EB-99F4-EAF774BB6E4E"
+    },
+    "sync": {
+      "lastModified": "2026-06-12T17:06:06.093Z",
+      "checksum": "91e6e8b251b41863468e9641ba018a4276339903dc2be7b992c44d65c32fb32d"
     }
   }
 ]

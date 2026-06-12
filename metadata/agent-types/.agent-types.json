@@ -138,7 +138,7 @@
   {
     "fields": {
       "Name": "Realtime",
-      "Description": "Real-time agent type \u2014 a first-class peer of Loop and Flow that drives a streaming, full-duplex BaseRealtimeModel session (voice today, video later) instead of an iterative reasoning loop. The model owns the listen-reason-speak loop; the agent delegates real work back to async (Loop/Flow) agents via tool calls. The first agent of this type is the Voice Co-Agent, which voices on behalf of any target agent. The system prompt is per-agent (assembled at session start), so there is no type-level SystemPromptID.",
+      "Description": "Real-time agent type — a first-class peer of Loop and Flow that drives a streaming, full-duplex BaseRealtimeModel session (voice today, video later) instead of an iterative reasoning loop. The model owns the listen-reason-speak loop; the agent delegates real work back to async (Loop/Flow) agents via tool calls. The first agent of this type is the Voice Co-Agent, which voices on behalf of any target agent. The system prompt is per-agent (assembled at session start), so there is no type-level SystemPromptID.",
       "SystemPromptID": null,
       "IsActive": true,
       "AgentPromptPlaceholder": null,
@@ -154,8 +154,8 @@
       "ID": "29CA70B4-A097-474F-A5CE-3522ADD6407F"
     },
     "sync": {
-      "lastModified": "2026-06-10T22:36:28.417Z",
-      "checksum": "9230cb115a963df31761e0841330d318fb60003cf650f50452a78f079996f67c"
+      "lastModified": "2026-06-12T17:06:09.940Z",
+      "checksum": "f02d66eb84640ac05656d4edc57ac16ea0d8a3645b26870696531912cc78dc72"
     }
   }
 ]

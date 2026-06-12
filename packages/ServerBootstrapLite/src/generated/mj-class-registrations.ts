@@ -174,7 +174,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (367 classes)
+// @memberjunction/core-entities (368 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -198,6 +198,7 @@ import {
     MJAIAgentModelEntity,
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
+    MJAIAgentPairedAgentEntity,
     MJAIAgentPermissionEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
@@ -751,10 +752,12 @@ import {
     YouTubeUploadVideoAction,
 } from '@memberjunction/actions-bizapps-social';
 
-// @memberjunction/core-entities-server (20 classes)
+// @memberjunction/core-entities-server (22 classes)
 import {
+    MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
+    MJAIAgentPairedAgentEntityServer,
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
     MJActionEntityServer,
@@ -1097,6 +1100,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentModelEntity,
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
+    MJAIAgentPairedAgentEntity,
     MJAIAgentPermissionEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
@@ -1592,8 +1596,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     YouTubeSearchVideosAction,
     YouTubeUpdateVideoMetadataAction,
     YouTubeUploadVideoAction,
+    MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
+    MJAIAgentPairedAgentEntityServer,
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
     MJActionEntityServer,
@@ -1817,7 +1823,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 779;
+export const CLASS_REGISTRATIONS_COUNT = 782;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
