@@ -4837,6 +4837,50 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Turn-loop entry point for in-flight memory writes, gated on the agent's
+     * AllowMemoryWrite flag. When disabled but the LLM emitted writes anyway
+     * (prompt drift / injection attempt), records ONE summary skip step —
+     * observable without per-write noise — and tells the agent the memories
+     * were NOT saved so it stops re-emitting. When enabled, executes the
+     * writes as run steps and injects the results message.
+     *
+     * @protected
+     */
+    protected async processMemoryWritesForTurn(
+        memoryWrites: MemoryWriteRequest[],
+        params: ExecuteAgentParams,
+    ): Promise<void> {
+        if (params.agent.AllowMemoryWrite !== true) {
+            this.logStatus(`[MemoryWrites] LLM emitted ${memoryWrites.length} memory write(s) but AllowMemoryWrite=false — skipping`, true, params);
+            const skipStep = await this.createStepEntity({
+                stepType: 'Tool',
+                stepName: 'Memory Writes: skipped (AllowMemoryWrite=false)',
+                contextUser: params.contextUser,
+                inputData: { requestedWriteCount: memoryWrites.length },
+            });
+            await this.finalizeStepEntity(skipStep, true, undefined, { skipped: true, reason: 'AllowMemoryWrite=false' });
+            params.conversationMessages.push({
+                role: 'user',
+                content: 'Memory write result: this agent does not have durable memory writes enabled — the requested memories were NOT saved. Do not emit memoryWrites again.',
+                metadata: {
+                    turnAdded: this._promptTurnCount,
+                    messageType: 'tool-result',
+                    expirationTurns: 3,
+                    expirationMode: 'Compact',
+                    compactMode: 'First N Chars',
+                    compactLength: 200,
+                    compactPromptId: '',
+                },
+            });
+            return;
+        }
+
+        this.logStatus(`[MemoryWrites] LLM requested ${memoryWrites.length} memory write(s)`, true, params);
+        const writeResults = await this.executeMemoryWritesAsSteps(memoryWrites, params);
+        this.injectMemoryWriteResultsMessage(params, writeResults);
+    }
+
+    /**
      * Pushes a single user-role message containing memory-write outcomes into
      * the conversation, mirroring `injectArtifactToolResultsMessage`'s
      * inject-once-then-expire pattern. Closing the loop here is what stops the
@@ -7202,39 +7246,10 @@ The context is now within limits. Please retry your request with the recovered c
                 this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
             }
 
-            // Execute in-flight memory writes if provided (zero turn cost — processed inline).
-            // Gated on the agent's AllowMemoryWrite flag: when disabled but the LLM emitted
-            // writes anyway (prompt drift / injection attempt), record ONE summary skip step —
-            // observable without per-write noise — and tell the agent so it stops re-emitting.
+            // Execute in-flight memory writes if provided (zero turn cost — processed inline)
             const memoryWrites = initialNextStep.memoryWrites as MemoryWriteRequest[] | undefined;
             if (memoryWrites?.length) {
-                if (params.agent.AllowMemoryWrite !== true) {
-                    this.logStatus(`[MemoryWrites] LLM emitted ${memoryWrites.length} memory write(s) but AllowMemoryWrite=false — skipping`, true, params);
-                    const skipStep = await this.createStepEntity({
-                        stepType: 'Tool',
-                        stepName: 'Memory Writes: skipped (AllowMemoryWrite=false)',
-                        contextUser: params.contextUser,
-                        inputData: { requestedWriteCount: memoryWrites.length },
-                    });
-                    await this.finalizeStepEntity(skipStep, true, undefined, { skipped: true, reason: 'AllowMemoryWrite=false' });
-                    params.conversationMessages.push({
-                        role: 'user',
-                        content: 'Memory write result: this agent does not have durable memory writes enabled — the requested memories were NOT saved. Do not emit memoryWrites again.',
-                        metadata: {
-                            turnAdded: this._promptTurnCount,
-                            messageType: 'tool-result',
-                            expirationTurns: 3,
-                            expirationMode: 'Compact',
-                            compactMode: 'First N Chars',
-                            compactLength: 200,
-                            compactPromptId: '',
-                        },
-                    });
-                } else {
-                    this.logStatus(`[MemoryWrites] LLM requested ${memoryWrites.length} memory write(s)`, true, params);
-                    const writeResults = await this.executeMemoryWritesAsSteps(memoryWrites, params);
-                    this.injectMemoryWriteResultsMessage(params, writeResults);
-                }
+                await this.processMemoryWritesForTurn(memoryWrites, params);
             }
 
             // Execute a tool pipeline if provided (zero turn cost — processed inline). Each step's

@@ -46,6 +46,11 @@ const EXTRACTION_CONFIG = {
  * Configuration for note consolidation.
  * Consolidation finds clusters of similar notes and synthesizes them into single comprehensive notes.
  */
+const HARDENING_CONFIG = {
+    maxNotesPerRun: 200,           // Batch cap per MM run — remaining provisional notes picked up next cycle
+    dedupeSimilarity: 0.85,        // Similarity threshold for the dedupe check against hardened notes
+};
+
 const CONSOLIDATION_CONFIG = {
     /**
      * How often to run consolidation:
@@ -3053,24 +3058,6 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Run all 5 maintenance phases in order: importance scoring, consolidation,
-     * contradiction detection, stale-reference pruning, and decay-based archival.
-     * Each phase is wrapped in try/catch so a failure in one does not abort the rest.
-     *
-     * `triggerType` flows through to the parent consolidation run step so observability
-     * records *why* the maintenance cycle fired this run.
-     */
-    /**
-     * Counters returned by the hardening pass over agent-authored provisional notes.
-     */
-    private static readonly HARDENING_CONFIG = {
-        /** Max provisional notes processed per MM run — batch cap, remainder picked up next cycle */
-        maxNotesPerRun: 200,
-        /** Similarity threshold for the dedupe check against hardened notes */
-        dedupeSimilarity: 0.85,
-    };
-
-    /**
      * Hardening pass over in-flight agent-written notes (Status='Provisional',
      * AuthoredBy='Agent'). Runs UNCONDITIONALLY at the start of every MM cycle —
      * before the consolidation-gated maintenance phases — so that:
@@ -3089,7 +3076,7 @@ export class MemoryManagerAgent extends BaseAgent {
     ): Promise<{ hardened: number; deduped: number; failed: number }> {
         const counters = { hardened: 0, deduped: 0, failed: 0 };
         const step = await this.CreateRunStep('Decision', 'Harden Provisional Notes', {
-            maxNotesPerRun: MemoryManagerAgent.HARDENING_CONFIG.maxNotesPerRun
+            maxNotesPerRun: HARDENING_CONFIG.maxNotesPerRun
         });
         try {
             const rv = new RunView();
@@ -3097,7 +3084,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 EntityName: 'MJ: AI Agent Notes',
                 ExtraFilter: `Status = 'Provisional' AND AuthoredBy = 'Agent'`,
                 OrderBy: '__mj_CreatedAt ASC',
-                MaxRows: MemoryManagerAgent.HARDENING_CONFIG.maxNotesPerRun,
+                MaxRows: HARDENING_CONFIG.maxNotesPerRun,
                 ResultType: 'entity_object'
             }, contextUser);
 
@@ -3153,7 +3140,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 note.UserID || undefined,
                 note.CompanyID || undefined,
                 10,
-                MemoryManagerAgent.HARDENING_CONFIG.dedupeSimilarity
+                HARDENING_CONFIG.dedupeSimilarity
             )).filter(m => m.note.ID !== note.ID && m.note.Status === 'Active');
 
             if (similar.length > 0 && dedupePrompt) {
@@ -3197,6 +3184,14 @@ export class MemoryManagerAgent extends BaseAgent {
         }
     }
 
+    /**
+     * Run all 5 maintenance phases in order: importance scoring, consolidation,
+     * contradiction detection, stale-reference pruning, and decay-based archival.
+     * Each phase is wrapped in try/catch so a failure in one does not abort the rest.
+     *
+     * `triggerType` flows through to the parent consolidation run step so observability
+     * records *why* the maintenance cycle fired this run.
+     */
     private async runMaintenancePhases(
         contextUser: UserInfo,
         forceMaintenance: boolean,

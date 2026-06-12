@@ -16,7 +16,7 @@ export type InjectableNoteStatus = (typeof INJECTABLE_NOTE_STATUSES)[number];
 
 /** True when the given note status is eligible for retrieval/injection. */
 export function IsInjectableNoteStatus(status: string | null | undefined): boolean {
-  return status === 'Active' || status === 'Provisional';
+  return INJECTABLE_NOTE_STATUSES.some((s) => s === status);
 }
 
 /**
