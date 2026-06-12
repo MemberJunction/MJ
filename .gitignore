@@ -203,3 +203,4 @@ demo/
 # Credential broker runtime mailbox (job/result files — never committed)
 **/.cred-mailbox/
 openspec/
+metadata/integrations/**/.backups/
