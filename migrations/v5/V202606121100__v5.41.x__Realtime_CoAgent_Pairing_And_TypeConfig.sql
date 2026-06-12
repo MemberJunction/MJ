@@ -69,9 +69,10 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'AIAgent',
     @level2type = N'COLUMN', @level2name = N'TypeConfiguration';
 
--- ── 3. The type's published schema for that configuration ────────────────────
+-- ── 3. The type's published schema + type-level defaults for that configuration ──
 ALTER TABLE ${flyway:defaultSchema}.AIAgentType ADD
-    ConfigSchema NVARCHAR(MAX) NULL;
+    ConfigSchema NVARCHAR(MAX) NULL,
+    DefaultConfiguration NVARCHAR(MAX) NULL;
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -79,3 +80,10 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'AIAgentType',
     @level2type = N'COLUMN', @level2name = N'ConfigSchema';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Type-level DEFAULT configuration JSON for agents of this type — the base layer of the effective-configuration merge: type DefaultConfiguration <- agent TypeConfiguration <- runtime overrides (later layers win per key, deep-merged). Must itself conform to ConfigSchema when one is published. Null = no type defaults.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentType',
+    @level2type = N'COLUMN', @level2name = N'DefaultConfiguration';
