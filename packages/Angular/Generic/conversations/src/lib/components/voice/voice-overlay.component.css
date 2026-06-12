@@ -1,0 +1,121 @@
+.voice-overlay {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: 360px;
+  max-width: calc(100vw - 3rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 12px;
+  box-shadow: var(--mj-shadow-lg);
+  z-index: 1000;
+}
+
+.voice-overlay__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.voice-overlay__state {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 28px;
+}
+
+.voice-overlay__state-icon {
+  font-size: 1rem;
+  color: var(--mj-brand-primary);
+}
+
+.voice-overlay__state-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+/* Voice-activity orb — pulses while the agent speaks, steady while listening. */
+.voice-overlay__orb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--mj-brand-primary);
+  flex-shrink: 0;
+}
+.voice-overlay__orb[data-state='listening'] {
+  background: var(--mj-status-success);
+  animation: voice-orb-pulse 1.6s ease-in-out infinite;
+}
+.voice-overlay__orb[data-state='speaking'] {
+  background: var(--mj-brand-primary);
+  animation: voice-orb-pulse 0.7s ease-in-out infinite;
+}
+.voice-overlay__orb[data-state='thinking'] {
+  background: var(--mj-status-warning);
+  animation: voice-orb-pulse 1.1s ease-in-out infinite;
+}
+.voice-overlay__orb[data-state='error'] {
+  background: var(--mj-status-error);
+}
+
+@keyframes voice-orb-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.6; }
+}
+
+.voice-overlay__captions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: var(--mj-bg-surface-sunken);
+  border-radius: 8px;
+}
+
+.voice-overlay__caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.voice-overlay__caption-role {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--mj-text-muted);
+}
+.voice-overlay__caption[data-role='Assistant'] .voice-overlay__caption-role {
+  color: var(--mj-brand-primary);
+}
+
+.voice-overlay__caption-text {
+  color: var(--mj-text-primary);
+  white-space: pre-wrap;
+}
+
+.voice-overlay__caption--empty {
+  color: var(--mj-text-muted);
+  font-style: italic;
+}
+
+.voice-overlay__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.voice-overlay__controls button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}

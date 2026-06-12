@@ -1,4 +1,4 @@
-import { BaseEntity, UserInfo, QueryCacheConfig } from "@memberjunction/core";
+import { BaseEntity, UserInfo, QueryCacheConfig, IMetadataProvider } from "@memberjunction/core";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import {
     MJQueryEntity,
@@ -123,12 +123,74 @@ export class MJQueryEntityExtended extends MJQueryEntity {
     }
 
     /**
-     * Checks if a user can run this query based on permissions.
-     * Non-approved queries are allowed to execute (with a server-side warning)
-     * to enable testing before formal approval.
+     * Checks whether a user can run this query, considering query-level permissions,
+     * entity-level read permissions, and composition dependencies (recursive).
+     *
+     * Permission logic:
+     * 1. Check query-level run permissions (role-based)
+     * 2. If the query has explicit Query Permissions, those take precedence for this
+     *    query AND its composition dependencies (stored-procedure semantics)
+     * 3. If no explicit Query Permissions, check entity read permissions for all
+     *    referenced entities via the Query Entities bridge
+     * 4. Recursively check all composition dependencies ({{query:"..."}})
+     *
+     * @param user The user to check permissions for
+     * @param _visited Internal — tracks visited query IDs to prevent infinite loops in cyclic dependencies
+     * @returns Object with canRun boolean and list of denied entity names
      */
-    public UserCanRun(user: UserInfo): boolean {
-        return this.UserHasRunPermissions(user);
+    public UserCanRun(user: UserInfo, _visited?: Set<string>): { canRun: boolean; deniedEntities: string[] } {
+        // Cycle guard
+        const visited = _visited ?? new Set<string>();
+        if (visited.has(this.ID)) {
+            return { canRun: true, deniedEntities: [] };
+        }
+        visited.add(this.ID);
+
+        // Step 1: Check query-level run permissions
+        if (!this.UserHasRunPermissions(user)) {
+            return { canRun: false, deniedEntities: [] };
+        }
+
+        // Step 2: Explicit Query Permissions override entity checks for this query
+        // and all its dependencies (stored-procedure semantics)
+        const permissions = this.QueryPermissions;
+        if (permissions && permissions.length > 0) {
+            return { canRun: true, deniedEntities: [] };
+        }
+
+        // Step 3: No explicit permissions — check entity read access
+        const deniedEntities: string[] = [];
+        const queryEntities = this.QueryEntities;
+        if (queryEntities && queryEntities.length > 0) {
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
+            for (const qe of queryEntities) {
+                const entityInfo = md.EntityByID(qe.EntityID);
+                if (!entityInfo) continue;  // Stale reference — skip
+
+                const perms = entityInfo.GetUserPermisions(user);
+                if (!perms || !perms.CanRead) {
+                    deniedEntities.push(entityInfo.Name);
+                }
+            }
+        }
+
+        // Step 4: Recursively check composition dependencies
+        const dependencies = this.QueryDependencies;
+        if (dependencies && dependencies.length > 0) {
+            const allQueries = QueryEngine.Instance.Queries;
+            for (const dep of dependencies) {
+                const depQuery = allQueries.find(q => UUIDsEqual(q.ID, dep.DependsOnQueryID));
+                if (!depQuery) continue;  // Dependency not found — skip
+
+                const depResult = depQuery.UserCanRun(user, visited);
+                if (!depResult.canRun) {
+                    return { canRun: false, deniedEntities: [...deniedEntities, ...depResult.deniedEntities] };
+                }
+                deniedEntities.push(...depResult.deniedEntities);
+            }
+        }
+
+        return { canRun: deniedEntities.length === 0, deniedEntities };
     }
 
     // ─── Status Checks ──────────────────────────────────────────────────────────

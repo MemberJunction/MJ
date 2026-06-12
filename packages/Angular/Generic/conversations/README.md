@@ -2,6 +2,20 @@
 
 A comprehensive Angular component library for building conversation-based interfaces in MemberJunction, including messaging, artifact management, collections, projects, tasks, agent interaction panels, and collaboration features.
 
+> **Layering note.** The orchestration logic (agent dispatch, default-agent resolution, mention parsing, bridge state, streaming, client tools, sessions observability) lives in **`@memberjunction/conversations-runtime`** — a pure-TS, framework-agnostic package. This widget is one consumer of the runtime; React/Vue/Node hosts are also intended consumers. The widget is automatically wired to the runtime via `ConversationsRuntimeBootstrap` (registered `providedIn: 'root'`), which injects adapters for notifications, active-task tracking, and realtime sessions. See [`guides/CONVERSATIONS_UX_STACK_GUIDE.md`](../../../../guides/CONVERSATIONS_UX_STACK_GUIDE.md) for the full architecture.
+
+## Customization without forking
+
+The widget exposes three layers of extension:
+
+| Surface | What it lets you do |
+|---|---|
+| **6 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
+| **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
+
+Slot interfaces + cloneable default components + the `ChatSlotDirective` are exported — see the public API.
+
 ## Overview
 
 The `@memberjunction/ng-conversations` package is a large, feature-rich module that powers MemberJunction's conversation UI. It provides 40+ components covering the entire conversation lifecycle: message composition and rendering (with markdown, mentions, code blocks, and artifacts), conversation navigation and history, threaded discussions, artifact collections and libraries, project/task management, agent execution panels, sharing/permission modals, search, notifications, and export.
@@ -192,6 +206,25 @@ The overlay is generic — it raises events for navigation and tool execution. T
 </mj-active-agent-indicator>
 ```
 
+### Real-Time Voice (Co-Agent) UX
+
+The package hosts the full client UX for MJ's real-time co-agent sessions — live voice calls with the conversation's agent, with interactive channel surfaces (the live Whiteboard) docked beside the call. Architecture background: [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../../guides/REALTIME_CO_AGENTS_GUIDE.md).
+
+**`VoiceSessionService`** (`services/voice-session.service.ts`) is the provider-agnostic orchestrator, injectable at root. It drives a **client-direct** session: it calls the `StartRealtimeClientSession` mutation to mint a server-scoped ephemeral credential, resolves the matching `BaseRealtimeClient` driver (from `@memberjunction/ai-realtime-client` — OpenAI, Gemini, ElevenLabs, or AssemblyAI) through the ClassFactory by the server-reported `Provider` key, and connects the browser **directly** to the realtime provider — audio frames never transit the MJ server; only tool calls, final transcripts, channel state, and usage telemetry relay back over GraphQL. It exposes the reactive session state hosts consume: `ConnectionState$` (`connecting | listening | speaking | thinking | error | closed`), `Captions$`, `Active$`, `DelegationProgress$` / `DelegationResult$` / `DelegationNarration$`, `ActiveChannels$`, `ChannelFocus$`, `Minimized$`, plus `SendText` (typed input into the live call), `ToggleMute`, `RegisterClientToolHandler` (prefix-routed, client-executed UI tools), and the explicit delegation cancel channel — `CancelDelegation(callId)` / `CancelInFlightDelegations()` call the `CancelRealtimeSessionTool` mutation and flip the card to "Cancelled by user" (deliberate policy: **true barge-in never aborts delegated work** — only the per-card ✕ does). The client driver's `OnUsage` token deltas are accumulated and relayed onto the co-agent's observability prompt run via `RelayRealtimeUsage`, debounced (10 s) plus a teardown flush.
+
+**The call overlay** (`components/realtime/`): `RealtimeSessionOverlayComponent` (`mj-realtime-session-overlay`) fills the conversation panel in place while a session is active — hosted by `ConversationChatAreaComponent` behind `Active$`, started from the mic button in `MessageInputComponent`. Two columns:
+
+- **Main column** — agent banner (identity + turn state + model name), the unified session thread (`RealtimeSessionThreadComponent`, fed by the shared `RealtimeSessionState` merge of caption/delegation/narration streams), the channel strip, the in-call composer (typed turns behave identically to spoken ones), and the controls row (mute, end call, and a gear-gated developer mode revealing "Open run"/"Open session" links).
+- **Right panel** — `RealtimeSurfaceTabsComponent`, the tabbed surface panel (`RealtimeSurfaceTabsModel` is the framework-free, unit-tested tab state): the Activity rail is always tab 1; **one tab per artifact** a delegated run produces (auto-opened and flash-highlighted on arrival); **one tab per interactive channel**.
+
+**Interactive channels are plugins** — the shell is channel-agnostic. `BaseRealtimeChannelClient` (`components/realtime/channels/base-realtime-channel-client.ts`) is the contract: a client-executed tool set declared to the realtime model at session mint, a perception serializer feeding coalesced state deltas into the model as context notes, a dynamically-created Angular surface component the plugin binds itself, a persisted state of record, prior-session restore (`RestoreState`), artifact snapshots (`SaveAsArtifact`), and focus-mode layout requests. Plugins resolve at session start from the `MJ: AI Agent Channels` registry by `ClientPluginClass` key.
+
+**The live Whiteboard is a thin consumer of [`@memberjunction/ng-whiteboard`](../whiteboard/README.md)** — the board itself (the `WhiteboardState` engine, the `Whiteboard_*` tool API, the host/board/toolbar/zoom/popover/snapshot components, exports, the sandboxed-HTML-widget input bridge, the context menu) lives in that generic package; read its README for whiteboard details. This package contributes only the integration glue (`components/realtime/whiteboard/`): `RealtimeWhiteboardChannel`, the ~200-line channel plugin that declares `WHITEBOARD_TOOL_DEFINITIONS` to the model, routes `Whiteboard_*` calls to the bound host (or the pure engine call when the pane is collapsed), pipes the coalesced `SceneDelta` stream into the model as `[whiteboard]` context notes (with do-not-narrate-minor-edits etiquette inline), forwards widget submissions (`MJWhiteboard.submit` — the tutoring loop) and agent-undo events, persists/restores the board as the channel's state of record, and snapshots it to versioned `MJ: Artifacts`; plus `WhiteboardArtifactViewerPlugin` (`mj-whiteboard-artifact-viewer`), the saved-board artifact viewer rendered through the package's read-only snapshot component.
+
+**Session review & resume carryover**: a past session replays through the same overlay in review mode — `ConversationChatAreaComponent.OpenRealtimeSessionReview(agentSessionId)` loads a `RealtimeSessionReview` via `RealtimeSessionReviewService`. The loader is **chain-aware**: a session resumed via `lastSessionId` chains legs, and the loader walks the chain backwards (capped, cycle-guarded), rendering every leg chronologically with a divider between legs that carries the previous leg's `CloseReason` as a chip; the chain's conversation-history artifacts load as unfocused artifact tabs, and a read-only Whiteboard tab appears when a board was saved. "Start live session" resumes as a new session chained via `lastSessionId` — saved channel states restore *and* the prior legs' transcript is hydrated into the new model's prompt server-side. The conversations resource also accepts a `realtimeSessionId` query param (the deep link the custom `MJ: AI Agent Sessions` form emits) and opens review mode directly.
+
+This package never navigates (no Router): developer links emit a `RealtimeNavigateRequest` the host converts onto its `openEntityRecord` chain, and minimizing the call shows the host's floating "on call" pill while the session stays live.
+
 ### Collaboration
 
 ```html
@@ -272,6 +305,23 @@ The overlay is generic — it raises events for navigation and tool execution. T
 | `ActiveAgentIndicatorComponent` | `mj-active-agent-indicator` | Active processing indicator |
 | `ActiveTasksPanelComponent` | `mj-active-tasks-panel` | Active tasks panel |
 
+### Real-Time Voice Components
+
+| Component | Selector | Description |
+|-----------|----------|-------------|
+| `RealtimeSessionOverlayComponent` | `mj-realtime-session-overlay` | The in-place "call mode" overlay for a live voice session (two-column: call + tabbed surface panel) |
+| `RealtimeAgentBannerComponent` | `mj-realtime-agent-banner` | Compact agent identity + turn-state banner |
+| `RealtimeSessionThreadComponent` | `mj-realtime-session-thread` | Unified live thread (captions, delegation cards, ephemeral narration) |
+| `RealtimeActivityRailComponent` | `mj-realtime-activity-rail` | Session activity rail (the surface panel's first tab) |
+| `RealtimeDelegationCardComponent` | `mj-realtime-delegation-card` | "Working on it" → result card for a delegated agent run |
+| `RealtimeChannelStripComponent` | `mj-realtime-channel-strip` | Chip-per-channel strip |
+| `RealtimeComposerComponent` | `mj-realtime-composer` | In-call typed-input composer |
+| `RealtimeControlsComponent` | `mj-realtime-controls` | Mute / end-call / developer-mode controls |
+| `RealtimeSurfaceTabsComponent` | `mj-realtime-surface-tabs` | Tabbed surface panel: Activity + artifact tabs + channel surfaces (backed by the framework-free, unit-tested `RealtimeSurfaceTabsModel`) |
+| `WhiteboardArtifactViewerComponent` | `mj-whiteboard-artifact-viewer` | Saved-board artifact viewer (registered as `WhiteboardArtifactViewerPlugin`); renders via `@memberjunction/ng-whiteboard`'s snapshot component |
+
+> The live whiteboard surface itself (`mj-realtime-whiteboard-host`, board, toolbar, zoom, "What the agent sees" popover) ships in [`@memberjunction/ng-whiteboard`](../whiteboard/README.md); the `RealtimeWhiteboardChannel` plugin here creates it dynamically in a channel tab.
+
 ### Utility Components
 
 | Component | Selector | Description |
@@ -325,6 +375,8 @@ RxJS `BehaviorSubject` instances for all state, with derived observables using `
 | `@memberjunction/ng-markdown` | Markdown rendering |
 | `@memberjunction/ng-shared-generic` | Shared generic components |
 | `@memberjunction/ng-testing` | Testing framework components |
+| `@memberjunction/ng-whiteboard` | The generic collaborative whiteboard (consumed by the realtime Whiteboard channel + artifact viewer) |
+| `@memberjunction/ai-realtime-client` | Browser-side realtime drivers (OpenAI / Gemini / ElevenLabs / AssemblyAI) used by `VoiceSessionService` |
 
 ### Kendo UI Packages
 

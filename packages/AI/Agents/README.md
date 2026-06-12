@@ -135,6 +135,10 @@ Conversational agent that runs in a loop: prompt -> decide -> act -> repeat. Bes
 
 Step-based agent that follows a predefined flow graph. Each step has explicit paths to the next step based on conditions. Best for deterministic workflows where the execution path is known in advance.
 
+#### RealtimeAgentType
+
+Session-driven agent type for **live, low-latency, full-duplex** interaction (voice today; the contract is modality-agnostic). Unlike Loop and Flow, a Realtime agent does **not** run an iterative reasoning loop — modern realtime stacks (GPT Realtime, Gemini Live, ElevenLabs Agents, AssemblyAI Voice Agent) own the listen-reason-speak loop themselves, so `RealtimeAgentType` wraps a long-lived `BaseRealtimeModel` session instead. The marker is its `IsSessionDriven` getter (always `true`): `BaseAgent` duck-types it and routes execution to a `RealtimeSessionRunner` rather than entering the loop. See [Real-Time Co-Agents](#real-time-co-agents) below.
+
 ```mermaid
 graph LR
     subgraph "Loop Agent"
@@ -168,6 +172,25 @@ graph LR
     style F4 fill:#b8762f,stroke:#8a5722,color:#fff
     style F5 fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
+
+### Real-Time Co-Agents
+
+Real-time is the **live, low-latency complement** to the async Loop/Flow paradigm — not a replacement for it. Loop and Flow agents stay asynchronous and untouched; what they cannot deliver is a natural spoken conversation, because the loop is intentionally long-running while realtime models own sub-second turn taking, VAD, and barge-in natively. The `Realtime` agent type bridges the two worlds: a realtime model holds the conversation, and **real work is delegated back to the async agents you already have** as ordinary `AIAgentRun`s.
+
+The first shipped agent of this type is the **Realtime Co-Agent** (seeded in `metadata/agents/`): a generic companion that acts as the live voice *for any* target MJ agent. The target is a runtime parameter — agents gain voice by configuration, never by being rewritten. Which co-agent voices a given target resolves through a metadata chain at session start: runtime `coAgentId` parameter → `AIAgent.DefaultCoAgentID` → `AIAgentType.DefaultCoAgentID` → the seeded global `Realtime Co-Agent`.
+
+Key pieces in this package:
+
+- **`RealtimeAgentType`** (`src/agent-types/realtime-agent-type.ts`) — the registered agent type (`@RegisterClass(BaseAgentType, "RealtimeAgentType")`). Its `IsSessionDriven` getter makes `BaseAgent.ExecuteAgent` branch into `executeRealtimeSession()` instead of the loop; the loop-oriented abstract methods are implemented defensively and should never be reached.
+- **`RealtimeSessionRunner`** (`src/realtime/realtime-session-runner.ts`) — dependency-injected orchestrator for the **server-bridged** topology: opens the `IRealtimeSession`, registers the stable tool set, persists transcript turns, checkpoints usage onto the single long-lived `AIPromptRun` on a debounced cadence (crash-safe — a janitor close finalizes from the last-persisted values), and aborts an in-flight delegated run on barge-in. It also **narrates** delegated work itself: each significant progress event is fed to the session's optional `SendContextNote`, and a built-in pacing engine (first spoken update ~5 s into a burst, ≥8 s session-global spacing, deduped multi-message digests, cancellation on completion/barge-in) drives `RequestSpokenUpdate` — both feature-detected, since providers may omit either capability. Fully unit-testable against a mock realtime model.
+- **`realtime-narration.ts`** (`src/realtime/realtime-narration.ts`) — the shared narration module both topologies use: `ResolveNarrationInstructionsTemplate()` resolves the DB-driven `Realtime Co-Agent - Progress Narration` prompt (with a deprecated fallback to the pre-rename `Voice Co-Agent - Progress Narration` seed name) from `AIEngine`'s cache, and `BuildServerNarrationInstructions()` substitutes its placeholders for the server-bridged runner (the browser host has its own richer builder that chains the model's actual prior narrations — only the browser can observe those).
+- **`RealtimeToolBroker`** (`src/realtime/realtime-tool-broker.ts`) — the **topology-agnostic** tool-execution path both topologies share, so a tool call produces byte-for-byte identical results whether the provider socket lives on the server or in the browser. Routes the stable `invoke-target-agent` tool (the co-agent's one headline capability — the target rides *inside* the call, never as a per-target tool) to the delegation seam, everything else to the tool executor; owns the per-call `AbortController`; serializes failures as structured errors the model can *narrate*.
+- **`RealtimeClientSessionService`** (`src/realtime/realtime-client-session-service.ts`) — the server half of the **client-direct** topology (the shipped audio path: the browser opens its own provider socket with a server-minted ephemeral token, while the server keeps prompt/tool authority and executes every relayed tool call). `PrepareClientSession` resolves the Realtime model, assembles the companion system prompt + memory context (including a resumed session's prior-leg transcript when the caller threads one in), mints the `ClientRealtimeSessionConfig`, and creates the co-agent **observability run** (an `AIAgentRun` + linked `AIPromptRun` stamped with the co-agent's `AgentID`, plus a single `Prompt`-type `AIAgentRunStep` whose `TargetLogID` points at the prompt run — finalized with a `Success` stamp by `FinalizeCoAgentRun`). `ExecuteRelayedTool` runs relayed calls through the shared broker — registering each in a per-session **in-flight delegation registry** so `CancelInFlightDelegations(sessionId, callId?)` (the engine behind the `CancelRealtimeSessionTool` mutation) can abort them on explicit user cancel — including resuming a paused (`AwaitingFeedback`) interactive run and creating artifacts from delegated-run payloads.
+- **`AgentMemoryContextBuilder`** (`src/agent-memory-context-builder.ts`) — the memory/RAG injection orchestration extracted out of `BaseAgent` so the co-agent assembles the **same** notes/examples/context a loop agent does, with no duplicated logic.
+
+Delegated runs link to the co-agent's run via `ParentRunID` and share the session's `AgentSessionID`, so the whole episode — session, co-agent run (with its prompt run + Timeline step), delegated runs, transcript (`ConversationDetail` rows), channel state, usage telemetry (checkpointed server-side, or relayed from the browser via `RelayRealtimeUsage`) — groups under one session record with full standard observability.
+
+The browser-side driver layer lives in [`@memberjunction/ai-realtime-client`](../RealtimeClient/README.md); the model primitive (`BaseRealtimeModel` / `IRealtimeSession`) lives in `@memberjunction/ai`; the Angular UX (call overlay, interactive channels, the live whiteboard) lives in `@memberjunction/ng-conversations`. **The flagship guide — concept, triple-registry plugin architecture, topologies, session lifecycle, channels, narration, security — is [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../guides/REALTIME_CO_AGENTS_GUIDE.md).**
 
 ### PayloadManager
 
@@ -389,6 +412,7 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | [Expression Context (PRD)](./docs/prd-expression-context-phase1.md) | Expression evaluation in agent contexts |
 | [Agent Profiles (Proposal)](./docs/agent-profiles-proposal.md) | Proposed agent profile system |
 | [Code Refactoring Notes](./docs/code-refactoring.md) | Internal refactoring notes |
+| [Real-Time Co-Agents Guide](../../../guides/REALTIME_CO_AGENTS_GUIDE.md) | Repo-level flagship guide: Realtime agent type, Realtime Co-Agent, dual topologies, sessions, channels, whiteboard, narration, security |
 
 ## Re-exports
 

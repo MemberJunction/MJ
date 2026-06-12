@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/actions",
   "type": "module",
-  "version": "5.39.0",
+  "version": "5.40.2",
   "description": "Main library for MemberJunction Actions. This library is only intended to be imported on the server side.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,14 +21,14 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/action-runtime": "5.39.0",
-    "@memberjunction/actions-base": "5.39.0",
-    "@memberjunction/ai": "5.39.0",
-    "@memberjunction/code-execution": "5.39.0",
-    "@memberjunction/core": "5.39.0",
-    "@memberjunction/core-entities": "5.39.0",
-    "@memberjunction/doc-utils": "5.39.0",
-    "@memberjunction/global": "5.39.0"
+    "@memberjunction/action-runtime": "5.40.2",
+    "@memberjunction/actions-base": "5.40.2",
+    "@memberjunction/ai": "5.40.2",
+    "@memberjunction/code-execution": "5.40.2",
+    "@memberjunction/core": "5.40.2",
+    "@memberjunction/core-entities": "5.40.2",
+    "@memberjunction/doc-utils": "5.40.2",
+    "@memberjunction/global": "5.40.2"
   },
   "repository": {
     "type": "git",

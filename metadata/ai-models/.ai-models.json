@@ -5780,7 +5780,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "GroqLLM",
             "APIName": "moonshotai/kimi-k2-instruct-0905",
             "MaxInputTokens": 131072,
@@ -5794,8 +5794,8 @@
             "ID": "DA60EB91-B2BC-4F24-BFEE-4DEAB8959ADF"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.439Z",
-            "checksum": "5ef4d7e7063e988fe5dfc77b350ffec3687633a9b8f3b1f458e4a6505387fc88"
+            "lastModified": "2026-06-09T06:32:19.380Z",
+            "checksum": "07ae8122765a06f9d2b7876abc97ffb3ed7409be0bfc0fb4a87831094464b735"
           }
         },
         {
@@ -5803,7 +5803,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Deprecated",
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
@@ -5813,8 +5813,8 @@
             "ID": "37C8550B-699F-48C9-A0CA-E599C165A637"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.590Z",
-            "checksum": "a5027c3113a898e0e6076d614cfffe2a125525d91d12553389522228640eac4e"
+            "lastModified": "2026-06-09T06:32:19.400Z",
+            "checksum": "5d8f0a008ae79c0a550cad7a15929b016a99cacae766027bcd594d2af5456dd9"
           }
         },
         {
@@ -9441,7 +9441,7 @@
   {
     "fields": {
       "Name": "Claude Opus 4.1",
-      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window.",
+      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. DEPRECATION ANNOUNCED 2026-06-05: claude-opus-4-1-20250805 retires August 5, 2026. Recommended replacement is claude-opus-4-8. Source: https://platform.claude.com/docs/en/about-claude/model-deprecations",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 19,
       "IsActive": true,
@@ -9572,8 +9572,8 @@
       "ID": "2C5EA224-85A1-4D09-ABA6-0D52F2E6AFBB"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:25.411Z",
-      "checksum": "2c2e87341a7c6f2885fbe3c9da6cb4c940b7fe4fd3b772da0308694d93885561"
+      "lastModified": "2026-06-09T06:32:19.016Z",
+      "checksum": "b7babef47ddeb2f1dcdde5a7d8e6bf3e5e8db3312f652b532dea97e478d2b51d"
     }
   },
   {
@@ -14070,8 +14070,8 @@
     "fields": {
       "Name": "GPT Realtime 2",
       "PowerRank": 11,
-      "Description": "OpenAI's second-generation speech-to-speech voice model (May 7, 2026). GPT-5-class reasoning surfaced through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool calls, spoken preambles, and recovery on failed tasks. 128K token context (4x the predecessor). Multi-channel pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input, $24/M text output, $5/M image input.",
-      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "Description": "OpenAI's second-generation speech-to-speech voice model (May 7, 2026). GPT-5-class reasoning surfaced through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool calls, spoken preambles, and recovery on failed tasks. 128K token context (4x the predecessor). Multi-channel pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input, $24/M text output, $5/M image input. Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 8,
@@ -14152,8 +14152,8 @@
       "ID": "562BA6F2-9D4C-4CBF-8865-4A97EEA0F14C"
     },
     "sync": {
-      "lastModified": "2026-05-14T02:07:47.961Z",
-      "checksum": "e6e0ee9add0c539048051161bf21e2c24af5e0d1804ad80ad33f45de8fa059e4"
+      "lastModified": "2026-06-10T22:36:19.220Z",
+      "checksum": "d74ee7f556cc46337e20d8c226a1994e3058e51e6f0faf76b6bd7f5f0887b9b1"
     }
   },
   {
@@ -15767,6 +15767,273 @@
     "sync": {
       "lastModified": "2026-06-05T02:25:07.892Z",
       "checksum": "a2e840a7221f7ec13257672bab9ff1aea15d38c7ad03ece5879694e68e9e8c75"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.7 Plus",
+      "PowerRank": 18,
+      "Description": "Alibaba Cloud's Plus-tier model in the Qwen 3.7 series, GA on Alibaba Cloud Model Studio (Bailian) on 2026-06-01 at endpoint qwen3.7-plus. Multimodal (text, vision, video understanding) with deep-reasoning, tool invocation, and autonomous iteration capabilities. 1M token context window. Positioned as the cost-efficient sibling of Qwen 3.7 Max — roughly 1/6 the per-token price while preserving most of the agentic and reasoning capability of the Max tier. OpenAI-compatible API via DashScope; also surfaced on OpenRouter 2026-06-03.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Qwen 3.6 Plus"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A0EFD351-3588-4754-9EDF-7610844E0CA9"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:19.893Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.7-plus",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "86EE6496-C59A-4F8A-84D8-90506A341757"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:19.913Z",
+            "checksum": "92be4cff8f8db950d3c085f542c197c1fdd358aadff0004e9dd2c906c2091fe2"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.7-plus",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "522A32C5-FA8E-4772-83D4-3B2235235283"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:19.933Z",
+            "checksum": "e7067d63cb2f992a24fc76f1dadf7f67490feb3964f05f98173af9e83ac105e4"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-06-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.4,
+            "OutputPricePerUnit": 1.16,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.7 Plus pricing on Alibaba Cloud Model Studio (DashScope/Bailian) as of GA on 2026-06-01: $0.40/1M input, $1.16/1M output. Positioned at roughly 1/6 the per-token cost of Qwen 3.7 Max. Sources: https://www.marktechpost.com/2026/06/02/alibabas-qwen-team-launches-qwen3-7-plus-adding-vision-deep-reasoning-tool-invocation-and-autonomous-iteration-on-the-bailian-platform/ ; https://www.digitalapplied.com/blog/qwen-3-7-plus-alibaba-multimodal-agent-model-2026-release"
+          },
+          "primaryKey": {
+            "ID": "2E86FA53-B3E1-4F75-AD7B-A8263A09B81D"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:19.975Z",
+            "checksum": "1cdeefa86d37e72bdecfae5375da4badb3bf2ed2989873fea5c5723c4390000c"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-06-03T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.4,
+            "OutputPricePerUnit": 1.16,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.7 Plus on OpenRouter (passthrough pricing). Listed on 2026-06-03 per OpenRouter June 4 changelog. Source: https://openrouter.ai/docs/changelog"
+          },
+          "primaryKey": {
+            "ID": "068C6E17-6D4B-49A6-B85F-1ECE1BE4E1CD"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:19.994Z",
+            "checksum": "d7a4d61facaa7ce238463a3d332b4764d54d962a7b465044db74e2ff1814fcb5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6B5F5FCA-26CF-4DC4-90F9-6A2ABAA75028"
+    },
+    "sync": {
+      "lastModified": "2026-06-09T06:32:19.741Z",
+      "checksum": "24f9eea5cb2f4a7d1550fa4e2738049cbed75ca13c63ece27526e999bd08ed75"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 3.1 Flash Live",
+      "PowerRank": 11,
+      "Description": "Google's Gemini 3.1 Flash Live model — its highest-quality native-audio realtime model (supersedes the deprecated 2.5 native-audio previews): streaming, full-duplex, tool-calling, for low-latency voice conversations over the Gemini Live API. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GeminiRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "GeminiRealtime",
+            "APIName": "gemini-3.1-flash-live-preview",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          },
+          "primaryKey": {
+            "ID": "BAFB6CB9-C5E4-4BBB-9168-3CB8D38ACDC5"
+          },
+          "sync": {
+            "lastModified": "2026-06-10T22:36:19.630Z",
+            "checksum": "014978244a9f15bac0efaf67a18dc530e6c40efe3291be12622eb95fdcbadc35"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F1AEF71E-9E93-4C27-870E-620E75FA5552"
+    },
+    "sync": {
+      "lastModified": "2026-06-10T22:36:19.262Z",
+      "checksum": "f56ab8319539c962b6230c7b1f57f6db7f11f6e0d348c8e2ca39a06fa79d894f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ElevenLabs Agents",
+      "PowerRank": 10,
+      "Description": "ElevenLabs Agents Platform — an orchestrated STT→LLM→TTS conversational stack treated as a realtime model: streaming, full-duplex, client-tool-calling voice sessions over the Agents websocket. The driver uses a MANAGED-AGENT strategy: the Model Vendor APIName is the managed agent's NAME (find-by-name, create-if-missing with the session tool set and per-session prompt-override enablement, PATCH on tool-set drift); deployments may instead set APIName to a concrete agent_… id to use a hand-configured agent verbatim. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass ElevenLabsRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "ElevenLabsRealtime",
+            "APIName": "MJ Realtime Co-Agent",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          },
+          "primaryKey": {
+            "ID": "12ED40AE-7660-44FF-9158-CC162A8EC4CB"
+          },
+          "sync": {
+            "lastModified": "2026-06-11T13:58:05.222Z",
+            "checksum": "79458e967f6bad62f7a7c7b4fe025064fa48d9cb79365e6d9241d9e81d1a3d5a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "882996F4-BDD9-4C36-9291-D71A46FFE2D5"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T13:58:04.739Z",
+      "checksum": "35c232c808787c16a182efbc6988af44ef342b97a01c9760db8c3ee5eb4165f5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AssemblyAI Voice Agent",
+      "PowerRank": 9,
+      "Description": "AssemblyAI's Voice Agent API (launched April 2026) — a single-websocket speech-to-speech stack treated as a realtime model: Universal-3 Pro streaming ASR, server-side turn detection and barge-in, LLM reasoning, JSON-Schema tool calling, and conversational TTS (30+ voices, 6 languages). Per-session prompt/tool/voice/turn-detection config is supplied natively via session.update — no server-side agent object to manage. Flat $4.50/session-hour billing (no token usage events). Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass AssemblyAIRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=AssemblyAI",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "AssemblyAIRealtime",
+            "APIName": "voice-agent",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          },
+          "primaryKey": {
+            "ID": "246C0C12-10CC-4E3B-9330-CFA07923DBB8"
+          },
+          "sync": {
+            "lastModified": "2026-06-11T14:20:15.583Z",
+            "checksum": "a609879693e2ad504fe071d52c9fde49a03982b5722281c05d63797ffbb59b80"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E934CE9A-93DB-4FE3-B806-4144F108E930"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T14:20:15.142Z",
+      "checksum": "0e7038d9968183d769f1a02ea7af7611201d18fa27c0c5400b2f0444d75b22a4"
     }
   }
 ]

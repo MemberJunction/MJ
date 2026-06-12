@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/esignature-pandadoc",
-  "version": "5.39.0",
+  "version": "5.40.2",
   "description": "PandaDoc driver for the MemberJunction eSignature primitive. Registers a BaseSignatureProvider implementation via @RegisterClass(BaseSignatureProvider, 'PandaDoc') using the PandaDoc public v1 REST API and API-key authentication.",
   "type": "module",
   "main": "dist/index.js",
@@ -21,7 +21,7 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/esignature": "5.39.0",
-    "@memberjunction/global": "5.39.0"
+    "@memberjunction/esignature": "5.40.2",
+    "@memberjunction/global": "5.40.2"
   }
 }

@@ -6,6 +6,7 @@ import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunc
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
+import { BeforeAgentTurnEventArgs, AfterAgentTurnEventArgs } from '../../events/chat-events';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMetadata } from '../../services/conversation-streaming.service';
@@ -20,6 +21,8 @@ import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
+import { VoiceSessionService } from '../../services/voice-session.service';
+import { VoiceAgentPick } from '../voice/voice-agent-picker.component';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
@@ -159,8 +162,32 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     return this._inProgressMessageIds;
   }
 
+  /**
+   * Application context for the current conversation. Threaded through from the
+   * chat-area component for inclusion in the {@link beforeAgentTurn} event payload —
+   * lets listeners reason about which app's chat surface is invoking the agent.
+   * Optional; defaults to null for surfaces with no app context.
+   */
+  @Input() applicationId: string | null = null;
+
   @Output() messageSent = new EventEmitter<MJConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: MJConversationDetailEntity, agentResult: any}>();
+
+  /**
+   * Cancelable — fired BEFORE `agentService.processMessage()` is called for a user turn.
+   * Listeners may set `event.Cancel = true` to halt the agent invocation (e.g., a
+   * client-side guardrail blocking the turn). When canceled, the corresponding
+   * {@link afterAgentTurn} event is NOT fired and the running task is cleared.
+   * Follows MJ's established Before/After cancelable event pattern.
+   */
+  @Output() beforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+
+  /**
+   * Fired AFTER a successful agent turn completes. Carries the agent run id and the
+   * full agent result. Not fired when {@link beforeAgentTurn} was canceled or when
+   * the underlying `processMessage` errored.
+   */
+  @Output() afterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
   @Output() agentRunUpdate = new EventEmitter<{conversationDetailId: string; agentRun?: any, agentRunId?: string}>(); // Emits when agent run data updates during progress
   @Output() messageComplete = new EventEmitter<{conversationDetailId: string; agentId?: string}>(); // Emits when message completes (success or error)
@@ -202,9 +229,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     private mentionParser: MentionParserService,
     private mentionAutocomplete: MentionAutocompleteService,
     private attachmentService: ConversationAttachmentService,
-    private bridge: ConversationBridgeService
+    private bridge: ConversationBridgeService,
+    private voiceSession: VoiceSessionService
   ) {
   super();}
+
+  // ── Voice session (Realtime Co-Agent) ───────────────────────────────
+  /** True while a live voice session is active — drives the overlay + mic state. */
+  public voiceActive: boolean = false;
+  private voiceActiveSub?: Subscription;
 
   async ngOnInit() {
     // Bind provider-aware services to this component's provider.
@@ -213,6 +246,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.dataCache.Provider = p;
     this.activeTasks.Provider = p;
     this.attachmentService.Provider = p;
+    this.voiceSession.Provider = p;
+
+    // Reflect the live voice-session Active flag into a local field for the template.
+    this.voiceActiveSub = this.voiceSession.Active$.subscribe(active => {
+      this.voiceActive = active;
+    });
 
     this.converationManagerAgent = await this.agentService.getConversationManagerAgent();
 
@@ -266,6 +305,161 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   ngOnDestroy() {
     // Unregister all streaming callbacks
     this.unregisterAllCallbacks();
+    this.voiceActiveSub?.unsubscribe();
+    // If the user navigates away mid-call, tear the session down.
+    if (this.voiceSession.IsActive) {
+      void this.voiceSession.EndVoiceSession();
+    }
+  }
+
+  /**
+   * Resolve the agent the voice session should front for THIS conversation.
+   * Mirrors the routing precedence used for text turns ({@link routeMessage}):
+   *   1. last non-Sage agent (continuity)
+   *   2. per-conversation pinned default
+   *   3. embedder-supplied default
+   *   4. Sage fallback
+   * Returns null only if Sage itself failed to load.
+   */
+  public resolveCurrentAgentId(): string | null {
+    return this.findLastNonSageAgentId()
+      ?? this.conversationDefaultAgentId
+      ?? this.defaultAgentId
+      ?? this.converationManagerAgent?.ID
+      ?? null;
+  }
+
+  /** True when the mic button should be enabled (have an agent + not disabled). */
+  public get canStartVoice(): boolean {
+    return !this.disabled && !this.voiceActive && !!this.resolveCurrentAgentId();
+  }
+
+  /**
+   * Display name of the agent the voice session fronts. Resolved here (this component
+   * owns the conversation's routing context) and passed to VoiceSessionService at
+   * session start so the chat-area-hosted overlay can read it from the service.
+   */
+  private resolveVoiceAgentName(): string {
+    const agentId = this.resolveCurrentAgentId();
+    if (agentId) {
+      const match = this.mentionAutocomplete
+        .getAvailableAgents()
+        .find(a => UUIDsEqual(a.ID, agentId));
+      if (match?.Name) {
+        return match.Name;
+      }
+    }
+    return this.converationManagerAgent?.Name ?? 'Sage';
+  }
+
+  /** True while the "Start a voice call with…" agent picker popover is open. */
+  public showVoiceAgentPicker: boolean = false;
+
+  /**
+   * Agents the voice picker offers — the same cached set the @mention
+   * autocomplete and {@link resolveVoiceAgentName} use, so the picker can
+   * never offer an agent the conversation couldn't otherwise route to.
+   */
+  public get voicePickerAgents(): MJAIAgentEntityExtended[] {
+    return this.mentionAutocomplete.getAvailableAgents();
+  }
+
+  /** The agent the default resolution would call — preselected in the picker. */
+  public get voicePickerDefaultAgentId(): string | null {
+    return this.resolveCurrentAgentId();
+  }
+
+  /**
+   * Start a real-time voice session fronting the conversation's current agent.
+   * Client-direct: the VoiceSessionService mints an ephemeral token and connects
+   * the browser straight to the realtime provider over WebRTC. The "call mode"
+   * overlay itself is hosted by the conversation chat area (driven by Active$).
+   *
+   * NEW vs EXISTING conversation:
+   * - When an agent has already participated (a prior non-Sage AI turn exists),
+   *   start immediately with the resolved agent — zero added friction.
+   * - When the conversation has NO prior agent participation (new / empty
+   *   conversation), the resolution would silently fall through to a default
+   *   the user never chose — so show a compact agent picker instead and start
+   *   with whichever agent they pick.
+   */
+  public async onStartVoice(): Promise<void> {
+    if (!this.canStartVoice) {
+      return;
+    }
+    // New/empty conversation (no prior agent turn): let the user choose who
+    // to call. Falls through to the immediate path if the agent cache is
+    // empty (nothing to pick from — the resolved default is the only option).
+    if (!this.findLastNonSageAgentId() && this.voicePickerAgents.length > 0) {
+      this.showVoiceAgentPicker = true;
+      return;
+    }
+    const targetAgentId = this.resolveCurrentAgentId();
+    if (!targetAgentId) {
+      this.toastService.error('No agent available for a voice session.');
+      return;
+    }
+    await this.startVoiceWithAgent(targetAgentId, this.resolveVoiceAgentName());
+  }
+
+  /**
+   * Caret-next-to-the-phone click: open the agent/model picker ON DEMAND, even when the
+   * conversation already has agent history (where the plain phone click instant-starts).
+   * The resolved agent is preselected, so "open → Start" matches the instant path while
+   * keeping the voice-model choice one click away. Falls through to the instant path
+   * when there is nothing to pick from.
+   */
+  public onVoiceOptions(): void {
+    if (!this.canStartVoice) {
+      return;
+    }
+    if (this.voicePickerAgents.length > 0) {
+      this.showVoiceAgentPicker = true;
+      return;
+    }
+    void this.onStartVoice();
+  }
+
+  /** User confirmed an agent (+ optional voice model) in the voice picker — start the call. */
+  public async onVoiceAgentPicked(pick: VoiceAgentPick): Promise<void> {
+    this.showVoiceAgentPicker = false;
+    await this.startVoiceWithAgent(
+      pick.Agent.ID,
+      pick.Agent.Name || this.resolveVoiceAgentName(),
+      pick.PreferredModelId ?? undefined
+    );
+  }
+
+  /** User dismissed the voice picker without starting a call. */
+  public onVoiceAgentPickerCancelled(): void {
+    this.showVoiceAgentPicker = false;
+  }
+
+  /**
+   * Shared session-start path for both the immediate (existing conversation)
+   * and picker (new conversation / caret options) flows. The agent NAME is passed
+   * through to VoiceSessionService so the chat-area-hosted overlay banner (AgentName$)
+   * shows who the call fronts without re-resolving. An explicit voice-model choice
+   * (picker only) rides along as `preferredModelId` — the server uses exactly that
+   * model or fails with a clear reason (no silent fallback).
+   *
+   * Interactive-channel tools (e.g. the live whiteboard's `Whiteboard_*` set) are NOT
+   * passed here — the session service resolves the active channel plugins from the
+   * `MJ: AI Agent Channels` registry and aggregates their tool sets at mint itself.
+   */
+  private async startVoiceWithAgent(agentId: string, agentName: string, preferredModelId?: string): Promise<void> {
+    try {
+      await this.voiceSession.StartVoiceSession(
+        agentId,
+        this.conversationId,
+        null,
+        agentName,
+        preferredModelId ?? null
+      );
+    } catch (error) {
+      console.error('Failed to start voice session:', error);
+      this.toastService.error('Could not start the voice session.');
+    }
   }
 
   /**
@@ -1114,6 +1308,34 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         conversationName: this.conversationName
       });
 
+      // ── PR 2c follow-up: Before/After cancelable event wiring ──
+      // Emit beforeAgentTurn so consumers can veto the turn (rate-limit, guardrail,
+      // confirm-dialog, etc.). Cancel propagates synchronously through the chat-area
+      // re-emit binding, so by the time .emit() returns, event.Cancel reflects every
+      // subscriber's final answer.
+      const beforeEvent = new BeforeAgentTurnEventArgs(
+        conversationId,
+        userMessage.Message ?? '',
+        this.applicationId
+      );
+      this.beforeAgentTurn.emit(beforeEvent);
+      if (beforeEvent.Cancel) {
+        // Mark the conversation-manager message as canceled + clear its task so the
+        // UI doesn't show a forever-pending spinner. afterAgentTurn is NOT emitted.
+        await this.updateConversationDetail(
+          conversationManagerMessage,
+          beforeEvent.CancelReason ?? '⛔ Turn canceled before agent invocation',
+          'Error'
+        );
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
+        if (taskId) {
+          this.activeTasks.remove(taskId);
+          taskId = null;
+        }
+        return;
+      }
+
       const result = await this.agentService.processMessage(
         conversationId,
         userMessage,
@@ -1122,6 +1344,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.createProgressCallback(conversationManagerMessage, 'Sage'),
         this.appContext
       );
+
+      // Emit afterAgentTurn on the happy path only — the error/failure branch
+      // immediately below handles its own cleanup and skips this emit.
+      if (result && result.success) {
+        this.afterAgentTurn.emit(new AfterAgentTurnEventArgs(
+          conversationId,
+          (result.agentRun?.ID ?? '') as string,
+          result as unknown as import('@memberjunction/ai-core-plus').ExecuteAgentResult
+        ));
+      }
 
       // Task will be removed automatically in markMessageComplete()
       // DO NOT remove here - agent may still be streaming/processing

@@ -479,10 +479,36 @@ export class AgentClientSession {
     }
 
     /**
-     * Handle an incoming tool request: emit event, execute tool, send response.
+     * Handle an incoming tool request: emit BEFORE event, honor host-side veto if set,
+     * otherwise execute tool, emit AFTER event, and send response to server.
+     *
+     * **Cancel-enforcement:** `ToolRequested$.next(event)` fires subscribers
+     * synchronously (RxJS `Subject` behavior). After the synchronous notify
+     * completes, we inspect `event.Cancel` — if any subscriber set it to `true`,
+     * we skip `toolRegistry.Execute`, skip the `ToolExecuted$` emit, and send a
+     * failure response to the server with the optional `CancelReason` included in
+     * the message. The agent receives the cancellation and can adapt its next turn.
      */
     private async handleToolRequest(request: ClientToolRequest, agentRunID: string): Promise<void> {
-        this.ToolRequested$.next({ Request: request, AgentRunID: agentRunID });
+        const event: ClientToolRequestEvent = {
+            Request: request,
+            AgentRunID: agentRunID,
+            Cancel: false,
+        };
+        this.ToolRequested$.next(event);
+
+        if (event.Cancel) {
+            const reasonSuffix = event.CancelReason ? `: ${event.CancelReason}` : '';
+            const result: ClientToolResult = {
+                Success: false,
+                ErrorMessage: `Tool dispatch canceled by host${reasonSuffix}`,
+            };
+            // Intentionally NOT emitting ToolExecuted$ — the tool did not execute.
+            // The JSDoc on AfterToolInvokedEventArgs (in @memberjunction/ng-conversations)
+            // documents this contract on the widget side.
+            await this.sendToolResponse(request.RequestID, result);
+            return;
+        }
 
         const result = await this.toolRegistry.Execute(
             request.ToolName,

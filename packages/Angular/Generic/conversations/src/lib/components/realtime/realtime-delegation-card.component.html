@@ -1,0 +1,97 @@
+@if (!Card.Done) {
+  <!-- WORKING — compact live card -->
+  <div class="work-card" role="status" aria-live="polite">
+    <div class="work-card__head">
+      <div class="avatar" aria-hidden="true">{{ Card.AgentName.charAt(0) }}</div>
+      <div class="work-card__title">{{ Card.AgentName }} is working…</div>
+      <span class="pill pill--running">
+        <i class="fa-solid fa-spinner spin" aria-hidden="true"></i> Running
+      </span>
+      @if (ShowOpenRun) {
+        <button type="button" class="dev-link" (click)="OpenRun($event)"
+                title="Open the delegated agent run record">
+          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          <span>Open run</span>
+        </button>
+      }
+      <button type="button" class="cancel-work" (click)="CancelWork($event)"
+              title="Cancel this work" aria-label="Cancel this work">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="work-card__step">{{ StepLabel }}</div>
+    @if (ShowDetailLine) {
+      <div class="work-card__detail">{{ Card.LatestMessage }}</div>
+    }
+    <div class="work-progress" [class.work-progress--indeterminate]="Card.Percentage == null">
+      @if (Card.Percentage != null) {
+        <div class="work-progress__fill" [style.width.%]="Card.Percentage"></div>
+      } @else {
+        <div class="work-progress__fill work-progress__fill--slide"></div>
+      }
+    </div>
+  </div>
+} @else {
+  <!-- DONE / FAILED — collapsed single-line chip, expandable inline -->
+  <div class="done">
+    <div class="done-row">
+      <button type="button"
+              class="done-chip"
+              [class.done-chip--failed]="!Card.Success"
+              (click)="ToggleExpanded()"
+              [attr.aria-expanded]="Expanded"
+              [title]="Expanded ? 'Collapse result' : 'Expand result'">
+        <i class="fa-solid done-chip__mark" [ngClass]="Card.Success ? 'fa-check' : 'fa-xmark'" aria-hidden="true"></i>
+        <span class="done-chip__agent">{{ Card.AgentName }}</span>
+        <span class="done-chip__sep" aria-hidden="true">·</span>
+        <span class="done-chip__preview">{{ ResultPreview }}</span>
+        <span class="via-badge">
+          <i class="fa-solid fa-shield-halved" [title]="ProvenanceTitle" aria-hidden="true"></i>
+          via {{ Card.AgentName }}
+        </span>
+        <i class="fa-solid done-chip__chev" [ngClass]="Expanded ? 'fa-chevron-up' : 'fa-chevron-down'" aria-hidden="true"></i>
+      </button>
+      @for (artifact of Artifacts; track artifact.ArtifactVersionID) {
+        <button type="button" class="artifact-link" (click)="OpenArtifact($event, artifact)"
+                [title]="'View ' + artifact.Name">
+          <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+          <span>View</span>
+          <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+        </button>
+      }
+      @if (ShowOpenRun) {
+        <button type="button" class="dev-link" (click)="OpenRun($event)"
+                title="Open the delegated agent run record">
+          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          <span>Open run</span>
+        </button>
+      }
+    </div>
+    @if (Expanded) {
+      <div class="done-detail">
+        <div class="done-detail__body">{{ ResultText }}</div>
+        @for (artifact of Artifacts; track artifact.ArtifactVersionID) {
+          <button type="button" class="artifact-link artifact-link--detail" (click)="OpenArtifact($event, artifact)"
+                  [title]="'View ' + artifact.Name">
+            <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+            <span>{{ artifact.Name }}</span>
+            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+          </button>
+        }
+        @if (Card.RunRef) {
+          <div class="done-detail__meta">
+            <i class="fa-solid fa-shield-halved" [title]="ProvenanceTitle" aria-hidden="true"></i>
+            via {{ Card.AgentName }} · run {{ Card.RunRef }}
+            @if (ShowOpenRun) {
+              <button type="button" class="dev-link dev-link--inline" (click)="OpenRun($event)"
+                      title="Open the delegated agent run record">
+                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                <span>Open run</span>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+}

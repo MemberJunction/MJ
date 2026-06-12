@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/core",
   "type": "module",
-  "version": "5.39.0",
+  "version": "5.40.2",
   "description": "MemberJunction: Core Library including Metadata, Application, Entity Retrieval and Manipulation, and Utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -26,8 +26,8 @@
     "vitest": "^3.1.1"
   },
   "dependencies": {
-    "@memberjunction/global": "5.39.0",
-    "@memberjunction/sql-dialect": "5.39.0",
+    "@memberjunction/global": "5.40.2",
+    "@memberjunction/sql-dialect": "5.40.2",
     "rxjs": "^7.8.2",
     "zod": "~3.24.4",
     "debug": "^4.4.3"

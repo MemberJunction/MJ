@@ -344,5 +344,19 @@
       "lastModified": "2026-05-08T00:53:49.018Z",
       "checksum": "41df91fd00c1ad43f8e226361ea0273229325341e37edc1d9a9e134fb4838576"
     }
+  },
+  {
+    "fields": {
+      "Name": "AssemblyAI",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "255D7FB9-26CE-41AE-BCE0-59B53D68AD09"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T14:20:09.733Z",
+      "checksum": "7dd5843f33dd6940ac44193c3a96531983b41ad6b1bfd168b96a799fb6627470"
+    }
   }
 ]

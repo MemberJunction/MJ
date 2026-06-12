@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, ChangeDetectorRef, inject } from '@angular/core';
 import { EntityInfo, RunViewParams, LogError } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
@@ -588,7 +589,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     if (!entityId) {
       return null;
     }
-    const match = this.ProviderToUse.Entities.find((e) => e.ID === entityId);
+    const match = this.ProviderToUse.Entities.find((e) => UUIDsEqual(e.ID, entityId));
     return match ? match.Name : null;
   }
 }

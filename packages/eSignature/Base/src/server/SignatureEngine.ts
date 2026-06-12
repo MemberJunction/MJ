@@ -433,7 +433,7 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
         const md = options.provider ?? Metadata.Provider;
         const request = await md.GetEntityObject<MJSignatureRequestEntity>('MJ: Signature Requests', options.contextUser);
         request.SignatureAccountID = account.account.ID;
-        request.Title = options.title;
+        request.Name = options.title;
         if (options.message != null) request.Message = options.message;
         request.Status = 'Draft';
         if (options.entityId != null) request.EntityID = options.entityId;
@@ -517,7 +517,7 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
                 filename: document.filename,
                 bytes: document.bytes,
                 contentType: document.contentType,
-                title: `${request.Title} (signed)`,
+                title: `${request.Name} (signed)`,
                 contextUser,
                 provider,
             });

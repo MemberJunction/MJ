@@ -767,7 +767,10 @@ export class AgentRunner {
      * - Other modes: Creates artifact with Visibility='Always'
      *
      * @param agentResult - The result from agent execution containing the payload
-     * @param conversationDetailId - The conversation detail to link the artifact to
+     * @param conversationDetailId - The conversation detail to link the artifact to. May be
+     *   `undefined` for runs executed OUTSIDE a conversation context (e.g. realtime voice
+     *   delegations): the artifact + version are still created, but the previous-artifact lookup
+     *   and the `ConversationDetailArtifact` junction link are skipped.
      * @param sourceArtifactId - Optional explicit artifact to version from (agent continuity)
      * @param contextUser - The user context for the operation
      * @returns Artifact metadata if created, undefined if skipped or failed
@@ -788,7 +791,7 @@ export class AgentRunner {
      */
     public async ProcessAgentArtifacts<R>(
         agentResult: ExecuteAgentResult<R>,
-        conversationDetailId: string,
+        conversationDetailId: string | undefined,
         sourceArtifactId: string | undefined,
         contextUser: UserInfo,
         provider?: IMetadataProvider
@@ -827,13 +830,16 @@ export class AgentRunner {
                 newVersionNumber = maxVersion + 1;
                 LogStatus(`Creating version ${newVersionNumber} of source artifact ${artifactId}`);
             }
-            // Priority 2: Try to find previous artifact for this message
+            // Priority 2: Try to find previous artifact for this message (only when running in
+            // a conversation context — outside one there is no message to look behind)
             else {
-                const previousArtifact = await this.FindPreviousArtifactForMessage(
-                    conversationDetailId,
-                    contextUser,
-                    md
-                );
+                const previousArtifact = conversationDetailId
+                    ? await this.FindPreviousArtifactForMessage(
+                        conversationDetailId,
+                        contextUser,
+                        md
+                    )
+                    : null;
 
                 if (previousArtifact) {
                     artifactId = previousArtifact.artifactId;
@@ -931,7 +937,11 @@ export class AgentRunner {
                 }
             }
 
-            // Link the new version to this conversation detail and return
+            // Link the new version to this conversation detail and return. Outside a
+            // conversation context (no detail id) there is nothing to link — return directly.
+            if (!conversationDetailId) {
+                return { artifactId, versionId: version.ID, versionNumber: newVersionNumber };
+            }
             return this.LinkArtifactToConversationDetail(
                 version.ID, conversationDetailId, artifactId, newVersionNumber, contextUser, md
             );
