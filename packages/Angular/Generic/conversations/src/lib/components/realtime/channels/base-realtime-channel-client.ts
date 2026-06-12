@@ -44,6 +44,16 @@ export interface RealtimeChannelContext {
   SetFocusMode(on: boolean): void;
 
   /**
+   * Asks the live model to SPEAK a response to the supplied instructions RIGHT NOW —
+   * the channel's "react to this" path, e.g. a widget submission the user expects an
+   * audible reaction to ({@link SendContextNote} deliberately never triggers speech).
+   * Rides the realtime client's spoken-update channel, so on some providers the spoken
+   * reply is narration-kind (ephemeral, not persisted as a caption). OPTIONAL member:
+   * older host contexts may not supply it — plugins must call it null-safely.
+   */
+  RequestSpokenResponse?(instructions: string): void;
+
+  /**
    * Persists a snapshot of the channel's state as a first-class versioned artifact
    * (`MJ: Artifacts` + version, linked into conversation history when possible) — e.g. the
    * whiteboard's "Save to artifacts". Distinct from {@link RealtimeChannelContext.RequestSave},

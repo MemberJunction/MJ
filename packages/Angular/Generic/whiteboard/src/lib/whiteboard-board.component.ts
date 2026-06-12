@@ -323,6 +323,48 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       const editor = this.canvasRef?.nativeElement.querySelector<HTMLElement>('.wb-edit');
       editor?.focus();
     }
+    this.observeCanvasSize();
+  }
+
+  // ── Hidden-host layout recovery ─────────────────────────────────────────────
+  //
+  // The board is often CREATED inside a display:none tab pane (a review session's
+  // Whiteboard tab, a collapsed surface panel): the canvas measures 0×0, so the
+  // viewport-lazy culling computes everything as off-screen and the board renders
+  // BLANK until some interaction forces a re-measure. A ResizeObserver watches for
+  // the first REAL layout: it re-runs change detection (fixing the culling) and —
+  // when the viewport is still untouched — frames the content via FitToContent so a
+  // reviewed board opens centered instead of wherever pan (0,0) happens to land.
+
+  /** Observer driving {@link onCanvasResize}; created once the canvas element exists. */
+  private canvasResizeObserver: ResizeObserver | null = null;
+  /** True once the canvas has had a real (non-zero) layout. */
+  private hadRealLayout = false;
+  /** True once the user pans/zooms — the auto-fit must never fight a chosen viewport. */
+  private viewportTouched = false;
+
+  /** Attaches the ResizeObserver exactly once (no-op where ResizeObserver is unavailable). */
+  private observeCanvasSize(): void {
+    const el = this.canvasRef?.nativeElement;
+    if (!el || this.canvasResizeObserver || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    this.canvasResizeObserver = new ResizeObserver(() => this.onCanvasResize());
+    this.canvasResizeObserver.observe(el);
+    this.onCanvasResize();
+  }
+
+  /** First non-zero layout: recompute culling and (if untouched) frame the content. */
+  private onCanvasResize(): void {
+    const el = this.canvasRef?.nativeElement;
+    if (!el || el.clientWidth === 0 || el.clientHeight === 0 || this.hadRealLayout) {
+      return;
+    }
+    this.hadRealLayout = true;
+    if (!this.viewportTouched) {
+      this.FitToContent();
+    }
+    this.cdr.markForCheck();
   }
 
   // ────────────────────────────────────────────── render-model getters
@@ -831,6 +873,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         i.CurY = p.Y;
         break;
       case 'pan':
+        this.viewportTouched = true; // a chosen viewport — the first-layout auto-fit must not fight it
         this.PanX = i.OrigPanX + (event.clientX - i.StartClientX);
         this.PanY = i.OrigPanY + (event.clientY - i.StartClientY);
         break;
@@ -1129,8 +1172,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
    */
   public IsNearViewport(item: WhiteboardItem): boolean {
     const el = this.canvasRef?.nativeElement;
-    if (!el) {
-      return true; // before the first layout, render rather than blank out
+    if (!el || el.clientWidth === 0 || el.clientHeight === 0) {
+      // Before the first layout — or while the host pane is display:none (an
+      // unfocused tab) — there is no real viewport to cull against: render rather
+      // than blank out (culling resumes on the first real layout).
+      return true;
     }
     const margin = 320;
     const b = this.State.ItemBounds(item);
@@ -1410,8 +1456,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   public FitToContent(): void {
     const bounds = this.State.ContentBounds();
     const el = this.canvasRef?.nativeElement;
-    if (!bounds || !el || bounds.W === 0 || bounds.H === 0) {
-      return;
+    if (!bounds || !el || bounds.W === 0 || bounds.H === 0 || el.clientWidth === 0 || el.clientHeight === 0) {
+      return; // a hidden (0×0) host cannot be fit against — wait for a real layout
     }
     const pad = 60;
     const zoom = this.clampZoom(Math.min((el.clientWidth - pad * 2) / bounds.W, (el.clientHeight - pad * 2) / bounds.H));
@@ -1487,6 +1533,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   private zoomCentered(next: number): void {
+    this.viewportTouched = true; // user-driven zoom — disable the first-layout auto-fit
     const el = this.canvasRef?.nativeElement;
     if (!el) {
       this.Zoom = next;

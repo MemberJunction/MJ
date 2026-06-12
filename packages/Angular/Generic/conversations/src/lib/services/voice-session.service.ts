@@ -767,10 +767,24 @@ export class VoiceSessionService {
     return {
       AgentName: this.CurrentAgentName,
       SendContextNote: (text: string) => this.SendContextNote(text),
+      RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
       SaveAsArtifact: (name: string, contentJson: string) => this.saveChannelArtifact(plugin.ChannelName, name, contentJson),
       SetFocusMode: (on: boolean) => this._channelFocus$.next({ Channel: plugin, Focused: on })
     };
+  }
+
+  /**
+   * A channel asked the live model to SPEAK in reaction to channel input (e.g. a widget
+   * submission) — routed through the client's spoken-update channel. No-op when the
+   * session isn't live; empty instructions are dropped.
+   */
+  private requestChannelSpokenResponse(instructions: string): void {
+    const trimmed = instructions?.trim() ?? '';
+    if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
+      return;
+    }
+    this.client.RequestSpokenUpdate(trimmed);
   }
 
   /**

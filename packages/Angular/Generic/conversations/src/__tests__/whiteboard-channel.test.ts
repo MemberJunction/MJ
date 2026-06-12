@@ -51,6 +51,7 @@ function asHost(fake: FakeWhiteboardHost): RealtimeWhiteboardHostComponent {
 
 interface CtxLog {
   Notes: string[];
+  Spoken: string[];
   Saves: string[];
   Focus: boolean[];
 }
@@ -59,6 +60,7 @@ function makeContext(log: CtxLog): RealtimeChannelContext {
   return {
     AgentName: 'Sage',
     SendContextNote: (text: string) => log.Notes.push(text),
+    RequestSpokenResponse: (instructions: string) => log.Spoken.push(instructions),
     RequestSave: (stateJson: string) => log.Saves.push(stateJson),
     SetFocusMode: (on: boolean) => log.Focus.push(on),
     SaveAsArtifact: async () => null
@@ -71,7 +73,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
 
   beforeEach(() => {
     channel = new RealtimeWhiteboardChannel();
-    log = { Notes: [], Saves: [], Focus: [] };
+    log = { Notes: [], Spoken: [], Saves: [], Focus: [] };
     channel.Initialize(makeContext(log));
   });
 
@@ -139,6 +141,11 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     fake.WidgetSubmitted.emit({ ItemID: 'html-2', Title: 'Quick quiz', DataJson: '{"answer":"Mercury"}' });
     expect(log.Notes).toHaveLength(1);
     expect(log.Notes[0]).toBe('[whiteboard] the user submitted input in widget "Quick quiz": {"answer":"Mercury"}');
+    // …and the model is asked to REACT audibly (SendContextNote alone is silent by contract)
+    expect(log.Spoken).toHaveLength(1);
+    expect(log.Spoken[0]).toContain('Quick quiz');
+    expect(log.Spoken[0]).toContain('{"answer":"Mercury"}');
+    expect(log.Spoken[0]).toContain('React to it now');
 
     // untitled widgets fall back to the item ID
     fake.WidgetSubmitted.emit({ ItemID: 'html-3', Title: '', DataJson: '{"ok":true}' });

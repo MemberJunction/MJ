@@ -237,15 +237,17 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
   },
   {
     Name: WHITEBOARD_TOOL_NAMES.MoveItem,
-    Description: 'Move a whiteboard item to a new position (board coordinates of its top-left corner).',
+    Description: 'Move and/or RESIZE a whiteboard item: provide x+y to reposition (board coordinates of the top-left corner), w and/or h to resize (pixels, min 24), or all of them together.',
     ParametersSchema: {
       type: 'object',
       properties: {
-        itemId: { type: 'string', description: 'ID of the item to move.' },
-        x: { type: 'number', description: 'New left position.' },
-        y: { type: 'number', description: 'New top position.' }
+        itemId: { type: 'string', description: 'ID of the item to move/resize.' },
+        x: { type: 'number', description: 'New left position (provide together with y to move).' },
+        y: { type: 'number', description: 'New top position (provide together with x to move).' },
+        w: { type: 'number', description: 'New width in pixels (resize; min 24).' },
+        h: { type: 'number', description: 'New height in pixels (resize; min 24).' }
       },
-      required: ['itemId', 'x', 'y']
+      required: ['itemId']
     }
   },
   {
@@ -764,17 +766,49 @@ function moveItem(state: WhiteboardState, args: Record<string, unknown>): string
   const itemId = asString(args['itemId']);
   const x = asNumber(args['x']);
   const y = asNumber(args['y']);
-  if (!itemId || x === undefined || y === undefined) {
-    return fail('MoveItem requires "itemId", "x" and "y".');
+  const w = asNumber(args['w']);
+  const h = asNumber(args['h']);
+  const moving = x !== undefined && y !== undefined;
+  const resizing = w !== undefined || h !== undefined;
+  if (!itemId || (!moving && !resizing)) {
+    return fail('MoveItem requires "itemId" plus "x"+"y" (move), "w"/"h" (resize), or both.');
   }
   if (!state.GetItem(itemId)) {
-    return fail(`MoveItem: no item with id "${itemId}".`);
+    // Self-correction context: the id may be mistyped — or the item may live on
+    // another PAGE (item lookups are scoped to the active page).
+    const ids = state.Items.slice(0, 20).map((i) => i.ID).join(', ') || '(none)';
+    return fail(
+      `MoveItem: no item with id "${itemId}" on the active page "${state.ActivePageName}". ` +
+      `Items here: ${ids}. If it lives on another page, switch first with ${WHITEBOARD_TOOL_NAMES.SwitchPage}.`);
   }
-  const moved = state.RunBatch(() => state.MoveItem(itemId, x, y, 'agent'));
-  if (!moved) {
+  const applied = state.RunBatch(() => {
+    let okAll = true;
+    if (moving) {
+      okAll = state.MoveItem(itemId, x, y, 'agent') && okAll;
+    }
+    if (resizing) {
+      const patch: WhiteboardItemPatch = {};
+      if (w !== undefined) {
+        patch.W = Math.max(24, w);
+      }
+      if (h !== undefined) {
+        patch.H = Math.max(24, h);
+      }
+      okAll = state.UpdateItem(itemId, patch, 'agent') && okAll;
+    }
+    return okAll;
+  });
+  if (!applied) {
     return fail('The host application canceled this operation.');
   }
-  return ok(itemId, `Moved ${itemId} to (${Math.round(x)}, ${Math.round(y)}).`);
+  const parts: string[] = [];
+  if (moving) {
+    parts.push(`moved to (${Math.round(x)}, ${Math.round(y)})`);
+  }
+  if (resizing) {
+    parts.push(`resized to ${w !== undefined ? Math.round(Math.max(24, w)) : '(unchanged)'}×${h !== undefined ? Math.round(Math.max(24, h)) : '(unchanged)'}`);
+  }
+  return ok(itemId, `${itemId} ${parts.join(' and ')}.`);
 }
 
 function removeItem(state: WhiteboardState, args: Record<string, unknown>): string {
