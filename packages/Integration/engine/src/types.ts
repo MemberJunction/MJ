@@ -178,6 +178,13 @@ export interface SchemaPromotionResult {
     SchemaUpdatePending: boolean;
     /** Non-fatal detail when promotion was attempted but partially/fully failed. */
     Message?: string;
+    /**
+     * Non-fatal problems encountered during promotion (RSU/DDL failure, IOF or field-map save
+     * failure, per-pass churn-cap deferral, a missing entity map). The engine surfaces each as a
+     * structured SyncWarning on the run stream so the operator sees what didn't promote — promotion
+     * NEVER fails the sync, but a swallowed problem must not be invisible.
+     */
+    Warnings?: string[];
 }
 
 /**

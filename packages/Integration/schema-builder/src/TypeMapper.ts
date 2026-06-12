@@ -58,11 +58,17 @@ export class TypeMapper {
     // dialect's bounded ceiling. No `platform === ...` branching lives here.
     const abstractType = entry.SourceType;
     if (abstractType === 'string') {
-      let maxLength = this.boundedStringLength(field);
-      // A primary-key string column must fit the dialect's INDEX KEY size limit — cap it there. The
-      // dialect reports its OWN ceiling (SQL Server 450; PostgreSQL effectively none), so there is no
-      // platform branch here. A too-wide PK would otherwise fail unique-constraint / index creation.
-      if (field.IsPrimaryKey) maxLength = Math.min(maxLength, dialect.MaxKeyStringLength);
+      // When the source states NO length (MaxLength null/0 — the common case for APIs like GrowthZone
+      // that don't report field sizes), the size is genuinely UNKNOWN. Per the bounded-typing policy
+      // we must err GENEROUS and never truncate: a tight 255-floor column silently truncates long/JSON
+      // values (e.g. SponsorSettingsJson, SettingJson) and, on re-apply, makes SchemaEvolution try to
+      // NARROW an existing MAX column → "String or binary data would be truncated". So emit the dialect's
+      // unbounded text type (NVARCHAR(MAX) / TEXT) for unsized strings; only bound when a length is declared.
+      const declaredLen = field.MaxLength != null && field.MaxLength > 0;
+      if (!declaredLen) {
+        return dialect.ResolveAbstractType({ type: 'text' });
+      }
+      const maxLength = this.boundedStringLength(field);
       return dialect.ResolveAbstractType({ type: 'string', maxLength });
     }
     if (abstractType === 'decimal') {

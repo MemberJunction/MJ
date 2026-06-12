@@ -136,6 +136,20 @@ export interface FetchContext {
     AfterKeyValue?: string | null;
     /** Optional list of source field names to request from the external API. When provided, the connector should limit the returned fields to this set. */
     RequestedSourceFields?: string[];
+    /**
+     * Adaptive rate-limit hooks (plan.md §7), supplied by the engine so a connector's INNER request
+     * loop (e.g. a second-layer/parent-iterated object that fires one request per parent) is governed
+     * by the SAME per-credential AIMD token bucket that paces the outer object level — instead of a
+     * fixed self-throttle that defeats concurrency and ignores 429 back-off. Optional + back-compat: a
+     * connector that ignores them behaves exactly as before; the engine omits them when unavailable.
+     *
+     * - `RateLimitAcquire()` — await one token from the adaptive bucket before each inner request.
+     * - `RateLimitReport(err?)` — feed the outcome back so the rate auto-tunes (clean → ramp up, 429 → back off).
+     * - `MaxConcurrency` — the engine's resolved in-flight cap for inner requests (>=1).
+     */
+    RateLimitAcquire?: () => Promise<void>;
+    RateLimitReport?: (throttledErr?: unknown) => void;
+    MaxConcurrency?: number;
 }
 
 /**

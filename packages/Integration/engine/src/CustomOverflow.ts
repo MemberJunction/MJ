@@ -10,9 +10,11 @@
  * {@link MapSingleRecord} (only mapped fields get persisted). Rather than lose them, the
  * unmapped keys are parked here, on the row, in the SAME write as the mapped fields — so
  * capture costs no extra round-trip. A post-sync Runtime-Schema-Updation (RSU) pass later
- * reads this column back out, promotes pervasive keys to real columns, spreads the values
- * in, and clears them from here (at which point they are mapped → no longer "unmapped" →
- * not re-captured: the loop converges).
+ * reads this column back out and promotes pervasive keys to real columns (ADD COLUMN +
+ * CodeGen + a field map). It does NOT backfill historical values: once the field map exists
+ * the key is no longer "unmapped", so the NEXT sync maps it natively and populates the new
+ * column with the LIVE source value (a full sync repopulates every row; an incremental fills
+ * rows as they next change) — and stops re-capturing it here. The loop converges go-forward.
  *
  * Shape mirrors {@link CONTENT_HASH_COLUMN}: a JSON-serialized string sidecar, identical
  * in kind to `__mj_integration_LastSyncedSnapshot`. SS `NVARCHAR(MAX)` / PG `TEXT`; the
