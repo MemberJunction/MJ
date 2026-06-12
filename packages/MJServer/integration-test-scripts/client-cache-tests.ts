@@ -243,7 +243,7 @@ async function main(): Promise<void> {
 
     if (process.env.RUN_MUTATION_TESTS === '1') {
         suite.Test('C10 (mutation): client CacheLocal slot refreshes after save and drops the row after delete (revalidation round trip)', async () => {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const settingPrefix = `mj.integrationtest.client.${Date.now()}`;
             const makeParams = () => ({
                 EntityName: 'MJ: User Settings',

@@ -67,7 +67,7 @@ async function bootstrap(): Promise<Ctx> {
     if (!user) throw new Error('No context user found in UserCache.');
 
     // ── Fixtures ──────────────────────────────────────────────────────────────
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
 
     const category = await md.GetEntityObject<QueryCategoryEntity>('MJ: Query Categories', user);
     category.Name = `Integration Test Queries ${Date.now()}`;
@@ -107,7 +107,7 @@ async function bootstrap(): Promise<Ctx> {
 async function teardown(ctx: Ctx): Promise<void> {
     // Best-effort cleanup — fixtures first, then any leftover settings rows
     try {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
         const rv = new (await import('@memberjunction/core')).RunView();
         const leftovers = await rv.RunView<UserSettingEntity>({
             EntityName: 'MJ: User Settings',
@@ -128,7 +128,7 @@ async function teardown(ctx: Ctx): Promise<void> {
 }
 
 async function createSetting(user: UserInfo, tag: string): Promise<UserSettingEntity> {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
     const setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings', user);
     setting.UserID = user.ID;
     setting.Setting = `${SETTING_PREFIX}.${tag}.${Date.now()}`;
@@ -224,7 +224,7 @@ async function main(): Promise<void> {
     suite.Test('Q6: smart validation — current vs stale via CacheValidationSQL (in-process provider call)', async () => {
         // Drive RunQueriesWithCacheCheck directly with a synthetic cacheStatus, the way
         // a client transport does. First learn the true current status:
-        const provider = Metadata.Provider as unknown as IRunQueryProvider;
+        const provider = Metadata.Provider as unknown as IRunQueryProvider; // global-provider-ok: integration test script — single-provider process by design
         Assert(typeof provider.RunQueriesWithCacheCheck === 'function', 'provider must implement RunQueriesWithCacheCheck');
 
         const fresh = await provider.RunQueriesWithCacheCheck!([
@@ -255,7 +255,7 @@ async function main(): Promise<void> {
     });
 
     suite.Test('Q7: queries WITHOUT CacheValidationSQL answer no_validation with fresh rows', async () => {
-        const provider = Metadata.Provider as unknown as IRunQueryProvider;
+        const provider = Metadata.Provider as unknown as IRunQueryProvider; // global-provider-ok: integration test script — single-provider process by design
         const response = await provider.RunQueriesWithCacheCheck!([
             { params: { QueryID: ttlQuery.ID }, cacheStatus: { maxUpdatedAt: '2026-01-01T00:00:00Z', rowCount: 0 } }
         ], user);
@@ -264,7 +264,7 @@ async function main(): Promise<void> {
     });
 
     suite.Test('Q8: BREAK ATTEMPT — failed executions are never cached', async () => {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
         const broken = await md.GetEntityObject<QueryEntity>('MJ: Queries', user);
         broken.Name = `CacheTest Broken ${Date.now()}`;
         broken.CategoryID = ctx.category.ID;

@@ -314,7 +314,7 @@ async function main(): Promise<void> {
 
     if (process.env.RUN_MUTATION_TESTS === '1') {
         suite.Test('S17 (mutation): save invalidates the filtered cache entry; delete removes the row again', async () => {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const settingName = `mj.integrationtest.cache.${Date.now()}`;
             const filter = `UserID = '${user.ID}' AND Setting = '${settingName}'`;
             const params = { EntityName: 'MJ: User Settings', ExtraFilter: filter, Fields: ['ID', 'Setting', 'Value'], ResultType: 'simple' as const };
@@ -351,7 +351,7 @@ async function main(): Promise<void> {
         });
 
         suite.Test('S23 (mutation): unfiltered auto-maintained cache upserts on save and removes on delete IN PLACE', async () => {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const makeParams = () => ({ EntityName: 'MJ: User Settings', Fields: ['ID', 'Setting'], ResultType: 'simple' as const });
             const baseline = await rv.RunView(makeParams(), user);
             Assert(baseline.Success, `baseline failed: ${baseline.ErrorMessage}`);
@@ -379,7 +379,7 @@ async function main(): Promise<void> {
         });
 
         suite.Test('S24 (mutation): AllowCaching=false entities never touch the cache — flipped live and restored', async () => {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const entityInfo = md.EntityByName(SMALL_ENTITY);
             Assert(!!entityInfo, `${SMALL_ENTITY} must exist`);
             const entityRecord = await md.GetEntityObject<EntityEntity>('MJ: Entities', user);
@@ -389,7 +389,7 @@ async function main(): Promise<void> {
             entityRecord.AllowCaching = false;
             Assert(await entityRecord.Save(), `flip save failed: ${entityRecord.LatestResult?.CompleteMessage}`);
             try {
-                await Metadata.Provider.Refresh(); // provider must see the new flag
+                await Metadata.Provider.Refresh(); // provider must see the new flag // global-provider-ok: integration test script — single-provider process by design
                 Assert(md.EntityByName(SMALL_ENTITY)?.AllowCaching === false, 'metadata must reflect AllowCaching=false');
 
                 storage.ResetCounts();
@@ -417,7 +417,7 @@ async function main(): Promise<void> {
             } finally {
                 entityRecord.AllowCaching = true;
                 Assert(await entityRecord.Save(), `restore save failed: ${entityRecord.LatestResult?.CompleteMessage}`);
-                await Metadata.Provider.Refresh();
+                await Metadata.Provider.Refresh(); // global-provider-ok: integration test script — single-provider process by design
             }
             Assert(md.EntityByName(SMALL_ENTITY)?.AllowCaching === true, 'flag must be restored');
         });
@@ -496,7 +496,7 @@ async function main(): Promise<void> {
         // 'MJ: Audit Logs' has AllowCaching=true but TrustServerCacheCompletely=false in
         // this DB (rows arrive via raw SQL, so event-driven invalidation cannot be
         // trusted) — a DIFFERENT eligibility branch than AllowCaching (S24).
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
         const info = md.EntityByName('MJ: Audit Logs');
         Assert(!!info, 'MJ: Audit Logs must exist');
         Assert(info!.AllowCaching === true && info!.TrustServerCacheCompletely === false,
