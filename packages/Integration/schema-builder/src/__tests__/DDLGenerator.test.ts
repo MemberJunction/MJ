@@ -108,12 +108,14 @@ describe('DDLGenerator', () => {
             expect(sql).toContain('[Notes] NVARCHAR(MAX) NULL');
         });
 
-        it('should include UNIQUE constraint on PK fields', () => {
+        it('emits NO DB constraint for the PK — soft-only (PK-ness lives in additionalSchemaInfo)', () => {
             const config = MakeTableConfig();
             const sql = gen.GenerateCreateTable(config, 'sqlserver');
-            expect(sql).toContain('CONSTRAINT [UQ_hubspot_Contact_PK] UNIQUE ([ContactID])');
-            // Should NOT contain old PK constraint
-            expect(sql).not.toContain('PRIMARY KEY ([ID])');
+            // There is NO enforced key: not a PRIMARY KEY, and (now) not a UNIQUE either.
+            // Integration PKs are inferred, so enforcing one could reject valid rows on a wrong guess —
+            // PK-ness lives only in additionalSchemaInfo, which CodeGen reads for the entity's metadata PK.
+            expect(sql).not.toContain('PRIMARY KEY');
+            expect(sql).not.toContain('UNIQUE');
         });
 
         it('should include default values when specified', () => {

@@ -46,6 +46,7 @@ export type SyncLogEvent =
     | 'sync.partition.reconcile'
     | 'sync.fetch.batch.start'
     | 'sync.fetch.batch.complete'
+    | 'sync.fetch.retry'
     | 'sync.record.decision'
     | 'sync.record.saved'
     | 'sync.record.error'
@@ -58,6 +59,7 @@ export type SyncLogEvent =
     | 'sync.run.complete'
     | 'sync.run.fail'
     | 'sync.run.cancelled'
+    | 'sync.schema_update'
     | 'sync.warning';
 
 import type { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
@@ -80,6 +82,22 @@ export interface SyncLogEntry {
     /** Free-form, event-specific structured data. */
     [key: string]: unknown;
 }
+
+/**
+ * High-volume per-record events fire ONCE PER ROW — on a multi-million-row sync they would flood
+ * stdout (and any tee'd log file) without bound, a real disk-exhaustion path. They are gated behind
+ * `MJ_INTEGRATION_VERBOSE_RECORD_LOGS` (default OFF): only the console spam is suppressed — the
+ * structured per-record detail still reaches the durable progress artifact via `forwardToEmitter`
+ * where applicable. Errors, warnings, and run/batch-level events ALWAYS log regardless of the flag.
+ */
+const VERBOSE_RECORD_EVENTS: ReadonlySet<SyncLogEvent> = new Set<SyncLogEvent>([
+    'sync.record.decision',
+    'sync.record.saved',
+    'sync.record.archived',
+    'sync.push.record',
+    'sync.push.response',
+]);
+const VERBOSE_RECORD_LOGS_ENABLED = process.env.MJ_INTEGRATION_VERBOSE_RECORD_LOGS === 'true';
 
 /**
  * Light wrapper that prepends an ISO timestamp + the per-run context to every
@@ -152,7 +170,10 @@ export class SyncLogger {
             console.error(line);
         } else if (event === 'sync.warning') {
             console.warn(line);
-        } else {
+        } else if (!VERBOSE_RECORD_EVENTS.has(event) || VERBOSE_RECORD_LOGS_ENABLED) {
+            // Per-record events (one per row) are suppressed from the console unless explicitly
+            // enabled — otherwise a large sync floods stdout / the tee'd log without bound. The
+            // structured per-record detail still reaches the durable artifact via forwardToEmitter.
             console.log(line);
         }
         this.forwardToEmitter(event, data);

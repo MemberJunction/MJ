@@ -8,7 +8,6 @@ export { WicketConnector, type WicketCRUDResult, type WicketSearchOptions, type 
 export { SageIntacctConnector, type SageIntacctConnectionConfig } from './SageIntacctConnector.js';
 export { QuickBooksConnector, type QuickBooksConnectionConfig } from './QuickBooksConnector.js';
 export { AptifyConnector, type AptifyConnectionConfig } from './AptifyConnector.js';
-export { PropFuelConnector, type PropFuelConnectionConfig } from './PropFuelConnector.js';
 export { BettyConnector } from './BettyConnector.js';
 export { MJToMJConnector } from './MJToMJConnector.js';
 export { GrowthZoneConnector } from './GrowthZoneConnector.js';
@@ -23,3 +22,5 @@ export { BlackbaudConnector } from './BlackbaudConnector.js';
 export { NetSuiteConnector } from './NetSuiteConnector.js';
 export { NetForumConnector } from './NetForumConnector.js';
 export { NimbleAMSConnector } from './NimbleAMSConnector.js';
+export { PropFuelConnector, parseFileName, compareMicrotime } from './PropFuelConnector.js';
+export { PathLMSConnector, LoadPathLMSConnector } from './PathLMSConnector.js';

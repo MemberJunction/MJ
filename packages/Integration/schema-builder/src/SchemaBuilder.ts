@@ -330,6 +330,13 @@ export class SchemaBuilder {
                 IsNullable: true,
                 Description: 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark (e.g. YourMembership, which re-fetches every record each sync).',
             },
+            {
+                Name: '__mj_integration_CustomOverflow',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(MAX)' : 'TEXT',
+                IsNullable: true,
+                Description: 'Backend staging (system) column: JSON of source fields a record returned that have no field map yet — the extra keys this table has no column for. A post-sync Runtime-Schema-Updation pass promotes pervasive keys to real columns and clears them here. Not user-facing metadata; transient until promotion.',
+            },
             // ── Per-record sync ledger (plan §2.5) ──────────────────────────────────────
             {
                 Name: '__mj_integration_ExternalVersion',

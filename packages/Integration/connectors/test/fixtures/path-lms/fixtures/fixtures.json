@@ -1,0 +1,48 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "GraphQLEndpoint",
+  "Configuration": { "applicationId": "mock-app-id", "applicationSecret": "mock-app-secret" },
+  "Routes": [
+    {
+      "Path": "/api/v1/getToken",
+      "Method": "POST",
+      "Status": 200,
+      "Body": { "token": "Bearer mock-jwt-token" }
+    },
+    {
+      "Path": "/graphql",
+      "Method": "POST",
+      "Match": "operationName:teams",
+      "Status": 200,
+      "Body": { "data": { "teams": [
+        { "id": 101, "name": "<scrubbed-name-1>", "createdDate": "2026-01-15" },
+        { "id": 102, "name": "<scrubbed-name-2>", "createdDate": "2026-02-20" },
+        { "id": 103, "name": "<scrubbed-name-3>", "createdDate": "2026-03-10" }
+      ] } }
+    },
+    {
+      "Path": "/graphql",
+      "Method": "POST",
+      "Match": "operationName:account",
+      "Status": 200,
+      "Body": { "data": { "account": {
+        "id": 1,
+        "name": "<scrubbed-account-name>",
+        "courses": [
+          { "id": 201, "name": "Course A", "accountId": 1 },
+          { "id": 202, "name": "Course B", "accountId": 1 }
+        ],
+        "assessmentsReport": [
+          { "id": 401, "assessmentQuestions": [ { "id": 301, "text": "Q1" }, { "id": 302, "text": "Q2" } ] },
+          { "id": 402, "assessmentQuestions": [ { "id": 303, "text": "Q3" } ] }
+        ]
+      } } }
+    }
+  ],
+  "Objects": [
+    { "Name": "Team", "Description": "depth-0 - door teams" },
+    { "Name": "Course", "Description": "depth-1 - account -> courses[]" },
+    { "Name": "AssessmentQuestion", "Description": "depth-2 - account -> assessmentsReport[] -> assessmentQuestions[]" }
+  ],
+  "DeltaPasses": []
+}

@@ -13,7 +13,7 @@ import {
     SoftPKClassifier,
     type LLMOneShotCallback,
 } from '@memberjunction/integration-pk-classifier';
-import { BaseIntegrationConnector } from './BaseIntegrationConnector.js';
+import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
 import type { IntrospectSchemaOptions } from './types.js';
@@ -92,7 +92,68 @@ export interface ConnectorCreationPipelineResult {
  * `__mj.Entity`. The pipeline emits `entity.skipped-no-pk` events for visibility.
  */
 export class IntegrationConnectorCreationPipeline {
+    /** In-flight runs by CompanyIntegrationID — coalesces a concurrent duplicate onto the same promise. */
+    private static readonly inFlightRuns = new Map<string, Promise<ConnectorCreationPipelineResult>>();
+    /** Just-completed runs by CompanyIntegrationID — coalesces a *sequential* duplicate within the window. */
+    private static readonly recentRuns = new Map<string, { result: ConnectorCreationPipelineResult; at: number }>();
+    /** Default coalesce window (ms) when the env override is unset/invalid. */
+    private static readonly DEFAULT_COALESCE_WINDOW_MS = 5000;
+
+    /**
+     * How long a just-completed run is reused for a duplicate invocation of the SAME CompanyIntegration.
+     * Sized only to absorb the create-time double-fire (the `IsActive` Save-hook runs the pipeline, then
+     * `IntegrationCreateConnection` calls it again milliseconds later) — short enough that a genuine,
+     * later operator-initiated re-refresh always runs fresh. Override via the
+     * `MJ_CONNECTOR_PIPELINE_COALESCE_WINDOW_MS` env var (a positive integer of milliseconds; set 0/unset
+     * to use the default). Env-based, matching the RSU env-var convention (RSU_WORK_DIR, etc.).
+     */
+    private static get COALESCE_WINDOW_MS(): number {
+        const override = Number(process.env.MJ_CONNECTOR_PIPELINE_COALESCE_WINDOW_MS);
+        return Number.isFinite(override) && override > 0 ? override : IntegrationConnectorCreationPipeline.DEFAULT_COALESCE_WINDOW_MS;
+    }
+
+    /**
+     * Public entry. De-dups the known create-time double-invocation: the connection's `IsActive`
+     * false→true Save fires the entity-server hook (which runs this pipeline WITH LLM PK inference),
+     * and the create resolver then calls it again. Both converge here, so we run the pipeline ONCE
+     * per CompanyIntegration and hand both callers the same result — no double introspect/persist/
+     * classify, no double live API calls, and the resolver still gets a real summary. A legitimate
+     * re-refresh later (outside the window) runs fresh.
+     */
     public async Run(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
+        const ciID = opts.CompanyIntegration?.ID;
+        if (!ciID) return this.runInternal(opts); // no key to de-dup on — run directly
+
+        const cls = IntegrationConnectorCreationPipeline;
+        const inFlight = cls.inFlightRuns.get(ciID);
+        if (inFlight) return inFlight; // a concurrent run is already going — share it
+
+        cls.pruneRecentRuns();
+        const recent = cls.recentRuns.get(ciID);
+        if (recent) return recent.result; // a run just completed (within the window) — reuse it
+
+        const promise = this.runInternal(opts);
+        cls.inFlightRuns.set(ciID, promise);
+        try {
+            const result = await promise;
+            cls.recentRuns.set(ciID, { result, at: Date.now() });
+            return result;
+        } finally {
+            cls.inFlightRuns.delete(ciID);
+        }
+    }
+
+    /** Drops recent-run entries older than the coalesce window so the map stays bounded. */
+    private static pruneRecentRuns(): void {
+        const now = Date.now();
+        for (const [key, entry] of IntegrationConnectorCreationPipeline.recentRuns) {
+            if (now - entry.at >= IntegrationConnectorCreationPipeline.COALESCE_WINDOW_MS) {
+                IntegrationConnectorCreationPipeline.recentRuns.delete(key);
+            }
+        }
+    }
+
+    private async runInternal(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
         const runID = opts.RunID ?? IntegrationProgressEmitter.newRunID('connector');
         const manifest: IntegrationRunManifest = {
             runID,
@@ -181,6 +242,72 @@ export class IntegrationConnectorCreationPipeline {
                 opts.ContextUser,
                 opts.IntrospectOptions
             );
+
+            // UNIVERSAL additive runtime-object discovery — the single chokepoint EVERY connector
+            // funnels through, regardless of which base it extends or whether that base's
+            // IntrospectSchema only reflects already-declared metadata. IntrospectSchema gives the
+            // rich declared/persisted catalog; we then ADD any objects the connector surfaces at
+            // runtime that aren't already in it, via the abstract DiscoverObjects/DiscoverFields
+            // primitives that EVERY connector implements (so a future connector on a different base
+            // can't silently lose runtime discovery). PersistDiscoveredSchema is additive, so
+            // declared objects are preserved and runtime-only objects (e.g. an auth-gated file
+            // feed's streams) get created as Discovered. Errors are SURFACED, never swallowed.
+            const seen = new Set(schema.Objects.map(o => o.ExternalName.toLowerCase()));
+            let runtimeObjects: ExternalObjectSchema[] = [];
+            try {
+                runtimeObjects = await opts.Connector.DiscoverObjects(opts.CompanyIntegration, opts.ContextUser);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                emitter.stageError('Introspect', `DiscoverObjects failed: ${msg}`, { code: 'discover-objects-failed' });
+                console.error(`[IntrospectPipeline] DiscoverObjects failed: ${msg}`);
+            }
+            let runtimeAdded = 0;
+            for (const d of runtimeObjects) {
+                const key = d.Name.toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                let fields: ExternalFieldSchema[] = [];
+                try {
+                    // Discover fields + PROVABLE PK over the READ PATH (FetchChanges), time-bounded and
+                    // SAVE-LESS — stream as much of the feed as the budget allows so the PK decision is
+                    // made on a statistically-significant sample, not a single (possibly tiny) file. No
+                    // DB write happens here; the real save is the later ApplyAll → StartSync.
+                    fields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, d.Name, opts.ContextUser);
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
+                    console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`);
+                }
+                schema.Objects.push({
+                    ExternalName: d.Name,
+                    ExternalLabel: d.Label,
+                    Description: d.Description,
+                    Fields: fields.map(f => ({
+                        Name: f.Name,
+                        Label: f.Label,
+                        Description: f.Description,
+                        SourceType: f.DataType,
+                        IsRequired: f.IsRequired,
+                        AllowsNull: f.AllowsNull,
+                        MaxLength: f.MaxLength ?? null,
+                        Precision: f.Precision ?? null,
+                        Scale: f.Scale ?? null,
+                        DefaultValue: f.DefaultValue ?? null,
+                        IsPrimaryKey: f.IsPrimaryKey ?? false,
+                        IsUniqueKey: f.IsUniqueKey,
+                        IsReadOnly: f.IsReadOnly,
+                        IsForeignKey: f.IsForeignKey ?? false,
+                        ForeignKeyTarget: f.ForeignKeyTarget ?? null,
+                    })),
+                    PrimaryKeyFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),
+                    Relationships: fields
+                        .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                        .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' })),
+                });
+                runtimeAdded++;
+            }
+            console.log(`[IntrospectPipeline] declared=${seen.size - runtimeAdded} runtime-added=${runtimeAdded} total=${schema.Objects.length}`);
+
             const fieldCount = schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
             emitter.stageComplete('Introspect', {
                 processed: schema.Objects.length,

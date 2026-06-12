@@ -424,3 +424,168 @@ describe('IntegrationEngine — safe-floor-on-error watermark (audit bug #6)', (
         }
     });
 });
+
+// ---------------------------------------------------------------------------
+// #3 — skip-and-continue on an offset-page fetch error.
+//
+// A PERSISTENT fetch failure on ONE page of an offset/page-paged object must NOT
+// abandon the whole object. The engine steps past the failed page (advancing the
+// offset) and keeps paging, while HOLDING the watermark so the skipped window is
+// re-fetched on the next run (idempotent upsert + content-hash skip reconcile it).
+// Pre-#3 the loop `break`ed on the first fetch error and never paged past it.
+//
+// Source under test (IntegrationEngine.ts, ProcessPullSync fetch-error catch):
+//   - canSkipPage = currentOffset != null || currentPage != null
+//   - on skip: fetchGapCount++, hadFetchGap=true, fetchCompletedCleanly=false,
+//     advance the offset/page, `continue` (vs `break`)
+//   - finalize: a non-clean exit matches no watermark-save branch → watermark held
+// ---------------------------------------------------------------------------
+
+/**
+ * An offset-paged connector whose page at offset 2 ALWAYS fails (even across retries,
+ * since the throw keys on the offset, not the call count):
+ *   offset undefined — two clean records, NextOffset=2, HasMore=true
+ *   offset 2         — throws (the gap)
+ *   offset > 2       — empty, HasMore=false (the engine skipped past the gap → ends)
+ * Non-keyset (StableOrderingKey === null) so the offset path runs.
+ */
+function createOffsetGapConnector(): {
+    connector: BaseIntegrationConnector;
+    offsetsSeen: () => Array<number | undefined>;
+} {
+    const offsets: Array<number | undefined> = [];
+    const batch1: ExternalRecord[] = [
+        { ExternalID: 'ext-1', ObjectType: 'Contact', Fields: { Name: 'Contact 1' }, IsDeleted: false },
+        { ExternalID: 'ext-2', ObjectType: 'Contact', Fields: { Name: 'Contact 2' }, IsDeleted: false },
+    ];
+    const connector = {
+        TestConnection: vi.fn(),
+        DiscoverObjects: vi.fn(),
+        DiscoverFields: vi.fn(),
+        FetchChanges: vi.fn().mockImplementation(async (ctx: FetchContext): Promise<FetchBatchResult> => {
+            offsets.push(ctx.CurrentOffset);
+            if (ctx.CurrentOffset == null) {
+                return { Records: batch1, HasMore: true, NextOffset: 2, NewWatermarkValue: CLEAN_WATERMARK };
+            }
+            if (ctx.CurrentOffset === 2) {
+                throw new Error('simulated transient page fetch failure at offset 2');
+            }
+            return { Records: [], HasMore: false };   // paged past the skipped page → end cleanly
+        }),
+        GetDefaultFieldMappings: vi.fn().mockReturnValue([]),
+        RateLimitPolicy: null,
+        ExtractRetryAfterMs: () => undefined,
+        PostProcessRecord: (r: ExternalRecord) => r,
+        StableOrderingKey: () => null,
+    } as unknown as BaseIntegrationConnector;
+    return { connector, offsetsSeen: () => offsets };
+}
+
+describe('IntegrationEngine — skip-and-continue on an offset-page fetch error (#3 resilience)', () => {
+    let orchestrator: IntegrationEngine;
+
+    beforeEach(() => {
+        orchestrator = new IntegrationEngine();
+        mockEntityInstances = new Map();
+        mockRunViewFn = vi.fn();
+        mockRunViewsFn = vi.fn();
+        (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
+    });
+
+    it('steps past a persistently-failing page and continues, holding the watermark so the gap re-fetches next run', async () => {
+        const { connector, offsetsSeen } = createOffsetGapConnector();
+        const companyIntegration = createMockCompanyIntegration();
+        const integration = {
+            ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+            Name: 'Test',
+            ClassName: 'TestConnector',
+        } as unknown as MJIntegrationEntity;
+
+        mockRunViewsFn.mockResolvedValueOnce([
+            { Success: true, Results: [companyIntegration] },
+            {
+                Success: true,
+                Results: [{
+                    Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                    CompanyIntegrationID: 'ci-1',
+                    EntityID: 'entity-1',
+                    ConflictResolution: 'SourceWins',
+                    DeleteBehavior: 'SoftDelete',
+                    Entity: 'Contacts',
+                    ExternalObjectName: 'contacts',
+                } as unknown as ICompanyIntegrationEntityMap],
+            },
+            { Success: true, Results: [integration] },
+            { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+        ]);
+
+        let persistedWatermark: string | null | undefined;
+        const existingWatermark = {
+            ID: 'wm-1',
+            EntityMapID: 'em-1',
+            Direction: 'Pull' as const,
+            WatermarkType: 'Timestamp' as const,
+            WatermarkValue: PRIOR_WATERMARK as string | null,
+            LastSyncAt: new Date('2024-06-15T09:00:00.000Z'),
+            RecordsSynced: 0,
+            Get: vi.fn(),
+            Save: vi.fn().mockImplementation(async function (this: { WatermarkValue: string | null }) {
+                persistedWatermark = this.WatermarkValue;
+                return true;
+            }),
+        } as unknown as ICompanyIntegrationSyncWatermark;
+
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+            const entityName = params['EntityName'] as string;
+            if (entityName === 'MJ: Company Integration Field Maps') {
+                return {
+                    Success: true,
+                    Results: [{
+                        SourceFieldName: 'Name',
+                        DestinationFieldName: 'Name',
+                        TransformPipeline: null,
+                        IsKeyField: false,
+                        Status: 'Active',
+                        Priority: 0,
+                    } as unknown as ICompanyIntegrationFieldMap],
+                };
+            }
+            if (entityName === 'MJ: Company Integration Sync Watermarks') {
+                return { Success: true, Results: [existingWatermark] };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        const { Metadata: MockMetadataClass } = await import('@memberjunction/core');
+        const origGetEntity = MockMetadataClass.prototype.GetEntityObject;
+        MockMetadataClass.prototype.GetEntityObject = vi.fn().mockImplementation(async () => createMockEntity({}));
+
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser, 'Manual', undefined, undefined, { FullSync: false });
+
+            // PROGRESS: the reachable first page was written — skip-and-continue makes forward progress
+            // instead of abandoning the whole object on one bad page.
+            expect(result.RecordsCreated).toBe(2);
+            // A fetch failure is NOT a record error — it must not inflate RecordsErrored.
+            expect(result.RecordsErrored).toBe(0);
+
+            // THE SKIP SIGNAL: after the page at offset 2 failed, the engine advanced the offset and
+            // CALLED FETCH AGAIN at a higher offset. Pre-#3 it broke out and never paged past the gap;
+            // a call with CurrentOffset > 2 proves it stepped over the failure and kept going.
+            expect(offsetsSeen().some(o => o != null && o > 2)).toBe(true);
+
+            // WATERMARK HELD: the incomplete set must NOT advance the persisted watermark to the fetched
+            // page's value — it stays at/below the run-start value so the skipped window re-fetches next run.
+            expect(persistedWatermark).not.toBe(CLEAN_WATERMARK);
+            expect(persistedWatermark).not.toBe(DIRTY_WATERMARK);
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+            MockMetadataClass.prototype.GetEntityObject = origGetEntity;
+        }
+    });
+});

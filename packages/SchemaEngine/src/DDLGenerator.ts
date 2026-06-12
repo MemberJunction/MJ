@@ -72,13 +72,28 @@ export class DDLGenerator {
       lines.push(`    CONSTRAINT ${q(pkName)} PRIMARY KEY (${pkColNames})`);
     }
 
+    // All integration PKs/FKs are SOFT — declared in metadata so CodeGen can key its sprocs, but NOT
+    // enforced by a hard DB constraint. The PK is an inferred/statistical key; a UNIQUE constraint
+    // would reject genuine rows the inference missed and turn a guess into a write-blocking failure.
+    // We emit a NON-UNIQUE index instead, so per-record match/load lookups stay fast without
+    // enforcing a uniqueness we only inferred. (Soft FKs are already excluded in the FK loop below.)
+    const softPkIndex: string[] = [];
     if (def.SoftPrimaryKeys && def.SoftPrimaryKeys.length > 0) {
-      const pkColNames = def.SoftPrimaryKeys.map((f) => {
-        ValidateIdentifier(f, 'soft-pk column');
-        return q(f);
-      }).join(', ');
-      const uqName = `UQ_${def.SchemaName}_${def.TableName}_PK`;
-      lines.push(`    CONSTRAINT ${q(uqName)} UNIQUE (${pkColNames})`);
+      def.SoftPrimaryKeys.forEach((f) => ValidateIdentifier(f, 'soft-pk column'));
+      const ixName = `IX_${def.SchemaName}_${def.TableName}_PK`;
+      const idx = d.IndexDDL({
+        schema: def.SchemaName,
+        tableName: def.TableName,
+        indexName: ixName,
+        columns: def.SoftPrimaryKeys,
+        unique: false,
+      });
+      // Idempotent on re-codegen: PG IndexDDL already emits IF NOT EXISTS; guard SQL Server explicitly.
+      softPkIndex.push(
+        platform === 'postgresql'
+          ? idx + ';'
+          : `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'${ixName}' AND object_id = OBJECT_ID(N'${fullTable}'))\n${idx};`,
+      );
     }
 
     for (const fk of def.ForeignKeys?.filter((f) => !f.IsSoft) ?? []) {
@@ -95,9 +110,9 @@ export class DDLGenerator {
       ? d.CreateTableIfAbsent(fullTable, body)
       : `CREATE TABLE ${fullTable} (\n${body}\n);`;
 
-    const descStatements = this.GenerateDescriptions(def, d, options?.IfNotExists);
-    if (descStatements.length > 0) {
-      return createTable + '\n\n' + descStatements.join('\n\n');
+    const trailing = [...softPkIndex, ...this.GenerateDescriptions(def, d, options?.IfNotExists)];
+    if (trailing.length > 0) {
+      return createTable + '\n\n' + trailing.join('\n\n');
     }
 
     return createTable;
