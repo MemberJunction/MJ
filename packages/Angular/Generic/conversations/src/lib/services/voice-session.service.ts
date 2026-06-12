@@ -505,6 +505,12 @@ export class VoiceSessionService {
    *   chain. When set, the server uses exactly that co-agent and FAILS with a clear reason if
    *   it can't (no silent fallback). Omit to let server metadata drive the choice: the target
    *   agent's `DefaultCoAgentID`, then its agent type's, then the global Realtime Co-Agent.
+   * @param configOverridesJson Optional JSON payload of SESSION CONFIG overrides (e.g.
+   *   `{"realtime":{"modelPreference":"<modelId>"}}`), forwarded verbatim on the mint
+   *   mutation. The server enforces the `Realtime: Advanced Session Controls`
+   *   authorization on any overrides — hosts only populate this from authorization-gated
+   *   pickers, and never synthesize overrides beyond what the user explicitly chose.
+   *   Omit/`null` for the server's defaults (today's behavior).
    */
   public async StartVoiceSession(
     targetAgentId: string,
@@ -513,7 +519,8 @@ export class VoiceSessionService {
     agentName?: string | null,
     preferredModelId?: string | null,
     clientTools?: RealtimeToolDefinition[] | null,
-    coAgentId?: string | null
+    coAgentId?: string | null,
+    configOverridesJson?: string | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
@@ -530,7 +537,7 @@ export class VoiceSessionService {
       // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
       // tool sets must be declared to the realtime model at session mint.
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId);
+      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
@@ -1312,11 +1319,12 @@ export class VoiceSessionService {
     lastSessionId?: string | null,
     preferredModelId?: string | null,
     clientTools?: RealtimeToolDefinition[] | null,
-    coAgentId?: string | null
+    coAgentId?: string | null,
+    configOverridesJson?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
     const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson) {
           AgentSessionId
           ConversationId
           Provider
@@ -1336,7 +1344,8 @@ export class VoiceSessionService {
       lastSessionId: lastSessionId ?? null,
       preferredModelId: preferredModelId ?? null,
       clientToolsJson: clientTools && clientTools.length > 0 ? JSON.stringify(clientTools) : null,
-      coAgentId: coAgentId ?? null
+      coAgentId: coAgentId ?? null,
+      configOverridesJson: configOverridesJson ?? null
     };
     const result = await this.gql().ExecuteGQL(mutation, variables);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
