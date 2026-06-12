@@ -1,0 +1,85 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "apiBaseUrl",
+  "Configuration": {
+    "Token": "fixture-token",
+    "AccountID": "mock-acct"
+  },
+  "Objects": [
+    {
+      "Name": "checkin_questions"
+    },
+    {
+      "Name": "opens"
+    },
+    {
+      "Name": "clicks"
+    }
+  ],
+  "Routes": [
+    {
+      "Path": "/dataexport/mock-acct/list",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        "1717804800.1-checkin_questions.json",
+        "1717804801.2-opens.json",
+        "1717804802.3-clicks.json"
+      ]
+    },
+    {
+      "Path": "/dataexport/mock-acct/download/1717804800.1-checkin_questions.json",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "cq-1001",
+          "question": "sample-question",
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-02T00:00:00Z"
+        },
+        {
+          "id": "cq-1002",
+          "question": "sample-question-2",
+          "createdAt": "2026-01-03T00:00:00Z",
+          "updatedAt": "2026-01-04T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/dataexport/mock-acct/download/1717804801.2-opens.json",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "op-1001",
+          "campaignId": 2001,
+          "openedAt": "2026-02-01T00:00:00Z"
+        },
+        {
+          "id": "op-1002",
+          "campaignId": 2001,
+          "openedAt": "2026-02-02T00:00:00Z"
+        },
+        {
+          "id": "op-1003",
+          "campaignId": 2002,
+          "openedAt": "2026-02-03T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/dataexport/mock-acct/download/1717804802.3-clicks.json",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "cl-1001",
+          "campaignId": 2001,
+          "url": "https://example.com/a",
+          "clickedAt": "2026-03-01T00:00:00Z"
+        }
+      ]
+    }
+  ]
+}

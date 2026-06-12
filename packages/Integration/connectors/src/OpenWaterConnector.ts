@@ -753,7 +753,11 @@ export class OpenWaterConnector extends BaseRESTIntegrationConnector {
         try {
             const parsed = JSON.parse(obj.Configuration) as { AccessPath?: AccessPath };
             const ap = parsed.AccessPath;
-            if (!ap || !ap.door || !ap.doorPath || !ap.entryPath) return null;
+            if (!ap || !ap.door || !ap.doorPath) return null;
+            // embedded-array records are sliced from the DOOR payload itself — they have no
+            // entryPath by design. Requiring it here made every embedded IO (e.g. Rounds)
+            // silently fall back to its non-fetchable "(embedded in ...)" APIPath.
+            if (ap.extractionMode !== 'embedded-array' && !ap.entryPath) return null;
             return ap;
         } catch {
             console.warn(`[OpenWater] Invalid Configuration JSON for object "${obj.Name}"`);

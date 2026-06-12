@@ -29,10 +29,10 @@
             "maxRowsPerPage": 1000,
             "maxTotalResults": 10000
           },
-          "searchPaginationNote": "No cursor \u2014 connector re-resolves the search each run and deduplicates via content-hash idempotency."
+          "searchPaginationNote": "No cursor — connector re-resolves the search each run and deduplicates via content-hash idempotency."
         },
         "IncrementalSyncCapability": true,
-        "IncrementalSyncDescription": "Activity items carry last-modified-date (IncrementalWatermarkField). Connector tracks last-seen modified-date per object type as watermark. Search-scoped iD universe has no cursor \u2014 re-resolve each run, dedup via content-hash idempotency.",
+        "IncrementalSyncDescription": "Activity items carry last-modified-date (IncrementalWatermarkField). Connector tracks last-seen modified-date per object type as watermark. Search-scoped iD universe has no cursor — re-resolve each run, dedup via content-hash idempotency.",
         "universalPK": {
           "activityItems": {
             "fieldName": "put-code",
@@ -193,13 +193,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2766AB68-CBA3-4947-ACE3-6E59A4F22F3A"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:26.207Z",
-                  "checksum": "43ffada5efa3b291ea61c32159134dc7309197d9245fc1d93802e9a570ec9dd8"
                 }
               },
               {
@@ -217,13 +210,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "73A8531F-DA0A-4AAF-A3F0-813DF14BCE9B"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:26.345Z",
-                  "checksum": "de4c47bfa9042bd960a0fed06ec3b2442a9f83b048ceacb066cb5620904f794e"
                 }
               },
               {
@@ -241,13 +227,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "D49AEAE2-B407-48CC-AA5B-85E806771E47"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:26.438Z",
-                  "checksum": "bc8375b05a54e0d983663e497c3ad6e365a359281f19ec31e3874364f5c1d84c"
                 }
               },
               {
@@ -265,13 +244,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "5EB53B7D-06DB-4E79-9F2C-47E65400B9AB"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:26.531Z",
-                  "checksum": "fea73cbf88a337fa6593aa7156e7c14278be56a556c6ff020888f3c366f11065"
                 }
               },
               {
@@ -289,13 +261,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "590E7037-82FE-4A4C-B6D7-29DA8FF10B13"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:26.637Z",
-                  "checksum": "9291389f0ae60759200c5ffa441358eb17d32e8504a1e1163fed0a5aa2181616"
                 }
               },
               {
@@ -313,13 +278,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "6D5D926C-6B59-4B04-9882-7F4B73BED744"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:26.737Z",
-                  "checksum": "a7f428da4b53fae0f73e9eb1f8a262bb69fc4492a59143ca7051ba77bf615464"
                 }
               },
               {
@@ -337,13 +295,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "FD196385-4240-4609-8861-17339F573873"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:26.836Z",
-                  "checksum": "f23d63ac06124b71d5d1d44ac26e646d646ed42512112540f29119138779308b"
                 }
               },
               {
@@ -361,13 +312,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "A5B96C04-ADE0-4E83-AE03-B969FEF2B3D7"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:26.938Z",
-                  "checksum": "00bd00b6574ef9b27229426dc0e1b4d508a1d8ee8d15cda8544e7ab051fab672"
                 }
               },
               {
@@ -385,13 +329,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "6474C480-CA2E-48F2-BDCA-8471055C8483"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:27.040Z",
-                  "checksum": "c08b9cb900d2e67773482720cc56955360de0851207a0688181a8c3d4bd5980d"
                 }
               },
               {
@@ -410,20 +347,13 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "9AD24B80-7219-4776-A40C-0A81A8B2FCAB"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:27.145Z",
-                  "checksum": "061d269ab29fcb1e50405a1c64f0840b75e5ca1f156ef77e3c3687da44796215"
                 }
               },
               {
                 "fields": {
                   "Name": "family-name",
                   "DisplayName": "Family Name",
-                  "Description": "Family (last) name of the researcher (optional \u2014 some cultures use only given names). (personal-details-3.0.xsd name/family-name, common:string-150)",
+                  "Description": "Family (last) name of the researcher (optional — some cultures use only given names). (personal-details-3.0.xsd name/family-name, common:string-150)",
                   "Type": "String",
                   "IsRequired": false,
                   "IsReadOnly": true,
@@ -435,13 +365,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "01D5D9B7-D467-4B00-B3FD-09F4CC8119C4"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:27.268Z",
-                  "checksum": "b8d77b9d1258026773746fc305c08d2b73770f81378a14f916b3ec7360591de2"
                 }
               },
               {
@@ -460,13 +383,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "1B436510-741C-452A-9FB4-DD9BDBB7924D"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:27.369Z",
-                  "checksum": "2b77e9a7ec217adbd88f957ba3c4e263f4dea26889969bfff067e867702f8347"
                 }
               },
               {
@@ -484,13 +400,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "17A6D7D0-91F8-4366-B6F7-5730214C8ED3"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:27.469Z",
-                  "checksum": "fd4b6dc7ab3f576a4568be59fb31004811b2fabbbac11277db1a2d9d530a62d2"
                 }
               },
               {
@@ -508,13 +417,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "888AD824-976F-4C62-801C-BD908DFE0315"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:27.569Z",
-                  "checksum": "0cbdac4da54708a37238c3284543ca1c50b08890eb41caf18889c207d4009885"
                 }
               },
               {
@@ -532,13 +434,6 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "AA92C68C-5294-4872-8A83-AE45BB2A6CF2"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:27.666Z",
-                  "checksum": "934438ee12fa257fcb7614ee6808296c285e93a2a207679c1de26525cbc8e54f"
                 }
               },
               {
@@ -556,13 +451,6 @@
                   "IsCustom": false,
                   "Sequence": 15,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "FCBE3124-E925-4F79-89F5-E370E87B9144"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:27.789Z",
-                  "checksum": "45ac8e9b17fd002872dadcd24e2f79526f789a022f7a430425e5cca39b3cf15b"
                 }
               },
               {
@@ -580,13 +468,6 @@
                   "IsCustom": false,
                   "Sequence": 16,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "7C6CA17A-8871-4435-89D6-8662808C7186"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:27.889Z",
-                  "checksum": "a8fbde37cf468e228ad9860f6f758bf57df14e15add5d11528e77c07e2a30969"
                 }
               },
               {
@@ -604,13 +485,6 @@
                   "IsCustom": false,
                   "Sequence": 17,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "1C8DEB65-FB0F-48E7-8EBC-A2FD1B9150DD"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:27.990Z",
-                  "checksum": "ce473fae79ee786018cf97e8e860700e954c964908933a935022f210dee675f2"
                 }
               },
               {
@@ -628,23 +502,9 @@
                   "IsCustom": false,
                   "Sequence": 18,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "4B560DD9-C70D-4297-82F0-6B20AE1B9878"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:28.089Z",
-                  "checksum": "10c2ad48dc968a0e770e169d8372c660cdc7f1f9ecaa2965f212d7b53c859111"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "CC052C25-BF1F-441B-8909-093F7778EFC3"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:25.888Z",
-            "checksum": "f5c2786f54625bc7fc34de93a8cc9c2e2536ab4aad985476a936cdfffbc950ed"
           }
         },
         {
@@ -671,7 +531,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -685,13 +545,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "4C28F4B1-D37F-4F65-BDB4-D1D7857923C0"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:28.188Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -709,13 +562,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "622B4DF9-C013-4A0C-A12E-6B739BD6089D"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:28.307Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -734,13 +580,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "04B8C1D4-6C75-430D-B221-71FE3F7B9381"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:28.406Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -758,13 +597,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "6B785657-8A26-461C-B3A1-DC67FE4D1B63"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:28.503Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -782,13 +614,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "BE5BC77E-F716-436D-8616-8AF80F34350A"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:28.606Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -806,13 +631,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8736F153-5053-4E12-BFEC-939DD2D7F7E6"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:28.705Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -830,13 +648,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8051C3D8-978A-4D2B-ACB7-E95683E2DA55"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:28.807Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -854,13 +665,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "F630E506-346E-48DE-A5CB-74AA8241C69C"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:28.908Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -878,13 +682,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2C7ABDB3-7811-43E3-AA74-A2915CAB0594"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:29.010Z",
-                  "checksum": "d1538838ba7c463287b912c08cf2f503e9186e527047e70e83d2e9398331d8e6"
                 }
               },
               {
@@ -903,13 +700,6 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "F4EA39E7-F9C1-4082-8979-A950018E046E"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:29.109Z",
-                  "checksum": "fdad803816e22ac8720fd3b55afc9d4f5444cd1dc15d562b9aa247aa560a169a"
                 }
               },
               {
@@ -928,13 +718,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "A1E8BCC3-11A7-4C29-BBCB-B8B327C8806C"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:29.207Z",
-                  "checksum": "8f1bfe71659b881a583e4d61f36f38dbaa0df9b36bf5eea381bc6ae5f5469f5e"
                 }
               },
               {
@@ -952,13 +735,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "10D5C1F0-A419-4AB9-AEF2-606B090A2BC9"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:29.327Z",
-                  "checksum": "6a54a4d58ab5a53d0c219f2fd3666c6adb5fa84dcdbe3ad58c8c7f33db253574"
                 }
               },
               {
@@ -976,13 +752,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "69D5D999-DF0D-4534-8528-C3EC7E5E81F7"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:29.422Z",
-                  "checksum": "76182e17f1dd035a953360ac99cc5fe76f9a5df9b1d21969edcd3b693d0a1808"
                 }
               },
               {
@@ -1000,13 +769,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "225F67BF-82B8-4431-B49A-FB2106627745"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:29.520Z",
-                  "checksum": "fd8ccaa245e65bc1d4d68acda7d4d81bd720f11c7682e4c9f4e284827abd9c4d"
                 }
               },
               {
@@ -1024,13 +786,6 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "716899F0-E6CD-4B25-B867-B8E342920BBD"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:29.619Z",
-                  "checksum": "555dc47deafaa73b11139640852126e3aefd3398a35e686fbe51c6f32c163a6c"
                 }
               },
               {
@@ -1048,13 +803,6 @@
                   "IsCustom": false,
                   "Sequence": 15,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "AF0A1FFC-70CA-4E79-BFF3-C631BC921DF2"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:29.721Z",
-                  "checksum": "f9d540b99ec23cb29630ad0ae5c03d169b775ff34005f45531ce386e019078cc"
                 }
               },
               {
@@ -1072,13 +820,6 @@
                   "IsCustom": false,
                   "Sequence": 16,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "CA554C96-D12B-4C49-A7A0-F18785CF4407"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:29.825Z",
-                  "checksum": "69198c52a1cc628f42d9a254139b4389f9628111a727f49221002417c82e65b4"
                 }
               },
               {
@@ -1096,13 +837,6 @@
                   "IsCustom": false,
                   "Sequence": 17,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "86136384-7934-4001-BF0F-BA0EED1F13BE"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:29.925Z",
-                  "checksum": "79db10539d7b8907c839bf449dfb06997a5729e5713abc3881103de851cd4766"
                 }
               },
               {
@@ -1120,23 +854,9 @@
                   "IsCustom": false,
                   "Sequence": 18,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "E4D129AD-2D9C-468F-85EB-58744025A998"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.018Z",
-                  "checksum": "be3ced76b62ea0e6e8df68c90ce9491997e7c4a0a94350a00126119bc19ae5f6"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "1BB1A201-0BD5-4FE6-B7B8-9F9E8898214F"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:25.927Z",
-            "checksum": "7bb22ed4b77a4fb73edc2c1ef3077b991f0e4e80b218c31f1c98986da181e5db"
           }
         },
         {
@@ -1163,7 +883,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -1177,13 +897,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "67905D42-EB03-4C34-9760-1D8A87265920"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.111Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -1201,13 +914,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2EF0095E-8E60-401C-A199-D3CBE4C078A5"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.202Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -1226,13 +932,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "BBDFC15E-D9DE-4E88-90BC-6B97D849634B"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.314Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -1250,13 +949,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8BF4F6F5-BAEB-4F00-AEEE-D71B4AE138EC"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.408Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -1274,13 +966,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "865E1E42-E173-499E-B7B2-E0BAE92E2EE9"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.505Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -1298,13 +983,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "08A826CD-C1ED-457E-9622-EC7602DAC258"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.604Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -1322,13 +1000,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "CD335A18-0560-47A9-9502-7CD511D06E55"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.704Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -1346,13 +1017,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "1CA7184D-8E64-4B92-9262-702C5CDC1447"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.803Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -1371,13 +1035,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "52859C11-A7D1-47EE-B2AC-8BB32BBD660F"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.901Z",
-                  "checksum": "8c0f139ac99965b1624903806e9c47911d45b0b2bd600bada116e3bb8b68b523"
                 }
               },
               {
@@ -1396,13 +1053,6 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "AE40CC61-1E8F-44DB-A080-CB3DB27BBC59"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:30.999Z",
-                  "checksum": "131af79a71f6ee7b0eb3aefd0e5c132bc436a3104091f3d8d724cee4f258ad3a"
                 }
               },
               {
@@ -1420,13 +1070,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "0E178DF8-9E70-44A3-93AF-184E7F0A62D8"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:31.100Z",
-                  "checksum": "180c7ebbff39c2b072ccd444a6800ebbb5e8d09e830de844f4261bb8b6c28b91"
                 }
               },
               {
@@ -1444,13 +1087,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "D997F13B-2C4B-4586-849B-51D7E988D960"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:31.202Z",
-                  "checksum": "9c1b2d0783aa8707cfada14d3b7855e7fc41fb4c4d08d306d16dcb91ad92e995"
                 }
               },
               {
@@ -1468,13 +1104,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2D9956E2-5333-48DF-B68B-5ED6E1189AB8"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:31.324Z",
-                  "checksum": "7f25c7e2b586b86a2964ae34499c80f48a019865fcd643bd07d75c4d209891c2"
                 }
               },
               {
@@ -1492,13 +1121,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "34134EF6-5D94-499B-BEBE-72573C203621"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:31.428Z",
-                  "checksum": "fc84e3fbec5f5e2187cf55a2fb59bf589e4be9dbada29b6f79f62070a00cb5d3"
                 }
               },
               {
@@ -1516,23 +1138,9 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "9B17819D-DE12-44F6-B9CA-BBFBB2106A1B"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:31.530Z",
-                  "checksum": "97c8230cda8ffbc6e91586243babf622ad91c741687f7b5ceb8d71e81410412e"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "D034A9A9-4D2C-4557-8A03-1A853D487C22"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:25.952Z",
-            "checksum": "5cf523cd118fdf351efb2de7301a747438dba32dae9e77bdfffd1bd9020400c1"
           }
         },
         {
@@ -1559,7 +1167,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -1573,13 +1181,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "AEB1D40A-FCB8-43C3-B370-3DA3DFC5EB44"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:31.630Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -1597,13 +1198,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "3E3AE0EB-3553-4678-B85A-560500C3CA5B"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:31.728Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -1622,13 +1216,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "606D1D26-6309-44F5-B87D-EB6F7AA6943F"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:31.834Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -1646,13 +1233,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "4E9EBCB4-874B-43D6-9D4F-B1BEE7A5037A"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:31.935Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -1670,13 +1250,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "C7005845-D5B6-4B07-BDEF-EDC612989B4B"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:32.035Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -1694,13 +1267,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "E353B02E-AA9F-4228-911B-E3BD154F93E9"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:32.132Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -1718,13 +1284,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "1256CECF-2DC7-4372-A015-7D22B013F09B"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:32.233Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -1742,13 +1301,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "53A3B0D2-8730-48BB-A303-A56EB5344770"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:32.352Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -1767,13 +1319,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "53CBB946-D307-482A-8164-BB40A076534E"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:32.450Z",
-                  "checksum": "8c0f139ac99965b1624903806e9c47911d45b0b2bd600bada116e3bb8b68b523"
                 }
               },
               {
@@ -1792,13 +1337,6 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "FBFF22AA-BC0F-4549-9A8E-29FB4F8AFBC5"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:32.545Z",
-                  "checksum": "131af79a71f6ee7b0eb3aefd0e5c132bc436a3104091f3d8d724cee4f258ad3a"
                 }
               },
               {
@@ -1816,13 +1354,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "B3AD8D5C-3473-4575-BB99-423371E815CB"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:32.644Z",
-                  "checksum": "180c7ebbff39c2b072ccd444a6800ebbb5e8d09e830de844f4261bb8b6c28b91"
                 }
               },
               {
@@ -1840,13 +1371,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "034D7B15-E2EC-41FB-B228-1255B9CEDEFD"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:32.741Z",
-                  "checksum": "9c1b2d0783aa8707cfada14d3b7855e7fc41fb4c4d08d306d16dcb91ad92e995"
                 }
               },
               {
@@ -1864,13 +1388,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "4B73F516-49D5-4DC6-A8F6-DB4E22BD4D37"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:32.841Z",
-                  "checksum": "7f25c7e2b586b86a2964ae34499c80f48a019865fcd643bd07d75c4d209891c2"
                 }
               },
               {
@@ -1888,13 +1405,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8E8A030D-D5DC-4690-94D9-8C3F38CD5C2E"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:32.937Z",
-                  "checksum": "fc84e3fbec5f5e2187cf55a2fb59bf589e4be9dbada29b6f79f62070a00cb5d3"
                 }
               },
               {
@@ -1912,23 +1422,9 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "DE8A23A5-5451-474A-B17F-2B8FAF7B0A91"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:33.037Z",
-                  "checksum": "97c8230cda8ffbc6e91586243babf622ad91c741687f7b5ceb8d71e81410412e"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "6CAA8A0D-19F5-4FB2-8C63-FC5CBE503E4D"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:25.977Z",
-            "checksum": "6975ef49f16d2a846458eac16a002fa114451d3b9bc9298b210f3ca10d03bd0c"
           }
         },
         {
@@ -1955,7 +1451,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -1969,13 +1465,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "D0E937EF-978C-4B01-83FF-92DACFDC4BCF"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:33.138Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -1993,13 +1482,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "4009D17B-181A-4118-A169-E4D6203F4CC1"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:33.235Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -2018,13 +1500,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "9D750198-1B03-40B6-ABEC-1DB0C3C317F0"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:33.355Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -2042,13 +1517,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "BFA1B2BB-8B89-4C77-A8B0-508C3901CF98"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:33.453Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -2066,13 +1534,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "25CA2D57-9989-4DCA-AAC9-21EC013B6063"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:33.555Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -2090,13 +1551,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8A579575-0E48-49EC-B413-211D99F5A076"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:33.652Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -2114,13 +1568,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "BA9734AE-E04B-46F0-B15F-528158018FD9"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:33.753Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -2138,13 +1585,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "118B97AB-447C-4F6F-8718-B7D17E4604DC"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:33.855Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -2163,13 +1603,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "0EC19BA1-94A0-44D3-BCFF-A9733BA85FB1"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:33.954Z",
-                  "checksum": "8c0f139ac99965b1624903806e9c47911d45b0b2bd600bada116e3bb8b68b523"
                 }
               },
               {
@@ -2188,13 +1621,6 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "C600ECDC-42A0-4D86-BE9F-CE531D8B9DDA"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:34.050Z",
-                  "checksum": "131af79a71f6ee7b0eb3aefd0e5c132bc436a3104091f3d8d724cee4f258ad3a"
                 }
               },
               {
@@ -2212,13 +1638,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "C61195DD-74C4-4A58-B610-F84659B7F0E6"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:34.145Z",
-                  "checksum": "180c7ebbff39c2b072ccd444a6800ebbb5e8d09e830de844f4261bb8b6c28b91"
                 }
               },
               {
@@ -2236,13 +1655,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "D9CA6A7C-0986-43ED-9959-DE0B029A6BC5"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:34.241Z",
-                  "checksum": "9c1b2d0783aa8707cfada14d3b7855e7fc41fb4c4d08d306d16dcb91ad92e995"
                 }
               },
               {
@@ -2260,13 +1672,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "947E1356-E2A7-4437-98D4-5EFE28053477"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:34.357Z",
-                  "checksum": "7f25c7e2b586b86a2964ae34499c80f48a019865fcd643bd07d75c4d209891c2"
                 }
               },
               {
@@ -2284,13 +1689,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "847835D8-3FED-48C2-B4A1-55EFA9DEC14E"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:34.455Z",
-                  "checksum": "fc84e3fbec5f5e2187cf55a2fb59bf589e4be9dbada29b6f79f62070a00cb5d3"
                 }
               },
               {
@@ -2308,23 +1706,9 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "D1F4D5E6-B920-4620-A0CB-31296A9EF9AD"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:34.553Z",
-                  "checksum": "97c8230cda8ffbc6e91586243babf622ad91c741687f7b5ceb8d71e81410412e"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "935B1BEA-016F-4548-ABAD-115058353A12"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:26.000Z",
-            "checksum": "2cef1f08ab23f838199ce68f3fe7cec37f78c251d2df5edf837393bd72639597"
           }
         },
         {
@@ -2351,7 +1735,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -2365,13 +1749,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2333B506-665D-4A11-93DA-2CA2858634D9"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:34.652Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -2389,13 +1766,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "1D44ACD9-1505-41E0-881F-CF211A14C8EE"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:34.749Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -2414,13 +1784,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "EB16CA3E-03E9-4E46-BC80-4B259572AB5D"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:34.851Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -2438,13 +1801,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "F3E435AF-5C81-46D1-9CB2-E3340E89A684"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:34.952Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -2462,13 +1818,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "CF672E59-DB10-43DD-A6E3-E5BD2F03B980"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:35.254Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -2486,13 +1835,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "86551A4E-3526-4188-BC80-998ABEA31086"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:35.055Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -2510,13 +1852,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "B8925EE6-6977-4956-A29F-0A46B6AF1EF5"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:35.155Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -2534,13 +1869,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "1B750C40-4DFD-4E5B-8097-A5BAA8E6FE9F"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:35.375Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -2559,13 +1887,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2EBFF821-1221-482F-82D4-7841A0254463"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:35.473Z",
-                  "checksum": "8c0f139ac99965b1624903806e9c47911d45b0b2bd600bada116e3bb8b68b523"
                 }
               },
               {
@@ -2584,13 +1905,6 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "72A7886B-0939-45ED-BA61-87CAF2184919"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:35.574Z",
-                  "checksum": "131af79a71f6ee7b0eb3aefd0e5c132bc436a3104091f3d8d724cee4f258ad3a"
                 }
               },
               {
@@ -2608,13 +1922,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "D52F7FCD-4061-4394-82B6-E98A99D83234"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:35.678Z",
-                  "checksum": "180c7ebbff39c2b072ccd444a6800ebbb5e8d09e830de844f4261bb8b6c28b91"
                 }
               },
               {
@@ -2632,13 +1939,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "E0C311BA-826B-43CF-A84F-87F0E8BEA854"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:35.779Z",
-                  "checksum": "9c1b2d0783aa8707cfada14d3b7855e7fc41fb4c4d08d306d16dcb91ad92e995"
                 }
               },
               {
@@ -2656,13 +1956,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "B777985B-417F-47ED-93BE-77195376E322"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:35.879Z",
-                  "checksum": "7f25c7e2b586b86a2964ae34499c80f48a019865fcd643bd07d75c4d209891c2"
                 }
               },
               {
@@ -2680,13 +1973,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "F9AD7518-ECB4-406A-9BEA-A1E4550DDAFA"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:35.974Z",
-                  "checksum": "fc84e3fbec5f5e2187cf55a2fb59bf589e4be9dbada29b6f79f62070a00cb5d3"
                 }
               },
               {
@@ -2704,23 +1990,9 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "C5E76560-301A-4A3A-822C-F170F8E11A09"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:36.074Z",
-                  "checksum": "97c8230cda8ffbc6e91586243babf622ad91c741687f7b5ceb8d71e81410412e"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "AB670D78-CC8F-4B25-952C-D5E9F7E0509C"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:26.024Z",
-            "checksum": "7c500cf624966b227fdbb263abf6f04827f591764165f87a5df0203cd86b3b3e"
           }
         },
         {
@@ -2747,7 +2019,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -2761,13 +2033,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "ACF1D31B-2EEF-4CC1-B19D-3C6D249611C3"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:36.173Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -2785,13 +2050,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "40B1F247-EB8B-4060-A76A-C1539AF2846C"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:36.275Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -2810,13 +2068,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "82DAE89F-9300-4F39-AF1E-CA6F60B587E2"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:36.395Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -2834,13 +2085,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "6B255D47-FB40-4E3E-BB7C-73F2E9EA1562"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:36.495Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -2858,13 +2102,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "62A92E86-C229-4CC0-AA23-0A3E9888ADA8"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:36.592Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -2882,13 +2119,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "1BC17BE3-DD2A-45D4-A3C0-B02EFE802134"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:36.691Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -2906,13 +2136,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "920AC2EE-E498-4C59-AB90-6DB22047EAB7"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:36.789Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -2930,13 +2153,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8880EB2B-6553-4835-AA17-1F8EFD239427"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:36.891Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -2955,13 +2171,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "C1DC4F8A-4F69-420E-90D8-450E0EF3BD6B"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:36.998Z",
-                  "checksum": "8c0f139ac99965b1624903806e9c47911d45b0b2bd600bada116e3bb8b68b523"
                 }
               },
               {
@@ -2980,13 +2189,6 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "DEFDB8B8-A492-4822-A290-543BC2F13CA6"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:37.104Z",
-                  "checksum": "131af79a71f6ee7b0eb3aefd0e5c132bc436a3104091f3d8d724cee4f258ad3a"
                 }
               },
               {
@@ -3004,13 +2206,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "7F66722C-24FF-4E0D-B583-0D88D785D566"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:37.206Z",
-                  "checksum": "180c7ebbff39c2b072ccd444a6800ebbb5e8d09e830de844f4261bb8b6c28b91"
                 }
               },
               {
@@ -3028,13 +2223,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8AD6D90A-A04B-48B5-94E9-33FBE2D29C75"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:37.302Z",
-                  "checksum": "9c1b2d0783aa8707cfada14d3b7855e7fc41fb4c4d08d306d16dcb91ad92e995"
                 }
               },
               {
@@ -3052,13 +2240,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "ABA8DEC1-C267-4198-9692-18A15B8A6F55"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:37.416Z",
-                  "checksum": "7f25c7e2b586b86a2964ae34499c80f48a019865fcd643bd07d75c4d209891c2"
                 }
               },
               {
@@ -3076,13 +2257,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "C2CDE0EA-E800-4E33-ACB8-E52B515A86C0"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:37.513Z",
-                  "checksum": "fc84e3fbec5f5e2187cf55a2fb59bf589e4be9dbada29b6f79f62070a00cb5d3"
                 }
               },
               {
@@ -3100,23 +2274,9 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "F615D453-ACE9-4371-A921-D842C27E2672"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:37.612Z",
-                  "checksum": "97c8230cda8ffbc6e91586243babf622ad91c741687f7b5ceb8d71e81410412e"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "49AF3B26-FD9A-46B3-9672-85A9FE57A501"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:26.049Z",
-            "checksum": "8b12d699981edfb22b3cf8f608588560cc411cc0d4d0ab5982ae275bec8cd1a3"
           }
         },
         {
@@ -3143,7 +2303,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -3157,13 +2317,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "D7127928-C724-4BB9-81B2-AF7372D863E7"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:37.713Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -3181,13 +2334,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "E8CFDF9F-23E4-42FF-8423-DC8AD972E950"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:37.813Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -3206,13 +2352,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "7ED35652-3FFC-4912-ACF8-DB4C57430DE7"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:37.911Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -3230,13 +2369,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "05DFC903-2FF2-407A-A970-BD2B3271926E"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:38.010Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -3254,13 +2386,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "319FC70C-0402-4C54-8A31-72D2F3A9AF3A"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:38.112Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -3278,13 +2403,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "FB1BD62F-3C93-4095-BADF-088761686B92"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:38.216Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -3302,13 +2420,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "4BCCCFFB-8F5E-4B93-98FE-7DDDED208159"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:38.318Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -3326,13 +2437,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "FE4FB531-7B0B-40A8-B7E6-554912B0728F"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:38.439Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -3351,13 +2455,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "937AE050-BEDE-4799-8961-C6DE729B7FE8"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:38.545Z",
-                  "checksum": "8c0f139ac99965b1624903806e9c47911d45b0b2bd600bada116e3bb8b68b523"
                 }
               },
               {
@@ -3376,13 +2473,6 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "F81951CF-22B8-4850-9ECB-59EB6DB65CD2"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:38.646Z",
-                  "checksum": "131af79a71f6ee7b0eb3aefd0e5c132bc436a3104091f3d8d724cee4f258ad3a"
                 }
               },
               {
@@ -3400,13 +2490,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "ACCD23F4-1F1D-43AB-B515-FC124BAAAA7A"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:38.751Z",
-                  "checksum": "180c7ebbff39c2b072ccd444a6800ebbb5e8d09e830de844f4261bb8b6c28b91"
                 }
               },
               {
@@ -3424,13 +2507,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "27F581B7-DDCE-4D93-AFEE-E350785569D5"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:38.853Z",
-                  "checksum": "9c1b2d0783aa8707cfada14d3b7855e7fc41fb4c4d08d306d16dcb91ad92e995"
                 }
               },
               {
@@ -3448,13 +2524,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2DE30751-DD1C-40A6-B24D-F9F804492D4B"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:38.958Z",
-                  "checksum": "7f25c7e2b586b86a2964ae34499c80f48a019865fcd643bd07d75c4d209891c2"
                 }
               },
               {
@@ -3472,13 +2541,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "4AC13A93-B2BB-4D7C-92AD-227657C6416E"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:39.061Z",
-                  "checksum": "fc84e3fbec5f5e2187cf55a2fb59bf589e4be9dbada29b6f79f62070a00cb5d3"
                 }
               },
               {
@@ -3496,23 +2558,9 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "1001481A-8514-4797-B646-96905498A614"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:39.162Z",
-                  "checksum": "97c8230cda8ffbc6e91586243babf622ad91c741687f7b5ceb8d71e81410412e"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "29B2CA63-F13A-49CE-9E4F-2DFD26953223"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:26.072Z",
-            "checksum": "7033a90aae57578bedf729e2d43594ccdecf752ba6d15622bf3134417e2610f4"
           }
         },
         {
@@ -3539,7 +2587,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -3553,13 +2601,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "75244E57-157E-4A71-A55D-9B016FF753D8"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:39.263Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -3577,13 +2618,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8582336D-6C45-4914-8650-275716896FFD"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:39.365Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -3602,13 +2636,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "11937317-45A8-4D34-AE82-5AFE51AE59B6"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:39.486Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -3626,13 +2653,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "3C7E50ED-555D-4726-8EB6-C3A649387A4A"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:39.586Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -3650,13 +2670,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "ED506FC3-DC5E-4738-A422-BC4DCFBE97BF"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:39.690Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -3674,13 +2687,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "14DE17FF-DD23-4CB0-B9F4-DBD20A4F2B91"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:39.787Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -3698,13 +2704,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "F264BD3B-9AF8-4BB2-9579-00E2E7C40D69"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:39.890Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -3722,13 +2721,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "149B613D-EB2D-4184-994B-5FB0F7F7A685"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:40.001Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -3747,13 +2739,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "4309E401-73B4-42FD-B0DC-1FE6723B7D97"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:40.107Z",
-                  "checksum": "8c0f139ac99965b1624903806e9c47911d45b0b2bd600bada116e3bb8b68b523"
                 }
               },
               {
@@ -3772,13 +2757,6 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "B69552C9-56E2-4B89-A208-B206970FB971"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:40.208Z",
-                  "checksum": "131af79a71f6ee7b0eb3aefd0e5c132bc436a3104091f3d8d724cee4f258ad3a"
                 }
               },
               {
@@ -3796,13 +2774,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "29FA4FE0-B0DE-4539-988C-218879ED2D2C"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:40.309Z",
-                  "checksum": "180c7ebbff39c2b072ccd444a6800ebbb5e8d09e830de844f4261bb8b6c28b91"
                 }
               },
               {
@@ -3820,13 +2791,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "04BB01F0-7B13-41EF-B528-075F55636634"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:40.409Z",
-                  "checksum": "9c1b2d0783aa8707cfada14d3b7855e7fc41fb4c4d08d306d16dcb91ad92e995"
                 }
               },
               {
@@ -3844,13 +2808,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "26732CF2-5366-4393-BF68-A71618862906"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:40.532Z",
-                  "checksum": "7f25c7e2b586b86a2964ae34499c80f48a019865fcd643bd07d75c4d209891c2"
                 }
               },
               {
@@ -3868,13 +2825,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "783B38C5-14A6-4B6A-9604-BC45995596F1"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:40.640Z",
-                  "checksum": "fc84e3fbec5f5e2187cf55a2fb59bf589e4be9dbada29b6f79f62070a00cb5d3"
                 }
               },
               {
@@ -3892,23 +2842,9 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "4A2A120F-B1D0-408E-ACB2-A793D77DC075"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:40.742Z",
-                  "checksum": "97c8230cda8ffbc6e91586243babf622ad91c741687f7b5ceb8d71e81410412e"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "91419BF8-9F2C-4640-99C7-8C2EEAAEDED2"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:26.095Z",
-            "checksum": "d7d5c922a7f072839f5d1b41adecf77b25eccefebdeb5c161cfd1ebb22d45d73"
           }
         },
         {
@@ -3935,7 +2871,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -3949,13 +2885,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2F5CC2AE-576C-493F-914B-8B0A9D88B342"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:40.844Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -3973,13 +2902,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "DE2C30F0-0BD6-432E-B0D5-AAAB2AA3AA7B"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:40.942Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -3998,13 +2920,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "172D6553-F9DE-48C1-A05C-093F9C079F0C"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:41.045Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -4022,13 +2937,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "E0527836-BCC9-4BBA-A813-CCA75CA6CCC9"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:41.145Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -4046,13 +2954,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8AD5A175-CEF5-4003-929C-F163750EA882"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:41.244Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -4070,13 +2971,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "31287F96-FAB8-4C33-B61B-35C7B20D88C0"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:41.347Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -4094,13 +2988,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "3EF45F1A-4D09-498C-89D8-5D6A1B4D5FBB"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:41.448Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -4118,13 +3005,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "7E44D307-B48C-4695-BFFA-F97164B4D5A4"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:41.569Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -4142,13 +3022,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "E853F0A2-6BD1-44ED-9447-EF3A63CB5D62"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:41.671Z",
-                  "checksum": "25f06f5eacb59a6723c15b5f5f7780aa152ee6a549b0645b85dab0ba40f10d00"
                 }
               },
               {
@@ -4166,13 +3039,6 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "F62CE432-C5F4-4A17-BB03-D2E343FB41F5"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:41.773Z",
-                  "checksum": "f500f91b9e8319f63d482121a10781ef41288ebcde361fe585179bb77be73701"
                 }
               },
               {
@@ -4190,13 +3056,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "5ED93A9D-B93F-421B-908D-2A955607872A"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:41.871Z",
-                  "checksum": "eef62e00362aada844f6fcc348de88a2b95c041650443e2fa20033393bbb5788"
                 }
               },
               {
@@ -4215,13 +3074,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "459FBE95-F31D-44E8-9D86-55A48968EDDE"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:41.973Z",
-                  "checksum": "700635ff2cfce31a410cde8ef07a6f99816ef40602b2fe876085b1b85f2a188f"
                 }
               },
               {
@@ -4239,13 +3091,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "902CF63E-8E1E-4B0F-9CDE-50E3E01A2424"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:42.075Z",
-                  "checksum": "ca142015d3d3dbbbf7d931ce8aad3dd35cdd265f81a4e30c09f36ee91d84fd53"
                 }
               },
               {
@@ -4263,13 +3108,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "C6CD3044-46D5-40FF-8FF4-4C74836BF7C9"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:42.175Z",
-                  "checksum": "93c53c45638375bcbbc6490625d75b18a15e901221d739627701ee547a89dfc3"
                 }
               },
               {
@@ -4287,13 +3125,6 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "A5951BD9-C6E2-4D9C-970A-CC805CDFC73F"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:42.274Z",
-                  "checksum": "788d9e47e05b2060f4a89b0792e0d3b8dc0ed38cc1eecbc64d46f4a106bc5a05"
                 }
               },
               {
@@ -4311,13 +3142,6 @@
                   "IsCustom": false,
                   "Sequence": 15,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "35A1EDA4-6783-4816-98AD-969874B704B9"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:42.379Z",
-                  "checksum": "ab9857eae9f7f46c06468ee567fe805ef39d4acd3be4f59d6477dfa06b11ba9c"
                 }
               },
               {
@@ -4335,13 +3159,6 @@
                   "IsCustom": false,
                   "Sequence": 16,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "A8EAFB4A-667B-4380-83F2-1CFED10A64E4"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:42.481Z",
-                  "checksum": "a7ef0f4a8e4f6bd0d3fd24c6c4a4caa5b62d757dc970628f56cd02ca9821447c"
                 }
               },
               {
@@ -4359,13 +3176,6 @@
                   "IsCustom": false,
                   "Sequence": 17,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "9DF0A39D-B47D-417D-87C3-36030019C1DD"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:42.600Z",
-                  "checksum": "e44af866bdc59f8c1c700bec1ac98877c2f5c59936605ce39081139a8a6d0467"
                 }
               },
               {
@@ -4383,23 +3193,9 @@
                   "IsCustom": false,
                   "Sequence": 18,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "EB91A291-1512-4280-9D5C-A0AA7B4FF4C3"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:42.707Z",
-                  "checksum": "5621dd180988d0dbb34f24d9caffbc917ee5403a8e6ca6d88c55d0ecd4e0de13"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "E27D5561-587B-4901-9BDB-8D76A9204A06"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:26.117Z",
-            "checksum": "d999e9b5845a7c1d02fe7e2c75087f9371c0fad79e2edddd6e2cd15b0d584463"
           }
         },
         {
@@ -4426,7 +3222,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -4440,13 +3236,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "19417AF8-CC48-4BFB-8572-B31584F7F81A"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:42.809Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -4464,13 +3253,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2CCF9594-0CEE-4446-BB6B-295D8BEFF84D"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:42.906Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -4489,13 +3271,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2E8DC088-A87B-4CE1-AAD4-97950EF011C6"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:43.013Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -4513,13 +3288,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "6C07DE7C-B6F1-4779-B719-329E07B13312"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:43.118Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -4537,13 +3305,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "0C56B873-B87D-43E2-9932-EAABE9DC228D"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:43.218Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -4561,13 +3322,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "9E724B23-6BA9-4226-92B2-E4E1DA54B6B9"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:43.315Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -4585,13 +3339,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "55BCB38E-D34C-48D7-B471-5BF1A8E0A7F3"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:43.416Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -4609,13 +3356,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "3D4A95CA-D753-4D5F-984D-5CA3CF28B929"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:43.515Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -4633,13 +3373,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "1B7E6A80-6541-4EF1-B9D4-3C4179D732AC"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:43.637Z",
-                  "checksum": "ae4397626c7e65ba89b4bf5ef7a7a1061cc3b36a55f147499e9ce680ee8cbd03"
                 }
               },
               {
@@ -4657,13 +3390,6 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "3EF30F89-6832-42D8-82AD-4D8714272596"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:43.740Z",
-                  "checksum": "eee1f159a1f64ee9b3d21b6c744731d4bdc947b8ad155095e823879434061e90"
                 }
               },
               {
@@ -4681,13 +3407,6 @@
                   "IsCustom": false,
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "D052728F-1D4E-4464-9A60-EC2F6C7FD128"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:43.843Z",
-                  "checksum": "440561addbfe88b749661a14aafdd82eca168b4599e5ffc072cbe03b4e41b0aa"
                 }
               },
               {
@@ -4705,13 +3424,6 @@
                   "IsCustom": false,
                   "Sequence": 11,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "D15E798F-53D2-414D-A7B9-64E507908474"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:43.944Z",
-                  "checksum": "34cc217435cc717160b7ac94eef6113fd6166ce5b46086c211a41d7020067e17"
                 }
               },
               {
@@ -4729,13 +3441,6 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "4400E704-0A5D-4F3C-96FB-405C84483822"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:44.046Z",
-                  "checksum": "59e4669addecad9e1f594be1f7b68dbaa883ad307ee64e7418f70a0d26c38ae1"
                 }
               },
               {
@@ -4753,13 +3458,6 @@
                   "IsCustom": false,
                   "Sequence": 13,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "B6BC278C-AB8E-4CBB-B91D-B123302BD4FD"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:44.141Z",
-                  "checksum": "6d0de9f2dca7237d538d1c71a4d317ee43ded6579185cb6af21aa01addedbb0b"
                 }
               },
               {
@@ -4777,13 +3475,6 @@
                   "IsCustom": false,
                   "Sequence": 14,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "F622697A-06D2-42A5-930C-5671E251B1F6"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:44.238Z",
-                  "checksum": "6389e448d02350db529a50293b5b7ce55403796109d84a91aacce041de45dc78"
                 }
               },
               {
@@ -4802,13 +3493,6 @@
                   "IsCustom": false,
                   "Sequence": 15,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "705DF92C-E86F-48DE-9A3A-95DC682B675A"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:44.334Z",
-                  "checksum": "c34899a8aec3217d9ccb92175bceef3eabb52533e38bae768a73d39c29742f40"
                 }
               },
               {
@@ -4826,13 +3510,6 @@
                   "IsCustom": false,
                   "Sequence": 16,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "9993E434-7BDF-4112-945F-50C1632B3339"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:44.431Z",
-                  "checksum": "db2e8e05ef88003bfed16aa414a3e7c105b7244d71623f2a470a51ec4027001c"
                 }
               },
               {
@@ -4850,13 +3527,6 @@
                   "IsCustom": false,
                   "Sequence": 17,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "2CDAF27A-6937-46AD-876C-4369B68920F2"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:44.532Z",
-                  "checksum": "094a1746664417b1855a66f3bc06f7a34faf162662a5b5da8b005fdafcf8cdd3"
                 }
               },
               {
@@ -4874,13 +3544,6 @@
                   "IsCustom": false,
                   "Sequence": 18,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "F7F4A255-F01B-481C-9C62-E3756ABAF3E3"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:44.652Z",
-                  "checksum": "5b41e23099cb0c08fb910f4f0ad8cb828981c3ae4ae1e25f9df2291def82c073"
                 }
               },
               {
@@ -4898,23 +3561,9 @@
                   "IsCustom": false,
                   "Sequence": 19,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8124A59F-E253-486A-B1B8-58EC664446F4"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:44.755Z",
-                  "checksum": "e62e7f8915aef09d9a36b66165e226f70460fffd785214764085de36f07c9bf7"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "266C9798-F874-4AB0-A775-4251674102C0"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:26.147Z",
-            "checksum": "5074d13bec9e7cbf571365dd12bb6f0029be028d529a4722779e7e4cc58b94b8"
           }
         },
         {
@@ -4941,7 +3590,7 @@
                 "fields": {
                   "Name": "orcid-id",
                   "DisplayName": "Orcid Id",
-                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) \u2014 the {ORCID-iD} segment IS the FK.",
+                  "Description": "The ORCID iD of the researcher whose record this item belongs to. Foreign key to the record IO. Proven by the parametric child path GET /{ORCID-iD}/<section> (read-data tutorial) — the {ORCID-iD} segment IS the FK.",
                   "Type": "String",
                   "IsRequired": true,
                   "IsReadOnly": true,
@@ -4955,13 +3604,6 @@
                   "IsCustom": false,
                   "Sequence": 0,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "BC4103BA-0C73-4855-AD82-3D010A4453BE"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:44.855Z",
-                  "checksum": "67522a5edb18b49ff52ed9f951d4a4ebe243632d77122d456a2601f394122135"
                 }
               },
               {
@@ -4979,13 +3621,6 @@
                   "IsCustom": false,
                   "Sequence": 1,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "8A260B06-3B8E-4B7D-8DB8-0E6D450A712F"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:44.958Z",
-                  "checksum": "b40a2209e2b400810c4f3b53d4d5fdddb850e73bb81e152f16bd80da71e1e998"
                 }
               },
               {
@@ -5004,13 +3639,6 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "CB9C2E83-368A-4B9C-8A46-F166EFC9B321"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:45.055Z",
-                  "checksum": "0e8c0740b32a24e0521838dd2805fcfaddf67141c4ccdef98163327f8d35d826"
                 }
               },
               {
@@ -5028,13 +3656,6 @@
                   "IsCustom": false,
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "AA632965-950B-44E2-B35A-A66785AB6415"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:45.150Z",
-                  "checksum": "5628324cc7e7c921dc212dacbcc179e9bcf65e176464a1dbb52036cf1dc343d4"
                 }
               },
               {
@@ -5052,13 +3673,6 @@
                   "IsCustom": false,
                   "Sequence": 4,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "598D57D5-F355-4409-A453-FF87CB4858B7"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:45.242Z",
-                  "checksum": "c321fa83a2533be5d2f3a80ecb75aa99368fc7c23e56f6d2d8814b7b251c7aab"
                 }
               },
               {
@@ -5076,13 +3690,6 @@
                   "IsCustom": false,
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "A7AE8263-28B9-4950-928D-90402748EE22"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:45.333Z",
-                  "checksum": "dae64cbe1c5394ecb32c5ef6ae5838383c92025765c07869f8fd44204b85f089"
                 }
               },
               {
@@ -5100,13 +3707,6 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "23329719-ECAD-4CAD-9DE1-F834219C84FC"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:45.425Z",
-                  "checksum": "3a658519bbaa0467c9f0d4f57e1f3f73356c6715bdff6c184e3e4287400cb157"
                 }
               },
               {
@@ -5124,13 +3724,6 @@
                   "IsCustom": false,
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "CFA09EEC-8D69-40FA-A633-DF2A8BB5C823"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:45.518Z",
-                  "checksum": "3ed3f2487516d45ac0aa1bd4dd65eb100236400cd684d2ba1356df4a5c4eb13c"
                 }
               },
               {
@@ -5148,13 +3741,6 @@
                   "IsCustom": false,
                   "Sequence": 8,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "1E80E88E-51E3-49DB-A6D6-C0D9A9CE6C9D"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:45.621Z",
-                  "checksum": "81c15e92367212dcfff4ef7b727b83e0881413e87665d51db1708e48ee62d7b0"
                 }
               },
               {
@@ -5172,33 +3758,12 @@
                   "IsCustom": false,
                   "Sequence": 9,
                   "IntegrationObjectID": "@parent:ID"
-                },
-                "primaryKey": {
-                  "ID": "E949ED37-6D45-42D8-A684-5088C6D395B9"
-                },
-                "sync": {
-                  "lastModified": "2026-06-11T00:54:45.718Z",
-                  "checksum": "83fd86d1e65ae4baf5d4dcb6e02031e286724f711425e1bb3b1aed6f2489338e"
                 }
               }
             ]
-          },
-          "primaryKey": {
-            "ID": "184C9D9F-2983-4358-99FE-23304D1D5F22"
-          },
-          "sync": {
-            "lastModified": "2026-06-11T00:54:26.168Z",
-            "checksum": "ec036ae3b24068291e0d302179be972632ae2070fdf654e0890ba434456d4063"
           }
         }
       ]
-    },
-    "primaryKey": {
-      "ID": "A84A0806-850E-4D10-8A59-C878F3B23788"
-    },
-    "sync": {
-      "lastModified": "2026-06-11T00:54:19.438Z",
-      "checksum": "7ec036ef393b36cc4b96a509b47b524944852bfea379e0c68b21a48aa911dbf5"
     }
   }
 ]
