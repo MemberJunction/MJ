@@ -2,6 +2,7 @@ import { NgModule } from '@angular/core';
 import { RealtimeWhiteboardBoardComponent } from './whiteboard-board.component';
 import { RealtimeWhiteboardToolbarComponent } from './whiteboard-toolbar.component';
 import { RealtimeWhiteboardZoomComponent } from './whiteboard-zoom.component';
+import { RealtimeWhiteboardPagesComponent } from './whiteboard-pages.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
 import { RealtimeWhiteboardHostComponent } from './whiteboard-host.component';
 import { WhiteboardSnapshotComponent } from './whiteboard-snapshot.component';
@@ -17,6 +18,7 @@ import { WhiteboardSnapshotComponent } from './whiteboard-snapshot.component';
     RealtimeWhiteboardBoardComponent,
     RealtimeWhiteboardToolbarComponent,
     RealtimeWhiteboardZoomComponent,
+    RealtimeWhiteboardPagesComponent,
     RealtimeWhiteboardAgentSeesPopoverComponent,
     RealtimeWhiteboardHostComponent,
     WhiteboardSnapshotComponent
@@ -25,6 +27,7 @@ import { WhiteboardSnapshotComponent } from './whiteboard-snapshot.component';
     RealtimeWhiteboardBoardComponent,
     RealtimeWhiteboardToolbarComponent,
     RealtimeWhiteboardZoomComponent,
+    RealtimeWhiteboardPagesComponent,
     RealtimeWhiteboardAgentSeesPopoverComponent,
     RealtimeWhiteboardHostComponent,
     WhiteboardSnapshotComponent

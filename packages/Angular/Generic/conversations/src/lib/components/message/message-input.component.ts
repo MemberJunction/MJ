@@ -11,6 +11,7 @@ import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMetadata } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
@@ -2601,91 +2602,34 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Name the conversation based on the first message using GraphQL AI client
-   *
-   * IMPORTANT: This runs asynchronously in the background and has a 30-second timeout
-   * to prevent long delays. Failures are logged but don't affect the user experience.
+   * Names the conversation from its first message via the SHARED naming helper
+   * ({@link GenerateAndApplyConversationName}) — the same implementation the realtime
+   * session path uses. This wrapper keeps the composer-specific concerns local:
+   * mention stripping and the sidebar rename animation event.
    */
   private async nameConversation(message: string): Promise<void> {
-    try {
-      // Load the Name Conversation prompt to get its ID
-      await AIEngineBase.Instance.Config(false);
-      const p = AIEngineBase.Instance.Prompts.find(pr => pr.Name === 'Name Conversation');
-      if (!p) {
-        console.warn('⚠️ Name Conversation prompt not found');
-        return;
-      }
+    // Convert message to plain text (strips JSON-encoded mentions like @{"id":"...","name":"Sage"} to @Sage)
+    const plainTextMessage = this.mentionParser.toPlainText(
+      message,
+      this.mentionAutocomplete.getAvailableAgents(),
+      this.mentionAutocomplete.getAvailableUsers()
+    );
 
-      const promptId = p.ID;
+    const result = await GenerateAndApplyConversationName({
+      ConversationId: this.conversationId,
+      MessageText: plainTextMessage,
+      Provider: this.ProviderToUse as GraphQLDataProvider,
+      CurrentUser: this.currentUser
+    });
 
-      // Use GraphQL AI client to run the prompt (same client as agent)
-      const provider = this.ProviderToUse as GraphQLDataProvider;
-      if (!provider) {
-        console.warn('⚠️ GraphQLDataProvider not available');
-        return;
-      }
-
-      // Convert message to plain text (strips JSON-encoded mentions like @{"id":"...","name":"Sage"} to @Sage)
-      const plainTextMessage = this.mentionParser.toPlainText(
-        message,
-        this.mentionAutocomplete.getAvailableAgents(),
-        this.mentionAutocomplete.getAvailableUsers()
-      );
-
-      const aiClient = new GraphQLAIClient(provider);
-
-      // Add 30-second timeout to prevent long delays
-      // If this times out, the conversation will keep its default name
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Conversation naming timed out after 30 seconds')), 30000);
+    if (result) {
+      // Emit event for animation in conversation list
+      this.conversationRenamed.emit({
+        conversationId: this.conversationId,
+        name: result.Name,
+        description: result.Description
       });
-
-      const result = await Promise.race([
-        aiClient.RunAIPrompt({
-          promptId: promptId,
-          messages: [{ role: 'user', content: plainTextMessage }],
-        }),
-        timeoutPromise
-      ]);
-
-      if (result && result.success && (result.parsedResult || result.output)) {
-        // Use parsedResult if available, otherwise clean and parse output
-        // (CleanAndParseJSON handles markdown code blocks like ```json ... ```)
-        const parsed = result.parsedResult ||
-          (result.output ? CleanAndParseJSON(result.output) : null);
-
-        if (parsed) {
-          const { name, description } = parsed;
-
-          if (name) {
-            // Update the conversation name and description in database AND state immediately
-            await this.engine.SaveConversation(
-              this.conversationId,
-              { Name: name, Description: description || '' },
-              this.currentUser
-            );
-
-            // Emit event for animation in conversation list
-            this.conversationRenamed.emit({
-              conversationId: this.conversationId,
-              name: name,
-              description: description || ''
-            });
-
-            console.log(`✅ Conversation renamed to: "${name}"`);
-          }
-        }
-      } else {
-        console.warn('⚠️ Failed to generate conversation name - using default');
-      }
-    } catch (error) {
-      // Log timeout or other errors but don't disrupt user experience
-      if (error instanceof Error && error.message.includes('timed out')) {
-        console.warn('⏱️ Conversation naming timed out - conversation will keep default name');
-      } else {
-        console.error('❌ Error naming conversation:', error);
-      }
-      // Don't show error to user - naming failures should be silent
+      console.log(`✅ Conversation renamed to: "${result.Name}"`);
     }
   }
 

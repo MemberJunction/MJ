@@ -53,6 +53,7 @@ export * from './lib/whiteboard-context-menu';
 export * from './lib/whiteboard-board.component';
 export * from './lib/whiteboard-toolbar.component';
 export * from './lib/whiteboard-zoom.component';
+export * from './lib/whiteboard-pages.component';
 export * from './lib/whiteboard-agent-sees-popover.component';
 export * from './lib/whiteboard-host.component';
 export * from './lib/whiteboard-snapshot.component';

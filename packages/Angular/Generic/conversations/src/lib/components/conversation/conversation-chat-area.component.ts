@@ -5,6 +5,7 @@ import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, M
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand } from "@memberjunction/ai-core-plus";
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
@@ -33,6 +34,7 @@ import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
+import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -439,6 +441,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * A realtime session that CREATED its own conversation has ended — the new
+   * conversation is named (background, shared helper) and ready. The workspace folds
+   * it into the cached list and selects it when the conversation list is visible.
+   */
+  @Output() realtimeConversationReady = new EventEmitter<{conversationId: string; select: boolean}>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
   @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
@@ -714,6 +723,52 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .subscribe((command) => {
         if (command.type === 'client:capture-data-snapshot') {
           void this.handleCaptureDataSnapshotCommand(command);
+        }
+      });
+
+    // REALTIME-CREATED CONVERSATIONS — three-beat lifecycle so the UI feels live:
+    //  START: fold the server-created conversation into the cached list right away
+    //         (it shows as 'New Conversation' while the call runs; no selection yet).
+    //         Driven by SessionStarted$ — it fires AFTER mintSession resolves, so the
+    //         created conversation id is guaranteed present (Active$ races the mint).
+    //  FIRST UTTERANCE: auto-name it via the shared helper (background) — the list
+    //         updates reactively through ConversationEngine.Conversations$.
+    //  END:   select it (workspace gates on the list being visible).
+    let namedThisSession = false;
+    this.VoiceSession.SessionStarted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        namedThisSession = false;
+        const created = this.VoiceSession.SessionCreatedConversationId;
+        if (created) {
+          this.realtimeConversationReady.emit({ conversationId: created, select: false });
+        }
+      });
+    let voiceWasActive = false;
+    this.VoiceSession.Active$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((active) => {
+        if (voiceWasActive && !active) {
+          this.onVoiceSessionEnded();
+        }
+        voiceWasActive = active;
+      });
+    this.VoiceSession.Captions$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((captions) => {
+        if (namedThisSession) {
+          return;
+        }
+        const created = this.VoiceSession.SessionCreatedConversationId;
+        const seed = this.VoiceSession.FirstUserTranscript;
+        if (created && seed && captions.some(c => c.Role === 'User')) {
+          namedThisSession = true;
+          void GenerateAndApplyConversationName({
+            ConversationId: created,
+            MessageText: seed,
+            Provider: this.ProviderToUse as GraphQLDataProvider,
+            CurrentUser: this.currentUser
+          });
         }
       });
 
@@ -2684,6 +2739,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       entityName: event.EntityName,
       compositeKey
     });
+  }
+
+  /**
+   * Post-call hook for sessions that created their own conversation: kicks the shared
+   * auto-naming helper in the background (first user utterance as the seed) and emits
+   * {@link realtimeConversationReady} so the workspace can refresh + select.
+   */
+  private onVoiceSessionEnded(): void {
+    const conversationId = this.VoiceSession.SessionCreatedConversationId;
+    if (!conversationId) {
+      return;
+    }
+    // Naming normally fired at the first utterance; this covers a silent call's default.
+    this.realtimeConversationReady.emit({ conversationId, select: true });
   }
 
   /**

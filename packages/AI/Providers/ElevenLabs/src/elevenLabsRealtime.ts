@@ -40,6 +40,95 @@ const MANAGED_AGENT_BASE_PROMPT =
     'You are a MemberJunction realtime co-agent. The effective system prompt for each session is ' +
     'supplied at conversation start via the prompt override; this base prompt is a placeholder.';
 
+// ── Tool-parameter schema sanitization (ElevenLabs client-tool validator quirks) ──
+
+/**
+ * JSON-schema keywords whose values are DATA, not subschemas — the sanitizer's walker must not
+ * descend into them (an enum/default/example value that happens to look like a schema is data).
+ */
+const NON_SUBSCHEMA_KEYWORDS = new Set(['enum', 'const', 'default', 'examples', 'description', 'title', 'required']);
+
+/**
+ * Pure sanitizer for tool-parameter JSON schemas bound for the ElevenLabs Agents Platform.
+ *
+ * ElevenLabs validates client-tool `parameters` schemas STRICTLY and its schema model only
+ * allows `enum` on **string-typed** properties — a numeric enum such as
+ * `{ type: 'number', enum: [12, 14, 18, 24, 32] }` is rejected at agents.create/update with
+ * "Expected string. Received 12.". This provider quirk is handled here in the driver (never in
+ * the tool definitions): the schema is deep-cloned and walked (nested objects, array `items`,
+ * composition keywords — anything subschema-shaped); any NON-string node carrying `enum` has
+ * the enum REMOVED and its allowed values appended to the node's `description`
+ * (`"Allowed values: 12, 14, 18, 24, 32."`) so the model still sees the constraint. String
+ * enums and everything else pass through unchanged.
+ *
+ * Pure and idempotent: the input is never mutated, and re-sanitizing a sanitized schema is a
+ * no-op — which is what lets {@link ElevenLabsRealtime.ToolSetFingerprint} hash the sanitized
+ * form on both the local and the round-tripped remote side without PATCH loops.
+ */
+export function SanitizeToolParametersForElevenLabs(schema: JSONObject): JSONObject {
+    const clone = JSON.parse(JSON.stringify(schema)) as JSONObject;
+    sanitizeSchemaNode(clone);
+    return clone;
+}
+
+/** Recursive walker behind {@link SanitizeToolParametersForElevenLabs} (mutates the clone). */
+function sanitizeSchemaNode(node: JSONValue): void {
+    if (node === null || typeof node !== 'object') {
+        return;
+    }
+    if (Array.isArray(node)) {
+        for (const item of node) {
+            sanitizeSchemaNode(item);
+        }
+        return;
+    }
+    const obj = node as JSONObject;
+    stripDisallowedEnum(obj);
+    ensureLeafDescription(obj);
+    for (const [key, value] of Object.entries(obj)) {
+        if (!NON_SUBSCHEMA_KEYWORDS.has(key)) {
+            sanitizeSchemaNode(value);
+        }
+    }
+}
+
+/**
+ * ElevenLabs' schema model requires every VALUE-typed subschema to declare one of
+ * `description` / `dynamic_variable` / `is_system_provided` / `constant_value` /
+ * `is_omitted` — a bare `{ type: 'string' }` array-items node 422s agents.create with
+ * "Must set one of: description, …". Whenever a typed node lacks all of those markers,
+ * synthesize a short generic description from its type. Idempotent (only fills gaps).
+ */
+function ensureLeafDescription(obj: JSONObject): void {
+    const type = obj['type'];
+    if (typeof type !== 'string') {
+        return;
+    }
+    const hasMarker = ['description', 'dynamic_variable', 'is_system_provided', 'constant_value', 'is_omitted']
+        .some((key) => obj[key] !== undefined);
+    if (!hasMarker) {
+        const article = /^[aeiou]/i.test(type) ? 'An' : 'A';
+        obj['description'] = `${article} ${type} value.`;
+    }
+}
+
+/**
+ * If this schema node carries an `enum` ElevenLabs would reject (any non-string type — number,
+ * integer, boolean, object, array, or untyped), removes the enum and folds the allowed values
+ * into the node's `description`.
+ */
+function stripDisallowedEnum(obj: JSONObject): void {
+    const enumValues = obj['enum'];
+    if (!Array.isArray(enumValues) || obj['type'] === 'string') {
+        return;
+    }
+    delete obj['enum'];
+    const allowed = `Allowed values: ${enumValues.map((v) => JSON.stringify(v)).join(', ')}.`;
+    const existing = obj['description'];
+    obj['description'] =
+        typeof existing === 'string' && existing.trim().length > 0 ? `${existing.trim()} ${allowed}` : allowed;
+}
+
 // ── Wire-event shapes (snake_case, exactly as the Agents websocket emits/accepts) ──
 // The websocket protocol is spoken RAW (the SDK's high-level Conversation wrapper owns audio
 // devices, which a server bridge must not), so the minimal frame shapes are declared here.
@@ -301,9 +390,12 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             type: 'client',
             name: tool.Name,
             description: tool.Description,
-            // The Core ParametersSchema is a JSON-schema object — the same shape ElevenLabs'
-            // client-tool `parameters` slot accepts.
-            parameters: tool.ParametersSchema as ElevenLabs.ObjectJsonSchemaPropertyOutput,
+            // The Core ParametersSchema is a JSON-schema object in the same SHAPE ElevenLabs'
+            // client-tool `parameters` slot accepts — but their validator is STRICTER than
+            // JSON Schema (e.g. enum is string-only), so the schema is SANITIZED first.
+            // Provider quirk, handled in this driver only — other providers get the
+            // original richer schemas.
+            parameters: SanitizeToolParametersForElevenLabs(tool.ParametersSchema) as ElevenLabs.ObjectJsonSchemaPropertyOutput,
             expectsResponse: true,
             responseTimeoutSecs: 120,
         };
@@ -343,7 +435,9 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         return JSON.stringify(
             [...tools]
                 .sort((a, b) => a.Name.localeCompare(b.Name))
-                .map((t) => ({ Name: t.Name, Description: t.Description, ParametersSchema: t.ParametersSchema }))
+                // Hash the SANITIZED schema: the remote agent stores the sanitized form, so
+                // fingerprinting the raw form would see permanent drift and PATCH-loop.
+                .map((t) => ({ Name: t.Name, Description: t.Description, ParametersSchema: SanitizeToolParametersForElevenLabs(t.ParametersSchema) }))
         );
     }
 
