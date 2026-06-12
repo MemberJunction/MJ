@@ -277,12 +277,19 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       this.registerChannelTabs([...this.voice.ActiveChannels]);
       this.flushPendingChannelTabs();
       const reveal = this.pendingRevealKey;
-      if (reveal) {
-        this.pendingRevealKey = null;
-        // Deferred: RevealChannel un-collapses the panel, which feeds the parent's width
-        // binding — never mutate that inside the same change-detection pass.
-        setTimeout(() => ref.RevealChannel(reveal));
-      }
+      this.pendingRevealKey = null;
+      // Deferred: focus/expand feed the parent's width bindings (wide tier) — never
+      // mutate those inside the change-detection pass that created the panel.
+      setTimeout(() => {
+        if (reveal) {
+          // The agent's first channel activity caused this creation — land ON the board.
+          ref.RevealChannel(reveal);
+        } else if (!this.IsReviewing) {
+          // LIVE default for a fresh panel: the marquee surface (channels lead the
+          // strip), NOT the Activity rail — agent-run plumbing is the power-user tab.
+          ref.FocusFirstTab();
+        }
+      });
     }
   }
 
@@ -565,8 +572,9 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.revealedChannelKeys.add(plugin.ChannelName);
     this.DetailsPeek = true; // the panel shows via the same on-demand mechanism Details uses
     if (this.surfaceTabs) {
-      const tabs = this.surfaceTabs;
-      setTimeout(() => tabs.RevealChannel(plugin.ChannelName));
+      // Stream handler (a tool call), not a change-detection pass — reveal synchronously
+      // so the board is the visible tab the instant the agent's first stroke lands.
+      this.surfaceTabs.RevealChannel(plugin.ChannelName);
     } else {
       // Panel not rendered yet (the peek just created it) — reveal once it exists.
       this.pendingRevealKey = plugin.ChannelName;
