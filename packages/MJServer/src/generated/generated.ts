@@ -4382,6 +4382,7 @@ export class MJAIAgentExample_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(20)
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -5496,6 +5497,7 @@ export class MJAIAgentNote_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(20)
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -7835,6 +7837,7 @@ each time the agent processes a prompt step.`})
     User?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(20)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -7864,6 +7867,10 @@ each time the agent processes a prompt step.`})
     @Field({nullable: true}) 
     @MaxLength(255)
     PrimaryScopeEntity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentSession?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -8683,6 +8690,10 @@ export class MJAIAgentSessionChannel_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentSession?: string;
         
     @Field() 
     @MaxLength(100)
@@ -34149,6 +34160,7 @@ export class MJConversationDetailArtifact_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
+    @MaxLength(20)
     ConversationDetail: string;
         
     @Field({nullable: true}) 
@@ -34353,6 +34365,7 @@ export class MJConversationDetailAttachment_ {
     ArtifactVersionID?: string;
         
     @Field() 
+    @MaxLength(20)
     ConversationDetail: string;
         
     @Field() 
@@ -34597,6 +34610,7 @@ export class MJConversationDetailRating_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
+    @MaxLength(20)
     ConversationDetail: string;
         
     @Field() 
@@ -34861,6 +34875,7 @@ export class MJConversationDetail_ {
     ArtifactVersion?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(20)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -34870,6 +34885,10 @@ export class MJConversationDetail_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     TestRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentSession?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -65880,6 +65899,7 @@ export class MJReport_ {
     Conversation?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(20)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -75010,6 +75030,7 @@ export class MJTask_ {
     Project?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(20)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
