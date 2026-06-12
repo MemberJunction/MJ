@@ -34,7 +34,6 @@
  * ```
  */
 
-export {
-    CohereReranker,
-    createCohereReranker
-} from './models/CohereReranker';
+export { CohereReranker, createCohereReranker } from './models/CohereReranker';
+
+export { CohereEmbedding } from './models/CohereEmbedding';
