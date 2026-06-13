@@ -944,21 +944,35 @@ Every phase is "done" only when **all** of the following hold — this is baked 
       namespacing verified by tests.
 - [x] **Tests**: AI Core 181, AI Agents 1263 (+109 new across runner/host/state/channel), conversations
       552 (+3 optional-surface) — all green; every touched package builds. Guide section added.
-- [ ] **Follow-up (flagged):** bridge-server wiring — when `AIBridgeEngine` mints a server-bridged
-      `RealtimeSessionRunner`, it must (a) start the session's channels through
-      `RealtimeChannelServerHost.OnSessionStarted`, (b) construct the `MeetingControlsChannelServer`
-      with the driver's `IMeetingControlsEventSource` adapter, (c) pass `host.GetSessionServerTools(id)`
-      as `ServerChannelTools` and bind `ExecuteServerChannelTool` to `host.ExecuteSessionServerTool(id, …)`,
-      and (d) supply the runner's session `SendContextNote` to the channel context. The seams all exist
-      and are tested; this is the integration that lands with the Zoom driver (Phase 3), where a real
-      `IMeetingControlsEventSource` adapter exists.
+- [x] **Follow-up (flagged) — DONE (Phase 3):** bridge-server channel wiring. `AIBridgeEngine` now wires
+      the channel plane generically via the additive optional `IBridgeChannelHost` (declared in
+      `ai-bridge-base` so the engine takes no `ai-agents` dependency — the runner-constructing layer
+      supplies an adapter over `RealtimeChannelServerHost`) + `BaseRealtimeBridge.GetMeetingControlsEventSource()`
+      (default null; overridden by drivers that contribute a facilitator surface). `wireChannelPlane`
+      (a) starts the session's channels (`host.StartSessionChannels`), (b) constructs the Meeting Controls
+      channel from the driver's event source, (c) surfaces `host.GetSessionServerTools(id)` +
+      binds the executor onto `ActiveBridgeSession.ServerChannelTools` / `ExecuteServerChannelTool` for the
+      runner layer to register, and (d) feeds the realtime session's `SendContextNote` into the channel
+      context. `closeChannelPlane` runs on every stop path. Failure-tolerant. Unit-tested with
+      LoopbackBridge + a fake event source + a mock channel host (`channel-plane.test.ts`).
 
-### Phase 3 — Zoom meeting bridge
-- [ ] `@memberjunction/ai-bridge-zoom` (or driver in server pkg): `ZoomBridge` join (on-demand +
-      scheduled), media in/out, diarized participants, bot lifecycle.
-- [ ] All three turn modes live; Zoom-native channels (chat, whiteboard) via the channel plane.
+### Phase 3 — Zoom meeting bridge  ✅ CORE DONE (real-SDK binding + observer console pending)
+- [x] `@memberjunction/ai-bridge-zoom`: `ZoomBridge` (`@RegisterClass(BaseRealtimeBridge,'ZoomBridge')`)
+      — join (on-demand + scheduled via `Address`), audio in/out, diarized participants, mute + chat,
+      bot lifecycle. Behind an injectable `IZoomMeetingSdk` seam (creation seam `SetSdkFactory`) so it
+      builds + unit-tests with no network; real Zoom Meeting SDK + raw-data adapter is a deployment TODO.
+      **24 tests** (FakeZoomSdk): connect/disconnect, audio in→OnMedia (speaker labels) + out→seam,
+      participant join/leave → roster + event source, hand-raise → Meeting Controls, capability gating,
+      chat.
+- [x] Zoom-native channel (Meeting Controls facilitator) via the channel plane —
+      `ZoomMeetingControlsEventSource` adapts the seam; the engine's `wireChannelPlane` (Part A) wires it.
+- [x] Provider seed: Zoom row flipped `Disabled → Active` (driver now exists). Others stay Disabled.
+- [ ] All three turn modes live end-to-end against a real Zoom session (passive shipped via the engine;
+      active/hybrid + chat-post need the real SDK).
 - [ ] Observer console reuse (read-only monitor of a bridged session).
-- [ ] **Quality bar** + guide "adding a bridge driver" walkthrough (Zoom as the worked example).
+- [x] **Quality bar (this slice):** READMEs (Zoom) · guide "adding a bridge driver" (Zoom worked example)
+      + new "Channel plane" section · BridgeBase 48 / Bridge 29 / BridgeZoom 24 / Agents 1263 tests green;
+      all touched packages build.
 
 ### Phase 4 — Invite/calendar joins + agent identity
 - [ ] `AIBridgeAgentIdentity` provisioning flow + tenant mailbox model.

@@ -513,6 +513,60 @@ its own; the host's janitor calls `ReconcileOrphans`.
 
 ---
 
+## 5b. The Channel Plane — a bridge contributes channels
+
+A bridge is not only a media pipe; it is also a **channel contributor** (§4b of the architecture).
+`AIBridgeEngine` wires the Phase 2 server-side channel plane (`RealtimeChannelServerHost` +
+`MeetingControlsChannelServer`, both in `@memberjunction/ai-agents`) to a bridged session **generically**
+— without the bridge-server engine depending on the heavy agents package.
+
+### The additive seam — `IBridgeChannelHost` + `GetMeetingControlsEventSource`
+
+Two additive pieces make this decoupled and back-compatible:
+
+- **`StartBridgeSessionParams.ChannelHost?: IBridgeChannelHost`** — an optional, session-scoped view of
+  the channel plane (`StartSessionChannels` / `GetSessionServerTools` / `ExecuteSessionServerTool` /
+  `CloseSessionChannels`), declared in `@memberjunction/ai-bridge-base`. The **runner-constructing layer**
+  (which already depends on `@memberjunction/ai-agents`) supplies a thin adapter binding these to
+  `RealtimeChannelServerHost`. When omitted, an `IRealtimeSession`-only caller works exactly as before —
+  no channel wiring.
+- **`BaseRealtimeBridge.GetMeetingControlsEventSource(): IBridgeMeetingControlsEventSource | null`** — a
+  driver returns a facilitator event source (roster / hand-raise / speaking / mute) when it has one
+  (default `null`). This is **not** a throwing capability gate — most drivers legitimately contribute
+  none. `ZoomBridge` returns one when `SpeakerDiarization` is on; the `LoopbackBridge` exposes a simple
+  one for tests.
+
+### What `wireChannelPlane` does (in `StartBridgeSession`)
+
+```typescript
+private async wireChannelPlane(active: ActiveBridgeSession): Promise<void> {
+    const host = active.ChannelHost;
+    if (!host) return;                                       // back-compat: no channel plane
+    const meetingControls = active.Bridge.GetMeetingControlsEventSource();
+    const sink = active.RealtimeSession.SendContextNote      // perception sink (provider-gated)
+        ? (t: string) => active.RealtimeSession.SendContextNote?.(t) : undefined;
+
+    await host.StartSessionChannels(active.AgentSessionID, meetingControls, sink);
+    active.ServerChannelTools = host.GetSessionServerTools(active.AgentSessionID);   // → runner.ServerChannelTools
+    active.ExecuteServerChannelTool = (name, args) =>                                // → runner.ExecuteServerChannelTool
+        host.ExecuteSessionServerTool(active.AgentSessionID, name, args);
+}
+```
+
+The contributed `ServerChannelTools` + `ExecuteServerChannelTool` are surfaced on the returned
+`ActiveBridgeSession`, so the runner-constructing layer registers them on `RealtimeSessionRunner`. The
+realtime session's `SendContextNote` is fed into the channel context so **channel perception** (a hand
+went up, who is speaking, time remaining) reaches the model. Channel teardown runs on every stop path via
+`closeChannelPlane`. The whole wiring is **failure-tolerant**: a channel-host error is logged and never
+breaks the live media plane.
+
+The Zoom driver realizes this end-to-end: `ZoomMeetingControlsEventSource` adapts the `IZoomMeetingSdk`
+roster / hand-raise / speaking / mute into the channel's event source, so an agent on a Zoom call gains
+the facilitator tool vocabulary (`MeetingControls_RaiseHand`, `_CallOnParticipant`, `_MuteParticipant`,
+`_SetTimer`) + perception with zero platform code in the channel.
+
+---
+
 ## 6. Turn-Taking
 
 Turn-taking is **generic and platform-agnostic** — it operates on the diarized transcript stream the
@@ -645,8 +699,8 @@ marked here and in the architecture plan.
 |---|---|---|
 | **0 — Transport seam** | `BaseRealtimeBridge` media contract wired to `IRealtimeSession` (`OnMedia → SendInput`, `OnOutput → SendMedia`); `AIBridgeEngine` ↔ injected `IRealtimeSession`; `LoopbackBridge` proving an in-memory round-trip. | ✅ **Shipped** |
 | **1 — Schema + engines** | The 5-entity migration → CodeGen; `AIBridgeEngineBase` (cache) + `AIBridgeEngine` (composition, lifecycle, host registry, janitor `ReconcileOrphans`); capability-gated `BaseRealtimeBridge` + `BridgeCapabilityNotSupportedError`; `TurnTakingPolicy`; the `*EntityServer` invariants. | ✅ **Shipped** (provider seed metadata + the `Realtime: Advanced Bridge Controls` authorization pending) |
-| **2 — Server-side channel plane** | Dynamic tool-definition contribution into `RealtimeSessionRunner.ExtraTools`, optional client surface, the `Meeting Controls` channel (roster / hand-raise queue / who's-speaking / timer → facilitator). Makes 3rd-party channels = MJ channels; the `PostToChat` turn hook consumes this. | 🔜 Planned |
-| **3 — Zoom meeting bridge** | `ZoomBridge` (on-demand + scheduled join), diarized participants, all three turn modes live, Zoom-native channels, observer-console reuse. First real platform. | 🔜 Planned |
+| **2 — Server-side channel plane** | Dynamic tool-definition contribution into the runner's `ServerChannelTools` / `ExecuteServerChannelTool`, optional client surface, the `Meeting Controls` channel (roster / hand-raise queue / who's-speaking / timer → facilitator). The bridge ↔ channel-plane integration (`AIBridgeEngine` wires a session's channels generically via the optional `IBridgeChannelHost` + `BaseRealtimeBridge.GetMeetingControlsEventSource`) is shipped. | ✅ **Shipped** |
+| **3 — Zoom meeting bridge** | `ZoomBridge` (`@memberjunction/ai-bridge-zoom`): on-demand + scheduled join, audio in/out, diarized participants, participant mute + chat, and a Meeting Controls facilitator surface — all behind an injectable `IZoomMeetingSdk` seam (real-SDK binding is a deployment TODO via `SetSdkFactory`). First real platform, built + unit-tested with no network. | ✅ **Shipped** (real Zoom SDK adapter binding pending) |
 | **4 — Invite/calendar joins + agent identity** | Tenant-mailbox provisioning + calendar watcher ("invite the agent like a person"); shared with inbound telephony. | 🔜 Planned |
 | **5 — Teams → Meet → Webex → Slack → Discord** | One minimal subclass per platform on the proven base. | 🔜 Planned |
 | **6 — Telephony: RingCentral → Twilio → Vonage** | `BaseTelephonyBridge` — outbound dial + inbound DID routing, DTMF, transfer. Same engine/session/turn-taking. | 🔜 Planned |
@@ -669,7 +723,8 @@ graph LR
 
     style P0 fill:#2d5016,stroke:#1a5c3a,color:#fff
     style P1 fill:#2d5016,stroke:#1a5c3a,color:#fff
-    style P3 fill:#7a4a1f,stroke:#a0632a,color:#fff
+    style P2 fill:#2d5016,stroke:#1a5c3a,color:#fff
+    style P3 fill:#2d5016,stroke:#1a5c3a,color:#fff
 ```
 
 ---
@@ -683,8 +738,11 @@ graph LR
 | Media-track types | `packages/AI/BridgeBase/src/media-tracks.ts` |
 | Turn-taking policy | `packages/AI/BridgeBase/src/turn-taking-policy.ts` |
 | Capability error | `packages/AI/BridgeBase/src/capability-errors.ts` |
-| Server engine + transport seam + janitor | `packages/AI/Bridge/src/ai-bridge-engine.ts` |
-| Worked driver example | `packages/AI/Bridge/src/loopback-bridge.ts` |
+| Server engine + transport seam + channel-plane wiring + janitor | `packages/AI/Bridge/src/ai-bridge-engine.ts` |
+| Bridge ↔ channel-plane seam (`IBridgeChannelHost`, `IBridgeMeetingControlsEventSource`) | `packages/AI/BridgeBase/src/channel-plane.ts` |
+| Worked minimal driver example | `packages/AI/Bridge/src/loopback-bridge.ts` |
+| Zoom driver (first real platform) | `packages/AI/Providers/BridgeZoom/src/zoom-bridge.ts`, `zoom-sdk.ts`, `zoom-meeting-controls.ts` |
+| Server channel host + Meeting Controls channel | `packages/AI/Agents/src/realtime/realtime-channel-server-host.ts`, `meeting-controls-channel-server.ts` |
 | Capability interface | `metadata/entities/JSONType-interfaces/IBridgeProviderFeatures.ts` |
 | Entity invariants | `packages/MJCoreEntitiesServer/src/custom/MJAIBridge*EntityServer.server.ts`, `MJAIAgentSessionBridge*EntityServer.server.ts` |
 | Generated entities | `@memberjunction/core-entities` (`MJAIBridgeProviderEntity`, …) |

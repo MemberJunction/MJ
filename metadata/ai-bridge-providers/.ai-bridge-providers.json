@@ -1,6 +1,6 @@
 [
   {
-    "_comments": "Bridge provider registry for the Realtime Bridges subsystem. Each row connects the single realtime agent engine to an external endpoint — a meeting (Zoom/Teams/Meet/Webex/Slack/Discord/LiveKit/RingCentral) or a phone call (Twilio/Vonage/RingCentral). SupportedFeatures encodes the per-platform capability matrix from /plans/realtime/realtime-bridges-architecture.md §8 as an IBridgeProviderFeatures JSON string (omitted flag = not supported). STATUS POLICY: only Loopback is 'Active' — its in-memory echo driver (LoopbackBridge) already exists. Every other provider is 'Disabled': the row populates the registry/dashboard and captures the capability matrix, but sessions cannot start until that platform's driver lands. Flip to 'Active' as each driver ships. IDs are assigned by mj-sync on first push — primaryKey/sync intentionally omitted.",
+    "_comments": "Bridge provider registry for the Realtime Bridges subsystem. Each row connects the single realtime agent engine to an external endpoint — a meeting (Zoom/Teams/Meet/Webex/Slack/Discord/LiveKit/RingCentral) or a phone call (Twilio/Vonage/RingCentral). SupportedFeatures encodes the per-platform capability matrix from /plans/realtime/realtime-bridges-architecture.md §8 as an IBridgeProviderFeatures JSON string (omitted flag = not supported). STATUS POLICY: Loopback and Zoom are 'Active' — their drivers exist (LoopbackBridge in @memberjunction/ai-bridge-server; ZoomBridge in @memberjunction/ai-bridge-zoom). Every other provider is 'Disabled': the row populates the registry/dashboard and captures the capability matrix, but sessions cannot start until that platform's driver lands. Flip to 'Active' as each driver ships. IDs are assigned by mj-sync on first push — primaryKey/sync intentionally omitted.",
     "fields": {
       "Name": "Loopback",
       "Description": "In-memory echo bridge for development and testing. Loops the agent's outbound audio back as inbound with no external platform. The only provider whose driver exists today.",
@@ -16,7 +16,7 @@
       "Description": "Zoom Meetings bridge. Built first, end-to-end — the reference driver the others subclass. Full meeting AV plus marketplace native-invite.",
       "BridgeType": "Meeting",
       "DriverClass": "ZoomBridge",
-      "Status": "Disabled",
+      "Status": "Active",
       "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"NativeInvite\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
     }
   },

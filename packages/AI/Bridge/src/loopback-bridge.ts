@@ -7,6 +7,9 @@ import {
     BridgeMediaTrackKind,
     BridgeParticipantInfo,
     RealtimeBridgeContext,
+    IBridgeMeetingControlsEventSource,
+    BridgeMeetingParticipant,
+    BridgeMeetingControlsCapability,
 } from '@memberjunction/ai-bridge-base';
 
 /**
@@ -14,6 +17,61 @@ import {
  * `DriverClass = 'LoopbackBridge'` resolves to this driver via the `ClassFactory`.
  */
 export const LOOPBACK_BRIDGE_DRIVER_CLASS = 'LoopbackBridge';
+
+/**
+ * A trivial in-memory {@link IBridgeMeetingControlsEventSource} for tests — the loopback driver's
+ * optional facilitator surface. It records the registered perception handlers and exposes `Emit*`
+ * helpers so a test can drive roster / speaking / hand-raise signals into the Meeting Controls
+ * channel, and records mute requests. A real driver (e.g. `ZoomBridge`) implements this by adapting
+ * its native participant/event stream; the loopback version proves the bridge → channel-plane wiring
+ * with no platform.
+ */
+export class LoopbackMeetingControlsEventSource implements IBridgeMeetingControlsEventSource {
+    private rosterHandler?: (participants: BridgeMeetingParticipant[]) => void;
+    private speakingHandler?: (participantIds: string[]) => void;
+    private handRaiseHandler?: (participantId: string, raised: boolean) => void;
+
+    /** Participant ids this source was asked to mute, in order — a capture sink for assertions. */
+    public readonly Muted: string[] = [];
+
+    /** The facilitator capabilities the loopback advertises (mute supported, so the gated tool appears). */
+    public readonly Capabilities: ReadonlyArray<BridgeMeetingControlsCapability> = ['Mute'];
+
+    /** @inheritdoc */
+    public OnRosterChange(handler: (participants: BridgeMeetingParticipant[]) => void): void {
+        this.rosterHandler = handler;
+    }
+
+    /** @inheritdoc */
+    public OnSpeakingChange(handler: (participantIds: string[]) => void): void {
+        this.speakingHandler = handler;
+    }
+
+    /** @inheritdoc */
+    public OnHandRaiseChange(handler: (participantId: string, raised: boolean) => void): void {
+        this.handRaiseHandler = handler;
+    }
+
+    /** @inheritdoc */
+    public async MuteParticipant(participantId: string): Promise<void> {
+        this.Muted.push(participantId);
+    }
+
+    /** Drives a roster snapshot into the channel. */
+    public EmitRoster(participants: BridgeMeetingParticipant[]): void {
+        this.rosterHandler?.(participants);
+    }
+
+    /** Drives a speaking-set change into the channel. */
+    public EmitSpeaking(participantIds: string[]): void {
+        this.speakingHandler?.(participantIds);
+    }
+
+    /** Drives a platform hand-raise/lower signal into the channel. */
+    public EmitHandRaise(participantId: string, raised: boolean): void {
+        this.handRaiseHandler?.(participantId, raised);
+    }
+}
 
 /**
  * An in-memory, platform-free Realtime Bridge driver for **test and development**.
@@ -56,6 +114,41 @@ export class LoopbackBridge extends BaseRealtimeBridge {
         Role: 'Agent',
         IsAgent: true,
     };
+
+    /**
+     * The optional Meeting Controls event source. `null` by default so the loopback driver contributes
+     * NO facilitator surface (matching most drivers) — a test opts in via {@link EnableMeetingControls}
+     * to exercise the bridge → channel-plane wiring.
+     */
+    private meetingControls: LoopbackMeetingControlsEventSource | null = null;
+
+    /**
+     * Enables (and returns) a simple {@link LoopbackMeetingControlsEventSource} so this loopback driver
+     * contributes a Meeting Controls surface — used by tests of the engine's channel-plane wiring. The
+     * returned source's `Emit*` helpers drive roster / speaking / hand-raise signals into the channel.
+     *
+     * @returns The enabled event source (the same instance {@link GetMeetingControlsEventSource} returns).
+     */
+    public EnableMeetingControls(): LoopbackMeetingControlsEventSource {
+        this.meetingControls = new LoopbackMeetingControlsEventSource();
+        return this.meetingControls;
+    }
+
+    /**
+     * Returns the loopback's Meeting Controls event source when {@link EnableMeetingControls} was
+     * called, else `null` (the base default — no facilitator surface).
+     */
+    public override GetMeetingControlsEventSource(): IBridgeMeetingControlsEventSource | null {
+        return this.meetingControls;
+    }
+
+    /**
+     * The enabled Meeting Controls event source (or `null`), typed concretely so tests can drive its
+     * `Emit*` helpers. {@link GetMeetingControlsEventSource} returns the same instance via the interface.
+     */
+    public get MeetingControlsSource(): LoopbackMeetingControlsEventSource | null {
+        return this.meetingControls;
+    }
 
     /**
      * "Connects" the loopback endpoint. Records the context for capability gating and returns

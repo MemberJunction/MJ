@@ -33,6 +33,9 @@ import {
     BridgeTurnMode,
     IAddressedMatcher,
     IWorthSayingScorer,
+    IBridgeChannelHost,
+    BridgeChannelToolDefinition,
+    BridgeChannelToolResult,
 } from '@memberjunction/ai-bridge-base';
 
 /**
@@ -140,6 +143,22 @@ export interface StartBridgeSessionParams {
     /** Per-session bridge configuration (resolved credential refs, region, …) passed to the driver. */
     Configuration?: Record<string, unknown>;
 
+    /**
+     * Optional server-side channel-plane host (Part A — the generic channel wiring). When supplied,
+     * the engine starts the session's channels through it at connect, constructs a Meeting Controls
+     * channel from the driver's {@link BaseRealtimeBridge.GetMeetingControlsEventSource} (when the
+     * driver contributes one), feeds the realtime session's `SendContextNote` perception sink into the
+     * channel context, and surfaces the contributed server tools + executor onto the returned
+     * {@link ActiveBridgeSession} so the runner-constructing layer binds them to
+     * `RealtimeSessionRunner.ServerChannelTools` / `ExecuteServerChannelTool`.
+     *
+     * Additive and optional: `IRealtimeSession`-only callers (no channel plane) keep working untouched.
+     * In production this is an adapter (in `@memberjunction/ai-agents`, which owns `RealtimeChannelServerHost`)
+     * over the channel host; here the engine depends only on the {@link IBridgeChannelHost} interface so
+     * it takes no heavy dependency on the agents package.
+     */
+    ChannelHost?: IBridgeChannelHost;
+
     /** The MJ user the bridge session runs as; every session is owned + audited by a user. */
     ContextUser?: UserInfo;
 
@@ -176,6 +195,26 @@ export interface ActiveBridgeSession {
 
     /** The metadata provider bound to this session's entity operations. */
     MetadataProvider?: IMetadataProvider;
+
+    /**
+     * The server-side channel host wired for this session (Part A), or `undefined` when the caller
+     * supplied none. Held so teardown can close the session's channels.
+     */
+    ChannelHost?: IBridgeChannelHost;
+
+    /**
+     * The server-executed tool definitions the session's channels contributed at connect (e.g. the
+     * Meeting Controls facilitator tools). Empty when no channel host / no contributing channels. The
+     * runner-constructing layer registers these as `RealtimeSessionRunner.ServerChannelTools`.
+     */
+    ServerChannelTools: BridgeChannelToolDefinition[];
+
+    /**
+     * Executes ONE server-channel tool call for this session, routed through the channel host. Bound by
+     * the runner-constructing layer to `RealtimeSessionRunner.ExecuteServerChannelTool`. `undefined`
+     * when no channel host was supplied. Never throws — resolves to a structured failure.
+     */
+    ExecuteServerChannelTool?: (toolName: string, argsJson: string) => Promise<BridgeChannelToolResult>;
 }
 
 /**
@@ -390,11 +429,14 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 Provider: params.Provider,
                 ContextUser: params.ContextUser,
                 MetadataProvider: params.MetadataProvider,
+                ChannelHost: params.ChannelHost,
+                ServerChannelTools: [],
             };
 
             this.wireTransportSeam(active);
             this.wireParticipantTracking(active);
             this.wireTurnTaking(active);
+            await this.wireChannelPlane(active);
 
             this.activeSessions.set(bridgeRow.ID.toLowerCase(), active);
             LogStatus(`[AIBridgeEngine] Bridge session ${bridgeRow.ID} connected via ${params.Provider.Name}`);
@@ -521,7 +563,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private decodeBase64(base64: string): ArrayBuffer {
         if (typeof Buffer !== 'undefined') {
             const buf = Buffer.from(base64, 'base64');
-            return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+            // Copy into a fresh ArrayBuffer (Buffer.buffer is ArrayBufferLike under newer @types/node).
+            const out = new Uint8Array(buf.byteLength);
+            out.set(buf);
+            return out.buffer;
         }
         const binary = atob(base64);
         const bytes = new Uint8Array(binary.length);
@@ -721,6 +766,84 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     // ──────────────────────────────────────────────────────────────────────────────
+    // THE CHANNEL PLANE — Part A: generic wiring of the Phase 2 server-side channels.
+    // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Wires the session's server-side channel plane (Phase 2's `RealtimeChannelServerHost` +
+     * `MeetingControlsChannelServer`) to this bridged session — the generic, platform-agnostic
+     * integration the Phase 2 agent flagged as the bridge-server follow-up.
+     *
+     * When a {@link IBridgeChannelHost} was supplied, this:
+     * 1. Resolves the driver's optional Meeting Controls event source
+     *    ({@link BaseRealtimeBridge.GetMeetingControlsEventSource}) — non-null only for drivers that
+     *    contribute a facilitator surface.
+     * 2. Captures the realtime session's `SendContextNote` perception sink (when the provider supports
+     *    mid-session context injection) so channel perception reaches the model.
+     * 3. Calls {@link IBridgeChannelHost.StartSessionChannels} to register the session's channels and
+     *    construct + bind the Meeting Controls channel to the event source.
+     * 4. Reads the contributed server-channel tools and binds the per-session executor onto the
+     *    {@link ActiveBridgeSession}, so the runner-constructing layer registers them as
+     *    `RealtimeSessionRunner.ServerChannelTools` and routes `ExecuteServerChannelTool` here.
+     *
+     * Failure posture mirrors the channel plane itself: a channel-host error is logged and never
+     * propagates — the live media plane (the call/meeting) must not break because a channel failed.
+     *
+     * @param active The live bridged session to wire channels for.
+     */
+    private async wireChannelPlane(active: ActiveBridgeSession): Promise<void> {
+        const host = active.ChannelHost;
+        if (!host) {
+            return; // IRealtimeSession-only caller — no channel plane to wire (back-compat).
+        }
+        try {
+            const meetingControls = active.Bridge.GetMeetingControlsEventSource();
+            // The model perceives channel events via SendContextNote when the provider supports it.
+            const sink = active.RealtimeSession.SendContextNote
+                ? (text: string) => active.RealtimeSession.SendContextNote?.(text)
+                : undefined;
+
+            await host.StartSessionChannels(active.AgentSessionID, meetingControls, sink);
+
+            active.ServerChannelTools = host.GetSessionServerTools(active.AgentSessionID) ?? [];
+            active.ExecuteServerChannelTool = (toolName: string, argsJson: string) =>
+                host.ExecuteSessionServerTool(active.AgentSessionID, toolName, argsJson);
+
+            LogStatus(
+                `[AIBridgeEngine] Channel plane wired for bridge ${active.SessionBridgeID}: ` +
+                    `${active.ServerChannelTools.length} server-channel tool(s)` +
+                    `${meetingControls ? ' (incl. Meeting Controls)' : ''}.`,
+            );
+        } catch (err) {
+            LogError(
+                `[AIBridgeEngine] Channel-plane wiring failed for bridge ${active.SessionBridgeID} ` +
+                    `(media plane unaffected): ${err instanceof Error ? err.message : String(err)}`,
+            );
+        }
+    }
+
+    /**
+     * Closes the session's server-side channels through the channel host (best-effort; teardown must
+     * never throw). Invoked from {@link disconnectDriver} so every stop path — explicit, janitor,
+     * shutdown — releases the channel plane.
+     *
+     * @param active The live bridged session whose channels to close.
+     */
+    private async closeChannelPlane(active: ActiveBridgeSession): Promise<void> {
+        if (!active.ChannelHost) {
+            return;
+        }
+        try {
+            await active.ChannelHost.CloseSessionChannels(active.AgentSessionID);
+        } catch (err) {
+            LogError(
+                `[AIBridgeEngine] Channel-plane close failed for bridge ${active.SessionBridgeID}: ` +
+                    `${err instanceof Error ? err.message : String(err)}`,
+            );
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────────
     // Janitor — orphan reconciliation (scaffold; scheduling is a host-provided hook).
     // ──────────────────────────────────────────────────────────────────────────────
 
@@ -912,8 +1035,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
     }
 
-    /** Disconnects the driver of a live session, tolerant of driver teardown errors. */
+    /** Disconnects the driver of a live session, tolerant of driver teardown errors, and closes its channels. */
     private async disconnectDriver(active: ActiveBridgeSession, reason: BridgeDisconnectReason): Promise<void> {
+        // Close the channel plane first so its post-close hooks see the session still mid-teardown,
+        // then release the driver's media plane.
+        await this.closeChannelPlane(active);
         try {
             await active.Bridge.Disconnect(reason);
         } catch (err) {

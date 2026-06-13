@@ -2,6 +2,7 @@ import { MJAIBridgeProviderEntity_IBridgeProviderFeatures } from '@memberjunctio
 import { UserInfo } from '@memberjunction/core';
 import { BridgeCapabilityNotSupportedError } from './capability-errors';
 import { BridgeMediaFrame, BridgeMediaTrackKind, BridgeParticipantInfo } from './media-tracks';
+import { IBridgeMeetingControlsEventSource } from './channel-plane';
 
 /**
  * Strongly-typed shape of a bridge provider's `SupportedFeatures` JSON.
@@ -264,6 +265,29 @@ export abstract class BaseRealtimeBridge {
      */
     public StartRecording(): Promise<void> {
         return Promise.reject(this.notSupported('Recording'));
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────────
+    // Channel-plane contribution — optional, NOT a throwing capability gate.
+    // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Returns a **Meeting Controls** event source adapting this driver's native participant / speaking
+     * / hand-raise stream into the server-side channel plane, or `null` when the driver contributes no
+     * such surface. Unlike the capability-gated virtuals above this does **not** throw by default — it
+     * is a contribution hook, and most drivers (and all telephony drivers) legitimately contribute
+     * nothing. The engine wires the Meeting Controls channel only for drivers that return a non-null
+     * source, so the base default of `null` means "no facilitator surface".
+     *
+     * A meeting driver (e.g. `ZoomBridge`) overrides this to return an {@link IBridgeMeetingControlsEventSource}
+     * fed by its roster/speaking/hand-raise events; the engine hands it to the channel plane's
+     * `MeetingControlsChannelServer` so the agent gains the facilitator tool vocabulary + perception.
+     * Typically only meaningful when the provider also has `SpeakerDiarization` (a roster to facilitate).
+     *
+     * @returns The driver's Meeting Controls event source, or `null` (the default — no facilitator surface).
+     */
+    public GetMeetingControlsEventSource(): IBridgeMeetingControlsEventSource | null {
+        return null;
     }
 
     // ──────────────────────────────────────────────────────────────────────────────
