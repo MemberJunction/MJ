@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { decideBooleanOverlay } from '../IntegrationSchemaSync';
+import { decideBooleanOverlay, decideAbsentDeactivations, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
 
 describe('decideBooleanOverlay', () => {
     describe('undefined discovered (no-opinion case — the bug class)', () => {
@@ -102,5 +102,67 @@ describe('decideBooleanOverlay', () => {
             expect(unique.winner).toBe('Declared');
             expect(readonly.winner).toBe('Declared');
         });
+    });
+});
+
+describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)', () => {
+    const base = (over: Partial<AbsentDeactivationInput>): AbsentDeactivationInput => ({
+        DeactivateAbsent: true,
+        IsAuthoritative: true,
+        DiscoveredObjectNames: [],
+        DiscoveredFieldNamesByObject: {},
+        ActiveObjects: [],
+        ActiveFieldsByObjectID: {},
+        ObjectIDByName: {},
+        ...over,
+    });
+
+    it('SAFETY: not authoritative -> deactivates NOTHING even when objects are absent', () => {
+        const out = decideAbsentDeactivations(
+            base({ IsAuthoritative: false, DiscoveredObjectNames: ['Keep'], ActiveObjects: [{ ID: 'o1', Name: 'Keep' }, { ID: 'o2', Name: 'Gone' }] }),
+        );
+        expect(out.ObjectIDsToDeactivate).toEqual([]);
+        expect(out.FieldIDsToDeactivate).toEqual([]);
+    });
+
+    it('SAFETY: DeactivateAbsent=false -> deactivates nothing', () => {
+        const out = decideAbsentDeactivations(base({ DeactivateAbsent: false, DiscoveredObjectNames: ['Keep'], ActiveObjects: [{ ID: 'o2', Name: 'Gone' }] }));
+        expect(out.ObjectIDsToDeactivate).toEqual([]);
+    });
+
+    it('authoritative + requested: deactivates an ACTIVE object ABSENT from discovery, keeps present ones', () => {
+        const out = decideAbsentDeactivations(
+            base({ DiscoveredObjectNames: ['Keep'], ActiveObjects: [{ ID: 'o1', Name: 'Keep' }, { ID: 'o2', Name: 'Gone' }] }),
+        );
+        expect(out.ObjectIDsToDeactivate).toEqual(['o2']);
+    });
+
+    it('object matching is case-insensitive (discovered "Contacts" keeps active "contacts")', () => {
+        const out = decideAbsentDeactivations(base({ DiscoveredObjectNames: ['Contacts'], ActiveObjects: [{ ID: 'o1', Name: 'contacts' }] }));
+        expect(out.ObjectIDsToDeactivate).toEqual([]);
+    });
+
+    it('FIELD-level: deactivates an ACTIVE field absent from the discovered field set (case-insensitive)', () => {
+        const out = decideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Contacts'],
+                DiscoveredFieldNamesByObject: { Contacts: ['id', 'Name'] },
+                ObjectIDByName: { contacts: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'ID' }, { ID: 'f2', Name: 'name' }, { ID: 'f3', Name: 'oldcol' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual(['f3']); // id/Name matched case-insensitively; only oldcol is absent
+    });
+
+    it('FIELD-level SAFETY: an object discovered with ZERO fields never has its columns disabled', () => {
+        const out = decideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Stub'],
+                DiscoveredFieldNamesByObject: { Stub: [] }, // DiscoverFields found nothing -> not authoritative for columns
+                ObjectIDByName: { stub: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'anything' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual([]);
     });
 });

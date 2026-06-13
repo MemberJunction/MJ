@@ -109,6 +109,58 @@ export function decideBooleanOverlay(
   return { value: discovered, winner: 'Discovered' };
 }
 
+/** §7 — input for {@link decideAbsentDeactivations}. */
+export interface AbsentDeactivationInput {
+  /** Caller requested a deactivating (comprehensive) refresh. */
+  DeactivateAbsent: boolean;
+  /** Discovery is AUTHORITATIVE — it enumerated the FULL gamut the credentials expose. */
+  IsAuthoritative: boolean;
+  /** ExternalName of every object this discovery returned. */
+  DiscoveredObjectNames: string[];
+  /** Per discovered object (by ExternalName): the field names it returned. An EMPTY list means the
+   *  object's fields are NOT authoritative (DiscoverFields found none) → its columns are never disabled. */
+  DiscoveredFieldNamesByObject: Record<string, string[]>;
+  /** Current ACTIVE objects in the integration. */
+  ActiveObjects: Array<{ ID: string; Name: string }>;
+  /** persisted IO ID → its current ACTIVE fields. */
+  ActiveFieldsByObjectID: Record<string, Array<{ ID: string; Name: string }>>;
+  /** discovered ExternalName (any case) → persisted IO ID. */
+  ObjectIDByName: Record<string, string>;
+}
+
+/**
+ * §7 — PURE decision of which active objects/fields a comprehensive AUTHORITATIVE discovery should
+ * DEACTIVATE (they are ABSENT from the discovery, so the source dropped them). Returns empty unless
+ * BOTH `DeactivateAbsent` AND `IsAuthoritative` — a stubbed/empty/cache-driven/scoped discovery
+ * (`IsAuthoritative=false`) deactivates NOTHING, because absence proves nothing and disabling would
+ * wrongly wipe the Declared metadata that is the only source. Field-level applies only to objects
+ * discovered WITH ≥1 field (zero discovered fields ⇒ not authoritative for that object's columns).
+ * The inverse — reactivate-on-rediscover (Disabled → Active when it reappears) — is handled in the
+ * upserts, not here. Pure ⇒ unit-testable without mocking the engine or provider.
+ */
+export function decideAbsentDeactivations(input: AbsentDeactivationInput): {
+  ObjectIDsToDeactivate: string[];
+  FieldIDsToDeactivate: string[];
+} {
+  if (!input.DeactivateAbsent || !input.IsAuthoritative) {
+    return { ObjectIDsToDeactivate: [], FieldIDsToDeactivate: [] };
+  }
+  const discovered = new Set(input.DiscoveredObjectNames.map((n) => n.toLowerCase()));
+  const ObjectIDsToDeactivate = input.ActiveObjects.filter((o) => !discovered.has(o.Name.toLowerCase())).map((o) => o.ID);
+
+  const FieldIDsToDeactivate: string[] = [];
+  for (const [objName, fieldNames] of Object.entries(input.DiscoveredFieldNamesByObject)) {
+    if (fieldNames.length === 0) continue; // not authoritative for this object's columns — never disable them
+    const objID = input.ObjectIDByName[objName.toLowerCase()];
+    if (!objID) continue;
+    const discoveredFields = new Set(fieldNames.map((f) => f.toLowerCase()));
+    for (const f of input.ActiveFieldsByObjectID[objID] ?? []) {
+      if (!discoveredFields.has(f.Name.toLowerCase())) FieldIDsToDeactivate.push(f.ID);
+    }
+  }
+  return { ObjectIDsToDeactivate, FieldIDsToDeactivate };
+}
+
 /** Per-object provenance summary. */
 export interface ObjectMergeLog {
   ObjectName: string;
@@ -281,48 +333,51 @@ export class IntegrationSchemaSync {
     // cache-driven discovery has IsAuthoritative=false, so absence proves NOTHING and nothing is disabled
     // (else it would wrongly wipe the Declared metadata that is the only source). Deactivate, never delete.
     if (opts.DeactivateAbsent && SourceSchema.IsAuthoritative) {
-      const discovered = new Set(SourceSchema.Objects.map((o) => o.ExternalName.toLowerCase()));
-      let deactivated = 0;
-      for (const io of engine.GetActiveIntegrationObjects(IntegrationID)) {
-        if (discovered.has(io.Name.toLowerCase())) continue;
-        const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', ContextUser);
-        if (await obj.InnerLoad(CompositeKey.FromID(io.ID))) {
-          obj.Status = 'Disabled'; // deactivate (Active|Deprecated|Disabled enum); never delete
-          if (await obj.Save()) deactivated++;
-          else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom object '${io.Name}': ${obj.LatestResult?.CompleteMessage ?? 'unknown'}`);
-        }
-      }
-      if (deactivated > 0)
-        console.log(
-          `[IntegrationSchemaSync] Deactivated ${deactivated} phantom object(s) absent from discovery for ${IntegrationID} (not materialized, not deleted).`,
-        );
-
-      // §7 FIELD-LEVEL: for each DISCOVERED object (we saw its fields, so absence IS authoritative),
-      // deactivate its active fields ABSENT from the discovered field set. Objects NOT discovered were
-      // deactivated wholesale above — we skip their fields. An object discovered with ZERO fields is
-      // NOT authoritative (DiscoverFields found nothing for it) — skip, never wipe its columns.
-      let fieldsDeactivated = 0;
+      // Gather the active set + per-discovered-object fields, then let the PURE decision
+      // (decideAbsentDeactivations — unit-tested) choose what to Disable. The EFFECT (load + Save) is
+      // applied here; the CHOICE lives in the pure function so it is testable without mocking the engine.
+      const discoveredFieldNamesByObject: Record<string, string[]> = {};
+      const objectIDByName: Record<string, string> = {};
+      const activeFieldsByObjectID: Record<string, Array<{ ID: string; Name: string }>> = {};
       for (const r of objectResults) {
         if (!r.ObjectID) continue;
-        const discoveredFieldNames = new Set(r.srcObj.Fields.map((f) => f.Name.toLowerCase()));
-        if (discoveredFieldNames.size === 0) continue;
-        for (const iof of engine.GetIntegrationObjectFields(r.ObjectID)) {
-          if (iof.Status !== 'Active') continue;
-          if (discoveredFieldNames.has(iof.Name.toLowerCase())) continue;
-          const f = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', ContextUser);
-          if (await f.InnerLoad(CompositeKey.FromID(iof.ID))) {
-            f.Status = 'Disabled'; // deactivate, never delete
-            if (await f.Save()) fieldsDeactivated++;
-            else
-              LogError(
-                `[IntegrationSchemaSync] Failed to deactivate phantom field '${iof.Name}' on object ${r.ObjectID}: ${f.LatestResult?.CompleteMessage ?? 'unknown'}`,
-              );
-          }
+        discoveredFieldNamesByObject[r.srcObj.ExternalName] = r.srcObj.Fields.map((f) => f.Name);
+        objectIDByName[r.srcObj.ExternalName.toLowerCase()] = r.ObjectID;
+        activeFieldsByObjectID[r.ObjectID] = engine
+          .GetIntegrationObjectFields(r.ObjectID)
+          .filter((iof) => iof.Status === 'Active')
+          .map((iof) => ({ ID: iof.ID, Name: iof.Name }));
+      }
+      const decision = decideAbsentDeactivations({
+        DeactivateAbsent: true,
+        IsAuthoritative: true,
+        DiscoveredObjectNames: SourceSchema.Objects.map((o) => o.ExternalName),
+        DiscoveredFieldNamesByObject: discoveredFieldNamesByObject,
+        ActiveObjects: engine.GetActiveIntegrationObjects(IntegrationID).map((io) => ({ ID: io.ID, Name: io.Name })),
+        ActiveFieldsByObjectID: activeFieldsByObjectID,
+        ObjectIDByName: objectIDByName,
+      });
+      let deactivated = 0;
+      for (const id of decision.ObjectIDsToDeactivate) {
+        const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', ContextUser);
+        if (await obj.InnerLoad(CompositeKey.FromID(id))) {
+          obj.Status = 'Disabled'; // deactivate (Active|Deprecated|Disabled enum); never delete
+          if (await obj.Save()) deactivated++;
+          else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom object ${id}: ${obj.LatestResult?.CompleteMessage ?? 'unknown'}`);
         }
       }
-      if (fieldsDeactivated > 0)
+      let fieldsDeactivated = 0;
+      for (const id of decision.FieldIDsToDeactivate) {
+        const f = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', ContextUser);
+        if (await f.InnerLoad(CompositeKey.FromID(id))) {
+          f.Status = 'Disabled'; // deactivate, never delete
+          if (await f.Save()) fieldsDeactivated++;
+          else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom field ${id}: ${f.LatestResult?.CompleteMessage ?? 'unknown'}`);
+        }
+      }
+      if (deactivated > 0 || fieldsDeactivated > 0)
         console.log(
-          `[IntegrationSchemaSync] Deactivated ${fieldsDeactivated} phantom field(s) absent from discovery for ${IntegrationID} (not materialized, not deleted).`,
+          `[IntegrationSchemaSync] Deactivated ${deactivated} object(s) + ${fieldsDeactivated} field(s) absent from authoritative discovery for ${IntegrationID} (not materialized, not deleted).`,
         );
     }
 
