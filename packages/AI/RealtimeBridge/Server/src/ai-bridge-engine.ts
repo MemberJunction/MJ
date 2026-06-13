@@ -37,6 +37,7 @@ import {
     BridgeChannelToolDefinition,
     BridgeChannelToolResult,
 } from '@memberjunction/ai-bridge-base';
+import { MultiAgentRoomCoordinator } from './multi-agent-room-coordinator';
 
 /**
  * Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place.
@@ -262,6 +263,14 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private hostIdentity: IHostInstanceIdentity = new DefaultHostInstanceIdentity();
 
     /**
+     * Coordinates speaking discipline when MULTIPLE agent bridge sessions share one room (§4c —
+     * "1+ agents in a shared room"). Single-agent sessions never touch it; it is engaged only via the
+     * additive {@link RegisterRoomParticipant} / {@link UnregisterRoomParticipant} hooks, so the default
+     * single-agent path is wholly unaffected.
+     */
+    private readonly roomCoordinator = new MultiAgentRoomCoordinator();
+
+    /**
      * The singleton accessor. Keyed by THIS class's name in the Global Object Store (via
      * {@link BaseSingleton}), distinct from {@link AIBridgeEngineBase.Instance} — which this engine
      * composes rather than inherits.
@@ -380,6 +389,56 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      */
     public get ActiveSessions(): ReadonlyArray<ActiveBridgeSession> {
         return Array.from(this.activeSessions.values());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────────
+    // Multi-party — shared-room coordination (§4c). Additive; single-agent unaffected.
+    // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * The {@link MultiAgentRoomCoordinator} this engine uses for inter-agent floor arbitration when
+     * multiple agent bridge sessions share one room. Exposed so the runner-constructing layer can run
+     * `CanTakeFloor` / `TakeFloor` / `ReleaseFloor` around an agent's generation in a multi-agent room.
+     */
+    public get RoomCoordinator(): MultiAgentRoomCoordinator {
+        return this.roomCoordinator;
+    }
+
+    /**
+     * Ties a bridge session into the multi-agent room coordinator when it joins a SHARED room (§4c). Call
+     * this for an agent session whose bridge connects into a room that other agent sessions may also
+     * inhabit — keyed by the shared external room id (the driver's `ExternalConnectionID` / the
+     * ConversationID). Once 2+ agents are registered on the same room, floor arbitration keeps exactly one
+     * agent speaking at a time across agents; combined with passive turn-taking, two agents are loop-safe.
+     *
+     * **Additive and opt-in.** A normal single-agent bridge never calls this and is wholly unaffected —
+     * the coordinator only matters once two sessions name the same room. Designating `isFacilitator`
+     * marks the agent (typically the one running the Meeting Controls channel) as the room's arbiter,
+     * which may override the floor to call on a specific agent.
+     *
+     * @param roomId The shared external room id all co-located agents key on.
+     * @param agentSessionId The agent session joining the room.
+     * @param isFacilitator Whether this agent is the room's facilitator (may override the floor).
+     */
+    public RegisterRoomParticipant(roomId: string, agentSessionId: string, isFacilitator = false): void {
+        this.roomCoordinator.RegisterRoomParticipant(roomId, agentSessionId, isFacilitator);
+        LogStatus(
+            `[AIBridgeEngine] Agent session ${agentSessionId} registered in shared room ${roomId}` +
+                `${isFacilitator ? ' (facilitator)' : ''}; multi-agent=${this.roomCoordinator.IsMultiAgentRoom(roomId)}.`,
+        );
+    }
+
+    /**
+     * Removes a bridge session from the multi-agent room coordinator (its bridge stopped / it left the
+     * room). Releases the floor if the leaving agent held it and clears the facilitator slot if it was
+     * the facilitator. Safe to call unconditionally on teardown — a no-op for sessions that were never
+     * registered as room participants.
+     *
+     * @param roomId The shared room the agent is leaving.
+     * @param agentSessionId The agent session leaving.
+     */
+    public UnregisterRoomParticipant(roomId: string, agentSessionId: string): void {
+        this.roomCoordinator.UnregisterRoomParticipant(roomId, agentSessionId);
     }
 
     // ──────────────────────────────────────────────────────────────────────────────

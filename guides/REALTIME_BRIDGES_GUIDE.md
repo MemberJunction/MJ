@@ -41,7 +41,7 @@ not build a second realtime stack; a bridge is just a driver that supplies the m
 6. [Turn-Taking](#6-turn-taking)
 7. [Entity Invariants](#7-entity-invariants)
 8. [Join Methods & Agent Identity (Planned)](#8-join-methods--agent-identity-planned)
-9. [Multi-Party (Planned)](#9-multi-party-planned)
+9. [Multi-party (LiveKit + multiple agents)](#9-multi-party-livekit--multiple-agents)
 10. [Roadmap / Phase Status](#10-roadmap--phase-status)
 
 ---
@@ -731,22 +731,68 @@ bridge. Everything below the host is platform-free and tested with mocks.
 
 ---
 
-## 9. Multi-Party (Planned)
+## 9. Multi-party (LiveKit + multiple agents)
 
-*Emergent property — **planned (Phase 7)**.* Multi-party is **not** a separate build. The conferencing
-platform *is* the shared room — it already does the SFU, the mixing, the multi-party media plane.
+*Emergent property of the bridge — **shipped (Phase 7 core)**.* Multi-party is **not** a separate build.
+The conferencing platform (or the MJ-native LiveKit room) *is* the shared room — it already does the SFU,
+the mixing, the multi-party media plane.
 
 - **Multiple humans?** The platform already provides it — MJ builds nothing.
 - **Multiple agents?** Each agent is an **independent bridge connection** (its own bot, its own
-  `AIAgentSession`) into the *same* meeting. Two agents joining one Zoom call literally hear each other —
-  each one's voice is part of "everyone else" in the other's inbound mix. No transcript-relay hack.
-- **The one genuinely new problem** is turn-taking discipline among multiple agents so they don't loop —
-  and that is exactly the passive/active/hybrid policy ([§6](#6-turn-taking)) already shipped. Two
-  *passive* agents never loop (neither speaks unless addressed).
+  `AIAgentSession`) into the *same* room. Two agents joining one room literally hear each other — each
+  one's voice is part of "everyone else" in the other's inbound mix. **No transcript-relay hack, no mixer
+  in MJ — the room already mixes.**
 
-A self-hosted MJ-native room (e.g. LiveKit) is treated identically — *another bridge*, not a special
-build. The `BridgeParticipantInfo.IsAgent` flag already lets multi-agent turn-taking exclude agents from
-"a human addressed me" detection and avoid self-echo loops.
+### LiveKit — the MJ-native room (`@memberjunction/ai-bridge-livekit`)
+
+Every other bridge connects **out** to a 3rd-party platform. **LiveKit is the opposite: a self-hosted
+WebRTC SFU that MJ runs itself** — the "MJ-native room" for an MJ-owned multi-party experience (e.g.
+embedded in Explorer). The architecture treats a Zoom meeting and a LiveKit room **identically** — both
+are multi-party media transports — so LiveKit is "*another bridge, not a special build.*"
+
+- `LiveKitBridge` (`@RegisterClass(BaseRealtimeBridge, 'LiveKitBridge')`) is an ordinary
+  `BaseRealtimeBridge` driver behind an injectable `ILiveKitRoomSdk` seam (production binds
+  `livekit-server-sdk` + a room client; tests inject `FakeLiveKitRoomSdk` — **24 tests, no network**).
+- `connect(roomUrl, token)` joins the room as a bot participant with an MJ-minted token. LiveKit does the
+  **full** media set — audio/video/screen in+out — and **per-participant audio tracks**, so diarization
+  is native (no extra mixer). Chat rides the LiveKit **data channel** (`sendDataMessage`). It contributes
+  a Meeting Controls facilitator channel exactly like Zoom.
+- Capabilities: on-demand join, A/V/screen in+out, diarization, data-channel chat, room-admin mute. No
+  scheduled/invite/telephony — those gated base methods throw `BridgeCapabilityNotSupportedError`.
+
+### Inter-agent speaking discipline — `MultiAgentRoomCoordinator`
+
+The one genuinely new problem is keeping multiple agents from **talking over each other or looping**. The
+`MultiAgentRoomCoordinator` (`@memberjunction/ai-bridge-server`, pure + synchronous, **20 tests**) adds
+**floor arbitration** on top of passive turn-taking:
+
+- An agent calls `CanTakeFloor(roomId, agentSessionId)` before generating speech → `true` only if no
+  *other* agent holds the floor. `TakeFloor` claims it, `ReleaseFloor` frees it, `IsFloorHolder` lets a
+  bumped agent learn it must yield. **At most one agent speaks at a time across agents.**
+- A designated **facilitator** agent (typically the one running the Meeting Controls channel) may
+  **override** the floor (`FacilitatorOverride`) to cut in and call on a specific agent. Designate via
+  `RegisterRoomParticipant(roomId, id, /*isFacilitator*/ true)` or `SetFacilitator(...)` at runtime.
+- **Loop-safety = two guards.** Passive turn-taking ([§6](#6-turn-taking)) means an agent speaks only when
+  *addressed by name*, so two passive agents never start a loop; the floor coordinator means even if both
+  policies fired, only one speaks. The combination makes two agents in a room loop-safe **and**
+  non-overlapping.
+- Distinct rooms are fully isolated; single-agent rooms impose no contention.
+
+Wire it through the engine's **additive** hooks — `AIBridgeEngine.RegisterRoomParticipant(roomId,
+agentSessionId, isFacilitator?)` / `UnregisterRoomParticipant(...)` — keyed on the shared external room id
+(the driver's `ExternalConnectionID` / the `ConversationID`). **Single-agent sessions never call these and
+are wholly unaffected**; arbitration engages only once 2+ sessions name the same room. The runner-
+constructing layer runs `CanTakeFloor`/`TakeFloor`/`ReleaseFloor` around an agent's generation via
+`AIBridgeEngine.RoomCoordinator`.
+
+### Echo / self-audio
+
+A bot must not hear its **own** output or it would react to itself. Conferencing platforms (and the
+LiveKit SFU) **exclude a participant's own published audio from that participant's inbound mix**, so the
+bridge driver never feeds the agent its own voice (`LiveKitBridge` documents this). Where a platform does
+*not* exclude own-audio, the bridge driver must gate it before `OnMedia`. The `MultiAgentRoomCoordinator`
+itself never touches media — it operates purely on floor state. The `BridgeParticipantInfo.IsAgent` flag
+also lets multi-agent turn-taking exclude agents from "a human addressed me" detection.
 
 ---
 
@@ -764,7 +810,7 @@ marked here and in the architecture plan.
 | **4 — Invite/calendar joins + agent identity** | `CalendarWatcher` ("invite the agent like a person") over an injectable `ICalendarSource` (Graph/Google stubs), `ResolveProviderFromJoinUrl`, `ScheduledBridgeRunner` (a janitor-style host hook starting due `Scheduled` bridges), and the `IAgentIdentityProvisioner` seam — all platform-free + unit-tested. Shared with inbound telephony. | ✅ **Shipped** (real calendar-API + provisioning admin-API binding pending — documented `TODO(production)` seams) |
 | **5 — Teams → Meet → Webex → Slack → Discord** | One minimal subclass per platform on the proven base. | 🔜 Planned |
 | **6 — Telephony: RingCentral → Twilio → Vonage** | `BaseTelephonyBridge` — outbound dial + inbound DID routing, DTMF, transfer. Same engine/session/turn-taking. | 🔜 Planned |
-| **7 — Multi-party** | 1+ agents in one shared room (emergent), multi-agent turn-taking discipline, the LiveKit MJ-native-room bridge. | 🔜 Planned |
+| **7 — Multi-party** | `LiveKitBridge` (`@memberjunction/ai-bridge-livekit`) — the self-hosted MJ-native room (full A/V/screen, native per-participant diarization, data-channel chat) behind an injectable `ILiveKitRoomSdk` seam; `MultiAgentRoomCoordinator` (`@memberjunction/ai-bridge-server`) — floor arbitration (one agent speaks at a time) + facilitator override, loop-safe with passive turn-taking; additive `AIBridgeEngine.RegisterRoomParticipant`/`UnregisterRoomParticipant` hooks. Built + unit-tested with no network. | ✅ **Shipped (core)** (real LiveKit SDK adapter binding pending; runner-layer floor wiring around generation pending) |
 | **8 — Remote Browser channel** | `RemoteBrowserChannel` + `ContainerRunner` (any Playwright Docker image), screen-track out, control arbiter. | 🔜 Planned |
 | **9 — Native marketplace inclusion** | Per-platform "add the agent" apps. | 🔜 Planned |
 | **UI — Realtime dashboard + forms** | A `Realtime` section in the AI dashboard + custom `*Extended` forms + an AIAgent Realtime panel. | 🔜 Planned |
@@ -777,7 +823,7 @@ graph LR
     P3 --> P4["4 · Invite/identity ✅"]
     P3 --> P5["5 · Teams·Meet·Webex·Slack·Discord"]
     P4 --> P6["6 · Telephony"]
-    P5 --> P7["7 · Multi-party + LiveKit"]
+    P5 --> P7["7 · Multi-party + LiveKit ✅"]
     P6 --> P7
     P3 --> P8["8 · Remote Browser"]
 
@@ -786,6 +832,7 @@ graph LR
     style P2 fill:#2d5016,stroke:#1a5c3a,color:#fff
     style P3 fill:#2d5016,stroke:#1a5c3a,color:#fff
     style P4 fill:#2d5016,stroke:#1a5c3a,color:#fff
+    style P7 fill:#2d5016,stroke:#1a5c3a,color:#fff
 ```
 
 ---
@@ -808,6 +855,8 @@ graph LR
 | Scheduled-bridge runner (host hook) | `packages/AI/Bridge/src/scheduled-bridge-runner.ts` |
 | Agent identity provisioning seam | `packages/AI/Bridge/src/identity-provisioner.ts` |
 | Zoom driver (first real platform) | `packages/AI/Providers/BridgeZoom/src/zoom-bridge.ts`, `zoom-sdk.ts`, `zoom-meeting-controls.ts` |
+| LiveKit driver (MJ-native room) | `packages/AI/RealtimeBridge/Providers/LiveKit/src/livekit-bridge.ts`, `livekit-sdk.ts`, `livekit-meeting-controls.ts` |
+| Multi-agent floor arbitration (one speaker at a time + facilitator) | `packages/AI/Bridge/src/multi-agent-room-coordinator.ts` (engine hooks: `AIBridgeEngine.RegisterRoomParticipant` / `UnregisterRoomParticipant` / `RoomCoordinator`) |
 | Server channel host + Meeting Controls channel | `packages/AI/Agents/src/realtime/realtime-channel-server-host.ts`, `meeting-controls-channel-server.ts` |
 | Capability interface | `metadata/entities/JSONType-interfaces/IBridgeProviderFeatures.ts` |
 | Entity invariants | `packages/MJCoreEntitiesServer/src/custom/MJAIBridge*EntityServer.server.ts`, `MJAIAgentSessionBridge*EntityServer.server.ts` |

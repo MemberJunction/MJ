@@ -1009,12 +1009,28 @@ Every phase is "done" only when **all** of the following hold — this is baked 
       watcher's DID/identity routing (Phase 4) feeds inbound. Telephony correctly has no video/screen.
 - [x] **Quality bar** + guide telephony coverage. Full repo build + tests 509/509 green.
 
-### Phase 7 — Multi-party
-- [ ] Multiple agents in one room (N bridge connections); echo/self-audio gating.
-- [ ] Multi-agent turn-taking discipline (passive-default loop safety; facilitator arbitration).
-- [ ] `LiveKitBridge` as the MJ-native room.
-- [ ] **Update `multi-party-and-meeting-bridge.md` → stub pointing here** (done early — see below).
-- [ ] **Quality bar** + guide multi-party section.
+### Phase 7 — Multi-party  ✅ CORE DONE (real-SDK binding + runner-layer floor wiring pending)
+- [x] Multiple agents in one room (N bridge connections); echo/self-audio gating documented (SFU excludes
+      own audio — `LiveKitBridge` documents it; gate at the driver where a platform doesn't). The room IS
+      the shared media plane (no transcript-relay, no MJ mixer).
+- [x] Multi-agent turn-taking discipline: `MultiAgentRoomCoordinator` (pure, in `@memberjunction/ai-bridge-server`)
+      — floor arbitration (`CanTakeFloor`/`TakeFloor`/`ReleaseFloor`/`IsFloorHolder`, one agent speaks at a
+      time across agents), passive-default loop safety, facilitator override (`FacilitatorOverride` +
+      `SetFacilitator`), multi-room isolation. Additive `AIBridgeEngine.RegisterRoomParticipant`/
+      `UnregisterRoomParticipant`/`RoomCoordinator` hooks (single-agent sessions unaffected). **20 tests.**
+- [x] `LiveKitBridge` as the MJ-native room (`@memberjunction/ai-bridge-livekit`,
+      `@RegisterClass(BaseRealtimeBridge,'LiveKitBridge')`) — self-hosted SFU (connect(roomUrl,token) as a
+      bot), full A/V/screen in+out, native per-participant diarization, data-channel chat, Meeting Controls
+      facilitator surface, room-admin mute. Behind injectable `ILiveKitRoomSdk` seam (`SetSdkFactory`;
+      throws "bind the real LiveKit SDK" until bound — real `livekit-server-sdk` + room client is a
+      deployment TODO). **24 tests (FakeLiveKitRoomSdk).** Seed: LiveKit provider row flipped
+      `Disabled → Active` (the driver now exists), mirroring Zoom/Teams/etc.
+- [x] **Update `multi-party-and-meeting-bridge.md` → stub pointing here** (done early — see below).
+- [x] **Quality bar (this slice):** READMEs (LiveKit) · guide "Multi-party (LiveKit + multiple agents)"
+      section (rewritten Planned → Shipped, roadmap row + reference map) · BridgeLiveKit 24 / ai-bridge-server
+      93 (incl. +20 coordinator; existing 73 still green) tests · both packages build. *(Real LiveKit SDK
+      adapter binding + runner-layer floor wiring around an agent's generation remain — documented as
+      pending.)*
 
 ### Phase 8 — Remote Browser channel
 - [ ] `ContainerRunner` abstraction (any Playwright Docker image; ephemeral, sandboxed, egress-limited).

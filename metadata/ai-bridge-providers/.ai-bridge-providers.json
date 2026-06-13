@@ -106,7 +106,7 @@
       "Description": "LiveKit MJ-native room bridge \u2014 an SFU we run ourselves rather than connect out to. Open-source, self-hostable, with existing OpenAI/Gemini realtime adapters. Full multi-party AV in an MJ-owned room.",
       "BridgeType": "Meeting",
       "DriverClass": "LiveKitBridge",
-      "Status": "Disabled",
+      "Status": "Active",
       "SupportedFeatures": "{\"OnDemandJoin\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
     }
   }
