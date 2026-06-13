@@ -646,28 +646,88 @@ resurface a pre-existing quirk on an untouched field).
 
 ---
 
-## 8. Join Methods & Agent Identity (Planned)
-
-*This is forward-looking — the **identity entity and resolution helpers exist** (`MJAIBridgeAgentIdentityEntity`,
-`AIBridgeEngineBase.IdentityByValue` / `IdentitiesForAgent`); the calendar watchers and provisioning
-flow are **planned (Phase 4)**.*
+## 8. Join Methods & Agent Identity
 
 There are several ways an agent gets onto an endpoint, each gated by a `SupportedFeatures` join flag and
 recorded in `AIAgentSessionBridge.JoinMethod`:
 
 - **On-demand** (`OnDemandJoin`) — a user pastes a join URL and sends the agent. The shipped default
   `JoinMethod` is `'OnDemand'`.
-- **Scheduled** (`ScheduledJoin`) — an MJ Scheduled Action fires at the meeting start time.
-- **Invite / Calendar** (`InviteJoin`) — *the headline planned UX.* The agent gets a real
+- **Scheduled** (`ScheduledJoin`) — a `Scheduled` bridge fires at the meeting start time (see the
+  `ScheduledBridgeRunner` below).
+- **Invite / Calendar** (`InviteJoin`) — *the headline UX, now built (Phase 4).* The agent gets a real
   mailbox/calendar identity **in the customer's own tenant** (`AIBridgeAgentIdentity` with
-  `IdentityType = 'Email'`). Organizers invite `sage@customer.com` like a person; a calendar watcher
-  matches the invite to the identity and joins at start. The same identity model serves **inbound
-  telephony** (a call to the agent's DID routes to it via `IdentityByValue`).
+  `IdentityType = 'Email'`). Organizers invite `sage@customer.com` like a person; the `CalendarWatcher`
+  matches the invite to the identity and creates a `Scheduled` bridge that joins at start. The same
+  identity model serves **inbound telephony** (a call to the agent's DID routes to it via
+  `IdentityByValue`).
 - **Native marketplace inclusion** (`NativeInvite`) and **in-meeting command** — planned, per-platform.
 
 Because the tenant-resident identity generalizes to "agent presence," the same `AIBridgeAgentIdentity`
 row is the seam for future **email** and **calendar** surfaces, and existing tenant governance
 (retention, DLP, eDiscovery, offboarding) applies to the agent automatically.
+
+### 8a. Invite & Calendar Joins (built — `@memberjunction/ai-bridge-server`)
+
+The "invite the agent like a person" pipeline has four collaborating pieces, all **injectable seams** so
+the whole flow is unit-testable with no network/DB:
+
+```mermaid
+flowchart LR
+    CAL["Calendar (Graph / Google)"] -->|ICalendarSource| W["CalendarWatcher.Sweep()"]
+    W -->|new invite, agent is attendee| B["Scheduled AIAgentSessionBridge<br/>JoinMethod=Invite · Status=Scheduled<br/>ScheduledStartTime=start · Address=joinUrl"]
+    B -->|ScheduledStartTime <= now| R["ScheduledBridgeRunner.RunDueBridges()"]
+    R -->|host builds IRealtimeSession| E["AIBridgeEngine.StartBridgeSession()"]
+    PROV["IAgentIdentityProvisioner"] -.provisions.-> ID["AIBridgeAgentIdentity (tenant mailbox)"]
+    ID -.watched by.-> W
+
+    style B fill:#2d5016,stroke:#1a5c3a,color:#fff
+    style E fill:#5a3d7a,stroke:#7c5295,color:#fff
+```
+
+1. **`CalendarWatcher`** (`calendar-watcher.ts`) — for each active `IdentityType='Email'` identity, polls
+   its calendar via an injected **`ICalendarSource`**, and for each new invite where the identity is an
+   attendee creates a `Scheduled` `AIAgentSessionBridge` (+ a linked `Idle` `AIAgentSession`). It is
+   **idempotent** (dedupes on the invite's `ExternalEventID`, stamped onto `ExternalConnectionID`),
+   **tolerant** (a failing identity/source is logged and the sweep continues), and exposes only
+   `Sweep()` — **no timer; the host schedules the polling loop** (matching the engine janitor). It
+   ignores non-attendee invites, invites with no join URL, past-start invites, and invites whose join URL
+   resolves to no active provider.
+
+2. **`ICalendarSource`** (`calendar-source.ts`) — the **per-provider calendar-API seam**:
+   `ListUpcomingInvites(identityValue, sinceCursor)` returning normalized
+   `{ ExternalEventID, JoinUrl, StartTime, Attendees, Organizer }`. Ships with **`GraphCalendarSource`**
+   and **`GoogleCalendarSource`** stubs that throw `CalendarSourceNotBoundError` until production binds
+   the real Microsoft Graph (`/me/events` / app-level `calendarView` delta) and Google Calendar
+   (`events.list` + `syncToken`) APIs. **The real-API binding is a documented seam** (like the bridge SDK
+   seams) — see the `TODO(production)` in each adapter.
+
+3. **`ResolveProviderFromJoinUrl(url, providers)`** (`join-url-resolver.ts`) — a **pure** helper mapping a
+   join URL to the matching active `AIBridgeProvider` by hostname (`zoom.us` → Zoom,
+   `teams.microsoft.com` → Teams, `meet.google.com` → Google Meet, Webex, Slack, Discord, RingCentral,
+   …). Uses a strict **domain-suffix** test, so `zoom.us.attacker.com` and `evil.com/zoom.us/...` do **not**
+   match. `ClassifyJoinUrl(url)` returns just the platform; both return `null` for unknown/malformed input.
+
+4. **`ScheduledBridgeRunner`** (`scheduled-bridge-runner.ts`) — a documented host hook (like the janitor's
+   `ReconcileOrphans`): `RunDueBridges()` loads `Scheduled` bridges with `ScheduledStartTime <= now` and
+   calls `AIBridgeEngine.StartBridgeSession` for each. The **`IRealtimeSession` construction stays the
+   host's job** — the runner asks a host-supplied `ScheduledBridgeSessionFactory` to build the start
+   params, keeping the transport seam clean exactly like `StartBridgeSession`. The engine owns the
+   `Scheduled → Connecting → Connected/Failed` transition, so a started/failed bridge drops off the next
+   pass automatically (idempotent); a factory that returns `null` leaves the bridge `Scheduled` for later.
+
+5. **`IAgentIdentityProvisioner`** (`identity-provisioner.ts`) — a thin documented seam to provision a
+   tenant mailbox/calendar (or telephony DID) identity for an agent: `Provision(request)` returns the
+   concrete `{ IdentityValue, Configuration }`, which `ApplyProvisionResultToIdentity` maps onto a
+   `MJAIBridgeAgentIdentityEntity` (the caller saves it). `StubAgentIdentityProvisioner` throws
+   `IdentityProvisionerNotBoundError` until production wires Microsoft Graph admin / Google Workspace
+   Admin SDK / a telephony carrier API. The schema already holds the result — this is the seam + the
+   `TODO(production)`, deliberately **not** over-built.
+
+**Host wiring (production):** schedule `CalendarWatcher.Sweep()` and `ScheduledBridgeRunner.RunDueBridges()`
+on the host's timer/scheduler, bind a real `ICalendarSource` + `IAgentIdentityProvisioner`, and supply a
+`ScheduledBridgeSessionFactory` that constructs the `IRealtimeSession` + `RealtimeSessionRunner` for a due
+bridge. Everything below the host is platform-free and tested with mocks.
 
 ---
 
@@ -701,7 +761,7 @@ marked here and in the architecture plan.
 | **1 — Schema + engines** | The 5-entity migration → CodeGen; `AIBridgeEngineBase` (cache) + `AIBridgeEngine` (composition, lifecycle, host registry, janitor `ReconcileOrphans`); capability-gated `BaseRealtimeBridge` + `BridgeCapabilityNotSupportedError`; `TurnTakingPolicy`; the `*EntityServer` invariants. | ✅ **Shipped** (provider seed metadata + the `Realtime: Advanced Bridge Controls` authorization pending) |
 | **2 — Server-side channel plane** | Dynamic tool-definition contribution into the runner's `ServerChannelTools` / `ExecuteServerChannelTool`, optional client surface, the `Meeting Controls` channel (roster / hand-raise queue / who's-speaking / timer → facilitator). The bridge ↔ channel-plane integration (`AIBridgeEngine` wires a session's channels generically via the optional `IBridgeChannelHost` + `BaseRealtimeBridge.GetMeetingControlsEventSource`) is shipped. | ✅ **Shipped** |
 | **3 — Zoom meeting bridge** | `ZoomBridge` (`@memberjunction/ai-bridge-zoom`): on-demand + scheduled join, audio in/out, diarized participants, participant mute + chat, and a Meeting Controls facilitator surface — all behind an injectable `IZoomMeetingSdk` seam (real-SDK binding is a deployment TODO via `SetSdkFactory`). First real platform, built + unit-tested with no network. | ✅ **Shipped** (real Zoom SDK adapter binding pending) |
-| **4 — Invite/calendar joins + agent identity** | Tenant-mailbox provisioning + calendar watcher ("invite the agent like a person"); shared with inbound telephony. | 🔜 Planned |
+| **4 — Invite/calendar joins + agent identity** | `CalendarWatcher` ("invite the agent like a person") over an injectable `ICalendarSource` (Graph/Google stubs), `ResolveProviderFromJoinUrl`, `ScheduledBridgeRunner` (a janitor-style host hook starting due `Scheduled` bridges), and the `IAgentIdentityProvisioner` seam — all platform-free + unit-tested. Shared with inbound telephony. | ✅ **Shipped** (real calendar-API + provisioning admin-API binding pending — documented `TODO(production)` seams) |
 | **5 — Teams → Meet → Webex → Slack → Discord** | One minimal subclass per platform on the proven base. | 🔜 Planned |
 | **6 — Telephony: RingCentral → Twilio → Vonage** | `BaseTelephonyBridge` — outbound dial + inbound DID routing, DTMF, transfer. Same engine/session/turn-taking. | 🔜 Planned |
 | **7 — Multi-party** | 1+ agents in one shared room (emergent), multi-agent turn-taking discipline, the LiveKit MJ-native-room bridge. | 🔜 Planned |
@@ -713,8 +773,8 @@ marked here and in the architecture plan.
 graph LR
     P0["0 · Transport seam ✅"] --> P1["1 · Schema + engines ✅"]
     P1 --> P2["2 · Channel plane"]
-    P2 --> P3["3 · Zoom"]
-    P3 --> P4["4 · Invite/identity"]
+    P2 --> P3["3 · Zoom ✅"]
+    P3 --> P4["4 · Invite/identity ✅"]
     P3 --> P5["5 · Teams·Meet·Webex·Slack·Discord"]
     P4 --> P6["6 · Telephony"]
     P5 --> P7["7 · Multi-party + LiveKit"]
@@ -725,6 +785,7 @@ graph LR
     style P1 fill:#2d5016,stroke:#1a5c3a,color:#fff
     style P2 fill:#2d5016,stroke:#1a5c3a,color:#fff
     style P3 fill:#2d5016,stroke:#1a5c3a,color:#fff
+    style P4 fill:#2d5016,stroke:#1a5c3a,color:#fff
 ```
 
 ---
@@ -741,6 +802,11 @@ graph LR
 | Server engine + transport seam + channel-plane wiring + janitor | `packages/AI/Bridge/src/ai-bridge-engine.ts` |
 | Bridge ↔ channel-plane seam (`IBridgeChannelHost`, `IBridgeMeetingControlsEventSource`) | `packages/AI/BridgeBase/src/channel-plane.ts` |
 | Worked minimal driver example | `packages/AI/Bridge/src/loopback-bridge.ts` |
+| Calendar watcher (invite → scheduled bridge) | `packages/AI/Bridge/src/calendar-watcher.ts` |
+| Calendar-API seam + Graph/Google stubs | `packages/AI/Bridge/src/calendar-source.ts` |
+| Join-URL → provider resolution (pure) | `packages/AI/Bridge/src/join-url-resolver.ts` |
+| Scheduled-bridge runner (host hook) | `packages/AI/Bridge/src/scheduled-bridge-runner.ts` |
+| Agent identity provisioning seam | `packages/AI/Bridge/src/identity-provisioner.ts` |
 | Zoom driver (first real platform) | `packages/AI/Providers/BridgeZoom/src/zoom-bridge.ts`, `zoom-sdk.ts`, `zoom-meeting-controls.ts` |
 | Server channel host + Meeting Controls channel | `packages/AI/Agents/src/realtime/realtime-channel-server-host.ts`, `meeting-controls-channel-server.ts` |
 | Capability interface | `metadata/entities/JSONType-interfaces/IBridgeProviderFeatures.ts` |

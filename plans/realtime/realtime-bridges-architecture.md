@@ -974,16 +974,22 @@ Every phase is "done" only when **all** of the following hold — this is baked 
       + new "Channel plane" section · BridgeBase 48 / Bridge 29 / BridgeZoom 24 / Agents 1263 tests green;
       all touched packages build.
 
-### Phase 4 — Invite/calendar joins + agent identity
-- [ ] `AIBridgeAgentIdentity` provisioning flow + tenant mailbox model.
-- [ ] Calendar watcher (Graph / Google) → match invite → scheduled bridge → join.
-- [ ] **Quality bar** + guide section on identity & invite joins.
+### Phase 4 — Invite/calendar joins + agent identity  ✅ DONE
+- [x] `IAgentIdentityProvisioner` seam + tenant-mailbox model (stub throws-until-bound; Graph/Google
+      admin TODO). `AIBridgeAgentIdentity` already holds the result.
+- [x] `CalendarWatcher` (injectable `ICalendarSource` → `GraphCalendarSource`/`GoogleCalendarSource`
+      stubs) → match invite (attendee) → create Scheduled bridge (`JoinMethod='Invite'`, dedupe via
+      `ExternalConnectionID=ExternalEventID`); `ScheduledBridgeRunner` starts due bridges;
+      `ResolveProviderFromJoinUrl` (security-aware domain-suffix match). All in `ai-bridge-server`.
+- [x] **Quality bar** + guide "Invite & Calendar Joins" section. (ai-bridge-server 73 tests.)
 
 ### Phase 5 — Teams → Google Meet → Webex → Slack → Discord  (one driver per box)
-- [ ] `TeamsBridge` (+ caps metadata + native channels) · tests · guide entry.
-- [ ] `GoogleMeetBridge` · tests · guide entry.
+- [x] `TeamsBridge` (`@memberjunction/ai-bridge-teams`, ACS calling-bot seam; invite/native/inbound +
+      diarization + chat; hand-raise ⚠️). **26 tests.** Seed Active.
+- [x] `GoogleMeetBridge` (`@memberjunction/ai-bridge-googlemeet`, Meet Media API seam; no hand-raise/
+      chat — handled as absent). **23 tests.** Seed Active.
 - [ ] `WebexBridge` · tests · guide entry.
-- [ ] `SlackBridge` (full-AV huddle; verify media API first) · tests · guide entry.
+- [ ] `SlackBridge` (full-AV huddle; media API is the gating unknown) · tests · guide entry.
 - [ ] `DiscordBridge` · tests · guide entry.
 - [ ] **Quality bar** after each driver (repo tests green before moving on).
 

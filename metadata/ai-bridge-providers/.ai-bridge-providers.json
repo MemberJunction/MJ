@@ -26,7 +26,7 @@
       "Description": "Microsoft Teams meeting bridge. Full meeting AV plus marketplace native-invite; calendar invite via the agent's Microsoft 365 identity.",
       "BridgeType": "Meeting",
       "DriverClass": "TeamsBridge",
-      "Status": "Disabled",
+      "Status": "Active",
       "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"NativeInvite\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
     }
   },
@@ -36,7 +36,7 @@
       "Description": "Google Meet bridge. On-demand and scheduled joins need verification; calendar invite via the agent's Google Workspace identity is the headline path.",
       "BridgeType": "Meeting",
       "DriverClass": "GoogleMeetBridge",
-      "Status": "Disabled",
+      "Status": "Active",
       "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
     }
   },
