@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "GrowthZone",
+      "Icon": "fa-solid fa-people-group",
       "ClassName": "GrowthZoneConnector",
       "ImportPath": "@memberjunction/connector-growthzone",
       "NavigationBaseURL": "https://{subdomain}.growthzoneapp.com/API",

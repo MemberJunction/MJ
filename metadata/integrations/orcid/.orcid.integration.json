@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "ORCID",
+      "Icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48cGF0aCBmaWxsPSIjQTZDRTM5IiBkPSJNMjU2IDEyOGMwIDcwLjctNTcuMyAxMjgtMTI4IDEyOFMwIDE5OC43IDAgMTI4IDU3LjMgMCAxMjggMHMxMjggNTcuMyAxMjggMTI4eiIvPjxwYXRoIGZpbGw9IiNGRkYiIGQ9Ik04Ni4zIDE4Ni4ySDcwLjlWNzkuMWgxNS40djEwNy4xeiIvPjxwYXRoIGZpbGw9IiNGRkYiIGQ9Ik0xMDguOSA3OS4xaDQxLjZjMzkuNiAwIDU3IDI4LjMgNTcgNTMuNiAwIDI3LjUtMjEuNSA1My42LTU2LjggNTMuNmgtNDEuOFY3OS4xem0xNS40IDkzLjNoMjQuNWMzNC45IDAgNDIuOS0yNi41IDQyLjktMzkuNyAwLTIxLjUtMTMuNy0zOS43LTQzLjctMzkuN2gtMjMuN3Y3OS40eiIvPjxwYXRoIGZpbGw9IiNGRkYiIGQ9Ik04OC43IDU2LjhjMCA1LjUtNC41IDEwLjEtMTAuMSAxMC4xLTUuNiAwLTEwLjEtNC42LTEwLjEtMTAuMSAwLTUuNiA0LjUtMTAuMSAxMC4xLTEwLjEgNS42IDAgMTAuMSA0LjYgMTAuMSAxMC4xeiIvPjwvc3ZnPg==",
       "ClassName": "ORCIDConnector",
       "Description": "ORCID Public API v3.0 read-only connector. Resolves researcher iD universes via per-connection Lucene search and/or explicit iD lists, then fetches the record and activity sections. Pull-only / read-public; OAuth2 client-credentials.",
       "ImportPath": "@memberjunction/integration-connectors",
@@ -10,6 +11,11 @@
       "BatchRequestWaitTime": 1,
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=OAuth2 Client Credentials",
       "Configuration": {
+        "IconProvenance": {
+          "Source": "Official ORCID iD icon (green, unmodified) — ORCID Brand Library",
+          "License": "ORCID Brand Library materials are largely CC0; the iD icon is a trademark of Orcid, Inc. whose Trademark & iD Display Guidelines explicitly invite use of the unmodified green iD icon to represent ORCID (used here solely to identify the ORCID integration; no endorsement implied).",
+          "URL": "https://info.orcid.org/brand-guidelines"
+        },
         "AuthFlow": "oauth2-cc",
         "AuthHeaderPattern": "Authorization: Bearer <token>",
         "AuthScope": "/read-public",

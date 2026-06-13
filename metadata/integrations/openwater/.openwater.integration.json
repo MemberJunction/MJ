@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "OpenWater",
+      "Icon": "fa-solid fa-trophy",
       "ClassName": "OpenWaterConnector",
       "Description": "OpenWater awards/grants/abstracts/fellowship platform connector — pull-centric sync of programs, applications, users, invoices, judges, rounds and nested review objects via the OpenWater Public API v2 (REST, ClientKey + ApiKey headers).",
       "ImportPath": "@memberjunction/connector-openwater",
