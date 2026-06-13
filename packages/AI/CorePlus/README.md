@@ -154,6 +154,12 @@ params.override = {
     modelId: 'specific-model-id',
     vendorId: 'specific-vendor-id'
 };
+
+// Force the runner to credential-check EVERY candidate model-vendor combination
+// instead of short-circuiting at the first usable one. Default false — only enable
+// for diagnostics that need a complete per-candidate availability report, since it
+// runs a credential lookup for every configured model on the run.
+params.forceFullModelEvaluation = true;
 ```
 
 ### Agent Execution Parameters

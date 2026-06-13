@@ -189,8 +189,17 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get AgentNotes(): MJAIAgentNoteEntity[] { return this.Base.AgentNotes; }
     public get AgentExamples(): MJAIAgentExampleEntity[] { return this.Base.AgentExamples; }
     public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] { return this.Base.VendorTypeDefinitions; }
+    public get InferenceProviderTypeID(): string | undefined { return this.Base.InferenceProviderTypeID; }
+    public IsInferenceProvider(modelVendor: MJAIModelVendorEntity): boolean { return this.Base.IsInferenceProvider(modelVendor); }
     public get Vendors(): MJAIVendorEntity[] { return this.Base.Vendors; }
     public get ModelVendors(): MJAIModelVendorEntity[] { return this.Base.ModelVendors; }
+    // O(1) lookup indexes — delegated from AIEngineBase (see those getters for semantics)
+    public get ModelsByID(): Map<string, MJAIModelEntityExtended> { return this.Base.ModelsByID; }
+    public get VendorsByID(): Map<string, MJAIVendorEntity> { return this.Base.VendorsByID; }
+    public get ModelTypesByID(): Map<string, MJAIModelTypeEntity> { return this.Base.ModelTypesByID; }
+    public get ConfigurationsByID(): Map<string, MJAIConfigurationEntity> { return this.Base.ConfigurationsByID; }
+    public get ModelVendorsByModelID(): Map<string, MJAIModelVendorEntity[]> { return this.Base.ModelVendorsByModelID; }
+    public get PromptModelsByPromptID(): Map<string, MJAIPromptModelEntity[]> { return this.Base.PromptModelsByPromptID; }
     public get CredentialBindings(): MJAICredentialBindingEntity[] { return this.Base.CredentialBindings; }
     public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] { return this.Base.ClientToolDefinitions; }
     public get AgentClientTools(): MJAIAgentClientToolEntity[] { return this.Base.AgentClientTools; }
