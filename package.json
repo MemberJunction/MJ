@@ -11,6 +11,8 @@
     "packages/AI/Providers/*",
     "packages/AI/RealtimeBridge/*",
     "packages/AI/RealtimeBridge/Providers/*",
+    "packages/AI/RemoteBrowser/*",
+    "packages/AI/RemoteBrowser/Providers/*",
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
     "packages/AI/Vectors/Providers/*",
