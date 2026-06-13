@@ -2133,7 +2133,7 @@ export const MJAIAgentNoteSchema = z.object({
     ConsolidatedIntoNote: z.string().nullable().describe(`
         * * Field Name: ConsolidatedIntoNote
         * * Display Name: Consolidated Into Note Name
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(20)`),
     RootConsolidatedIntoNoteID: z.string().nullable().describe(`
         * * Field Name: RootConsolidatedIntoNoteID
         * * Display Name: Root Consolidated Note
@@ -7178,6 +7178,91 @@ export const MJAIPromptSchema = z.object({
 });
 
 export type MJAIPromptEntityType = z.infer<typeof MJAIPromptSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Remote Browser Providers
+ */
+export const MJAIRemoteBrowserProviderSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique backend name (e.g. Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Optional human-readable description of the backend / driver.`),
+    ProviderType: z.union([z.literal('SelfHost'), z.literal('Service')]).describe(`
+        * * Field Name: ProviderType
+        * * Display Name: Provider Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Service
+    * * Value List Type: List
+    * * Possible Values 
+    *   * SelfHost
+    *   * Service
+        * * Description: How the browser is hosted: SelfHost (MJ orchestrates a lightweight headless-Chrome container we connect to over CDP) or Service (a browser-as-a-service such as Browserbase/Steel/Browserless/Hyperbrowser exposes a CDP connect endpoint).`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(250)
+        * * Description: Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseRemoteBrowserProvider, DriverClass). MUST match the @RegisterClass key on the concrete provider driver.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Whether this backend is available for use. Disabled backends cannot start new remote-browser sessions.`),
+    SupportedFeatures: z.any().nullable().describe(`
+        * * Field Name: SupportedFeatures
+        * * Display Name: Supported Features
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures
+        * * Description: Strongly-typed JSON of the backend's supported features (the IRemoteBrowserProviderFeatures interface, bound via JSONType metadata): the universal CDP-control substrate (RawCdpControl), an optional provider-native AI-control harness (NativeAIControl, e.g. Browserbase Stagehand), LiveView, HumanTakeover, ScreenStreaming, and operational capabilities (Stealth, ProxyEgress, SessionRecording, PersistentContext, MultiTab, FileDownloads, CaptchaSolving). The engine gates optional driver calls on these flags; the base driver throws RemoteBrowserCapabilityNotSupportedError when a feature is claimed but unimplemented. Held as JSON so new features need no schema change. NULL/omitted = unsupported.`),
+    DefaultControlMode: z.union([z.literal('AgentOnly'), z.literal('Collaborative'), z.literal('ViewOnly')]).describe(`
+        * * Field Name: DefaultControlMode
+        * * Display Name: Default Control Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: AgentOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AgentOnly
+    *   * Collaborative
+    *   * ViewOnly
+        * * Description: Default control mode for channels using this backend, overridable per-channel and at runtime: AgentOnly (only the agent drives — e.g. a sales demo), ViewOnly (the agent drives while humans watch the live view but cannot take over), or Collaborative (a human can grab the wheel — e.g. a trainer agent that demonstrates then watches the user try). The backend must support the capabilities a mode requires (HumanTakeover for Collaborative, LiveView for ViewOnly/Collaborative).`),
+    ConfigSchema: z.string().nullable().describe(`
+        * * Field Name: ConfigSchema
+        * * Display Name: Config Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON Schema validating the backend Configuration and per-session remote-browser Config payloads.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Backend-level configuration JSON (e.g. API region, default Chrome container image for SelfHost, credential references resolved via the MJ credential system, egress proxy settings). Never store secrets inline.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIRemoteBrowserProviderEntityType = z.infer<typeof MJAIRemoteBrowserProviderSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Result Cache
@@ -34771,7 +34856,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     /**
     * * Field Name: ConsolidatedIntoNote
     * * Display Name: Consolidated Into Note Name
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(20)
     */
     get ConsolidatedIntoNote(): string | null {
         return this.Get('ConsolidatedIntoNote');
@@ -48375,6 +48460,305 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     */
     get RootResultSelectorPromptID(): string | null {
         return this.Get('RootResultSelectorPromptID');
+    }
+}
+
+
+/**
+ * Strongly-typed shape of `AIRemoteBrowserProvider.SupportedFeatures` (the
+ * `MJ: AI Remote Browser Providers` entity), bound to the column via JSONType metadata so
+ * CodeGen emits a typed accessor.
+ *
+ * A *remote browser provider* is a backend that hosts a real, live browser the Remote Browser
+ * channel drives while an agent talks — self-hosted headless Chrome (MJ orchestrates a
+ * lightweight container) or a browser-as-a-service (Browserbase / Steel / Browserless /
+ * Hyperbrowser). Every backend sits on the SAME primitive: a Chrome DevTools Protocol (CDP)
+ * endpoint that `@memberjunction/computer-use` attaches to. These flags declare what each
+ * backend's driver supports. The Remote Browser engine **gates** every optional driver call on
+ * the matching flag; `BaseRemoteBrowserProvider` additionally throws
+ * `RemoteBrowserCapabilityNotSupportedError` if a feature is claimed here but the driver hasn't
+ * implemented it (defense-in-depth — exactly like the bridge `IBridgeProviderFeatures` model).
+ * All properties are optional — an omitted flag means the feature is **not** supported.
+ *
+ * Holding these as JSON (rather than dedicated BIT columns) keeps the table simple and lets new
+ * backend capabilities be added without a schema migration — just extend this interface.
+ *
+ * NOTE: control *mode* (AgentOnly / ViewOnly / Collaborative) is NOT a feature flag — it is a
+ * per-provider default (`DefaultControlMode`) plus a per-channel / runtime override. A mode only
+ * has to be *supported* by the underlying capabilities here (Collaborative needs
+ * {@link MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures.HumanTakeover}; ViewOnly/Collaborative need
+ * {@link MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures.LiveView}).
+ *
+ * See `/plans/realtime/realtime-bridges-architecture.md` (§4d).
+ */
+export interface MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures {
+    // ── Control substrate & strategies ──────────────────────────────────────────
+    /**
+     * The backend exposes a raw CDP endpoint MJ's computer-use layer connects to and drives
+     * directly. This is the UNIVERSAL substrate — every backend supports it — and the default
+     * control strategy: the realtime agent emits tool calls and our adapter executes DOM actions.
+     */
+    RawCdpControl?: boolean;
+    /**
+     * The backend offers a FIRST-PARTY AI-control harness invoked via its API (e.g. Browserbase
+     * Stagehand's act/extract/observe). An optional accelerator for heavy, robust, autonomous
+     * automation — the engine may delegate high-level intents to it where available and opted-in,
+     * instead of the default computer-use loop. (OSS Stagehand-over-CDP is a control *strategy*
+     * the engine can run over RawCdpControl on any backend; this flag is specifically a provider's
+     * own hosted harness.)
+     */
+    NativeAIControl?: boolean;
+
+    // ── Viewing & collaboration ─────────────────────────────────────────────────
+    /**
+     * The backend exposes a live-view stream / embeddable session URL so humans can watch the
+     * browser without MJ encoding frames itself. Required for ViewOnly and Collaborative modes.
+     */
+    LiveView?: boolean;
+    /**
+     * A human can take the wheel — their pointer/keyboard events route into the backend's browser.
+     * Required for Collaborative mode (e.g. a trainer agent: demonstrate, then "your turn").
+     */
+    HumanTakeover?: boolean;
+    /**
+     * A continuous video stream of the viewport is available (CDP `Page.startScreencast` for
+     * self-host, or the provider's live-view stream) — the source for the channel's ScreenOut
+     * track when screen-sharing the browser into a meeting.
+     */
+    ScreenStreaming?: boolean;
+
+    // ── Operational capabilities ────────────────────────────────────────────────
+    /** Anti-bot stealth / fingerprint evasion for sites that block automation. */
+    Stealth?: boolean;
+    /** Outbound traffic routes through a (geo-)proxy / controlled egress. */
+    ProxyEgress?: boolean;
+    /** The backend records the session (video / trace) for later review. */
+    SessionRecording?: boolean;
+    /** Persistent browser profiles / authenticated contexts survive across sessions. */
+    PersistentContext?: boolean;
+    /** Multiple tabs / pages within one session. */
+    MultiTab?: boolean;
+    /** File downloads triggered in the browser are captured and retrievable. */
+    FileDownloads?: boolean;
+    /** Built-in CAPTCHA solving. */
+    CaptchaSolving?: boolean;
+}
+
+/**
+ * MJ: AI Remote Browser Providers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIRemoteBrowserProvider
+ * * Base View: vwAIRemoteBrowserProviders
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Remote Browser Providers')
+export class MJAIRemoteBrowserProviderEntity extends BaseEntity<MJAIRemoteBrowserProviderEntityType> {
+    /**
+    * Loads the MJ: AI Remote Browser Providers record from the database
+    * @param ID: string - primary key value to load the MJ: AI Remote Browser Providers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIRemoteBrowserProviderEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique backend name (e.g. Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Optional human-readable description of the backend / driver.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ProviderType
+    * * Display Name: Provider Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Service
+    * * Value List Type: List
+    * * Possible Values 
+    *   * SelfHost
+    *   * Service
+    * * Description: How the browser is hosted: SelfHost (MJ orchestrates a lightweight headless-Chrome container we connect to over CDP) or Service (a browser-as-a-service such as Browserbase/Steel/Browserless/Hyperbrowser exposes a CDP connect endpoint).
+    */
+    get ProviderType(): 'SelfHost' | 'Service' {
+        return this.Get('ProviderType');
+    }
+    set ProviderType(value: 'SelfHost' | 'Service') {
+        this.Set('ProviderType', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(250)
+    * * Description: Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseRemoteBrowserProvider, DriverClass). MUST match the @RegisterClass key on the concrete provider driver.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Whether this backend is available for use. Disabled backends cannot start new remote-browser sessions.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: SupportedFeatures
+    * * Display Name: Supported Features
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures
+    * * Description: Strongly-typed JSON of the backend's supported features (the IRemoteBrowserProviderFeatures interface, bound via JSONType metadata): the universal CDP-control substrate (RawCdpControl), an optional provider-native AI-control harness (NativeAIControl, e.g. Browserbase Stagehand), LiveView, HumanTakeover, ScreenStreaming, and operational capabilities (Stealth, ProxyEgress, SessionRecording, PersistentContext, MultiTab, FileDownloads, CaptchaSolving). The engine gates optional driver calls on these flags; the base driver throws RemoteBrowserCapabilityNotSupportedError when a feature is claimed but unimplemented. Held as JSON so new features need no schema change. NULL/omitted = unsupported.
+    */
+    get SupportedFeatures(): string | null {
+        return this.Get('SupportedFeatures');
+    }
+    set SupportedFeatures(value: string | null) {
+        this.Set('SupportedFeatures', value);
+    }
+
+    private _SupportedFeaturesObject_cached: MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures | null | undefined = undefined;
+    private _SupportedFeaturesObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for SupportedFeatures — returns parsed JSON as MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get SupportedFeaturesObject(): MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures | null {
+        const raw = this.SupportedFeatures;
+        if (raw !== this._SupportedFeaturesObject_lastRaw) {
+            this._SupportedFeaturesObject_cached = raw ? JSON.parse(raw) : null;
+            this._SupportedFeaturesObject_lastRaw = raw;
+        }
+        return this._SupportedFeaturesObject_cached!;
+    }
+    set SupportedFeaturesObject(value: MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.SupportedFeatures = raw;
+        this._SupportedFeaturesObject_cached = value;
+        this._SupportedFeaturesObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: DefaultControlMode
+    * * Display Name: Default Control Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: AgentOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AgentOnly
+    *   * Collaborative
+    *   * ViewOnly
+    * * Description: Default control mode for channels using this backend, overridable per-channel and at runtime: AgentOnly (only the agent drives — e.g. a sales demo), ViewOnly (the agent drives while humans watch the live view but cannot take over), or Collaborative (a human can grab the wheel — e.g. a trainer agent that demonstrates then watches the user try). The backend must support the capabilities a mode requires (HumanTakeover for Collaborative, LiveView for ViewOnly/Collaborative).
+    */
+    get DefaultControlMode(): 'AgentOnly' | 'Collaborative' | 'ViewOnly' {
+        return this.Get('DefaultControlMode');
+    }
+    set DefaultControlMode(value: 'AgentOnly' | 'Collaborative' | 'ViewOnly') {
+        this.Set('DefaultControlMode', value);
+    }
+
+    /**
+    * * Field Name: ConfigSchema
+    * * Display Name: Config Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON Schema validating the backend Configuration and per-session remote-browser Config payloads.
+    */
+    get ConfigSchema(): string | null {
+        return this.Get('ConfigSchema');
+    }
+    set ConfigSchema(value: string | null) {
+        this.Set('ConfigSchema', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Backend-level configuration JSON (e.g. API region, default Chrome container image for SelfHost, credential references resolved via the MJ credential system, egress proxy settings). Never store secrets inline.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 

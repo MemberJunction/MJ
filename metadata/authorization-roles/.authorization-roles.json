@@ -46,6 +46,13 @@
       "AuthorizationID": "@lookup:MJ: Authorizations.Name=Realtime: Advanced Bridge Controls",
       "RoleID": "@lookup:MJ: Roles.Name=Developer",
       "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "61A1FB89-9643-4FB5-828B-89EE6E68E683"
+    },
+    "sync": {
+      "lastModified": "2026-06-13T11:33:54.859Z",
+      "checksum": "eab488741b67126efea252dd672a8cc31fa55350588380860d4a2b10fc803ed1"
     }
   }
 ]
