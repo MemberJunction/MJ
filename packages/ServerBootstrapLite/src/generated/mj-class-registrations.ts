@@ -764,7 +764,7 @@ import {
     YouTubeUploadVideoAction,
 } from '@memberjunction/actions-bizapps-social';
 
-// @memberjunction/core-entities-server (27 classes)
+// @memberjunction/core-entities-server (28 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -777,6 +777,7 @@ import {
     MJAIBridgeProviderEntityServer,
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
+    MJAIRemoteBrowserProviderEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
@@ -1633,6 +1634,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIBridgeProviderEntityServer,
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
+    MJAIRemoteBrowserProviderEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
@@ -1855,7 +1857,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 796;
+export const CLASS_REGISTRATIONS_COUNT = 797;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

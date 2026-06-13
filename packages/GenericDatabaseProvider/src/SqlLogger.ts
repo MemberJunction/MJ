@@ -279,12 +279,13 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       await this._fileHandle.close();
       this._fileHandle = null;
 
-      // Check if we should delete empty log files
+      // Check if we should delete empty log files. We delete silently — callers
+      // inspect `statementCount` to decide what (if anything) to report to the user.
+      // (Previously this emitted a raw console.log with an absolute path, bypassing
+      // the caller's logging callbacks and contradicting any later "log saved" line.)
       if (this._emittedStatementCount === 0 && !this.options.retainEmptyLogFiles) {
         try {
           await fs.promises.unlink(this.filePath);
-          // Log that we deleted the empty file (optional)
-          console.log(`Deleted empty SQL log file: ${this.filePath}`);
         } catch (error) {
           // Ignore errors during deletion (file might already be deleted, etc.)
           console.error(`Failed to delete empty SQL log file: ${this.filePath}`, error);

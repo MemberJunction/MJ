@@ -1,6 +1,7 @@
 ---
 "@memberjunction/core": minor
 "@memberjunction/core-entities": minor
+"@memberjunction/core-entities-server": minor
 "@memberjunction/server": minor
 "@memberjunction/computer-use": minor
 "@memberjunction/remote-browser-base": minor
