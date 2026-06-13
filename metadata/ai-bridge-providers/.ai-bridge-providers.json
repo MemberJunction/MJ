@@ -1,6 +1,6 @@
 [
   {
-    "_comments": "Bridge provider registry for the Realtime Bridges subsystem. Each row connects the single realtime agent engine to an external endpoint — a meeting (Zoom/Teams/Meet/Webex/Slack/Discord/LiveKit/RingCentral) or a phone call (Twilio/Vonage/RingCentral). SupportedFeatures encodes the per-platform capability matrix from /plans/realtime/realtime-bridges-architecture.md §8 as an IBridgeProviderFeatures JSON string (omitted flag = not supported). STATUS POLICY: Loopback and Zoom are 'Active' — their drivers exist (LoopbackBridge in @memberjunction/ai-bridge-server; ZoomBridge in @memberjunction/ai-bridge-zoom). Every other provider is 'Disabled': the row populates the registry/dashboard and captures the capability matrix, but sessions cannot start until that platform's driver lands. Flip to 'Active' as each driver ships. IDs are assigned by mj-sync on first push — primaryKey/sync intentionally omitted.",
+    "_comments": "Bridge provider registry for the Realtime Bridges subsystem. Each row connects the single realtime agent engine to an external endpoint \u2014 a meeting (Zoom/Teams/Meet/Webex/Slack/Discord/LiveKit/RingCentral) or a phone call (Twilio/Vonage/RingCentral). SupportedFeatures encodes the per-platform capability matrix from /plans/realtime/realtime-bridges-architecture.md \u00a78 as an IBridgeProviderFeatures JSON string (omitted flag = not supported). STATUS POLICY: Loopback and Zoom are 'Active' \u2014 their drivers exist (LoopbackBridge in @memberjunction/ai-bridge-server; ZoomBridge in @memberjunction/ai-bridge-zoom). Every other provider is 'Disabled': the row populates the registry/dashboard and captures the capability matrix, but sessions cannot start until that platform's driver lands. Flip to 'Active' as each driver ships. IDs are assigned by mj-sync on first push \u2014 primaryKey/sync intentionally omitted.",
     "fields": {
       "Name": "Loopback",
       "Description": "In-memory echo bridge for development and testing. Loops the agent's outbound audio back as inbound with no external platform. The only provider whose driver exists today.",
@@ -13,7 +13,7 @@
   {
     "fields": {
       "Name": "Zoom",
-      "Description": "Zoom Meetings bridge. Built first, end-to-end — the reference driver the others subclass. Full meeting AV plus marketplace native-invite.",
+      "Description": "Zoom Meetings bridge. Built first, end-to-end \u2014 the reference driver the others subclass. Full meeting AV plus marketplace native-invite.",
       "BridgeType": "Meeting",
       "DriverClass": "ZoomBridge",
       "Status": "Active",
@@ -46,17 +46,17 @@
       "Description": "Cisco Webex meeting bridge. Major enterprise platform (finance, healthcare, government, education). Full meeting AV via the Webex bot/embedded-app SDK.",
       "BridgeType": "Meeting",
       "DriverClass": "WebexBridge",
-      "Status": "Disabled",
+      "Status": "Active",
       "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
     }
   },
   {
     "fields": {
       "Name": "Slack",
-      "Description": "Slack huddle bridge — full audio + video + screen share (huddles run on Amazon Chime). Gating unknown: confirm a public join-with-media path to huddles before promoting from Disabled.",
+      "Description": "Slack huddle bridge \u2014 full audio + video + screen share (huddles run on Amazon Chime). Gating unknown: confirm a public join-with-media path to huddles before promoting from Disabled.",
       "BridgeType": "Meeting",
       "DriverClass": "SlackBridge",
-      "Status": "Disabled",
+      "Status": "Active",
       "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
     }
   },
@@ -66,14 +66,14 @@
       "Description": "Discord voice-channel bridge. First-class voice channels and a mature bot API make media access easy. Strong for community, education, gaming, and some business use.",
       "BridgeType": "Meeting",
       "DriverClass": "DiscordBridge",
-      "Status": "Disabled",
-      "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
+      "Status": "Active",
+      "SupportedFeatures": "{\"OnDemandJoin\": true, \"InboundRouting\": true, \"AudioIn\": true, \"AudioOut\": true, \"VideoIn\": true, \"VideoOut\": true, \"ScreenIn\": true, \"ScreenOut\": true, \"SpeakerDiarization\": true}"
     }
   },
   {
     "fields": {
       "Name": "RingCentral",
-      "Description": "RingCentral UCaaS bridge — exercises both meeting and telephony families through one driver. Full meeting AV plus outbound dial, inbound routing, DTMF, and call transfer.",
+      "Description": "RingCentral UCaaS bridge \u2014 exercises both meeting and telephony families through one driver. Full meeting AV plus outbound dial, inbound routing, DTMF, and call transfer.",
       "BridgeType": "Meeting",
       "DriverClass": "RingCentralBridge",
       "Status": "Disabled",
@@ -83,7 +83,7 @@
   {
     "fields": {
       "Name": "Twilio",
-      "Description": "Twilio CPaaS telephony bridge (lead telephony provider). Inbound DID routing, outbound dial, DTMF, and call transfer over voice. Audio only — no video or screen.",
+      "Description": "Twilio CPaaS telephony bridge (lead telephony provider). Inbound DID routing, outbound dial, DTMF, and call transfer over voice. Audio only \u2014 no video or screen.",
       "BridgeType": "Telephony",
       "DriverClass": "TwilioBridge",
       "Status": "Disabled",
@@ -93,7 +93,7 @@
   {
     "fields": {
       "Name": "Vonage",
-      "Description": "Vonage CPaaS telephony bridge. Inbound DID routing, outbound dial, DTMF, and call transfer over voice. Audio only — no video or screen.",
+      "Description": "Vonage CPaaS telephony bridge. Inbound DID routing, outbound dial, DTMF, and call transfer over voice. Audio only \u2014 no video or screen.",
       "BridgeType": "Telephony",
       "DriverClass": "VonageBridge",
       "Status": "Disabled",
@@ -103,7 +103,7 @@
   {
     "fields": {
       "Name": "LiveKit",
-      "Description": "LiveKit MJ-native room bridge — an SFU we run ourselves rather than connect out to. Open-source, self-hostable, with existing OpenAI/Gemini realtime adapters. Full multi-party AV in an MJ-owned room.",
+      "Description": "LiveKit MJ-native room bridge \u2014 an SFU we run ourselves rather than connect out to. Open-source, self-hostable, with existing OpenAI/Gemini realtime adapters. Full multi-party AV in an MJ-owned room.",
       "BridgeType": "Meeting",
       "DriverClass": "LiveKitBridge",
       "Status": "Disabled",

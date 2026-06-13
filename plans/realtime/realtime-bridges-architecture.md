@@ -988,10 +988,15 @@ Every phase is "done" only when **all** of the following hold — this is baked 
       diarization + chat; hand-raise ⚠️). **26 tests.** Seed Active.
 - [x] `GoogleMeetBridge` (`@memberjunction/ai-bridge-googlemeet`, Meet Media API seam; no hand-raise/
       chat — handled as absent). **23 tests.** Seed Active.
-- [ ] `WebexBridge` · tests · guide entry.
-- [ ] `SlackBridge` (full-AV huddle; media API is the gating unknown) · tests · guide entry.
-- [ ] `DiscordBridge` · tests · guide entry.
-- [ ] **Quality bar** after each driver (repo tests green before moving on).
+- [x] `WebexBridge` (`@memberjunction/ai-bridge-webex`, Webex Meetings SDK/xAPI seam; on-demand+
+      scheduled+invite, inbound, A/V/screen, diarization, chat; no native-invite). **26 tests.** Active.
+- [x] `SlackBridge` (`@memberjunction/ai-bridge-slack`, huddle seam; full AV). **29 tests.** Active.
+      ⚠️ **Real-API risk flagged in 4 places**: Slack publishes no documented bot-join-with-media path
+      for huddles (Chime-level integration may be required) — verify before production use.
+- [x] `DiscordBridge` (`@memberjunction/ai-bridge-discord`, @discordjs/voice seam; voice-channel based —
+      on-demand+inbound, per-user diarization, video/screen, chat; NO scheduled/invite/hand-raise).
+      **27 tests.** Active; seed features corrected to voice-channel reality.
+- [x] **Quality bar** after each driver (full repo build + tests green).
 
 ### Phase 6 — Telephony: RingCentral → Twilio → Vonage
 - [ ] `BaseTelephonyBridge` (dial/accept/DTMF/transfer capability methods).
