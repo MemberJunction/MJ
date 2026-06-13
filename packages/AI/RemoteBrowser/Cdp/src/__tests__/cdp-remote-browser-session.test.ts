@@ -1,0 +1,199 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+    IRemoteBrowserProviderFeatures,
+    RemoteBrowserActionResult,
+    RemoteBrowserCapabilityNotSupportedError,
+    RemoteBrowserScreencastFrame,
+} from '@memberjunction/remote-browser-base';
+import { ActionExecutionResult, ClickAction, ScreencastFrame } from '@memberjunction/computer-use';
+import { CdpRemoteBrowserSession } from '../cdp-remote-browser-session';
+import { FakeCdpSessionBackend, FakePlaywrightBrowserAdapter } from './fakes';
+
+/** Builds a session over fresh fakes with the given feature flags. */
+function buildSession(
+    features: IRemoteBrowserProviderFeatures,
+): {
+    session: CdpRemoteBrowserSession;
+    adapter: FakePlaywrightBrowserAdapter;
+    backend: FakeCdpSessionBackend;
+} {
+    const adapter = new FakePlaywrightBrowserAdapter();
+    const backend = new FakeCdpSessionBackend();
+    const session = new CdpRemoteBrowserSession(
+        adapter,
+        'ws://cdp.test/endpoint',
+        features,
+        backend,
+        'FakeProvider',
+    );
+    return { session, adapter, backend };
+}
+
+describe('CdpRemoteBrowserSession — core', () => {
+    let adapter: FakePlaywrightBrowserAdapter;
+    let backend: FakeCdpSessionBackend;
+    let session: CdpRemoteBrowserSession;
+
+    beforeEach(() => {
+        ({ session, adapter, backend } = buildSession({}));
+    });
+
+    it('GetCdpEndpoint returns the endpoint it was constructed with', () => {
+        expect(session.GetCdpEndpoint()).toBe('ws://cdp.test/endpoint');
+    });
+
+    it('Navigate delegates to the adapter and reports success + current URL', async () => {
+        adapter.CurrentUrlValue = 'https://landed.test/';
+        const result = await session.Navigate('https://go.test/');
+        expect(adapter.NavigatedUrls).toEqual(['https://go.test/']);
+        expect(result).toEqual<RemoteBrowserActionResult>({
+            Success: true,
+            CurrentUrl: 'https://landed.test/',
+        });
+    });
+
+    it('Navigate maps an adapter failure to a failed result with Detail', async () => {
+        adapter.NavigateError = new Error('boom');
+        const result = await session.Navigate('https://go.test/');
+        expect(result.Success).toBe(false);
+        expect(result.Detail).toBe('boom');
+    });
+
+    it('ExecuteAction maps the Base action through and maps the result back', async () => {
+        adapter.CurrentUrlValue = 'https://after.test/';
+        const failure = new ActionExecutionResult(new ClickAction());
+        failure.Success = false;
+        failure.Error = 'element not found';
+        adapter.NextExecuteResult = failure;
+
+        const result = await session.ExecuteAction({ Kind: 'click', Selector: '#x' });
+
+        // The mapped computer-use action reached the adapter.
+        expect(adapter.ExecutedActions[0]).toBeInstanceOf(ClickAction);
+        expect((adapter.ExecutedActions[0] as ClickAction).Selector).toBe('#x');
+        // The result was mapped back to the Base shape with the current URL and error detail.
+        expect(result).toEqual<RemoteBrowserActionResult>({
+            Success: false,
+            CurrentUrl: 'https://after.test/',
+            Detail: 'element not found',
+        });
+    });
+
+    it('CaptureScreenshot delegates to the adapter', async () => {
+        expect(await session.CaptureScreenshot()).toBe('BASE64SCREENSHOT');
+    });
+
+    it('GetCurrentUrl reads the adapter URL', () => {
+        adapter.CurrentUrlValue = 'https://now.test/';
+        expect(session.GetCurrentUrl()).toBe('https://now.test/');
+    });
+
+    it('Close closes the adapter then releases the backend', async () => {
+        await session.Close();
+        expect(adapter.CloseCount).toBe(1);
+        expect(backend.ReleaseCount).toBe(1);
+    });
+
+    it('Close still releases the backend even when adapter.Close throws', async () => {
+        adapter.CloseError = new Error('close failed');
+        await session.Close();
+        expect(backend.ReleaseCount).toBe(1);
+    });
+});
+
+describe('CdpRemoteBrowserSession — capability gating (flags OFF → throw)', () => {
+    let session: CdpRemoteBrowserSession;
+
+    beforeEach(() => {
+        ({ session } = buildSession({}));
+    });
+
+    it('StartScreencast throws when ScreenStreaming is off', async () => {
+        await expect(session.StartScreencast(() => undefined)).rejects.toBeInstanceOf(
+            RemoteBrowserCapabilityNotSupportedError,
+        );
+    });
+
+    it('StopScreencast throws when ScreenStreaming is off', async () => {
+        await expect(session.StopScreencast()).rejects.toBeInstanceOf(
+            RemoteBrowserCapabilityNotSupportedError,
+        );
+    });
+
+    it('RouteHumanInput throws when HumanTakeover is off', () => {
+        expect(() => session.RouteHumanInput({ Kind: 'pointer-move', X: 1, Y: 1 })).toThrow(
+            RemoteBrowserCapabilityNotSupportedError,
+        );
+    });
+
+    it('GetLiveViewUrl throws when LiveView is off', async () => {
+        await expect(session.GetLiveViewUrl()).rejects.toBeInstanceOf(
+            RemoteBrowserCapabilityNotSupportedError,
+        );
+    });
+
+    it('InvokeNativeAIControl throws when NativeAIControl is off', async () => {
+        await expect(session.InvokeNativeAIControl('do it')).rejects.toBeInstanceOf(
+            RemoteBrowserCapabilityNotSupportedError,
+        );
+    });
+});
+
+describe('CdpRemoteBrowserSession — capability gating (flags ON → delegate)', () => {
+    it('StartScreencast delegates and maps frames; StopScreencast delegates', async () => {
+        const { session, adapter } = buildSession({ ScreenStreaming: true });
+        const received: RemoteBrowserScreencastFrame[] = [];
+
+        await session.StartScreencast((frame) => received.push(frame));
+        expect(adapter.StartScreencastCount).toBe(1);
+        expect(adapter.LastOnFrame).not.toBeNull();
+
+        // Drive a computer-use frame through the captured callback and confirm the mapping.
+        const cuFrame = new ScreencastFrame();
+        cuFrame.DataBase64 = 'FRAME';
+        cuFrame.Width = 640;
+        cuFrame.Height = 480;
+        cuFrame.SequenceNumber = 7;
+        adapter.LastOnFrame?.(cuFrame);
+
+        expect(received).toEqual<RemoteBrowserScreencastFrame[]>([
+            { DataBase64: 'FRAME', Width: 640, Height: 480, SequenceNumber: 7 },
+        ]);
+
+        await session.StopScreencast();
+        expect(adapter.StopScreencastCount).toBe(1);
+    });
+
+    it('RouteHumanInput delegates a mapped action to the adapter (fire-and-forget)', async () => {
+        const { session, adapter } = buildSession({ HumanTakeover: true });
+        session.RouteHumanInput({ Kind: 'pointer-click', X: 9, Y: 9, Button: 'middle' });
+        // Allow the fire-and-forget microtask to settle.
+        await Promise.resolve();
+        expect(adapter.ExecutedActions[0]).toBeInstanceOf(ClickAction);
+        const click = adapter.ExecutedActions[0] as ClickAction;
+        expect(click.X).toBe(9);
+        expect(click.Button).toBe('middle');
+    });
+
+    it('RouteHumanInput swallows an adapter rejection (does not throw)', async () => {
+        const { session, adapter } = buildSession({ HumanTakeover: true });
+        adapter.ExecuteError = new Error('input dropped');
+        expect(() => session.RouteHumanInput({ Kind: 'key', Key: 'A' })).not.toThrow();
+        await Promise.resolve();
+    });
+
+    it('GetLiveViewUrl delegates to the backend', async () => {
+        const { session, backend } = buildSession({ LiveView: true });
+        backend.LiveViewUrl = 'https://live.test/view';
+        expect(await session.GetLiveViewUrl()).toBe('https://live.test/view');
+        expect(backend.GetLiveViewUrlCount).toBe(1);
+    });
+
+    it('InvokeNativeAIControl delegates the intent to the backend', async () => {
+        const { session, backend } = buildSession({ NativeAIControl: true });
+        backend.NativeAIResult = { Success: true, CurrentUrl: 'https://done.test/' };
+        const result = await session.InvokeNativeAIControl('log in');
+        expect(backend.InvokedIntents).toEqual(['log in']);
+        expect(result.Success).toBe(true);
+    });
+});
