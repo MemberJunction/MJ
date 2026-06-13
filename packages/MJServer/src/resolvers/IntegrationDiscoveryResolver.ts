@@ -1212,6 +1212,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     async IntegrationRefreshConnectorSchema(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK convention hint (e.g. 'id' for HubSpot)" }) universalPKConvention: string | undefined,
+        @Arg("deactivateAbsent", { nullable: true, description: "Comprehensive refresh (default true): objects/fields ABSENT from this discovery are deactivated (Status='Disabled', never deleted, reversible on a later rediscovery). Pass false for a scoped/partial discovery so it never disables what it didn't probe." }) deactivateAbsent: boolean | undefined,
         @Ctx() ctx: AppContext
     ): Promise<RefreshConnectorSchemaOutput> {
         try {
@@ -1232,6 +1233,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 UniversalPKConvention: universalPKConvention || undefined,
                 ConsoleMirror: true,
                 TriggerType: 'Manual' as const,
+                // §7 — explicit RefreshConnectorSchema is a comprehensive re-discovery: default to
+                // deactivating objects/fields the source no longer exposes (reversible). Caller can opt out.
+                DeactivateAbsent: deactivateAbsent ?? true,
             };
             const result = await pipeline.Run(runOpts as unknown as Parameters<typeof pipeline.Run>[0]);
 

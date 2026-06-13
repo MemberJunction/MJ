@@ -795,6 +795,19 @@ export abstract class BaseIntegrationConnector {
      * @param options - Optional filter to restrict introspection to a subset of objects
      * @returns Full schema info for all (or the requested subset of) source objects
      */
+    /**
+     * §7 — does this connector's discovery (DiscoverObjects/DiscoverFields → IntrospectSchema) return the
+     * AUTHORITATIVE, COMPLETE gamut of objects/fields the credentials expose? Default **false** (safe):
+     * a connector must explicitly affirm this. Override to `true` ONLY when DiscoverObjects hits a real
+     * list/describe endpoint that returns EVERYTHING accessible — so an object/field absent from a refresh
+     * genuinely means the source dropped it (and may be deactivated). Leave false for stubbed discovery
+     * (returns nothing → static metadata is all we have), a cache-driven IntrospectSchema, or any
+     * partial/scoped enumeration — there, absence proves nothing and MUST NOT deactivate.
+     */
+    public get DiscoveryIsAuthoritative(): boolean {
+        return false;
+    }
+
     public async IntrospectSchema(
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo,
@@ -805,7 +818,9 @@ export abstract class BaseIntegrationConnector {
             ? new Set(options.ObjectNames)
             : null;
         const objects = wanted ? allObjects.filter(o => wanted.has(o.Name)) : allObjects;
-        const result: SourceSchemaInfo = { Objects: [] };
+        // §7 — a SCOPED introspection (ObjectNames filter) is never authoritative over the whole surface,
+        // so it can never drive deactivation even if the connector affirms authoritative discovery.
+        const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: this.DiscoveryIsAuthoritative && !wanted };
 
         // Parallel describe via the SAME control law the sync engine uses for its layers —
         // `RunAdaptive` + `AdaptiveConcurrencyController` (AIMD). Discovery IS the sync read path with

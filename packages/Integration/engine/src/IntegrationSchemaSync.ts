@@ -274,11 +274,13 @@ export class IntegrationSchemaSync {
       result.FieldMergeLog.push(...fr.logs);
     }
 
-    // Phase 3 (gated): deactivate phantom objects — declared IOs ABSENT from this discovery so
-    // ApplyAll never materializes a table for them (the phantom-table / advancedGen-cost problem).
-    // Only runs under DeactivateAbsent (a comprehensive refresh that probed every object); a
-    // requested-subset run must not deactivate objects it never checked. Deactivate, never delete.
-    if (opts.DeactivateAbsent) {
+    // Phase 3 (gated): deactivate phantom objects/fields — declared IOs/IOFs ABSENT from this discovery,
+    // so ApplyAll never materializes them (the phantom-table / advancedGen-cost problem). Runs ONLY when
+    // BOTH (a) the caller requested it (DeactivateAbsent) AND (b) the discovery is AUTHORITATIVE — it
+    // enumerated the FULL gamut the credentials expose (SourceSchema.IsAuthoritative). A stubbed/empty or
+    // cache-driven discovery has IsAuthoritative=false, so absence proves NOTHING and nothing is disabled
+    // (else it would wrongly wipe the Declared metadata that is the only source). Deactivate, never delete.
+    if (opts.DeactivateAbsent && SourceSchema.IsAuthoritative) {
       const discovered = new Set(SourceSchema.Objects.map((o) => o.ExternalName.toLowerCase()));
       let deactivated = 0;
       for (const io of engine.GetActiveIntegrationObjects(IntegrationID)) {
@@ -293,6 +295,34 @@ export class IntegrationSchemaSync {
       if (deactivated > 0)
         console.log(
           `[IntegrationSchemaSync] Deactivated ${deactivated} phantom object(s) absent from discovery for ${IntegrationID} (not materialized, not deleted).`,
+        );
+
+      // §7 FIELD-LEVEL: for each DISCOVERED object (we saw its fields, so absence IS authoritative),
+      // deactivate its active fields ABSENT from the discovered field set. Objects NOT discovered were
+      // deactivated wholesale above — we skip their fields. An object discovered with ZERO fields is
+      // NOT authoritative (DiscoverFields found nothing for it) — skip, never wipe its columns.
+      let fieldsDeactivated = 0;
+      for (const r of objectResults) {
+        if (!r.ObjectID) continue;
+        const discoveredFieldNames = new Set(r.srcObj.Fields.map((f) => f.Name.toLowerCase()));
+        if (discoveredFieldNames.size === 0) continue;
+        for (const iof of engine.GetIntegrationObjectFields(r.ObjectID)) {
+          if (iof.Status !== 'Active') continue;
+          if (discoveredFieldNames.has(iof.Name.toLowerCase())) continue;
+          const f = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', ContextUser);
+          if (await f.InnerLoad(CompositeKey.FromID(iof.ID))) {
+            f.Status = 'Disabled'; // deactivate, never delete
+            if (await f.Save()) fieldsDeactivated++;
+            else
+              LogError(
+                `[IntegrationSchemaSync] Failed to deactivate phantom field '${iof.Name}' on object ${r.ObjectID}: ${f.LatestResult?.CompleteMessage ?? 'unknown'}`,
+              );
+          }
+        }
+      }
+      if (fieldsDeactivated > 0)
+        console.log(
+          `[IntegrationSchemaSync] Deactivated ${fieldsDeactivated} phantom field(s) absent from discovery for ${IntegrationID} (not materialized, not deleted).`,
         );
     }
 
@@ -361,6 +391,15 @@ export class IntegrationSchemaSync {
         existing.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
         dirty = true;
         changes.push('IncrementalWatermarkField');
+      }
+      // §7 REACTIVATE-on-rediscover: an object the source dropped (and we Disabled) that REAPPEARS in a
+      // later discovery flips back to Active — deactivation is reversible, the active set always tracks
+      // the live source. Matched against ALL rows (GetIntegrationObjectsByIntegrationID), so a Disabled
+      // row is found and reactivated rather than duplicated (UQ_IntegrationObject_Name).
+      if (existing.Status !== 'Active') {
+        existing.Status = 'Active';
+        dirty = true;
+        changes.push('Status:reactivated');
       }
       if (dirty) {
         try {
@@ -473,6 +512,12 @@ export class IntegrationSchemaSync {
       // attribute so the caller (progress emitter, UI) can show structural
       // transparency on the merge.
       let dirty = false;
+      // §7 REACTIVATE-on-rediscover: a field the source dropped (and we Disabled) that REAPPEARS flips
+      // back to Active. existingFields includes Disabled rows, so it is reactivated, not duplicated.
+      if (existing.Status !== 'Active') {
+        existing.Status = 'Active';
+        dirty = true;
+      }
       const mappedType = MapSourceType(srcField.SourceType);
       const describedAllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
 

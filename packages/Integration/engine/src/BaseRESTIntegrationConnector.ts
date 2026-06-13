@@ -273,7 +273,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     ): Promise<SourceSchemaInfo> {
         const integrationID = companyIntegration.IntegrationID;
         const objects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
-        const result: SourceSchemaInfo = { Objects: [] };
+        // §7 — CACHE-DRIVEN IntrospectSchema (re-reads persisted ACTIVE metadata, not a live source
+        // enumeration): NEVER authoritative for deactivation — it can only return what is already Active.
+        // A REST connector doing genuine live full-gamut discovery must override IntrospectSchema +
+        // DiscoveryIsAuthoritative itself.
+        const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: false };
 
         for (const obj of objects) {
             const fields = this.GetCachedFields(obj.ID);

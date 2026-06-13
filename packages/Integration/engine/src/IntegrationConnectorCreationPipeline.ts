@@ -51,6 +51,13 @@ export interface ConnectorCreationPipelineOptions {
     RunID?: string;
     /** Trigger reason recorded in the manifest. */
     TriggerType?: 'Manual' | 'Scheduled' | 'Webhook' | 'Pipeline' | 'Restart';
+    /**
+     * §7 — when true, this is a COMPREHENSIVE re-discovery: declared/discovered objects (and their
+     * fields) ABSENT from this run are deactivated (Status='Disabled', never deleted; reversible on a
+     * later rediscovery). Only set on a full-surface refresh — a scoped/partial discovery must leave it
+     * false so it never disables what it didn't look at. Threaded to PersistDiscoveredSchema.
+     */
+    DeactivateAbsent?: boolean;
 }
 
 /** Outcome of a single pipeline invocation. */
@@ -342,6 +349,8 @@ export class IntegrationConnectorCreationPipeline {
             ContextUser: opts.ContextUser,
             Provider: opts.Provider,
             UseTransactionGroup: true,
+            // §7 comprehensive-refresh deactivation (objects + fields absent from this discovery).
+            DeactivateAbsent: opts.DeactivateAbsent ?? false,
         });
 
         // Emit per-object + per-field structural-transparency events so the UI/audit

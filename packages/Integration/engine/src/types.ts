@@ -325,6 +325,17 @@ export interface IntegrationSyncOptions {
 export interface SourceSchemaInfo {
     /** All objects (tables, API entities) discovered in the source system. */
     Objects: SourceObjectInfo[];
+    /**
+     * §7 — TRUE only when this schema is an AUTHORITATIVE live enumeration of the FULL gamut the
+     * credentials expose (a real list/describe endpoint that returns everything accessible). When true,
+     * a comprehensive refresh may DEACTIVATE declared/discovered objects/fields ABSENT from it (the
+     * source genuinely dropped them). When false/undefined — the default, and the case for stubbed
+     * discovery (`DiscoverObjects` returns nothing) or a CACHE-DRIVEN IntrospectSchema (which just
+     * re-reads persisted metadata) or any partial/scoped discovery — deactivation is FORBIDDEN, because
+     * absence proves nothing and would wrongly wipe the Declared metadata that is the only source.
+     * Set by the connector's `DiscoveryIsAuthoritative` getter; never assume true.
+     */
+    IsAuthoritative?: boolean;
 }
 
 /** Options controlling scope of IntrospectSchema. */
