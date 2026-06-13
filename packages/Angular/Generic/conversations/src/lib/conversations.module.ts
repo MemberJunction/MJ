@@ -70,7 +70,6 @@ import { GlobalTasksPanelComponent } from './components/global-tasks/global-task
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
 import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
 import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.component';
-import { RealtimeCallOverlayComponent } from './components/realtime/realtime-call-overlay.component';
 import { RealtimeAgentPickerComponent } from './components/realtime/realtime-agent-picker.component';
 import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
 import { RealtimeWhiteboardHostComponent } from '@memberjunction/ng-whiteboard';
@@ -185,7 +184,6 @@ const COMPONENTS = [
     MJChatDemonstrationSurfaceDefaultComponent,
     MJChatMessageBubbleDefaultComponent,
     // Realtime / voice (PR #2787)
-    RealtimeCallOverlayComponent,
     RealtimeAgentPickerComponent,
     RealtimeSessionOverlayComponent,
     RealtimeWhiteboardHostComponent
@@ -204,7 +202,6 @@ const COMPONENTS = [
     MJChatDemonstrationSurfaceDefaultComponent,
     MJChatMessageBubbleDefaultComponent,
     // Realtime / voice (PR #2787)
-    RealtimeCallOverlayComponent,
     RealtimeAgentPickerComponent,
     RealtimeSessionOverlayComponent,
     RealtimeWhiteboardHostComponent

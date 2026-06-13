@@ -87,7 +87,6 @@ export * from './lib/components/slots/mj-chat-message-bubble-default.component';
 export * from './lib/events/chat-events';
 
 // Realtime / voice (PR #2787 — co-agent realtime sessions)
-export * from './lib/components/realtime/realtime-call-overlay.component';
 export * from './lib/components/realtime/realtime-agent-picker.component';
 // Real-time "call mode" overlay + its componentized parts
 export * from './lib/components/realtime/realtime-session-overlay.component';
