@@ -50,6 +50,7 @@ export type SyncLogEvent =
     | 'sync.record.decision'
     | 'sync.record.saved'
     | 'sync.record.error'
+    | 'sync.record.retry'
     | 'sync.record.archived'
     | 'sync.record.conflict'
     | 'sync.push.candidates'

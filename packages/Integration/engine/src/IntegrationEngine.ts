@@ -1535,12 +1535,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         let hasMore = true;
         let currentWatermark = initialWatermark;
-        // Safe-floor watermark for data-loss prevention: the high-water mark of the last FULLY-CLEAN batch
-        // (zero errored records). If any batch rolls back, we persist THIS instead of currentWatermark so the
-        // next incremental re-fetches the window covering the failed records (the idempotent upsert + content-
-        // hash skip then reconcile them). Without this, errored-then-rolled-back records fall below the saved
-        // watermark and are never re-fetched — silent permanent data loss.
-        let lastCleanWatermark = initialWatermark;
+        // §10 — the watermark ALWAYS advances to the max value seen on a clean fetch; it is NEVER held back
+        // by a per-record failure. A failed record is classified: a PROVABLY-TRANSIENT save error is retried
+        // inline within the batch (ApplyRecords); a PERMANENT (or retry-exhausted) failure is dead-lettered —
+        // counted errored, logged to result.Errors (queryable over GraphQL), and the sync moves on. Holding
+        // the watermark at the last-clean batch was the old safe-floor; it poison-pilled the stream when an
+        // EARLY record failed permanently (the whole window re-fetched + re-failed every run, watermark frozen
+        // at the start). Recovery for dead-lettered records is an operator-triggered full sync (which ignores
+        // the watermark). The run still reports Status='Failed' whenever ANY record errored.
         let recordsInMap = 0;
         let currentPage: number | undefined;
         let currentOffset: number | undefined;
@@ -1757,7 +1759,6 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 : await this.runWriteExclusive(() => this.matchEngine.Resolve(mapped, entityMap, fieldMaps, contextUser));
 
             const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
-            const erroredBeforeApply = result.RecordsErrored;
             try {
                 if (!partitionReconcile) await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser, logger, this.getSyncConcurrency(config) <= 1);
             } catch (applyErr) {
@@ -1812,10 +1813,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
 
             if (batch.NewWatermarkValue) {
-                currentWatermark = batch.NewWatermarkValue;
-                // Only raise the safe floor when this batch applied with ZERO errors. A batch that rolled back
-                // (RecordsErrored increased) must NOT advance the floor, so its records stay re-fetchable next run.
-                if (result.RecordsErrored === erroredBeforeApply) lastCleanWatermark = currentWatermark;
+                currentWatermark = batch.NewWatermarkValue;   // §10 — track the max seen; failures never hold it back
             }
             currentPage = batch.NextPage;
             currentOffset = batch.NextOffset;
@@ -1903,13 +1901,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // but at least a watermark row exists for bookkeeping.
             let finalWatermark: string;
             if (currentWatermark) {
-                // On an incremental where records errored, hold the watermark to the last fully-clean batch's
-                // value (the safe floor) so the next run re-fetches the failed window; the idempotent upsert +
-                // content-hash skip reconcile it. A full sync advances to wall-clock "now" — EXCEPT a connector
-                // whose watermark is a reliable monotonic max (MonotonicWatermark=true): for it, "now" in the
-                // source's OWN watermark format IS currentWatermark (the max seen), so advancing to that — not
-                // an ISO timestamp the connector can't compare against — lets the next incremental narrow.
-                const incrementalWatermark = result.RecordsErrored > 0 ? (lastCleanWatermark ?? currentWatermark) : currentWatermark;
+                // §10 — advance to the max watermark seen, ALWAYS. Errored records are dead-lettered (logged +
+                // counted), never held against the watermark — a permanently-failing record must not freeze the
+                // stream. A full sync advances to wall-clock "now" — EXCEPT a connector whose watermark is a
+                // reliable monotonic max (MonotonicWatermark=true): for it, "now" in the source's OWN watermark
+                // format IS currentWatermark (the max seen), so advancing to that — not an ISO timestamp the
+                // connector can't compare against — lets the next incremental narrow.
+                const incrementalWatermark = currentWatermark;
                 // D2 clock-skew safety net: a clean full sync advances to wall-clock "now", but if the source's
                 // own max watermark is AHEAD of our clock, advancing to "now" would skip the (now, sourceMax]
                 // window on the next incremental — so never advance the watermark below the max value seen.
@@ -2889,11 +2887,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     for (const record of batch) {
                         result.RecordsProcessed++;
                         try {
-                            await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds);
+                            // §10 — bounded inline retry for provably-transient save failures (auto-commit per
+                            // record, so no transaction to manage); permanent errors throw straight to dead-letter.
+                            await WithRetry(
+                                () => this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds),
+                                undefined,
+                                (e) => !(e instanceof SchemaNotGeneratedError) && IsRetryableError(ClassifyError(e).Code),
+                                (attempt, e, delayMs) => logger?.emit('sync.record.retry', {
+                                    phase: 'save',
+                                    externalObjectName: entityMap.ExternalObjectName,
+                                    externalId: record.ExternalRecord?.ExternalID ?? '',
+                                    attempt, delayMs, errorCode: ClassifyError(e).Code,
+                                }),
+                            );
                         } catch (err) {
                             if (err instanceof SchemaNotGeneratedError) {
                                 throw err;
                             }
+                            // §10 — permanent / retry-exhausted → dead-letter (count + log), move on; watermark advances regardless.
                             result.RecordsErrored++;
                             const classified = ClassifyError(err);
                             result.Errors.push({
@@ -2991,14 +3002,37 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const provider = this.ProviderToUse as DatabaseProviderBase;
 
         for (const record of batch) {
-            await provider.BeginTransaction();
+            result.RecordsProcessed++;
             try {
-                result.RecordsProcessed++;
-                await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds);
-                await provider.CommitTransaction();
+                // §10 — apply in its own transaction, with bounded inline retry for PROVABLY-TRANSIENT
+                // save failures (NETWORK_TIMEOUT / RATE_LIMIT_EXCEEDED / DATABASE_ERROR per IsRetryableError).
+                // Each attempt rolls back on throw so the next starts clean; a deadlock/momentary timeout
+                // self-heals here. A PERMANENT error (validation/FK/duplicate/config) is NOT retried — it
+                // throws straight out to the dead-letter path below.
+                await WithRetry(
+                    async () => {
+                        await provider.BeginTransaction();
+                        try {
+                            await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds);
+                            await provider.CommitTransaction();
+                        } catch (e) {
+                            await provider.RollbackTransaction();
+                            throw e;
+                        }
+                    },
+                    undefined,
+                    (err) => !(err instanceof SchemaNotGeneratedError) && IsRetryableError(ClassifyError(err).Code),
+                    (attempt, err, delayMs) => logger?.emit('sync.record.retry', {
+                        phase: 'save',
+                        externalObjectName: entityMap.ExternalObjectName,
+                        externalId: record.ExternalRecord.ExternalID,
+                        changeType: record.ChangeType,
+                        attempt,
+                        delayMs,
+                        errorCode: ClassifyError(err).Code,
+                    }),
+                );
             } catch (recErr) {
-                await provider.RollbackTransaction();
-
                 // A schema-not-generated failure on one record means EVERY record in this
                 // object will fail identically — bubble it up so the entityMap fail-stops
                 // once rather than emitting per-record duplicates for the whole batch.
@@ -3006,6 +3040,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     throw recErr;
                 }
 
+                // §10 — permanent (or retry-exhausted transient) failure → DEAD-LETTER: count it errored,
+                // log it (queryable over GraphQL), and move on. The watermark is NOT held back (it advances
+                // to max-seen regardless), so a permanently-bad record never poison-pills the stream; recovery
+                // is an operator-triggered full sync. The run still reports Status='Failed' (RecordsErrored>0).
                 const classified = ClassifyError(recErr);
                 const msg = recErr instanceof Error ? recErr.message : String(recErr);
                 result.RecordsErrored++;

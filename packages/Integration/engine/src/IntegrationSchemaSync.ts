@@ -1,4 +1,4 @@
-/**
+  /**
  * @fileoverview Persists dynamically discovered integration objects and fields
  * to the IntegrationObject / IntegrationObjectField tables.
  *
@@ -24,7 +24,6 @@ import type {
   MJActionCategoryEntity,
 } from '@memberjunction/core-entities';
 import type { SourceSchemaInfo, SourceObjectInfo, SourceFieldInfo } from './types';
-import { EnrichSchemaConstraints } from './EnrichSchemaConstraints.js';
 import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator';
 
 export interface PersistSchemaOptions {
@@ -243,11 +242,12 @@ export class IntegrationSchemaSync {
       FieldMergeLog: [],
     };
 
-    // Lightweight constraint discovery: deterministically infer the FKs the source
-    // did NOT declare (naming-based, provable-only) so discovered objects gain proper
-    // relationships before the Declared/Discovered merge below resolves them. No AI
-    // dependency — safe on AI-less BI instances.
-    EnrichSchemaConstraints.InferForeignKeys(SourceSchema.Objects);
+    // §D — NO runtime FK-from-stream inference. Foreign keys come ONLY from (a) declared metadata
+    // (the curated .<vendor>.integration.json) or (b) the connector's own DiscoverFields/DiscoverObjects
+    // (which read a real describe/schema endpoint and set IsForeignKey + ForeignKeyTarget). Discovery is a
+    // lightweight PK-only guess; a naming-heuristic FK guess over the sampled stream produced false edges that
+    // skewed the sync DAG, so it was removed. Whatever FK info SourceSchema.Objects already carries flows
+    // through the Declared/Discovered merge as-is. (EnrichSchemaConstraints remains exported for offline use.)
 
     // Load existing objects for this integration from cache
     const existingObjects = engine.GetIntegrationObjectsByIntegrationID(IntegrationID);

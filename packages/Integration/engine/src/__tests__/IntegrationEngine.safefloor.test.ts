@@ -18,29 +18,32 @@ import type { ExternalRecord } from '../types.js';
 import { IntegrationEngine } from '../IntegrationEngine.js';
 
 // ---------------------------------------------------------------------------
-// Critical audit bug #6 — safe-floor-on-error watermark.
+// §10 — watermark always advances; a failed RECORD is dead-lettered, never held.
 //
-// When an incremental pull has a CLEAN earlier batch followed by a LATER batch
-// that errors a record, the persisted incremental watermark MUST be held to the
-// last fully-clean batch's value (lastCleanWatermark) — NOT advanced to the
-// errored batch's watermark. Advancing past the failed window would drop the
-// errored records below the saved watermark, so the next incremental never
-// re-fetches them: silent permanent data loss.
+// REVERSES the former "safe-floor-on-error" rule (audit bug #6). When an
+// incremental pull has a CLEAN earlier batch followed by a LATER batch that
+// errors a record, the persisted incremental watermark now ADVANCES to the max
+// value seen (the errored batch's watermark) — it is NOT held back to the last
+// clean batch. The errored record is dead-lettered: counted RecordsErrored and
+// logged to result.Errors (queryable over GraphQL), and the sync moves on.
+//
+// Why the reversal: the old hold-back poison-pilled the stream when an EARLY
+// record failed permanently — the whole window re-fetched + re-failed every run,
+// the watermark frozen at the start, never advancing past 1 bad record even when
+// the other 999,999 succeeded. Holding for a permanently-recurring error is pure
+// waste. Transient save errors self-heal via the inline WithRetry in ApplyRecords;
+// permanent ones are accepted, surfaced, and recovered by an operator full sync
+// (fullSync ignores the watermark). The run still reports Status='Failed' on any
+// errored record.
 //
 // Source under test (IntegrationEngine.ts):
-//   - lastCleanWatermark init                                (~1197)
-//   - per-batch gate: only raise floor on a zero-error batch
-//       `if (result.RecordsErrored === erroredBeforeApply)`  (~1388)
-//   - final selection:
-//       `result.RecordsErrored > 0
-//           ? (lastCleanWatermark ?? currentWatermark)
-//           : currentWatermark`                              (~1459)
+//   - `currentWatermark = batch.NewWatermarkValue;` (max seen; no per-batch clamp)
+//   - final selection: `const incrementalWatermark = currentWatermark;`
+//   - dead-letter path in applyRecordsIndividually (count + log, no hold-back)
 //
-// This drives the REAL engine through its public RunSync() API. The harness is
-// copied from IntegrationEngine.test.ts (same mocks for core/global, same
-// connector + RunView shapes). The only new wrinkle is that we hand the engine
-// a PRE-EXISTING watermark row whose Save() captures whatever WatermarkValue the
-// engine decides to persist — that captured value is the assertion subject.
+// This drives the REAL engine through its public RunSync() API. We hand the
+// engine a PRE-EXISTING watermark row whose Save() captures whatever WatermarkValue
+// the engine decides to persist — that captured value is the assertion subject.
 // ---------------------------------------------------------------------------
 
 // A valid ISO-timestamp watermark for batch 1 (the clean batch). Because the
@@ -206,7 +209,7 @@ function createTwoBatchConnector(): { connector: BaseIntegrationConnector; fetch
     return { connector, fetchCalls: () => fetchCallCount };
 }
 
-describe('IntegrationEngine — safe-floor-on-error watermark (audit bug #6)', () => {
+describe('IntegrationEngine — watermark advances on record error, failed record dead-lettered (§10)', () => {
     let orchestrator: IntegrationEngine;
 
     beforeEach(() => {
@@ -217,7 +220,7 @@ describe('IntegrationEngine — safe-floor-on-error watermark (audit bug #6)', (
         (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
     });
 
-    it('holds the persisted incremental watermark to the last CLEAN batch when a later batch errors a record', async () => {
+    it('advances the persisted watermark to max-seen and dead-letters the failed record when a later batch errors', async () => {
         const { connector, fetchCalls } = createTwoBatchConnector();
 
         const companyIntegration = createMockCompanyIntegration();
@@ -317,24 +320,25 @@ describe('IntegrationEngine — safe-floor-on-error watermark (audit bug #6)', (
             expect(result.RecordsProcessed).toBe(4);      // 2 clean + (1 poison + 1 good)
             expect(result.RecordsCreated).toBe(3);        // Contact 1, 2, 4
             expect(result.RecordsErrored).toBe(1);        // only Contact POISON
+            // The failed record is DEAD-LETTERED — counted + logged (queryable over GraphQL), not silently lost.
             expect(result.Errors[0].ExternalID).toBe('ext-3');
 
-            // THE SAFE-FLOOR ASSERTION (asserts on the value actually written to the watermark row —
-            // the persisted DB effect, which is the real subject of bug #6):
-            // The engine advanced currentWatermark to DIRTY_WATERMARK (batch 2) but, because batch 2
-            // errored, it must persist the last fully-clean batch's value (CLEAN_WATERMARK) so the next
-            // incremental re-fetches the failed window. It must NOT persist DIRTY_WATERMARK.
-            expect(persistedWatermark).toBe(CLEAN_WATERMARK);
-            expect(persistedWatermark).not.toBe(DIRTY_WATERMARK);
+            // §10 ASSERTION (the value actually written to the watermark row): the watermark ADVANCES to the
+            // max value seen (DIRTY_WATERMARK, batch 2) even though batch 2 errored a record. The failed record
+            // is dead-lettered, NOT held against the watermark — so a permanently-bad record can never freeze the
+            // stream. Recovery for the dead-lettered record is an operator-triggered full sync. (REVERSES bug #6.)
+            expect(persistedWatermark).toBe(DIRTY_WATERMARK);
+            expect(persistedWatermark).not.toBe(CLEAN_WATERMARK);
         } finally {
             ConnectorFactory.Resolve = resolveOrig;
             MockMetadataClass.prototype.GetEntityObject = origGetEntity;
         }
     });
 
-    it('advances the watermark to the latest batch when ALL batches are clean (control — floor only triggers on error)', async () => {
-        // Same two-batch shape, but NO poison record — proves the assertion above isolates the
-        // safe-floor behavior and isn't just always returning the earlier watermark.
+    it('advances the watermark to the latest batch when ALL batches are clean', async () => {
+        // Same two-batch shape, but NO poison record — a fully-clean run also advances to max-seen.
+        // Together with the errored-run test above (which ALSO advances under §10), this proves the
+        // watermark tracks max-seen regardless of per-record outcome — never held back.
         const { connector } = createTwoBatchConnector();
 
         const companyIntegration = createMockCompanyIntegration();

@@ -622,9 +622,21 @@ export abstract class BaseIntegrationConnector {
             const v = parseInt(process.env[name] ?? '', 10);
             return Number.isFinite(v) && v > 0 ? v : fb;
         };
-        const timeBudgetMs = opts.TimeBudgetMs ?? envInt('MJ_INTEGRATION_DISCOVERY_TIME_BUDGET_MS', 5 * 60 * 1000);
-        const batchSize = opts.BatchSize ?? envInt('MJ_INTEGRATION_DISCOVERY_BATCH_SIZE', 500);
-        const maxRecords = opts.MaxRecords ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 5000);
+        // §A — per-connection overrides via Configuration (set over GraphQL through IntegrationSetSyncConfig).
+        // Precedence: explicit opts > per-connection Configuration > operator env > default.
+        let cfg: { discoveryTimeBudgetMs?: number; discoveryBatchSize?: number; discoveryMaxRecords?: number } = {};
+        try { if (companyIntegration.Configuration) cfg = JSON.parse(companyIntegration.Configuration); } catch { /* malformed → defaults */ }
+        const cfgInt = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined);
+        const timeBudgetMs = opts.TimeBudgetMs ?? cfgInt(cfg.discoveryTimeBudgetMs) ?? envInt('MJ_INTEGRATION_DISCOVERY_TIME_BUDGET_MS', 5 * 60 * 1000);
+        const batchSize = opts.BatchSize ?? cfgInt(cfg.discoveryBatchSize) ?? envInt('MJ_INTEGRATION_DISCOVERY_BATCH_SIZE', 500);
+        // §C — default sample is SMALL (one batch). Discovery only needs a column corpus + a lightweight
+        // PK guess + type inference — NOT a full scan. The old 5000 default caused a 100-objects × 5000-rows
+        // read storm on no-describe (file-feed) sources for zero added schema fidelity (the runtime soft-PK
+        // classifier judges uniqueness on the live data, not this sample; custom-column overflow captures any
+        // late-appearing field). Operator-tunable via env or, per-connection, the IntegrationSetSyncConfig
+        // `discoveryMaxRecords` knob. Sampling itself is the FALLBACK path — used only when the source lacks a
+        // describe endpoint that yields pk+type+columns; a describe-capable connector returns here-unused.
+        const maxRecords = opts.MaxRecords ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
         const self = this;
         async function* readPathStream(): AsyncGenerator<Record<string, unknown>> {
             let ctx: FetchContext = {
