@@ -32,6 +32,7 @@
     "@memberjunction/ai-groq": "5.40.2",
     "@memberjunction/ai-heygen": "5.40.2",
     "@memberjunction/ai-inception": "5.40.2",
+    "@memberjunction/ai-inworld": "5.40.2",
     "@memberjunction/ai-llamacpp": "5.40.2",
     "@memberjunction/ai-lmstudio": "5.40.2",
     "@memberjunction/ai-local-embeddings": "5.40.2",
