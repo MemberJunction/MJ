@@ -3,7 +3,7 @@ import {
     BaseEnginePropertyConfig,
     IMetadataProvider,
     LogError,
-    LogStatus,
+    LogStatusEx,
     NormalizedPermission,
     PermissionAction,
     PermissionAuditEntry,
@@ -132,10 +132,12 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
                 LogError(`PermissionEngine: failed to instantiate provider '${domain.ProviderClassName}': ${err}`);
             }
         }
-        LogStatus(
-            `PermissionEngine configured with ${this._providers.size} provider(s) ` +
-                `out of ${activeDomains.length} active domain(s).`
-        );
+        LogStatusEx({
+            message:
+                `PermissionEngine configured with ${this._providers.size} provider(s) ` +
+                `out of ${activeDomains.length} active domain(s).`,
+            verboseOnly: true,
+        });
     }
 
     /**
