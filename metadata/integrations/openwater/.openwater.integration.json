@@ -3,7 +3,7 @@
     "fields": {
       "Name": "OpenWater",
       "ClassName": "OpenWaterConnector",
-      "Description": "OpenWater awards / grants / abstracts / fellowship management platform connector — syncs programs, applications, users, invoices, judges, rounds and their nested review objects via the OpenWater Public API v2 (REST, ClientKey + ApiKey header pair). Pull-centric; nested objects are reached through per-IO AccessPath door descents from /v2/Programs and /v2/Applications.",
+      "Description": "OpenWater awards/grants/abstracts/fellowship platform connector — pull-centric sync of programs, applications, users, invoices, judges, rounds and nested review objects via the OpenWater Public API v2 (REST, ClientKey + ApiKey headers).",
       "ImportPath": "@memberjunction/connector-openwater",
       "NavigationBaseURL": "https://api.getopenwater.com",
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=OpenWater API"

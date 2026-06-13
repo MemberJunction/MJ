@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Path LMS",
       "ClassName": "PathLMSConnector",
-      "Description": "Path LMS Reporting API connector — GraphQL-based analytics and reporting integration for Blue Sky eLearn Path LMS. Provides pull-only access to 16 report query surfaces via a two-step bearer-token auth flow (applicationId + applicationSecret exchanged for a 12-hour JWT). No mutations; no write capability. All data retrieved via POST to the single GraphQL endpoint.",
+      "Description": "Path LMS (Blue Sky eLearn) Reporting API connector — pull-only GraphQL analytics over 16 report query surfaces. Two-step bearer auth (applicationId + applicationSecret then 12-hour JWT); no writes. All data via POST to the single GraphQL endpoint.",
       "ImportPath": "@memberjunction/integration-connectors",
       "NavigationBaseURL": "https://data-api.pathlms.com/",
       "BatchMaxRequestCount": -1,
