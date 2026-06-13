@@ -9,6 +9,8 @@
     "packages/Actions/BizApps/*",
     "packages/AI/*",
     "packages/AI/Providers/*",
+    "packages/AI/RealtimeBridge/*",
+    "packages/AI/RealtimeBridge/Providers/*",
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
     "packages/AI/Vectors/Providers/*",
@@ -39,7 +41,7 @@
     "packages/eSignature/Providers/*"
   ],
   "scripts": {
-    "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
+    "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n\u274c Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
     "build": "npm run build:stream",
     "postbuild": "npm run mj:manifest && turbo --log-order=stream build --filter=@memberjunction/server-bootstrap-lite --filter=@memberjunction/server-bootstrap --filter=@memberjunction/ng-bootstrap --filter=@memberjunction/ng-bootstrap-lite --filter=@memberjunction/a2aserver --filter=@memberjunction/ai-mcp-server --filter=mj_codegen_api --filter=mj_api",
     "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",

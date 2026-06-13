@@ -86,7 +86,7 @@
       "Description": "Twilio CPaaS telephony bridge (lead telephony provider). Inbound DID routing, outbound dial, DTMF, and call transfer over voice. Audio only \u2014 no video or screen.",
       "BridgeType": "Telephony",
       "DriverClass": "TwilioBridge",
-      "Status": "Disabled",
+      "Status": "Active",
       "SupportedFeatures": "{\"InviteJoin\":true,\"OutboundDial\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"DTMF\":true,\"CallTransfer\":true}"
     }
   },
