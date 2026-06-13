@@ -10,10 +10,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Channel Definition Section -->
+    <!-- Provider Information Section -->
     <mj-collapsible-panel
-        SectionKey="channelDefinition"
-        SectionName="Channel Definition"
+        SectionKey="providerInformation"
+        SectionName="Provider Information"
         Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
@@ -33,45 +33,63 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Provider Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="providerConfiguration"
+        SectionName="Provider Configuration"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
+            FieldName="BridgeType"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DriverClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Technical Configuration Section -->
+    <!-- Technical Capabilities Section -->
     <mj-collapsible-panel
-        SectionKey="technicalConfiguration"
-        SectionName="Technical Configuration"
-        Icon="fa fa-cogs"
+        SectionKey="technicalCapabilities"
+        SectionName="Technical Capabilities"
+        Icon="fa fa-code"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ServerPluginClass"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ClientPluginClass"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="TransportType"
-            Type="select"
+            FieldName="SupportedFeatures"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -118,25 +136,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AI Agent Session Channels Section -->
+    <!-- AI Agent Session Bridges Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentSessionChannels"
-        SectionName="AI Agent Session Channels"
-        Icon="fa fa-plug"
+        SectionKey="mJAIAgentSessionBridges"
+        SectionName="AI Agent Session Bridges"
+        Icon="fa fa-network-wired"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentSessionChannels')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSessionBridges')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Channels','ChannelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Channels')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentSessionChannels')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Bridges','ProviderID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridges')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSessionBridges')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionChannels', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionBridges', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -156,12 +174,37 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Bridge Provider Channels','ChannelID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Bridge Provider Channels','ProviderID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Bridge Provider Channels')"
                 [AllowLoad]="IsSectionExpanded('mJAIBridgeProviderChannels')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIBridgeProviderChannels', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Bridge Agent Identities Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIBridgeAgentIdentities"
+        SectionName="AI Bridge Agent Identities"
+        Icon="fa fa-id-card"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIBridgeAgentIdentities')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Bridge Agent Identities','ProviderID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Agent Identities')"
+                [AllowLoad]="IsSectionExpanded('mJAIBridgeAgentIdentities')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIBridgeAgentIdentities', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -10,67 +10,45 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Channel Definition Section -->
+    <!-- Session Context Section -->
     <mj-collapsible-panel
-        SectionKey="channelDefinition"
-        SectionName="Channel Definition"
+        SectionKey="sessionContext"
+        SectionName="Session Context"
         Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
+            FieldName="AgentSessionID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
+            FieldName="ProviderID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Technical Configuration Section -->
+    <!-- Connection Details Section -->
     <mj-collapsible-panel
-        SectionKey="technicalConfiguration"
-        SectionName="Technical Configuration"
-        Icon="fa fa-cogs"
+        SectionKey="connectionDetails"
+        SectionName="Connection Details"
+        Icon="fa fa-plug"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ServerPluginClass"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ClientPluginClass"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="TransportType"
+            FieldName="Direction"
             Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -78,8 +56,91 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ConfigSchema"
-            Type="code"
+            FieldName="JoinMethod"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TurnMode"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ExternalConnectionID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Address"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="URL"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="BotParticipantID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Lifecycle and Timing Section -->
+    <mj-collapsible-panel
+        SectionKey="lifecycleAndTiming"
+        SectionName="Lifecycle and Timing"
+        Icon="fa fa-clock"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ScheduledStartTime"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ConnectedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DisconnectedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CloseReason"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -90,9 +151,25 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="HostInstanceID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Config"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -118,50 +195,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AI Agent Session Channels Section -->
+    <!-- AI Agent Session Bridge Participants Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentSessionChannels"
-        SectionName="AI Agent Session Channels"
-        Icon="fa fa-plug"
+        SectionKey="mJAIAgentSessionBridgeParticipants"
+        SectionName="AI Agent Session Bridge Participants"
+        Icon="fa fa-users"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentSessionChannels')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSessionBridgeParticipants')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Channels','ChannelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Channels')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentSessionChannels')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Bridge Participants','SessionBridgeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridge Participants')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSessionBridgeParticipants')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionChannels', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- AI Bridge Provider Channels Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIBridgeProviderChannels"
-        SectionName="AI Bridge Provider Channels"
-        Icon="fa fa-project-diagram"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIBridgeProviderChannels')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Bridge Provider Channels','ChannelID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Provider Channels')"
-                [AllowLoad]="IsSectionExpanded('mJAIBridgeProviderChannels')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIBridgeProviderChannels', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionBridgeParticipants', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

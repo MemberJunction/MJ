@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -3397,6 +3397,9 @@ export class MJAIAgentChannel_ {
     @Field(() => [MJAIAgentSessionChannel_])
     MJAIAgentSessionChannels_ChannelIDArray: MJAIAgentSessionChannel_[]; // Link to MJAIAgentSessionChannels
     
+    @Field(() => [MJAIBridgeProviderChannel_])
+    MJAIBridgeProviderChannels_ChannelIDArray: MJAIBridgeProviderChannel_[]; // Link to MJAIBridgeProviderChannels
+    
 }
 
 //****************************************************************************
@@ -3533,6 +3536,16 @@ export class MJAIAgentChannelResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessionChannels')} WHERE ${provider.QuoteIdentifier('ChannelID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Session Channels', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiagentchannel_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Session Channels', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIBridgeProviderChannel_])
+    async MJAIBridgeProviderChannels_ChannelIDArray(@Root() mjaiagentchannel_: MJAIAgentChannel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Bridge Provider Channels', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIBridgeProviderChannels')} WHERE ${provider.QuoteIdentifier('ChannelID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Bridge Provider Channels', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentchannel_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Bridge Provider Channels', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -4602,6 +4615,7 @@ export class MJAIAgentExample_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -5716,6 +5730,7 @@ export class MJAIAgentNote_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -8055,6 +8070,7 @@ each time the agent processes a prompt step.`})
     User?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -8865,6 +8881,516 @@ export class MJAIAgentSearchScopeResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: AI Agent Session Bridge Participants
+//****************************************************************************
+@ObjectType()
+export class MJAIAgentSessionBridgeParticipant_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    SessionBridgeID: string;
+        
+    @Field({nullable: true, description: `The platform's participant identifier (used to map diarized audio to a person).`}) 
+    @MaxLength(500)
+    ExternalParticipantID?: string;
+        
+    @Field({nullable: true, description: `The participant's display name as shown on the platform.`}) 
+    @MaxLength(500)
+    DisplayName?: string;
+        
+    @Field({description: `The participant's role in the meeting/call: Host, CoHost, Participant, or Agent (the AI bot).`}) 
+    @MaxLength(20)
+    Role: string;
+        
+    @Field({nullable: true, description: `The matched MJ user, when the participant can be identified (NULL for external/anonymous participants).`}) 
+    @MaxLength(36)
+    UserID?: string;
+        
+    @Field(() => Boolean, {description: `True when this participant is the bridged AI agent bot itself.`}) 
+    IsAgent: boolean;
+        
+    @Field({nullable: true, description: `When the participant joined the meeting/call.`}) 
+    JoinedAt?: Date;
+        
+    @Field({nullable: true, description: `When the participant left. NULL while still present.`}) 
+    LeftAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    SessionBridge?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Session Bridge Participants
+//****************************************************************************
+@InputType()
+export class CreateMJAIAgentSessionBridgeParticipantInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SessionBridgeID?: string;
+
+    @Field({ nullable: true })
+    ExternalParticipantID: string | null;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsAgent?: boolean;
+
+    @Field({ nullable: true })
+    JoinedAt: Date | null;
+
+    @Field({ nullable: true })
+    LeftAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Session Bridge Participants
+//****************************************************************************
+@InputType()
+export class UpdateMJAIAgentSessionBridgeParticipantInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SessionBridgeID?: string;
+
+    @Field({ nullable: true })
+    ExternalParticipantID?: string | null;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsAgent?: boolean;
+
+    @Field({ nullable: true })
+    JoinedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LeftAt?: Date | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Agent Session Bridge Participants
+//****************************************************************************
+@ObjectType()
+export class RunMJAIAgentSessionBridgeParticipantViewResult {
+    @Field(() => [MJAIAgentSessionBridgeParticipant_])
+    Results: MJAIAgentSessionBridgeParticipant_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIAgentSessionBridgeParticipant_)
+export class MJAIAgentSessionBridgeParticipantResolver extends ResolverBase {
+    @Query(() => RunMJAIAgentSessionBridgeParticipantViewResult)
+    async RunMJAIAgentSessionBridgeParticipantViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentSessionBridgeParticipantViewResult)
+    async RunMJAIAgentSessionBridgeParticipantViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentSessionBridgeParticipantViewResult)
+    async RunMJAIAgentSessionBridgeParticipantDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Agent Session Bridge Participants';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIAgentSessionBridgeParticipant_, { nullable: true })
+    async MJAIAgentSessionBridgeParticipant(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIAgentSessionBridgeParticipant_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Agent Session Bridge Participants', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessionBridgeParticipants')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Session Bridge Participants', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Agent Session Bridge Participants', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIAgentSessionBridgeParticipant_)
+    async CreateMJAIAgentSessionBridgeParticipant(
+        @Arg('input', () => CreateMJAIAgentSessionBridgeParticipantInput) input: CreateMJAIAgentSessionBridgeParticipantInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Agent Session Bridge Participants', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIAgentSessionBridgeParticipant_)
+    async UpdateMJAIAgentSessionBridgeParticipant(
+        @Arg('input', () => UpdateMJAIAgentSessionBridgeParticipantInput) input: UpdateMJAIAgentSessionBridgeParticipantInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Agent Session Bridge Participants', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIAgentSessionBridgeParticipant_)
+    async DeleteMJAIAgentSessionBridgeParticipant(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Agent Session Bridge Participants', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Agent Session Bridges
+//****************************************************************************
+@ObjectType()
+export class MJAIAgentSessionBridge_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    AgentSessionID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    ProviderID: string;
+        
+    @Field({description: `Direction of the connection: Outbound (the agent goes to a meeting / places a call) or Inbound (a meeting/call routes to the agent).`}) 
+    @MaxLength(20)
+    Direction: string;
+        
+    @Field({description: `How the agent connected: OnDemand, Scheduled, Invite (calendar), NativeInvite (platform UI), InboundRoute (call/invite to the agent's identity), or InMeetingCommand (chat command).`}) 
+    @MaxLength(30)
+    JoinMethod: string;
+        
+    @Field({description: `Turn-taking mode for this bridged session: Passive (speak only when addressed — default), Active (proactive in silence windows), or Hybrid (passive voice + post-to-chat hand-raise).`}) 
+    @MaxLength(20)
+    TurnMode: string;
+        
+    @Field({nullable: true, description: `The platform's identifier for the connection (meeting id / call SID), set once connecting.`}) 
+    @MaxLength(500)
+    ExternalConnectionID?: string;
+        
+    @Field({nullable: true, description: `The endpoint address: a meeting join URL (meetings) or a phone number (telephony).`}) 
+    @MaxLength(2000)
+    Address?: string;
+        
+    @Field({nullable: true, description: `The agent bot's own participant id within the meeting/call once admitted.`}) 
+    @MaxLength(500)
+    BotParticipantID?: string;
+        
+    @Field({description: `Bridge connection lifecycle: Pending, Scheduled, Connecting, Connected, Disconnecting, Disconnected, or Failed.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `For scheduled/invite joins: when the bridge should connect. NULL for immediate (on-demand/inbound).`}) 
+    ScheduledStartTime?: Date;
+        
+    @Field({nullable: true, description: `When the bridge became Connected (media flowing). NULL until connected.`}) 
+    ConnectedAt?: Date;
+        
+    @Field({nullable: true, description: `When the bridge disconnected. NULL while still connected.`}) 
+    DisconnectedAt?: Date;
+        
+    @Field({nullable: true, description: `Why the bridge closed: Explicit, HostEnded (the meeting/call ended), Janitor (orphan sweep), Error, or Shutdown. NULL while active.`}) 
+    @MaxLength(20)
+    CloseReason?: string;
+        
+    @Field({nullable: true, description: `Identifier of the server node currently hosting this bridge's bot connection (hostname:pid:bootId). Used for affinity and janitor orphan reconciliation, mirroring AIAgentSession.`}) 
+    @MaxLength(200)
+    HostInstanceID?: string;
+        
+    @Field({nullable: true, description: `Per-session bridge configuration/state JSON (validated against the provider ConfigSchema).`}) 
+    Config?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Provider: string;
+        
+    @Field(() => [MJAIAgentSessionBridgeParticipant_])
+    MJAIAgentSessionBridgeParticipants_SessionBridgeIDArray: MJAIAgentSessionBridgeParticipant_[]; // Link to MJAIAgentSessionBridgeParticipants
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Session Bridges
+//****************************************************************************
+@InputType()
+export class CreateMJAIAgentSessionBridgeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentSessionID?: string;
+
+    @Field({ nullable: true })
+    ProviderID?: string;
+
+    @Field({ nullable: true })
+    Direction?: string;
+
+    @Field({ nullable: true })
+    JoinMethod?: string;
+
+    @Field({ nullable: true })
+    TurnMode?: string;
+
+    @Field({ nullable: true })
+    ExternalConnectionID: string | null;
+
+    @Field({ nullable: true })
+    Address: string | null;
+
+    @Field({ nullable: true })
+    BotParticipantID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ScheduledStartTime: Date | null;
+
+    @Field({ nullable: true })
+    ConnectedAt: Date | null;
+
+    @Field({ nullable: true })
+    DisconnectedAt: Date | null;
+
+    @Field({ nullable: true })
+    CloseReason: string | null;
+
+    @Field({ nullable: true })
+    HostInstanceID: string | null;
+
+    @Field({ nullable: true })
+    Config: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Session Bridges
+//****************************************************************************
+@InputType()
+export class UpdateMJAIAgentSessionBridgeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentSessionID?: string;
+
+    @Field({ nullable: true })
+    ProviderID?: string;
+
+    @Field({ nullable: true })
+    Direction?: string;
+
+    @Field({ nullable: true })
+    JoinMethod?: string;
+
+    @Field({ nullable: true })
+    TurnMode?: string;
+
+    @Field({ nullable: true })
+    ExternalConnectionID?: string | null;
+
+    @Field({ nullable: true })
+    Address?: string | null;
+
+    @Field({ nullable: true })
+    BotParticipantID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ScheduledStartTime?: Date | null;
+
+    @Field({ nullable: true })
+    ConnectedAt?: Date | null;
+
+    @Field({ nullable: true })
+    DisconnectedAt?: Date | null;
+
+    @Field({ nullable: true })
+    CloseReason?: string | null;
+
+    @Field({ nullable: true })
+    HostInstanceID?: string | null;
+
+    @Field({ nullable: true })
+    Config?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Agent Session Bridges
+//****************************************************************************
+@ObjectType()
+export class RunMJAIAgentSessionBridgeViewResult {
+    @Field(() => [MJAIAgentSessionBridge_])
+    Results: MJAIAgentSessionBridge_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIAgentSessionBridge_)
+export class MJAIAgentSessionBridgeResolver extends ResolverBase {
+    @Query(() => RunMJAIAgentSessionBridgeViewResult)
+    async RunMJAIAgentSessionBridgeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentSessionBridgeViewResult)
+    async RunMJAIAgentSessionBridgeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentSessionBridgeViewResult)
+    async RunMJAIAgentSessionBridgeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Agent Session Bridges';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIAgentSessionBridge_, { nullable: true })
+    async MJAIAgentSessionBridge(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIAgentSessionBridge_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Agent Session Bridges', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessionBridges')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Session Bridges', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Agent Session Bridges', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJAIAgentSessionBridgeParticipant_])
+    async MJAIAgentSessionBridgeParticipants_SessionBridgeIDArray(@Root() mjaiagentsessionbridge_: MJAIAgentSessionBridge_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Session Bridge Participants', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessionBridgeParticipants')} WHERE ${provider.QuoteIdentifier('SessionBridgeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Session Bridge Participants', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentsessionbridge_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Session Bridge Participants', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJAIAgentSessionBridge_)
+    async CreateMJAIAgentSessionBridge(
+        @Arg('input', () => CreateMJAIAgentSessionBridgeInput) input: CreateMJAIAgentSessionBridgeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Agent Session Bridges', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIAgentSessionBridge_)
+    async UpdateMJAIAgentSessionBridge(
+        @Arg('input', () => UpdateMJAIAgentSessionBridgeInput) input: UpdateMJAIAgentSessionBridgeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Agent Session Bridges', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIAgentSessionBridge_)
+    async DeleteMJAIAgentSessionBridge(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Agent Session Bridges', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Session Channels
 //****************************************************************************
 @ObjectType()
@@ -9146,6 +9672,9 @@ export class MJAIAgentSession_ {
     @Field(() => [MJAIAgentSession_])
     MJAIAgentSessions_LastSessionIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
     
+    @Field(() => [MJAIAgentSessionBridge_])
+    MJAIAgentSessionBridges_AgentSessionIDArray: MJAIAgentSessionBridge_[]; // Link to MJAIAgentSessionBridges
+    
 }
 
 //****************************************************************************
@@ -9330,6 +9859,16 @@ export class MJAIAgentSessionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessions')} WHERE ${provider.QuoteIdentifier('LastSessionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Sessions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiagentsession_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentSessionBridge_])
+    async MJAIAgentSessionBridges_AgentSessionIDArray(@Root() mjaiagentsession_: MJAIAgentSession_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Session Bridges', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessionBridges')} WHERE ${provider.QuoteIdentifier('AgentSessionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Session Bridges', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentsession_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Session Bridges', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -10598,6 +11137,9 @@ if this limit is exceeded.`})
     @Field(() => [MJAIAgentCoAgent_])
     MJAIAgentCoAgents_TargetAgentIDArray: MJAIAgentCoAgent_[]; // Link to MJAIAgentCoAgents
     
+    @Field(() => [MJAIBridgeAgentIdentity_])
+    MJAIBridgeAgentIdentities_AgentIDArray: MJAIBridgeAgentIdentity_[]; // Link to MJAIBridgeAgentIdentities
+    
 }
 
 //****************************************************************************
@@ -11385,6 +11927,16 @@ export class MJAIAgentResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAIBridgeAgentIdentity_])
+    async MJAIBridgeAgentIdentities_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Bridge Agent Identities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIBridgeAgentIdentities')} WHERE ${provider.QuoteIdentifier('AgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Bridge Agent Identities', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Bridge Agent Identities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJAIAgent_)
     async CreateMJAIAgent(
         @Arg('input', () => CreateMJAIAgentInput) input: CreateMJAIAgentInput,
@@ -11643,6 +12195,646 @@ export class MJAIArchitectureResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: AI Architectures', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Bridge Agent Identities
+//****************************************************************************
+@ObjectType()
+export class MJAIBridgeAgentIdentity_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    AgentID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    ProviderID: string;
+        
+    @Field({description: `The kind of address: Email (a calendar mailbox organizers invite), PhoneNumber (an inbound DID), or AccountID (a platform-native bot/user account).`}) 
+    @MaxLength(20)
+    IdentityType: string;
+        
+    @Field({description: `The address value itself (e.g. sage@customer.com, +15551234567, or a platform account id). Unique per provider.`}) 
+    @MaxLength(500)
+    IdentityValue: string;
+        
+    @Field({nullable: true, description: `Friendly display name shown to other participants (e.g. "Sage (AI)").`}) 
+    @MaxLength(255)
+    DisplayName?: string;
+        
+    @Field(() => Boolean, {description: `Whether this identity is active. Inactive identities are ignored by invite watchers and inbound routing.`}) 
+    IsActive: boolean;
+        
+    @Field({nullable: true, description: `Identity-level configuration JSON (e.g. tenant/mailbox references, calendar-watch scopes). Credentials resolve via the MJ credential system; never inline.`}) 
+    Configuration?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Agent?: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Provider: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Bridge Agent Identities
+//****************************************************************************
+@InputType()
+export class CreateMJAIBridgeAgentIdentityInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    ProviderID?: string;
+
+    @Field({ nullable: true })
+    IdentityType?: string;
+
+    @Field({ nullable: true })
+    IdentityValue?: string;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Bridge Agent Identities
+//****************************************************************************
+@InputType()
+export class UpdateMJAIBridgeAgentIdentityInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    ProviderID?: string;
+
+    @Field({ nullable: true })
+    IdentityType?: string;
+
+    @Field({ nullable: true })
+    IdentityValue?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Bridge Agent Identities
+//****************************************************************************
+@ObjectType()
+export class RunMJAIBridgeAgentIdentityViewResult {
+    @Field(() => [MJAIBridgeAgentIdentity_])
+    Results: MJAIBridgeAgentIdentity_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIBridgeAgentIdentity_)
+export class MJAIBridgeAgentIdentityResolver extends ResolverBase {
+    @Query(() => RunMJAIBridgeAgentIdentityViewResult)
+    async RunMJAIBridgeAgentIdentityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIBridgeAgentIdentityViewResult)
+    async RunMJAIBridgeAgentIdentityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIBridgeAgentIdentityViewResult)
+    async RunMJAIBridgeAgentIdentityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Bridge Agent Identities';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIBridgeAgentIdentity_, { nullable: true })
+    async MJAIBridgeAgentIdentity(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIBridgeAgentIdentity_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Bridge Agent Identities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIBridgeAgentIdentities')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Bridge Agent Identities', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Bridge Agent Identities', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIBridgeAgentIdentity_)
+    async CreateMJAIBridgeAgentIdentity(
+        @Arg('input', () => CreateMJAIBridgeAgentIdentityInput) input: CreateMJAIBridgeAgentIdentityInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Bridge Agent Identities', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIBridgeAgentIdentity_)
+    async UpdateMJAIBridgeAgentIdentity(
+        @Arg('input', () => UpdateMJAIBridgeAgentIdentityInput) input: UpdateMJAIBridgeAgentIdentityInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Bridge Agent Identities', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIBridgeAgentIdentity_)
+    async DeleteMJAIBridgeAgentIdentity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Bridge Agent Identities', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Bridge Provider Channels
+//****************************************************************************
+@ObjectType()
+export class MJAIBridgeProviderChannel_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    ProviderID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    ChannelID: string;
+        
+    @Field(() => Boolean, {description: `When 1, this channel is auto-attached to a new bridge session on this provider; when 0, it is available but attached on demand.`}) 
+    IsDefault: boolean;
+        
+    @Field(() => Int, {description: `Display/attachment order of this channel for the provider (ascending).`}) 
+    Sequence: number;
+        
+    @Field({nullable: true, description: `Optional per-provider configuration JSON for this channel contribution (e.g. mapping platform tool names to the channel's tool vocabulary).`}) 
+    Configuration?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Provider: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Channel: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Bridge Provider Channels
+//****************************************************************************
+@InputType()
+export class CreateMJAIBridgeProviderChannelInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ProviderID?: string;
+
+    @Field({ nullable: true })
+    ChannelID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Bridge Provider Channels
+//****************************************************************************
+@InputType()
+export class UpdateMJAIBridgeProviderChannelInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ProviderID?: string;
+
+    @Field({ nullable: true })
+    ChannelID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Bridge Provider Channels
+//****************************************************************************
+@ObjectType()
+export class RunMJAIBridgeProviderChannelViewResult {
+    @Field(() => [MJAIBridgeProviderChannel_])
+    Results: MJAIBridgeProviderChannel_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIBridgeProviderChannel_)
+export class MJAIBridgeProviderChannelResolver extends ResolverBase {
+    @Query(() => RunMJAIBridgeProviderChannelViewResult)
+    async RunMJAIBridgeProviderChannelViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIBridgeProviderChannelViewResult)
+    async RunMJAIBridgeProviderChannelViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIBridgeProviderChannelViewResult)
+    async RunMJAIBridgeProviderChannelDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Bridge Provider Channels';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIBridgeProviderChannel_, { nullable: true })
+    async MJAIBridgeProviderChannel(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIBridgeProviderChannel_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Bridge Provider Channels', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIBridgeProviderChannels')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Bridge Provider Channels', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Bridge Provider Channels', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIBridgeProviderChannel_)
+    async CreateMJAIBridgeProviderChannel(
+        @Arg('input', () => CreateMJAIBridgeProviderChannelInput) input: CreateMJAIBridgeProviderChannelInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Bridge Provider Channels', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIBridgeProviderChannel_)
+    async UpdateMJAIBridgeProviderChannel(
+        @Arg('input', () => UpdateMJAIBridgeProviderChannelInput) input: UpdateMJAIBridgeProviderChannelInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Bridge Provider Channels', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIBridgeProviderChannel_)
+    async DeleteMJAIBridgeProviderChannel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Bridge Provider Channels', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Bridge Providers
+//****************************************************************************
+@ObjectType()
+export class MJAIBridgeProvider_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Unique platform name (e.g. Zoom, Microsoft Teams, Google Meet, Webex, Slack, Discord, RingCentral, Twilio, Vonage, LiveKit).`}) 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional human-readable description of the platform / driver.`}) 
+    @MaxLength(1000)
+    Description?: string;
+        
+    @Field({description: `The family of endpoint this bridge connects to: Meeting (a conferencing room) or Telephony (a phone call). LiveKit (MJ-native multi-party room) is a Meeting.`}) 
+    @MaxLength(20)
+    BridgeType: string;
+        
+    @Field({description: `Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseRealtimeBridge, DriverClass). MUST match the @RegisterClass key on the concrete bridge driver.`}) 
+    @MaxLength(250)
+    DriverClass: string;
+        
+    @Field({description: `Whether this provider is available for use. Inactive providers cannot start new bridge sessions.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `Strongly-typed JSON of the platform's supported features (the IBridgeProviderFeatures interface, bound via JSONType metadata): join methods (OnDemandJoin, ScheduledJoin, InviteJoin, NativeInvite, InboundRouting, OutboundDial), directional media tracks (AudioIn/Out, VideoIn/Out, ScreenIn/Out), and signals (SpeakerDiarization, DTMF, CallTransfer, Recording). The engine gates optional driver calls on these flags; the base driver throws BridgeCapabilityNotSupportedError when a feature is claimed but unimplemented. Held as JSON so new features need no schema change. NULL/omitted = unsupported.`}) 
+    SupportedFeatures?: string;
+        
+    @Field({nullable: true, description: `Optional JSON Schema validating the provider Configuration and per-session bridge Config payloads.`}) 
+    ConfigSchema?: string;
+        
+    @Field({nullable: true, description: `Provider-level configuration JSON (e.g. credential references resolved via the MJ credential system, region, bot display name). Never store secrets inline.`}) 
+    Configuration?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJAIAgentSessionBridge_])
+    MJAIAgentSessionBridges_ProviderIDArray: MJAIAgentSessionBridge_[]; // Link to MJAIAgentSessionBridges
+    
+    @Field(() => [MJAIBridgeProviderChannel_])
+    MJAIBridgeProviderChannels_ProviderIDArray: MJAIBridgeProviderChannel_[]; // Link to MJAIBridgeProviderChannels
+    
+    @Field(() => [MJAIBridgeAgentIdentity_])
+    MJAIBridgeAgentIdentities_ProviderIDArray: MJAIBridgeAgentIdentity_[]; // Link to MJAIBridgeAgentIdentities
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Bridge Providers
+//****************************************************************************
+@InputType()
+export class CreateMJAIBridgeProviderInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    BridgeType?: string;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    SupportedFeatures: string | null;
+
+    @Field({ nullable: true })
+    ConfigSchema: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Bridge Providers
+//****************************************************************************
+@InputType()
+export class UpdateMJAIBridgeProviderInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    BridgeType?: string;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    SupportedFeatures?: string | null;
+
+    @Field({ nullable: true })
+    ConfigSchema?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Bridge Providers
+//****************************************************************************
+@ObjectType()
+export class RunMJAIBridgeProviderViewResult {
+    @Field(() => [MJAIBridgeProvider_])
+    Results: MJAIBridgeProvider_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIBridgeProvider_)
+export class MJAIBridgeProviderResolver extends ResolverBase {
+    @Query(() => RunMJAIBridgeProviderViewResult)
+    async RunMJAIBridgeProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIBridgeProviderViewResult)
+    async RunMJAIBridgeProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIBridgeProviderViewResult)
+    async RunMJAIBridgeProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Bridge Providers';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIBridgeProvider_, { nullable: true })
+    async MJAIBridgeProvider(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIBridgeProvider_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Bridge Providers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIBridgeProviders')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Bridge Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Bridge Providers', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJAIAgentSessionBridge_])
+    async MJAIAgentSessionBridges_ProviderIDArray(@Root() mjaibridgeprovider_: MJAIBridgeProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Session Bridges', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessionBridges')} WHERE ${provider.QuoteIdentifier('ProviderID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Session Bridges', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaibridgeprovider_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Session Bridges', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIBridgeProviderChannel_])
+    async MJAIBridgeProviderChannels_ProviderIDArray(@Root() mjaibridgeprovider_: MJAIBridgeProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Bridge Provider Channels', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIBridgeProviderChannels')} WHERE ${provider.QuoteIdentifier('ProviderID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Bridge Provider Channels', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaibridgeprovider_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Bridge Provider Channels', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIBridgeAgentIdentity_])
+    async MJAIBridgeAgentIdentities_ProviderIDArray(@Root() mjaibridgeprovider_: MJAIBridgeProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Bridge Agent Identities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIBridgeAgentIdentities')} WHERE ${provider.QuoteIdentifier('ProviderID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Bridge Agent Identities', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaibridgeprovider_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Bridge Agent Identities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJAIBridgeProvider_)
+    async CreateMJAIBridgeProvider(
+        @Arg('input', () => CreateMJAIBridgeProviderInput) input: CreateMJAIBridgeProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Bridge Providers', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIBridgeProvider_)
+    async UpdateMJAIBridgeProvider(
+        @Arg('input', () => UpdateMJAIBridgeProviderInput) input: UpdateMJAIBridgeProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Bridge Providers', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIBridgeProvider_)
+    async DeleteMJAIBridgeProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Bridge Providers', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -34407,8 +35599,9 @@ export class MJConversationDetailArtifact_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    ConversationDetail: string;
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ConversationDetail?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -34611,8 +35804,9 @@ export class MJConversationDetailAttachment_ {
     @MaxLength(36)
     ArtifactVersionID?: string;
         
-    @Field() 
-    ConversationDetail: string;
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ConversationDetail?: string;
         
     @Field() 
     @MaxLength(50)
@@ -34855,8 +36049,9 @@ export class MJConversationDetailRating_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    ConversationDetail: string;
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ConversationDetail?: string;
         
     @Field() 
     @MaxLength(100)
@@ -35120,6 +36315,7 @@ export class MJConversationDetail_ {
     ArtifactVersion?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -66139,6 +67335,7 @@ export class MJReport_ {
     Conversation?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -75269,6 +76466,7 @@ export class MJTask_ {
     Project?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -82497,6 +83695,9 @@ export class MJUser_ {
     @Field(() => [MJAIAgentSession_])
     MJAIAgentSessions_UserIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
     
+    @Field(() => [MJAIAgentSessionBridgeParticipant_])
+    MJAIAgentSessionBridgeParticipants_UserIDArray: MJAIAgentSessionBridgeParticipant_[]; // Link to MJAIAgentSessionBridgeParticipants
+    
 }
 
 //****************************************************************************
@@ -83689,6 +84890,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessions')} WHERE ${provider.QuoteIdentifier('UserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Sessions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentSessionBridgeParticipant_])
+    async MJAIAgentSessionBridgeParticipants_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Session Bridge Participants', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessionBridgeParticipants')} WHERE ${provider.QuoteIdentifier('UserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Session Bridge Participants', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Session Bridge Participants', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
