@@ -16,6 +16,7 @@ export type BrowserAction =
     | KeypressAction
     | KeyDownAction
     | KeyUpAction
+    | MouseMoveAction
     | ScrollAction
     | WaitAction
     | NavigateAction
@@ -72,6 +73,21 @@ export class KeyUpAction {
     public readonly Type = 'KeyUp' as const;
     /** Key to release */
     public Key: string = '';
+}
+
+/**
+ * Move the mouse cursor to an absolute viewport coordinate without clicking.
+ *
+ * Completes the input vocabulary for hover-driven UIs (tooltips, fly-out menus)
+ * and human-takeover scenarios where the cursor position itself is meaningful.
+ * Unlike {@link ClickAction}, no button press is issued — only a pointer move.
+ */
+export class MouseMoveAction {
+    public readonly Type = 'MouseMove' as const;
+    /** X coordinate in viewport pixels to move the cursor to */
+    public X: number = 0;
+    /** Y coordinate in viewport pixels to move the cursor to */
+    public Y: number = 0;
 }
 
 export class ScrollAction {
@@ -150,6 +166,88 @@ export class BoundingBox {
     public XMax: number = 0;
     /** Maximum Y coordinate (bottom edge) */
     public YMax: number = 0;
+}
+
+// ─── Screencast (CDP live viewport feed) ───────────────────
+/**
+ * A single frame from a live screencast of the browser viewport.
+ *
+ * Emitted by {@link BaseBrowserAdapter.StartScreencast}'s callback. Backed by
+ * Chrome DevTools Protocol's `Page.screencastFrame` event on adapters that
+ * support it (e.g. PlaywrightBrowserAdapter); other adapters never emit frames.
+ */
+export class ScreencastFrame {
+    /** Base64-encoded image data for this frame (no data URI prefix). */
+    public DataBase64: string = '';
+    /** Frame width in pixels. */
+    public Width: number = 0;
+    /** Frame height in pixels. */
+    public Height: number = 0;
+    /**
+     * Monotonically increasing frame index, starting at 0 for the first frame
+     * of a screencast session. Lets consumers detect ordering / dropped frames.
+     */
+    public SequenceNumber: number = 0;
+}
+
+/**
+ * Options controlling a screencast session started via
+ * {@link BaseBrowserAdapter.StartScreencast}. All fields are optional — adapters
+ * apply sensible defaults (and ignore options they cannot honor).
+ */
+export class ScreencastOptions {
+    /** Maximum frame width in pixels (frames are scaled down to fit). */
+    public MaxWidth?: number;
+    /** Maximum frame height in pixels (frames are scaled down to fit). */
+    public MaxHeight?: number;
+    /**
+     * Emit only every Nth frame to reduce throughput (e.g. 2 emits half the
+     * frames). Defaults to every frame when omitted.
+     */
+    public EveryNthFrame?: number;
+    /** Compression quality 0–100 (applies to the 'jpeg' format only). */
+    public Quality?: number;
+    /** Image encoding for emitted frames. Defaults to 'jpeg' (smaller frames). */
+    public Format?: 'jpeg' | 'png';
+}
+
+// ─── Accessibility Snapshot (structured perception) ────────
+/**
+ * A node in the page's accessibility tree — a token-efficient, structured
+ * alternative to a screenshot for LLM perception.
+ *
+ * Mirrors the subset of fields exposed by Playwright's `page.accessibility.snapshot()`
+ * that are useful to a controller: the ARIA role, the accessible name, an
+ * optional value (for inputs/sliders), and child nodes (recursive).
+ */
+export class AccessibilityNode {
+    /** ARIA role of the node (e.g. "button", "textbox", "heading"). */
+    public Role: string = '';
+    /** Accessible name (computed label / text) of the node. */
+    public Name: string = '';
+    /** Value of the node, when applicable (e.g. an input's current value). */
+    public Value?: string;
+    /** Child accessibility nodes, when the node has descendants. */
+    public Children?: AccessibilityNode[];
+}
+
+// ─── Element Introspection ─────────────────────────────────
+/**
+ * Result of {@link BaseBrowserAdapter.QueryElement} — a non-throwing snapshot of
+ * a single element's existence, visibility, text, and geometry.
+ *
+ * Designed so callers never have to handle a "not found" exception: a missing
+ * element simply yields `{ Exists: false, Visible: false, Text: '' }`.
+ */
+export class ElementInfo {
+    /** True when at least one element matches the queried selector. */
+    public Exists: boolean = false;
+    /** True when the matched element is currently visible. */
+    public Visible: boolean = false;
+    /** The matched element's inner text (empty when missing/unreadable). */
+    public Text: string = '';
+    /** The matched element's bounding box, when one is available. */
+    public BoundingBox?: BoundingBox;
 }
 
 // ─── Action Execution Result ───────────────────────────────

@@ -15,15 +15,59 @@
  * which version is installed.
  */
 
-import type { Browser, BrowserContext, Page, Route } from 'playwright';
+import type { Browser, BrowserContext, CDPSession, Page, Route } from 'playwright';
 import { BaseBrowserAdapter } from './BaseBrowserAdapter.js';
 import {
     BrowserAction,
     BrowserConfig,
     ActionExecutionResult,
     CookieEntry,
+    ScreencastFrame,
+    ScreencastOptions,
+    AccessibilityNode,
+    ElementInfo,
+    BoundingBox,
 } from '../types/browser.js';
 import { ClassifyConnectEndpoint } from './connect-endpoint.js';
+
+/**
+ * Shape of a node returned by Playwright's `page.accessibility.snapshot()`.
+ * Only the fields we map are declared. As of Playwright 1.58 the
+ * `accessibility` namespace remains at runtime but is no longer in the public
+ * `.d.ts`, so we declare a precise local view rather than reach for `any`.
+ */
+interface PlaywrightAXNode {
+    role: string;
+    name: string;
+    value?: string | number;
+    children?: PlaywrightAXNode[];
+}
+
+/**
+ * Typed view of the (now untyped-in-d.ts) `page.accessibility` namespace.
+ * Lets us call `snapshot()` without `any` while staying resilient to the
+ * field having been dropped from the published types.
+ */
+interface PlaywrightAccessibilityNamespace {
+    snapshot(): Promise<PlaywrightAXNode | null>;
+}
+
+/**
+ * Minimal shape of a CDP `Page.screencastFrame` event payload — only the
+ * fields we consume. Playwright's `CDPSession.on('Page.screencastFrame', …)`
+ * is loosely typed, so we narrow it here to stay free of `any`.
+ */
+interface CDPScreencastFramePayload {
+    /** Base64-encoded frame image data. */
+    data: string;
+    /** Acknowledgement id to pass back to `Page.screencastFrameAck`. */
+    sessionId: number;
+    /** Frame metadata, including device-pixel dimensions. */
+    metadata: {
+        deviceWidth: number;
+        deviceHeight: number;
+    };
+}
 
 export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private browser: Browser | null = null;
@@ -41,6 +85,11 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private domainHeaders: Map<string, Record<string, string>> = new Map();
     /** Whether the route interceptor has been set up */
     private routeInterceptorActive: boolean = false;
+
+    /** Active CDP session backing a running screencast, if any. */
+    private screencastSession: CDPSession | null = null;
+    /** Monotonic frame counter for the current screencast session. */
+    private screencastSequence: number = 0;
 
     // ─── Lifecycle ─────────────────────────────────────────
 
@@ -194,6 +243,178 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         return this.page.innerText('body');
     }
 
+    /**
+     * Return the current page title. Returns '' when no page is open (guarded,
+     * never throws on a closed adapter).
+     */
+    public override async GetTitle(): Promise<string> {
+        if (!this.page) {
+            return '';
+        }
+        return this.page.title();
+    }
+
+    /**
+     * Wait until the page reaches the given load state. No-op when no page is
+     * open (guarded, never throws on a closed adapter).
+     */
+    public override async WaitForLoadState(
+        state: 'load' | 'domcontentloaded' | 'networkidle'
+    ): Promise<void> {
+        if (!this.page) {
+            return;
+        }
+        await this.page.waitForLoadState(state);
+    }
+
+    /**
+     * Capture the page's accessibility tree, mapped recursively into our own
+     * {@link AccessibilityNode} type. Returns `null` when no page is open or
+     * Playwright produces no snapshot (e.g. a blank page).
+     */
+    public override async GetAccessibilitySnapshot(): Promise<AccessibilityNode | null> {
+        if (!this.page) {
+            return null;
+        }
+        // `page.accessibility` exists at runtime but was dropped from Playwright's
+        // public types in 1.58; bridge to it through a precise typed view.
+        const accessibility = (this.page as unknown as { accessibility: PlaywrightAccessibilityNamespace }).accessibility;
+        const root = await accessibility.snapshot();
+        return root ? this.mapAccessibilityNode(root) : null;
+    }
+
+    /**
+     * Recursively map a Playwright accessibility snapshot node into our own
+     * {@link AccessibilityNode}. Null-safe on every field; omits empty children.
+     */
+    private mapAccessibilityNode(node: PlaywrightAXNode): AccessibilityNode {
+        const mapped = new AccessibilityNode();
+        mapped.Role = node.role ?? '';
+        mapped.Name = node.name ?? '';
+        if (node.value !== undefined) {
+            mapped.Value = String(node.value);
+        }
+        if (node.children && node.children.length > 0) {
+            mapped.Children = node.children.map(child => this.mapAccessibilityNode(child));
+        }
+        return mapped;
+    }
+
+    /**
+     * Introspect a single element via `page.locator(selector)`. Reports
+     * existence (`count() > 0`), visibility, inner text, and bounding box.
+     * Never throws on a missing element — returns `Exists:false` instead.
+     * Bounded by the configured action timeout where Playwright supports it.
+     */
+    public override async QueryElement(selector: string): Promise<ElementInfo> {
+        const info = new ElementInfo();
+        if (!this.page) {
+            return info;
+        }
+
+        try {
+            const locator = this.page.locator(selector);
+            const count = await locator.count();
+            if (count === 0) {
+                return info; // Exists:false, Visible:false, Text:''
+            }
+
+            info.Exists = true;
+            // Scope subsequent reads to the first match for stability.
+            const first = locator.first();
+            info.Visible = await first.isVisible();
+
+            // innerText can throw on detached/hidden nodes — guard it.
+            try {
+                info.Text = await first.innerText({ timeout: this.config.ActionTimeoutMs });
+            } catch {
+                info.Text = '';
+            }
+
+            const box = await first.boundingBox();
+            if (box) {
+                const bb = new BoundingBox();
+                bb.XMin = box.x;
+                bb.YMin = box.y;
+                bb.XMax = box.x + box.width;
+                bb.YMax = box.y + box.height;
+                info.BoundingBox = bb;
+            }
+        } catch {
+            // Any failure (invalid selector, navigation race) → treat as absent.
+            return new ElementInfo();
+        }
+
+        return info;
+    }
+
+    // ─── Screencast (CDP live viewport feed) ───────────────
+
+    /**
+     * Start a CDP-backed live screencast of the viewport.
+     *
+     * Obtains a CDP session via `context.newCDPSession(page)`, subscribes to
+     * `Page.screencastFrame`, and for each frame decodes the payload into a
+     * {@link ScreencastFrame} (with a monotonic SequenceNumber), invokes
+     * `onFrame`, then acks the frame via `Page.screencastFrameAck` so Chromium
+     * continues streaming. Calling start while a screencast is already running
+     * is a no-op (the existing session keeps streaming).
+     *
+     * @param onFrame - Callback invoked with each decoded frame.
+     * @param opts - Optional sizing / quality / format / frame-skip controls.
+     */
+    public override async StartScreencast(
+        onFrame: (frame: ScreencastFrame) => void,
+        opts?: ScreencastOptions
+    ): Promise<void> {
+        this.requirePage();
+        if (this.screencastSession) {
+            return; // Already streaming — don't double-subscribe.
+        }
+
+        const session = await this.context!.newCDPSession(this.page!);
+        this.screencastSession = session;
+        this.screencastSequence = 0;
+
+        session.on('Page.screencastFrame', (payload: CDPScreencastFramePayload) => {
+            const frame = new ScreencastFrame();
+            frame.DataBase64 = payload.data;
+            frame.Width = payload.metadata.deviceWidth;
+            frame.Height = payload.metadata.deviceHeight;
+            frame.SequenceNumber = this.screencastSequence++;
+            onFrame(frame);
+
+            // Ack so Chromium keeps producing frames. Best-effort — if the
+            // session is detaching mid-flight, swallow the error.
+            session.send('Page.screencastFrameAck', { sessionId: payload.sessionId }).catch(() => {});
+        });
+
+        await session.send('Page.startScreencast', {
+            format: opts?.Format ?? 'jpeg',
+            quality: opts?.Quality,
+            maxWidth: opts?.MaxWidth,
+            maxHeight: opts?.MaxHeight,
+            everyNthFrame: opts?.EveryNthFrame,
+        });
+    }
+
+    /**
+     * Stop the active screencast (if any): tell Chromium to stop streaming,
+     * detach the CDP session, and clear screencast state. Safe to call when no
+     * screencast is running. Best-effort — teardown errors are swallowed.
+     */
+    public override async StopScreencast(): Promise<void> {
+        const session = this.screencastSession;
+        if (!session) {
+            return;
+        }
+        this.screencastSession = null;
+        this.screencastSequence = 0;
+
+        await session.send('Page.stopScreencast').catch(() => {});
+        await session.detach().catch(() => {});
+    }
+
     // ─── Action Execution ──────────────────────────────────
 
     public override async ExecuteAction(action: BrowserAction): Promise<ActionExecutionResult> {
@@ -257,6 +478,10 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
             case 'KeyUp':
                 await page.keyboard.up(action.Key);
+                break;
+
+            case 'MouseMove':
+                await page.mouse.move(action.X, action.Y);
                 break;
 
             case 'Scroll':

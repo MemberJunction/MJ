@@ -232,6 +232,9 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
             case 'KeyUp':
                 await page.keyboard.up(action.Key);
                 break;
+            case 'MouseMove':
+                await page.mouse.move(action.X, action.Y);
+                break;
             case 'Scroll':
                 await page.mouse.wheel(action.DeltaX, action.DeltaY);
                 break;

@@ -18,6 +18,10 @@ import {
     BrowserConfig,
     ActionExecutionResult,
     CookieEntry,
+    ScreencastFrame,
+    ScreencastOptions,
+    AccessibilityNode,
+    ElementInfo,
 } from '../types/browser.js';
 
 /**
@@ -82,6 +86,103 @@ export abstract class BaseBrowserAdapter {
     public async GetVisibleText(): Promise<string> {
         // No-op default — adapters with a live page override this.
         return '';
+    }
+
+    /**
+     * Capture the current page's title for cheap perception / sync.
+     *
+     * Default implementation returns an empty string so adapters without a live
+     * page don't break — it's a non-throwing, additive default. Adapters backed
+     * by a real page (e.g. Playwright) override this to return the page title.
+     *
+     * @returns The page title, or '' when unavailable.
+     */
+    public async GetTitle(): Promise<string> {
+        // No-op default — adapters with a live page override this.
+        return '';
+    }
+
+    /**
+     * Wait until the page reaches a given load state.
+     *
+     * Useful after a navigation/action to let the page settle before the next
+     * perception step. Default implementation is a no-op resolve so adapters
+     * that cannot observe load state don't break — additive and non-throwing.
+     * Adapters backed by a real page (e.g. Playwright) override this.
+     *
+     * @param state - 'load', 'domcontentloaded', or 'networkidle'.
+     */
+    public async WaitForLoadState(
+        _state: 'load' | 'domcontentloaded' | 'networkidle'
+    ): Promise<void> {
+        // No-op default — adapters with a live page override this.
+    }
+
+    /**
+     * Capture the page's accessibility tree for token-efficient, structured
+     * perception (a lighter-weight alternative to a screenshot).
+     *
+     * Default implementation returns `null` so adapters that cannot produce an
+     * accessibility tree don't break — additive and non-throwing. Adapters
+     * backed by a real page (e.g. Playwright) override this.
+     *
+     * @returns The root {@link AccessibilityNode}, or `null` when unavailable.
+     */
+    public async GetAccessibilitySnapshot(): Promise<AccessibilityNode | null> {
+        // No-op default — adapters with a live page override this.
+        return null;
+    }
+
+    /**
+     * Introspect a single element matched by a CSS selector — its existence,
+     * visibility, text, and bounding box — without ever throwing on a miss.
+     *
+     * Default implementation reports the element as absent so adapters that
+     * cannot query the DOM don't break — additive and non-throwing. Adapters
+     * backed by a real page (e.g. Playwright) override this.
+     *
+     * @param selector - CSS selector identifying the target element.
+     * @returns An {@link ElementInfo}; `{ Exists:false, Visible:false, Text:'' }` when missing.
+     */
+    public async QueryElement(_selector: string): Promise<ElementInfo> {
+        // No-op default — adapters with a live page override this.
+        return new ElementInfo();
+    }
+
+    // ─── Screencast (CDP live viewport feed) ───────────────
+
+    /**
+     * Start a live screencast of the browser viewport, invoking `onFrame` for
+     * each captured frame until {@link StopScreencast} is called.
+     *
+     * Default implementation is a no-op resolve: it starts no feed and emits no
+     * frames. This is the safer additive default — a consumer that
+     * opportunistically requests a live feed on an adapter that can't provide
+     * one (e.g. a non-CDP backend) simply receives nothing rather than an
+     * exception that would break an otherwise-working automation loop. Adapters
+     * that can drive CDP (e.g. PlaywrightBrowserAdapter) override this to emit
+     * real {@link ScreencastFrame}s.
+     *
+     * @param onFrame - Callback invoked with each captured frame.
+     * @param opts - Optional {@link ScreencastOptions} (size, quality, format, frame skipping).
+     */
+    public async StartScreencast(
+        _onFrame: (frame: ScreencastFrame) => void,
+        _opts?: ScreencastOptions
+    ): Promise<void> {
+        // No-op default — screencast is not supported by this adapter.
+        // Resolves rather than throws so requesting a live feed is always safe.
+    }
+
+    /**
+     * Stop a screencast previously started via {@link StartScreencast} and
+     * release any associated resources (e.g. the CDP session).
+     *
+     * Default implementation is a no-op — safe to call even when no screencast
+     * is active or the adapter never supported one.
+     */
+    public async StopScreencast(): Promise<void> {
+        // No-op default — nothing to stop on adapters without screencast support.
     }
 
     // ─── Action Execution ──────────────────────────────────
