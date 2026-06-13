@@ -64,6 +64,26 @@ export abstract class BaseBrowserAdapter {
      */
     public abstract CaptureScreenshot(): Promise<string>;
 
+    // ─── Perception ────────────────────────────────────────
+
+    /**
+     * Read the visible text of the current page for agent perception.
+     *
+     * Returns the rendered (visible) text content of the page body — useful
+     * for an LLM controller that needs the page's textual state without a
+     * screenshot. Adapters backed by a live page (e.g. Playwright) override
+     * this to return the real page text.
+     *
+     * Default implementation returns an empty string so adapters that cannot
+     * read page text don't break — it's a non-throwing, additive default.
+     *
+     * @returns The page's visible text, or '' if unavailable.
+     */
+    public async GetVisibleText(): Promise<string> {
+        // No-op default — adapters with a live page override this.
+        return '';
+    }
+
     // ─── Action Execution ──────────────────────────────────
 
     /**

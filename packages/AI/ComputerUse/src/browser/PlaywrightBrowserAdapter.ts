@@ -179,6 +179,21 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         return buffer.toString('base64');
     }
 
+    // ─── Perception ────────────────────────────────────────
+
+    /**
+     * Read the visible text of the current page (the rendered text of <body>).
+     * Used by consumers that need page text for agent perception without a
+     * screenshot. Returns '' when no page is open (guarded, never throws on
+     * a closed adapter).
+     */
+    public override async GetVisibleText(): Promise<string> {
+        if (!this.page) {
+            return '';
+        }
+        return this.page.innerText('body');
+    }
+
     // ─── Action Execution ──────────────────────────────────
 
     public override async ExecuteAction(action: BrowserAction): Promise<ActionExecutionResult> {
@@ -207,11 +222,29 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
         switch (action.Type) {
             case 'Click':
-                await this.executeClick(page, action);
+                if (action.Selector) {
+                    // Selector path: click the matched element directly; the
+                    // X/Y/BoundingBox coordinates are ignored when a selector
+                    // is supplied.
+                    await page.click(action.Selector, {
+                        button: action.Button,
+                        clickCount: action.ClickCount,
+                        timeout: this.config.ActionTimeoutMs,
+                    });
+                } else {
+                    await this.executeClick(page, action);
+                }
                 break;
 
             case 'Type':
-                await page.keyboard.type(action.Text);
+                if (action.Selector) {
+                    // Selector path: focus the matched element, then type so that
+                    // keystroke events (and any input handlers) fire naturally.
+                    await page.locator(action.Selector).focus({ timeout: this.config.ActionTimeoutMs });
+                    await page.keyboard.type(action.Text);
+                } else {
+                    await page.keyboard.type(action.Text);
+                }
                 break;
 
             case 'Keypress':
@@ -227,11 +260,23 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 break;
 
             case 'Scroll':
-                await page.mouse.wheel(action.DeltaX, action.DeltaY);
+                if (action.Selector) {
+                    // Selector path: bring the matched element into view; the
+                    // delta scroll is ignored when a selector is supplied.
+                    await page.locator(action.Selector).scrollIntoViewIfNeeded({ timeout: this.config.ActionTimeoutMs });
+                } else {
+                    await page.mouse.wheel(action.DeltaX, action.DeltaY);
+                }
                 break;
 
             case 'Wait':
-                await page.waitForTimeout(action.DurationMs);
+                if (action.Selector) {
+                    // Selector path: wait for the element to appear, bounded by
+                    // the configured action timeout; DurationMs is ignored.
+                    await page.waitForSelector(action.Selector, { timeout: this.config.ActionTimeoutMs });
+                } else {
+                    await page.waitForTimeout(action.DurationMs);
+                }
                 break;
 
             case 'Navigate':

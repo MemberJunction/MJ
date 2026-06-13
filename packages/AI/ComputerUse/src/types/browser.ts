@@ -36,12 +36,24 @@ export class ClickAction {
     public Button: 'left' | 'right' | 'middle' = 'left';
     /** Number of clicks (1 = single, 2 = double) */
     public ClickCount: number = 1;
+    /**
+     * Optional CSS selector identifying the target. When set, the adapter
+     * clicks the matched element (robust DOM targeting) and X/Y/BoundingBox
+     * are ignored; when omitted, the existing coordinate click is used.
+     */
+    public Selector?: string;
 }
 
 export class TypeAction {
     public readonly Type = 'Type' as const;
     /** Text to type into the currently focused element */
     public Text: string = '';
+    /**
+     * Optional CSS selector to focus before typing. When set, the adapter
+     * focuses/fills that element; when omitted, text goes to the currently
+     * focused element (existing behavior).
+     */
+    public Selector?: string;
 }
 
 export class KeypressAction {
@@ -68,12 +80,24 @@ export class ScrollAction {
     public DeltaY: number = 0;
     /** Horizontal scroll delta (positive = right, negative = left) */
     public DeltaX: number = 0;
+    /**
+     * Optional CSS selector to scroll into view. When set, the adapter scrolls
+     * that element into view and DeltaX/DeltaY are ignored; when omitted, the
+     * existing delta scroll is used.
+     */
+    public Selector?: string;
 }
 
 export class WaitAction {
     public readonly Type = 'Wait' as const;
     /** Duration in milliseconds */
     public DurationMs: number = 1000;
+    /**
+     * Optional CSS selector to wait for. When set, the adapter waits until the
+     * element appears (bounded by the action timeout); when omitted, it waits
+     * DurationMs (existing behavior).
+     */
+    public Selector?: string;
 }
 
 export class NavigateAction {
