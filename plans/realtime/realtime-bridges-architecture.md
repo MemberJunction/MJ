@@ -80,20 +80,20 @@ So when you asked "most of that is a server engine, right? plug it right in with
 ```mermaid
 graph TD
     subgraph Meta["Metadata (CodeGen entities, seeded via mj-sync)"]
-        P["RealtimeBridgeProvider<br/>registry + capability flags"]
-        ID["RealtimeBridgeAgentIdentity<br/>agent's address / phone#"]
+        P["AIBridgeProvider<br/>registry + capability flags"]
+        ID["AIBridgeAgentIdentity<br/>agent's address / phone#"]
         SB["AIAgentSessionBridge<br/>session ↔ transport binding"]
         PART["AIAgentSessionBridgeParticipant<br/>who's on the call"]
     end
 
     subgraph Base["Cross-platform base (no execution)"]
-        EB["RealtimeBridgeEngineBase<br/>(BaseEngine) — caches providers,<br/>capabilities, agent identities"]
+        EB["AIBridgeEngineBase<br/>(BaseEngine) — caches providers,<br/>capabilities, agent identities"]
         BBP["BaseRealtimeBridge (abstract)<br/>lifecycle + capability methods,<br/>NotImplemented by default"]
         TT["TurnTakingPolicy<br/>passive / active / hybrid<br/>(platform-agnostic)"]
     end
 
     subgraph Server["Server coordination & execution"]
-        ENG["RealtimeBridgeEngine<br/>(extends base) — bot lifecycle,<br/>host affinity, janitor, calendar watchers,<br/>inbound routing"]
+        ENG["AIBridgeEngine<br/>(extends base) — bot lifecycle,<br/>host affinity, janitor, calendar watchers,<br/>inbound routing"]
         RUN["RealtimeSessionRunner<br/>(EXISTING realtime engine)"]
     end
 
@@ -125,11 +125,11 @@ graph TD
 
 **The engine pair mirrors `AIEngineBase` / `AIEngine` exactly** (your explicit ask):
 
-- **`RealtimeBridgeEngineBase`** (`@memberjunction/ai-bridge-base`, proposed) — `BaseEngine`
-  subclass. Caches `RealtimeBridgeProvider` rows + their capability flags + `RealtimeBridgeAgentIdentity`
+- **`AIBridgeEngineBase`** (`@memberjunction/ai-bridge-base`, proposed) — `BaseEngine`
+  subclass. Caches `AIBridgeProvider` rows + their capability flags + `AIBridgeAgentIdentity`
   rows. Pure metadata: provider resolution (by name, by join-URL pattern, by inbound number),
   capability lookups, identity resolution. **No execution.** Reactive via `BaseEngine` events.
-- **`RealtimeBridgeEngine`** (`@memberjunction/ai-bridge-server`, proposed) — extends the base,
+- **`AIBridgeEngine`** (`@memberjunction/ai-bridge-server`, proposed) — extends the base,
   adds **all coordination + execution**: spinning up bot connections, the per-node host registry
   (`HostInstanceID` affinity — copied from `AIAgentSession`), the janitor (reconcile orphaned bot
   sessions), calendar/invite watchers, inbound-call routing, and wiring each bridge's audio to/from
@@ -147,7 +147,7 @@ graph TD
    driver (`ZoomBridge`) implements only the **irreducibly platform-specific** primitives.
 2. **Capability-gated optional features.** Methods that not every platform supports are **virtual,
    throwing `BridgeCapabilityNotSupportedError` by default**. The matching boolean flag on
-   `RealtimeBridgeProvider` tells callers whether to call. **The engine checks the flag first; the
+   `AIBridgeProvider` tells callers whether to call. **The engine checks the flag first; the
    throw is defense-in-depth.** Metadata says "don't call this," code refuses to pretend.
 
 ```mermaid
@@ -190,8 +190,8 @@ A driver advertises what it overrode; the **seed metadata flags must match** (va
 is the single biggest reuse win: one session record, one lifecycle, one persistence/transcript path,
 whether the media plane is a browser, a Zoom room, or a phone line.
 
-**Five new entities** (per open question #6, the provider-channel junction is in): `RealtimeBridgeProvider`,
-`RealtimeBridgeAgentIdentity`, `RealtimeBridgeProviderChannel`, `AIAgentSessionBridge`,
+**Five new entities** (per open question #6, the provider-channel junction is in): `AIBridgeProvider`,
+`AIBridgeAgentIdentity`, `AIBridgeProviderChannel`, `AIAgentSessionBridge`,
 `AIAgentSessionBridgeParticipant`. **The bridge's channels live in the *same* `AIAgentChannel`
 registry as MJ-native channels** (open question #6 confirmed: metadata-declared *and* runtime-dynamic
 both supported) — that is the "3rd-party channels understood the same basic way as MJ channels"
@@ -201,16 +201,16 @@ this migration does not modify the shipped `AIAgentSessionChannel`.
 
 ```mermaid
 erDiagram
-    AIAgent ||--o{ RealtimeBridgeAgentIdentity : "reachable as"
-    RealtimeBridgeProvider ||--o{ RealtimeBridgeAgentIdentity : "on platform"
-    RealtimeBridgeProvider ||--o{ AIAgentSessionBridge : "transports via"
-    RealtimeBridgeProvider ||--o{ RealtimeBridgeProviderChannel : "contributes"
-    AIAgentChannel ||--o{ RealtimeBridgeProviderChannel : "as channel"
+    AIAgent ||--o{ AIBridgeAgentIdentity : "reachable as"
+    AIBridgeProvider ||--o{ AIBridgeAgentIdentity : "on platform"
+    AIBridgeProvider ||--o{ AIAgentSessionBridge : "transports via"
+    AIBridgeProvider ||--o{ AIBridgeProviderChannel : "contributes"
+    AIAgentChannel ||--o{ AIBridgeProviderChannel : "as channel"
     AIAgentSession ||--o| AIAgentSessionBridge : "bridged by"
     AIAgentSessionBridge ||--o{ AIAgentSessionBridgeParticipant : "has"
     User ||--o{ AIAgentSessionBridgeParticipant : "is (if matched)"
 
-    RealtimeBridgeProvider {
+    AIBridgeProvider {
         uuid ID PK
         string Name "Zoom, Microsoft Teams, Twilio…"
         string BridgeType "Meeting | Telephony"
@@ -235,7 +235,7 @@ erDiagram
         string ConfigSchema "JSON Schema"
         string Configuration "JSON"
     }
-    RealtimeBridgeAgentIdentity {
+    AIBridgeAgentIdentity {
         uuid ID PK
         uuid AgentID FK
         uuid ProviderID FK
@@ -245,9 +245,9 @@ erDiagram
         bool IsActive
         string Configuration "JSON"
     }
-    RealtimeBridgeProviderChannel {
+    AIBridgeProviderChannel {
         uuid ID PK
-        uuid ProviderID FK "→ RealtimeBridgeProvider"
+        uuid ProviderID FK "→ AIBridgeProvider"
         uuid ChannelID FK "→ AIAgentChannel (same registry as MJ channels)"
         bool IsDefault "auto-attach on connect"
         int Sequence
@@ -532,7 +532,7 @@ flowchart TD
         IMC["In-meeting command<br/>participant types '@agent join' in chat"]
     end
 
-    OD & SC & INV & NAT & IR & IMC --> BIND["RealtimeBridgeEngine creates an<br/>AIAgentSessionBridge (+ AIAgentSession)<br/>and connects the driver"]
+    OD & SC & INV & NAT & IR & IMC --> BIND["AIBridgeEngine creates an<br/>AIAgentSessionBridge (+ AIAgentSession)<br/>and connects the driver"]
     BIND --> LIVE["Agent is live on the bridge"]
 
     style INV fill:#2d5016,stroke:#1a5c3a,color:#fff
@@ -544,7 +544,7 @@ flowchart TD
 1. **On-demand + Scheduled first** (Zoom) — fully under our control, no marketplace review, immediate
    demo value. `JoinMethod = OnDemand | Scheduled`.
 2. **Invite / Calendar second — the headline UX.** The agent gets a provisioned **identity**
-   (`RealtimeBridgeAgentIdentity`: a calendar mailbox for meetings, a phone number for telephony).
+   (`AIBridgeAgentIdentity`: a calendar mailbox for meetings, a phone number for telephony).
    Organizers just **invite the agent like a human**. A calendar/invite watcher (Graph / Google
    Calendar webhooks or polling) matches incoming invites to agent identities, creates a `Scheduled`
    bridge, and joins at start. **This is the most generic method — every platform has calendar
@@ -565,7 +565,7 @@ is the right call and it pays off well beyond meetings:
 - **It makes the agent a first-class colleague.** Organizers add `sage@customer.com` to an invite
   exactly like a person; the calendar watcher (Graph / Google Calendar) sees it and the agent joins.
   No special "add a bot" UX — the agent is in the directory.
-- **`RealtimeBridgeAgentIdentity` generalizes to "agent presence."** The same row that holds a
+- **`AIBridgeAgentIdentity` generalizes to "agent presence."** The same row that holds a
   calendar mailbox is the seam for, over time: **email** (the agent reads/sends async — a natural
   follow-on once it has an inbox), **calendar** (proposes/accepts meetings), and **telephony** (the
   phone-number identity for inbound DID). One identity model, many surfaces. The `IdentityType` enum
@@ -579,7 +579,7 @@ is the right call and it pays off well beyond meetings:
 
 **Open sub-question for later phases (not blocking the migration):** the exact provisioning
 handshake (self-service admin-consent flow vs. customer creates the mailbox and shares credentials).
-The schema is ready either way — `RealtimeBridgeAgentIdentity` + provider `Configuration` carry it.
+The schema is ready either way — `AIBridgeAgentIdentity` + provider `Configuration` carry it.
 
 ---
 
@@ -717,10 +717,10 @@ calling* is the watch-list global add as its API matures.
 | Phase | Deliverable |
 |---|---|
 | **0 — Transport seam** | Complete the server-bridged realtime **media** transport: `BaseRealtimeBridge` abstract (media tracks + capability methods) + the engine wiring `SendInput`/`OnOutput` ↔ `RealtimeSessionRunner`; a loopback test bridge proves media round-trips with no platform. The unification foundation. |
-| **1 — Schema + engines** | The migration (5 entities) → CodeGen → `RealtimeBridgeEngineBase` + `RealtimeBridgeEngine` + capability-gated base driver + the platform-agnostic turn-taking policy (passive/active/hybrid). |
+| **1 — Schema + engines** | The migration (5 entities) → CodeGen → `AIBridgeEngineBase` + `AIBridgeEngine` + capability-gated base driver + the platform-agnostic turn-taking policy (passive/active/hybrid). |
 | **2 — Server-side channel plane** | Complete the deferred server-side channel execution: dynamic tool-definition contribution into `RealtimeSessionRunner.ExtraTools`, optional client surface, the `Meeting Controls` channel (roster/hand-raise-queue/who's-speaking/timer → facilitator). Makes 3rd-party channels = MJ channels. |
 | **3 — Zoom meeting bridge** | `ZoomBridge` (on-demand + scheduled join), participant diarization, all three turn modes, Zoom-native channels (chat, whiteboard), observer console reuse. First real platform, end-to-end. |
-| **4 — Invite/calendar joins + agent identity** | `RealtimeBridgeAgentIdentity` (tenant mailbox) + the calendar watcher: "invite the agent like a person." Headline UX; shared with inbound telephony. |
+| **4 — Invite/calendar joins + agent identity** | `AIBridgeAgentIdentity` (tenant mailbox) + the calendar watcher: "invite the agent like a person." Headline UX; shared with inbound telephony. |
 | **5 — Teams → Google Meet → Webex → Slack → Discord** | Minimal subclasses on the proven base, one at a time, each with its capability metadata + native channels. |
 | **6 — Telephony: RingCentral (UCaaS) → Twilio → Vonage** | `BaseTelephonyBridge`: **outbound** (agent places calls) + **inbound** (DID routes to the agent), DTMF, transfer. Same engine/session/turn-taking. |
 | **7 — Multi-party** | 1+ agents in one shared room (emergent — §4c); multi-agent turn-taking discipline; the LiveKit MJ-native-room bridge. Kills the standalone agent-panel/multi-human tracks. |
@@ -785,7 +785,7 @@ Every phase is "done" only when **all** of the following hold — this is baked 
 ## 10. Security, multi-tenancy & cost
 
 - **Provider credentials** (Zoom SDK keys, Twilio auth) resolve through MJ's credential system
-  (`GetAIAPIKey`-style), never hardcoded; referenced by `RealtimeBridgeProvider.Configuration`.
+  (`GetAIAPIKey`-style), never hardcoded; referenced by `AIBridgeProvider.Configuration`.
 - **Authorization to bridge** — joining an external meeting / placing a call on the org's behalf is a
   privileged action; gated by a dedicated authorization (mirroring `Realtime: Advanced Session
   Controls`), and every bridge session is owned by a `UserID` and fully audited via the session +
@@ -805,7 +805,7 @@ Every phase is "done" only when **all** of the following hold — this is baked 
    `packages/AI/Bridge` (`@memberjunction/ai-bridge-server`), beside the realtime packages. Agree?
    - YES
 
-2. **Naming** — `RealtimeBridgeProvider` / `AIAgentSessionBridge` etc. vs. a shorter prefix
+2. **Naming** — `AIBridgeProvider` / `AIAgentSessionBridge` etc. vs. a shorter prefix
    (`BridgeProvider`?). I lean on `…Bridge…` tied to `AIAgentSession` for discoverability.
    - AIAgentSessionBridget is good I think so stays in AI...
 
@@ -820,7 +820,7 @@ Every phase is "done" only when **all** of the following hold — this is baked 
    tenant (their M365/Google) or an MJ-managed identity? Affects Phase 3.
    - I think agents get an inbox in the customer's tenant and over time that can be used for email, thoughts?
 
-6. **Bridge-contributed channels (§4b)** — do we add a 5th entity `RealtimeBridgeProviderChannel`
+6. **Bridge-contributed channels (§4b)** — do we add a 5th entity `AIBridgeProviderChannel`
    (a junction declaring which registered channels a provider contributes by default, e.g. Zoom →
    Meeting Controls + Native Whiteboard), while still allowing fully *runtime-contributed* channels
    with no registry row? I lean yes — it makes the common case discoverable in metadata without
@@ -853,16 +853,16 @@ Every phase is "done" only when **all** of the following hold — this is baked 
 > the phase is "done." Skip the `sql-converter` PG suite only.
 
 ### Phase 1 — Schema + engines  ⟵ START HERE (blocked on CodeGen)
-- [ ] **Migration** `V…__v5.42.x__Realtime_Bridges.sql` — 5 tables (`RealtimeBridgeProvider`,
-      `RealtimeBridgeAgentIdentity`, `RealtimeBridgeProviderChannel`, `AIAgentSessionBridge`,
+- [ ] **Migration** `V…__v5.42.x__Realtime_Bridges.sql` — 5 tables (`AIBridgeProvider`,
+      `AIBridgeAgentIdentity`, `AIBridgeProviderChannel`, `AIAgentSessionBridge`,
       `AIAgentSessionBridgeParticipant`) + extended props. **← Amith reviews + runs CodeGen.**
 - [ ] After CodeGen: verify generated entity types; no drift; build `@memberjunction/core-entities`.
-- [ ] `@memberjunction/ai-bridge-base` package: `RealtimeBridgeEngineBase` (BaseEngine — caches
+- [ ] `@memberjunction/ai-bridge-base` package: `AIBridgeEngineBase` (BaseEngine — caches
       providers, capabilities, identities, provider-channels), provider/identity resolution.
 - [ ] `BaseRealtimeBridge` abstract (media-track contract + capability-gated methods, `NotSupported`
       defaults), `BridgeCapabilityNotSupportedError`, capability types (union types).
 - [ ] `TurnTakingPolicy` (passive/active/hybrid) — pure, platform-agnostic, on diarized transcript.
-- [ ] `@memberjunction/ai-bridge-server` package: `RealtimeBridgeEngine` (extends base — host
+- [ ] `@memberjunction/ai-bridge-server` package: `AIBridgeEngine` (extends base — host
       registry, janitor, lifecycle scaffold), ClassFactory driver resolution.
 - [ ] Server-side `MJ…EntityServer` subclasses + `ValidateAsync` invariants (capability/flag
       coherence, one-default-per-provider-channel, identity uniqueness).
@@ -873,7 +873,7 @@ Every phase is "done" only when **all** of the following hold — this is baked 
 
 ### Phase 0 — Transport seam  (do alongside/after Phase 1 base; it's the foundation)
 - [ ] `BaseRealtimeBridge` media-track plumbing wired to `IRealtimeSession.SendInput`/`OnOutput`.
-- [ ] `RealtimeBridgeEngine` ↔ `RealtimeSessionRunner` media wiring (server-bridged completion).
+- [ ] `AIBridgeEngine` ↔ `RealtimeSessionRunner` media wiring (server-bridged completion).
 - [ ] `LoopbackBridge` test driver (in-memory media round-trip, no platform).
 - [ ] Resampling/format normalization to the model's rate; backpressure/reconnect scaffold.
 - [ ] **Quality bar** (as above) + extend the guide with the transport-seam section.
@@ -893,7 +893,7 @@ Every phase is "done" only when **all** of the following hold — this is baked 
 - [ ] **Quality bar** + guide "adding a bridge driver" walkthrough (Zoom as the worked example).
 
 ### Phase 4 — Invite/calendar joins + agent identity
-- [ ] `RealtimeBridgeAgentIdentity` provisioning flow + tenant mailbox model.
+- [ ] `AIBridgeAgentIdentity` provisioning flow + tenant mailbox model.
 - [ ] Calendar watcher (Graph / Google) → match invite → scheduled bridge → join.
 - [ ] **Quality bar** + guide section on identity & invite joins.
 
