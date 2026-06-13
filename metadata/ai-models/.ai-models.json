@@ -16080,5 +16080,36 @@
       "lastModified": "2026-06-13T11:33:54.362Z",
       "checksum": "eae22eb04791813f6810953f043e681547227784bdd0d02cafb5babb6084f665"
     }
+  },
+  {
+    "fields": {
+      "Name": "Inworld Realtime",
+      "PowerRank": 11,
+      "Description": "Inworld's Realtime API — a single-WebSocket, full-duplex, tool-calling speech-to-speech realtime stack. Input is streamed audio (server-side STT with voice profiling); output is synthesized speech via Realtime TTS-2 (supports inline steering tags like [laugh]). Inworld brokers many underlying LLMs selected per session via modelId (e.g. anthropic/claude-sonnet-4-6); STT engine and TTS voice are configured independently. Turn-taking is semantic VAD with adjustable eagerness, handling true barge-in. Session components are swappable mid-session without reconnect via session.update. Supports fluent tool calling. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass InworldRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inworld",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "InworldRealtime",
+            "APIName": "anthropic/claude-sonnet-4-6",
+            "MaxInputTokens": 128000,
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          }
+        }
+      ]
+    }
   }
 ]
