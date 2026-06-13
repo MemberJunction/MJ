@@ -68,6 +68,7 @@ For each capability below, answer from sources or leave `null`:
 - Async semantics — are operations sync or do they return jobs?
 - Filter/search — present? What query language?
 - Rate limiting — documented limits?
+- **Authoritative object enumeration** — does the vendor expose a list/describe endpoint that returns the **COMPLETE gamut** of objects (and fields) the credential can access (not a stub, not a fixed subset)? If yes, the connector overrides `DiscoveryIsAuthoritative => true` so a comprehensive refresh may DEACTIVATE objects/fields the source dropped (reversible). If no — stubbed/cache-driven/partial discovery — it stays `false` (default) and NOTHING is ever deactivated (absence proves nothing; see `connector-code-conventions.md` → "Authoritative discovery + deactivation").
 
 Each capability's answer informs primitive composition. Each unprovable answer → `null`. The framework supports any combination that has discoverable capabilities.
 

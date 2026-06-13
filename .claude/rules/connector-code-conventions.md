@@ -76,6 +76,30 @@ code (cases 2/3). The actual discovered objects/fields are filled at runtime (ca
 (case 3). A catalog baked in code where the source admits more — or any build-time data sampling — is
 a **DEFECT** (it both freezes the wrong answer and silently drops everything it didn't guess).
 
+### Authoritative discovery + deactivation (`DiscoveryIsAuthoritative` — governs runtime de-activation)
+
+Runtime discovery feeds the comprehensive-refresh DEACTIVATION path (`IntegrationRefreshConnectorSchema`
+→ `PersistDiscoveredSchema`): objects/fields the source no longer exposes are set `Status='Disabled'`
+(**deactivate, never delete; reversible** — they flip back to `Active` automatically if they reappear on a
+later discovery). That deactivation is GATED on `SourceSchemaInfo.IsAuthoritative`, which comes from the
+connector's **`DiscoveryIsAuthoritative` getter (default `false` on `BaseIntegrationConnector`)**:
+
+- Override `DiscoveryIsAuthoritative => true` **only** with EVIDENCE that the connector's
+  `DiscoverObjects`/`DiscoverFields` (case 2) enumerate the **complete gamut the credentials expose** — a
+  real list/describe endpoint returning EVERYTHING accessible. Then absence in a refresh genuinely means
+  the source dropped it, and deactivation is safe.
+- Leave it **`false` (default)** for: **stubbed** discovery (`DiscoverObjects` returns nothing → static
+  `Declared` metadata is all there is); a **cache-driven** `IntrospectSchema` (the `BaseRESTIntegrationConnector`
+  default re-reads persisted ACTIVE metadata — it is hard-coded **non-authoritative**, `IsAuthoritative:false`);
+  any **partial/scoped** enumeration. There, absence proves NOTHING — deactivation would wrongly wipe the
+  Declared metadata that is the only source.
+- A SCOPED introspection (`ObjectNames` filter) is never authoritative regardless of the getter.
+- Case-3 (sync-time custom-column capture) connectors are NOT authoritative for deactivation — their
+  structure GROWS via promotion, it is not enumerated, so they never disable on absence.
+
+Provable-only applies: affirm authoritative discovery on evidence the endpoint returns the full set —
+never assume it. The pure decision lives in `IntegrationSchemaSync.decideAbsentDeactivations` (unit-tested).
+
 ### Provable-only PK/FK/watermark — NEVER fabricated, the overlay enforces it
 
 The persist-time overlay (`IntegrationSchemaSync` + `decideBooleanOverlay`) is the safety net that makes "provable-only" structural, not a guideline:
