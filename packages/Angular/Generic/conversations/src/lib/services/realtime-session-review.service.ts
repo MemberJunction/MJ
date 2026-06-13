@@ -56,6 +56,40 @@ export interface RealtimeSessionReviewChannelState {
 }
 
 /**
+ * MULTI-LEG channel-state merge: folds every leg's channel rows into one state set,
+ * NEWEST leg wins per channel name — but only a leg that actually SAVED state counts.
+ * A resumed session whose final leg never touched the whiteboard therefore still
+ * reviews with the board an EARLIER leg drew (previously only the primary/newest leg's
+ * rows were consulted, so that board silently vanished from review).
+ *
+ * @param legChannelStates Per-leg channel states, ordered OLDEST → NEWEST (the chain order).
+ * @returns One entry per channel name (case-insensitive), each from the newest leg that
+ *   saved a non-empty state; channels no leg ever saved keep a null-state entry so the
+ *   review still knows the channel existed.
+ */
+export function MergeChainChannelStates(
+  legChannelStates: ReadonlyArray<ReadonlyArray<RealtimeSessionReviewChannelState>>
+): RealtimeSessionReviewChannelState[] {
+  const byName = new Map<string, RealtimeSessionReviewChannelState>();
+  for (const leg of legChannelStates) {
+    for (const state of leg) {
+      const key = state.ChannelName.trim().toLowerCase();
+      if (key.length === 0) {
+        continue;
+      }
+      const existing = byName.get(key);
+      const hasState = typeof state.StateJson === 'string' && state.StateJson.trim().length > 0;
+      // Later legs are newer: a saved state always supersedes; a null/empty state only
+      // registers the channel's existence and never clobbers an earlier saved board.
+      if (!existing || hasState) {
+        byName.set(key, hasState ? state : (existing ?? state));
+      }
+    }
+  }
+  return [...byName.values()];
+}
+
+/**
  * One LEG of a reviewed session chain: a single `MJ: AI Agent Sessions` row plus its own
  * caption turns and delegated-run previews. A session resumed via `lastSessionId` chains
  * legs together (newest leg's `LastSessionID` → prior leg); the review loader walks that
@@ -518,7 +552,9 @@ export class RealtimeSessionReviewService {
       ClosedAt: this.toDate(session.ClosedAt),
       Turns: legs.flatMap(l => l.Turns),
       DelegatedRuns: legs.flatMap(l => l.DelegatedRuns),
-      ChannelStates: this.mapChannels(primary.channels),
+      // Multi-leg: newest leg with a SAVED state wins per channel — a final leg that
+      // never touched the board no longer hides an earlier leg's drawing from review.
+      ChannelStates: MergeChainChannelStates(chain.map(leg => this.mapChannels(leg.channels))),
       Legs: legs,
       Artifacts: artifacts
     };

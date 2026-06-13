@@ -29,7 +29,7 @@
 
     @if (Group.LastTurnPreview) {
       <div class="session-card__preview">
-        <span class="session-card__preview-role">{{ Group.LastTurnRole === 'User' ? 'You' : 'Agent' }}:</span>
+        <span class="session-card__preview-role">{{ Group.LastTurnRole === 'User' ? UserName : 'Agent' }}:</span>
         {{ Group.LastTurnPreview }}
       </div>
     }

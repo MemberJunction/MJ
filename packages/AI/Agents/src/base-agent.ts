@@ -16,7 +16,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -28,6 +28,13 @@ import {
     RealtimeSessionResult
 } from './realtime/realtime-session-runner';
 import { ResolveNarrationInstructionsTemplate } from './realtime/realtime-narration';
+import {
+    BuildVoiceMannerSection,
+    GetNarrationPaceMs,
+    GetProviderVoiceSettings,
+    RealtimeCoAgentConfig,
+    ResolveEffectiveRealtimeConfig
+} from './realtime/realtime-coagent-config';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -1611,7 +1618,7 @@ export class BaseAgent {
      */
     protected async resolveRealtimeModel(
         params: ExecuteAgentParams
-    ): Promise<{ model: BaseRealtimeModel; modelID: string; vendorID: string; apiName: string } | null> {
+    ): Promise<{ model: BaseRealtimeModel; modelID: string; vendorID: string; apiName: string; driverClass?: string } | null> {
         const model = this.selectRealtimeModelEntity(params.agent);
         if (!model) {
             return null;
@@ -1636,7 +1643,7 @@ export class BaseAgent {
             return null;
         }
 
-        return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName };
+        return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
     }
 
     /**
@@ -1656,7 +1663,48 @@ export class BaseAgent {
             return null;
         }
 
+        // Effective-config model preference (realtime.modelPreference, an MJ: AI Models Name or
+        // ID) participates first. METADATA preferences degrade gracefully: an unsatisfiable
+        // preference logs and falls through to the default highest-PowerRank selection.
+        const preference = this.resolveRealtimeEffectiveConfig(agent).realtime?.modelPreference;
+        if (preference) {
+            const wanted = preference.trim().toLowerCase();
+            const preferred = realtimeModels.find(m => UUIDsEqual(m.ID, preference))
+                ?? realtimeModels.find(m => m.Name?.trim().toLowerCase() === wanted);
+            if (preferred) {
+                return preferred;
+            }
+            this.logError(
+                `Realtime model preference '${preference}' for agent '${agent.Name}' matches no Active Realtime ` +
+                'model — falling through to default (highest-PowerRank) selection.',
+                { agent, category: 'RealtimeSession' }
+            );
+        }
+
         return realtimeModels.sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+    }
+
+    /**
+     * Resolves the agent's EFFECTIVE realtime configuration — the agent TYPE's
+     * `DefaultConfiguration` (base layer) deep-merged with the agent's `TypeConfiguration`
+     * (per-agent layer; the server-bridged path has no runtime-override layer). Tolerant:
+     * malformed layers contribute nothing and an unloaded type cache yields no type defaults.
+     * See `realtime/realtime-coagent-config.ts` for the merge contract.
+     *
+     * @param agent The session-driven (Realtime) agent.
+     * @returns The normalized effective configuration (possibly empty, never `null`).
+     */
+    protected resolveRealtimeEffectiveConfig(agent: MJAIAgentEntityExtended): RealtimeCoAgentConfig {
+        let typeDefault: string | null = null;
+        try {
+            if (agent.TypeID) {
+                const type = (AIEngine.Instance.AgentTypes ?? []).find(t => UUIDsEqual(t.ID, agent.TypeID!));
+                typeDefault = type?.DefaultConfiguration ?? null;
+            }
+        } catch {
+            typeDefault = null;
+        }
+        return ResolveEffectiveRealtimeConfig(typeDefault, agent.TypeConfiguration ?? null, null);
     }
 
     /**
@@ -1745,10 +1793,13 @@ export class BaseAgent {
     protected async buildRealtimeSessionDeps(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
-        modelResolution: { model: BaseRealtimeModel; apiName: string },
+        modelResolution: { model: BaseRealtimeModel; apiName: string; driverClass?: string },
         promptRun: MJAIPromptRunEntityExtended | null
     ): Promise<RealtimeSessionRunnerDeps> {
-        const sessionParams = await this.buildRealtimeSessionParams(params, config, modelResolution.apiName);
+        const effectiveConfig = this.resolveRealtimeEffectiveConfig(params.agent);
+        const sessionParams = await this.buildRealtimeSessionParams(
+            params, config, modelResolution.apiName, effectiveConfig, modelResolution.driverClass,
+        );
 
         return {
             Model: modelResolution.model,
@@ -1760,6 +1811,8 @@ export class BaseAgent {
             // DB-driven spoken-progress wording (shared lookup with the client-direct path);
             // null → the runner's documented built-in first-person fallback.
             NarrationInstructionsTemplate: ResolveNarrationInstructionsTemplate(),
+            // Effective-config narration pacing (realtime.narration.paceMs); null → runner default.
+            NarrationPaceMs: GetNarrationPaceMs(effectiveConfig),
             LogStatus: (message, verboseOnly) => this.logStatus(message, verboseOnly ?? false, params),
             LogError: (error) => this.logError(error, { agent: params.agent, category: 'RealtimeSession' })
         };
@@ -1782,7 +1835,9 @@ export class BaseAgent {
     private async buildRealtimeSessionParams(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
-        modelApiName: string
+        modelApiName: string,
+        effectiveConfig?: RealtimeCoAgentConfig,
+        driverClass?: string
     ): Promise<RealtimeSessionParams> {
         const framing =
             `You are the real-time voice for the agent "${params.agent.Name}". Hold a natural, ` +
@@ -1791,16 +1846,24 @@ export class BaseAgent {
             `the work yourself.`;
 
         const basePrompt = config.systemPrompt?.TemplateText ? config.systemPrompt.TemplateText : '';
+        // Effective-config voice persona (realtime.voice.default) → short "Voice & manner" section.
+        const voiceManner = BuildVoiceMannerSection(effectiveConfig);
         const memoryContext = await this.assembleRealtimeContext(params);
 
-        const systemPrompt = [framing, basePrompt, memoryContext]
+        const systemPrompt = [framing, basePrompt, voiceManner, memoryContext]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
+
+        // Provider-matched voice settings (realtime.voice.providers.<provider>) flow into the
+        // driver's open Config bag — the same pact every other config entry rides.
+        const providerVoice = GetProviderVoiceSettings(effectiveConfig, driverClass ?? null);
 
         return {
             Model: modelApiName,
             SystemPrompt: systemPrompt,
-            InitialContext: memoryContext || undefined
+            InitialContext: memoryContext || undefined,
+            // JSONObjectLike -> JSONObject: safe — the settings object came from JSON.parse.
+            Config: providerVoice ? (providerVoice as JSONObject) : undefined
         };
     }
 

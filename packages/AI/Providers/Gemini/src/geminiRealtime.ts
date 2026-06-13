@@ -57,8 +57,13 @@ const GEMINI_CLIENT_TOKEN_EXPIRY_MS = 30 * 60 * 1000;
  * outbound calls — no websocket, no network.
  */
 export interface GeminiLiveSession {
-    /** Streams a realtime media frame (audio now) to the model. */
-    sendRealtimeInput(params: { audio?: GeminiBlob; media?: GeminiBlob }): void;
+    /**
+     * Streams realtime user input to the model — media frames (audio now) AND mid-session
+     * text. Realtime text is the Live API's "respond now" path for in-conversation messages:
+     * native-audio models treat {@link sendClientContent} as history seeding only and will
+     * NOT generate from it mid-call, while realtime text triggers immediately.
+     */
+    sendRealtimeInput(params: { audio?: GeminiBlob; media?: GeminiBlob; text?: string }): void;
     /** Appends client content (used to seed initial context) to the conversation. */
     sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void;
     /** Replies to a server tool call with one or more function responses. */
@@ -557,9 +562,12 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * @inheritdoc
      *
      * Triggers ONE short spoken update. Gemini Live has no per-response-instructions slot
-     * (OpenAI's `response.create.instructions`), so this is **emulated**: the instructions ride as
-     * a user turn with `turnComplete: true` — Gemini's "respond now" trigger — exactly as the
-     * client-direct Gemini driver emulates it.
+     * (OpenAI's `response.create.instructions`), so this is **emulated**: the instructions ride
+     * as a realtime-text user turn (`sendRealtimeInput({ text })`) — the path that triggers
+     * generation on every Live model generation, exactly as the client-direct Gemini driver
+     * emulates it. (A mid-call `sendClientContent` with `turnComplete: true` lands in history
+     * WITHOUT starting generation on native-audio models — the model would stay silent until
+     * the user next speaks.)
      *
      * **Collision behavior: queue.** Deferred behind any in-flight turn (sending it mid-turn would
      * interrupt the pending reply); when it does send, the turn it triggers is marked active so
@@ -570,7 +578,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
     public RequestSpokenUpdate(instructions: string): void {
         this.enqueueOrRun(() => {
             this.responseActive = true;
-            this.requireLive().sendClientContent({ turns: [{ role: 'user', parts: [{ text: instructions }] }], turnComplete: true });
+            this.requireLive().sendRealtimeInput({ text: instructions });
         });
     }
 

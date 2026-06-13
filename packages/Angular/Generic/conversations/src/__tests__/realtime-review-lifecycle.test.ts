@@ -61,7 +61,7 @@ function createHarness(): { component: ConversationChatAreaComponent; stubs: Har
   open['_conversationId'] = null;
   open['isInitialized'] = false; // keep the setter from invoking the heavy load path
   open['Provider'] = {}; // ProviderToUse resolves to this stub, never the global Metadata.Provider
-  open['VoiceSession'] = stubs.voiceSession;
+  open['RealtimeSession'] = stubs.voiceSession;
   open['realtimeReviewService'] = { LoadSessionReview: stubs.loadSessionReview };
   open['cdr'] = { detectChanges: stubs.detectChanges };
   return { component, stubs };

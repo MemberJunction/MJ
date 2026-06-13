@@ -74,6 +74,18 @@ describe('SmartFieldIdentification guardrails', () => {
       it('rejects unbounded (MAX) text', () => {
          expect(mm.eligibleForNameField({ Type: 'nvarchar', Length: -1, IsPrimaryKey: false })).toBe(false);
       });
+
+      it('rejects unbounded (MAX) text when the length arrives under the runtime alias MaxLength', () => {
+         // The advanced-generation metadata query selects `ef.Length AS MaxLength`, so
+         // runtime rows carry MaxLength — checking only Length made the MAX rejection a
+         // silent no-op (how Conversation Details.Message, nvarchar(MAX), got flagged).
+         expect(mm.eligibleForNameField({ Type: 'nvarchar', MaxLength: -1, IsPrimaryKey: false })).toBe(false);
+         expect(mm.eligibleForNameField({ Type: 'nvarchar', MaxLength: 510, IsPrimaryKey: false })).toBe(true);
+      });
+
+      it('rejects virtual fields (view-only columns cannot anchor FK-name joins)', () => {
+         expect(mm.eligibleForNameField({ Type: 'nvarchar', Length: 510, IsPrimaryKey: false, IsVirtual: true })).toBe(false);
+      });
    });
 
    describe('applyNameFieldUpdates', () => {
@@ -90,6 +102,79 @@ describe('SmartFieldIdentification guardrails', () => {
          const result = emptyResult();
          delete (result as Partial<SmartFieldIdentificationResult>).nameFields;
          expect(() => mm.runNameFieldUpdates([], result)).not.toThrow();
+      });
+
+      // ── Single-winner semantics ────────────────────────────────────────────────
+
+      it('flags ONLY the first eligible LLM candidate when nothing is flagged yet', () => {
+         const fields = [
+            { ID: 'f-ext', Name: 'ExternalID', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: false, AutoUpdateIsNameField: true },
+            { ID: 'f-role', Name: 'Role', Type: 'nvarchar', Length: 40, IsPrimaryKey: false, IsNameField: false, AutoUpdateIsNameField: true },
+            { ID: 'f-msg', Name: 'Message', Type: 'nvarchar', Length: -1, IsPrimaryKey: false, IsNameField: false, AutoUpdateIsNameField: true },
+         ];
+         // LLM ranks Message first (ineligible: MAX) — winner must be Role, and ONLY Role.
+         const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: ['Message', 'Role', 'ExternalID'] }));
+         expect(sql).toHaveLength(1);
+         expect(sql[0]).toContain("'f-role'");
+         expect(sql[0]).toContain('IsNameField = 1');
+      });
+
+      it('keeps a single already-valid winner stable even when the LLM proposes a different field', () => {
+         const fields = [
+            { ID: 'f-a', Name: 'Title', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+            { ID: 'f-b', Name: 'Code', Type: 'nvarchar', Length: 40, IsPrimaryKey: false, IsNameField: false, AutoUpdateIsNameField: true },
+         ];
+         const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: ['Code'] }));
+         expect(sql).toHaveLength(0); // no drift: Title stays, Code is not flagged
+      });
+
+      it('repairs multi-flag accumulation: keeps one winner and clears the rest', () => {
+         // The Conversation Details case: three flagged, one of them MAX (ineligible).
+         const fields = [
+            { ID: 'f-ext', Name: 'ExternalID', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+            { ID: 'f-role', Name: 'Role', Type: 'nvarchar', Length: 40, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+            { ID: 'f-msg', Name: 'Message', Type: 'nvarchar', Length: -1, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+         ];
+         const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: [] }));
+         // Winner = ExternalID (first eligible flagged in field/sequence order, no literal 'Name');
+         // Role and Message are cleared. No SET for the winner (already flagged).
+         expect(sql).toHaveLength(2);
+         expect(sql.join('\n')).toContain("'f-role'");
+         expect(sql.join('\n')).toContain("'f-msg'");
+         expect(sql.join('\n')).not.toContain("'f-ext'");
+         for (const stmt of sql) {
+            expect(stmt).toContain('IsNameField = 0');
+         }
+      });
+
+      it('prefers the field literally named Name when repairing multiple flagged fields', () => {
+         const fields = [
+            { ID: 'f-dn', Name: 'DisplayName', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+            { ID: 'f-n', Name: 'Name', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+         ];
+         const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: [] }));
+         expect(sql).toHaveLength(1);
+         expect(sql[0]).toContain("'f-dn'");
+         expect(sql[0]).toContain('IsNameField = 0');
+      });
+
+      it('never clears a pinned loser (AutoUpdateIsNameField = 0)', () => {
+         const fields = [
+            { ID: 'f-n', Name: 'Name', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+            { ID: 'f-pin', Name: 'LegacyName', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: false },
+         ];
+         const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: [] }));
+         expect(sql).toHaveLength(0); // winner Name already set; pinned LegacyName untouched
+      });
+
+      it('clears a stale ineligible flag even when no eligible winner exists', () => {
+         const fields = [
+            { ID: 'f-blob', Name: 'Payload', Type: 'nvarchar', Length: -1, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+         ];
+         const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: [] }));
+         expect(sql).toHaveLength(1);
+         expect(sql[0]).toContain("'f-blob'");
+         expect(sql[0]).toContain('IsNameField = 0');
       });
    });
 
