@@ -2161,7 +2161,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         requestedNames?: string[],
     ): SourceSchemaInfo {
         const engine = IntegrationEngineBase.Instance;
-        const ios = engine.GetIntegrationObjectsByIntegrationID(integrationID);
+        // ACTIVE-only materialization: an object/field a given tenant doesn't expose is marked
+        // Status='Inactive' by discovery (the phantom-skip), and MUST NOT be materialized — creating
+        // empty tables/columns for absent objects wastes storage AND, more importantly, blows up the
+        // per-entity CodeGen + advancedGen (AI form-layout) time on every ApplyAll. The sync path
+        // already filters active (GetActiveIntegrationObjects); this build site now matches it.
+        const ios = engine.GetActiveIntegrationObjects(integrationID);
         const filter = requestedNames && requestedNames.length > 0
             ? new Set(requestedNames.map(n => n.toLowerCase()))
             : null;
@@ -2174,7 +2179,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const result: SourceSchemaInfo = { Objects: [] };
         for (const io of ios) {
             if (filter && !filter.has(io.Name.toLowerCase())) continue;
-            const iofs = engine.GetIntegrationObjectFields(io.ID);
+            // Active fields only — an inactive (source-absent / deactivated) field is not materialized.
+            const iofs = engine.GetIntegrationObjectFields(io.ID).filter(iof => iof.Status === 'Active');
 
             const fields = iofs.map(iof => {
                 const targetIOName = iof.RelatedIntegrationObjectID
@@ -3582,6 +3588,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (entityMapIDs?.length) syncOptions.EntityMapIDs = entityMapIDs;
             if (syncDirection) syncOptions.SyncDirection = syncDirection;
 
+            // Capture the fire instant BEFORE launching the sync. The run-record lookup below
+            // finds the run by recency (StartedAt >= firedAt) rather than by transient status, so
+            // a fast run (0-record / empty connector / quick failure) that finishes before we poll
+            // is still reported with its real RunID instead of an untrackable null. RunSync stamps
+            // StartedAt with an app-side `new Date()`, so this clock is consistent with the row.
+            const firedAt = new Date();
+
             // Fire and forget — progress is tracked inside IntegrationEngine
             const syncPromise = IntegrationEngine.Instance.RunSync(
                 companyIntegrationID,
@@ -3619,25 +3632,45 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     }
                 });
 
-            // Small delay to let the run record get created
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // Resolve the run record by RECENCY, not by transient 'In Progress' status. The prior
+            // implementation slept a fixed 200ms then filtered Status='In Progress' — when the run
+            // finished in under 200ms (an empty connector, a 0-record sync, or a fast synchronous
+            // failure) there was no 'In Progress' row to find, so it returned Success:true with a
+            // null RunID: an optimistic, untrackable result that read as "started" when nothing
+            // could be followed. Poll briefly for ANY run for this connector stamped at/after the
+            // fire instant; that catches both the still-running and the already-finished cases.
+            const firedAtFilter = firedAt.toISOString();
+            let run: { ID: string; Status: string } | null = null;
+            for (let attempt = 0; attempt < 15 && !run; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+                const rv = new RunView();
+                const runResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
+                    EntityName: 'MJ: Company Integration Runs',
+                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND StartedAt >= '${firedAtFilter}'`,
+                    OrderBy: 'StartedAt DESC',
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                    Fields: ['ID', 'Status', 'StartedAt']
+                }, user);
+                if (runResult.Success && runResult.Results.length > 0) {
+                    run = runResult.Results[0];
+                }
+            }
 
-            const rv = new RunView();
-            const runResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
-                EntityName: 'MJ: Company Integration Runs',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND Status='In Progress'`,
-                OrderBy: '__mj_CreatedAt DESC',
-                MaxRows: 1,
-                ResultType: 'simple',
-                Fields: ['ID', 'Status', 'StartedAt']
-            }, user);
-
-            const run = runResult.Success && runResult.Results.length > 0 ? runResult.Results[0] : null;
+            // No run record after the poll window ⇒ the sync genuinely did not start (it no-op'd
+            // before creating a run). Report that honestly rather than claiming Success with a null
+            // RunID — a caller/scheduler can act on a false, but a true+null silently strands it.
+            if (!run) {
+                return {
+                    Success: false,
+                    Message: 'Sync did not start — no run record was created (the connector may be gated or misconfigured)'
+                };
+            }
 
             return {
                 Success: true,
                 Message: 'Sync started',
-                RunID: run?.ID
+                RunID: run.ID
             };
         } catch (e) {
             LogError(`IntegrationStartSync error: ${e}`);

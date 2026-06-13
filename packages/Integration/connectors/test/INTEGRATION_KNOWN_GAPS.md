@@ -151,21 +151,37 @@ a missing feature.
 > Optimizations in §3–§5 must be **correctness-equivalent** (same output, faster) and wired
 > one-at-a-time + A/B-measured, so they don't force per-connector re-testing.
 
-## 6. Custom-column promoter: minted columns don't reach the entity's UPDATE sproc in the same pass — FRAMEWORK DEFECT (found 2026-06-12, Path LMS mock-floor hybrid-e2e)
+## 6. Promoted columns' UPDATE sproc not regenerated in a long-lived in-process MJAPI — NOT a separate defect; it is #9 (in-process CodeGen schema-cache staleness). Re-inspected 2026-06-12.
 
-The post-sync `CustomColumnPromoter` correctly detects overflow keys, mints typed columns via its
-own RSU migration (`ALTER TABLE ... ADD [endDate] DATETIMEOFFSET NULL`), and the EntityField
-metadata rows appear — but `spUpdate<Entity>` is NOT regenerated with the new parameters by the
-promoter's own in-process CodeGen pass. Every subsequent spread-save then fails with
-`@endDate is not a parameter for procedure spUpdateCourseItemView` until a FULL `mj codegen`
-is run out-of-band (after which the very next sync spreads cleanly — proven: PLMS e2e sync went
-`updated:3, spreadEnd=3/3` immediately after the repair codegen). Repro evidence:
-`/tmp/plms-mjapi*.log` runs of 2026-06-12; the promoter's RSU step list shows
-`RunCodeGen:success` yet `sys.parameters` for the update sproc lacks the minted columns.
-Suspected cause: the promoter's in-process CodeGen scopes regeneration to a diff that misses the
-just-ALTERed table (ordering or schema-cache staleness within the same process). Workaround in
-e2e: run `mj codegen` + rebuild + restart after first promotion. Fix belongs in the RSU/CodeGen
-in-process runner, NOT in any connector.
+**Original framing (WRONG):** "the `CustomColumnPromoter` mints the column but does NOT regenerate
+`spUpdate<Entity>`, so discovered fields can't be saved until a full `mj codegen` is run
+out-of-band — a missing step in the promoter."
+
+**The promoter DOES regenerate the sproc — by design.** `CustomColumnPromoter.applySchemaChange`
+(MJServer) builds the ADD COLUMN DDL and runs it through `RuntimeSchemaManager.Instance.RunPipeline`,
+i.e. the RSU pipeline, whose CodeGen step regenerates `spUpdate<Entity>` to include the new
+parameters. The promoter even documents the exact pitfall and handles it (lines ~184-189):
+"applySchemaChange just added the columns AND had RSU regenerate the spUpdate sproc to include
+them — [refresh the in-memory metadata FIRST] so the spread's row.Save() builds a sproc call that
+matches the regenerated sproc." This is precisely the **designed RSU-after-sync capture flow**:
+discover → overflow → promote (ADD COLUMN + RSU CodeGen regenerates the sproc + refresh metadata) →
+the NEXT sync spreads into the new columns. No out-of-band "full codegen" is part of the design.
+
+**What was actually observed, and why it's #9 not a new bug:** in a *long-lived in-process-CodeGen*
+MJAPI, the promoter's RSU step reported `RunCodeGen:success` yet `sys.parameters` for the update
+sproc lacked the minted columns — i.e. CodeGen ran but its regeneration **missed the just-ALTERed
+table** because the in-process runner carried a **stale schema cache** across the process's prior
+runs. That is the *same root cause* as #9 (in-process CodeGen reusing first-run schema state). It is
+gated to the in-process runner in a re-used process: a **fresh process / DIST boot regenerates the
+sproc correctly** — proven on the ORCID dist-boot run, where `spUpdateemployments` etc. regenerated
+in the same pass and the post-restart sync spread every promoted column (orgName 2/2, Works title
+7/7). Production ApplyAll uses the **child-process** CodeGen runner (fresh each call), so the
+designed flow regenerates the sproc and the next sync captures the fields — no manual codegen.
+
+**Action:** none in the promoter (it already regenerates the sproc). Track the residual under #9
+(in-process CodeGen schema-cache staleness), confirm whether it reproduces on the child-process
+runner, and if so fix it there — never in any connector, and never by adding a step the promoter
+already performs.
 
 ## 7. Dev-mode MJAPI (tsx) cannot load a populated `src/generated/generated.ts` — run from DIST after any RSU codegen (found 2026-06-12)
 
@@ -211,16 +227,32 @@ tsx-booted process — ORCID's 57-column promotion under the DIST-booted MJAPI r
 populated every promoted column (orgName 2/2, Works title 7/7) with rows flat. The dist-boot
 runbook (#7) therefore also mitigates #6.
 
-## 10. Content-hash compare-path vs persist-path canonicalization mismatch on deeply-nested shapes (found 2026-06-12, ORCID hybrid-e2e — deterministic, mock-replayable)
+## 10. ORCID `record` re-writes once after promotion — RETRACTED as a hash bug; it is correct convergence (re-inspected 2026-06-12)
 
-The ORCID `record` object (the giant flattened shape: 26 promoted columns + large
-CustomOverflow) re-classifies as "updated" on EVERY sync pass against a byte-identical mock
-payload — while its sibling objects (works ×7, employments ×2, peer-reviews ×1) converge to
-`skipped` correctly, AND the STORED `__mj_integration_ContentHash` is byte-stable across the
-redundant updates. Stored-hash-stable + always-updates ⇒ the hash computed at COMPARE time
-differs deterministically from the hash computed at PERSIST time for this shape (suspect:
-promoted-key removal from overflow happening on one path but not the other, or
-post-process value coercion ordering). Bounded impact: no growth, no error, content converges —
-cost is one redundant UPDATE per sync per affected record. Repro: MJ_PLMS_E2E env, ORCID CI
-FB560BE8-…, fullSync twice against the fixture mock on :4915 — `record upd:1, others skip`.
-Fix belongs in the engine's hash canonicalization (single shared function for both paths).
+**Original theory (WRONG):** the ORCID `record` object re-classifies as "updated" while its
+siblings `skipped`, so "the hash computed at COMPARE time differs from the hash at PERSIST time
+for this shape" — a compare/persist canonicalization mismatch to be fixed in the engine.
+
+**Static code inspection refutes this.** All three content-hash sites in `IntegrationEngine.ts`
+are the *byte-identical* call `computeContentHash(record.MappedFields ?? {})` on the *same*
+object within a sync (CreateRecord upsert precheck L3092, UpdateRecord matched precheck L3197,
+persist L3604), and `computeContentHash` (`ContentHash.ts`) is deterministic (recursively
+key-sorted canonical JSON). There is **no within-sync compare-vs-persist asymmetry** — the
+filed root cause cannot exist in this code.
+
+**What actually happens (and why it's correct):** the content hash is computed over the
+**mapped** fields only (`ContentHash.ts` docstring: "hashes the MAPPED field values, not the raw
+external payload"). On sync 1 the ~26 `record` keys are **unmapped** (parked in CustomOverflow,
+excluded from the hash). Post-sync-1 promotion mints columns + field maps for them, so on sync 2
+they are **mapped** and legitimately enter the hash → the hash differs from the stored one → the
+row is re-written **exactly once**, then converges to `skipped` from sync 3 on. The flat siblings
+have no promote-on-first-sync delta, so they converge immediately. A single post-promotion
+re-write is the schema-evolution path working as designed, not a defect.
+
+**Action: none in the engine.** Do NOT "fix" the hash canonicalization — both paths already share
+one function; forcing them further would risk breaking convergence. If a *third* identical sync is
+ever observed to still re-write `record` (true non-convergence), re-open with instrumentation that
+logs, per record, the stored hash, the recomputed hash, and whether the skip decision used the
+hash fast-path or the dirty-flag fallback (the latter can fire spuriously on JSON-string nested
+fields when the hash path doesn't engage) — but the 2-pass observation that prompted this entry is
+consistent with correct convergence, not a bug.

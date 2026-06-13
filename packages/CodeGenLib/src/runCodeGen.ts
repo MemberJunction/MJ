@@ -169,6 +169,12 @@ export class RunCodeGenBase {
       if (workingDirectory) {
         initializeConfig(workingDirectory);
       }
+      // Drop the process-static soft-PK/FK cache so this run re-reads additionalSchemaInfo from disk.
+      // RSU rewrites that file (WriteAdditionalSchemaInfo) immediately before invoking this in-process
+      // runner, so without this a connector's first ApplyAll reads a PRE-write cached config → its tables
+      // are seen as PK-less → entities are skipped ("No primary key found") → 0 rows sync until an MJAPI
+      // restart. In-process path only; the CLI Run() keeps load-once. Deterministic — no mtime/TOCTOU.
+      ManageMetadataBase.invalidateSoftPKFKConfigCache();
       return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
     } catch (e) {
       logError('In-process CodeGen failed: ' + e);

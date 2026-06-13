@@ -58,17 +58,20 @@ export class TypeMapper {
     // dialect's bounded ceiling. No `platform === ...` branching lives here.
     const abstractType = entry.SourceType;
     if (abstractType === 'string') {
-      // When the source states NO length (MaxLength null/0 — the common case for APIs like GrowthZone
-      // that don't report field sizes), the size is genuinely UNKNOWN. Per the bounded-typing policy
-      // we must err GENEROUS and never truncate: a tight 255-floor column silently truncates long/JSON
-      // values (e.g. SponsorSettingsJson, SettingJson) and, on re-apply, makes SchemaEvolution try to
-      // NARROW an existing MAX column → "String or binary data would be truncated". So emit the dialect's
-      // unbounded text type (NVARCHAR(MAX) / TEXT) for unsized strings; only bound when a length is declared.
-      const declaredLen = field.MaxLength != null && field.MaxLength > 0;
-      if (!declaredLen) {
-        return dialect.ResolveAbstractType({ type: 'text' });
-      }
-      const maxLength = this.boundedStringLength(field);
+      // Bounded-and-SMALL by policy — space is the priority. A plain `string` is NEVER NVARCHAR(MAX):
+      // genuinely large content is a distinct modality the source MUST type explicitly as `text`/`json`
+      // (those map to MAX in TYPE_MAP). SIZE IS PROVABLE-FIRST: when the extractor captured a declared
+      // size from the docs/spec (`field.MaxLength`), that wins (declared+headroom). The 255 floor is only
+      // the DEFAULT-of-last-resort for a field the source gives no size for — not a hardcoded policy, just
+      // the fallback when nothing is retrievable. A value that does not fit its bounded column is NOT
+      // truncated and does NOT widen the column — it is handled at sync time by SKIPPING that record with
+      // a surfaced warning (see IntegrationEngine string-overflow handling). Small columns + skip-and-
+      // surface beats a table of unbounded MAX columns for a rare oversized value.
+      let maxLength = this.boundedStringLength(field);
+      // A primary-key string column must fit the dialect's INDEX KEY size limit — cap it there. The
+      // dialect reports its OWN ceiling (SQL Server 450 chars; PostgreSQL effectively none), so there is
+      // no platform branch here. A too-wide PK would otherwise fail unique-constraint / index creation.
+      if (field.IsPrimaryKey) maxLength = Math.min(maxLength, dialect.MaxKeyStringLength);
       return dialect.ResolveAbstractType({ type: 'string', maxLength });
     }
     if (abstractType === 'decimal') {

@@ -133,6 +133,27 @@ export class SchemaNotGeneratedError extends Error {
 }
 
 /**
+ * Raised when a mapped string value exceeds its bounded destination column width. Per the
+ * bounded-typing policy (small, space-efficient columns; large content is an explicit text/json
+ * modality), an over-width value is NEVER truncated and NEVER widens the column — the offending
+ * RECORD is skipped and surfaced as a structured SyncWarning so the gap is visible, not silent.
+ * Caught per-record in ApplySingleRecord; it does not fail the batch.
+ */
+export class StringOverflowError extends Error {
+    public readonly FieldName: string;
+    public readonly ValueLength: number;
+    public readonly MaxLength: number;
+
+    constructor(fieldName: string, valueLength: number, maxLength: number) {
+        super(`Value for '${fieldName}' is ${valueLength} chars, exceeding the column width ${maxLength}; record skipped (not truncated).`);
+        this.name = 'StringOverflowError';
+        this.FieldName = fieldName;
+        this.ValueLength = valueLength;
+        this.MaxLength = maxLength;
+    }
+}
+
+/**
  * Returns a SchemaNotGeneratedError if the given Save() failure message matches the
  * "CRUD routine doesn't exist yet" pattern for either dialect, otherwise null. When
  * CodeGen hasn't created the spCreate/spUpdate/spDelete for an entity, BaseEntity.Save()
@@ -3001,26 +3022,43 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             d: result.RecordsDeleted, s: result.RecordsSkipped,
         };
 
-        switch (record.ChangeType) {
-            case 'Create': {
-                const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
-                if (outcome === 'updated') result.RecordsUpdated++;
-                else if (outcome === 'skipped') result.RecordsSkipped++;
-                else result.RecordsCreated++;
-                break;
+        try {
+            switch (record.ChangeType) {
+                case 'Create': {
+                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
+                    if (outcome === 'updated') result.RecordsUpdated++;
+                    else if (outcome === 'skipped') result.RecordsSkipped++;
+                    else result.RecordsCreated++;
+                    break;
+                }
+                case 'Update':
+                    await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds);
+                    break;
+                case 'Delete': {
+                    const didDelete = await this.DeleteRecord(record, entityMap, contextUser);
+                    if (didDelete) result.RecordsDeleted++;
+                    else result.RecordsErrored++;
+                    break;
+                }
+                case 'Skip':
+                    result.RecordsSkipped++;
+                    break;
             }
-            case 'Update':
-                await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds);
-                break;
-            case 'Delete': {
-                const didDelete = await this.DeleteRecord(record, entityMap, contextUser);
-                if (didDelete) result.RecordsDeleted++;
-                else result.RecordsErrored++;
-                break;
-            }
-            case 'Skip':
+        } catch (err) {
+            // A value too wide for its bounded column is a per-RECORD skip, not a batch failure and not
+            // truncation. Surface it as a structured SyncWarning (visible over GraphQL) and move on so
+            // the rest of the batch still commits. Any other error propagates (batch isolation handles it).
+            if (err instanceof StringOverflowError) {
                 result.RecordsSkipped++;
-                break;
+                logger?.warning(
+                    entityMap.ExternalObjectName ?? entityMap.Entity ?? entityMap.ID,
+                    'STRING_OVERFLOW_SKIPPED',
+                    `Record skipped — '${err.FieldName}' value is ${err.ValueLength} chars, wider than its ${err.MaxLength}-char column (value not truncated).`,
+                    { externalId: record.ExternalRecord.ExternalID, field: err.FieldName, valueLength: err.ValueLength, maxLength: err.MaxLength },
+                );
+            } else {
+                throw err;
+            }
         }
 
         if (logger) {
@@ -3453,21 +3491,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
-     * §5/§10 type-driven enforcement: clamp an over-length string to the target column's MaxLength
-     * (a character count — SQLMaxLength already converts nvarchar bytes→chars) so a source value
-     * wider than the resolved column is truncated instead of failing the whole row on "value too
-     * long". Non-strings / values that fit / unlimited columns (MaxLength 0) pass through unchanged.
+     * §5/§10 type-driven enforcement: a source string value WIDER than its bounded destination column
+     * is NOT truncated (silent data corruption) and does NOT widen the column (space is the priority —
+     * columns are small by policy; large content is an explicit text/json modality). Instead it raises
+     * StringOverflowError, which ApplySingleRecord catches to SKIP that one record and surface a
+     * structured SyncWarning. Non-strings / values that fit / unlimited columns (MaxLength 0) pass
+     * through unchanged.
      */
     private enforceMaxLength(value: unknown, maxLength: number | undefined, fieldName: string): unknown {
         if (typeof value !== 'string' || maxLength === undefined || value.length <= maxLength) return value;
-        // NVARCHAR width is in UTF-16 code units, so we cut at `maxLength` code units — but never
-        // mid surrogate pair (slicing between a high+low surrogate yields an invalid string). If the
-        // last kept unit is a high surrogate, drop it (lose one emoji rather than corrupt the value).
-        let cut = maxLength;
-        const lastUnit = value.charCodeAt(cut - 1);
-        if (lastUnit >= 0xD800 && lastUnit <= 0xDBFF) cut -= 1;
-        console.warn(`[IntegrationEngine] Truncated '${fieldName}' ${value.length}→${cut} code units (exceeds column width).`);
-        return value.slice(0, cut);
+        throw new StringOverflowError(fieldName, value.length, maxLength);
     }
 
     /**

@@ -314,10 +314,25 @@ class IntegrationCustomColumnPromoter {
             LogError(`[CustomColumnPromoter] No IntegrationObject '${externalObjectName}' for integration ${integrationID}; IOF rows skipped.`);
             return;
         }
-        // Idempotent: a recovery item (column existed, field map missing) may already have its IOF.
-        const existingIOF = await this.existingIOFNames(objectID);
+        // Lookup-or-reactivate-or-create — NEVER blind-create over an existing field. A field the source
+        // dropped is DEACTIVATED (Status='Inactive'), not deleted, and its column is preserved. When that
+        // key reappears in the payload and reaches promotion, the IOF already exists: reactivate it (so the
+        // active-filtered ApplyAll re-materializes the still-present column) instead of creating a duplicate.
+        // This is the "removed-then-re-added" case + the recovery case (column existed, field map missing).
+        const existingIOFs = await this.existingIOFsByName(objectID);
         for (const n of named) {
-            if (existingIOF.has(n.sourceKey.toLowerCase())) continue;
+            const existing = existingIOFs.get(n.sourceKey.toLowerCase());
+            if (existing) {
+                if (existing.Status !== 'Active') {
+                    const reIof = await this.provider.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', this.user);
+                    if (await reIof.Load(existing.ID)) {
+                        reIof.Status = 'Active';
+                        const ok = await reIof.Save();
+                        if (!ok) LogError(`[CustomColumnPromoter] Failed to reactivate IOF '${n.sourceKey}': ${reIof.LatestResult?.CompleteMessage ?? 'unknown'}`);
+                    }
+                }
+                continue;
+            }
             const iof = await this.provider.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', this.user);
             iof.NewRecord();
             iof.IntegrationObjectID = objectID;
@@ -486,15 +501,19 @@ class IntegrationCustomColumnPromoter {
     }
 
     /** Existing IOF field names (lowercased) for an object — for idempotent IOF creation. */
-    private async existingIOFNames(objectID: string): Promise<ReadonlySet<string>> {
+    private async existingIOFsByName(objectID: string): Promise<ReadonlyMap<string, { ID: string; Status: string }>> {
         const rv = new RunView();
         const res = await rv.RunView<MJIntegrationObjectFieldEntity>({
             EntityName: 'MJ: Integration Object Fields',
             ExtraFilter: `IntegrationObjectID='${objectID}'`,
-            Fields: ['Name'],
+            Fields: ['ID', 'Name', 'Status'],
             ResultType: 'simple',
         }, this.user);
-        return new Set(res.Success ? (res.Results ?? []).map(r => (r.Name ?? '').toLowerCase()) : []);
+        const map = new Map<string, { ID: string; Status: string }>();
+        if (res.Success) for (const r of res.Results ?? []) {
+            map.set((r.Name ?? '').toLowerCase(), { ID: String(r.ID), Status: r.Status ?? 'Active' });
+        }
+        return map;
     }
 
     /** Resolves the IntegrationObject ID for an external object name under an integration. */
