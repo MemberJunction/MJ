@@ -112,14 +112,20 @@ never creates a Company.
   composite-PK-junction heuristic) should be **removed from the runtime path** — FKs come only from
   Declared metadata, never guessed.
 
-### 7. Deactivate objects/fields not found by any means — **[PARTIAL → TO BUILD: wire it]**
+### 7. Deactivate objects/fields not found by any means — **[MUST BUILD — non-negotiable]**
 Your spec: objects/columns absent from discovery have their Declared metadata set **inactive** (never
 deleted). The code EXISTS — `IntegrationSchemaSync.ts:52` (`DeactivateAbsent?` option) + `:281-297` set
 `obj.Status='Disabled'` for active objects not in the discovered set — but it is **dead**: no caller ever
 passes `DeactivateAbsent:true` (StagePersist `IntegrationConnectorCreationPipeline.ts:339-345` omits it).
-**TO BUILD:** (a) set `DeactivateAbsent:true` on a *comprehensive* refresh; (b) add **field-level**
-deactivation (only object-level exists); (c) gate it behind a GraphQL flag so a partial discovery never
-wrongly disables.
+**This MUST be built:**
+- (a) Set `DeactivateAbsent:true` on a **comprehensive** discovery refresh (the one that re-discovers the
+  *whole* surface — NOT a scoped/partial discovery, which must never deactivate what it simply didn't look
+  at). The full-discovery path must thread the flag down through StagePersist.
+- (b) Add **field-level** deactivation (today only object-level is implemented).
+- (c) Pairs with §8 reactivate-on-rediscover: deactivation is reversible — an object/field that reappears
+  on a later discovery flips back to `Active`, so the active set always reflects the live source.
+- (d) GraphQL-gated: the comprehensive-vs-partial distinction is a GraphQL input, so a consumer explicitly
+  asks for a deactivating refresh.
 
 ### 8. Reactivate on reappearance — **[PARTIAL]**
 - Custom-column promotion reactivates an inactive IOF instead of duplicating it: `CustomColumnPromoter.ts:317-335`
@@ -164,12 +170,24 @@ No `MaxTables` / `MaxColumnsPerTable` ceiling exists (the only caps are the disc
   pipeline always re-runs all four stages — there is no in-pipeline "skip completed stages" consumer. Not
   required for correctness (dedupe covers re-run); a resume consumer is an efficiency follow-up.
 
-### 13. Scheduled discovery — **[TO BUILD]** (ABSENT; only sync is schedulable)
+### 13. Scheduled discovery — **[MUST BUILD]** (ABSENT today; only sync is schedulable)
 `IntegrationCreateSchedule` (`:3789`) creates an `MJ: Scheduled Jobs` row hard-wired to
 `DriverClass='IntegrationSyncScheduledJobDriver'` (`:4949`), which only calls `RunSync` — it does **no**
-discovery. **TO BUILD per spec:** an optional **discovery scheduled-job driver** (`MJScheduledJob`) that
-runs `IntegrationRefreshConnectorSchema` on a cron so objects/fields refresh in the background; selectable
-when creating the schedule.
+discovery. **Build a NEW, separate scheduled-job type whose ONLY job is to re-discover:**
+- A new driver (e.g. `IntegrationDiscoveryScheduledJobDriver`) registered as a distinct `MJ: Scheduled
+  Jobs` `DriverClass`, that runs **`IntegrationRefreshConnectorSchema`** (DiscoverObjects/Fields → persist,
+  with `DeactivateAbsent` per §7) on a cron — and **nothing else** (it does not sync data).
+- **Effect:** it keeps the underlying `MJ: Integration Objects` / `Integration Object Fields` continuously
+  in step with the live source — new tables/columns appear as `Active` (Discovered), vanished ones flip to
+  `Disabled`, reappeared ones flip back. So the **Entity-Map / Entity-Field-Map picker in the UI simply
+  re-reads the active set** and now offers the newly-discovered tables/columns for selection (and stops
+  offering the gone ones). Discovery and selection are decoupled: the job evolves the catalog; the user
+  later selects from it.
+- **GraphQL-exposed (required):** the option to create/manage a *discovery* schedule (vs a *sync* schedule)
+  is a GraphQL input — extend `IntegrationCreateSchedule` (a job-kind arg: `sync` | `discovery`) or add a
+  dedicated `IntegrationCreateDiscoverySchedule` mutation; list/update/delete via the existing schedule
+  resolvers. A consumer must be able to turn scheduled discovery on/off and set its cadence entirely over
+  GraphQL.
 
 ### 14. GraphQL config settability — **[PARTIAL → TO BUILD: cover everything]**
 Your rule: *all* configs controllable via GraphQL, none hardcoded — otherwise the integration resolver
@@ -187,11 +205,11 @@ needs work. Current state:
 ---
 
 ## TO-BUILD summary (to fully satisfy this spec)
-1. **Wire `DeactivateAbsent`** (§7) — set it true on a comprehensive refresh; add field-level deactivation; GraphQL-gated.
+1. **Wire `DeactivateAbsent` — MUST (non-negotiable)** (§7) — set it true on a comprehensive refresh; add field-level deactivation; reversible via §8 reactivate-on-rediscover; GraphQL-gated (comprehensive vs partial).
 2. **Reactivate-on-rediscover** for objects/fields in `UpsertObject`/`UpsertField` (§8).
 3. **`MaxTables` / `MaxColumnsPerTable`** config (default unbounded), GraphQL-settable, enforced at RSU select-time (§10).
 4. **Lower + GraphQL-expose the discovery sample cap**; bounded concurrency; sample only schema-less objects (§11).
-5. **Discovery scheduled-job driver** via `MJScheduledJob` (§13).
+5. **New discovery-only scheduled-job type** (§13) — a separate `MJScheduledJob` driver that ONLY re-discovers (RefreshConnectorSchema + DeactivateAbsent), continuously evolving the IO/IOF catalog so the Entity-Map / EFM picker offers the newly-discovered tables/columns; created/managed entirely over GraphQL (job-kind `sync` | `discovery`).
 6. **Expose all remaining configs via GraphQL** (§14).
 7. **Omit FK-from-stream / remove `InferForeignKeys` from the runtime path** — PK-only lightweight guess (§6).
 8. **Harden credential `Values`** to write-only / permission-gated over GraphQL (§4).
