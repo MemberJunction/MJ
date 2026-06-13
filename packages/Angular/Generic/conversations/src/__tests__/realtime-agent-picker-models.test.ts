@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  BuildVoiceModelOptions,
+  BuildRealtimeModelOptions,
   VoiceModelCandidate,
-} from '../lib/services/voice-pairing';
+} from '../lib/services/realtime-pairing';
 
 /**
  * The "Voice model" option builder the picker applies to {@link AIEngineBase}'s cached
@@ -20,9 +20,9 @@ function model(overrides: Partial<VoiceModelCandidate> & { ID: string; Name: str
   };
 }
 
-describe('BuildVoiceModelOptions', () => {
+describe('BuildRealtimeModelOptions', () => {
   it('keeps only ACTIVE models of type Realtime, projected to {ID, Name}', () => {
-    const options = BuildVoiceModelOptions([
+    const options = BuildRealtimeModelOptions([
       model({ ID: 'm1', Name: 'Realtime One' }),
       model({ ID: 'm2', Name: 'Inactive Realtime', IsActive: false }),
       model({ ID: 'm3', Name: 'Some LLM', AIModelType: 'LLM' }),
@@ -32,7 +32,7 @@ describe('BuildVoiceModelOptions', () => {
   });
 
   it('matches the Realtime type trim + case-insensitively (SQL-collation parity)', () => {
-    const options = BuildVoiceModelOptions([
+    const options = BuildRealtimeModelOptions([
       model({ ID: 'm1', Name: 'A', AIModelType: ' realtime ' }),
       model({ ID: 'm2', Name: 'B', AIModelType: 'REALTIME' }),
     ]);
@@ -40,7 +40,7 @@ describe('BuildVoiceModelOptions', () => {
   });
 
   it('sorts by Name ascending (parity with the previous OrderBy)', () => {
-    const options = BuildVoiceModelOptions([
+    const options = BuildRealtimeModelOptions([
       model({ ID: 'm2', Name: 'Zeta Voice' }),
       model({ ID: 'm1', Name: 'Alpha Voice' }),
       model({ ID: 'm3', Name: 'Mid Voice' }),
@@ -49,9 +49,9 @@ describe('BuildVoiceModelOptions', () => {
   });
 
   it('returns an empty list for an empty cache and never mutates the input', () => {
-    expect(BuildVoiceModelOptions([])).toEqual([]);
+    expect(BuildRealtimeModelOptions([])).toEqual([]);
     const input = [model({ ID: 'm2', Name: 'B' }), model({ ID: 'm1', Name: 'A' })];
-    BuildVoiceModelOptions(input);
+    BuildRealtimeModelOptions(input);
     expect(input.map(m => m.ID)).toEqual(['m2', 'm1']); // input order untouched
   });
 });

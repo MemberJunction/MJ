@@ -12,7 +12,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
  * zero-config default); a co-agent WITH rows may front exactly the listed targets, with the
  * `IsDefault` row as its preselected target.
  */
-export interface VoicePairedAgentRow {
+export interface RealtimePairedAgentRow {
   /** The pairing row id. */
   ID: string;
   /** The Realtime-type co-agent the pairing belongs to. */
@@ -28,7 +28,7 @@ export interface VoicePairedAgentRow {
 }
 
 /** Minimal agent shape the pure pairing/co-agent helpers operate on. */
-export interface VoiceAgentLike {
+export interface RealtimeAgentLike {
   ID: string;
 }
 
@@ -42,7 +42,7 @@ export interface VoiceAgentLike {
  * constraint". The client gate is pure disclosure; the server independently validates
  * the co-agent/target pairing at session mint.
  */
-export async function LoadCoAgentPairings(provider: IMetadataProvider, coAgentId: string): Promise<VoicePairedAgentRow[]> {
+export async function LoadCoAgentPairings(provider: IMetadataProvider, coAgentId: string): Promise<RealtimePairedAgentRow[]> {
   const id = coAgentId?.trim() ?? '';
   if (id.length === 0) {
     return [];
@@ -56,7 +56,7 @@ export async function LoadCoAgentPairings(provider: IMetadataProvider, coAgentId
         p.Status === 'Active' &&
         p.TargetAgentID != null &&
         UUIDsEqual(p.CoAgentID, id))
-      .map<VoicePairedAgentRow>(p => ({
+      .map<RealtimePairedAgentRow>(p => ({
         ID: p.ID,
         CoAgentID: p.CoAgentID,
         TargetAgentID: p.TargetAgentID!,
@@ -66,7 +66,7 @@ export async function LoadCoAgentPairings(provider: IMetadataProvider, coAgentId
       }));
     return SortPairings(rows);
   } catch (error) {
-    console.warn('[VoicePairing] Co-agent pairing lookup unavailable — treating co-agent as universal:', error);
+    console.warn('[RealtimePairing] Co-agent pairing lookup unavailable — treating co-agent as universal:', error);
     return [];
   }
 }
@@ -75,7 +75,7 @@ export async function LoadCoAgentPairings(provider: IMetadataProvider, coAgentId
  * Returns the pairing rows in canonical display order: `Sequence` ascending (null/missing
  * sequences last), ties broken by target-agent name. Pure; never mutates the input.
  */
-export function SortPairings(pairings: readonly VoicePairedAgentRow[]): VoicePairedAgentRow[] {
+export function SortPairings(pairings: readonly RealtimePairedAgentRow[]): RealtimePairedAgentRow[] {
   return [...pairings].sort((a, b) => {
     const aSeq = a.Sequence ?? Number.MAX_SAFE_INTEGER;
     const bSeq = b.Sequence ?? Number.MAX_SAFE_INTEGER;
@@ -96,9 +96,9 @@ export function SortPairings(pairings: readonly VoicePairedAgentRow[]): VoicePai
  *
  * Pure and UUID-casing safe (`NormalizeUUID` keys).
  */
-export function ConstrainTargetsToPairings<T extends VoiceAgentLike>(
+export function ConstrainTargetsToPairings<T extends RealtimeAgentLike>(
   agents: readonly T[],
-  pairings: readonly VoicePairedAgentRow[]
+  pairings: readonly RealtimePairedAgentRow[]
 ): T[] {
   if (!pairings || pairings.length === 0) {
     return [...agents];
@@ -125,7 +125,7 @@ export function ConstrainTargetsToPairings<T extends VoiceAgentLike>(
  * `Sequence` order (server enforces at most one, but the helper stays deterministic
  * regardless). `null` when there are no rows or none is marked default.
  */
-export function DefaultPairedTargetId(pairings: readonly VoicePairedAgentRow[]): string | null {
+export function DefaultPairedTargetId(pairings: readonly RealtimePairedAgentRow[]): string | null {
   for (const pairing of SortPairings(pairings ?? [])) {
     if (pairing.IsDefault) {
       return pairing.TargetAgentID;
@@ -139,7 +139,7 @@ export function DefaultPairedTargetId(pairings: readonly VoicePairedAgentRow[]):
  * co-agent is universal (always allowed); otherwise the target must appear among the
  * rows. Missing/empty target id is never allowed against a constrained co-agent.
  */
-export function PairingsAllowTarget(pairings: readonly VoicePairedAgentRow[], targetAgentId: string | null | undefined): boolean {
+export function PairingsAllowTarget(pairings: readonly RealtimePairedAgentRow[], targetAgentId: string | null | undefined): boolean {
   if (!pairings || pairings.length === 0) {
     return true;
   }
@@ -163,7 +163,7 @@ export function FilterRealtimeCoAgents<T extends { Type: string | null }>(agents
  * A selectable realtime model option in the voice picker (narrow read-only projection of
  * `MJ: AI Models` — only the fields the dropdown renders).
  */
-export interface VoiceModelOption {
+export interface RealtimeModelOption {
   /** The `MJ: AI Models` row id. */
   ID: string;
   /** The model's display name. */
@@ -171,7 +171,7 @@ export interface VoiceModelOption {
 }
 
 /**
- * The minimal `MJ: AI Models` row shape {@link BuildVoiceModelOptions} consumes —
+ * The minimal `MJ: AI Models` row shape {@link BuildRealtimeModelOptions} consumes —
  * structurally satisfied by `AIEngineBase`'s cached `Models` entities.
  */
 export interface VoiceModelCandidate {
@@ -188,13 +188,13 @@ export interface VoiceModelCandidate {
 /**
  * Builds the "Voice model" dropdown options from a cached model list: ACTIVE models whose
  * type is `Realtime` (trim + case-insensitive — SQL-collation parity with the previous
- * `IsActive = 1 AND AIModelType = 'Realtime'` filter), projected to {@link VoiceModelOption}
+ * `IsActive = 1 AND AIModelType = 'Realtime'` filter), projected to {@link RealtimeModelOption}
  * and sorted by Name. Pure; never mutates the input.
  */
-export function BuildVoiceModelOptions(models: ReadonlyArray<VoiceModelCandidate>): VoiceModelOption[] {
+export function BuildRealtimeModelOptions(models: ReadonlyArray<VoiceModelCandidate>): RealtimeModelOption[] {
   return models
     .filter(m => m.IsActive && (m.AIModelType ?? '').trim().toLowerCase() === 'realtime')
-    .map<VoiceModelOption>(m => ({ ID: m.ID, Name: m.Name }))
+    .map<RealtimeModelOption>(m => ({ ID: m.ID, Name: m.Name }))
     .sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
 }
 

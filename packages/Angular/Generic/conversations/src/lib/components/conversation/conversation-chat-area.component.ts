@@ -32,7 +32,7 @@ import { ConversationStreamingService } from '../../services/conversation-stream
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
-import { VoiceSessionService } from '../../services/voice-session.service';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
@@ -106,7 +106,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this._conversationId = value;
       // SESSION-REVIEW lifecycle: changing the active conversation must NEVER leave a
       // stale review overlay hosted over the new conversation. A LIVE call is untouched
-      // by this — the overlay's live mode renders off VoiceSession.Active$, not
+      // by this — the overlay's live mode renders off RealtimeSession.Active$, not
       // RealtimeReview (and a review can't open while a call is live anyway).
       this.ClearRealtimeSessionReview();
       // Trigger change handler after initialization is complete
@@ -412,8 +412,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   //   ✓ sessionStarted / sessionChannelStateChanged / sessionEnded — subscribed
   //     to ConversationsRuntime.Sessions.SessionLifecycle$ in ngOnInit. The
   //     runtime's SessionsObserver consumes whichever ISessionsAdapter the host
-  //     registered at bootstrap; the Angular default is VoiceSessionsAdapter,
-  //     which bridges VoiceSessionService's SessionStarted$ / ActiveChannels$
+  //     registered at bootstrap; the Angular default is RealtimeSessionsAdapter,
+  //     which bridges RealtimeSessionService's SessionStarted$ / ActiveChannels$
   //     (diffed for open/close) / SessionEnded$. Non-Angular hosts (React,
   //     Vue, Node) register their own adapter — the chat-area code is unchanged.
 
@@ -638,7 +638,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * overlay can be hosted here (it fills this conversation panel in place while
    * `Active$` is true). The trigger wiring lives in <mj-message-input>.
    */
-  public readonly VoiceSession = inject(VoiceSessionService);
+  public readonly RealtimeSession = inject(RealtimeSessionService);
 
   /** Stateless loader for the call overlay's SESSION REVIEW mode (past realtime sessions). */
   private readonly realtimeReviewService = inject(RealtimeSessionReviewService);
@@ -662,10 +662,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** Agent name the overlay banner shows: the reviewed session's agent while reviewing, else the live call's. */
   public get realtimeOverlayAgentName(): string {
-    if (this.RealtimeReview && !this.VoiceSession.IsActive) {
+    if (this.RealtimeReview && !this.RealtimeSession.IsActive) {
       return this.RealtimeReview.AgentName;
     }
-    return this.VoiceSession.CurrentAgentName;
+    return this.RealtimeSession.CurrentAgentName;
   }
 
   constructor(
@@ -735,17 +735,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     //         updates reactively through ConversationEngine.Conversations$.
     //  END:   select it (workspace gates on the list being visible).
     let namedThisSession = false;
-    this.VoiceSession.SessionStarted$
+    this.RealtimeSession.SessionStarted$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         namedThisSession = false;
-        const created = this.VoiceSession.SessionCreatedConversationId;
+        const created = this.RealtimeSession.SessionCreatedConversationId;
         if (created) {
           this.realtimeConversationReady.emit({ conversationId: created, select: false });
         }
       });
     let voiceWasActive = false;
-    this.VoiceSession.Active$
+    this.RealtimeSession.Active$
       .pipe(takeUntil(this.destroy$))
       .subscribe((active) => {
         if (voiceWasActive && !active) {
@@ -753,14 +753,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
         voiceWasActive = active;
       });
-    this.VoiceSession.Captions$
+    this.RealtimeSession.Captions$
       .pipe(takeUntil(this.destroy$))
       .subscribe((captions) => {
         if (namedThisSession) {
           return;
         }
-        const created = this.VoiceSession.SessionCreatedConversationId;
-        const seed = this.VoiceSession.FirstUserTranscript;
+        const created = this.RealtimeSession.SessionCreatedConversationId;
+        const seed = this.RealtimeSession.FirstUserTranscript;
         if (created && seed && captions.some(c => c.Role === 'User')) {
           namedThisSession = true;
           void GenerateAndApplyConversationName({
@@ -812,8 +812,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Bridge ConversationsRuntime.Sessions.SessionLifecycle$ → chat-area's
     // informational session* outputs. The runtime's SessionsObserver subscribes
     // to whichever ISessionsAdapter the host registered at bootstrap (today:
-    // VoiceSessionsAdapter from ConversationsRuntimeBootstrap, bridging
-    // VoiceSessionService from PR #2787). Each event variant maps 1:1 to one
+    // RealtimeSessionsAdapter from ConversationsRuntimeBootstrap, bridging
+    // RealtimeSessionService from PR #2787). Each event variant maps 1:1 to one
     // of the three @Output() emitters declared above.
     ConversationsRuntime.Instance.Sessions.SessionLifecycle$
       .pipe(takeUntil(this.destroy$))
@@ -2747,7 +2747,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * {@link realtimeConversationReady} so the workspace can refresh + select.
    */
   private onVoiceSessionEnded(): void {
-    const conversationId = this.VoiceSession.SessionCreatedConversationId;
+    const conversationId = this.RealtimeSession.SessionCreatedConversationId;
     if (!conversationId) {
       return;
     }
@@ -2766,7 +2766,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *   couldn't be loaded (missing/unreadable session) or a live call is already active.
    */
   public async OpenRealtimeSessionReview(agentSessionId: string): Promise<boolean> {
-    if (this.VoiceSession.IsActive) {
+    if (this.RealtimeSession.IsActive) {
       return false; // a live call owns the overlay — don't fight it with a review
     }
     const conversationAtRequest = this._conversationId;
@@ -2774,7 +2774,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!review) {
       return false;
     }
-    if (this.VoiceSession.IsActive) {
+    if (this.RealtimeSession.IsActive) {
       return false; // a live call started while the review was loading — it wins
     }
     if (!this.canHostLoadedReview(conversationAtRequest, review.ConversationID)) {
@@ -2802,7 +2802,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /**
    * Drops any hosted SESSION REVIEW so the overlay unhosts itself. Safe to call at any
-   * time: a LIVE call's overlay is unaffected (it renders off `VoiceSession.Active$`).
+   * time: a LIVE call's overlay is unaffected (it renders off `RealtimeSession.Active$`).
    * Called on every conversation change, on the overlay's Close, and available to hosts
    * that need to programmatically dismiss a review.
    */
@@ -2822,7 +2822,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public async onReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
     const agentName = this.RealtimeReview?.AgentName ?? null;
     try {
-      const start = this.VoiceSession.StartVoiceSession(
+      const start = this.RealtimeSession.StartVoiceSession(
         request.TargetAgentId,
         request.ConversationId ?? this.conversationId,
         request.LastSessionId,

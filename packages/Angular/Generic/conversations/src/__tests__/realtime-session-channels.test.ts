@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } fr
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RegisterClass } from '@memberjunction/global';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
-import { VoiceSessionService, RealtimeChannelFocusEvent } from '../lib/services/voice-session.service';
+import { RealtimeSessionService, RealtimeChannelFocusEvent } from '../lib/services/realtime-session.service';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
 
 /**
@@ -14,7 +14,7 @@ import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/compon
  */
 
 /** The private surface the tests drive — no `any`, just the members under test. */
-interface VoiceSessionChannelInternals {
+interface RealtimeSessionChannelInternals {
   client: FakeRealtimeClient | null;
   agentSessionId: string | null;
   startChannels(): Promise<RealtimeToolDefinition[]>;
@@ -35,8 +35,8 @@ class FakeRealtimeClient {
   }
 }
 
-function internals(service: VoiceSessionService): VoiceSessionChannelInternals {
-  return service as unknown as VoiceSessionChannelInternals;
+function internals(service: RealtimeSessionService): RealtimeSessionChannelInternals {
+  return service as unknown as RealtimeSessionChannelInternals;
 }
 
 /** A minimal surface stand-in (never instantiated by these node tests). */
@@ -115,11 +115,11 @@ function mockChannelRegistry(
   return configFn;
 }
 
-describe('VoiceSessionService — interactive-channel registry resolution', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — interactive-channel registry resolution', () => {
+  let service: RealtimeSessionService;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
   });
 
   afterEach(() => {
@@ -206,13 +206,13 @@ describe('VoiceSessionService — interactive-channel registry resolution', () =
   });
 });
 
-describe('VoiceSessionService — per-plugin tool routing + host context', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — per-plugin tool routing + host context', () => {
+  let service: RealtimeSessionService;
   let fakeClient: FakeRealtimeClient;
   let plugin: TestEchoChannel;
 
   beforeEach(async () => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     fakeClient = new FakeRealtimeClient();
     internals(service).client = fakeClient;
     mockChannelRegistry([{ ID: 'c1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' }]);
@@ -252,14 +252,14 @@ describe('VoiceSessionService — per-plugin tool routing + host context', () =>
   });
 });
 
-describe('VoiceSessionService — debounced channel saves + teardown flush/dispose', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — debounced channel saves + teardown flush/dispose', () => {
+  let service: RealtimeSessionService;
   let plugin: TestEchoChannel;
-  let saveSpy: MockInstance<VoiceSessionService['SaveChannelState']>;
+  let saveSpy: MockInstance<RealtimeSessionService['SaveChannelState']>;
 
   beforeEach(async () => {
     vi.useFakeTimers();
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     internals(service).agentSessionId = 'session-123';
     saveSpy = vi.spyOn(service, 'SaveChannelState').mockResolvedValue(true);
     mockChannelRegistry([{ ID: 'c1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' }]);

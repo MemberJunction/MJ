@@ -19,22 +19,22 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { REALTIME_ADVANCED_SESSION_CONTROLS, UserHoldsAuthorization } from '../../services/user-authorization';
 import {
-    BuildVoiceModelOptions,
+    BuildRealtimeModelOptions,
     ConstrainTargetsToPairings,
     DefaultPairedTargetId,
     LoadCoAgentPairings,
-    VoiceModelOption,
-    VoicePairedAgentRow,
-} from '../../services/voice-pairing';
+    RealtimeModelOption,
+    RealtimePairedAgentRow,
+} from '../../services/realtime-pairing';
 
 /**
- * The user's confirmed choice from the voice picker: the agent to call, an optional
+ * The user's confirmed choice from the realtime picker: the agent to call, an optional
  * EXPLICIT realtime model (`null` = "Auto (recommended)", i.e. let the server pick —
  * always `null` for users without the `Realtime: Advanced Session Controls`
  * authorization, who never see the model selector), and an optional EXPLICIT co-agent
  * (`null` = the server's co-agent resolution chain).
  */
-export interface VoiceAgentPick {
+export interface RealtimeAgentPick {
     /** The agent the voice call should front. */
     Agent: MJAIAgentEntityExtended;
     /** Explicit realtime model id, or `null` for the server's automatic selection. */
@@ -78,7 +78,7 @@ export interface VoiceAgentPick {
  */
 @Component({
     standalone: true,
-    selector: 'mj-voice-agent-picker',
+    selector: 'mj-realtime-agent-picker',
     imports: [MJButtonDirective],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
@@ -269,7 +269,7 @@ export interface VoiceAgentPick {
         }
     `]
 })
-export class VoiceAgentPickerComponent extends BaseAngularComponent implements OnInit, AfterViewInit {
+export class RealtimeAgentPickerComponent extends BaseAngularComponent implements OnInit, AfterViewInit {
     /** Agents the user can call — same cached set the @mention / routing logic uses. */
     @Input() Agents: MJAIAgentEntityExtended[] = [];
 
@@ -291,7 +291,7 @@ export class VoiceAgentPickerComponent extends BaseAngularComponent implements O
     @Input() DefaultCoAgentId: string | null = null;
 
     /** Emitted with the chosen agent + optional explicit voice model / co-agent when the user confirms. */
-    @Output() AgentPicked = new EventEmitter<VoiceAgentPick>();
+    @Output() AgentPicked = new EventEmitter<RealtimeAgentPick>();
 
     /** Emitted when the user dismisses without starting a call. */
     @Output() Cancelled = new EventEmitter<void>();
@@ -301,8 +301,8 @@ export class VoiceAgentPickerComponent extends BaseAngularComponent implements O
     public SearchText = '';
     public SelectedAgentId: string | null = null;
 
-    /** Active Realtime models the "Voice model" selector offers (loaded only for authorized users). */
-    public Models: VoiceModelOption[] = [];
+    /** Active Realtime models the model selector offers (loaded only for authorized users). */
+    public Models: RealtimeModelOption[] = [];
 
     /** The explicitly chosen voice model id, or `null` for "Auto (recommended)" (the default). */
     public SelectedModelId: string | null = null;
@@ -318,7 +318,7 @@ export class VoiceAgentPickerComponent extends BaseAngularComponent implements O
     public CanOverrideSessionConfig = false;
 
     /** The selected co-agent's pairing rows; empty = universal co-agent (no constraint). */
-    public Pairings: VoicePairedAgentRow[] = [];
+    public Pairings: RealtimePairedAgentRow[] = [];
 
     // Template helper — expose the shared UUID comparator to the view.
     public readonly UUIDsEqual = UUIDsEqual;
@@ -369,9 +369,9 @@ export class VoiceAgentPickerComponent extends BaseAngularComponent implements O
         try {
             const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
             await engine.Config(false, undefined, this.ProviderToUse);
-            this.Models = BuildVoiceModelOptions(engine.Models ?? []);
+            this.Models = BuildRealtimeModelOptions(engine.Models ?? []);
         } catch (error) {
-            console.error('[VoiceAgentPicker] Failed to load realtime models:', error);
+            console.error('[RealtimeAgentPicker] Failed to load realtime models:', error);
             this.Models = [];
         }
         this.cdr.markForCheck();
@@ -545,7 +545,7 @@ export class VoiceAgentPickerComponent extends BaseAngularComponent implements O
      * authorization here (defense in depth — unauthorized users never see the selector,
      * so `SelectedModelId` should already be null).
      */
-    private buildPick(agent: MJAIAgentEntityExtended): VoiceAgentPick {
+    private buildPick(agent: MJAIAgentEntityExtended): RealtimeAgentPick {
         return {
             Agent: agent,
             PreferredModelId: this.CanOverrideSessionConfig ? this.SelectedModelId : null,

@@ -35,16 +35,16 @@
   <!-- Voice agent/co-agent/model picker — shown when starting a call on a conversation
        with NO prior agent participation, or on demand via the caret next to the phone
        button (any conversation). Anchored above the composer. -->
-  @if (showVoiceAgentPicker) {
-    <mj-voice-agent-picker
+  @if (showRealtimeAgentPicker) {
+    <mj-realtime-agent-picker
       [Provider]="Provider"
       [Agents]="voicePickerAgents"
       [DefaultAgentId]="voicePickerDefaultAgentId"
       [CoAgents]="voicePickerCoAgents"
       [DefaultCoAgentId]="voicePickerDefaultCoAgentId"
-      (AgentPicked)="onVoiceAgentPicked($event)"
-      (Cancelled)="onVoiceAgentPickerCancelled()">
-    </mj-voice-agent-picker>
+      (AgentPicked)="onRealtimeAgentPicked($event)"
+      (Cancelled)="onRealtimeAgentPickerCancelled()">
+    </mj-realtime-agent-picker>
   }
 </div>
 

@@ -9,7 +9,7 @@
  * - Adapter swap — prior subscription torn down, new adapter takes over.
  * - `Dispose` — safe, idempotent, completes the broadcast stream.
  *
- * These are pure-RxJS unit tests; no real `VoiceSessionService` involvement.
+ * These are pure-RxJS unit tests; no real `RealtimeSessionService` involvement.
  * Integration with the Angular bridge lives in the ng-conversations test suite.
  */
 

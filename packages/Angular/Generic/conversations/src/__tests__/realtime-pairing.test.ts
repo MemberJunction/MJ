@@ -9,8 +9,8 @@ import {
   LoadCoAgentPairings,
   PairingsAllowTarget,
   SortPairings,
-  VoicePairedAgentRow,
-} from '../lib/services/voice-pairing';
+  RealtimePairedAgentRow,
+} from '../lib/services/realtime-pairing';
 
 /**
  * Pure co-agent pairing helpers — the client side of the `MJ: AI Agent Co Agents`
@@ -23,7 +23,7 @@ import {
 const CO_AGENT = 'C0000000-0000-0000-0000-000000000001';
 
 /** The engine-cache row shape LoadCoAgentPairings filters on (the new AIAgentCoAgent contract). */
-interface FakeCoAgentEngineRow extends VoicePairedAgentRow {
+interface FakeCoAgentEngineRow extends RealtimePairedAgentRow {
   Type: 'CoAgent' | 'Peer';
   Status: 'Active' | 'Disabled';
   TargetAgentTypeID?: string | null;

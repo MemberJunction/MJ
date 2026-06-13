@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { JSONObject } from '@memberjunction/ai';
-import { VoiceSessionService, VoiceCaption, VoiceConnectionState } from '../lib/services/voice-session.service';
+import { RealtimeSessionService, VoiceCaption, VoiceConnectionState } from '../lib/services/realtime-session.service';
 
 /**
  * Provider-agnostic POLICY surfaces of the voice session service that no other suite
@@ -38,7 +38,7 @@ interface FakeTrack {
 }
 
 /** The private surface the tests drive — no `any`, just the members under test. */
-interface VoiceSessionPolicyInternals {
+interface RealtimeSessionPolicyInternals {
   client: FakeRealtimeClient | null;
   agentSessionId: string | null;
   localStream: { getAudioTracks(): FakeTrack[]; getTracks(): FakeTrack[] } | null;
@@ -46,23 +46,23 @@ interface VoiceSessionPolicyInternals {
   parseSessionConfig(sessionConfigJson: string | null): JSONObject;
 }
 
-function internals(service: VoiceSessionService): VoiceSessionPolicyInternals {
-  return service as unknown as VoiceSessionPolicyInternals;
+function internals(service: RealtimeSessionService): RealtimeSessionPolicyInternals {
+  return service as unknown as RealtimeSessionPolicyInternals;
 }
 
-function latestState(service: VoiceSessionService): VoiceConnectionState {
+function latestState(service: RealtimeSessionService): VoiceConnectionState {
   let state: VoiceConnectionState = 'closed';
   service.ConnectionState$.subscribe(s => (state = s)).unsubscribe();
   return state;
 }
 
-describe('VoiceSessionService — SendText (typed turn injection)', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — SendText (typed turn injection)', () => {
+  let service: RealtimeSessionService;
   let client: FakeRealtimeClient;
   let executeGQL: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     client = new FakeRealtimeClient();
     executeGQL = vi.fn(async () => ({}));
     service.Provider = { ExecuteGQL: executeGQL } as unknown as IMetadataProvider;
@@ -127,12 +127,12 @@ describe('VoiceSessionService — SendText (typed turn injection)', () => {
   });
 });
 
-describe('VoiceSessionService — ToggleMute', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — ToggleMute', () => {
+  let service: RealtimeSessionService;
   let client: FakeRealtimeClient;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     client = new FakeRealtimeClient();
     internals(service).client = client;
   });
@@ -165,11 +165,11 @@ describe('VoiceSessionService — ToggleMute', () => {
   });
 });
 
-describe('VoiceSessionService — client→UI connection-state mapping', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — client→UI connection-state mapping', () => {
+  let service: RealtimeSessionService;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
   });
 
   it("maps 'connecting' / 'listening' / 'speaking' straight through", () => {
@@ -202,11 +202,11 @@ describe('VoiceSessionService — client→UI connection-state mapping', () => {
   });
 });
 
-describe('VoiceSessionService — parseSessionConfig resilience', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — parseSessionConfig resilience', () => {
+  let service: RealtimeSessionService;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
   });
 
   it('parses a valid config JSON', () => {
@@ -224,13 +224,13 @@ describe('VoiceSessionService — parseSessionConfig resilience', () => {
   });
 });
 
-describe('VoiceSessionService — EndVoiceSession / teardown lifecycle', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () => {
+  let service: RealtimeSessionService;
   let client: FakeRealtimeClient;
   let executeGQL: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     client = new FakeRealtimeClient();
     executeGQL = vi.fn(async () => ({}));
     service.Provider = { ExecuteGQL: executeGQL } as unknown as IMetadataProvider;
@@ -298,12 +298,12 @@ describe('VoiceSessionService — EndVoiceSession / teardown lifecycle', () => {
   });
 });
 
-describe('VoiceSessionService — SaveChannelState (explicit id + failure paths)', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — SaveChannelState (explicit id + failure paths)', () => {
+  let service: RealtimeSessionService;
   let executeGQL: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     executeGQL = vi.fn(async () => ({ SaveSessionChannelState: true }));
     service.Provider = { ExecuteGQL: executeGQL } as unknown as IMetadataProvider;
   });
@@ -345,8 +345,8 @@ describe('VoiceSessionService — SaveChannelState (explicit id + failure paths)
   });
 });
 
-describe('VoiceSessionService — transcript correction (ReplacesPrevious)', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — transcript correction (ReplacesPrevious)', () => {
+  let service: RealtimeSessionService;
   let executeGQL: ReturnType<typeof vi.fn>;
 
   /** The private transcript entry point the client driver feeds. */
@@ -357,18 +357,18 @@ describe('VoiceSessionService — transcript correction (ReplacesPrevious)', () 
     }): Promise<void>;
   }
 
-  function transcriptInternals(s: VoiceSessionService): TranscriptInternals {
+  function transcriptInternals(s: RealtimeSessionService): TranscriptInternals {
     return s as unknown as TranscriptInternals;
   }
 
-  function captionsOf(s: VoiceSessionService): VoiceCaption[] {
+  function captionsOf(s: RealtimeSessionService): VoiceCaption[] {
     let captions: VoiceCaption[] = [];
     s.Captions$.subscribe(c => (captions = c)).unsubscribe();
     return captions;
   }
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     executeGQL = vi.fn(async () => ({}));
     service.Provider = { ExecuteGQL: executeGQL } as unknown as IMetadataProvider;
     internals(service).agentSessionId = 'sess-1';

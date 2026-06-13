@@ -22,14 +22,14 @@ import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
-import { VoiceSessionService } from '../../services/voice-session.service';
-import { VoiceAgentPick } from '../voice/voice-agent-picker.component';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
+import { RealtimeAgentPick } from '../realtime/realtime-agent-picker.component';
 import {
   BuildRealtimeConfigOverridesJson,
   FilterRealtimeCoAgents,
   LoadCoAgentPairings,
   PairingsAllowTarget
-} from '../../services/voice-pairing';
+} from '../../services/realtime-pairing';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
@@ -237,7 +237,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     private mentionAutocomplete: MentionAutocompleteService,
     private attachmentService: ConversationAttachmentService,
     private bridge: ConversationBridgeService,
-    private voiceSession: VoiceSessionService
+    private voiceSession: RealtimeSessionService
   ) {
   super();}
 
@@ -343,7 +343,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Display name of the agent the voice session fronts. Resolved here (this component
-   * owns the conversation's routing context) and passed to VoiceSessionService at
+   * owns the conversation's routing context) and passed to RealtimeSessionService at
    * session start so the chat-area-hosted overlay can read it from the service.
    */
   private resolveVoiceAgentName(): string {
@@ -360,7 +360,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /** True while the "Start a voice call with…" agent picker popover is open. */
-  public showVoiceAgentPicker: boolean = false;
+  public showRealtimeAgentPicker: boolean = false;
 
   /**
    * `MJ: User Settings` key persisting the user's co-agent choice for realtime calls
@@ -400,7 +400,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Start a real-time voice session fronting the conversation's current agent.
-   * Client-direct: the VoiceSessionService mints an ephemeral token and connects
+   * Client-direct: the RealtimeSessionService mints an ephemeral token and connects
    * the browser straight to the realtime provider over WebRTC. The "call mode"
    * overlay itself is hosted by the conversation chat area (driven by Active$).
    *
@@ -420,7 +420,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // to call. Falls through to the immediate path if the agent cache is
     // empty (nothing to pick from — the resolved default is the only option).
     if (!this.findLastNonSageAgentId() && this.voicePickerAgents.length > 0) {
-      await this.openVoiceAgentPicker();
+      await this.openRealtimeAgentPicker();
       return;
     }
     const targetAgentId = this.resolveCurrentAgentId();
@@ -445,21 +445,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return;
     }
     if (this.voicePickerAgents.length > 0) {
-      await this.openVoiceAgentPicker();
+      await this.openRealtimeAgentPicker();
       return;
     }
     void this.onStartVoice();
   }
 
   /** Loads the persisted co-agent preference, then shows the picker (pref preselected). */
-  private async openVoiceAgentPicker(): Promise<void> {
+  private async openRealtimeAgentPicker(): Promise<void> {
     this.voicePickerDefaultCoAgentId = await this.loadPersistedCoAgentId();
-    this.showVoiceAgentPicker = true;
+    this.showRealtimeAgentPicker = true;
   }
 
   /** User confirmed an agent (+ optional co-agent / voice model) in the voice picker — start the call. */
-  public async onVoiceAgentPicked(pick: VoiceAgentPick): Promise<void> {
-    this.showVoiceAgentPicker = false;
+  public async onRealtimeAgentPicked(pick: RealtimeAgentPick): Promise<void> {
+    this.showRealtimeAgentPicker = false;
     this.persistCoAgentChoice(pick.CoAgentId);
     await this.startVoiceWithAgent(
       pick.Agent.ID,
@@ -523,14 +523,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /** User dismissed the voice picker without starting a call. */
-  public onVoiceAgentPickerCancelled(): void {
-    this.showVoiceAgentPicker = false;
+  public onRealtimeAgentPickerCancelled(): void {
+    this.showRealtimeAgentPicker = false;
   }
 
   /**
    * Shared session-start path for both the immediate (existing conversation)
    * and picker (new conversation / caret options) flows. The agent NAME is passed
-   * through to VoiceSessionService so the chat-area-hosted overlay banner (AgentName$)
+   * through to RealtimeSessionService so the chat-area-hosted overlay banner (AgentName$)
    * shows who the call fronts without re-resolving. An explicit voice-model choice
    * (authorization-gated, picker only) rides along as `preferredModelId` — the server
    * uses exactly that model or fails with a clear reason (no silent fallback) — and is

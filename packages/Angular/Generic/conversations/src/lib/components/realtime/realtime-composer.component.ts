@@ -1,7 +1,7 @@
 import { Component, ElementRef, EventEmitter, Input, Output, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { VoiceSessionService } from '../../services/voice-session.service';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
 
 /**
  * The call overlay's BOTTOM DOCK — the progressive-disclosure composer
@@ -15,7 +15,7 @@ import { VoiceSessionService } from '../../services/voice-session.service';
  *    "press T to type" hint — typing exists, but there's no visible composer yet.
  *  - **Level 2+ (the dock)** — mute/captions shrink to compact minis and the in-call text
  *    input docks beside them (one bottom bar, per Redesign A's fused composer+controls).
- *    Submit calls {@link VoiceSessionService.SendText}, which injects the text as a user
+ *    Submit calls {@link RealtimeSessionService.SendText}, which injects the text as a user
  *    turn into the SAME live voice call.
  *
  * Mute talks to the session service directly (pure local toggle); captions / Details /
@@ -65,7 +65,7 @@ export class RealtimeComposerComponent {
 
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement>;
 
-  private voice = inject(VoiceSessionService);
+  private voice = inject(RealtimeSessionService);
 
   /** True when there's non-whitespace text to send. */
   public get CanSend(): boolean {

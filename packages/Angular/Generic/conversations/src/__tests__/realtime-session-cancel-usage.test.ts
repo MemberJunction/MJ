@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { RealtimeClientUsage } from '@memberjunction/ai-realtime-client';
-import { VoiceSessionService, VoiceDelegationResult } from '../lib/services/voice-session.service';
+import { RealtimeSessionService, VoiceDelegationResult } from '../lib/services/realtime-session.service';
 
 /**
- * The explicit delegation-CANCEL channel ({@link VoiceSessionService.CancelDelegation} /
- * {@link VoiceSessionService.CancelInFlightDelegations}) and the usage-telemetry relay
+ * The explicit delegation-CANCEL channel ({@link RealtimeSessionService.CancelDelegation} /
+ * {@link RealtimeSessionService.CancelInFlightDelegations}) and the usage-telemetry relay
  * (`OnUsage` deltas → debounced `RelayRealtimeUsage` + teardown flush).
  *
  * Same narrow typed-seam approach as the sibling voice-session suites: a fake Provider whose
@@ -13,7 +13,7 @@ import { VoiceSessionService, VoiceDelegationResult } from '../lib/services/voic
  */
 
 /** The private surface the tests drive — no `any`, just the members under test. */
-interface VoiceSessionCancelUsageInternals {
+interface RealtimeSessionCancelUsageInternals {
   agentSessionId: string | null;
   inFlightCallIds: Set<string>;
   cancelledCallIds: Set<string>;
@@ -26,22 +26,22 @@ interface VoiceSessionCancelUsageInternals {
   teardown(closeServerSession: boolean): Promise<void>;
 }
 
-function internals(service: VoiceSessionService): VoiceSessionCancelUsageInternals {
-  return service as unknown as VoiceSessionCancelUsageInternals;
+function internals(service: RealtimeSessionService): RealtimeSessionCancelUsageInternals {
+  return service as unknown as RealtimeSessionCancelUsageInternals;
 }
 
-function collectResults(service: VoiceSessionService): VoiceDelegationResult[] {
+function collectResults(service: RealtimeSessionService): VoiceDelegationResult[] {
   const results: VoiceDelegationResult[] = [];
   service.DelegationResult$.subscribe(r => results.push(r));
   return results;
 }
 
-describe('VoiceSessionService — CancelDelegation (per-card ✕, explicit user intent)', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — CancelDelegation (per-card ✕, explicit user intent)', () => {
+  let service: RealtimeSessionService;
   let executeGQL: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     executeGQL = vi.fn(async () => ({ CancelRealtimeSessionTool: { AbortedCount: 1, Success: true } }));
     service.Provider = { ExecuteGQL: executeGQL } as unknown as IMetadataProvider;
     internals(service).agentSessionId = 'sess-1';
@@ -144,12 +144,12 @@ describe('VoiceSessionService — CancelDelegation (per-card ✕, explicit user 
   });
 });
 
-describe('VoiceSessionService — CancelInFlightDelegations (sweep cancel)', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — CancelInFlightDelegations (sweep cancel)', () => {
+  let service: RealtimeSessionService;
   let executeGQL: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     executeGQL = vi.fn(async () => ({ CancelRealtimeSessionTool: { AbortedCount: 2, Success: true } }));
     service.Provider = { ExecuteGQL: executeGQL } as unknown as IMetadataProvider;
     internals(service).agentSessionId = 'sess-1';
@@ -192,13 +192,13 @@ describe('VoiceSessionService — CancelInFlightDelegations (sweep cancel)', () 
   });
 });
 
-describe('VoiceSessionService — usage telemetry relay (OnUsage → RelayRealtimeUsage)', () => {
-  let service: VoiceSessionService;
+describe('RealtimeSessionService — usage telemetry relay (OnUsage → RelayRealtimeUsage)', () => {
+  let service: RealtimeSessionService;
   let executeGQL: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    service = new VoiceSessionService();
+    service = new RealtimeSessionService();
     executeGQL = vi.fn(async () => ({ RelayRealtimeUsage: true }));
     service.Provider = { ExecuteGQL: executeGQL } as unknown as IMetadataProvider;
     internals(service).agentSessionId = 'sess-1';
@@ -300,7 +300,7 @@ describe('VoiceSessionService — usage telemetry relay (OnUsage → RelayRealti
   });
 });
 
-describe('VoiceSessionService — OnUsage wiring through wireClientHandlers', () => {
+describe('RealtimeSessionService — OnUsage wiring through wireClientHandlers', () => {
   /** Fake client capturing every handler wireClientHandlers registers. */
   class FakeWiredClient {
     public UsageHandler: ((u: RealtimeClientUsage) => void) | null = null;
@@ -322,7 +322,7 @@ describe('VoiceSessionService — OnUsage wiring through wireClientHandlers', ()
   }
 
   it('registers an OnUsage handler that feeds the accumulator', () => {
-    const service = new VoiceSessionService();
+    const service = new RealtimeSessionService();
     const seam = service as unknown as WiringInternals;
     seam.agentSessionId = 'sess-1';
     const client = new FakeWiredClient();
