@@ -73,11 +73,11 @@
   {
     "fields": {
       "Name": "RingCentral",
-      "Description": "RingCentral UCaaS bridge \u2014 exercises both meeting and telephony families through one driver. Full meeting AV plus outbound dial, inbound routing, DTMF, and call transfer.",
-      "BridgeType": "Meeting",
+      "Description": "RingCentral telephony bridge (Voice / Call Control API). Outbound dial, inbound routing, DTMF, and call transfer over voice. Audio only \u2014 no video or screen. (RingCentral Video meetings could be a separate provider row later.)",
+      "BridgeType": "Telephony",
       "DriverClass": "RingCentralBridge",
-      "Status": "Disabled",
-      "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"OutboundDial\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true,\"DTMF\":true,\"CallTransfer\":true}"
+      "Status": "Active",
+      "SupportedFeatures": "{\"OutboundDial\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"DTMF\":true,\"CallTransfer\":true}"
     }
   },
   {
@@ -96,7 +96,7 @@
       "Description": "Vonage CPaaS telephony bridge. Inbound DID routing, outbound dial, DTMF, and call transfer over voice. Audio only \u2014 no video or screen.",
       "BridgeType": "Telephony",
       "DriverClass": "VonageBridge",
-      "Status": "Disabled",
+      "Status": "Active",
       "SupportedFeatures": "{\"InviteJoin\":true,\"OutboundDial\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"DTMF\":true,\"CallTransfer\":true}"
     }
   },

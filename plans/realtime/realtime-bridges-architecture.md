@@ -998,11 +998,16 @@ Every phase is "done" only when **all** of the following hold — this is baked 
       **27 tests.** Active; seed features corrected to voice-channel reality.
 - [x] **Quality bar** after each driver (full repo build + tests green).
 
-### Phase 6 — Telephony: RingCentral → Twilio → Vonage
-- [ ] `BaseTelephonyBridge` (dial/accept/DTMF/transfer capability methods).
-- [ ] `RingCentralBridge` (UCaaS — meeting + telephony) · `TwilioBridge` · `VonageBridge`.
-- [ ] Inbound DID routing → agent identity; outbound dial flow.
-- [ ] **Quality bar** + guide telephony section.
+### Phase 6 — Telephony: Twilio → Vonage → RingCentral  ✅ DONE
+- [x] `BaseTelephonyBridge` (in ai-bridge-base): `ITelephonyCallSdk` seam (dial/answer/hangup/
+      audio/DTMF/transfer); Connect branches outbound(dial)/inbound(answer); overrides
+      SendDTMF/OnDTMF/TransferCall; no MeetingControls (no roster). + tests.
+- [x] `TwilioBridge` (Programmable Voice + Media Streams, 20 tests), `VonageBridge` (Voice API +
+      websocket, 20 tests), `RingCentralBridge` (Call Control API, 20 tests — BridgeType corrected
+      to Telephony, telephony-only features). All `extends BaseTelephonyBridge`. Seed Active.
+- [x] Inbound (answer)/outbound (dial) flows + DTMF + transfer, capability-gated; the calendar
+      watcher's DID/identity routing (Phase 4) feeds inbound. Telephony correctly has no video/screen.
+- [x] **Quality bar** + guide telephony coverage. Full repo build + tests 509/509 green.
 
 ### Phase 7 — Multi-party
 - [ ] Multiple agents in one room (N bridge connections); echo/self-audio gating.
