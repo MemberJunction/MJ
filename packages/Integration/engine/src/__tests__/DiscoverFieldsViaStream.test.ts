@@ -60,7 +60,7 @@ describe('BaseIntegrationConnector.DiscoverFieldsViaStream', () => {
         // id: unique + non-null over 60 rows → the statistics-first PK + unique key
         expect(id.IsPrimaryKey).toBe(true);
         expect(id.IsUniqueKey).toBe(true);
-        expect(id.AllowsNull).toBeUndefined(); // never observed null → not asserted nullable
+        expect(id.AllowsNull).toBe(true); // §10 — discovered columns default nullable (a sample never proves NOT NULL)
 
         // region: non-null but repeats → NOT a PK, NOT unique
         expect(region.IsPrimaryKey).toBeUndefined();
@@ -79,9 +79,9 @@ describe('BaseIntegrationConnector.DiscoverFieldsViaStream', () => {
         expect(rw.every(f => !f.IsReadOnly)).toBe(true);
     });
 
-    it('never asserts NOT NULL — leaves AllowsNull undefined for columns no null was seen on', async () => {
+    it('never asserts NOT NULL — discovered columns default nullable (§10), even when no null was seen', async () => {
         const fields = await connector.Run([{ a: '1' }, { a: '2' }, { a: '3' }]);
-        expect(find(fields, 'a').AllowsNull).toBeUndefined();
+        expect(find(fields, 'a').AllowsNull).toBe(true);
     });
 
     it('picks a SOFT PK on a sub-threshold sample (convention id) — best-available, no hard gate', async () => {
@@ -105,8 +105,8 @@ describe('BaseIntegrationConnector.DiscoverFieldsViaStream', () => {
         // clock steps 10ms/call; budget 25ms → stops after a few rows, but still returns the column.
         const fields = await connector.Run(rows, { Discovery: { TimeBudgetMs: 25, Now: steppedClock(10) } });
         expect(fields.map(f => f.Name)).toContain('id');
-        // Partial scan must NOT fabricate NOT NULL on the unseen tail.
-        expect(find(fields, 'id').AllowsNull).toBeUndefined();
+        // Partial scan must NOT fabricate NOT NULL on the unseen tail (§10 — nullable default).
+        expect(find(fields, 'id').AllowsNull).toBe(true);
     });
 
     it('carries the inferred data type + bounded MaxLength onto the field schema', async () => {

@@ -565,7 +565,7 @@ export abstract class BaseIntegrationConnector {
 
         return scan.Columns.map(c => {
             const provablyUnique = !c.DistinctCapped && c.Occurrences > 0 && c.DistinctNonNull === c.Occurrences;
-            const sawNull = c.Occurrences < c.TotalRows;
+            const isKey = pkFields.has(c.Key);
             const field: ExternalFieldSchema = {
                 Name: c.Key,
                 Label: c.Key,
@@ -574,16 +574,23 @@ export abstract class BaseIntegrationConnector {
                 IsUniqueKey: provablyUnique,
                 IsReadOnly: readOnly,
             };
-            // Provable-only: only assert nullability we actually observed; never fabricate NOT NULL.
-            if (sawNull) field.AllowsNull = true;
+            // §10 — discovered columns default NULLABLE. A sample can prove a value CAN be null but can
+            // NEVER prove NOT NULL, and a wrong NOT NULL rejects real rows. So always permit null here;
+            // a genuine NOT NULL only ever comes from an explicit source-declared "required".
+            field.AllowsNull = true;
             // Statistics-first PK: mark each component of the chosen identity (single column or the
             // greedy composite set). Empty set = genuinely keyless → content-hash identity handles dedup.
-            if (pkFields.has(c.Key)) field.IsPrimaryKey = true;
-            // Provable-only length: a streamed-sample max isn't a proof. When unproven, seed a
-            // safe bounded default (450 — the largest a key column can be, so any field stays
-            // PK-eligible) so the column is nvarchar(450) downstream — never NVARCHAR(MAX),
-            // which can't be a key and breaks idempotent re-apply.
-            field.MaxLength = c.Inferred.MaxLength ?? 450;
+            if (isKey) field.IsPrimaryKey = true;
+            // §11 — ALWAYS size with generous headroom: a streamed-sample max is NOT the true max, so pad
+            // well above it (≥2×, rounded up to a standard bucket) so the next-larger record never
+            // truncates. Key columns stay capped at the 450-byte index-key limit so they remain
+            // PK-eligible (and never NVARCHAR(MAX), which can't be a key); unproven length uses that cap.
+            field.MaxLength = (() => {
+                const m = c.Inferred.MaxLength;
+                if (m == null || m <= 0) return 450;
+                const padded = [32, 64, 128, 256, 512, 1024, 2048, 4000].find(b => b >= m * 2) ?? 4000;
+                return isKey ? Math.min(padded, 450) : padded;
+            })();
             return field;
         });
     }

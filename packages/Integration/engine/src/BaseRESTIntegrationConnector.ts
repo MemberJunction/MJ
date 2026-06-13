@@ -759,12 +759,10 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const tVarLower = templateVar.toLowerCase();
         const siblingObjects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
 
-        // Strategy 0 (PREFERRED — deterministic + deploy-safe): the object DECLARES its parent BY NAME in
+        // Strategy A (PREFERRED — deterministic + deploy-safe): the object DECLARES its parent BY NAME in
         // Configuration.parentObjectName (the extractor emits this for second-layer / {param} objects). A
         // by-name reference needs NO RelatedIntegrationObjectID FK-UUID — which a dense @lookup FK graph
-        // often can't deploy (same-transaction rollback) — and is immune to the PK-name collision that makes
-        // Strategy 2 ambiguous when many siblings share a key name (e.g. every contact-scoped object keyed by
-        // ContactId). When a valid declaration is present it WINS over the FK/PK heuristics below.
+        // often can't deploy (same-transaction rollback). When a valid declaration is present it WINS.
         const declaredParent = this.ReadObjectConfigString(obj, 'parentObjectName');
         if (declaredParent) {
             const parent = siblingObjects.find(s => s.Name.toLowerCase() === declaredParent.toLowerCase());
@@ -774,37 +772,25 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             }
             console.warn(
                 `[BaseRESTIntegrationConnector] "${obj.Name}": Configuration.parentObjectName="${declaredParent}" ` +
-                `matches no sibling IntegrationObject — falling back to FK/PK heuristics.`
+                `matches no sibling IntegrationObject — cannot resolve parent (will skip, not guess).`
             );
         }
 
-        // Strategy 1: explicit FK field whose name matches this var.
+        // Strategy B (DECLARED FK only): an EXPLICIT FK field (RelatedIntegrationObjectID set) whose name
+        // EXACTLY equals this template var. Exact, NOT substring (substring can bind the wrong FK) — this
+        // resolves only via authored metadata, never a guess.
         for (const field of fields) {
             if (!field.RelatedIntegrationObjectID) continue;
-            if (field.Name.toLowerCase().includes(tVarLower)) {
+            if (field.Name.toLowerCase() === tVarLower) {
                 return { templateVar, fkFieldName: field.Name, parentObjectID: field.RelatedIntegrationObjectID };
             }
         }
 
-        // Strategy 2 (LAST RESORT — heuristic): sibling object whose PK field name equals this var. This is
-        // AMBIGUOUS when multiple siblings share the PK name; picking the first silently fetches the wrong
-        // parent's IDs (or an empty orphan). Trust it ONLY when EXACTLY ONE sibling matches; on >1, warn and
-        // refuse so the failure is LOUD (and the build's floor-check can require a parentObjectName).
-        const pkMatches = siblingObjects.filter(sibling => {
-            const pkField = IntegrationEngineBase.Instance.GetIntegrationObjectFields(sibling.ID).find(f => f.IsPrimaryKey);
-            return !!pkField && pkField.Name.toLowerCase() === tVarLower;
-        });
-        if (pkMatches.length === 1) {
-            return { templateVar, fkFieldName: templateVar, parentObjectID: pkMatches[0].ID };
-        }
-        if (pkMatches.length > 1) {
-            console.warn(
-                `[BaseRESTIntegrationConnector] "${obj.Name}": template var {${templateVar}} matches the PK of ` +
-                `${pkMatches.length} siblings (${pkMatches.map(s => s.Name).join(', ')}) — ambiguous; refusing to ` +
-                `guess. Declare Configuration.parentObjectName on "${obj.Name}" to disambiguate.`
-            );
-        }
-
+        // §19 — NO heuristic fallback. The removed "sibling whose PK name equals this var" strategy was a
+        // GUESS: on a name collision it silently bound the WRONG parent → children fetched under the wrong
+        // owner IDs (silent cross-owner data corruption, not an error). An undeclared/unresolvable parent is
+        // now a LOUD skip — the caller surfaces "declare Configuration.parentObjectName" and fetches nothing
+        // rather than guess. Resolution is by authored metadata only (declared name or declared FK).
         return null;
     }
 

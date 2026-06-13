@@ -133,25 +133,61 @@ export class SchemaNotGeneratedError extends Error {
 }
 
 /**
- * Raised when a mapped string value exceeds its bounded destination column width. Per the
- * bounded-typing policy (small, space-efficient columns; large content is an explicit text/json
- * modality), an over-width value is NEVER truncated and NEVER widens the column — the offending
- * RECORD is skipped and surfaced as a structured SyncWarning so the gap is visible, not silent.
- * Caught per-record in ApplySingleRecord; it does not fail the batch.
+ * §29 — base of the VALUE-FIT error family: a mapped value cannot fit/coerce into its destination
+ * column's type. Per the bounded-typing policy (small columns; large content is an explicit text/json
+ * modality), such a value is NEVER truncated/clamped and NEVER widens the column — the offending
+ * RECORD is skipped and surfaced as a structured SyncWarning so the gap is visible, not silent, and
+ * the rest of the batch still commits. Caught per-record in ApplySingleRecord (catches the base, so
+ * every family member is handled uniformly). Add a subclass for each new fit failure mode.
  */
-export class StringOverflowError extends Error {
+export abstract class ValueFitError extends Error {
     public readonly FieldName: string;
+    /** Stable SyncWarning code for this fit failure (e.g. STRING_OVERFLOW_SKIPPED). */
+    public abstract readonly WarningCode: string;
+    constructor(message: string, fieldName: string) {
+        super(message);
+        this.name = new.target.name;
+        this.FieldName = fieldName;
+    }
+    /** Structured detail for the SyncWarning payload (subclass-specific). */
+    public abstract Details(): Record<string, unknown>;
+}
+
+/** A string value wider than its bounded NVARCHAR column. */
+export class StringOverflowError extends ValueFitError {
+    public readonly WarningCode = 'STRING_OVERFLOW_SKIPPED';
     public readonly ValueLength: number;
     public readonly MaxLength: number;
-
     constructor(fieldName: string, valueLength: number, maxLength: number) {
-        super(`Value for '${fieldName}' is ${valueLength} chars, exceeding the column width ${maxLength}; record skipped (not truncated).`);
-        this.name = 'StringOverflowError';
-        this.FieldName = fieldName;
+        super(`Value for '${fieldName}' is ${valueLength} chars, exceeding the column width ${maxLength}; record skipped (not truncated).`, fieldName);
         this.ValueLength = valueLength;
         this.MaxLength = maxLength;
     }
+    public Details(): Record<string, unknown> { return { valueLength: this.ValueLength, maxLength: this.MaxLength }; }
 }
+
+/** A numeric value outside its integer column's representable range (e.g. > INT max → would sink the batch at bind time). */
+export class NumericOverflowError extends ValueFitError {
+    public readonly WarningCode = 'NUMERIC_OVERFLOW_SKIPPED';
+    public readonly Value: number;
+    public readonly SqlType: string;
+    constructor(fieldName: string, value: number, sqlType: string) {
+        super(`Value for '${fieldName}' (${value}) is outside the range of its ${sqlType} column; record skipped (not clamped).`, fieldName);
+        this.Value = value;
+        this.SqlType = sqlType;
+    }
+    public Details(): Record<string, unknown> { return { value: this.Value, sqlType: this.SqlType }; }
+}
+
+/** §29 — integer SQL-type ranges (JS-number-comparable). BIGINT bounds exceed 2^53 so the check is a
+ *  no-op there (any JS number already fits); the real overflow risk is INT/SMALLINT/TINYINT. */
+const INTEGER_SQL_BOUNDS: Record<string, { min: number; max: number }> = {
+    tinyint: { min: 0, max: 255 },
+    smallint: { min: -32768, max: 32767 },
+    int: { min: -2147483648, max: 2147483647 },
+    integer: { min: -2147483648, max: 2147483647 },
+    bigint: { min: -9223372036854775808, max: 9223372036854775807 },
+};
 
 /**
  * Returns a SchemaNotGeneratedError if the given Save() failure message matches the
@@ -3045,16 +3081,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     break;
             }
         } catch (err) {
-            // A value too wide for its bounded column is a per-RECORD skip, not a batch failure and not
-            // truncation. Surface it as a structured SyncWarning (visible over GraphQL) and move on so
-            // the rest of the batch still commits. Any other error propagates (batch isolation handles it).
-            if (err instanceof StringOverflowError) {
+            // §29 — a value that doesn't fit its column type (string too wide, integer out of range) is a
+            // per-RECORD skip, not a batch failure and not truncation/clamping. Surface it as a structured
+            // SyncWarning (visible over GraphQL) and move on so the rest of the batch still commits. The
+            // base ValueFitError is caught, so every family member is handled uniformly. Any other error
+            // propagates (batch isolation handles it).
+            if (err instanceof ValueFitError) {
                 result.RecordsSkipped++;
                 logger?.warning(
                     entityMap.ExternalObjectName ?? entityMap.Entity ?? entityMap.ID,
-                    'STRING_OVERFLOW_SKIPPED',
-                    `Record skipped — '${err.FieldName}' value is ${err.ValueLength} chars, wider than its ${err.MaxLength}-char column (value not truncated).`,
-                    { externalId: record.ExternalRecord.ExternalID, field: err.FieldName, valueLength: err.ValueLength, maxLength: err.MaxLength },
+                    err.WarningCode,
+                    `Record skipped — ${err.message}`,
+                    { externalId: record.ExternalRecord.ExternalID, field: err.FieldName, ...err.Details() },
                 );
             } else {
                 throw err;
@@ -3486,21 +3524,30 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         for (const [fieldName, value] of Object.entries(fields)) {
             const key = fieldName.toLowerCase();
             const coerced = this.coerceIncomingValue(value, typeLookup.get(key));
-            entity.Set(fieldName, this.enforceMaxLength(coerced, maxLenLookup.get(key), fieldName));
+            entity.Set(fieldName, this.enforceValueFit(coerced, typeLookup.get(key), maxLenLookup.get(key), fieldName));
         }
     }
 
     /**
-     * §5/§10 type-driven enforcement: a source string value WIDER than its bounded destination column
-     * is NOT truncated (silent data corruption) and does NOT widen the column (space is the priority —
-     * columns are small by policy; large content is an explicit text/json modality). Instead it raises
-     * StringOverflowError, which ApplySingleRecord catches to SKIP that one record and surface a
-     * structured SyncWarning. Non-strings / values that fit / unlimited columns (MaxLength 0) pass
-     * through unchanged.
+     * §5/§10/§29 value-fit enforcement: a value that cannot fit its bounded destination column is NOT
+     * truncated/clamped (silent corruption) and does NOT widen the column (space is the priority) —
+     * instead it raises a {@link ValueFitError}, which ApplySingleRecord catches to SKIP that one record
+     * and surface a structured SyncWarning. Two fit failures are enforced: a string wider than its column
+     * ({@link StringOverflowError}) and an integer outside its column's range ({@link NumericOverflowError},
+     * which would otherwise sink the whole batch at SQL bind time). Values that fit / unlimited columns /
+     * non-enforced types pass through unchanged.
      */
-    private enforceMaxLength(value: unknown, maxLength: number | undefined, fieldName: string): unknown {
-        if (typeof value !== 'string' || maxLength === undefined || value.length <= maxLength) return value;
-        throw new StringOverflowError(fieldName, value.length, maxLength);
+    private enforceValueFit(value: unknown, targetType: string | undefined, maxLength: number | undefined, fieldName: string): unknown {
+        if (typeof value === 'string' && maxLength !== undefined && value.length > maxLength) {
+            throw new StringOverflowError(fieldName, value.length, maxLength);
+        }
+        if (typeof value === 'number' && Number.isFinite(value) && targetType) {
+            const bound = INTEGER_SQL_BOUNDS[targetType.toLowerCase()];
+            if (bound && (value < bound.min || value > bound.max)) {
+                throw new NumericOverflowError(fieldName, value, targetType);
+            }
+        }
+        return value;
     }
 
     /**

@@ -60,9 +60,10 @@ export interface PromotionCandidate {
 /** Tuning + context for {@link planPromotions}. */
 export interface PromotionPlanOptions {
     /**
-     * Minimum coverage (in [0,1]) a key must clear to earn a column. Default 0.5 — a key
-     * present on at least half the rows that carried any overflow. Below this it stays in the
-     * overflow JSON (queryable, never lost) rather than minting a sparse column from noise.
+     * Minimum coverage (in [0,1]) a key must clear to earn a column. Default 0 — §23: a custom key
+     * earns a column on FIRST occurrence (presence, not prevalence); appearing in even one row is
+     * enough. Raise this only if a caller deliberately wants to suppress sparse keys. The captured
+     * values are never lost regardless — they stay in the overflow JSON until promoted.
      */
     CoverageThreshold?: number;
     /**
@@ -72,7 +73,7 @@ export interface PromotionPlanOptions {
     ExistingColumnNames?: ReadonlySet<string>;
 }
 
-const DEFAULT_COVERAGE_THRESHOLD = 0.5;
+const DEFAULT_COVERAGE_THRESHOLD = 0; // §23 — presence-based: a key seen in even one row earns a column.
 /** SQL Server's largest bounded NVARCHAR before MAX; above this we must use MAX/TEXT. */
 const MAX_BOUNDED_STRING = 4000;
 /** Floor for a generous string bound — never size a custom string column tighter than this. */
@@ -99,7 +100,8 @@ export function planPromotions(
     for (const stat of stats) {
         // Terminate / never re-promote: the column already exists.
         if (existing.has(stat.Key.toLowerCase())) continue;
-        // Pervasiveness floor — never mint a column from a junk key in one malformed row.
+        // Guard div-by-zero only; §23 — presence is enough (default threshold 0), so a key seen in
+        // even one row earns a column. A higher bar is opt-in via CoverageThreshold.
         if (stat.TotalRows <= 0) continue;
         const coverage = stat.Occurrences / stat.TotalRows;
         if (coverage < threshold) continue;

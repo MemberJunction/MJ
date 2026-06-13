@@ -75,13 +75,14 @@ describe('CustomColumnPromotion', () => {
     });
 
     describe('planPromotions', () => {
-        it('promotes a pervasive key and skips a sparse one', () => {
+        it('promotes EVERY key on first occurrence — presence-based default (§23)', () => {
             const out = planPromotions([
                 stat('Pervasive', 9, 10),   // 0.9 coverage
-                stat('Sparse', 1, 10),      // 0.1 coverage
+                stat('Sparse', 1, 10),      // 0.1 coverage — STILL promoted: presence is enough
             ]);
-            expect(out.map(c => c.Key)).toEqual(['Pervasive']);
-            expect(out[0].Coverage).toBeCloseTo(0.9);
+            // Default threshold is 0 (§23): both earn a column; sorted by key for stable output.
+            expect(out.map(c => c.Key)).toEqual(['Pervasive', 'Sparse']);
+            expect(out.find(c => c.Key === 'Sparse')!.Coverage).toBeCloseTo(0.1);
         });
 
         it('honors a custom coverage threshold', () => {
