@@ -507,6 +507,48 @@ are handled via the credential system, never baked into images; egress is allow-
 is one container (cost is per-session compute + the realtime session). **Phase placement:** after the
 media-track plane and the first meeting bridge work (it consumes both), but within this program.
 
+### 4d-i. Build decisions (option 3 — pluggable backends, the MJ way)
+
+Settled with Amith (2026-06-13). The Remote Browser channel is built **exactly like the bridge
+subsystem**: one registry table + base driver + EngineBase/Engine pair + pluggable backends.
+
+- **One primitive — CDP.** Every backend (self-hosted Chrome and every BaaS) exposes a Chrome
+  DevTools Protocol endpoint. We standardize on **CDP-connect** and reuse `@memberjunction/computer-use`
+  — its `PlaywrightBrowserAdapter` already does `chromium.connectOverCDP()` plus a clean
+  click/type/scroll/screenshot vocabulary. We do **not** hand-roll raw CDP. The lightweight-container
+  insight follows: self-host is just headless Chrome + a CDP port — no heavy Docker image.
+
+- **Registry table `AIRemoteBrowserProvider`** (`MJ: AI Remote Browser Providers`, migration
+  `V202606161000`): `Name`, `ProviderType` (`SelfHost`/`Service`), `DriverClass` (ClassFactory key),
+  `Status`, `SupportedFeatures` (strongly-typed `IRemoteBrowserProviderFeatures` JSON, bound via
+  JSONType — capability gating exactly like `AIBridgeProvider`), `DefaultControlMode`, `ConfigSchema`,
+  `Configuration`. Seeded via mj-sync with **five backends**: Self-Hosted Chrome, Browserbase, Steel,
+  Browserless, Hyperbrowser.
+
+- **Engine pair (mirrors `AIEngineBase`/`AIEngine`):** `RemoteBrowserEngineBase` (universal,
+  metadata-only, client+server — caches the provider registry via `BaseEngine`) + `RemoteBrowserEngine`
+  (server-only, **composition over the base** — owns containment: live browser sessions, control
+  arbitration, the viewport→screen-track encode). `BaseRemoteBrowserProvider` is the driver family
+  (sibling of `BaseRealtimeBridge`); concrete backends `@RegisterClass(BaseRemoteBrowserProvider, '<X>RemoteBrowser')`.
+
+- **Control is a pluggable STRATEGY (the Stagehand question):** the CDP substrate is universal; *how
+  the agent decides what to click* is a strategy gated by capability.
+  1. **MJ computer-use control (default, universal)** — our own perception→action loop over CDP;
+     works on every backend; right fit for a realtime co-agent that is already a powerful brain
+     emitting tool calls while it talks.
+  2. **Provider-native AI control (optional, `NativeAIControl`-gated)** — delegate high-level intents
+     to the backend's own harness (Browserbase **Stagehand**, Hyperbrowser agent). Genuinely better
+     for heavy/robust autonomous automation, but it runs its own model loop (double-LLM inside a live
+     voice turn), so it is an *accelerator we offer*, not the default. OSS-Stagehand-over-CDP can also
+     run as an engine strategy on any `RawCdpControl` backend.
+
+- **Control MODE (metadata + runtime override), distinct from strategy:** `AgentOnly` (only the agent
+  drives — a sales demo that doesn't hand over), `ViewOnly` (agent drives, humans watch the live view),
+  `Collaborative` (a human can **grab the wheel** — the trainer agent: demonstrate a task, then "your
+  turn, try X, Y, Z" and watch + give feedback). `DefaultControlMode` lives on the provider; the
+  `RemoteBrowserChannel` config overrides it per-channel and at runtime. A mode is only valid if the
+  backend supports its prerequisites (`HumanTakeover` for Collaborative, `LiveView` for ViewOnly/Collaborative).
+
 ---
 
 ## 5. How an agent joins / connects
@@ -1032,13 +1074,42 @@ Every phase is "done" only when **all** of the following hold — this is baked 
       adapter binding + runner-layer floor wiring around an agent's generation remain — documented as
       pending.)*
 
-### Phase 8 — Remote Browser channel
-- [ ] `ContainerRunner` abstraction (any Playwright Docker image; ephemeral, sandboxed, egress-limited).
-- [ ] `RemoteBrowserChannel` (tools, perception, viewport→screen-track, control arbiter).
+### Phase 8 — Remote Browser channel  (option 3 — pluggable backends, the MJ way; see §4d-i)
+- [x] **Migration** `V202606161000__v5.42.x__AI_Remote_Browser_Providers.sql` — one table
+      `AIRemoteBrowserProvider` (registry; `SupportedFeatures` JSONType, `DefaultControlMode`).
+- [x] **Metadata** — `IRemoteBrowserProviderFeatures` JSONType interface + binding; mj-sync seed of
+      the five backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+- [ ] **Base package** `@memberjunction/remote-browser` (universal, client+server): `BaseRemoteBrowserProvider`
+      driver family, `RemoteBrowserEngineBase` (BaseEngine cache of the registry, conditional dataset so
+      it boots green pre-CodeGen), `IRemoteBrowserProviderFeatures`, control-mode + control-strategy types,
+      `RemoteBrowserCapabilityNotSupportedError`. Reuses `@memberjunction/computer-use` (CDP substrate).
+- [ ] **Server package** `@memberjunction/remote-browser-server` (server-only): `RemoteBrowserEngine`
+      (composition over base; session containment + lifecycle/janitor), `RemoteBrowserChannel`
+      (`BaseRealtimeChannelServer` — tool vocabulary, perception feed, control arbiter + modes),
+      MJ-computer-use control strategy + provider-native-AI (Stagehand) strategy seam, viewport→ScreenOut
+      encode, the "Remote Browser" `AIAgentChannel` registry seed.
+- [ ] **5 backend drivers** `@memberjunction/remote-browser-{selfhost,browserbase,steel,browserless,hyperbrowser}`
+      — each a `BaseRemoteBrowserProvider` subclass with an injectable SDK/CDP seam + Fake + tests.
 - [ ] **Quality bar** + guide remote-browser section.
 
+### Phase RT — New realtime model providers (Inworld + xAI Grok Voice)
+- [ ] **xAI Grok Voice** realtime driver in `@memberjunction/ai-xai` — `@RegisterClass(BaseRealtimeModel, 'GrokRealtime')`;
+      OpenAI-Realtime-compatible (`wss://api.x.ai/v1/realtime`, PCM16 24 kHz) so it reuses the OpenAI
+      realtime SDK pointed at the xAI base URL; injectable connection seam + Fake + tests; honors all 8
+      driver obligations. AIModel/Vendor/ModelVendor metadata seed (DriverClass `GrokRealtime`).
+- [ ] **Inworld** realtime driver in new `@memberjunction/ai-inworld` — `@RegisterClass(BaseRealtimeModel, 'InworldRealtime')`;
+      custom WebSocket protocol (`session.update`, semantic VAD, fluent tool calling) implemented to spec
+      behind an injectable seam + Fake + tests (wire-format binding points marked for live verification).
+      Inworld Vendor + AIModel/ModelVendor metadata seed (DriverClass `InworldRealtime`).
+- [ ] **Quality bar** + README/guide note.
+
 ### Phase 9 — Native marketplace inclusion
-- [ ] Per-platform "add the agent" apps (Zoom/Teams marketplace) — design + first submission.
+- [x] **Design doc** — [native-marketplace-apps.md](./native-marketplace-apps.md): the app-as-shim
+      model (per-platform OAuth shim + one thin `StartBridgeSessionFromNativeInvite` resolver onto the
+      already-built `AIBridgeEngine`; no new engine/entities/media path), per-platform landscape
+      (Zoom first, Teams second), security/consent, and the phased submission plan.
+- [ ] `StartBridgeSessionFromNativeInvite` resolver + tests (near-term code item; 9.1).
+- [ ] Per-platform "add the agent" apps (Zoom/Teams) — submission (marketplace-clock, off critical path).
 - [ ] **Quality bar** + guide.
 
 ### Phase UI — Realtime management dashboard + forms  ✅ DONE
