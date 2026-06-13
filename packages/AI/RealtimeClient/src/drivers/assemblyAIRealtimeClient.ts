@@ -177,6 +177,14 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
     private pendingToolCallIds = new Set<string>();
     /** True once Disconnect ran — an expected socket close must not surface as fatal. */
     private closedByConsumer = false;
+
+    // ── session.resume reconnect window ─────────────────────────────────────────
+    /** Provider-assigned session id (from `session.ready`) — the `session.resume` key. */
+    private providerSessionId: string | null = null;
+    /** The token-authenticated endpoint URL, kept for the resume reattach socket. */
+    private connectUrl: string | null = null;
+    /** One resume attempt per session: a second unexpected drop is fatal (as before). */
+    private resumeAttempted = false;
     /**
      * The client's own view of the session state — mirrors what was last emitted, EXCEPT after
      * a tool call: the host typically shows its own busy indicator then, so the client silently
@@ -227,7 +235,10 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
             failReady?.(error);
         };
 
-        const socket = this.createSocket(`${ASSEMBLYAI_AGENT_WS_URL}?token=${encodeURIComponent(config.EphemeralToken)}`);
+        this.connectUrl = `${ASSEMBLYAI_AGENT_WS_URL}?token=${encodeURIComponent(config.EphemeralToken)}`;
+        this.providerSessionId = null;
+        this.resumeAttempted = false;
+        const socket = this.createSocket(this.connectUrl);
         this.socket = socket;
         socket.onopen = () => openSocket?.();
         socket.onmessage = (data) => this.handleSocketMessage(data);
@@ -513,8 +524,44 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         if (this.closedByConsumer || this.currentState === 'error' || this.currentState === 'closed') {
             return;
         }
+        // The provider holds the session for a 30-second resume window — try ONE reattach
+        // before declaring the session dead (the plan's "provider session.resume" item).
+        if (this.tryResumeSession()) {
+            return; // the resume path owns the state machine from here
+        }
         this.emitError({ Message: 'AssemblyAI agent session closed unexpectedly', Fatal: true });
         this.setState('error');
+    }
+
+    /**
+     * ONE-shot reattach inside the provider's 30-second resume window: a fresh socket to
+     * the same token-authenticated endpoint whose FIRST frame is `session.resume` with the
+     * `session_id` captured from `session.ready`. The provider re-confirms with another
+     * `session.ready`, which restores `'listening'` — the mic worklet and playout engine
+     * survive untouched (mic chunks simply flow into the new socket). A failed or second
+     * drop falls through to the pre-existing fatal path, so the worst case is exactly the
+     * old behavior. Returns `true` when a reattach was started.
+     */
+    private tryResumeSession(): boolean {
+        if (this.resumeAttempted || !this.providerSessionId || !this.connectUrl) {
+            return false;
+        }
+        this.resumeAttempted = true;
+        const sessionId = this.providerSessionId;
+        this.setState('connecting'); // hosts surface this as "reconnecting…"
+        try {
+            const socket = this.createSocket(this.connectUrl);
+            this.socket = socket;
+            socket.onopen = () => this.sendFrame({ type: 'session.resume', session_id: sessionId });
+            socket.onmessage = (data) => this.handleSocketMessage(data);
+            socket.onerror = (message) => this.handleSocketError(message);
+            socket.onclose = () => this.handleSocketClose(); // resumeAttempted → fatal path
+            // The resume handshake's `session.ready` restores the live state.
+            this.onSessionReady = () => this.setState('listening');
+            return true;
+        } catch {
+            return false; // socket construction failed — fall through to the fatal path
+        }
     }
 
     // ── Inbound message translation ────────────────────────────────────────────
@@ -534,6 +581,8 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
     private handleServerEvent(event: AssemblyAIServerEvent): void {
         switch (event.type) {
             case 'session.ready':
+                // The provider-assigned id is the `session.resume` key (30s reattach window).
+                this.providerSessionId = event.session_id ?? this.providerSessionId;
                 this.onSessionReady?.();
                 this.onSessionReady = null;
                 break;

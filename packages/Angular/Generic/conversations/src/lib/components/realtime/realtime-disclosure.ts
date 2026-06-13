@@ -235,7 +235,11 @@ export class RealtimeDisclosureModel {
     return this.SessionLevel >= 1;
   }
 
-  /** Level 2+: the composer dock replaces the big-controls strip. */
+  /**
+   * Level 2+ POWER-CHROME milestone (app-bar End pill, gear, channel strip). NOTE: the
+   * composer dock itself is NOT level-forced — it is the overlay's per-session, user-owned
+   * Open toggle (the strip's Type control / T opens it; the dock's hide control closes it).
+   */
   public get ShowComposer(): boolean {
     return this.SessionLevel >= 2;
   }

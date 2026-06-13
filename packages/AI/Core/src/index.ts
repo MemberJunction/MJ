@@ -12,5 +12,6 @@ export * from './generic/baseEmbeddings';
 export * from './generic/baseAudio';
 export * from './generic/baseVideo';
 export * from './generic/baseRealtime';
+export * from './generic/baseRealtimeChannelServer';
 export * from './generic/errorTypes';
 export * from './generic/errorAnalyzer';

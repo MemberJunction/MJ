@@ -291,6 +291,16 @@ export class PushService {
       for (const warning of this.syncMetadataEngine.drainWarnings()) {
         callbacks?.onWarn?.(`   ⚠️  ${warning}`);
       }
+      const delegations = this.syncMetadataEngine.getDelegationSummary();
+      if (delegations.length > 0) {
+        const donorCount = new Set(delegations.map(d => d.engineClassName)).size;
+        callbacks?.onLog?.(`   ↪ Reused in-memory caches for ${delegations.length} ${delegations.length === 1 ? 'entity' : 'entities'} already loaded by ${donorCount} ${donorCount === 1 ? 'engine' : 'engines'}`);
+        if (options.verbose) {
+          for (const d of delegations.sort((a, b) => a.entityName.localeCompare(b.entityName))) {
+            callbacks?.onLog?.(`      • ${d.entityName} ← ${d.engineClassName}`);
+          }
+        }
+      }
       callbacks?.onLog?.('✓ Preload completed successfully\n');
       
       if (options.verbose) {

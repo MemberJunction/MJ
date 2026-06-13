@@ -44,6 +44,26 @@ export const AUDIO_DIRECTION_HOLD_MS = 280;
 export const AUDIO_DIRECTION_STEAL_FACTOR = 1.15;
 
 /**
+ * NOISE GATES (per direction): raw analyser levels at/below the gate render as TRUE
+ * silence — without this, an idle microphone's room-noise/auto-gain floor keeps the EQ
+ * dancing and the direction stuck on "user" while nobody is speaking. The mic gate sits
+ * well above the output gate because playback silence is actual zero; mic silence isn't.
+ */
+export const AUDIO_OUTPUT_NOISE_GATE = 0.03;
+export const AUDIO_INPUT_NOISE_GATE = 0.08;
+
+/**
+ * Soft-knee noise gate: at/below `gate` → 0; above it the remaining range rescales to
+ * 0..1 (so the gate never visibly "clips" the bottom off real speech). Pure.
+ */
+export function GateLevel(level: number, gate: number): number {
+  if (!Number.isFinite(level) || level <= gate) {
+    return 0;
+  }
+  return Math.min(1, (level - gate) / (1 - gate));
+}
+
+/**
  * One smoothing step: fast attack (speech onset reads instantly), slow decay (the level
  * rings down like a speaker cone instead of snapping). Pure.
  */
@@ -85,9 +105,12 @@ export class RealtimeAudioVisualSmoother {
     if (!raw) {
       return null;
     }
-    this.outputLevel = SmoothLevel(this.outputLevel, raw.OutputLevel ?? 0);
-    this.inputLevel = SmoothLevel(this.inputLevel, raw.InputLevel ?? 0);
-    this.smoothBins(this.pickRawBins(raw));
+    // Gate BEFORE smoothing: silence is true zero, the decay still rings down smoothly.
+    const gatedOut = GateLevel(raw.OutputLevel ?? 0, AUDIO_OUTPUT_NOISE_GATE);
+    const gatedIn = GateLevel(raw.InputLevel ?? 0, AUDIO_INPUT_NOISE_GATE);
+    this.outputLevel = SmoothLevel(this.outputLevel, gatedOut);
+    this.inputLevel = SmoothLevel(this.inputLevel, gatedIn);
+    this.smoothBins(this.pickRawBins(raw, gatedOut, gatedIn));
     this.resolveDirection(nowMs);
     return {
       OutputLevel: this.outputLevel,
@@ -97,12 +120,18 @@ export class RealtimeAudioVisualSmoother {
     };
   }
 
-  /** The spectrum follows whichever direction is louder (falling back to whichever exists). */
-  private pickRawBins(raw: RealtimeAudioActivity): number[] | null {
-    if (raw.OutputBins && raw.InputBins) {
-      return this.outputLevel >= this.inputLevel ? raw.OutputBins : raw.InputBins;
+  /**
+   * The spectrum follows whichever direction is louder (falling back to whichever
+   * exists) — but a side whose GATED level is silence contributes no spectrum at all:
+   * an idle mic's room-noise bins must not keep the EQ dancing.
+   */
+  private pickRawBins(raw: RealtimeAudioActivity, gatedOut: number, gatedIn: number): number[] | null {
+    const outBins = gatedOut > 0 ? raw.OutputBins : null;
+    const inBins = gatedIn > 0 ? raw.InputBins : null;
+    if (outBins && inBins) {
+      return this.outputLevel >= this.inputLevel ? outBins : inBins;
     }
-    return raw.OutputBins ?? raw.InputBins;
+    return outBins ?? inBins;
   }
 
   private smoothBins(rawBins: number[] | null): void {

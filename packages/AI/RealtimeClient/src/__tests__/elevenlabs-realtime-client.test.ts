@@ -301,7 +301,9 @@ describe('ElevenLabsRealtimeClient', () => {
             const finals = transcripts.filter((t) => t.Role === 'Assistant');
             expect(finals).toEqual([
                 { Role: 'Assistant', Text: 'The full answer is forty-two and', IsFinal: true, Kind: 'normal' },
-                { Role: 'Assistant', Text: 'The full answer is', IsFinal: true, Kind: 'normal' },
+                // The correction is MACHINE-READABLY marked as superseding the previous final
+                // (the §10 "Transcript Replaces marker" contract) so hosts update in place.
+                { Role: 'Assistant', Text: 'The full answer is', IsFinal: true, Kind: 'normal', ReplacesPrevious: true },
             ]);
         });
 

@@ -202,3 +202,13 @@ kbd {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* The dock's hide control — typing is a two-way door, never permanent chrome. */
+.dock__hide {
+  border-style: dashed;
+  color: var(--mj-text-muted);
+  flex-shrink: 0;
+}
+.dock__hide:hover {
+  color: var(--mj-text-primary);
+}
