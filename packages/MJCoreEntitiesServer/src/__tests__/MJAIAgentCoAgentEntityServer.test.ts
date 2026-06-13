@@ -1,7 +1,8 @@
 /**
  * Unit tests for the PURE invariant cores behind `MJAIAgentCoAgentEntityServer.ValidateAsync`:
- * self-pairing defense, the Active+Realtime co-agent requirement, and the
- * at-most-one-default-per-co-agent rule.
+ * self-pairing defense, the Active+Realtime co-agent requirement (Type='CoAgent' rows),
+ * the at-most-one-default-per-(CoAgentID, Type) rule, and the duplicate-relationship
+ * rejection on (CoAgentID, target side, Type).
  */
 import { describe, it, expect } from 'vitest';
 import { ValidationErrorType } from '@memberjunction/core';
