@@ -5,11 +5,44 @@ import 'reflect-metadata';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// --- Mock CanRun authorization (AIAgentPermissionHelper.HasPermission) ---
+// --- Mock CanRun authorization (AIAgentPermissionHelper.HasPermission) plus the
+//     provider-scoped AIEngineBase whose cached metadata serves the resolver's pairing-row
+//     and channel-definition reads (the engine replaced the per-call RunViews) ---
 const hasPermissionMock = vi.fn<[], Promise<boolean>>();
+/** Cached `MJ: AI Agent Co Agents` rows the fake engine serves. */
+interface FakeCoAgentRow {
+    ID: string;
+    CoAgentID: string;
+    TargetAgentID: string | null;
+    TargetAgentTypeID?: string | null;
+    Type: 'CoAgent' | 'Delegate' | 'Fallback' | 'Observer' | 'Peer' | 'Reviewer';
+    Status: 'Active' | 'Disabled';
+    IsDefault: boolean;
+    Sequence: number;
+}
+/** Cached `MJ: AI Agent Channels` rows the fake engine serves. */
+interface FakeChannelRow {
+    ID: string;
+    Name: string;
+    IsActive: boolean;
+}
+const engineCoAgentsMock = vi.fn((): FakeCoAgentRow[] => []);
+const engineChannelsMock = vi.fn((): FakeChannelRow[] => []);
+const engineConfigMock = vi.fn(async (): Promise<void> => undefined);
 vi.mock('@memberjunction/ai-engine-base', () => ({
     AIAgentPermissionHelper: {
         HasPermission: (...args: unknown[]) => hasPermissionMock(...(args as [])),
+    },
+    AIEngineBase: {
+        GetProviderInstance: vi.fn(() => ({
+            Config: engineConfigMock,
+            get AgentCoAgents() {
+                return engineCoAgentsMock();
+            },
+            get AgentChannels() {
+                return engineChannelsMock();
+            },
+        })),
     },
 }));
 
@@ -43,17 +76,33 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
-// --- Mock the client-direct service (prepare + relayed-tool execution + cancel registry) ---
+// --- Mock the client-direct service (prepare + relayed-tool execution + cancel registry) plus
+//     the channel-plugin host (SaveSessionChannelState's pre-persistence normalization hook) ---
 const prepareClientSessionMock = vi.fn();
 const executeRelayedToolMock = vi.fn();
 const cancelInFlightMock = vi.fn((_agentSessionID: string, _callID?: string): number => 0);
-vi.mock('@memberjunction/ai-agents', () => ({
-    RealtimeClientSessionService: class {
-        PrepareClientSession = prepareClientSessionMock;
-        ExecuteRelayedTool = executeRelayedToolMock;
-        CancelInFlightDelegations = cancelInFlightMock;
-    },
-}));
+const onChannelStateSaveMock = vi.fn(
+    async (_agentSessionID: string, _channelName: string, stateJson: string): Promise<string> => stateJson,
+);
+// PARTIAL mock: the service + channel host are stubbed, but the PURE co-agent config module
+// (DeepMergeConfigs / ResolveEffectiveRealtimeConfig / EvaluateRuntimeOverrideAuthorization /
+// ParseRealtimeTypeConfiguration) stays REAL — the resolver's pairing/override gate is under test.
+vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    return {
+        ...actual,
+        RealtimeClientSessionService: class {
+            PrepareClientSession = prepareClientSessionMock;
+            ExecuteRelayedTool = executeRelayedToolMock;
+            CancelInFlightDelegations = cancelInFlightMock;
+        },
+        RealtimeChannelServerHost: {
+            get Instance() {
+                return { OnChannelStateSave: onChannelStateSaveMock };
+            },
+        },
+    };
+});
 
 // --- Mock SessionManager (create / close / heartbeat) ---
 const createSessionMock = vi.fn();
@@ -77,6 +126,26 @@ import { RealtimeClientSessionResolver } from '../resolvers/RealtimeClientSessio
 import type { AppContext } from '../types.js';
 
 const USER = { ID: 'user-1', Email: 'tester@example.com' };
+
+/**
+ * A pre-granted 'Realtime: Advanced Session Controls' authorization row, shaped like the
+ * AuthorizationInfo surface the resolver's gate consumes (Name lookup + UserCanExecute +
+ * ParentID hierarchy walk). Attach to a test provider's `Authorizations` to authorize overrides.
+ */
+const GRANTED_ADVANCED_CONTROLS_AUTH = {
+    ID: 'auth-advanced-1',
+    Name: 'Realtime: Advanced Session Controls',
+    ParentID: null,
+    UserCanExecute: () => true,
+};
+
+/** The same authorization row, but the caller's roles do NOT grant it. */
+const DENIED_ADVANCED_CONTROLS_AUTH = {
+    ID: 'auth-advanced-1',
+    Name: 'Realtime: Advanced Session Controls',
+    ParentID: null,
+    UserCanExecute: () => false,
+};
 
 /** Build a resolver with GetUserFromPayload stubbed to return our test user. */
 function makeResolver(): RealtimeClientSessionResolver {
@@ -126,10 +195,20 @@ function makeProvider(factory: (entityName: string) => FakeSession): unknown {
 
 beforeEach(() => {
     hasPermissionMock.mockReset();
+    engineCoAgentsMock.mockReset();
+    engineCoAgentsMock.mockReturnValue([]);
+    engineChannelsMock.mockReset();
+    engineChannelsMock.mockReturnValue([]);
+    engineConfigMock.mockReset();
+    engineConfigMock.mockResolvedValue(undefined);
     prepareClientSessionMock.mockReset();
     executeRelayedToolMock.mockReset();
     cancelInFlightMock.mockReset();
     cancelInFlightMock.mockReturnValue(0);
+    onChannelStateSaveMock.mockReset();
+    onChannelStateSaveMock.mockImplementation(
+        async (_agentSessionID: string, _channelName: string, stateJson: string) => stateJson,
+    );
     createSessionMock.mockReset();
     closeSessionMock.mockClear();
     heartbeatMock.mockClear();
@@ -196,7 +275,9 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
 
     it('threads preferredModelId to the prepare service and surfaces ModelName + narration template', async () => {
         hasPermissionMock.mockResolvedValue(true);
+        // Explicit model selection is gated by 'Realtime: Advanced Session Controls' — grant it.
         currentProvider = makeProvider(() => makeSessionEntity());
+        (currentProvider as { Authorizations?: unknown }).Authorizations = [GRANTED_ADVANCED_CONTROLS_AUTH];
         createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-10' }));
         prepareClientSessionMock.mockResolvedValue({
             Success: true,
@@ -250,6 +331,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
     it('propagates the preferred-model failure (and closes the session) — no silent fallback', async () => {
         hasPermissionMock.mockResolvedValue(true);
         currentProvider = makeProvider(() => makeSessionEntity());
+        (currentProvider as { Authorizations?: unknown }).Authorizations = [GRANTED_ADVANCED_CONTROLS_AUTH];
         createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-12' }));
         prepareClientSessionMock.mockResolvedValue({
             Success: false,
@@ -416,7 +498,10 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent 
 
     it("uses the agent TYPE's DefaultCoAgentID (step 3 beats 4) when the agent has none", async () => {
         setupHappyStart();
-        agentTypesMock.mockReturnValue([REALTIME_TYPE, { ...LOOP_TYPE, DefaultCoAgentID: 'co-type-default' }]);
+        agentTypesMock.mockReturnValue([REALTIME_TYPE, LOOP_TYPE]);
+        engineCoAgentsMock.mockReturnValue([
+            { ID: 'pair-typedef', CoAgentID: 'co-type-default', TargetAgentID: null, TargetAgentTypeID: 'type-loop', Type: 'CoAgent' as const, Status: 'Active' as const, IsDefault: true, Sequence: 0 },
+        ]);
         agentsMock.mockReturnValue([
             { ID: 'target-1', Name: 'Target', Status: 'Active', TypeID: 'type-loop', DefaultCoAgentID: null },
             TYPE_CO, GLOBAL_CO,
@@ -428,7 +513,10 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent 
 
     it('falls through (warn, no throw) past an INVALID agent-level default to the type default', async () => {
         setupHappyStart();
-        agentTypesMock.mockReturnValue([REALTIME_TYPE, { ...LOOP_TYPE, DefaultCoAgentID: 'co-type-default' }]);
+        agentTypesMock.mockReturnValue([REALTIME_TYPE, LOOP_TYPE]);
+        engineCoAgentsMock.mockReturnValue([
+            { ID: 'pair-typedef', CoAgentID: 'co-type-default', TargetAgentID: null, TargetAgentTypeID: 'type-loop', Type: 'CoAgent' as const, Status: 'Active' as const, IsDefault: true, Sequence: 0 },
+        ]);
         agentsMock.mockReturnValue([
             // Agent-level default points at a Disabled co-agent — tolerated, falls through.
             { ID: 'target-1', Name: 'Target', Status: 'Active', TypeID: 'type-loop', DefaultCoAgentID: 'co-disabled' },
@@ -442,7 +530,10 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — co-agent 
 
     it('falls through past an INVALID type-level default (dangling reference) to the global Realtime Co-Agent', async () => {
         setupHappyStart();
-        agentTypesMock.mockReturnValue([REALTIME_TYPE, { ...LOOP_TYPE, DefaultCoAgentID: 'co-deleted' }]);
+        agentTypesMock.mockReturnValue([REALTIME_TYPE, LOOP_TYPE]);
+        engineCoAgentsMock.mockReturnValue([
+            { ID: 'pair-typedef', CoAgentID: 'co-deleted', TargetAgentID: null, TargetAgentTypeID: 'type-loop', Type: 'CoAgent' as const, Status: 'Active' as const, IsDefault: true, Sequence: 0 },
+        ]);
         agentsMock.mockReturnValue([
             { ID: 'target-1', Name: 'Target', Status: 'Active', TypeID: 'type-loop', DefaultCoAgentID: null },
             GLOBAL_CO,
@@ -791,6 +882,70 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
         ).rejects.toThrow(/do not own/i);
         expect(heartbeatMock).not.toHaveBeenCalled();
     });
+
+    describe('replacesPrevious (correction update-in-place)', () => {
+        it('UPDATES the most recent same-role turn in place instead of appending', async () => {
+            const previous = makeSessionEntity({ ID: 'detail-prev', Message: 'truncated turn that', Role: 'AI' });
+            const session = makeSessionEntity();
+            currentProvider = makeProvider(() => session);
+            (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
+                Success: true,
+                Results: [previous],
+            }));
+            const resolver = makeResolver();
+
+            const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'truncated turn', makeCtx(), true);
+
+            expect(ok).toBe(true);
+            expect(previous.Message).toBe('truncated turn'); // corrected IN PLACE
+            expect(previous.Save).toHaveBeenCalled();
+            expect(previous.NewRecord).not.toHaveBeenCalled(); // no duplicate row
+            expect(heartbeatMock).toHaveBeenCalled();
+            // the lookup scoped to THIS session + the mapped role, newest first
+            const params = (currentProvider as { RunView: ReturnType<typeof vi.fn> }).RunView.mock.calls[0][0] as {
+                ExtraFilter: string; OrderBy: string; MaxRows: number;
+            };
+            expect(params.ExtraFilter).toContain("AgentSessionID='session-1'");
+            expect(params.ExtraFilter).toContain("Role='AI'");
+            expect(params.OrderBy).toContain('__mj_CreatedAt DESC');
+            expect(params.MaxRows).toBe(1);
+        });
+
+        it('falls back to a plain INSERT when no prior same-role turn exists (correction never dropped)', async () => {
+            const detail = makeSessionEntity({ ID: 'detail-new' });
+            const session = makeSessionEntity({ ConversationID: 'conv-9' });
+            currentProvider = makeProvider((name) =>
+                name === 'MJ: Conversation Details' ? detail : session,
+            );
+            (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({ Success: true, Results: [] }));
+            const resolver = makeResolver();
+
+            const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'orphan correction', makeCtx(), true);
+
+            expect(ok).toBe(true);
+            expect(detail.NewRecord).toHaveBeenCalled();
+            expect(detail.Message).toBe('orphan correction');
+        });
+
+        it('returns false WITHOUT heartbeating when the in-place save fails', async () => {
+            const previous = makeSessionEntity({
+                ID: 'detail-prev',
+                Save: vi.fn(async () => false),
+                LatestResult: { CompleteMessage: 'locked' },
+            });
+            currentProvider = makeProvider(() => makeSessionEntity());
+            (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
+                Success: true,
+                Results: [previous],
+            }));
+            const resolver = makeResolver();
+
+            const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'x', makeCtx(), true);
+
+            expect(ok).toBe(false);
+            expect(heartbeatMock).not.toHaveBeenCalled();
+        });
+    });
 });
 
 describe('RealtimeClientSessionResolver.StartRealtimeClientSession — clientToolsJson validation', () => {
@@ -877,8 +1032,10 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelState', () => {
     const CHANNEL_ROW = { ID: 'channel-wb', IsActive: true };
 
     /**
-     * Provider with both GetEntityObject (session load + new session-channel rows) and RunView
-     * (channel definition + session-channel lookup) under test control.
+     * Provider with GetEntityObject (session load + new session-channel rows) and RunView
+     * (the session-channel upsert lookup — transactional, deliberately still RunView) under
+     * test control. Channel DEFINITIONS come from the mocked engine cache (`channelRows`,
+     * served as `MJ: AI Agent Channels` rows named 'Whiteboard').
      */
     function makeChannelProvider(opts: {
         session?: FakeSession;
@@ -887,12 +1044,10 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelState', () => {
         newSessionChannel?: FakeSession;
     }): { provider: unknown; runView: ReturnType<typeof vi.fn>; newRow: FakeSession } {
         const newRow = opts.newSessionChannel ?? makeSessionEntity({ ID: 'sc-new' });
-        const runView = vi.fn(async (params: { EntityName: string }) => {
-            if (params.EntityName === 'MJ: AI Agent Channels') {
-                return { Success: true, Results: opts.channelRows ?? [] };
-            }
-            return { Success: true, Results: opts.sessionChannelRows ?? [] };
-        });
+        engineChannelsMock.mockReturnValue(
+            (opts.channelRows ?? []).map((r) => ({ Name: 'Whiteboard', ...r })),
+        );
+        const runView = vi.fn(async () => ({ Success: true, Results: opts.sessionChannelRows ?? [] }));
         const provider = {
             GetEntityObject: vi.fn(async (name: string) =>
                 name === 'MJ: AI Agent Session Channels' ? newRow : (opts.session ?? makeSessionEntity()),
@@ -1004,6 +1159,43 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelState', () => {
         const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
         expect(ok).toBe(false);
     });
+
+    it('routes the payload through the channel server plugin host and persists its normalization', async () => {
+        onChannelStateSaveMock.mockResolvedValue('{"normalized":true}');
+        const { provider, newRow } = makeChannelProvider({ channelRows: [CHANNEL_ROW] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{ "raw" : true }', makeCtx());
+
+        expect(ok).toBe(true);
+        expect(onChannelStateSaveMock).toHaveBeenCalledWith('session-1', 'Whiteboard', '{ "raw" : true }');
+        expect(newRow.Config_).toBe('{"normalized":true}');
+    });
+
+    it('persists the ORIGINAL payload when the plugin host throws (plugins never block a save)', async () => {
+        onChannelStateSaveMock.mockRejectedValue(new Error('plugin boom'));
+        const { provider, newRow } = makeChannelProvider({ channelRows: [CHANNEL_ROW] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{"orig":1}', makeCtx());
+
+        expect(ok).toBe(true);
+        expect(newRow.Config_).toBe('{"orig":1}');
+    });
+
+    it('persists the ORIGINAL payload when the plugin returns an oversized replacement', async () => {
+        onChannelStateSaveMock.mockResolvedValue('x'.repeat(2_000_001));
+        const { provider, newRow } = makeChannelProvider({ channelRows: [CHANNEL_ROW] });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const ok = await resolver.SaveSessionChannelState('session-1', 'Whiteboard', '{"orig":2}', makeCtx());
+
+        expect(ok).toBe(true);
+        expect(newRow.Config_).toBe('{"orig":2}');
+    });
 });
 
 describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior channel-state restore', () => {
@@ -1020,7 +1212,9 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
 
     /**
      * Provider for the restore path: GetEntityObject serves the PRIOR session (the only entity
-     * the start flow loads directly), RunView serves the prior session-channel rows.
+     * the start flow loads directly), RunView serves the prior session-channel rows. Pairing
+     * rows come from the mocked engine cache (empty by default — universal co-agent, pairing
+     * not under test here).
      */
     function makeRestoreProvider(opts: {
         prior?: FakeSession;
@@ -1062,6 +1256,11 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         expect(createArg.lastSessionID).toBe('prior-1');
     });
 
+    /** RunView calls that hit the session-channel restore query (the only RunView in the start flow). */
+    function restoreQueryCalls(runView: ReturnType<typeof vi.fn>): unknown[] {
+        return runView.mock.calls;
+    }
+
     it('omits the field when no lastSessionId is supplied (no restore query at all)', async () => {
         setupHappyStart();
         const { provider, runView } = makeRestoreProvider({ rows: [{ Channel: 'Whiteboard', Config: '{}' }] });
@@ -1071,7 +1270,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         const result = await resolver.StartRealtimeClientSession('target-1', makeCtx());
 
         expect(result.PriorChannelStatesJson).toBeUndefined();
-        expect(runView).not.toHaveBeenCalled();
+        expect(restoreQueryCalls(runView)).toHaveLength(0);
     });
 
     it('omits the field (no state leak, no query) when the prior session belongs to ANOTHER user', async () => {
@@ -1086,7 +1285,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
 
         expect(result.PriorChannelStatesJson).toBeUndefined();
-        expect(runView).not.toHaveBeenCalled();
+        expect(restoreQueryCalls(runView)).toHaveLength(0);
     });
 
     it('omits the field when the prior session does not exist', async () => {
@@ -1100,7 +1299,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-gone');
 
         expect(result.PriorChannelStatesJson).toBeUndefined();
-        expect(runView).not.toHaveBeenCalled();
+        expect(restoreQueryCalls(runView)).toHaveLength(0);
     });
 
     it('omits the field when the prior session has no channel rows / no non-empty configs', async () => {
@@ -1182,7 +1381,8 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
     /**
      * Provider for the artifact path: GetEntityObject routes by entity name (session / artifact /
      * version / junction), RunView routes by EntityName (artifact types / conversation details /
-     * channel definitions / session-channel rows).
+     * session-channel rows). Channel DEFINITIONS come from the mocked engine cache
+     * (`channelRows`, served as `MJ: AI Agent Channels` rows named 'Whiteboard').
      */
     function makeArtifactProvider(opts: {
         session?: FakeSession;
@@ -1204,14 +1404,15 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         const version = opts.version ?? makeSessionEntity({ ID: 'version-1' });
         const junction = opts.junction ?? makeSessionEntity({ ID: 'junction-1' });
         const session = opts.session ?? makeSessionEntity();
+        engineChannelsMock.mockReturnValue(
+            (opts.channelRows ?? []).map((r) => ({ Name: 'Whiteboard', ...r })),
+        );
         const runView = vi.fn(async (params: { EntityName: string }) => {
             switch (params.EntityName) {
                 case 'MJ: Artifact Types':
                     return { Success: true, Results: opts.typeRows ?? [] };
                 case 'MJ: Conversation Details':
                     return { Success: true, Results: opts.detailRows ?? [] };
-                case 'MJ: AI Agent Channels':
-                    return { Success: true, Results: opts.channelRows ?? [] };
                 default: // MJ: AI Agent Session Channels
                     return { Success: true, Results: opts.sessionChannelRows ?? [] };
             }
@@ -2080,5 +2281,316 @@ describe('RealtimeClientSessionResolver.RelayRealtimeUsage', () => {
         expect(promptRun.TokensPrompt).toBe(9);
         expect(promptRun.TokensCompletion).toBe(3);
         expect(promptRun.TokensUsed).toBe(12);
+    });
+});
+
+describe('RealtimeClientSessionResolver.StartRealtimeClientSession — pairing constraints (MJ: AI Agent Co Agents)', () => {
+    const okPrep = {
+        Success: true,
+        ClientConfig: {
+            Provider: 'openai',
+            Model: 'gpt-realtime',
+            EphemeralToken: 'ek_abc',
+            ExpiresAt: '2026-01-01T00:00:00Z',
+            SessionConfig: {},
+        },
+    };
+
+    /**
+     * Seeds the mocked engine cache with pairing rows for the resolved co-agent ('co-agent-1')
+     * — the resolver filters the cached `AgentCoAgents` by `CoAgentID`, relationship Type
+     * ('CoAgent'), Status ('Active') and agent-target presence itself, so the rows carry the
+     * full new-entity shape (plus stray rows — another co-agent's, a Disabled row, a reserved
+     * Peer-type row, and a type-level row — to prove every filter). `failPairingQuery` makes
+     * the engine load reject, exercising the degrade-to-universal path.
+     */
+    function makePairingProvider(
+        pairingRows: Array<{ TargetAgentID: string; IsDefault: boolean; Sequence: number }>,
+        opts: { failPairingQuery?: boolean } = {},
+    ): { provider: unknown } {
+        if (opts.failPairingQuery) {
+            engineConfigMock.mockRejectedValue(new Error('db down'));
+        } else {
+            engineCoAgentsMock.mockReturnValue([
+                ...pairingRows.map((r, i) => ({ ID: `pair-${i}`, CoAgentID: 'co-agent-1', Type: 'CoAgent' as const, Status: 'Active' as const, ...r })),
+                // Another co-agent's pairing — must never constrain THIS co-agent.
+                { ID: 'pair-other', CoAgentID: 'co-agent-other', TargetAgentID: 'target-elsewhere', Type: 'CoAgent' as const, Status: 'Active' as const, IsDefault: true, Sequence: 0 },
+                // Disabled row for THIS co-agent — must be ignored by resolution.
+                { ID: 'pair-disabled', CoAgentID: 'co-agent-1', TargetAgentID: 'target-disabled', Type: 'CoAgent' as const, Status: 'Disabled' as const, IsDefault: false, Sequence: 99 },
+                // Reserved relationship type — must be ignored until its feature ships.
+                { ID: 'pair-peer', CoAgentID: 'co-agent-1', TargetAgentID: 'target-peer-only', Type: 'Peer' as const, Status: 'Active' as const, IsDefault: false, Sequence: 0 },
+                // Type-level row — expresses the type default, never a target restriction.
+                { ID: 'pair-type', CoAgentID: 'co-agent-1', TargetAgentID: null, TargetAgentTypeID: 'type-loop', Type: 'CoAgent' as const, Status: 'Active' as const, IsDefault: false, Sequence: 0 },
+            ]);
+        }
+        return { provider: { GetEntityObject: vi.fn(async () => makeSessionEntity()), RunView: vi.fn(async () => ({ Success: true, Results: [] })) } };
+    }
+
+    function setupHappyStart(): void {
+        hasPermissionMock.mockResolvedValue(true);
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-pair' }));
+        prepareClientSessionMock.mockResolvedValue(okPrep);
+    }
+
+    it('zero pairing rows (universal) — behaves exactly as today with a runtime target', async () => {
+        setupHappyStart();
+        const { provider } = makePairingProvider([]);
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx());
+
+        expect(result.AgentSessionId).toBe('session-pair');
+        expect(hasPermissionMock).toHaveBeenCalledWith('target-1', USER, 'run');
+        const createArg = createSessionMock.mock.calls[0][0] as { config: string };
+        expect(JSON.parse(createArg.config).targetAgentID).toBe('target-1');
+    });
+
+    it('zero pairing rows + NO runtime target — clear error, no session created', async () => {
+        setupHappyStart();
+        const { provider } = makePairingProvider([]);
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.StartRealtimeClientSession(undefined, makeCtx()),
+        ).rejects.toThrow(/targetAgentId is required/i);
+        expect(createSessionMock).not.toHaveBeenCalled();
+        expect(hasPermissionMock).not.toHaveBeenCalled();
+    });
+
+    it('pairing rows RESTRICT: a runtime target inside the list is accepted', async () => {
+        setupHappyStart();
+        const { provider } = makePairingProvider([
+            { TargetAgentID: 'target-a', IsDefault: false, Sequence: 0 },
+            { TargetAgentID: 'target-b', IsDefault: true, Sequence: 1 },
+        ]);
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('target-a', makeCtx());
+
+        const createArg = createSessionMock.mock.calls[0][0] as { config: string };
+        expect(JSON.parse(createArg.config).targetAgentID).toBe('target-a');
+    });
+
+    it('pairing rows RESTRICT: a runtime target OUTSIDE the list is a structured error (no session)', async () => {
+        setupHappyStart();
+        const { provider } = makePairingProvider([
+            { TargetAgentID: 'target-a', IsDefault: true, Sequence: 0 },
+        ]);
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.StartRealtimeClientSession('target-rogue', makeCtx()),
+        ).rejects.toThrow(/not in it/i);
+        expect(createSessionMock).not.toHaveBeenCalled();
+    });
+
+    it('matches paired targets UUID-case-insensitively and uses the canonical row casing', async () => {
+        setupHappyStart();
+        const { provider } = makePairingProvider([
+            { TargetAgentID: 'ABCDEF00-0000-0000-0000-000000000001', IsDefault: false, Sequence: 0 },
+        ]);
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('abcdef00-0000-0000-0000-000000000001', makeCtx());
+
+        const createArg = createSessionMock.mock.calls[0][0] as { config: string };
+        // Canonical casing from the pairing row, not the caller's.
+        expect(JSON.parse(createArg.config).targetAgentID).toBe('ABCDEF00-0000-0000-0000-000000000001');
+    });
+
+    it('no runtime target + IsDefault row — the default pairing stands in (and CanRun gates IT)', async () => {
+        setupHappyStart();
+        const { provider } = makePairingProvider([
+            { TargetAgentID: 'target-a', IsDefault: false, Sequence: 0 },
+            { TargetAgentID: 'target-default', IsDefault: true, Sequence: 1 },
+        ]);
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession(undefined, makeCtx());
+
+        expect(hasPermissionMock).toHaveBeenCalledWith('target-default', USER, 'run');
+        const createArg = createSessionMock.mock.calls[0][0] as { config: string };
+        expect(JSON.parse(createArg.config).targetAgentID).toBe('target-default');
+    });
+
+    it('no runtime target + NO IsDefault row — clear error asking for an explicit target', async () => {
+        setupHappyStart();
+        const { provider } = makePairingProvider([
+            { TargetAgentID: 'target-a', IsDefault: false, Sequence: 0 },
+        ]);
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(
+            resolver.StartRealtimeClientSession(undefined, makeCtx()),
+        ).rejects.toThrow(/no pairing is marked IsDefault/i);
+        expect(createSessionMock).not.toHaveBeenCalled();
+    });
+
+    it('a failed pairing query degrades to universal (logged, CanRun still gates) — never breaks starts', async () => {
+        setupHappyStart();
+        const { provider } = makePairingProvider([], { failPairingQuery: true });
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx());
+        expect(result.AgentSessionId).toBe('session-pair');
+        expect(hasPermissionMock).toHaveBeenCalledWith('target-1', USER, 'run');
+    });
+
+    it('CanRun is enforced on the pairing-resolved target (denial throws, no session)', async () => {
+        setupHappyStart();
+        hasPermissionMock.mockResolvedValue(false);
+        const { provider } = makePairingProvider([
+            { TargetAgentID: 'target-default', IsDefault: true, Sequence: 0 },
+        ]);
+        currentProvider = provider;
+        const resolver = makeResolver();
+
+        await expect(resolver.StartRealtimeClientSession(undefined, makeCtx())).rejects.toThrow(/not authorized/i);
+        expect(createSessionMock).not.toHaveBeenCalled();
+    });
+});
+
+describe('RealtimeClientSessionResolver.StartRealtimeClientSession — runtime-override authorization gate', () => {
+    const okPrep = {
+        Success: true,
+        ClientConfig: {
+            Provider: 'openai',
+            Model: 'gpt-realtime',
+            EphemeralToken: 'ek_abc',
+            ExpiresAt: '2026-01-01T00:00:00Z',
+            SessionConfig: {},
+        },
+    };
+    const OVERRIDES = JSON.stringify({ realtime: { narration: { paceMs: 3000 } } });
+
+    /** Sets up a happy start whose provider carries the given Authorizations rows. */
+    function setupWithAuthorizations(authorizations: unknown[] | undefined): void {
+        hasPermissionMock.mockResolvedValue(true);
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-ovr' }));
+        prepareClientSessionMock.mockResolvedValue(okPrep);
+        const provider = makeProvider(() => makeSessionEntity()) as { Authorizations?: unknown };
+        provider.Authorizations = authorizations;
+        currentProvider = provider;
+    }
+
+    /** Positional helper: start with configOverridesJson (the 8th arg) and optional model. */
+    async function start(opts: { overrides?: string; model?: string } = {}): Promise<unknown> {
+        const resolver = makeResolver();
+        return resolver.StartRealtimeClientSession(
+            'target-1', makeCtx(), undefined, undefined, opts.model, undefined, undefined, opts.overrides,
+        );
+    }
+
+    it('REJECTS configOverridesJson without the authorization (structured, names the authorization, no session)', async () => {
+        setupWithAuthorizations([DENIED_ADVANCED_CONTROLS_AUTH]);
+
+        await expect(start({ overrides: OVERRIDES })).rejects.toThrow(/Advanced Session Controls/);
+        expect(createSessionMock).not.toHaveBeenCalled();
+        expect(prepareClientSessionMock).not.toHaveBeenCalled();
+    });
+
+    it('REJECTS configOverridesJson when the authorization row is absent from metadata (fail closed)', async () => {
+        setupWithAuthorizations([]); // un-synced seed
+        await expect(start({ overrides: OVERRIDES })).rejects.toThrow(/Advanced Session Controls/);
+    });
+
+    it('threads configOverridesJson to the prepare service for an AUTHORIZED caller', async () => {
+        setupWithAuthorizations([GRANTED_ADVANCED_CONTROLS_AUTH]);
+
+        await start({ overrides: OVERRIDES });
+
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ConfigOverridesJson?: string };
+        expect(prepArg.ConfigOverridesJson).toBe(OVERRIDES);
+    });
+
+    it('REJECTS malformed configOverridesJson (not a JSON object) even for authorized callers', async () => {
+        setupWithAuthorizations([GRANTED_ADVANCED_CONTROLS_AUTH]);
+        await expect(start({ overrides: '[1,2,3]' })).rejects.toThrow(/expected a JSON object/i);
+        await expect(start({ overrides: '{broken' })).rejects.toThrow(/expected a JSON object/i);
+        expect(createSessionMock).not.toHaveBeenCalled();
+    });
+
+    it('REJECTS an explicit preferredModelId for an unauthorized caller (deviating model)', async () => {
+        setupWithAuthorizations([DENIED_ADVANCED_CONTROLS_AUTH]);
+        await expect(start({ model: 'model-77' })).rejects.toThrow(/Advanced Session Controls/);
+        expect(createSessionMock).not.toHaveBeenCalled();
+    });
+
+    it('ALLOWS an explicit preferredModelId equal to the co-agent metadata preference (no deviation), unauthorized', async () => {
+        setupWithAuthorizations([DENIED_ADVANCED_CONTROLS_AUTH]);
+        // The co-agent's TypeConfiguration prefers model-77 — requesting exactly it is not a deviation.
+        agentsMock.mockReturnValue([
+            {
+                ID: 'co-agent-1',
+                Name: 'Realtime Co-Agent',
+                TypeConfiguration: JSON.stringify({ realtime: { modelPreference: 'model-77' } }),
+            } as never,
+        ]);
+
+        await start({ model: 'model-77' });
+
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { PreferredModelID?: string };
+        expect(prepArg.PreferredModelID).toBe('model-77');
+    });
+
+    it('REJECTS a deviating preferredModelId for an AUTHORIZED caller when allowUserModelOverride=false', async () => {
+        setupWithAuthorizations([GRANTED_ADVANCED_CONTROLS_AUTH]);
+        agentsMock.mockReturnValue([
+            {
+                ID: 'co-agent-1',
+                Name: 'Realtime Co-Agent',
+                TypeConfiguration: JSON.stringify({
+                    realtime: { modelPreference: 'model-77', allowUserModelOverride: false },
+                }),
+            } as never,
+        ]);
+
+        await expect(start({ model: 'model-other' })).rejects.toThrow(/allowUserModelOverride/);
+        expect(createSessionMock).not.toHaveBeenCalled();
+    });
+
+    it('ALLOWS a deviating preferredModelId for an AUTHORIZED caller when the policy permits', async () => {
+        setupWithAuthorizations([GRANTED_ADVANCED_CONTROLS_AUTH]);
+        await start({ model: 'model-77' });
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { PreferredModelID?: string };
+        expect(prepArg.PreferredModelID).toBe('model-77');
+    });
+
+    it('a plain start (no overrides, no model) never consults the authorization at all', async () => {
+        setupWithAuthorizations(undefined); // provider has no Authorizations surface
+        const result = (await start()) as { AgentSessionId: string };
+        expect(result.AgentSessionId).toBe('session-ovr');
+    });
+
+    it('surfaces NarrationPaceMs and EffectiveConfigJson from the prepare result', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-cfg' }));
+        prepareClientSessionMock.mockResolvedValue({
+            ...okPrep,
+            NarrationPaceMs: 4500,
+            EffectiveConfig: { realtime: { narration: { paceMs: 4500 } } },
+        });
+        const resolver = makeResolver();
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx());
+
+        expect(result.NarrationPaceMs).toBe(4500);
+        expect(JSON.parse(result.EffectiveConfigJson as string)).toEqual({ realtime: { narration: { paceMs: 4500 } } });
+    });
+
+    it('omits NarrationPaceMs / EffectiveConfigJson when the prepare result carries none (back-compat)', async () => {
+        setupWithAuthorizations(undefined);
+        const result = (await start()) as { NarrationPaceMs?: number; EffectiveConfigJson?: string };
+        expect(result.NarrationPaceMs).toBeUndefined();
+        expect(result.EffectiveConfigJson).toBeUndefined();
     });
 });

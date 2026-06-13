@@ -32,6 +32,13 @@ export class RealtimeSessionThreadComponent implements OnInit, AfterViewChecked,
   /** Display name of the agent (caption avatar / meta line). */
   @Input() AgentName = 'Sage';
 
+  /**
+   * Display name of the signed-in user for their turns — consistent with the main
+   * chat's sender names, and ready for multi-user sessions where "You" stops meaning
+   * anything. Hosts bind the current user's name; the default keeps old hosts working.
+   */
+  @Input() UserName = 'You';
+
   /** Shared live-session state, owned by the overlay shell. */
   @Input({ required: true }) State!: RealtimeSessionState;
 

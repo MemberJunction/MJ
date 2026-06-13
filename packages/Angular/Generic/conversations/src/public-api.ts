@@ -32,6 +32,8 @@ export * from './lib/services/conversation-attachment.service';
 export * from './lib/services/ui-command-handler.service';
 export * from './lib/services/conversation-bridge.service';
 export * from './lib/services/realtime-session.service';
+export * from './lib/services/realtime-pairing';
+export * from './lib/services/user-authorization';
 export * from './lib/services/realtime-sessions-adapter';
 export * from './lib/services/realtime-session-review.service';
 export * from './lib/services/delegation-result-parser';

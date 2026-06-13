@@ -31,6 +31,9 @@ export class RealtimeSessionTimelineCardComponent {
   /** Optional session-row enrichment (agent name / status / close reason); null degrades gracefully. */
   @Input() Meta: RealtimeSessionTimelineMeta | null = null;
 
+  /** Display name of the signed-in user for the last-turn preview (matches the chat's sender names). */
+  @Input() UserName = 'You';
+
   /** Emitted with the `MJ: AI Agent Sessions.ID` when the user asks to open the session review. */
   @Output() OpenRequested = new EventEmitter<string>();
 

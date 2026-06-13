@@ -5,7 +5,7 @@ import {
     MJConversationEntity,
 } from '@memberjunction/core-entities';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
+import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import { GetHostInstanceID } from './HostInstance.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
@@ -114,7 +114,9 @@ export class SessionManager {
         const conversationID = input.conversationID
             ?? await this.createConversation(input, contextUser, provider);
 
-        return this.persistNewSession(input, conversationID, contextUser, provider);
+        const session = await this.persistNewSession(input, conversationID, contextUser, provider);
+        await this.notifyChannelPluginsSessionStarted(session, contextUser, provider);
+        return session;
     }
 
     /**
@@ -143,7 +145,11 @@ export class SessionManager {
         this.heartbeatLastWrite.delete(agentSessionID.toLowerCase());
 
         if (session.Status === 'Closed') {
-            return true; // idempotent — already terminal
+            // Idempotent — already terminal. Still notify the channel-plugin host so a session
+            // whose plugin instances live in THIS process is cleaned up even when another host
+            // instance won the close race (the host no-ops for sessions it doesn't hold).
+            await this.notifyChannelPluginsSessionClosed(agentSessionID, session.CloseReason ?? null);
+            return true;
         }
 
         const closed = await this.markSessionClosed(session, closeReason);
@@ -152,7 +158,52 @@ export class SessionManager {
         }
         await this.disconnectChannels(agentSessionID, contextUser, provider);
         await this.finalizeObservabilityRuns(session, contextUser, provider);
+        await this.notifyChannelPluginsSessionClosed(agentSessionID, closeReason);
         return true;
+    }
+
+    /**
+     * Notifies the server-side channel-plugin host that a session started, so it can resolve the
+     * ACTIVE `MJ: AI Agent Channels` rows' `ServerPluginClass` plugins (one fresh instance per
+     * channel, per session) and fire their start hooks. Strictly best-effort: the host itself
+     * never throws, and this guard makes session creation immune to any plugin-layer surprise.
+     */
+    private async notifyChannelPluginsSessionStarted(
+        session: MJAIAgentSessionEntity,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<void> {
+        try {
+            await RealtimeChannelServerHost.Instance.OnSessionStarted(
+                {
+                    AgentSessionID: session.ID,
+                    AgentID: session.AgentID,
+                    UserID: session.UserID,
+                    ConversationID: session.ConversationID ?? null,
+                },
+                contextUser,
+                provider,
+            );
+        } catch (e) {
+            LogError(`SessionManager.notifyChannelPluginsSessionStarted failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Notifies the server-side channel-plugin host that a session closed (fires each plugin's
+     * `OnSessionClosed` hook and schedules disposal). Invoked from EVERY close provenance —
+     * explicit hang-up, janitor sweeps, shutdown drain, and error teardowns all funnel through
+     * {@link CloseSession}. Strictly best-effort, same posture as the start notification.
+     */
+    private async notifyChannelPluginsSessionClosed(
+        agentSessionID: string,
+        closeReason: SessionCloseReason | null,
+    ): Promise<void> {
+        try {
+            await RealtimeChannelServerHost.Instance.OnSessionClosed(agentSessionID, closeReason);
+        } catch (e) {
+            LogError(`SessionManager.notifyChannelPluginsSessionClosed failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     /**

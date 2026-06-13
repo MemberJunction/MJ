@@ -24,8 +24,11 @@ Every AI capability is represented by an abstract base class. Provider packages 
 | `BaseAudio` | Text-to-speech and speech-to-text | `TextToSpeech()`, `SpeechToText()` |
 | `BaseVideo` | Video generation from text/images | `GenerateVideo()` |
 | `BaseReranker` | Document reranking for retrieval | `Rerank()` |
+| `BaseRealtimeModel` | Live, full-duplex, tool-calling realtime sessions (voice) | `StartSession()`, `CreateClientSession()` |
 
 All inherit from `BaseModel`, which manages API key storage and provides the `@RegisterClass` integration point.
+
+One additional realtime primitive lives here that is *not* a `BaseModel` capability: `BaseRealtimeChannelServer` — the server half of the realtime **interactive-channel** plugin contract (`MJ: AI Agent Channels.ServerPluginClass`), mirroring the client half (`BaseRealtimeChannelClient` in the Angular conversations package). Concrete plugins register via `@RegisterClass(BaseRealtimeChannelServer, '<key>')` and are resolved per session by `RealtimeChannelServerHost` in `@memberjunction/ai-agents`. See [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../guides/REALTIME_CO_AGENTS_GUIDE.md) §5.
 
 ## Type Definitions
 

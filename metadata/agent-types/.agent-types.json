@@ -145,15 +145,17 @@
       "DriverClass": "RealtimeAgentType",
       "UIFormSectionKey": null,
       "UIFormKey": null,
-      "UIFormSectionExpandedByDefault": false
+      "UIFormSectionExpandedByDefault": false,
+      "ConfigSchema": "@file:schemas/realtime-type-config.schema.json",
+      "DefaultConfiguration": "@file:schemas/realtime-type-default-config.json"
     },
     "relatedEntities": {},
     "primaryKey": {
       "ID": "29CA70B4-A097-474F-A5CE-3522ADD6407F"
     },
     "sync": {
-      "lastModified": "2026-06-10T22:36:28.417Z",
-      "checksum": "9230cb115a963df31761e0841330d318fb60003cf650f50452a78f079996f67c"
+      "lastModified": "2026-06-12T23:42:51.143Z",
+      "checksum": "f02d66eb84640ac05656d4edc57ac16ea0d8a3645b26870696531912cc78dc72"
     }
   }
 ]

@@ -4,11 +4,11 @@
       @case ('caption') {
         @if (ShowCaptions) {
           <div class="turn" [class.turn--user]="item.Role === 'User'" [class.turn--agent]="item.Role === 'Assistant'">
-            <div class="turn-avatar">{{ item.Role === 'User' ? 'You'.charAt(0) : AgentName.charAt(0) }}</div>
+            <div class="turn-avatar">{{ (item.Role === 'User' ? UserName : AgentName).charAt(0).toUpperCase() }}</div>
             <div class="turn-body">
               <div class="turn-meta">
                 @if (item.Role === 'User') {
-                  <span class="typed-tag">You</span>
+                  <span class="typed-tag">{{ UserName }}</span>
                 } @else {
                   {{ AgentName }} <span class="muted">· voice</span>
                 }
