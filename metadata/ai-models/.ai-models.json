@@ -14070,8 +14070,8 @@
     "fields": {
       "Name": "GPT Realtime 2",
       "PowerRank": 11,
-      "Description": "OpenAI's second-generation speech-to-speech voice model (May 7, 2026). GPT-5-class reasoning surfaced through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool calls, spoken preambles, and recovery on failed tasks. 128K token context (4x the predecessor). Multi-channel pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input, $24/M text output, $5/M image input.",
-      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "Description": "OpenAI's second-generation speech-to-speech voice model (May 7, 2026). GPT-5-class reasoning surfaced through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool calls, spoken preambles, and recovery on failed tasks. 128K token context (4x the predecessor). Multi-channel pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input, $24/M text output, $5/M image input. Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 8,
@@ -14152,8 +14152,8 @@
       "ID": "562BA6F2-9D4C-4CBF-8865-4A97EEA0F14C"
     },
     "sync": {
-      "lastModified": "2026-05-14T02:07:47.961Z",
-      "checksum": "e6e0ee9add0c539048051161bf21e2c24af5e0d1804ad80ad33f45de8fa059e4"
+      "lastModified": "2026-06-12T23:03:30.246Z",
+      "checksum": "d74ee7f556cc46337e20d8c226a1994e3058e51e6f0faf76b6bd7f5f0887b9b1"
     }
   },
   {
@@ -15902,6 +15902,138 @@
     "sync": {
       "lastModified": "2026-06-09T06:32:19.741Z",
       "checksum": "24f9eea5cb2f4a7d1550fa4e2738049cbed75ca13c63ece27526e999bd08ed75"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 3.1 Flash Live",
+      "PowerRank": 11,
+      "Description": "Google's Gemini 3.1 Flash Live model — its highest-quality native-audio realtime model (supersedes the deprecated 2.5 native-audio previews): streaming, full-duplex, tool-calling, for low-latency voice conversations over the Gemini Live API. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GeminiRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "GeminiRealtime",
+            "APIName": "gemini-3.1-flash-live-preview",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          },
+          "primaryKey": {
+            "ID": "BAFB6CB9-C5E4-4BBB-9168-3CB8D38ACDC5"
+          },
+          "sync": {
+            "lastModified": "2026-06-12T23:03:30.681Z",
+            "checksum": "014978244a9f15bac0efaf67a18dc530e6c40efe3291be12622eb95fdcbadc35"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F1AEF71E-9E93-4C27-870E-620E75FA5552"
+    },
+    "sync": {
+      "lastModified": "2026-06-12T23:03:30.272Z",
+      "checksum": "f56ab8319539c962b6230c7b1f57f6db7f11f6e0d348c8e2ca39a06fa79d894f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ElevenLabs Agents",
+      "PowerRank": 10,
+      "Description": "ElevenLabs Agents Platform — an orchestrated STT→LLM→TTS conversational stack treated as a realtime model: streaming, full-duplex, client-tool-calling voice sessions over the Agents websocket. The driver uses a MANAGED-AGENT strategy: the Model Vendor APIName is the managed agent's NAME (find-by-name, create-if-missing with the session tool set and per-session prompt-override enablement, PATCH on tool-set drift); deployments may instead set APIName to a concrete agent_… id to use a hand-configured agent verbatim. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass ElevenLabsRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "ElevenLabsRealtime",
+            "APIName": "MJ Realtime Co-Agent",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          },
+          "primaryKey": {
+            "ID": "12ED40AE-7660-44FF-9158-CC162A8EC4CB"
+          },
+          "sync": {
+            "lastModified": "2026-06-12T23:03:30.698Z",
+            "checksum": "79458e967f6bad62f7a7c7b4fe025064fa48d9cb79365e6d9241d9e81d1a3d5a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "882996F4-BDD9-4C36-9291-D71A46FFE2D5"
+    },
+    "sync": {
+      "lastModified": "2026-06-12T23:03:30.293Z",
+      "checksum": "35c232c808787c16a182efbc6988af44ef342b97a01c9760db8c3ee5eb4165f5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AssemblyAI Voice Agent",
+      "PowerRank": 9,
+      "Description": "AssemblyAI's Voice Agent API (launched April 2026) — a single-websocket speech-to-speech stack treated as a realtime model: Universal-3 Pro streaming ASR, server-side turn detection and barge-in, LLM reasoning, JSON-Schema tool calling, and conversational TTS (30+ voices, 6 languages). Per-session prompt/tool/voice/turn-detection config is supplied natively via session.update — no server-side agent object to manage. Flat $4.50/session-hour billing (no token usage events). Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass AssemblyAIRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=AssemblyAI",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "AssemblyAIRealtime",
+            "APIName": "voice-agent",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          },
+          "primaryKey": {
+            "ID": "246C0C12-10CC-4E3B-9330-CFA07923DBB8"
+          },
+          "sync": {
+            "lastModified": "2026-06-12T23:03:30.714Z",
+            "checksum": "a609879693e2ad504fe071d52c9fde49a03982b5722281c05d63797ffbb59b80"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E934CE9A-93DB-4FE3-B806-4144F108E930"
+    },
+    "sync": {
+      "lastModified": "2026-06-12T23:03:30.306Z",
+      "checksum": "0e7038d9968183d769f1a02ea7af7611201d18fa27c0c5400b2f0444d75b22a4"
     }
   }
 ]

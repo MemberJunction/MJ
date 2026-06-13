@@ -102,6 +102,39 @@
           <p>{{ formInitError || 'Could not bind a record to this form.' }}</p>
         </div>
       }
+    } @else if (isPermissionBlocked) {
+      <!-- Permission warning — user lacks access to one or more data sources -->
+      <div class="permission-warning">
+        <div class="permission-warning-icon">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <h3>Insufficient Permissions</h3>
+        <p>This component requires data access that you don't currently have:</p>
+
+        @if (permissionResult!.missingEntities.length > 0) {
+          <div class="permission-warning-section">
+            <span class="permission-warning-section-label">Entities</span>
+            <ul>
+              @for (entity of permissionResult!.missingEntities; track entity) {
+                <li><i class="fa-solid fa-table"></i> {{ entity }}</li>
+              }
+            </ul>
+          </div>
+        }
+
+        @if (permissionResult!.missingQueries.length > 0) {
+          <div class="permission-warning-section">
+            <span class="permission-warning-section-label">Queries</span>
+            <ul>
+              @for (query of permissionResult!.missingQueries; track query) {
+                <li><i class="fa-solid fa-database"></i> {{ query }}</li>
+              }
+            </ul>
+          </div>
+        }
+
+        <p class="permission-warning-hint">Contact your administrator to request access.</p>
+      </div>
     } @else {
       <!-- Default (non-form) interactive component path -->
       @if (component && (component.code || component.namespace)) {

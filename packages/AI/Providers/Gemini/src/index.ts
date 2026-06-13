@@ -1017,3 +1017,6 @@ export class GeminiLLM extends BaseLLM {
 
 // Export image generation
 export * from './geminiImage';
+
+// Export realtime (Gemini Live) driver
+export * from './geminiRealtime';

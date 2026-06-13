@@ -116,6 +116,10 @@ const prompts = AIEngineBase.Instance.Prompts;
 | `ModelModalities` | MJ: AI Model Modalities | Model modality support |
 | `VectorDatabases` | Vector Databases | Vector database configurations |
 | `ArtifactTypes` | MJ: Artifact Types | Artifact type definitions |
+| `AgentPairedAgents` | MJ: AI Agent Paired Agents | Realtime co-agent → target-agent pairing junction |
+| `AgentChannels` | MJ: AI Agent Channels | Interactive-channel registry (plugin classes, transport) |
+
+> **Realtime pairing + channel registries (new):** `AgentPairedAgents` (`MJ: AI Agent Paired Agents`) and `AgentChannels` (`MJ: AI Agent Channels`) are cached as unfiltered local datasets like every other small metadata table here. Pairing rows constrain which target agents a Realtime co-agent may front (`Sequence` ordering, at most one `IsDefault` per co-agent; zero rows = universal co-agent), and channel rows declare the interactive-channel surfaces (e.g. the live Whiteboard) with their server/client plugin class keys and `IsActive` flag. Consumers (the voice picker/session services, `RealtimeChannelServerHost`, and `RealtimeClientSessionResolver`) read these getters and filter in memory instead of issuing per-call RunViews — BaseEngine's save/delete/remote-invalidate reactivity keeps both caches fresh.
 
 #### Convenience Methods
 

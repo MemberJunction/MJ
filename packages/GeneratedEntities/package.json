@@ -21,8 +21,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/core": "5.39.0",
-    "@memberjunction/global": "5.39.0",
+    "@memberjunction/core": "5.40.2",
+    "@memberjunction/global": "5.40.2",
     "zod": "~3.24.4"
   },
   "repository": {

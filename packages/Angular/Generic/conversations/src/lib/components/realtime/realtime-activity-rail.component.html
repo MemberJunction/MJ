@@ -1,0 +1,75 @@
+<aside class="rail" [class.rail--collapsed]="Collapsed && !Embedded" [class.rail--embedded]="Embedded" aria-label="Session activity">
+  @if (!Embedded) {
+    <div class="rail__head">
+      <button type="button"
+              class="rail__toggle"
+              (click)="Toggle()"
+              [title]="Collapsed ? 'Show session activity' : 'Hide session activity'"
+              [attr.aria-expanded]="!Collapsed">
+        <i class="fa-solid" [ngClass]="Collapsed ? 'fa-chevron-left' : 'fa-chevron-right'" aria-hidden="true"></i>
+      </button>
+      @if (!Collapsed) {
+        <span class="rail__title">
+          <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+          Session activity
+        </span>
+      }
+    </div>
+  }
+
+  @if (!Collapsed || Embedded) {
+    <div class="rail__list">
+      @for (card of State.Cards; track TrackCard($index, card)) {
+        <div class="act-card"
+             [class.act-card--running]="!card.Done"
+             [class.act-card--done]="card.Done && card.Success"
+             [class.act-card--failed]="card.Done && !card.Success">
+          <div class="act-card__top">
+            <span class="act-card__name">{{ card.AgentName }}</span>
+            @if (!card.Done) {
+              <span class="act-status act-status--running">
+                <i class="fa-solid fa-spinner spin" aria-hidden="true"></i> Running
+              </span>
+            } @else if (card.Success) {
+              <span class="act-status act-status--done">
+                <i class="fa-solid fa-check" aria-hidden="true"></i> Done
+              </span>
+            } @else {
+              <span class="act-status act-status--failed">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i> Failed
+              </span>
+            }
+          </div>
+          <div class="act-card__step">{{ StepLabel(card) }}</div>
+          @if (card.Done) {
+            @if (Elapsed(card); as elapsed) {
+              <div class="act-card__meta">
+                <i class="fa-regular fa-clock" aria-hidden="true"></i> {{ elapsed }}
+              </div>
+            }
+            @if (Preview(card)) {
+              <div class="act-card__preview">{{ Preview(card) }}</div>
+            }
+          }
+          @for (artifact of CardArtifacts(card); track artifact.ArtifactVersionID) {
+            <button type="button" class="act-card__artifact-link" (click)="OpenArtifact(artifact)"
+                    [title]="'View ' + artifact.Name">
+              <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+              <span>View</span>
+              <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </button>
+          }
+          @if (ShowOpenRun(card)) {
+            <button type="button" class="act-card__dev-link" (click)="OpenRun(card)"
+                    title="Open the delegated agent run record">
+              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+              <span>Open run</span>
+            </button>
+          }
+        </div>
+      } @empty {
+        <div class="rail__empty">Tool and agent calls will appear here as they run.</div>
+      }
+    </div>
+  }
+</aside>

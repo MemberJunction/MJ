@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "Realtime: Advanced Session Controls",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants advanced per-session controls for realtime voice sessions: runtime configuration overrides (configOverridesJson on session start) and explicit realtime-model selection. Users without this authorization always get the co-agent's configured defaults — the call experience itself is unaffected."
+    },
+    "primaryKey": {
+      "ID": "4CBD0585-0058-448E-B39A-B1FF465E3337"
+    },
+    "sync": {
+      "lastModified": "2026-06-12T23:03:30.888Z",
+      "checksum": "5e331ccb2b5ad1fb6602318378a6d8731a0d4642fcf670f81d955fe32c6a2174"
+    }
+  }
+]

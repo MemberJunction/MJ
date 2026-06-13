@@ -303,6 +303,10 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - JSON-string-field pattern for complex payloads, client/engine type decoupling, and reference implementations (`GraphQLClusterClient`, `SearchKnowledgeResolver`, etc.)
   - **Read this before hand-writing any new resolver or GraphQL client.** Not for plain entity CRUD — that's already generated.
 
+- **[Real-Time Co-Agents Guide](guides/REALTIME_CO_AGENTS_GUIDE.md)**: The live, low-latency agent stack — the `Realtime` agent type and Voice Co-Agent (one co-agent voices any target agent via the stable `invoke-target-agent` tool), the triple-registry plugin architecture (server/client realtime-model drivers + interactive-channel plugins, all ClassFactory + metadata resolved), client-direct vs server-bridged topologies, `AIAgentSession` lifecycle/janitor, interactive channels (the live Whiteboard), progress narration, observability, and the security model. **Read before touching anything realtime / voice / agent-session / channel.**
+
+- **[Conversations UX Stack Guide](guides/CONVERSATIONS_UX_STACK_GUIDE.md)**: The 3-layer architecture for every chat surface in MJ — `@memberjunction/conversations-runtime` (pure-TS engine: agent dispatch, default-agent resolution, mentions, bridge, streaming, client tools, sessions observability) ↔ adapters (`INotificationAdapter` / `IActiveTaskTracker` / `ISessionsAdapter`) ↔ `@memberjunction/ng-conversations` (Angular widget) ↔ your app. Covers: when to use each layer, the slot system (6 slots: `header` / `agentPresence` / `emptyState` / `messageRenderer` / `messageExtra` / `demonstrationSurface` with project / wrap / subclass modes), Before/After cancelable events (`beforeAgentTurn`, `beforeToolInvoked`, `beforeResponseFormSubmitted` with `event.Cancel = true` enforced; `sessionStarted` / `sessionChannelStateChanged` / `sessionEnded` informational), persona inputs (`[showAgentCharacter]` + `agentCharacterConfig`), `--mj-chat-*` design tokens, default-agent resolution chain (explicit → app-scoped → global → code-const Sage fallback), sessions adapter bridging to PR #2787's `VoiceSessionService`, multi-provider scoping, runtime pre-warming via `@RegisterForStartup`. **Read before building any chat surface (overlay, full workspace, embedded panel) OR before forking the widget — slots + events almost certainly cover the use case.**
+
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
@@ -921,6 +925,38 @@ Key principles:
 - **Filtered/sorted caches are invalidated (not updated)** on entity changes — we can't evaluate SQL predicates in JS, so the safe approach is to blow away the cache entry and let it repopulate on next request
 - **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
 - **`BypassCache: true`** — per-query escape hatch that skips all server-side caching (both read and write). Use for maintenance actions, scheduled jobs, or any query that needs true DB state after direct SQL operations that bypassed `BaseEntity.Save()`
+
+### Check the Registry Before You Query (MJ Convention)
+
+**Before any code bulk-loads an entity's full row set, ask `BaseEngineRegistry` whether a loaded engine already holds it in memory.** In any process that bootstraps via `StartupManager` (MJAPI, MJCLI commands, mj-sync), every `@RegisterForStartup` engine has already paid for its caches — AI Models, Prompts, Queries, Integrations, Dashboards, and dozens more are sitting in RAM before your code runs. Re-querying them doubles the DB round trips, doubles the memory, and triggers the `REDUNDANT DATA LOADING` warning.
+
+The API (see [packages/MJCore/src/generic/baseEngineRegistry.ts](packages/MJCore/src/generic/baseEngineRegistry.ts)):
+
+```typescript
+import { BaseEngineRegistry } from '@memberjunction/core';
+
+// "Best cache or null" — the common one-liner
+const rows = BaseEngineRegistry.Instance.TryGetCachedRecords<UserInfo>('Users', { unfilteredOnly: true });
+if (rows) { /* serve from memory */ } else { /* RunView fallback */ }
+
+// Full matches — when you need to vet the donor's config before trusting it
+const matches = BaseEngineRegistry.Instance.FindCachedEntity('MJ: AI Prompts', { unfilteredOnly: true });
+```
+
+**Vet the donor before reusing its cache.** A match is safe to treat as the authoritative full set only when ALL of these hold:
+
+1. **`unfilteredOnly: true`** — a `Filter` means a subset, useless as a full cache (always pass this option unless you genuinely want subsets)
+2. **No `OrderBy`** on the config — ordered configs fail `canUseImmediateMutation`, so the donor responds to entity events with a full refresh that **reassigns** the array property; if you hold the array across mutations, resolve it per-access via donor engine + `config.PropertyName` instead of capturing the reference
+3. **`ResultType` is not `'simple'`** (and `records[0] instanceof BaseEntity` when rows exist) — if your code calls `.Get()` / `.Save()` / `.PrimaryKey` on the rows
+4. **Not yourself** — guard `match.engine === this` so a prior run's own slot can't masquerade as a donor
+
+**The returned array is the donor's live array — read it, never mutate it** (unless you understand the donor's event-mutation semantics; see `SyncMetadataEngine` for a correctly-engineered exception). The donor's BaseEntity event subscription keeps unfiltered/unordered/`entity_object` arrays current on save/delete automatically, so a live reference stays fresh for free.
+
+**Why this is a convention, not an optimization**: donors are discovered dynamically at runtime, so consumers get faster automatically as new engines ship — no version coupling, no hardcoded donor lists. If no engine caches the entity, the lookup returns empty and you fall back to your own `RunView`/`Load` — graceful by construction.
+
+**Reference implementation**: `SyncMetadataEngine.delegateEntityIfCached()` in [packages/MetadataSync/src/lib/sync-metadata-engine.ts](packages/MetadataSync/src/lib/sync-metadata-engine.ts) — partitions a dynamic entity set into "delegate to donor" vs. "self-load", resolves donor arrays per-access, and documents the write-path dedup rules.
+
+**When NOT to use**: per-request user-scoped data (donor caches are typically process-wide, not per-user), entities where you need true DB state after out-of-band SQL writes (use `BypassCache: true` on a RunView instead), or one-off point lookups where a single filtered `RunView` is cheaper than vetting a cache.
 
 ### Batch Database Operations
 - Use `RunViews` (plural) instead of multiple `RunView` calls

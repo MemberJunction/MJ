@@ -19,10 +19,24 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Fetch PR base commit
+        # The default checkout is a depth-1 shallow clone of the merge commit, so
+        # the base commit's objects aren't present and `git diff <base>` fails
+        # with "bad object" — which previously made every validation step silently
+        # skip. Fetch just that one commit at depth 1: its trees are nearly
+        # identical to the already-checked-out merge commit, so the incremental
+        # transfer is ~the PR diff size, not the full repo history that
+        # `fetch-depth: 0` would pull.
+        run: git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.sha }}
+
       - name: Check for migration file changes
         id: check_migrations
         run: |
-          MIGRATION_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
+          # Resolve the diff first so a real git failure (e.g. an unfetched base
+          # commit) hard-fails the job under `set -e` instead of being swallowed
+          # by `|| true` and reported as "no migrations".
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+          MIGRATION_FILES=$(echo "$CHANGED_FILES" | grep -E '^migrations/.*\.sql$' || true)
           if [ -n "$MIGRATION_FILES" ]; then
             echo "has_migrations=true" >> $GITHUB_OUTPUT
             echo "Migration files found:"
@@ -111,6 +125,26 @@ jobs:
               fi
             fi
           done
+
+      - name: Check for duplicate migration versions
+        if: steps.check_migrations.outputs.has_migrations == 'true'
+        run: |
+          # Two migrations sharing a version both get applied — the history
+          # table is keyed by installed_rank, not version — writing duplicate
+          # rows. Scan the whole migrations/ tree of the checked-out PR state so
+          # this catches collisions with already-merged files and renames, not
+          # just newly added files.
+          DUPES=$(find migrations -type f -name 'V*.sql' \
+            | sed -E 's@.*/V([0-9]{12})__.*@\1@' \
+            | grep -E '^[0-9]{12}$' | sort | uniq -d)
+          if [ -n "$DUPES" ]; then
+            for v in $DUPES; do
+              echo "::error::Duplicate migration version $v is used by more than one file:"
+              find migrations -type f -name "V${v}__*.sql" | sed 's/^/    /'
+            done
+            exit 1
+          fi
+          echo "No duplicate migration versions found"
 
       - name: Check migration content
         if: steps.check_migrations.outputs.has_migrations == 'true'
