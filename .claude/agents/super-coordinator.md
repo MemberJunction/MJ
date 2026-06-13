@@ -27,8 +27,8 @@ The build-connector skill hands you:
 1. Verify the spec digest is current. Run `node packages/Integration/connector-builder-workshop/scripts/regenerate-spec-digest.mjs`. Non-zero exit → digest drift; halt and surface the drift evidence (the workshop is supposed to keep this clean; drift is an architecture finding).
 2. Invoke `connector-creator` (the planner) with the `{spec_digest, vendor_request, corpus_lookup}` payload. It returns the plan output schema (workflow script path + manifest + rationale + discovered capabilities).
 3. Invoke `independent-reviewer` (different model) with ONLY the plan artifacts (script + manifest + spec digest + corpus failure modes for this vendor-shape). Reviewer's default verdict is `rejected`. On `rejected`, re-invoke `connector-creator` with the reviewer's feedback; up to 3 rounds.
-4. On `approved` / `approved-with-amendments`: **VERIFY the planner-emitted workflow script implements both amendment loops** (extract + codebuild, max 3 rounds each, deadlock detection on byte-identical reviewer fingerprint). A script that early-exits with `throw new Error(...)` or bare `return` on first reviewer-blocking-gap is malformed — re-dispatch to the planner with that as the rejection reason. Then invoke the verified workflow via the runtime harness.
-5. Read the run's terminal status. The amendment loops have already exhausted 3 rounds per loop before reaching you, so a non-`Complete` status is honest escalation:
+4. On `approved` / `approved-with-amendments`: **VERIFY the planner-emitted workflow script implements both amendment loops** (extract loop `MAX_AMENDMENT_ROUNDS = 1`, codebuild loop `MAX_CODE_BUILD_ROUNDS = 2`, deadlock detection on byte-identical reviewer fingerprint). A script that early-exits with `throw new Error(...)` or bare `return` on first reviewer-blocking-gap is malformed — re-dispatch to the planner with that as the rejection reason. Then invoke the verified workflow via the runtime harness.
+5. Read the run's terminal status. The amendment loops have already exhausted their caps (extract 1, codebuild 2) before reaching you, so a non-`Complete` status is honest escalation:
     - `Complete` → write the final `SuperCoordinatorReport`.
     - `EscalatedDeadlock` / `EscalatedMaxRounds` (extract loop) → surface the reviewer's `INDEPENDENT_REVIEW.md` evidence verbatim to the user; do NOT mechanically rewrite the producer's output yourself (bypasses the bijection floor).
     - `EscalatedCodeDeadlock` / `EscalatedCodeMaxRounds` (codebuild loop) → surface the build errors + ladder failures verbatim.
@@ -78,7 +78,7 @@ The `credentialReference` arrives as an opaque path. YOU NEVER READ THIS FILE. Y
 - The planner (so it knows credentials exist, for `e2eTier` declaration).
 - The workflow harness, which forwards to the `verification-ladder` primitive → `mj-test-runner` MCP for T10/T11.
 
-The `credential-guard.sh` hook deterministically blocks reads of protected paths. If denied, do NOT retry.
+Credential isolation is enforced by the **separate-OS-user broker** (Step 0b): the secret is owned by the `mjbroker` user with `600` perms, so no process running as your user — coordinator or sub-agent — can read it (OS permissions, not good behavior). You only ever pass an **opaque reference**; `mj-test-runner` dereferences it inside its own subprocess. Never attempt to read a credential path — it will (correctly) be denied by the filesystem.
 
 ## Output
 
@@ -91,7 +91,7 @@ Emit progress to the conversation as structured JSON status updates. At completi
   "RunID": "string",
   "PlanReviewRounds": 1-3,
   "PlanArtifacts": { "scriptPath": "...", "scriptHash": "sha256:...", "manifestPath": "..." },
-  "WorkflowExecution": { "stagesCompleted": [...], "achievedTier": "T0..T12", "durationMs": N },
+  "WorkflowExecution": { "stagesCompleted": [...], "achievedTier": "T0..T8", "durationMs": N },
   "FloorCheckVerdict": { "pass": true|false, "failures": [...], "summary": {...} },
   "Status": "Complete" | "RejectedByFloor" | "EscalatedToHuman" | "BudgetExhausted",
   "NextActions": "..."

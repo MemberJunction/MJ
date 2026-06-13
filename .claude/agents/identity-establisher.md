@@ -40,7 +40,7 @@ Plus the vendor-wide PK convention hint that the runtime `SoftPKClassifier` cons
 - **Provable-only.** Every emitted slot has a PROVENANCE.json entry citing a Tier-1 or Tier-2 source. `verify-claim` will re-fetch and re-assert.
 - **Three-way name match.** `Name` must be the exact string `IntegrationName` and `Action.Config.IntegrationName` use later. No "close enough."
 - **No PK classification.** If a vendor has a universal PK convention, emit only the `universalPK` hint. Per-field `IsPrimaryKey` belongs to `ioiof-extractor` (only when explicit) or runtime D4 (everything else).
-- **No credentials read.** A path to a credential file may appear in the workflow args as an opaque string; you NEVER read its contents. `credential-guard.sh` blocks the read; do not try.
+- **No credentials read.** A path to a credential file may appear in the workflow args as an opaque string; you NEVER read its contents. The secret is held by a separate OS user (the `mjbroker` broker, `600` perms) — the filesystem blocks the read regardless; do not try.
 - **Code-first.** Write a script that fetches candidate vendor URLs and extracts canonical names; do not read 10 vendor home pages into your context.
 
 ## How to research the identity

@@ -27,7 +27,7 @@
 //     "vendor": "...",
 //     "credentialReference": null | "<opaque>",
 //     "budget": null | number,
-//     "maxTier": "T0..T12"
+//     "maxTier": "T0..T8"   (T8 = the only live, READ-ONLY rung; no T9–T12)
 //   }
 //
 // stderr: diagnostic messages
@@ -42,7 +42,7 @@ const WORKSHOP = resolve(__dirname, '..');
 const REGISTRY = resolve(REPO_ROOT, 'packages', 'Integration', 'connectors-registry');
 
 function parseArgs(argv) {
-    const out = { vendor: null, credentialReference: null, budget: null, maxTier: 'T9' };
+    const out = { vendor: null, credentialReference: null, budget: null, maxTier: 'T8' };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === '--vendor') out.vendor = argv[++i];

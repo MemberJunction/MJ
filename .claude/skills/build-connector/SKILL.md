@@ -151,14 +151,14 @@ The plan-script template at `packages/Integration/connector-builder-workshop/pla
 
 The planner-emitted workflow MUST implement two amendment loops (the template does). A single `return` on first reviewer-blocking-gap is a broken orchestration — it wastes the entire upstream investment (sources + identity + metadata + extraction) and ships nothing. The amendment loop turns reviewer feedback into mechanical corrections the producer applies, then re-validates.
 
-**Extract amendment loop** — when `independent-reviewer` reports `ConfirmedGapsBlocking > 0`, the workflow re-dispatches `ioiof-extractor` with the reviewer's `FixInstructions` as input, re-freezes the contract, re-reviews. Up to 3 rounds.
+**Extract amendment loop** — when `independent-reviewer` reports `ConfirmedGapsBlocking > 0`, the workflow re-dispatches `ioiof-extractor` with the reviewer's `FixInstructions` as input, re-freezes the contract, re-reviews. `MAX_AMENDMENT_ROUNDS = 1` (kept LOW deliberately — the mechanical gates: 0-field hard-fail, §0b `enforce-finding-floor`, `compute-source-diff`, T1 invariants, catch defects in-pass, so repeated re-extract is pure waste).
 
 Exit conditions:
 - `ConfirmedGapsBlocking === 0` → proceed to CodeBuild.
 - Reviewer fingerprint byte-identical to prior round (same gaps, same fix instructions) → producer can't fix what reviewer wants → escalate as `EscalatedDeadlock`.
-- Hit `MAX_AMENDMENT_ROUNDS = 3` with unresolved gaps → escalate as `EscalatedMaxRounds`.
+- Hit `MAX_AMENDMENT_ROUNDS = 1` with unresolved gaps → escalate as `EscalatedMaxRounds`.
 
-**CodeBuild amendment loop** — when `code-builder` returns `BuildClean=false` OR `verification-ladder` shows a red rung, re-dispatch `code-builder` with the specific errors fed back. Up to 3 rounds. Same convergence + max-round rules.
+**CodeBuild amendment loop** — when `code-builder` returns `BuildClean=false` OR `verification-ladder` shows a red rung, re-dispatch `code-builder` with the specific errors fed back. `MAX_CODE_BUILD_ROUNDS = 2`. Same convergence + max-round rules.
 
 Anti-thrash: if a higher tier fails on something a lower tier could have caught, that's a gate-placement bug — fix the lower-tier check, don't silently re-run the higher tier.
 
@@ -238,7 +238,7 @@ Concretely:
 ## What this skill does NOT do
 
 - **Does NOT discover, probe, analyze, or conclude anything itself — only the agent architecture's findings count.** The orchestrator MUST NOT hand-run discovery probes, parse vendor schemas, measure patterns, or reach conclusions about the connector's shape/objects/fields/PK/FK and then feed them in or "report" them as truth. That is the single biggest failure mode: the orchestrator injecting "likely"-grade hand-work that the rigorous pipeline never sanctioned. Findings produced by the orchestrator are **invalid by construction** and must not drive any decision. The orchestrator ONLY: runs Step-0 intake, sequences Plan→Review→Execute, and **reports back what the AGENTS found** (verbatim from their structured outputs / the floor-check verdict). If you catch yourself running a `curl`/probe/script to "see what the vendor has" or analyzing a result to decide the connector's shape — STOP; that is the agent's job, and your version is not trustworthy. (Reading run artifacts to *report status* is fine; deriving connector truth is not.)
-- Does NOT read the credentials file. The `credential-guard.sh` hook blocks any attempt by this skill or any sub-agent. Only the `mj-test-runner` MCP subprocess dereferences the path internally.
+- Does NOT read the credentials file. The secret is held by a **separate OS user** (the `mjbroker` broker set up in Step 0b, `600` perms) so the filesystem denies any read by this skill or any sub-agent running as your user — credential isolation is an OS-permission guarantee, not a behavioral one. Only the `mj-test-runner` MCP subprocess dereferences the opaque reference internally.
 - Does NOT make design decisions about the connector's shape — the planner owns those (and the workflow runtime executes them deterministically).
 - Does NOT commit or push. Final commit requires explicit user approval each time.
 - Does NOT call `SoftPKClassifier` directly. That's runtime D4's job inside `IntegrationConnectorCreationPipeline` if/when the connector is later registered against a live system.

@@ -63,7 +63,23 @@ Applies to vitest test files under `packages/Integration/connectors-registry/<ve
   - Free-text → `<redacted>` when no safe substitution
 - Run-directory test data under `connectors-registry/<vendor>/runs/<runID>/test-data/` is wiped before PR open. Presence of unscrubbed test data at PR-open time is a floor-check failure.
 
-## Live e2e harness (T10/T11) — separate from the vitest files; the HubSpot framework is the template
+## Live e2e harness — separate from the vitest files; the HubSpot framework is the template
+
+> **🚨 READ-ONLY REVISION (BINDING) — supersedes the write/bidirectional/delete/dual-dialect material below.**
+> The current live contract is **READ-ONLY, ceiling T8**. The verification ladder is **T0..T8**; **T8 is the only
+> live rung and it is READ-ONLY** (TestConnection + discover + one read page — never create/update/delete/ack).
+> **There is no T9–T12.** The live gate `floor-check` enforces is the **read-only `hybrid-e2e`** primitive plus the
+> read-only `reality-probe` — NOT a write/bidirectional/delete/dual-dialect matrix. `phase0-slots.json`'s
+> `e2eLivePhases` reflects this (Phase B sub-phase 3.4 deletes removed; 3.2 reframed inbound-read-only;
+> `E2E.DualDialect` removed; all phases `dualDialect:false` = SQL-Server-only). **Write-path correctness
+> (Create/Update/Delete, bidirectional conflict, idempotency) is proven by the MOCKED tiers T4/T5 below and
+> by unit tests — NEVER by a live mutation against a real vendor.**
+>
+> Therefore, in everything below: treat the §3.2 write-paths, §3.4 deletes/tombstoning, and §7 dual-dialect
+> cells as the **aspirational full plan, NOT run live** — author them as mocked T4/T5 coverage or omit them with
+> a logged `skipReason`. The "T10/T11" naming throughout refers to this read-only `hybrid-e2e` live harness, not
+> a write tier. The binding source of truth is `SKILL.md` (read-only-only) + `phase0-slots.json` + the
+> `verification-ladder` / `floor-check` primitives — if this doc and those disagree, those win.
 
 The vitest files above are the credential-free mocked tiers (T4/T5). The **live** tier is a separate artifact: a connector-specific e2e harness modeled on the reference framework at `packages/Integration/connectors/test/` — `gql-live-harness.mjs` (orchestration), `gql-live-adapters.mjs` (the fetch/DB/vendor adapters), `plans.mjs` (the named read-only + write plans), run through `credential-broker.mjs`. It is NOT a vitest file and does NOT hit the vendor directly from test code; it drives the connector **through the MJ GraphQL API** (`IntegrationCreateConnection` → discover → `CreateEntityMaps`/`FieldMaps` → `ApplyAll` → `StartSync` → `IntegrationTailRunEvents`/`GetRun` → teardown) exactly as a real client would.
 
