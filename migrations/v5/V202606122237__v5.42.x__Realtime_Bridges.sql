@@ -65,22 +65,7 @@ CREATE TABLE ${flyway:defaultSchema}.AIBridgeProvider (
     BridgeType                  NVARCHAR(20)     NOT NULL CONSTRAINT DF_AIBridgeProvider_BridgeType DEFAULT ('Meeting'),
     DriverClass                 NVARCHAR(250)    NOT NULL,
     Status                      NVARCHAR(20)     NOT NULL CONSTRAINT DF_AIBridgeProvider_Status DEFAULT ('Active'),
-    SupportsOnDemandJoin        BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_OnDemandJoin DEFAULT (0),
-    SupportsScheduledJoin       BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_ScheduledJoin DEFAULT (0),
-    SupportsInviteJoin          BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_InviteJoin DEFAULT (0),
-    SupportsNativeInvite        BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_NativeInvite DEFAULT (0),
-    SupportsInboundRouting      BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_InboundRouting DEFAULT (0),
-    SupportsOutboundDial        BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_OutboundDial DEFAULT (0),
-    SupportsAudioIn             BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_AudioIn DEFAULT (1),
-    SupportsAudioOut            BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_AudioOut DEFAULT (1),
-    SupportsVideoIn             BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_VideoIn DEFAULT (0),
-    SupportsVideoOut            BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_VideoOut DEFAULT (0),
-    SupportsScreenIn            BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_ScreenIn DEFAULT (0),
-    SupportsScreenOut           BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_ScreenOut DEFAULT (0),
-    SupportsSpeakerDiarization  BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_Diarization DEFAULT (0),
-    SupportsDTMF                BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_DTMF DEFAULT (0),
-    SupportsCallTransfer        BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_CallTransfer DEFAULT (0),
-    SupportsRecording           BIT              NOT NULL CONSTRAINT DF_AIBridgeProvider_Recording DEFAULT (0),
+    SupportedFeatures           NVARCHAR(MAX)    NULL,
     ConfigSchema                NVARCHAR(MAX)    NULL,
     Configuration               NVARCHAR(MAX)    NULL,
     CONSTRAINT PK_AIBridgeProvider PRIMARY KEY (ID),
@@ -113,69 +98,9 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'Status';
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Capability flag: the agent can join a meeting on demand from a supplied join URL/ID. The engine checks this before invoking the driver join; the base driver throws BridgeCapabilityNotSupportedError when a flag is set but unimplemented.',
+    @value = N'Strongly-typed JSON of the platform''s supported features (the IBridgeProviderFeatures interface, bound via JSONType metadata): join methods (OnDemandJoin, ScheduledJoin, InviteJoin, NativeInvite, InboundRouting, OutboundDial), directional media tracks (AudioIn/Out, VideoIn/Out, ScreenIn/Out), and signals (SpeakerDiarization, DTMF, CallTransfer, Recording). The engine gates optional driver calls on these flags; the base driver throws BridgeCapabilityNotSupportedError when a feature is claimed but unimplemented. Held as JSON so new features need no schema change. NULL/omitted = unsupported.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsOnDemandJoin';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Capability flag: the agent can be scheduled to join a known meeting at a future start time (via MJ Scheduled Actions).',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsScheduledJoin';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Capability flag: the agent can be invited like a person via its calendar/email identity (a watcher matches the invite to a AIBridgeAgentIdentity and joins at start). The headline "invite the agent like a colleague" method.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsInviteJoin';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Capability flag: a host can add the agent from inside the platform''s own UI (requires a published marketplace app).',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsNativeInvite';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Capability flag: inbound connections (a call to the agent''s number, or an invite to its address) route TO the agent. Drives inbound telephony and inbound meeting routing.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsInboundRouting';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Capability flag (telephony): the agent can place outbound calls.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsOutboundDial';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Media-track capability: the bridge can deliver inbound audio (the agent hears the meeting/call). Routed to IRealtimeSession.SendInput.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsAudioIn';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Media-track capability: the bridge can emit outbound audio (the agent speaks into the meeting/call). Fed from IRealtimeSession.OnOutput.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsAudioOut';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Media-track capability: the bridge can deliver inbound video (the agent sees participants'' video). Forward-looking for full-duplex video models.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsVideoIn';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Media-track capability: the bridge can emit outbound video (the agent shows video). Forward-looking for full-duplex video models.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsVideoOut';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Media-track capability: the bridge can deliver inbound screen-share (the agent sees a shared screen).',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsScreenIn';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Media-track capability: the bridge can emit outbound screen-share (e.g. the Remote Browser channel screen-sharing a live demo into the meeting).',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsScreenOut';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Capability flag: inbound audio carries per-speaker labels, enabling diarized transcripts and addressed-speaker turn-taking.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsSpeakerDiarization';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Capability flag (telephony): the bridge can send/receive DTMF tones.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsDTMF';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Capability flag (telephony): the bridge can transfer a call to another party.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsCallTransfer';
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Capability flag: the bridge can request platform recording (subject to per-jurisdiction consent handling).',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsRecording';
+    @level1type = N'TABLE',  @level1name = N'AIBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportedFeatures';
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'Optional JSON Schema validating the provider Configuration and per-session bridge Config payloads.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',

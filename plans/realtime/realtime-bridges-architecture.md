@@ -146,18 +146,22 @@ graph TD
    turn-taking, participant bookkeeping, transcript stamping, reconnect/backoff, teardown. A concrete
    driver (`ZoomBridge`) implements only the **irreducibly platform-specific** primitives.
 2. **Capability-gated optional features.** Methods that not every platform supports are **virtual,
-   throwing `BridgeCapabilityNotSupportedError` by default**. The matching boolean flag on
-   `AIBridgeProvider` tells callers whether to call. **The engine checks the flag first; the
-   throw is defense-in-depth.** Metadata says "don't call this," code refuses to pretend.
+   throwing `BridgeCapabilityNotSupportedError` by default**. Which features a platform supports is
+   declared in **`AIBridgeProvider.SupportedFeatures`** — a single `NVARCHAR(MAX)` JSON column
+   **strongly typed via the `IBridgeProviderFeatures` interface** (MJ's JSONType system; the
+   interface lives in `metadata/entities/JSONType-interfaces/`). One JSON column instead of ~16
+   BIT columns keeps the table simple and lets new features be added without a schema migration —
+   just extend the interface. **The engine checks the feature flag first; the throw is
+   defense-in-depth.** Metadata says "don't call this," code refuses to pretend.
 
 ```mermaid
 flowchart TD
-    A["Engine wants to RaiseHand()"] --> B{"provider.SupportsHandRaise?"}
-    B -->|"false (metadata)"| C["skip silently —<br/>never call the driver"]
-    B -->|"true"| D["driver.RaiseHand()"]
+    A["Engine wants to SendDTMF()"] --> B{"provider.SupportedFeatures.DTMF?"}
+    B -->|"false / omitted (metadata)"| C["skip silently —<br/>never call the driver"]
+    B -->|"true"| D["driver.SendDTMF()"]
     D --> E{"driver overrode it?"}
     E -->|"no — base throws<br/>NotSupportedError"| F["bug surfaced loudly:<br/>flag lied about capability"]
-    E -->|"yes"| G["platform hand-raise fires"]
+    E -->|"yes"| G["DTMF tones sent"]
 
     style C fill:#2d5016,stroke:#1a5c3a,color:#fff
     style F fill:#7a1f1f,stroke:#a02a2a,color:#fff
@@ -167,19 +171,22 @@ flowchart TD
 **Abstract (every bridge MUST implement):**
 - `Connect(ctx)` — join the meeting / place or accept the call; return the bot participant handle.
 - `Disconnect(reason)` — leave / hang up cleanly.
-- `SendAudio(pcmFrame)` — the agent speaking out into the meeting/call (← `IRealtimeSession.OnOutput`).
-- `OnAudio(handler)` — meeting/call audio in (→ `IRealtimeSession.SendInput`); with speaker labels
+- `SendMedia(track, frame)` — outbound media (audio/video/screen) into the meeting/call
+  (← `IRealtimeSession.OnOutput`). Audio is just one track.
+- `OnMedia(handler)` — inbound media (→ `IRealtimeSession.SendInput`); audio carries speaker labels
   when the platform diarizes.
 
-**Virtual / capability-gated (throw `NotSupported` unless overridden):**
+**Virtual / capability-gated (throw `NotSupported` unless overridden; gated by `SupportedFeatures`):**
 - `OnParticipantChange(handler)` / `GetParticipants()` — roster + diarization mapping.
-- `PostChatMessage(text)` — for the **hybrid** turn mode (post instead of interrupt).
-- `RaiseHand()` — native raise-hand signal.
-- `SendDTMF(digits)` / `OnDTMF(handler)` — **telephony**.
-- `TransferCall(target)` — **telephony**.
-- `StartScreenShare()` / `StartVideo()` / `StartRecording()` — richer meeting features.
+- `SendDTMF(digits)` / `OnDTMF(handler)` — **telephony** (`DTMF`).
+- `TransferCall(target)` — **telephony** (`CallTransfer`).
+- `StartRecording()` — `Recording`.
+- Video/screen tracks are gated by the directional media flags (`VideoIn/Out`, `ScreenIn/Out`).
 
-A driver advertises what it overrode; the **seed metadata flags must match** (validated server-side).
+*(Interactive surfaces — hand-raise, in-meeting chat, native whiteboard — are NOT driver methods;
+they are CHANNELS the bridge contributes, see §4b.)*
+
+A driver advertises what it overrode; the **`SupportedFeatures` JSON must match** (validated server-side).
 
 ---
 
@@ -216,22 +223,7 @@ erDiagram
         string BridgeType "Meeting | Telephony"
         string DriverClass "ClassFactory key"
         string Status "Active | Disabled"
-        bool SupportsOnDemandJoin
-        bool SupportsScheduledJoin
-        bool SupportsInviteJoin "email/calendar"
-        bool SupportsNativeInvite
-        bool SupportsInboundRouting "inbound calls/invites"
-        bool SupportsOutboundDial "telephony"
-        bool SupportsAudioIn "media tracks — directional"
-        bool SupportsAudioOut
-        bool SupportsVideoIn
-        bool SupportsVideoOut
-        bool SupportsScreenIn
-        bool SupportsScreenOut
-        bool SupportsSpeakerDiarization
-        bool SupportsDTMF
-        bool SupportsCallTransfer
-        bool SupportsRecording
+        string SupportedFeatures "JSON (IBridgeProviderFeatures): join methods, directional media tracks (audio/video/screen in+out), diarization, DTMF, transfer, recording"
         string ConfigSchema "JSON Schema"
         string Configuration "JSON"
     }
@@ -285,16 +277,19 @@ erDiagram
 ```
 
 Telephony reuses **the same five tables** with no schema change: `BridgeType='Telephony'`,
-`IdentityType='PhoneNumber'`, `Direction='Inbound'|'Outbound'`, capability flags `SupportsDTMF` /
-`SupportsOutboundDial` / `SupportsCallTransfer` on. That is the proof the model is genuinely unified.
+`IdentityType='PhoneNumber'`, `Direction='Inbound'|'Outbound'`, and `SupportedFeatures` with
+`{ DTMF, OutboundDial, CallTransfer }` on. That is the proof the model is genuinely unified.
 
-**Note the capability flags are *transport/media* concerns only** (join methods, directional media
-tracks, diarization, DTMF/transfer, recording). The *interactive* surfaces — hand-raise, in-meeting
-chat, the native whiteboard — are **not** transport flags; they are **channels the bridge
-contributes** (next section), which is why they don't appear as booleans here.
+**`SupportedFeatures` is one strongly-typed JSON column, not ~16 BIT columns** — bound to the
+`IBridgeProviderFeatures` interface via MJ's JSONType system (`metadata/entities/JSONType-interfaces/
+IBridgeProviderFeatures.ts` + a `.entity-field-jsontype-bridges.json` sync file applied after
+CodeGen). It holds *transport/media* concerns only (join methods, directional media tracks,
+diarization, DTMF/transfer, recording). The *interactive* surfaces — hand-raise, in-meeting chat,
+the native whiteboard — are **not** features here; they are **channels the bridge contributes**
+(next section). New platform features need no schema change — just extend the interface.
 
-**Reference data** (the Zoom/Teams/Slack/Meet/Twilio provider rows) is seeded via **mj-sync metadata,
-never SQL INSERTs**, per convention. The migration creates only the four tables + their columns.
+**Reference data** (the provider rows + their `SupportedFeatures` JSON) is seeded via **mj-sync
+metadata, never SQL INSERTs**, per convention. The migration creates only the five tables + columns.
 
 ---
 
@@ -855,7 +850,14 @@ Every phase is "done" only when **all** of the following hold — this is baked 
 ### Phase 1 — Schema + engines  ⟵ START HERE (blocked on CodeGen)
 - [ ] **Migration** `V…__v5.42.x__Realtime_Bridges.sql` — 5 tables (`AIBridgeProvider`,
       `AIBridgeAgentIdentity`, `AIBridgeProviderChannel`, `AIAgentSessionBridge`,
-      `AIAgentSessionBridgeParticipant`) + extended props. **← Amith reviews + runs CodeGen.**
+      `AIAgentSessionBridgeParticipant`) + extended props. `AIBridgeProvider.SupportedFeatures` is a
+      single JSON column (not BIT columns). **← Amith reviews + runs CodeGen.**
+- [x] `IBridgeProviderFeatures` interface (`metadata/entities/JSONType-interfaces/`) +
+      `.entity-field-jsontype-bridges.json` sync file binding it to `SupportedFeatures`.
+- [ ] **JSONType sequencing:** after CodeGen creates the entity, run mj-sync (binds the JSONType),
+      then CodeGen again so the typed `SupportedFeaturesObject` accessor is emitted. Confirm the
+      sync file's `@lookup` entity name matches CodeGen's generated name (predicted "MJ: AI Bridge
+      Providers").
 - [ ] After CodeGen: verify generated entity types; no drift; build `@memberjunction/core-entities`.
 - [ ] `@memberjunction/ai-bridge-base` package: `AIBridgeEngineBase` (BaseEngine — caches
       providers, capabilities, identities, provider-channels), provider/identity resolution.

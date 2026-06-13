@@ -1,0 +1,33 @@
+[
+  {
+    "_comments": [
+      "Binds JSONType metadata to AIBridgeProvider.SupportedFeatures so CodeGen emits a typed",
+      "accessor conforming to IBridgeProviderFeatures. Apply AFTER the v5.42 Realtime_Bridges",
+      "migration + CodeGen have created the 'MJ: AI Bridge Providers' entity and its fields.",
+      "If CodeGen names the entity differently, update the @lookup names below to match."
+    ],
+    "fields": {
+      "Name": "MJ: AI Bridge Providers"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IBridgeProviderFeatures",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IBridgeProviderFeatures.ts"
+          },
+          "_comments": [
+            "SupportedFeatures field — strongly-typed platform capability flags"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Bridge Providers&Name=SupportedFeatures"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Bridge Providers"
+    }
+  }
+]
