@@ -848,7 +848,7 @@ import {
     TemplateEmbedExtension,
 } from '@memberjunction/templates';
 
-// @memberjunction/ai-agents (16 classes)
+// @memberjunction/ai-agents (17 classes)
 import {
     CSVToolLibrary,
     DataSnapshotToolLibrary,
@@ -859,6 +859,7 @@ import {
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
+    MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
     QueryBuilderAgent,
@@ -1679,6 +1680,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
+    MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
     QueryBuilderAgent,
@@ -1843,7 +1845,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 792;
+export const CLASS_REGISTRATIONS_COUNT = 793;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

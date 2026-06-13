@@ -79,9 +79,13 @@ export interface RealtimeChannelContext {
  *  2. a STATE→CONTEXT SERIALIZER policy — the plugin owns its state engine and pushes
  *     coalesced deltas through {@link RealtimeChannelContext.SendContextNote} — the
  *     PERCEPTION direction;
- *  3. an ANGULAR SURFACE ({@link GetSurfaceComponent}) the overlay creates dynamically in
- *     a channel tab, handed back through {@link BindSurface} so the plugin wires its own
- *     inputs/outputs (the host never knows the component's API);
+ *  3. an OPTIONAL ANGULAR SURFACE ({@link GetSurfaceComponent}) the overlay creates dynamically
+ *     in a channel tab, handed back through {@link BindSurface} so the plugin wires its own
+ *     inputs/outputs (the host never knows the component's API). A channel may be **server-only**
+ *     (no rendered surface) — e.g. a bridge-contributed meeting-controls or native-whiteboard
+ *     channel whose surface lives on the external platform, not in MJ. Such a channel returns
+ *     `null` from {@link GetSurfaceComponent} ({@link HasSurface} is `false`) and the overlay
+ *     simply skips its tab while still wiring its tools + perception;
  *  4. a STATE OF RECORD ({@link SerializeState}, persisted via
  *     {@link RealtimeChannelContext.RequestSave} under {@link ChannelName}).
  *
@@ -149,11 +153,32 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   public abstract ApplyAgentTool(toolName: string, argsJson: string): string | Promise<string>;
 
   /**
-   * The Angular component the overlay creates dynamically as this channel's tab pane.
-   * The created instance is handed straight back via {@link BindSurface} — the host treats
-   * it as opaque.
+   * The Angular component the overlay creates dynamically as this channel's tab pane, or `null`
+   * for a **server-only** channel that renders no MJ surface (its surface, if any, lives on the
+   * external platform — e.g. a bridge-contributed native whiteboard or meeting-controls channel).
+   *
+   * When this returns `null`, the overlay renders NO tab for the channel and never calls
+   * {@link BindSurface}/{@link UnbindSurface} — but the channel's tools ({@link GetToolDefinitions} /
+   * {@link ApplyAgentTool}) and perception ({@link RealtimeChannelContext.SendContextNote}) still run.
+   * A created surface instance is handed straight back via {@link BindSurface}; the host treats it as
+   * opaque.
+   *
+   * Default: `null` (server-only). A channel with a rendered surface overrides this to return its
+   * component type.
    */
-  public abstract GetSurfaceComponent(): Type<TSurface>;
+  public GetSurfaceComponent(): Type<TSurface> | null {
+    return null;
+  }
+
+  /**
+   * Whether this channel has a rendered MJ surface ({@link GetSurfaceComponent} returns non-null).
+   * The overlay uses this to decide whether to register a surface tab; server-only channels are
+   * `false`. Override only if surface availability must be decided WITHOUT constructing the type
+   * (the default calls {@link GetSurfaceComponent} once).
+   */
+  public HasSurface(): boolean {
+    return this.GetSurfaceComponent() != null;
+  }
 
   /**
    * Called by the host right after it created the surface component (and BEFORE the

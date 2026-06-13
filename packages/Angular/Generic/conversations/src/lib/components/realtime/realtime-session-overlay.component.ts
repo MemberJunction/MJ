@@ -870,10 +870,18 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     setTimeout(() => this.surfaceTabs?.FocusArtifact(artifact));
   }
 
-  /** Registers one surface tab per active channel plugin (key/title/icon from the plugin). */
+  /**
+   * Registers one surface tab per active channel plugin THAT HAS A SURFACE (key/title/icon from the
+   * plugin). Server-only channels ({@link BaseRealtimeChannelClient.HasSurface} === `false`) render no
+   * tab — their tools + perception are already wired by the session service; there is simply nothing
+   * to show in the surface panel.
+   */
   private registerChannelTabs(channels: BaseRealtimeChannelClient[]): void {
     this.cleanupStaleReviewBoardTab(channels);
     for (const plugin of channels) {
+      if (!plugin.HasSurface()) {
+        continue; // server-only channel — no surface to tab.
+      }
       this.RegisterChannelTab({
         Key: plugin.ChannelName,
         Title: plugin.TabTitle,

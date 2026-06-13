@@ -926,12 +926,32 @@ Every phase is "done" only when **all** of the following hold — this is baked 
       translates `BridgeMediaFrame`↔`ArrayBuffer`; per-platform sample-rate conversion lands with Zoom).
 - [x] Guide transport-seam section (in `/guides/REALTIME_BRIDGES_GUIDE.md`).
 
-### Phase 2 — Server-side channel plane
-- [ ] Dynamic `GetToolDefinitions()` contribution → `RealtimeSessionRunner.ExtraTools`.
-- [ ] Optional client surface (server-only channels); per-session server channel host (de-stub).
-- [ ] `MeetingControlsChannel` (roster · hand-raise queue · who's-speaking · timer; facilitator tools).
-- [ ] Channel perception sourced from a bridge event stream; `ToolNamePrefix` namespacing verified.
-- [ ] **Quality bar** + guide section on channel contribution.
+### Phase 2 — Server-side channel plane  ✅ CORE DONE
+- [x] Dynamic server-tool contribution: `BaseRealtimeChannelServer.GetServerToolDefinitions()` (runtime-
+      computed) + `ExecuteServerTool()` + `ToolNamePrefix`; `RealtimeChannelServerHost` aggregation
+      (`GetSessionServerTools` / `ExecuteSessionServerTool`, longest-prefix routing); wired into
+      `RealtimeSessionRunner` via the **additive** `ServerChannelTools` + `ExecuteServerChannelTool`
+      deps (registered after `ExtraTools`; client-direct path untouched).
+- [x] Optional client surface: `BaseRealtimeChannelClient.GetSurfaceComponent()` now defaults to
+      `null` + `HasSurface()`; the overlay skips surfaceless channels' tabs; the pane component is
+      defensive. (The per-session server channel host already existed — de-stubbed by giving it the
+      tool-contribution + execution role.)
+- [x] `MeetingControlsChannel` (roster · hand-raise queue · who's-speaking · timer; facilitator tools
+      `RaiseHand`/`LowerHand`/`CallOnParticipant`/`MuteParticipant` (capability-gated)/`SetTimer`).
+      Server-only (no client surface). Pure `MeetingControlsState` queue/timer logic.
+- [x] Channel perception sourced from an injected bridge event stream (`IMeetingControlsEventSource`)
+      fed back via the new optional `RealtimeChannelServerContext.SendContextNote`; `ToolNamePrefix`
+      namespacing verified by tests.
+- [x] **Tests**: AI Core 181, AI Agents 1263 (+109 new across runner/host/state/channel), conversations
+      552 (+3 optional-surface) — all green; every touched package builds. Guide section added.
+- [ ] **Follow-up (flagged):** bridge-server wiring — when `AIBridgeEngine` mints a server-bridged
+      `RealtimeSessionRunner`, it must (a) start the session's channels through
+      `RealtimeChannelServerHost.OnSessionStarted`, (b) construct the `MeetingControlsChannelServer`
+      with the driver's `IMeetingControlsEventSource` adapter, (c) pass `host.GetSessionServerTools(id)`
+      as `ServerChannelTools` and bind `ExecuteServerChannelTool` to `host.ExecuteSessionServerTool(id, …)`,
+      and (d) supply the runner's session `SendContextNote` to the channel context. The seams all exist
+      and are tested; this is the integration that lands with the Zoom driver (Phase 3), where a real
+      `IMeetingControlsEventSource` adapter exists.
 
 ### Phase 3 — Zoom meeting bridge
 - [ ] `@memberjunction/ai-bridge-zoom` (or driver in server pkg): `ZoomBridge` join (on-demand +
@@ -975,17 +995,22 @@ Every phase is "done" only when **all** of the following hold — this is baked 
 - [ ] Per-platform "add the agent" apps (Zoom/Teams marketplace) — design + first submission.
 - [ ] **Quality bar** + guide.
 
-### Phase UI — Realtime management dashboard + forms (starts right after CodeGen)
-- [ ] Custom `*Extended` forms: `AIBridgeProviderFormExtended` (SupportedFeatures capability editor
-      via the typed accessor), `AIAgentSessionBridgeFormExtended` (participants + lifecycle +
-      observer link), `AIBridgeAgentIdentityFormExtended`. Register in custom-forms module.
-- [ ] AIAgent form **Realtime panel** (BaseFormPanel slot — no regeneration): co-agent pairings,
-      TypeConfiguration, bridge identities, default co-agent.
-- [ ] New **Realtime** section in the AI dashboard (`@memberjunction/ng-dashboards`): Live Sessions
-      (+ observer console), Bridge Providers, Agent Identities, Channels, Co-Agents, Session History,
-      Metrics. BaseEngine for data; page-chrome trio; UserInfoEngine prefs; design tokens;
-      `NotifyLoadComplete`.
-- [ ] **Quality bar** + guide section on the realtime dashboard/forms.
+### Phase UI — Realtime management dashboard + forms  ✅ DONE
+- [x] Custom `*Extended` forms: `MJAIBridgeProviderFormComponentExtended` (16-flag SupportedFeatures
+      capability editor through the typed `SupportedFeaturesObject` accessor; omit-on-disable),
+      `MJAIAgentSessionBridgeFormComponentExtended` (lifecycle timeline + participant grid),
+      `MJAIBridgeAgentIdentityFormComponentExtended`. Registered in custom-forms module; pure
+      object↔toggles helper unit-tested (14 tests).
+- [x] AIAgent form **Realtime panel** (`@RegisterClassEx(BaseFormPanel, …)`, slot `after-fields`,
+      falls through to `after-everything` since the custom AIAgent form has no slot marker — graceful
+      per PANELS.md): co-agent pairings, TypeConfiguration, bridge identities.
+- [x] **Realtime Management** section in the AI dashboard (`@memberjunction/ng-dashboards`): Live
+      Sessions, Bridge Providers (capability chips), Agent Identities, Channels (+ contributing
+      providers), Co-Agents, Session History, Metrics. Batched `RunViews` (matches the existing
+      realtime-analytics sections — no new BaseEngine), `UserInfoEngine` sub-tab pref, design tokens,
+      pure metrics helpers unit-tested (11 tests). v1 read-only (observer-console + review-launch
+      marked TODO).
+- [x] **Quality bar**: ng-dashboards 307 tests; full repo build 249/249 + tests 491/491 green.
 
 ### Cross-cutting (do once, early)
 - [x] Architecture plan doc (this file) with mermaid + WBS.

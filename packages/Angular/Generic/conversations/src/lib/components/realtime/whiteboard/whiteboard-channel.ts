@@ -89,7 +89,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     return WHITEBOARD_TOOL_DEFINITIONS;
   }
 
-  public GetSurfaceComponent(): Type<RealtimeWhiteboardHostComponent> {
+  public override GetSurfaceComponent(): Type<RealtimeWhiteboardHostComponent> {
     return RealtimeWhiteboardHostComponent;
   }
 

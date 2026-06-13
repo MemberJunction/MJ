@@ -162,6 +162,11 @@ interface NavItem {
                             [TimeRange]="CurrentTimeRange"
                         ></app-analytics-realtime-sessions>
                     }
+                    @case ('realtime-management') {
+                        <app-realtime-management
+                            [TimeRange]="CurrentTimeRange"
+                        ></app-realtime-management>
+                    }
                 }
             </div>
             </mj-page-body-interior>
@@ -310,6 +315,10 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
             // sub-day ranges are dropped.
             case 'realtime-overview':
             case 'realtime-sessions':
+            // Realtime management owns its sub-tab rail + per-surface filters
+            // internally; only the time-range chips come from the shared chrome
+            // (it windows session history daily, so sub-day ranges are dropped).
+            case 'realtime-management':
                 return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['24h', '7d', '30d'] };
             default:
                 return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
@@ -499,6 +508,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
           Description: 'Operational analytics for voice-agent sessions — sessions, channels, and delegated runs' },
         { Label: 'Voice Sessions', Icon: 'fa-solid fa-table-list', Key: 'realtime-sessions',
           Description: 'Every long-lived agent session — live calls, idle holds, and closed history' },
+        { Label: 'Realtime Management', Icon: 'fa-solid fa-satellite-dish', Key: 'realtime-management',
+          Description: 'Manage the realtime + bridge surface — live sessions, bridge providers, agent identities, channels, co-agents, history, and metrics' },
     ];
 
     /**

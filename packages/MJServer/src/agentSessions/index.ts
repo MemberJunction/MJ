@@ -7,12 +7,13 @@
  *
  * @module @memberjunction/server
  */
-import { LoadWhiteboardChannelServer } from '@memberjunction/ai-agents';
+import { LoadWhiteboardChannelServer, LoadMeetingControlsChannelServer } from '@memberjunction/ai-agents';
 
 // Tree-shaking prevention: force the server-side channel plugin registrations
 // (`@RegisterClass(BaseRealtimeChannelServer, ...)`) to execute on any static path that touches
 // the session lifecycle — `SessionManager.CreateSession` resolves them via the ClassFactory.
 LoadWhiteboardChannelServer();
+LoadMeetingControlsChannelServer();
 
 export * from './HostInstance.js';
 export * from './SessionManager.js';
