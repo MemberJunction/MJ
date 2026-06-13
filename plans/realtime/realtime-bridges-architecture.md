@@ -892,38 +892,38 @@ Every phase is "done" only when **all** of the following hold — this is baked 
 > green build, changeset — applies to **every** phase block and its boxes must all be checked before
 > the phase is "done." Skip the `sql-converter` PG suite only.
 
-### Phase 1 — Schema + engines  ⟵ START HERE (blocked on CodeGen)
-- [ ] **Migration** `V…__v5.42.x__Realtime_Bridges.sql` — 5 tables (`AIBridgeProvider`,
-      `AIBridgeAgentIdentity`, `AIBridgeProviderChannel`, `AIAgentSessionBridge`,
-      `AIAgentSessionBridgeParticipant`) + extended props. `AIBridgeProvider.SupportedFeatures` is a
-      single JSON column (not BIT columns). **← Amith reviews + runs CodeGen.**
-- [x] `IBridgeProviderFeatures` interface (`metadata/entities/JSONType-interfaces/`) +
-      `.entity-field-jsontype-bridges.json` sync file binding it to `SupportedFeatures`.
-- [ ] **JSONType sequencing:** after CodeGen creates the entity, run mj-sync (binds the JSONType),
-      then CodeGen again so the typed `SupportedFeaturesObject` accessor is emitted. Confirm the
-      sync file's `@lookup` entity name matches CodeGen's generated name (predicted "MJ: AI Bridge
-      Providers").
-- [ ] After CodeGen: verify generated entity types; no drift; build `@memberjunction/core-entities`.
-- [ ] `@memberjunction/ai-bridge-base` package: `AIBridgeEngineBase` (BaseEngine — caches
-      providers, capabilities, identities, provider-channels), provider/identity resolution.
-- [ ] `BaseRealtimeBridge` abstract (media-track contract + capability-gated methods, `NotSupported`
-      defaults), `BridgeCapabilityNotSupportedError`, capability types (union types).
-- [ ] `TurnTakingPolicy` (passive/active/hybrid) — pure, platform-agnostic, on diarized transcript.
-- [ ] `@memberjunction/ai-bridge-server` package: `AIBridgeEngine` (extends base — host
-      registry, janitor, lifecycle scaffold), ClassFactory driver resolution.
-- [ ] Server-side `MJ…EntityServer` subclasses + `ValidateAsync` invariants (capability/flag
-      coherence, one-default-per-provider-channel, identity uniqueness).
+### Phase 1 — Schema + engines  ✅ CORE DONE (docs/seed pending)
+- [x] **Migration** `V202606160900__v5.42.x__Realtime_Bridges.sql` — 5 tables + extended props,
+      `SupportedFeatures` JSON column. Ran + CodeGen'd; drift verified 0.
+- [x] `IBridgeProviderFeatures` interface + `.entity-field-jsontype-bridges.json` sync file.
+- [x] **JSONType sequencing** — binding verified live: typed `SupportedFeaturesObject` accessor +
+      `MJAIBridgeProviderEntity_IBridgeProviderFeatures` interface emitted; entity named
+      `MJ: AI Bridge Providers` as predicted.
+- [x] After CodeGen: generated entity types verified; zero drift; `core-entities` builds.
+- [x] `@memberjunction/ai-bridge-base`: `AIBridgeEngineBase` (BaseEngine cache), provider/identity
+      resolution. **48 tests.**
+- [x] `BaseRealtimeBridge` abstract (media-track contract + capability-gated `NotSupported` methods),
+      `BridgeCapabilityNotSupportedError`, union capability types.
+- [x] `TurnTakingPolicy` (passive/active/hybrid) — pure, platform-agnostic, injected matcher/scorer/clock.
+- [x] `@memberjunction/ai-bridge-server`: `AIBridgeEngine` (composition over base like AIEngine —
+      host registry, janitor `ReconcileOrphans`, lifecycle), ClassFactory driver resolution. **24 tests.**
+- [x] Server-side `MJ…EntityServer` subclasses + `ValidateAsync` invariants (SupportedFeatures JSON
+      shape, identity uniqueness case-insensitive, session cross-field coherence, one agent
+      participant/bridge). **MJCoreEntitiesServer 270 tests (+37).**
 - [ ] Seed metadata (mj-sync): provider rows for every platform with capability flags; the
       `Realtime: Advanced Bridge Controls` authorization.
-- [ ] **Quality bar:** JSDoc · package READMEs · create `/guides/REALTIME_BRIDGES_GUIDE.md` · new
-      unit tests · repo tests green · build green · changeset · commit/push.
+- [ ] **Quality bar finish:** package READMEs (base done) · create `/guides/REALTIME_BRIDGES_GUIDE.md`
+      · repo tests green · changeset · update PR. (JSDoc + new unit tests ✓; per-package builds ✓.)
 
-### Phase 0 — Transport seam  (do alongside/after Phase 1 base; it's the foundation)
-- [ ] `BaseRealtimeBridge` media-track plumbing wired to `IRealtimeSession.SendInput`/`OnOutput`.
-- [ ] `AIBridgeEngine` ↔ `RealtimeSessionRunner` media wiring (server-bridged completion).
-- [ ] `LoopbackBridge` test driver (in-memory media round-trip, no platform).
-- [ ] Resampling/format normalization to the model's rate; backpressure/reconnect scaffold.
-- [ ] **Quality bar** (as above) + extend the guide with the transport-seam section.
+### Phase 0 — Transport seam  ✅ DONE
+- [x] `BaseRealtimeBridge` media-track plumbing wired to `IRealtimeSession.SendInput`/`OnOutput`
+      (the seam: `bridge.OnMedia → session.SendInput`, `session.OnOutput → bridge.SendMedia`).
+- [x] `AIBridgeEngine` ↔ injected `IRealtimeSession` media wiring (server-bridged completion;
+      session injected so the engine never constructs the model — fully testable).
+- [x] `LoopbackBridge` test driver (in-memory media round-trip, no platform) — proves the seam.
+- [ ] Resampling/format normalization to the model's rate — deferred to first real driver (the seam
+      translates `BridgeMediaFrame`↔`ArrayBuffer`; per-platform sample-rate conversion lands with Zoom).
+- [ ] Guide transport-seam section (with the Phase-1 guide).
 
 ### Phase 2 — Server-side channel plane
 - [ ] Dynamic `GetToolDefinitions()` contribution → `RealtimeSessionRunner.ExtraTools`.
