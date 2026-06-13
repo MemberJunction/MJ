@@ -721,6 +721,7 @@ calling* is the watch-list global add as its API matures.
 | **7 — Multi-party** | 1+ agents in one shared room (emergent — §4c); multi-agent turn-taking discipline; the LiveKit MJ-native-room bridge. Kills the standalone agent-panel/multi-human tracks. |
 | **8 — Remote Browser channel** | `RemoteBrowserChannel` + `ContainerRunner` (any Playwright Docker image), screen-track out, control arbiter (§4d). |
 | **9 — Native marketplace inclusion** | Per-platform apps for in-UI "add the agent." App-review gated; last. |
+| **UI — Realtime management dashboard + forms** | A new **Realtime** section in the AI dashboard (`@memberjunction/ng-dashboards`) managing the whole realtime + bridge surface; custom Extended forms for the major new entities; a Realtime panel on the AIAgent form. Starts right after CodeGen; the dashboard fills in as backend phases land. |
 
 ```mermaid
 graph LR
@@ -743,6 +744,50 @@ graph LR
 
 > **The migration covers Phase 1 only.** Everything from Phase 0 onward is code I build solo once
 > CodeGen has run — see the Work Breakdown Structure (§13) for the resumable task list.
+
+---
+
+## 11b. UI — Realtime management dashboard & entity forms
+
+Two deliverables, both built on MJ's generated-forms + dashboard frameworks (per
+[DASHBOARD_BEST_PRACTICES](../../guides/DASHBOARD_BEST_PRACTICES.md) and
+[FORMS_ARCHITECTURE_GUIDE](../../guides/FORMS_ARCHITECTURE_GUIDE.md)) — and it manages the **whole**
+realtime surface, not just bridges.
+
+**1. The "Realtime" section in the AI dashboard (`@memberjunction/ng-dashboards`).** A new top-level
+section (page chrome: `<mj-page-layout>` + header/body trio; data via `BaseEngine` subclasses, never
+Angular data services; prefs via `UserInfoEngine`; `--mj-*` tokens; `NotifyLoadComplete`):
+
+- **Live Sessions** — active `AIAgentSession`s + their `AIAgentSessionBridge`: who is on which
+  call/meeting right now, status, turn mode, participants; one click into the **observer console**
+  (the read-only monitor from §1) to watch a live bridged session.
+- **Bridge Providers** — the platform registry: the `SupportedFeatures` capability matrix, status
+  toggle, credentials/config (referenced, never shown).
+- **Agent Identities** — which agents are reachable where (calendar mailboxes, phone numbers).
+- **Channels** — the `AIAgentChannel` registry incl. bridge-contributed; which providers contribute
+  which (`AIBridgeProviderChannel`).
+- **Co-Agents** — the `AIAgentCoAgent` pairing registry (already shipped; surfaced here too).
+- **Session History** — past sessions, transcripts, recordings, one-click review launch.
+- **Metrics** — sessions over time, by platform / agent, duration, and (later) cost — reusing the AI
+  dashboard's existing charting patterns.
+
+**2. Entity forms.** Generated base forms come free from CodeGen for all five new entities; we add
+**custom `*Extended` forms** for the major ones with real UX:
+
+- `AIBridgeProviderFormExtended` — a **capability editor** (feature toggles backed by the
+  `SupportedFeatures` JSON through the typed `SupportedFeaturesObject` accessor), status, and the
+  channels the provider contributes.
+- `AIAgentSessionBridgeFormExtended` — the live/historical bridge: participants, lifecycle timeline,
+  links to the session + observer console.
+- `AIBridgeAgentIdentityFormExtended` — identity provisioning UX (tenant mailbox / phone number).
+- The provider-channel and session-bridge-participant forms can stay generated.
+
+**3. AIAgent form integration.** Add a **Realtime panel** to the AIAgent form via the
+`BaseFormPanel` slot system (no regeneration) showing the agent's whole realtime presence in one
+place: co-agent pairings, `TypeConfiguration`, bridge agent identities, default co-agent.
+
+This phase **starts right after CodeGen** (forms + the AIAgent panel are immediately useful) and the
+dashboard's live/metrics surfaces fill in as the engine and bridges land.
 
 ---
 
@@ -928,6 +973,18 @@ Every phase is "done" only when **all** of the following hold — this is baked 
 ### Phase 9 — Native marketplace inclusion
 - [ ] Per-platform "add the agent" apps (Zoom/Teams marketplace) — design + first submission.
 - [ ] **Quality bar** + guide.
+
+### Phase UI — Realtime management dashboard + forms (starts right after CodeGen)
+- [ ] Custom `*Extended` forms: `AIBridgeProviderFormExtended` (SupportedFeatures capability editor
+      via the typed accessor), `AIAgentSessionBridgeFormExtended` (participants + lifecycle +
+      observer link), `AIBridgeAgentIdentityFormExtended`. Register in custom-forms module.
+- [ ] AIAgent form **Realtime panel** (BaseFormPanel slot — no regeneration): co-agent pairings,
+      TypeConfiguration, bridge identities, default co-agent.
+- [ ] New **Realtime** section in the AI dashboard (`@memberjunction/ng-dashboards`): Live Sessions
+      (+ observer console), Bridge Providers, Agent Identities, Channels, Co-Agents, Session History,
+      Metrics. BaseEngine for data; page-chrome trio; UserInfoEngine prefs; design tokens;
+      `NotifyLoadComplete`.
+- [ ] **Quality bar** + guide section on the realtime dashboard/forms.
 
 ### Cross-cutting (do once, early)
 - [x] Architecture plan doc (this file) with mermaid + WBS.
