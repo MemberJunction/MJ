@@ -1079,29 +1079,42 @@ Every phase is "done" only when **all** of the following hold — this is baked 
       `AIRemoteBrowserProvider` (registry; `SupportedFeatures` JSONType, `DefaultControlMode`).
 - [x] **Metadata** — `IRemoteBrowserProviderFeatures` JSONType interface + binding; mj-sync seed of
       the five backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
-- [ ] **Base package** `@memberjunction/remote-browser` (universal, client+server): `BaseRemoteBrowserProvider`
-      driver family, `RemoteBrowserEngineBase` (BaseEngine cache of the registry, conditional dataset so
-      it boots green pre-CodeGen), `IRemoteBrowserProviderFeatures`, control-mode + control-strategy types,
-      `RemoteBrowserCapabilityNotSupportedError`. Reuses `@memberjunction/computer-use` (CDP substrate).
-- [ ] **Server package** `@memberjunction/remote-browser-server` (server-only): `RemoteBrowserEngine`
-      (composition over base; session containment + lifecycle/janitor), `RemoteBrowserChannel`
-      (`BaseRealtimeChannelServer` — tool vocabulary, perception feed, control arbiter + modes),
-      MJ-computer-use control strategy + provider-native-AI (Stagehand) strategy seam, viewport→ScreenOut
-      encode, the "Remote Browser" `AIAgentChannel` registry seed.
-- [ ] **5 backend drivers** `@memberjunction/remote-browser-{selfhost,browserbase,steel,browserless,hyperbrowser}`
-      — each a `BaseRemoteBrowserProvider` subclass with an injectable SDK/CDP seam + Fake + tests.
-- [ ] **Quality bar** + guide remote-browser section.
+- [x] **Base package** `@memberjunction/remote-browser-base` (universal, client+server): `BaseRemoteBrowserProvider`
+      driver family, `RemoteBrowserEngineBase` (BaseEngine cache of the registry, reads typed `SupportedFeaturesObject`),
+      `IRemoteBrowserProviderFeatures` (aliases the generated JSONType), control-mode + control-strategy types,
+      `RemoteBrowserCapabilityNotSupportedError`. **35 tests.** (commit `6a61ed2ece`)
+- [x] **computer-use enrichment (the generic value multiplier)** — rather than per-backend workarounds,
+      `@memberjunction/computer-use` gained, strictly additively: CSS-selector-aware Click/Type/Scroll/Wait,
+      CDP `Screencast`, `MouseMove`, `GetAccessibilitySnapshot`/`QueryElement`/`GetVisibleText`/`GetTitle`/
+      `WaitForLoadState`. 167→201 tests. (commits `1fe526b11c`, `a2f3ec246e`)
+- [x] **Shared CDP kit** `@memberjunction/remote-browser-cdp` — `CdpRemoteBrowserSession` + one lossless
+      `mapRemoteBrowserAction`/`mapHumanInput` + `BaseCdpRemoteBrowserProvider` + `ICdpSessionBackend`; the DRY
+      heart so backends stay thin. **43 tests.** (commit `4eab96e39d`)
+- [x] **Server package** `@memberjunction/remote-browser-server`: `RemoteBrowserEngine` (composition over
+      base; driver resolution, control arbiter honoring modes, `PipeScreencastToTrack` ScreenOut seam, janitor),
+      `RemoteBrowserChannel` (`BaseRealtimeChannelServer`, `browser_*` tools + `browser_DoTask` when NativeAI,
+      perception). Server-only channel — engine-constructed per session, no registry row (like Meeting Controls).
+      **50 tests.** (commit `3eb93f35cf`)
+- [x] **5 backend drivers** `@memberjunction/remote-browser-{selfhost,browserbase,steel,browserless,hyperbrowser}`
+      — each `extends BaseCdpRemoteBrowserProvider`, implements only `AcquireSession` + an `ICdpSessionBackend`,
+      injectable SDK/runner seam + Fake. **46 tests.** Per-deployment `LoadX*` loading. (commit `7e4063147e`)
+- [x] **Quality bar** + [REMOTE_BROWSER_GUIDE.md](./REMOTE_BROWSER_GUIDE.md) + CLAUDE.md index. Full-repo
+      build exit 0; test gate green (DB-suite exceptions only).
 
-### Phase RT — New realtime model providers (Inworld + xAI Grok Voice)
-- [ ] **xAI Grok Voice** realtime driver in `@memberjunction/ai-xai` — `@RegisterClass(BaseRealtimeModel, 'GrokRealtime')`;
-      OpenAI-Realtime-compatible (`wss://api.x.ai/v1/realtime`, PCM16 24 kHz) so it reuses the OpenAI
-      realtime SDK pointed at the xAI base URL; injectable connection seam + Fake + tests; honors all 8
-      driver obligations. AIModel/Vendor/ModelVendor metadata seed (DriverClass `GrokRealtime`).
-- [ ] **Inworld** realtime driver in new `@memberjunction/ai-inworld` — `@RegisterClass(BaseRealtimeModel, 'InworldRealtime')`;
-      custom WebSocket protocol (`session.update`, semantic VAD, fluent tool calling) implemented to spec
-      behind an injectable seam + Fake + tests (wire-format binding points marked for live verification).
-      Inworld Vendor + AIModel/ModelVendor metadata seed (DriverClass `InworldRealtime`).
-- [ ] **Quality bar** + README/guide note.
+### Phase RT — New realtime model providers (Inworld + xAI Grok Voice)  ✅ DONE
+- [x] **xAI Grok Voice** realtime driver in `@memberjunction/ai-xai` (`@RegisterClass(BaseRealtimeModel, 'GrokRealtime')`,
+      class `xAIRealtime`) — OpenAI-Realtime-compatible (`wss://api.x.ai/v1/realtime`, PCM16 24 kHz), reuses the
+      OpenAI realtime SDK at the xAI base URL; injectable connection seam + Fake; honors all 8 driver obligations.
+      **38 tests.** AIModel/Vendor/ModelVendor seed (DriverClass `GrokRealtime`). (commit `9c277cc2aa`)
+- [x] **Inworld** realtime driver in `@memberjunction/ai-inworld` (`@RegisterClass(BaseRealtimeModel, 'InworldRealtime')`)
+      — custom WebSocket protocol (`session.update`, semantic VAD, fluent tool calling) behind an injectable seam +
+      FakeSocket (wire-format binding points marked for live verification). **61 tests.** New Inworld Vendor +
+      AIModel/ModelVendor seed. (commit `8728a26e19`)
+- [x] **Runtime registration** — both are universal `BaseRealtimeModel` drivers, wired into the `ServerBootstrap`
+      pre-built manifest (ai-inworld added as a dep; manifest regenerated → `xAIRealtime` + `InworldRealtime`
+      register). Bridge providers + Remote Browser channel/backends load per-deployment via `LoadX*` (heavy
+      SDK/playwright deps not forced on every server). (commit `a7bc27db00`)
+- [x] **Quality bar** + README/guide note.
 
 ### Phase 9 — Native marketplace inclusion
 - [x] **Design doc** — [native-marketplace-apps.md](./native-marketplace-apps.md): the app-as-shim
