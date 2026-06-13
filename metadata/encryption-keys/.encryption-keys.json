@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Base Encryption Key",
-      "Description": "Default encryption key for general-purpose field encryption. Set MJ_BASE_ENCRYPTION_KEY environment variable with a base64-encoded 32-byte key (openssl rand -base64 32).",
+      "Description": "da Default encryption key for general-purpose field encryption. Set MJ_BASE_ENCRYPTION_KEY environment variable with a base64-encoded 32-byte key (openssl rand -base64 32).",
       "EncryptionKeySourceID": "@lookup:MJ: Encryption Key Sources.Name=Environment Variable",
       "EncryptionAlgorithmID": "@lookup:MJ: Encryption Algorithms.Name=AES-256-GCM",
       "KeyLookupValue": "MJ_BASE_ENCRYPTION_KEY",
@@ -15,8 +15,8 @@
       "ID": "85B814C8-A01B-4AE3-A252-DC9D54C914C7"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:45.049Z",
-      "checksum": "109b218d81238c330972e760b99d6b09e4afadb3a8df5f117cc87624b62179e2"
+      "lastModified": "2026-06-13T18:22:23.188Z",
+      "checksum": "73c5fa1cca05a95e078cc95343f4061dcdd8c23a7875a214b6af1d3fc1935d0c"
     }
   }
 ]
