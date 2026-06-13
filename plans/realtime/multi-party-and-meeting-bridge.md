@@ -1,6 +1,19 @@
 # Multi-Party Realtime Sessions & Meeting Bridging — Proposal
 
-**Status:** Proposal for discussion (2026-06-12). No code. Studied against the shipped realtime stack on `an-dev-28` (PR #2828): client-direct topology, co-agent pairing junction, `AIAgentSession` lifecycle, interactive channels, transcript relay, progress narration.
+> ## ⚠️ SUPERSEDED (2026-06-13) — see [realtime-bridges-architecture.md](realtime-bridges-architecture.md)
+>
+> This early proposal split the work into three tracks (A: agent panels, B: multiple humans via an
+> SFU, C: meeting bridge). That split is **retired.** The unified architecture collapses all of it
+> into **one realtime engine + pluggable media bridges**: multi-agent and multi-human are an
+> **emergent property** of putting 1+ agents into a shared room (Zoom/Teams/… or an MJ-native
+> LiveKit room — all just "bridges"). There is no standalone "agent panel" or "multiple humans"
+> build; the conferencing platform *is* the shared media plane. **Read
+> [realtime-bridges-architecture.md](realtime-bridges-architecture.md) instead** — this file is kept
+> only for historical context.
+
+---
+
+**Status:** Proposal for discussion (2026-06-12) — **SUPERSEDED, see above.** No code. Studied against the shipped realtime stack on `an-dev-28` (PR #2828): client-direct topology, co-agent pairing junction, `AIAgentSession` lifecycle, interactive channels, transcript relay, progress narration.
 
 Three capabilities, presented in recommended build order:
 

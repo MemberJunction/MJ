@@ -1,0 +1,429 @@
+/* ============================================================================
+   Realtime Bridges — Meeting & Telephony media transports for AI agents
+   v5.42.x
+
+   Companion plan: /plans/realtime/realtime-bridges-architecture.md
+
+   ONE realtime engine; a *bridge* is a pluggable MEDIA transport (audio, video,
+   screen — full duplex) + channel contributor that connects that engine to an
+   external endpoint: a Zoom/Teams/Slack/Meet/Webex/Discord MEETING, or a
+   Twilio/Vonage/RingCentral/VOIP CALL. Nothing here is audio-specific — media
+   tracks are typed and directional so video lights up with zero re-architecture.
+
+   This migration is Phase 1 of the program: the schema only. Five new tables,
+   no destructive changes, no modification of the shipped realtime tables:
+
+     RealtimeBridgeProvider          — the platform registry + capability flags
+                                       (what each platform supports; the engine
+                                       gates optional calls on these flags).
+     RealtimeBridgeAgentIdentity     — an agent's addressable identity per
+                                       platform (calendar mailbox / phone number)
+                                       — how invite-based joins and inbound
+                                       routing find the agent.
+     RealtimeBridgeProviderChannel   — junction: which AIAgentChannel rows a
+                                       provider contributes by default. Bridge
+                                       channels live in the SAME registry as
+                                       MJ-native channels ("3rd-party channels
+                                       understood the same way as MJ channels").
+     AIAgentSessionBridge            — binds an existing AIAgentSession to a
+                                       bridge connection (the session IS the
+                                       realtime session; the bridge is an
+                                       ATTACHMENT, exactly like
+                                       AIAgentSessionChannel attaches a channel).
+     AIAgentSessionBridgeParticipant — who is on the meeting/call (diarization
+                                       mapping + multi-party awareness).
+
+   Telephony reuses these SAME tables (BridgeType='Telephony',
+   IdentityType='PhoneNumber', Direction Inbound/Outbound) — no schema fork.
+
+   CodeGen convention (per CLAUDE.md migrations guide):
+     * NO __mj_CreatedAt / __mj_UpdatedAt columns — CodeGen adds + triggers them.
+     * NO foreign-key indexes — CodeGen creates IDX_AUTO_MJ_FKEY_* automatically.
+     * sp_addextendedproperty on business columns so CodeGen surfaces descriptions.
+     * Status / enum columns use CHECK constraints so CodeGen emits string-union
+       types. Server code that sets/reads the new columns ships AFTER CodeGen
+       generates the typed entity properties, per the no-weak-typing rule.
+     * Reference data (provider rows + capability flags, the authorization, any
+       default provider-channel rows) is seeded via metadata/mj-sync, NOT here.
+
+   Entity metadata, views, and spCreate/Update/Delete are produced by CodeGen
+   after this migration runs.
+   ============================================================================ */
+
+
+-- ============================================================================
+-- 1. RealtimeBridgeProvider  ("MJ: Realtime Bridge Providers")
+--    The platform registry. Capability flags are TRANSPORT/MEDIA concerns only
+--    (join methods, directional media tracks, diarization, DTMF/transfer,
+--    recording). Interactive surfaces (hand-raise, chat, whiteboard) are NOT
+--    flags here — they are CHANNELS the bridge contributes (see table 3).
+-- ============================================================================
+CREATE TABLE ${flyway:defaultSchema}.RealtimeBridgeProvider (
+    ID                          UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    Name                        NVARCHAR(100)    NOT NULL,
+    Description                 NVARCHAR(1000)   NULL,
+    BridgeType                  NVARCHAR(20)     NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_BridgeType DEFAULT ('Meeting'),
+    DriverClass                 NVARCHAR(250)    NOT NULL,
+    Status                      NVARCHAR(20)     NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_Status DEFAULT ('Active'),
+    SupportsOnDemandJoin        BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_OnDemandJoin DEFAULT (0),
+    SupportsScheduledJoin       BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_ScheduledJoin DEFAULT (0),
+    SupportsInviteJoin          BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_InviteJoin DEFAULT (0),
+    SupportsNativeInvite        BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_NativeInvite DEFAULT (0),
+    SupportsInboundRouting      BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_InboundRouting DEFAULT (0),
+    SupportsOutboundDial        BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_OutboundDial DEFAULT (0),
+    SupportsAudioIn             BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_AudioIn DEFAULT (1),
+    SupportsAudioOut            BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_AudioOut DEFAULT (1),
+    SupportsVideoIn             BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_VideoIn DEFAULT (0),
+    SupportsVideoOut            BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_VideoOut DEFAULT (0),
+    SupportsScreenIn            BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_ScreenIn DEFAULT (0),
+    SupportsScreenOut           BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_ScreenOut DEFAULT (0),
+    SupportsSpeakerDiarization  BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_Diarization DEFAULT (0),
+    SupportsDTMF                BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_DTMF DEFAULT (0),
+    SupportsCallTransfer        BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_CallTransfer DEFAULT (0),
+    SupportsRecording           BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProvider_Recording DEFAULT (0),
+    ConfigSchema                NVARCHAR(MAX)    NULL,
+    Configuration               NVARCHAR(MAX)    NULL,
+    CONSTRAINT PK_RealtimeBridgeProvider PRIMARY KEY (ID),
+    CONSTRAINT UQ_RealtimeBridgeProvider_Name UNIQUE (Name),
+    CONSTRAINT CK_RealtimeBridgeProvider_BridgeType
+        CHECK (BridgeType IN ('Meeting', 'Telephony')),
+    CONSTRAINT CK_RealtimeBridgeProvider_Status
+        CHECK (Status IN ('Active', 'Disabled'))
+);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Unique platform name (e.g. Zoom, Microsoft Teams, Google Meet, Webex, Slack, Discord, RingCentral, Twilio, Vonage, LiveKit).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'Name';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional human-readable description of the platform / driver.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'Description';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The family of endpoint this bridge connects to: Meeting (a conferencing room) or Telephony (a phone call). LiveKit (MJ-native multi-party room) is a Meeting.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'BridgeType';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseRealtimeBridge, DriverClass). MUST match the @RegisterClass key on the concrete bridge driver.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'DriverClass';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Whether this provider is available for use. Inactive providers cannot start new bridge sessions.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'Status';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Capability flag: the agent can join a meeting on demand from a supplied join URL/ID. The engine checks this before invoking the driver join; the base driver throws BridgeCapabilityNotSupportedError when a flag is set but unimplemented.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsOnDemandJoin';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Capability flag: the agent can be scheduled to join a known meeting at a future start time (via MJ Scheduled Actions).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsScheduledJoin';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Capability flag: the agent can be invited like a person via its calendar/email identity (a watcher matches the invite to a RealtimeBridgeAgentIdentity and joins at start). The headline "invite the agent like a colleague" method.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsInviteJoin';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Capability flag: a host can add the agent from inside the platform''s own UI (requires a published marketplace app).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsNativeInvite';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Capability flag: inbound connections (a call to the agent''s number, or an invite to its address) route TO the agent. Drives inbound telephony and inbound meeting routing.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsInboundRouting';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Capability flag (telephony): the agent can place outbound calls.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsOutboundDial';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Media-track capability: the bridge can deliver inbound audio (the agent hears the meeting/call). Routed to IRealtimeSession.SendInput.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsAudioIn';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Media-track capability: the bridge can emit outbound audio (the agent speaks into the meeting/call). Fed from IRealtimeSession.OnOutput.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsAudioOut';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Media-track capability: the bridge can deliver inbound video (the agent sees participants'' video). Forward-looking for full-duplex video models.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsVideoIn';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Media-track capability: the bridge can emit outbound video (the agent shows video). Forward-looking for full-duplex video models.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsVideoOut';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Media-track capability: the bridge can deliver inbound screen-share (the agent sees a shared screen).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsScreenIn';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Media-track capability: the bridge can emit outbound screen-share (e.g. the Remote Browser channel screen-sharing a live demo into the meeting).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsScreenOut';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Capability flag: inbound audio carries per-speaker labels, enabling diarized transcripts and addressed-speaker turn-taking.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsSpeakerDiarization';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Capability flag (telephony): the bridge can send/receive DTMF tones.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsDTMF';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Capability flag (telephony): the bridge can transfer a call to another party.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsCallTransfer';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Capability flag: the bridge can request platform recording (subject to per-jurisdiction consent handling).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'SupportsRecording';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional JSON Schema validating the provider Configuration and per-session bridge Config payloads.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'ConfigSchema';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Provider-level configuration JSON (e.g. credential references resolved via the MJ credential system, region, bot display name). Never store secrets inline.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProvider', @level2type = N'COLUMN', @level2name = N'Configuration';
+
+
+-- ============================================================================
+-- 2. RealtimeBridgeAgentIdentity  ("MJ: Realtime Bridge Agent Identities")
+--    An agent's addressable identity on a platform — the calendar mailbox that
+--    organizers invite, or the phone number that routes inbound calls. The seam
+--    that generalizes to agent "presence" (email/calendar/telephony) over time.
+-- ============================================================================
+CREATE TABLE ${flyway:defaultSchema}.RealtimeBridgeAgentIdentity (
+    ID             UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    AgentID        UNIQUEIDENTIFIER NOT NULL,
+    ProviderID     UNIQUEIDENTIFIER NOT NULL,
+    IdentityType   NVARCHAR(20)     NOT NULL,
+    IdentityValue  NVARCHAR(500)    NOT NULL,
+    DisplayName    NVARCHAR(255)    NULL,
+    IsActive       BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeAgentIdentity_IsActive DEFAULT (1),
+    Configuration  NVARCHAR(MAX)    NULL,
+    CONSTRAINT PK_RealtimeBridgeAgentIdentity PRIMARY KEY (ID),
+    CONSTRAINT FK_RealtimeBridgeAgentIdentity_Agent FOREIGN KEY (AgentID)
+        REFERENCES ${flyway:defaultSchema}.AIAgent (ID),
+    CONSTRAINT FK_RealtimeBridgeAgentIdentity_Provider FOREIGN KEY (ProviderID)
+        REFERENCES ${flyway:defaultSchema}.RealtimeBridgeProvider (ID),
+    CONSTRAINT UQ_RealtimeBridgeAgentIdentity UNIQUE (ProviderID, IdentityValue),
+    CONSTRAINT CK_RealtimeBridgeAgentIdentity_Type
+        CHECK (IdentityType IN ('Email', 'PhoneNumber', 'AccountID'))
+);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The kind of address: Email (a calendar mailbox organizers invite), PhoneNumber (an inbound DID), or AccountID (a platform-native bot/user account).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeAgentIdentity', @level2type = N'COLUMN', @level2name = N'IdentityType';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The address value itself (e.g. sage@customer.com, +15551234567, or a platform account id). Unique per provider.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeAgentIdentity', @level2type = N'COLUMN', @level2name = N'IdentityValue';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Friendly display name shown to other participants (e.g. "Sage (AI)").',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeAgentIdentity', @level2type = N'COLUMN', @level2name = N'DisplayName';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Whether this identity is active. Inactive identities are ignored by invite watchers and inbound routing.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeAgentIdentity', @level2type = N'COLUMN', @level2name = N'IsActive';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Identity-level configuration JSON (e.g. tenant/mailbox references, calendar-watch scopes). Credentials resolve via the MJ credential system; never inline.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeAgentIdentity', @level2type = N'COLUMN', @level2name = N'Configuration';
+
+
+-- ============================================================================
+-- 3. RealtimeBridgeProviderChannel  ("MJ: Realtime Bridge Provider Channels")
+--    Junction declaring which AIAgentChannel rows a provider contributes by
+--    default (e.g. Zoom -> Meeting Controls + Native Whiteboard). Bridge
+--    channels live in the SAME AIAgentChannel registry as MJ-native channels,
+--    so 3rd-party surfaces are understood exactly like MJ channels. Fully
+--    runtime-dynamic channels (no registry row) are handled separately in a
+--    later phase and are not modeled here.
+-- ============================================================================
+CREATE TABLE ${flyway:defaultSchema}.RealtimeBridgeProviderChannel (
+    ID             UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    ProviderID     UNIQUEIDENTIFIER NOT NULL,
+    ChannelID      UNIQUEIDENTIFIER NOT NULL,
+    IsDefault      BIT              NOT NULL CONSTRAINT DF_RealtimeBridgeProviderChannel_IsDefault DEFAULT (1),
+    Sequence       INT              NOT NULL CONSTRAINT DF_RealtimeBridgeProviderChannel_Sequence DEFAULT (0),
+    Configuration  NVARCHAR(MAX)    NULL,
+    CONSTRAINT PK_RealtimeBridgeProviderChannel PRIMARY KEY (ID),
+    CONSTRAINT FK_RealtimeBridgeProviderChannel_Provider FOREIGN KEY (ProviderID)
+        REFERENCES ${flyway:defaultSchema}.RealtimeBridgeProvider (ID),
+    CONSTRAINT FK_RealtimeBridgeProviderChannel_Channel FOREIGN KEY (ChannelID)
+        REFERENCES ${flyway:defaultSchema}.AIAgentChannel (ID),
+    CONSTRAINT UQ_RealtimeBridgeProviderChannel UNIQUE (ProviderID, ChannelID)
+);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'When 1, this channel is auto-attached to a new bridge session on this provider; when 0, it is available but attached on demand.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProviderChannel', @level2type = N'COLUMN', @level2name = N'IsDefault';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Display/attachment order of this channel for the provider (ascending).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProviderChannel', @level2type = N'COLUMN', @level2name = N'Sequence';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional per-provider configuration JSON for this channel contribution (e.g. mapping platform tool names to the channel''s tool vocabulary).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RealtimeBridgeProviderChannel', @level2type = N'COLUMN', @level2name = N'Configuration';
+
+
+-- ============================================================================
+-- 4. AIAgentSessionBridge  ("MJ: AI Agent Session Bridges")
+--    Binds an existing AIAgentSession to a bridge connection. The session IS the
+--    realtime session (co-agent, tools, narration, transcript, persistence all
+--    reused); this row is the transport ATTACHMENT, parallel to
+--    AIAgentSessionChannel. HostInstanceID + CloseReason mirror AIAgentSession
+--    for node affinity + janitor reconciliation.
+-- ============================================================================
+CREATE TABLE ${flyway:defaultSchema}.AIAgentSessionBridge (
+    ID                    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    AgentSessionID        UNIQUEIDENTIFIER NOT NULL,
+    ProviderID            UNIQUEIDENTIFIER NOT NULL,
+    Direction             NVARCHAR(20)     NOT NULL CONSTRAINT DF_AIAgentSessionBridge_Direction DEFAULT ('Outbound'),
+    JoinMethod            NVARCHAR(30)     NOT NULL CONSTRAINT DF_AIAgentSessionBridge_JoinMethod DEFAULT ('OnDemand'),
+    TurnMode              NVARCHAR(20)     NOT NULL CONSTRAINT DF_AIAgentSessionBridge_TurnMode DEFAULT ('Passive'),
+    ExternalConnectionID  NVARCHAR(500)    NULL,
+    Address               NVARCHAR(2000)   NULL,
+    BotParticipantID      NVARCHAR(500)    NULL,
+    Status                NVARCHAR(20)     NOT NULL CONSTRAINT DF_AIAgentSessionBridge_Status DEFAULT ('Pending'),
+    ScheduledStartTime    DATETIMEOFFSET   NULL,
+    ConnectedAt           DATETIMEOFFSET   NULL,
+    DisconnectedAt        DATETIMEOFFSET   NULL,
+    CloseReason           NVARCHAR(20)     NULL,
+    HostInstanceID        NVARCHAR(200)    NULL,
+    Config                NVARCHAR(MAX)    NULL,
+    CONSTRAINT PK_AIAgentSessionBridge PRIMARY KEY (ID),
+    CONSTRAINT FK_AIAgentSessionBridge_Session FOREIGN KEY (AgentSessionID)
+        REFERENCES ${flyway:defaultSchema}.AIAgentSession (ID),
+    CONSTRAINT FK_AIAgentSessionBridge_Provider FOREIGN KEY (ProviderID)
+        REFERENCES ${flyway:defaultSchema}.RealtimeBridgeProvider (ID),
+    CONSTRAINT CK_AIAgentSessionBridge_Direction
+        CHECK (Direction IN ('Inbound', 'Outbound')),
+    CONSTRAINT CK_AIAgentSessionBridge_JoinMethod
+        CHECK (JoinMethod IN ('OnDemand', 'Scheduled', 'Invite', 'NativeInvite', 'InboundRoute', 'InMeetingCommand')),
+    CONSTRAINT CK_AIAgentSessionBridge_TurnMode
+        CHECK (TurnMode IN ('Passive', 'Active', 'Hybrid')),
+    CONSTRAINT CK_AIAgentSessionBridge_Status
+        CHECK (Status IN ('Pending', 'Scheduled', 'Connecting', 'Connected', 'Disconnecting', 'Disconnected', 'Failed')),
+    CONSTRAINT CK_AIAgentSessionBridge_CloseReason
+        CHECK (CloseReason IN ('Explicit', 'HostEnded', 'Janitor', 'Error', 'Shutdown'))
+);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Direction of the connection: Outbound (the agent goes to a meeting / places a call) or Inbound (a meeting/call routes to the agent).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'Direction';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'How the agent connected: OnDemand, Scheduled, Invite (calendar), NativeInvite (platform UI), InboundRoute (call/invite to the agent''s identity), or InMeetingCommand (chat command).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'JoinMethod';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Turn-taking mode for this bridged session: Passive (speak only when addressed — default), Active (proactive in silence windows), or Hybrid (passive voice + post-to-chat hand-raise).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'TurnMode';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The platform''s identifier for the connection (meeting id / call SID), set once connecting.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'ExternalConnectionID';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The endpoint address: a meeting join URL (meetings) or a phone number (telephony).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'Address';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The agent bot''s own participant id within the meeting/call once admitted.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'BotParticipantID';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Bridge connection lifecycle: Pending, Scheduled, Connecting, Connected, Disconnecting, Disconnected, or Failed.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'Status';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'For scheduled/invite joins: when the bridge should connect. NULL for immediate (on-demand/inbound).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'ScheduledStartTime';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'When the bridge became Connected (media flowing). NULL until connected.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'ConnectedAt';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'When the bridge disconnected. NULL while still connected.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'DisconnectedAt';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Why the bridge closed: Explicit, HostEnded (the meeting/call ended), Janitor (orphan sweep), Error, or Shutdown. NULL while active.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'CloseReason';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Identifier of the server node currently hosting this bridge''s bot connection (hostname:pid:bootId). Used for affinity and janitor orphan reconciliation, mirroring AIAgentSession.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'HostInstanceID';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Per-session bridge configuration/state JSON (validated against the provider ConfigSchema).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridge', @level2type = N'COLUMN', @level2name = N'Config';
+
+
+-- ============================================================================
+-- 5. AIAgentSessionBridgeParticipant  ("MJ: AI Agent Session Bridge Participants")
+--    Who is on the meeting/call — diarization mapping + multi-party awareness
+--    (the signal intel a facilitator agent reads). One row per participant,
+--    including the agent bot itself (IsAgent = 1).
+-- ============================================================================
+CREATE TABLE ${flyway:defaultSchema}.AIAgentSessionBridgeParticipant (
+    ID                     UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    SessionBridgeID        UNIQUEIDENTIFIER NOT NULL,
+    ExternalParticipantID  NVARCHAR(500)    NULL,
+    DisplayName            NVARCHAR(500)    NULL,
+    Role                   NVARCHAR(20)     NOT NULL CONSTRAINT DF_AIAgentSessionBridgeParticipant_Role DEFAULT ('Participant'),
+    UserID                 UNIQUEIDENTIFIER NULL,
+    IsAgent                BIT              NOT NULL CONSTRAINT DF_AIAgentSessionBridgeParticipant_IsAgent DEFAULT (0),
+    JoinedAt               DATETIMEOFFSET   NULL,
+    LeftAt                 DATETIMEOFFSET   NULL,
+    CONSTRAINT PK_AIAgentSessionBridgeParticipant PRIMARY KEY (ID),
+    CONSTRAINT FK_AIAgentSessionBridgeParticipant_Bridge FOREIGN KEY (SessionBridgeID)
+        REFERENCES ${flyway:defaultSchema}.AIAgentSessionBridge (ID),
+    CONSTRAINT FK_AIAgentSessionBridgeParticipant_User FOREIGN KEY (UserID)
+        REFERENCES ${flyway:defaultSchema}.[User] (ID),
+    CONSTRAINT CK_AIAgentSessionBridgeParticipant_Role
+        CHECK (Role IN ('Host', 'CoHost', 'Participant', 'Agent'))
+);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The platform''s participant identifier (used to map diarized audio to a person).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridgeParticipant', @level2type = N'COLUMN', @level2name = N'ExternalParticipantID';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The participant''s display name as shown on the platform.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridgeParticipant', @level2type = N'COLUMN', @level2name = N'DisplayName';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The participant''s role in the meeting/call: Host, CoHost, Participant, or Agent (the AI bot).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridgeParticipant', @level2type = N'COLUMN', @level2name = N'Role';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The matched MJ user, when the participant can be identified (NULL for external/anonymous participants).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridgeParticipant', @level2type = N'COLUMN', @level2name = N'UserID';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'True when this participant is the bridged AI agent bot itself.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridgeParticipant', @level2type = N'COLUMN', @level2name = N'IsAgent';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'When the participant joined the meeting/call.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridgeParticipant', @level2type = N'COLUMN', @level2name = N'JoinedAt';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'When the participant left. NULL while still present.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSessionBridgeParticipant', @level2type = N'COLUMN', @level2name = N'LeftAt';
+
+
+-- CODE GEN RUN
