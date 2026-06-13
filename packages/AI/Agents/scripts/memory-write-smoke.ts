@@ -6,7 +6,7 @@
  * then exercises the full memory-write path end-to-end against the configured database:
  *
  *   1. write        — MemoryWriteManager.ExecuteWrite persists a Provisional note
- *                     (asserts Status/AuthoredBy/scope/TTL/embedding on the actual row)
+ *                     (asserts Status/AuthorType/scope/TTL/embedding on the actual row)
  *   2. idempotency  — exact same text, same run → skipped-duplicate
  *   3. supersede    — near-duplicate text, same run → superseded-own (text updated in place)
  *   4. cross-run    — near-duplicate text, NEW manager (fresh run) → deduped (AccessCount bumped)
@@ -18,7 +18,7 @@
  * No LLM API keys required: embeddings use the local embedding model, and the hardening
  * dedupe LLM is only consulted when a similar ACTIVE note exists (the smoke note is unique).
  *
- * Usage:  npx tsx scripts/memory-write-smoke.ts
+ * Usage (from repo root):  npx tsx packages/AI/Agents/scripts/memory-write-smoke.ts
  */
 import 'dotenv/config';
 // Side-effect import: registers ALL @memberjunction classes (providers, entity subclasses, engines).
@@ -80,7 +80,7 @@ async function bootstrapProvider(): Promise<sql.ConnectionPool> {
 }
 
 async function loadNote(noteId: string, contextUser: UserInfo): Promise<MJAIAgentNoteEntity | null> {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: single-connection CLI smoke harness that bootstraps the global provider itself
     const note = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
     return (await note.Load(noteId)) ? note : null;
 }
@@ -131,7 +131,7 @@ async function main(): Promise<void> {
         check('note row loads', row !== null);
         if (row) {
             check("Status = 'Provisional'", row.Status === 'Provisional', String(row.Status));
-            check("AuthoredBy = 'Agent'", row.AuthoredBy === 'Agent', String(row.AuthoredBy));
+            check("AuthorType = 'Agent'", row.AuthorType === 'Agent', String(row.AuthorType));
             check('AgentID scoped', row.AgentID === agentId);
             check('UserID scoped', row.UserID === contextUser.ID);
             check('EmbeddingVector populated', !!row.EmbeddingVector && row.EmbeddingVector.length > 2);

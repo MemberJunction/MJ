@@ -87,16 +87,16 @@ ALTER TABLE ${flyway:defaultSchema}.AIAgentNote
     CHECK (Status IN ('Active','Pending','Revoked','Archived','Provisional'));
 
 ALTER TABLE ${flyway:defaultSchema}.AIAgentNote ADD
-    AuthoredBy NVARCHAR(20) NOT NULL DEFAULT 'MemoryManager'
-    CONSTRAINT CK_AIAgentNote_AuthoredBy CHECK (AuthoredBy IN ('Agent','MemoryManager','User'));
+    AuthorType NVARCHAR(20) NOT NULL DEFAULT 'MemoryManager'
+    CONSTRAINT CK_AIAgentNote_AuthorType CHECK (AuthorType IN ('Agent','MemoryManager','User'));
 ```
 
 - **`Status='Provisional'`** — the core signal, as a first-class lifecycle state rather than a separate timestamp column. `Provisional` = written in-flight by an agent, **immediately injectable**, not yet vetted. The `MemoryManagerAgent` *hardens* it (`Status → 'Active'`) or prunes it (`Archived`/`Revoked`). The injectable-status set becomes `('Active','Provisional')` — every read-path filter that previously tested `Status='Active'` widens accordingly (vector-service sync, embeddings refresh, fallback cache, SQL scoping query, TTL pruning).
-- **`AuthoredBy`** (`'Agent' | 'MemoryManager' | 'User'`) — explicit provenance. Necessary because `SourceAgentRunID` alone can't distinguish *written-in-flight-by-agent* from *extracted-from-a-run-by-MM* (both carry a run ID). Default `'MemoryManager'` preserves existing-row semantics.
+- **`AuthorType`** (`'Agent' | 'MemoryManager' | 'User'`) — explicit provenance. Necessary because `SourceAgentRunID` alone can't distinguish *written-in-flight-by-agent* from *extracted-from-a-run-by-MM* (both carry a run ID). Default `'MemoryManager'` preserves existing-row semantics.
 
 Existing fields reused unchanged: `Type` (constrained at write — see safety), `ImportanceScore`, `ProtectionTier` (defaults `Standard`), `ExpiresAt` (TTL safety net), `EmbeddingVector`/`EmbeddingModelID` (auto-filled on Save), scope fields (`PrimaryScopeRecordID`, `SecondaryScopes`, user/company), `SourceConversationID`/`SourceConversationDetailID`/`SourceAgentRunID` (provenance), `DerivedFromNoteIDs`/`ConsolidatedIntoNoteID` (hardening lineage).
 
-> **Workflow note:** per project rules, write the migration → run migration + CodeGen → *then* write TypeScript that references `AuthoredBy`/`AllowMemoryWrite`/the widened `Status` union via the strongly-typed generated properties. No `.Get()`/`.Set()`.
+> **Workflow note:** per project rules, write the migration → run migration + CodeGen → *then* write TypeScript that references `AuthorType`/`AllowMemoryWrite`/the widened `Status` union via the strongly-typed generated properties. No `.Get()`/`.Set()`.
 
 ### Agent config flag
 
@@ -104,10 +104,10 @@ Gate the capability like `InjectNotes`. Proposed field on `AIAgent`:
 
 ```sql
 ALTER TABLE ${flyway:defaultSchema}.AIAgent ADD
-    AllowMemoryWrite BIT NOT NULL DEFAULT 0;
+    AllowMemoryWrite BIT NOT NULL DEFAULT 1;
 ```
 
-Off by default — opt-in per agent. Restricted/system agents and user-facing assistants can be enabled selectively.
+On by default (revised per PR review) — consistent with the Memory Manager already extracting memories for every agent. Opt OUT selectively for restricted or experimental agents.
 
 ---
 
@@ -150,7 +150,7 @@ Tool documentation added to the loop system prompt template, in the same style a
 4. **Near-dup guard** — one in-memory vector check via `AIEngine.FindSimilarAgentNotes` against injectable notes in the same scope. Two outcomes:
    - Hit on a note **written earlier in this same run** → **supersede-own**: update that provisional note's text in place (last-write-wins within a run — "I love blue charts!" then "actually, red charts!" yields one red-charts note, no stale row).
    - Hit on a **pre-existing** note → bump `AccessCount`/`LastAccessedAt` on it instead of inserting **only when the request exactly restates the note** (normalized text equality). Any textual difference writes a new provisional note (ADD-only-strict): live testing showed a correction ("never use pie charts, bar charts only") being absorbed into the stale opposite note by similarity-only dedupe — reinforcing exactly the fact the user just retracted. Paraphrase duplicates this admits are consolidated by MM's hardening dedupe; *real* cross-run conflict resolution stays deferred to MM (plus recency-wins precedence at injection time in the interim).
-5. **Provenance + flags** — `Status='Provisional'`, `AuthoredBy='Agent'`, `ProtectionTier='Standard'`, `SourceAgentRunID`/`SourceConversationID(/DetailID)` stamped, default `ExpiresAt = now + 7 days` (TTL safety net).
+5. **Provenance + flags** — `Status='Provisional'`, `AuthorType='Agent'`, `ProtectionTier='Standard'`, `SourceAgentRunID`/`SourceConversationID(/DetailID)` stamped, default `ExpiresAt = now + 7 days` (TTL safety net).
 6. **Per-run cap + within-run idempotency** — a run-scoped `MemoryWriteManager` (mirroring `ArtifactToolManager`'s run state) holds a hash set of memories written this run (dedup repeated emissions across turns) and enforces a small cap (a handful, not the MM's 1000) so a runaway loop cannot spam the store.
 7. **Trace** — each write recorded as an agent run step (success/skip/reason), same as artifact tool calls.
 
@@ -169,7 +169,7 @@ This is where the `Provisional` status earns its keep at **runtime**, not just b
 
 ## Memory Manager: the Hardening Pass
 
-A new pass in `MemoryManagerAgent` (runs **first** in its existing maintenance cycle, so newly-hardened notes participate in importance/consolidation/contradiction/decay in the same cycle) over `Status='Provisional' AND AuthoredBy='Agent'`:
+A new pass in `MemoryManagerAgent` (runs **first** in its existing maintenance cycle, so newly-hardened notes participate in importance/consolidation/contradiction/decay in the same cycle) over `Status='Provisional' AND AuthorType='Agent'`:
 
 1. **Consolidate/dedup** against existing hardened notes (reuses current similarity + LLM dedup pipeline). Duplicate → `Archived` with `ConsolidatedIntoNoteID` lineage.
 2. **Contradiction resolution** — reuse existing contradiction detection; provisional contradicting an older Active note → recency wins, the old note is `Revoked` (Immutable/Protected tiers preserved); a provisional note the LLM judges wrong/low-confidence → `Archived`.
@@ -183,7 +183,7 @@ Net: the agent writes "user dislikes blue charts" at Agent+User scope, instantly
 
 ## Phasing
 
-- **Phase 1 — Write path.** Migration (widen `Status` CHECK with `Provisional`, add `AuthoredBy`, add `AllowMemoryWrite`) + CodeGen; injectable-status read-path widening; `memoryWrites` field + system-prompt docs; `MemoryWriteManager` + `executeMemoryWritesAsSteps` with gate/type-guard/scope-clamp/near-dup(supersede-own)/provenance/cap; unit tests.
+- **Phase 1 — Write path.** Migration (widen `Status` CHECK with `Provisional`, add `AuthorType`, add `AllowMemoryWrite`) + CodeGen; injectable-status read-path widening; `memoryWrites` field + system-prompt docs; `MemoryWriteManager` + `executeMemoryWritesAsSteps` with gate/type-guard/scope-clamp/near-dup(supersede-own)/provenance/cap; unit tests.
 - **Phase 2 — Injection trust.** Provisional labeling + recency-wins precedence in `FormatNotesForInjection`; TTL defaults; tests for prompt-injection containment.
 - **Phase 3 — Hardening pass.** New `MemoryManagerAgent` pass (first in maintenance cycle); dedup/contradiction integration; tests.
 - **Phase 4 (optional) — Thin Action wrapper.** Expose memory-write to Flows/low-code via an Action delegating to the shared service.
@@ -196,7 +196,7 @@ Net: the agent writes "user dislikes blue charts" at Agent+User scope, instantly
 2. **Higher precedence for provisional notes** — recency wins at injection time; an in-the-moment correction must beat stale vetted memory. The Memory Manager treats provisional notes as *suggestions* to reconcile, not ground truth.
 3. **Same-run conflicts: supersede-own** — a near-dup hit on a note written earlier in the same run updates that note in place (last-write-wins within a run). Cross-run conflicts defer to MM.
 4. **`ExpiresAt` on hardening: cleared to NULL** — hardened notes are decay-managed like every other Active note.
-5. **`AuthoredBy` default `'MemoryManager'`** — correct for all legacy rows.
+5. **`AuthorType` default `'MemoryManager'`** — correct for all legacy rows.
 6. **Sub-agent writes** — each agent reads its **own** `AllowMemoryWrite` flag; no inheritance (scope/identity differ).
 7. **Notes only for v1** — no in-flight `AIAgentExample` writes.
 8. **Near-dup threshold** — 0.85 at write time (tighter than MM's 0.60 clustering), constructor-configurable on `MemoryWriteManager`.

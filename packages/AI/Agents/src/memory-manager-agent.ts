@@ -3059,7 +3059,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
     /**
      * Hardening pass over in-flight agent-written notes (Status='Provisional',
-     * AuthoredBy='Agent'). Runs UNCONDITIONALLY at the start of every MM cycle —
+     * AuthorType='Agent'). Runs UNCONDITIONALLY at the start of every MM cycle —
      * before the consolidation-gated maintenance phases — so that:
      *   1. provisional notes never languish waiting for a consolidation trigger, and
      *   2. notes hardened here participate in importance scoring, consolidation,
@@ -3082,7 +3082,7 @@ export class MemoryManagerAgent extends BaseAgent {
             const rv = new RunView();
             const result = await rv.RunView<MJAIAgentNoteEntity>({
                 EntityName: 'MJ: AI Agent Notes',
-                ExtraFilter: `Status = 'Provisional' AND AuthoredBy = 'Agent'`,
+                ExtraFilter: `Status = 'Provisional' AND AuthorType = 'Agent'`,
                 OrderBy: '__mj_CreatedAt ASC',
                 MaxRows: HARDENING_CONFIG.maxNotesPerRun,
                 ResultType: 'entity_object'
