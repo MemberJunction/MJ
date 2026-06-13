@@ -849,7 +849,7 @@ import {
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
-// @memberjunction/integration-connectors (24 classes)
+// @memberjunction/integration-connectors (27 classes)
 import {
     AptifyConnector,
     BettyConnector,
@@ -865,6 +865,9 @@ import {
     NetForumConnector,
     NetSuiteConnector,
     NimbleAMSConnector,
+    ORCIDConnector,
+    OpenWaterConnector,
+    PathLMSConnector,
     PropFuelConnector,
     QuickBooksConnector,
     RasaConnector,
@@ -1170,11 +1173,12 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (4 classes)
+// @memberjunction/scheduling-engine (5 classes)
 import {
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
+    IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
 } from '@memberjunction/scheduling-engine';
 
@@ -1823,6 +1827,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     NetForumConnector,
     NetSuiteConnector,
     NimbleAMSConnector,
+    ORCIDConnector,
+    OpenWaterConnector,
+    PathLMSConnector,
     PropFuelConnector,
     QuickBooksConnector,
     RasaConnector,
@@ -2053,6 +2060,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
+    IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     AgentEvalDriver,
     ComputerUseAction,
@@ -2067,7 +2075,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 858;
+export const CLASS_REGISTRATIONS_COUNT = 862;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

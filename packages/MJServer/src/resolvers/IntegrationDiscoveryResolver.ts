@@ -50,6 +50,7 @@ import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-bui
 import { IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
+import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -583,6 +584,11 @@ class IntegrationSyncConfigInput {
     @Field(() => Boolean, { nullable: true, description: '§4 cross-layer pipelining: a child map starts when ITS parents finish, not the whole layer.' }) CrossLayerPipeline?: boolean;
     @Field(() => Boolean, { nullable: true, description: 'Merkle/partition hash-diff reconcile for watermark-less change detection (buffers the set in RAM).' }) PartitionReconcile?: boolean;
     @Field(() => Int, { nullable: true, description: 'Time budget (ms) for stage-2 streaming field discovery before it stops and uses what it gathered.' }) DiscoveryTimeBudgetMs?: number;
+    @Field(() => Int, { nullable: true, description: 'Batch size for stage-2 streaming field discovery (records per FetchChanges page). Default 500.' }) DiscoveryBatchSize?: number;
+    @Field(() => Int, { nullable: true, description: 'Max records sampled in stage-2 streaming field discovery (a column corpus + PK guess; NOT a full scan). Default 500.' }) DiscoveryMaxRecords?: number;
+    @Field(() => Boolean, { nullable: true, description: '§7 Comprehensive refresh deactivates Declared objects/fields ABSENT from an AUTHORITATIVE discovery (reversible). Default false.' }) DeactivateAbsent?: boolean;
+    // NOTE: §B table/column caps (MJ_INTEGRATION_MAX_TABLES / _MAX_COLUMNS_PER_TABLE) are DELIBERATELY NOT here —
+    // they are operator/env guardrails, not per-connection user settings (a user-raisable cap is toothless).
 }
 
 @ObjectType()
@@ -596,6 +602,45 @@ class IntegrationSyncConfigOutput {
     @Field(() => Boolean, { nullable: true }) CrossLayerPipeline?: boolean;
     @Field(() => Boolean, { nullable: true }) PartitionReconcile?: boolean;
     @Field(() => Int, { nullable: true }) DiscoveryTimeBudgetMs?: number;
+    @Field(() => Int, { nullable: true }) DiscoveryBatchSize?: number;
+    @Field(() => Int, { nullable: true }) DiscoveryMaxRecords?: number;
+    @Field(() => Boolean, { nullable: true }) DeactivateAbsent?: boolean;
+}
+
+@ObjectType()
+class CustomColumnCandidate {
+    @Field() EntityName: string;
+    /** The source field key as captured in the overflow column. */
+    @Field() SourceKey: string;
+    /** The sanitized, collision-resolved column name that would be created. */
+    @Field() ColumnName: string;
+    /** Inferred schema-field type family ('string' | 'number' | 'boolean' | 'datetime'). */
+    @Field() InferredType: string;
+    /** true = the real column does not exist yet (ADD COLUMN); false = recovery (column exists, mapping missing). */
+    @Field() NeedsColumn: boolean;
+}
+
+@ObjectType()
+class CustomColumnCandidatesOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [CustomColumnCandidate]) Candidates: CustomColumnCandidate[];
+}
+
+@ObjectType()
+class PromotedColumn {
+    @Field() EntityName: string;
+    @Field() ColumnName: string;
+}
+
+@ObjectType()
+class PromoteCustomColumnsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field() Promoted: boolean;
+    @Field(() => [PromotedColumn]) ColumnsAdded: PromotedColumn[];
+    /** true when an RSU schema change ran (a server restart may be pending to expose the new columns). */
+    @Field() SchemaUpdatePending: boolean;
 }
 
 @InputType()
@@ -656,6 +701,10 @@ class CreateScheduleInput {
     @Field({ nullable: true }) Description?: string;
     @Field({ nullable: true }) SyncDirection?: string;
     @Field({ nullable: true }) FullSync?: boolean;
+    /** §13 — 'sync' (default; moves data via RunSync) or 'discovery' (schema-only RefreshConnectorSchema on cron, evolving the IO/IOF catalog — no RSU, no data sync). */
+    @Field({ nullable: true, defaultValue: 'sync' }) JobKind?: string;
+    /** Discovery-job only: deactivate objects/fields absent from an authoritative refresh (reversible). Default true. */
+    @Field({ nullable: true }) DeactivateAbsent?: boolean;
 }
 
 @ObjectType()
@@ -1234,8 +1283,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ConsoleMirror: true,
                 TriggerType: 'Manual' as const,
                 // §7 — explicit RefreshConnectorSchema is a comprehensive re-discovery: default to
-                // deactivating objects/fields the source no longer exposes (reversible). Caller can opt out.
-                DeactivateAbsent: deactivateAbsent ?? true,
+                // deactivating objects/fields the source no longer exposes (reversible). Precedence:
+                // explicit arg > persisted Configuration.deactivateAbsent (set via IntegrationSetSyncConfig) >
+                // comprehensive default (true). Caller can opt out per-call or per-connection.
+                DeactivateAbsent: deactivateAbsent ?? this.readConfigBool(companyIntegration.Configuration, 'deactivateAbsent') ?? true,
             };
             const result = await pipeline.Run(runOpts as unknown as Parameters<typeof pipeline.Run>[0]);
 
@@ -2649,6 +2700,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             set('crossLayerPipeline', config.CrossLayerPipeline);
             set('partitionReconcile', config.PartitionReconcile);
             set('discoveryTimeBudgetMs', config.DiscoveryTimeBudgetMs);
+            set('discoveryBatchSize', config.DiscoveryBatchSize);
+            set('discoveryMaxRecords', config.DiscoveryMaxRecords);
+            set('deactivateAbsent', config.DeactivateAbsent);
             ci.Configuration = JSON.stringify(cfg);
             if (!await ci.Save()) return { Success: false, Message: `Failed to save: ${ci.LatestResult?.CompleteMessage ?? 'unknown'}` };
             return { Success: true, Message: 'Sync config updated', ...this.readSyncConfig(cfg) };
@@ -2680,6 +2734,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    /** Reads a single boolean key from a CompanyIntegration.Configuration JSON string (undefined if absent/malformed). */
+    private readConfigBool(configuration: string | null | undefined, key: string): boolean | undefined {
+        try {
+            if (!configuration) return undefined;
+            const v = (JSON.parse(configuration) as Record<string, unknown>)[key];
+            return typeof v === 'boolean' ? v : undefined;
+        } catch { return undefined; }
+    }
+
     /** Extracts the typed sync-config fields from a parsed Configuration object (type-guarded). */
     private readSyncConfig(cfg: Record<string, unknown>): Partial<IntegrationSyncConfigOutput> {
         const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
@@ -2692,7 +2755,87 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             CrossLayerPipeline: bool(cfg.crossLayerPipeline),
             PartitionReconcile: bool(cfg.partitionReconcile),
             DiscoveryTimeBudgetMs: num(cfg.discoveryTimeBudgetMs),
+            DiscoveryBatchSize: num(cfg.discoveryBatchSize),
+            DiscoveryMaxRecords: num(cfg.discoveryMaxRecords),
+            DeactivateAbsent: bool(cfg.deactivateAbsent),
         };
+    }
+
+    /** The MJ entity names this connection has entity maps for (for whole-connection scope). */
+    private async getMappedEntityNames(companyIntegrationID: string, user: UserInfo): Promise<string[]> {
+        const rv = new RunView();
+        const res = await rv.RunView<{ Entity: string }>({
+            EntityName: 'MJ: Company Integration Entity Maps',
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+            Fields: ['Entity'],
+            ResultType: 'simple',
+        }, user);
+        if (!res.Success) return [];
+        return Array.from(new Set((res.Results ?? []).map(r => r.Entity).filter((e): e is string => !!e)));
+    }
+
+    /**
+     * Lists the custom-column CANDIDATES captured in the overflow column awaiting promotion — the "new
+     * columns found" for a connection. READ-ONLY (no schema change, no RSU). Scope to one entity via
+     * entityName, or omit to list across all the connection's mapped entities. Computed live (overflow keys
+     * minus already-mapped/already-a-column), so it is inherently deduped against anything a concurrent
+     * discovery already promoted.
+     */
+    @Query(() => CustomColumnCandidatesOutput)
+    async IntegrationListCustomColumnCandidates(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("entityName", { nullable: true }) entityName: string | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<CustomColumnCandidatesOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const promoter = new IntegrationCustomColumnPromoter(user, provider);
+            const entityNames = entityName ? [entityName] : await this.getMappedEntityNames(companyIntegrationID, user);
+            const candidates: CustomColumnCandidate[] = [];
+            for (const en of entityNames) {
+                candidates.push(...await promoter.ListCandidates(companyIntegrationID, en));
+            }
+            return { Success: true, Message: `${candidates.length} candidate column(s) found`, Candidates: candidates };
+        } catch (e) {
+            LogError(`IntegrationListCustomColumnCandidates error: ${e}`);
+            return { Success: false, Message: this.formatError(e), Candidates: [] };
+        }
+    }
+
+    /**
+     * On-demand promotion of captured custom columns: runs RSU (ADD COLUMN + register EntityField + field map),
+     * which may require a server restart to expose them over GraphQL. This is the USER-ACCEPTED trigger — by
+     * default a sync only CAPTURES to the overflow column (auto-promote is opt-in per connection via
+     * Configuration.autoPromoteCustomColumns). Scope via entityNames, or omit to promote across all mapped
+     * entities. Idempotent: already-promoted/mapped keys are skipped (safe to re-run / run alongside discovery).
+     */
+    @Mutation(() => PromoteCustomColumnsOutput)
+    async IntegrationPromoteCustomColumns(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("entityNames", () => [String], { nullable: true }) entityNames: string[] | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<PromoteCustomColumnsOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
+            const targets = (entityNames && entityNames.length > 0) ? entityNames : await this.getMappedEntityNames(companyIntegrationID, user);
+            if (targets.length === 0) {
+                return { Success: true, Message: 'No mapped entities to promote', Promoted: false, ColumnsAdded: [], SchemaUpdatePending: false };
+            }
+            const promoter = new IntegrationCustomColumnPromoter(user, provider);
+            const result = await promoter.PromoteForSync(companyIntegrationID, targets);
+            return {
+                Success: true,
+                Message: result.Promoted ? `Promoted ${result.ColumnsAdded.length} column(s)` : 'No columns required promotion',
+                Promoted: result.Promoted,
+                ColumnsAdded: result.ColumnsAdded.map(c => ({ EntityName: c.EntityName, ColumnName: c.ColumnName })),
+                SchemaUpdatePending: result.SchemaUpdatePending,
+            };
+        } catch (e) {
+            LogError(`IntegrationPromoteCustomColumns error: ${e}`);
+            return { Success: false, Message: this.formatError(e), Promoted: false, ColumnsAdded: [], SchemaUpdatePending: false };
+        }
     }
 
     /**
@@ -3473,6 +3616,49 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Build schema artifacts for a single connector's objects.
      * Shared by IntegrationApplySchema (single) and IntegrationApplySchemaBatch (batch).
      */
+    /**
+     * §B — enforce OPTIONAL table/column caps at the create-tables (RSU) gate. These are OPERATOR
+     * (deployment) guardrails read from ENV — `MJ_INTEGRATION_MAX_TABLES` / `MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE`
+     * (absent or ≤0 = unbounded, the common case). They are DELIBERATELY env-only, NOT per-connection
+     * `Configuration`/GraphQL: a guardrail a user can raise via the same API they apply with is toothless.
+     * THROWS a clear error when the selection exceeds a cap so NOTHING partial is created — the caller surfaces
+     * it and the user narrows the selection (the cap itself is an operator concern). NEVER truncates. Discovery
+     * still surfaces every object/field; only materialization is capped. Per-table column count = the selected
+     * field subset, or the object's full discovered field count when all fields are selected.
+     */
+    private enforceSchemaLimits(
+        objects: SchemaPreviewObjectInput[],
+        filteredSchema: SourceSchemaInfo,
+    ): void {
+        const envInt = (name: string): number | null => {
+            const v = parseInt(process.env[name] ?? '', 10);
+            return Number.isFinite(v) && v > 0 ? v : null;
+        };
+        const maxTables = envInt('MJ_INTEGRATION_MAX_TABLES');
+        const maxColumnsPerTable = envInt('MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE');
+        if (maxTables === null && maxColumnsPerTable === null) return; // unbounded — no work
+
+        if (maxTables !== null && objects.length > maxTables) {
+            throw new Error(
+                `Selected ${objects.length} tables, which exceeds the deployment's MJ_INTEGRATION_MAX_TABLES limit (${maxTables}). ` +
+                `The apply was REJECTED — no tables were created. Narrow the selection (the cap is an operator/env setting).`
+            );
+        }
+        if (maxColumnsPerTable !== null) {
+            const fullCountByName = new Map(filteredSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.Fields.length]));
+            const offenders = objects
+                .map(o => ({ name: o.SourceObjectName, count: o.Fields?.length ?? fullCountByName.get(o.SourceObjectName.toLowerCase()) ?? 0 }))
+                .filter(o => o.count > maxColumnsPerTable);
+            if (offenders.length > 0) {
+                const list = offenders.map(o => `${o.name} (${o.count} columns)`).join(', ');
+                throw new Error(
+                    `These selected table(s) exceed the deployment's MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE limit (${maxColumnsPerTable}): ${list}. ` +
+                    `The apply was REJECTED — no tables were created. Narrow the columns (the cap is an operator/env setting).`
+                );
+            }
+        }
+    }
+
     private async buildSchemaForConnector(
         companyIntegrationID: string,
         objects: SchemaPreviewObjectInput[],
@@ -3530,6 +3716,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const filteredSchema: SourceSchemaInfo = {
             Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
         };
+
+        // §B — reject an over-limit table/column SELECTION before ANY table is materialized. This is the
+        // single shared gate for ApplyAll / ApplyAllBatch / ApplySchemaBatch (all route through here).
+        // Caps are operator/env guardrails (MJ_INTEGRATION_MAX_TABLES / _MAX_COLUMNS_PER_TABLE).
+        this.enforceSchemaLimits(objects, filteredSchema);
 
         const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform, connector);
 
@@ -3800,16 +3991,22 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const rv = new RunView();
 
-            // Find IntegrationSync job type
+            // §13 — select the driver by job-kind: 'discovery' = schema-only refresh on a cron;
+            // 'sync' (default) = the data-moving RunSync job.
+            const jobKind = (input.JobKind ?? 'sync').toLowerCase();
+            const driverClass = jobKind === 'discovery'
+                ? 'IntegrationDiscoveryScheduledJobDriver'
+                : 'IntegrationSyncScheduledJobDriver';
+
             const jobTypeResult = await rv.RunView<MJScheduledJobTypeEntity>({
                 EntityName: 'MJ: Scheduled Job Types',
-                ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
+                ExtraFilter: `DriverClass='${driverClass}'`,
                 MaxRows: 1,
                 ResultType: 'simple',
                 Fields: ['ID']
             }, user);
             if (!jobTypeResult.Success || jobTypeResult.Results.length === 0) {
-                return { Success: false, Message: 'IntegrationSync scheduled job type not found' };
+                return { Success: false, Message: `Scheduled job type not found for driver '${driverClass}' (kind='${jobKind}')` };
             }
             const jobTypeID = jobTypeResult.Results[0].ID;
 
@@ -3823,8 +4020,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             job.Status = 'Active';
             job.OwnerUserID = user.ID;
             const jobConfig: Record<string, unknown> = { CompanyIntegrationID: input.CompanyIntegrationID };
-            if (input.SyncDirection) jobConfig.SyncDirection = input.SyncDirection;
-            if (input.FullSync) jobConfig.FullSync = input.FullSync;
+            if (jobKind === 'discovery') {
+                // Discovery job: schema-only. SyncDirection/FullSync are meaningless here; carry the
+                // deactivate toggle instead (driver defaults it to true when omitted).
+                if (input.DeactivateAbsent !== undefined && input.DeactivateAbsent !== null) jobConfig.DeactivateAbsent = input.DeactivateAbsent;
+            } else {
+                if (input.SyncDirection) jobConfig.SyncDirection = input.SyncDirection;
+                if (input.FullSync) jobConfig.FullSync = input.FullSync;
+            }
             job.Configuration = JSON.stringify(jobConfig);
             job.NextRunAt = CronExpressionHelper.GetNextRunTime(input.CronExpression, input.Timezone || 'UTC');
 

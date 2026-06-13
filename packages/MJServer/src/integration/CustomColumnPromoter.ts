@@ -79,13 +79,34 @@ interface WorkItem {
 /** Registers the post-sync custom-column promotion hook on the IntegrationEngine singleton. */
 export function registerIntegrationCustomColumnPromoter(): void {
     IntegrationEngine.Instance.SetPostSyncSchemaPromotionCallback(async (ctx) => {
-        const promoter = new IntegrationCustomColumnPromoter(
-            ctx.ContextUser as UserInfo,
-            ctx.Provider as IMetadataProvider | undefined,
-        );
+        const user = ctx.ContextUser as UserInfo;
+        const provider = ctx.Provider as IMetadataProvider | undefined;
+        // GATE — promotion runs RSU (ADD COLUMN + register EntityField) + restart, which is disruptive.
+        // It is OPT-IN per connection (DEFAULT OFF): by default a sync only CAPTURES unmapped fields into
+        // the overflow column; the user triggers promotion on demand via IntegrationPromoteCustomColumns
+        // (after reviewing IntegrationListCustomColumnCandidates). Set Configuration.autoPromoteCustomColumns=true
+        // to restore automatic post-sync promotion. (Capture is unconditional; only the RSU step is gated.)
+        if (!(await readAutoPromoteFlag(ctx.CompanyIntegrationID, user, provider))) {
+            LogStatus(
+                `[CustomColumnPromoter] Auto-promote OFF for CI ${ctx.CompanyIntegrationID} — unmapped fields captured to ` +
+                `the overflow column; awaiting on-demand promotion (IntegrationPromoteCustomColumns).`
+            );
+            return { Promoted: false, ColumnsAdded: [], SchemaUpdatePending: false };
+        }
+        const promoter = new IntegrationCustomColumnPromoter(user, provider);
         return promoter.PromoteForSync(ctx.CompanyIntegrationID, ctx.SyncedEntityNames);
     });
-    LogStatus('[CustomColumnPromoter] Registered post-sync custom-column promotion hook.');
+    LogStatus('[CustomColumnPromoter] Registered post-sync custom-column promotion hook (auto-promote opt-in, default OFF).');
+}
+
+/** Reads the per-connection `autoPromoteCustomColumns` flag (default false = capture-only, on-demand promotion). */
+async function readAutoPromoteFlag(companyIntegrationID: string, user: UserInfo, provider?: IMetadataProvider): Promise<boolean> {
+    try {
+        const md = provider ?? Metadata.Provider;
+        const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+        if (!(await ci.Load(companyIntegrationID)) || !ci.Configuration) return false;
+        return (JSON.parse(ci.Configuration) as { autoPromoteCustomColumns?: boolean }).autoPromoteCustomColumns === true;
+    } catch { return false; }
 }
 
 const NOT_PROMOTED: SchemaPromotionResult = { Promoted: false, ColumnsAdded: [], SchemaUpdatePending: false };
@@ -94,7 +115,7 @@ const NOT_PROMOTED: SchemaPromotionResult = { Promoted: false, ColumnsAdded: [],
  * Orchestrates promotion for one sync run. One instance per invocation (carries the per-sync
  * context user + provider so it respects the bound provider, never the global default blindly).
  */
-class IntegrationCustomColumnPromoter {
+export class IntegrationCustomColumnPromoter {
     constructor(
         private readonly user: UserInfo,
         private readonly providerOverride?: IMetadataProvider,
@@ -141,31 +162,10 @@ class IntegrationCustomColumnPromoter {
         integrationID: string,
         entityName: string,
     ): Promise<Array<{ EntityName: string; ColumnName: string }>> {
-        const entityInfo = this.provider.EntityByName(entityName);
-        if (!entityInfo?.SchemaName || !entityInfo.BaseTable) return [];
-        // No overflow column on this table (predates the feature) → nothing to promote.
-        if (!entityInfo.Fields.some(f => f.Name === CUSTOM_OVERFLOW_COLUMN)) return [];
-
-        // 1. GATE + scan (dialect-agnostic via RunView).
-        const overflowJson = await this.scanOverflow(entityName);
-        if (overflowJson.length === 0) return []; // no customs captured → no work (1× guarantee)
-
-        // 2. PLAN — coverage-passing + typed keys (existing-column handled per-item below, so recovery
-        //    of a partially-promoted key — column added but field map missing — is also caught).
-        const passing = planPromotions(buildOverflowStats(overflowJson), {});
-        if (passing.length === 0) return [];
-
-        const entityMap = await this.findEntityMap(companyIntegrationID, entityName);
-        if (!entityMap) {
-            LogError(`[CustomColumnPromoter] No entity map for ${entityName} on CI ${companyIntegrationID}; skipping promotion.`);
-            return [];
-        }
-
-        // 3. Resolve per-key work: skip fully-terminated keys (column + field map both exist), keep
-        //    the rest as promote (needs column) or recover (column exists, field map missing).
-        const fieldMapSources = await this.activeFieldMapSources(entityMap.ID);
-        let work = this.resolveWorkItems(passing, entityInfo, fieldMapSources);
-        if (work.length === 0) return []; // everything already promoted + mapped → converged
+        const planned = await this.planWorkForEntity(companyIntegrationID, entityName);
+        if (!planned || planned.work.length === 0) return []; // no overflow / no entity map / already converged
+        const { entityInfo, entityMap } = planned;
+        let work = planned.work;
 
         // M4a: bound schema churn per pass — the remainder stays captured and promotes next sync.
         if (work.length > MAX_PROMOTIONS_PER_PASS) {
@@ -193,6 +193,60 @@ class IntegrationCustomColumnPromoter {
 
         LogStatus(`[CustomColumnPromoter] Promoted/recovered ${work.length} custom column(s) on ${entityName}: ${work.map(w => w.columnName).join(', ')}`);
         return work.map(w => ({ EntityName: entityName, ColumnName: w.columnName }));
+    }
+
+    /**
+     * Dry-run of GATE → scan → PLAN → resolve-work for ONE entity, WITHOUT applying any schema change.
+     * Shared by {@link promoteEntity} (which then PROMOTES the work) and {@link ListCandidates} (which only
+     * reports it). Returns null when the entity has no overflow column / no captured customs / no entity map.
+     * Because the work list is computed live (overflow keys minus already-column-and-mapped), re-running is
+     * inherently deduped — a concurrent discovery that already promoted a key yields no work item for it.
+     */
+    private async planWorkForEntity(
+        companyIntegrationID: string,
+        entityName: string,
+    ): Promise<{ entityInfo: EntityInfo; entityMap: { ID: string; ExternalObjectName: string }; work: WorkItem[] } | null> {
+        const entityInfo = this.provider.EntityByName(entityName);
+        if (!entityInfo?.SchemaName || !entityInfo.BaseTable) return null;
+        // No overflow column on this table (predates the feature) → nothing to promote.
+        if (!entityInfo.Fields.some(f => f.Name === CUSTOM_OVERFLOW_COLUMN)) return null;
+
+        const overflowJson = await this.scanOverflow(entityName);
+        if (overflowJson.length === 0) return null; // no customs captured
+
+        const passing = planPromotions(buildOverflowStats(overflowJson), {});
+        if (passing.length === 0) return null;
+
+        const entityMap = await this.findEntityMap(companyIntegrationID, entityName);
+        if (!entityMap) {
+            LogError(`[CustomColumnPromoter] No entity map for ${entityName} on CI ${companyIntegrationID}.`);
+            return null;
+        }
+
+        // Skip fully-terminated keys (column + field map both exist); keep promote (needs column) / recover.
+        const fieldMapSources = await this.activeFieldMapSources(entityMap.ID);
+        const work = this.resolveWorkItems(passing, entityInfo, fieldMapSources);
+        return { entityInfo, entityMap, work };
+    }
+
+    /**
+     * Lists the custom-column CANDIDATES for one entity — the "new columns found" awaiting promotion,
+     * computed live from the overflow column minus already-mapped/already-a-column keys (inherently deduped).
+     * READ-ONLY: no schema change, no RSU. Backs `IntegrationListCustomColumnCandidates`.
+     */
+    public async ListCandidates(
+        companyIntegrationID: string,
+        entityName: string,
+    ): Promise<Array<{ EntityName: string; SourceKey: string; ColumnName: string; InferredType: string; NeedsColumn: boolean }>> {
+        const planned = await this.planWorkForEntity(companyIntegrationID, entityName);
+        if (!planned) return [];
+        return planned.work.map(w => ({
+            EntityName: entityName,
+            SourceKey: w.sourceKey,
+            ColumnName: w.columnName,
+            InferredType: w.candidate.Inferred.SchemaFieldType,
+            NeedsColumn: w.needsColumn,
+        }));
     }
 
     /** Samples the overflow column (rows where it is non-null) — dialect-agnostic via RunView. */
