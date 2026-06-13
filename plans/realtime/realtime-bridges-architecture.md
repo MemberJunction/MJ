@@ -910,10 +910,11 @@ Every phase is "done" only when **all** of the following hold — this is baked 
 - [x] Server-side `MJ…EntityServer` subclasses + `ValidateAsync` invariants (SupportedFeatures JSON
       shape, identity uniqueness case-insensitive, session cross-field coherence, one agent
       participant/bridge). **MJCoreEntitiesServer 270 tests (+37).**
-- [ ] Seed metadata (mj-sync): provider rows for every platform with capability flags; the
-      `Realtime: Advanced Bridge Controls` authorization.
-- [ ] **Quality bar finish:** package READMEs (base done) · create `/guides/REALTIME_BRIDGES_GUIDE.md`
-      · repo tests green · changeset · update PR. (JSDoc + new unit tests ✓; per-package builds ✓.)
+- [x] Seed metadata (mj-sync): 11 provider rows w/ capability flags (Loopback Active, rest Disabled
+      until their driver lands) in `metadata/ai-bridge-providers/`; `Realtime: Advanced Bridge
+      Controls` authorization + Developer role mapping. (User runs `mj sync push`.)
+- [x] **Quality bar finish:** READMEs (base + server) · `/guides/REALTIME_BRIDGES_GUIDE.md` + CLAUDE.md
+      index entry · **full repo build 249/249 + repo tests 491/491 green** · changeset · update PR.
 
 ### Phase 0 — Transport seam  ✅ DONE
 - [x] `BaseRealtimeBridge` media-track plumbing wired to `IRealtimeSession.SendInput`/`OnOutput`
@@ -923,7 +924,7 @@ Every phase is "done" only when **all** of the following hold — this is baked 
 - [x] `LoopbackBridge` test driver (in-memory media round-trip, no platform) — proves the seam.
 - [ ] Resampling/format normalization to the model's rate — deferred to first real driver (the seam
       translates `BridgeMediaFrame`↔`ArrayBuffer`; per-platform sample-rate conversion lands with Zoom).
-- [ ] Guide transport-seam section (with the Phase-1 guide).
+- [x] Guide transport-seam section (in `/guides/REALTIME_BRIDGES_GUIDE.md`).
 
 ### Phase 2 — Server-side channel plane
 - [ ] Dynamic `GetToolDefinitions()` contribution → `RealtimeSessionRunner.ExtraTools`.
