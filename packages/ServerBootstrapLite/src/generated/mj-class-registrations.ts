@@ -174,7 +174,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (368 classes)
+// @memberjunction/core-entities (373 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -208,12 +208,17 @@ import {
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
     MJAIAgentSearchScopeEntity,
+    MJAIAgentSessionBridgeEntity,
+    MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
     MJAIArchitectureEntity,
+    MJAIBridgeAgentIdentityEntity,
+    MJAIBridgeProviderChannelEntity,
+    MJAIBridgeProviderEntity,
     MJAIClientToolDefinitionEntity,
     MJAIConfigurationEntity,
     MJAIConfigurationParamEntity,
@@ -752,12 +757,17 @@ import {
     YouTubeUploadVideoAction,
 } from '@memberjunction/actions-bizapps-social';
 
-// @memberjunction/core-entities-server (22 classes)
+// @memberjunction/core-entities-server (27 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
+    MJAIAgentSessionBridgeEntityServer,
+    MJAIAgentSessionBridgeParticipantEntityServer,
+    MJAIBridgeAgentIdentityEntityServer,
+    MJAIBridgeProviderChannelEntityServer,
+    MJAIBridgeProviderEntityServer,
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
     MJActionEntityServer,
@@ -1110,12 +1120,17 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
     MJAIAgentSearchScopeEntity,
+    MJAIAgentSessionBridgeEntity,
+    MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
     MJAIArchitectureEntity,
+    MJAIBridgeAgentIdentityEntity,
+    MJAIBridgeProviderChannelEntity,
+    MJAIBridgeProviderEntity,
     MJAIClientToolDefinitionEntity,
     MJAIConfigurationEntity,
     MJAIConfigurationParamEntity,
@@ -1600,6 +1615,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
+    MJAIAgentSessionBridgeEntityServer,
+    MJAIAgentSessionBridgeParticipantEntityServer,
+    MJAIBridgeAgentIdentityEntityServer,
+    MJAIBridgeProviderChannelEntityServer,
+    MJAIBridgeProviderEntityServer,
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
     MJActionEntityServer,
@@ -1823,7 +1843,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 782;
+export const CLASS_REGISTRATIONS_COUNT = 792;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
