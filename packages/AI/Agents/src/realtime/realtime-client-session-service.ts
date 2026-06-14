@@ -379,7 +379,7 @@ export class RealtimeClientSessionService {
         // failure here never fails the prepare — we just omit the ids.
         const promptID = this.resolveCoAgentSystemPrompt(coAgent).PromptID;
         const obs = await this.createCoAgentObservabilityRun(
-            coAgent, promptID, resolution.ModelID,
+            coAgent, promptID, resolution.ModelID, resolution.VendorID,
             input.UserID || contextUser?.ID, input.AgentSessionID,
             contextUser, provider, input.ConversationID,
         );
@@ -457,6 +457,7 @@ export class RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         promptID: string | null,
         modelID: string,
+        vendorID: string,
         userID: string | undefined,
         agentSessionID: string,
         contextUser: UserInfo,
@@ -469,7 +470,7 @@ export class RealtimeClientSessionService {
         if (!coAgentRunID) {
             return null;
         }
-        const promptRunID = await this.createCoAgentPromptRun(coAgent, promptID, modelID, coAgentRunID, contextUser, provider);
+        const promptRunID = await this.createCoAgentPromptRun(coAgent, promptID, modelID, vendorID, coAgentRunID, contextUser, provider);
         const runStepID = await this.createCoAgentRunStep(coAgentRunID, promptID, promptRunID, contextUser, provider);
         return { CoAgentRunID: coAgentRunID, PromptRunID: promptRunID ?? undefined, CoAgentRunStepID: runStepID ?? undefined };
     }
@@ -515,6 +516,7 @@ export class RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         promptID: string | null,
         modelID: string,
+        vendorID: string,
         coAgentRunID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
@@ -526,6 +528,11 @@ export class RealtimeClientSessionService {
         promptRun.NewRecord();
         promptRun.PromptID = promptID;
         promptRun.ModelID = modelID;
+        // VendorID is required on AIPromptRun ("Vendor cannot be null") — without it the prompt run
+        // save fails and the whole co-agent observability chain (transcript/tool-turn/usage) is dropped.
+        if (vendorID) {
+            promptRun.VendorID = vendorID;
+        }
         promptRun.AgentID = coAgent.ID;
         promptRun.RunAt = new Date();
         promptRun.RunType = 'Single';

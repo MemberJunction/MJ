@@ -106,10 +106,11 @@ class TestableService extends RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         promptID: string | null,
         modelID: string,
+        vendorID: string,
         userID: string | undefined,
         agentSessionID: string
     ): Promise<{ CoAgentRunID: string; PromptRunID?: string; CoAgentRunStepID?: string } | null> {
-        this.ObservabilitySpy({ coAgentID: coAgent.ID, promptID, modelID, userID, agentSessionID });
+        this.ObservabilitySpy({ coAgentID: coAgent.ID, promptID, modelID, vendorID, userID, agentSessionID });
         return this.ObservabilityResult;
     }
     protected override resolveTargetAgent(targetAgentID: string): MJAIAgentEntityExtended | null {
@@ -869,13 +870,14 @@ class ObservabilityTestService extends RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         promptID: string | null,
         modelID: string,
+        vendorID: string,
         userID: string | undefined,
         agentSessionID: string,
         prov: IMetadataProvider,
         conversationID?: string,
     ): Promise<{ CoAgentRunID: string; PromptRunID?: string; CoAgentRunStepID?: string } | null> {
         return this.createCoAgentObservabilityRun(
-            coAgent, promptID, modelID, userID, agentSessionID, contextUser, prov, conversationID
+            coAgent, promptID, modelID, vendorID, userID, agentSessionID, contextUser, prov, conversationID
         );
     }
 }
@@ -910,7 +912,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const svc = new ObservabilityTestService();
 
         const result = await svc.CallCreateObservabilityRun(
-            makeCoAgent(), 'prompt-77', 'model-77', 'voice-user', 'session-77', prov, 'conv-77'
+            makeCoAgent(), 'prompt-77', 'model-77', 'vendor-77', 'voice-user', 'session-77', prov, 'conv-77'
         );
 
         expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real', CoAgentRunStepID: 'run-step-real' });
@@ -929,6 +931,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         expect(promptRun.NewRecord).toHaveBeenCalled();
         expect(promptRun.PromptID).toBe('prompt-77');
         expect(promptRun.ModelID).toBe('model-77');
+        expect(promptRun.VendorID).toBe('vendor-77');   // required — without it the save fails ("Vendor cannot be null")
         expect(promptRun.AgentID).toBe('co-1');
         expect(promptRun.Status).toBe('Running');
         expect(promptRun.RunType).toBe('Single');
@@ -953,7 +956,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = makeRunProvider(() => agentRun);
         const svc = new ObservabilityTestService();
 
-        await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', undefined, 'session-1', prov);
+        await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', 'vendor-1', undefined, 'session-1', prov);
 
         expect(agentRun.ConversationID).toBeUndefined();
         expect(agentRun.UserID).toBeUndefined();
@@ -965,7 +968,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
         const svc = new ObservabilityTestService();
 
-        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 's1', prov);
 
         expect(result).toBeNull();
         expect(getEntity).toHaveBeenCalledTimes(1); // only the agent run was ever requested
@@ -977,7 +980,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
         const svc = new ObservabilityTestService();
 
-        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', 'u1', 's1', prov);
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', 'vendor-1', 'u1', 's1', prov);
 
         expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: undefined, CoAgentRunStepID: undefined });
         expect(getEntity).toHaveBeenCalledTimes(1); // neither the prompt run nor the step was requested
@@ -990,7 +993,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = makeObsProvider(agentRun, promptRun, runStep);
         const svc = new ObservabilityTestService();
 
-        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 's1', prov);
 
         expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: undefined, CoAgentRunStepID: 'run-step-real' });
         expect(runStep.TargetID).toBe('prompt-1');
@@ -1004,7 +1007,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = makeObsProvider(agentRun, promptRun, runStep);
         const svc = new ObservabilityTestService();
 
-        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 's1', prov);
 
         expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real', CoAgentRunStepID: undefined });
     });
@@ -1021,7 +1024,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
         const svc = new ObservabilityTestService();
 
-        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 's1', prov);
 
         expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real', CoAgentRunStepID: undefined });
     });
