@@ -125,7 +125,7 @@ export class ConfigurePhase {
       const patchedRootEnv = this.ensureEnvVar(
         existingRootEnv,
         'MJ_BASE_ENCRYPTION_KEY',
-        config.BaseEncryptionKey
+        config.BaseEncryptionKey ?? ''
       );
 
       if (patchedRootEnv !== existingRootEnv) {
@@ -150,7 +150,7 @@ export class ConfigurePhase {
         patchedMjapiEnv = this.ensureEnvVar(
           patchedMjapiEnv,
           'MJ_BASE_ENCRYPTION_KEY',
-          config.BaseEncryptionKey
+          config.BaseEncryptionKey ?? ''
         );
 
         if (patchedMjapiEnv !== existingMjapiEnv) {
@@ -442,7 +442,7 @@ OUTPUT_CODE='${config.DatabaseName}'
 MJ_CORE_SCHEMA='__mj'
 
 # Encryption key for MJ field-level encryption (base64-encoded, 256-bit)
-MJ_BASE_ENCRYPTION_KEY='${config.BaseEncryptionKey}'
+MJ_BASE_ENCRYPTION_KEY='${config.BaseEncryptionKey ?? ''}'
 
 # AI API Keys
 AI_VENDOR_API_KEY__OpenAILLM='${config.OpenAIKey ?? ''}'
