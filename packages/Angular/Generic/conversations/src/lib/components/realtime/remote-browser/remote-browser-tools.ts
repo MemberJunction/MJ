@@ -26,7 +26,7 @@ export const REMOTE_BROWSER_TOOL_NAMES = {
  * Each Remote Browser tool maps to exactly one of these (see {@link MapToolToAction}).
  */
 export type RemoteBrowserActionKind =
-  | 'openUrl'
+  | 'navigate'
   | 'click'
   | 'type'
   | 'key'
@@ -103,7 +103,7 @@ export function MapToolToAction(toolName: string, args: Record<string, ToolArgVa
       if (!url) {
         throw new RemoteBrowserToolArgError('browser_OpenUrl requires a non-empty "url".');
       }
-      return { Kind: 'openUrl', Url: url };
+      return { Kind: 'navigate', Url: url };
     }
     case REMOTE_BROWSER_TOOL_NAMES.Click: {
       const selector = asString(args['selector']);
