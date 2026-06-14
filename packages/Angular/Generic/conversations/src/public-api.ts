@@ -113,3 +113,7 @@ export * from './lib/components/realtime/channels/realtime-channel-pane.componen
 // @memberjunction/ng-whiteboard — import board types/components from there directly.
 export * from './lib/components/realtime/whiteboard/whiteboard-channel';
 export * from './lib/components/realtime/whiteboard/whiteboard-artifact-viewer.component';
+// Remote Browser channel plugin (client-direct, server-hosted browser) + its live surface + tools.
+export * from './lib/components/realtime/remote-browser/remote-browser-channel';
+export * from './lib/components/realtime/remote-browser/remote-browser-surface.component';
+export * from './lib/components/realtime/remote-browser/remote-browser-tools';

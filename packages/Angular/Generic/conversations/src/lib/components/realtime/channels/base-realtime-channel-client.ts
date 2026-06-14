@@ -1,5 +1,5 @@
 import type { Type } from '@angular/core';
-import { RealtimeToolDefinition } from '@memberjunction/ai';
+import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
 
 /**
  * Host services handed to a {@link BaseRealtimeChannelClient} at {@link BaseRealtimeChannelClient.Initialize}.
@@ -62,6 +62,35 @@ export interface RealtimeChannelContext {
    * the call AND right after it ends (the host retains the session id for late saves).
    */
   SaveAsArtifact(name: string, contentJson: string): Promise<string | null>;
+
+  /**
+   * The live `MJ: AI Agent Sessions` id this channel belongs to, or `null` before the
+   * session has minted / after it has torn down. A channel whose tools or surface drive a
+   * SERVER-SIDE resource (e.g. the Remote Browser channel's server-hosted browser) passes
+   * this as the `agentSessionID` argument to its own GraphQL resolvers via
+   * {@link ExecuteServerAction}. Most channels (whiteboard, shared doc) keep all state
+   * client-side and never read it.
+   */
+  AgentSessionID: string | null;
+
+  /**
+   * Executes a CHANNEL-SPECIFIC GraphQL operation against the session's MJ server — the
+   * escape hatch for channels backed by a SERVER-SIDE resource that the generic
+   * {@link RequestSave} / {@link SaveAsArtifact} contract doesn't cover (e.g. the Remote
+   * Browser channel driving a server-hosted browser through its own
+   * `ExecuteRemoteBrowserAction` mutation + `RemoteBrowserSnapshot` query).
+   *
+   * The host runs the operation through the SAME provider the live session uses, so the
+   * request rides the authenticated session. Best-effort and tolerant: a transport or
+   * server error resolves to `null` (logged host-side) rather than throwing, so a channel
+   * can map the failure to a model-readable result string without `try/catch`.
+   *
+   * @typeParam TResult The expected shape of the GraphQL operation's data payload.
+   * @param query The GraphQL query/mutation document.
+   * @param variables The operation variables (all JSON-serializable).
+   * @returns The operation's `data` payload, or `null` on any failure / when no session is live.
+   */
+  ExecuteServerAction<TResult>(query: string, variables: Record<string, JSONValue>): Promise<TResult | null>;
 }
 
 /**

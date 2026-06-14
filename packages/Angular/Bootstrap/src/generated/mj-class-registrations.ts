@@ -465,9 +465,10 @@ import {
     MJOktaProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (2 classes)
+// @memberjunction/ng-conversations (3 classes)
 import {
     RealtimeWhiteboardChannel,
+    RemoteBrowserChannel,
     WhiteboardArtifactViewerComponent,
 } from '@memberjunction/ng-conversations';
 
@@ -1070,6 +1071,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkProvider,
     MJOktaProvider,
     RealtimeWhiteboardChannel,
+    RemoteBrowserChannel,
     WhiteboardArtifactViewerComponent,
     CardsViewType,
     GridViewType,
@@ -1219,7 +1221,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 558;
+export const CLASS_REGISTRATIONS_COUNT = 559;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

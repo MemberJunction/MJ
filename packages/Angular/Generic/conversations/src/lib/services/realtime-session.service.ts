@@ -4,7 +4,7 @@ import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
 import {
   BaseRealtimeClient,
   LoadAssemblyAIRealtimeClient,
@@ -767,14 +767,41 @@ export class RealtimeSessionService {
 
   /** Builds the host-services context one channel plugin sees (its only line to the session). */
   private buildChannelContext(plugin: BaseRealtimeChannelClient): RealtimeChannelContext {
+    // Capture the service in a local so the AgentSessionID getter reads the SERVICE's live
+    // field (not the object literal's `this`) every time it's accessed.
+    const service = this;
     return {
       AgentName: this.CurrentAgentName,
       SendContextNote: (text: string) => this.SendContextNote(text),
       RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
       SaveAsArtifact: (name: string, contentJson: string) => this.saveChannelArtifact(plugin.ChannelName, name, contentJson),
-      SetFocusMode: (on: boolean) => this._channelFocus$.next({ Channel: plugin, Focused: on })
+      SetFocusMode: (on: boolean) => this._channelFocus$.next({ Channel: plugin, Focused: on }),
+      // Live session id + GraphQL escape hatch for SERVER-BACKED channels (e.g. Remote
+      // Browser). `get` so a channel always reads the CURRENT id — it's null at Initialize
+      // (the plugin is built before mintSession resolves) and set once the session is live.
+      get AgentSessionID(): string | null {
+        return service.agentSessionId;
+      },
+      ExecuteServerAction: <TResult>(query: string, variables: Record<string, JSONValue>) =>
+        this.executeChannelServerAction<TResult>(query, variables)
     };
+  }
+
+  /**
+   * Runs a channel-specific GraphQL operation through the live session's provider (the
+   * {@link RealtimeChannelContext.ExecuteServerAction} implementation). Best-effort: any
+   * transport/server error is logged and resolves to `null` so the calling channel can map
+   * the failure to a model-readable result string without `try/catch`.
+   */
+  private async executeChannelServerAction<TResult>(query: string, variables: Record<string, JSONValue>): Promise<TResult | null> {
+    try {
+      const result = await this.gql().ExecuteGQL(query, variables);
+      return (result as TResult) ?? null;
+    } catch (error) {
+      console.error('[RealtimeSession] Channel server action failed:', error);
+      return null;
+    }
   }
 
   /**
