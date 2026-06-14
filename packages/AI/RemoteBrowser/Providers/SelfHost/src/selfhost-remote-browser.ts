@@ -25,6 +25,7 @@ import {
     ChromeContainerRunnerFactory,
     IChromeContainerRunner,
 } from './chrome-container-runner';
+import { LocalChromeContainerRunner } from './local-chrome-container-runner';
 import { SelfHostSessionBackend } from './selfhost-session-backend';
 
 /**
@@ -34,31 +35,26 @@ import { SelfHostSessionBackend } from './selfhost-session-backend';
 export const SELF_HOST_REMOTE_BROWSER_DRIVER_CLASS = 'SelfHostRemoteBrowser';
 
 /**
- * The default Chrome-container-runner factory: throws an explicit "bind a real runner" error. A
- * deployment binds a real container orchestrator via {@link SelfHostRemoteBrowser.SetContainerRunnerFactory}
- * before connecting; tests inject a `FakeChromeContainerRunner`. Keeping the unbound default loud (rather
- * than silently degrading) makes a missing production binding fail fast and obviously.
+ * The DEFAULT Chrome-container-runner factory: a {@link LocalChromeContainerRunner} that launches a local
+ * headless Chromium via Playwright (no Docker, no container orchestrator, no cloud account). This makes
+ * Self-Hosted Chrome work OUT OF THE BOX — a deployment needs no `SetContainerRunnerFactory` call and no
+ * external service to drive a real browser. A deployment that wants a real container backend overrides it
+ * via {@link SelfHostRemoteBrowser.SetContainerRunnerFactory}; tests inject a `FakeChromeContainerRunner`.
  *
- * @returns Never returns; always throws.
- * @throws {Error} unconditionally, instructing the caller to bind a real runner.
+ * @returns A {@link LocalChromeContainerRunner}.
  */
-const defaultContainerRunnerFactory: ChromeContainerRunnerFactory = () => {
-    throw new Error(
-        'SelfHostRemoteBrowser has no Chrome container runner bound. ' +
-            'Call SelfHostRemoteBrowser.SetContainerRunnerFactory(...) with a factory that constructs a ' +
-            'real Chrome container runner via SetContainerRunnerFactory before connecting a session.',
-    );
-};
+const defaultContainerRunnerFactory: ChromeContainerRunnerFactory = () => new LocalChromeContainerRunner();
 
 /**
  * The Self-Hosted Chrome Remote Browser driver. Subclasses {@link BaseCdpRemoteBrowserProvider} and
  * implements only {@link AcquireSession}; all connect/disconnect orchestration, action mapping, and
  * capability gating are inherited.
  *
- * Construct via the default constructor (the engine's `ClassFactory` path). The container-runner seam is
- * bound process-wide via the static {@link SetContainerRunnerFactory} — mirroring how bridge drivers bind
- * their real SDK — so a deployment binds the real runner once at startup and every resolved driver
- * instance shares it.
+ * Construct via the default constructor (the engine's `ClassFactory` path). By default it uses a
+ * {@link LocalChromeContainerRunner} (local headless Chromium) so it works with no external service. The
+ * container-runner seam is bound process-wide via the static {@link SetContainerRunnerFactory} — mirroring
+ * how bridge drivers bind their real SDK — so a deployment that wants a real container backend overrides
+ * the default once at startup and every resolved driver instance shares it.
  *
  * Registered via `@RegisterClass(BaseRemoteBrowserProvider, 'SelfHostRemoteBrowser')`.
  */
@@ -66,15 +62,15 @@ const defaultContainerRunnerFactory: ChromeContainerRunnerFactory = () => {
 export class SelfHostRemoteBrowser extends BaseCdpRemoteBrowserProvider {
     /**
      * The process-wide Chrome-container-runner factory. Defaults to {@link defaultContainerRunnerFactory}
-     * (throws until bound); a deployment binds a real factory via {@link SetContainerRunnerFactory}.
+     * (a local headless Chromium); a deployment overrides it via {@link SetContainerRunnerFactory}.
      */
     private static containerRunnerFactory: ChromeContainerRunnerFactory = defaultContainerRunnerFactory;
 
     /**
-     * Binds the {@link ChromeContainerRunnerFactory} every {@link SelfHostRemoteBrowser} instance uses to
-     * acquire its Chrome container — the production binding seam, mirroring how bridge drivers bind their
-     * real SDK. Call once at deployment startup with a factory that constructs a real container
-     * orchestrator; tests call it with a factory that returns a fake runner.
+     * Overrides the {@link ChromeContainerRunnerFactory} every {@link SelfHostRemoteBrowser} instance uses
+     * to acquire its Chrome container — the override seam, mirroring how bridge drivers bind their real
+     * SDK. The default is a local-Chromium runner, so this is only needed to point self-host at a real
+     * container backend; tests call it with a factory that returns a fake runner.
      *
      * @param factory The factory that constructs the Chrome-container runner.
      */

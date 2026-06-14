@@ -163,6 +163,14 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     /** In-memory registry of the remote-browser sessions this process currently hosts, keyed by session id (lowercased). */
     private activeSessions = new Map<string, RemoteBrowserSessionHandle>();
 
+    /**
+     * Maps an `AIAgentSession` id (lowercased) → the engine-generated {@link RemoteBrowserSessionHandle.SessionID}
+     * of the live browser it lazily started. The realtime channel plane is keyed by agent session, while the
+     * engine's own lifecycle is keyed by its generated session id; this index bridges the two so the
+     * mutation/query resolvers (and the channel's teardown) can reach a browser by agent session id.
+     */
+    private agentSessionToEngineSession = new Map<string, string>();
+
     /** Monotonic counter feeding the generated session-id suffix (unique within this process). */
     private sessionCounter = 0;
 
@@ -239,6 +247,84 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
      */
     public GetSession(sessionId: string): RemoteBrowserSessionHandle | undefined {
         return this.activeSessions.get(sessionId.toLowerCase());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────────
+    // Agent-session-keyed lifecycle — the realtime channel plane's view of the engine.
+    //
+    // Realtime sessions are CLIENT-DIRECT: the agent's browser tools execute in the browser, which
+    // relays each driving action to the server through the `ExecuteRemoteBrowserAction` mutation. That
+    // mutation lazily starts the browser on first use (so sessions that never touch the browser never
+    // launch Chrome) and looks it up by `AIAgentSession` id — these three methods are that surface.
+    // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Lazily starts (or returns the already-running) remote-browser session for an `AIAgentSession`.
+     *
+     * Idempotent: a second call for an agent session that already has a live browser returns that same
+     * {@link IRemoteBrowserSession} rather than launching a second browser. The provider is resolved by
+     * the explicit `providerName` when supplied, else the engine's single {@link RemoteBrowserEngineBase.ActiveProviders}
+     * entry — assuming EXACTLY ONE Active provider for now (a clear error is thrown for none or ambiguous,
+     * rather than silently picking one).
+     *
+     * @param agentSessionID The `AIAgentSession` id the browser is bound to.
+     * @param contextUser The MJ user the browser session runs as (owned + audited by this user).
+     * @param providerName Optional explicit backend name; when omitted the single Active provider is used.
+     * @returns The live session the mutation drives.
+     * @throws When no/ambiguous Active provider can be resolved, or the underlying {@link StartSession} fails.
+     */
+    public async StartSessionForAgentSession(
+        agentSessionID: string,
+        contextUser?: UserInfo,
+        providerName?: string,
+    ): Promise<IRemoteBrowserSession> {
+        const existing = this.GetSessionForAgentSession(agentSessionID);
+        if (existing) {
+            return existing;
+        }
+        await this.Config(false, contextUser);
+        const resolvedProviderName = this.resolveAgentSessionProviderName(providerName);
+        const handle = await this.StartSession({ ProviderName: resolvedProviderName, ContextUser: contextUser });
+        this.agentSessionToEngineSession.set(this.agentSessionKey(agentSessionID), handle.SessionID);
+        LogStatus(
+            `[RemoteBrowserEngine] Lazily started browser for agent session ${agentSessionID} ` +
+                `(engine session ${handle.SessionID}, provider '${resolvedProviderName}').`,
+        );
+        return handle.Session;
+    }
+
+    /**
+     * Returns the live remote-browser session bound to an `AIAgentSession`, or `undefined` when this
+     * process holds no browser for it (never started, or already torn down).
+     *
+     * @param agentSessionID The `AIAgentSession` id.
+     * @returns The live session, or `undefined`.
+     */
+    public GetSessionForAgentSession(agentSessionID: string): IRemoteBrowserSession | undefined {
+        const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID));
+        if (!engineSessionID) {
+            return undefined;
+        }
+        return this.activeSessions.get(engineSessionID.toLowerCase())?.Session;
+    }
+
+    /**
+     * Tears down the remote-browser session lazily started for an `AIAgentSession` (if any) and forgets
+     * the mapping. Idempotent — ending an agent session that never started a browser is a benign no-op.
+     * Called from the Remote Browser channel plugin's close/dispose hooks so any browser a session opened
+     * is always released when the session ends.
+     *
+     * @param agentSessionID The `AIAgentSession` id whose browser to end.
+     * @returns `true` when a live browser was found and torn down, `false` when none was held.
+     */
+    public async EndSessionForAgentSession(agentSessionID: string): Promise<boolean> {
+        const key = this.agentSessionKey(agentSessionID);
+        const engineSessionID = this.agentSessionToEngineSession.get(key);
+        if (!engineSessionID) {
+            return false;
+        }
+        this.agentSessionToEngineSession.delete(key);
+        return this.EndSession(engineSessionID);
     }
 
     // ──────────────────────────────────────────────────────────────────────────────
@@ -672,6 +758,49 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     /** Looks up a live session handle by id (lowercased), or `undefined` when not held by this process. */
     private requireSession(sessionId: string): RemoteBrowserSessionHandle | undefined {
         return this.activeSessions.get(sessionId.toLowerCase());
+    }
+
+    /**
+     * Resolves the backend provider name for a lazily-started agent-session browser: the explicit
+     * `providerName` when supplied (after verifying it resolves to a known provider), else the engine's
+     * SINGLE {@link RemoteBrowserEngineBase.ActiveProviders} entry.
+     *
+     * NOTE — for now this assumes EXACTLY ONE Active provider when none is named. None or more-than-one
+     * is a clear error rather than a silent pick, so a deployment that wants a specific backend among
+     * several must name it (the agent's `TypeConfiguration` carries `remoteBrowser.provider` for that).
+     *
+     * @param providerName The optional explicit backend name.
+     * @returns The resolved backend display name to start a session with.
+     * @throws When the named provider is unknown, or when no/ambiguous Active provider can be auto-selected.
+     */
+    private resolveAgentSessionProviderName(providerName?: string): string {
+        const named = providerName?.trim();
+        if (named) {
+            const provider = this.Base.ProviderByName(named);
+            if (!provider) {
+                throw new Error(`No remote-browser provider found for name '${named}'.`);
+            }
+            return provider.Name;
+        }
+        const active = this.Base.ActiveProviders();
+        if (active.length === 0) {
+            throw new Error(
+                'No Active remote-browser provider is configured — sync a provider seed (e.g. Self-Hosted Chrome) ' +
+                    'and set its Status to Active before starting a remote-browser session.',
+            );
+        }
+        if (active.length > 1) {
+            throw new Error(
+                `Multiple Active remote-browser providers are configured (${active.map(p => p.Name).join(', ')}). ` +
+                    "Name the desired backend explicitly (the agent's TypeConfiguration carries remoteBrowser.provider).",
+            );
+        }
+        return active[0].Name;
+    }
+
+    /** Canonical map key for an agent-session id (UUID case differs across DB platforms). */
+    private agentSessionKey(agentSessionID: string): string {
+        return agentSessionID.trim().toLowerCase();
     }
 
     /** Builds the standard capability-not-supported error stamped with the backend name. */

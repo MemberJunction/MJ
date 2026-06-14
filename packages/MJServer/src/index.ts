@@ -170,6 +170,7 @@ export * from './resolvers/CurrentUserContextResolver.js';
 export * from './resolvers/RSUResolver.js';
 export * from './resolvers/AgentSessionResolver.js';
 export * from './resolvers/RealtimeClientSessionResolver.js';
+export * from './resolvers/RemoteBrowserActionResolver.js';
 export * from './agentSessions/index.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 

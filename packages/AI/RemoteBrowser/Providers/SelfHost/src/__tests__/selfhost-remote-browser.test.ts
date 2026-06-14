@@ -20,6 +20,7 @@ import {
     SelfHostRemoteBrowser,
 } from '../selfhost-remote-browser';
 import { SELF_HOST_PROVIDER_NAME, SelfHostSessionBackend } from '../selfhost-session-backend';
+import { LocalChromeContainerRunner } from '../local-chrome-container-runner';
 import { AcquiredCdpSession } from '@memberjunction/remote-browser-cdp';
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -178,23 +179,20 @@ describe('SelfHostRemoteBrowser', () => {
         });
     });
 
-    describe('SetContainerRunnerFactory default binding', () => {
-        it('throws an explicit "bind a real runner" error until a factory is set', async () => {
-            // Restore the unbound default by binding a factory that re-throws the default message,
-            // then assert AcquireSession surfaces a bind-the-runner error. We simulate the unbound
-            // state directly because other tests bind a fake in beforeEach.
-            SelfHostRemoteBrowser.SetContainerRunnerFactory(() => {
-                throw new Error(
-                    'SelfHostRemoteBrowser has no Chrome container runner bound. ' +
-                        'Call SelfHostRemoteBrowser.SetContainerRunnerFactory(...) with a factory that constructs a ' +
-                        'real Chrome container runner via SetContainerRunnerFactory before connecting a session.',
-                );
-            });
+    describe('SetContainerRunnerFactory override', () => {
+        it('uses the explicitly-bound runner over the local-Chrome default', async () => {
+            // beforeEach binds the fake runner; assert that override actually drives AcquireSession.
             const driver = new TestableSelfHostRemoteBrowser();
+            const acquired = await driver.AcquireSessionForTest(buildContext());
+            expect(acquired.CdpEndpoint).toBe(FAKE_CDP_ENDPOINT);
+            expect(runner.LastAcquireOptions).not.toBeNull();
+        });
 
-            await expect(driver.AcquireSessionForTest(buildContext())).rejects.toThrow(
-                /SetContainerRunnerFactory/,
-            );
+        it('exposes a local-Chrome default runner so self-host works with no external service', () => {
+            // The default factory (used when SetContainerRunnerFactory is never called) yields this runner.
+            const local = new LocalChromeContainerRunner();
+            expect(local).toBeInstanceOf(LocalChromeContainerRunner);
+            expect(typeof local.Acquire).toBe('function');
         });
     });
 

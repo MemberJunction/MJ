@@ -8,6 +8,7 @@
  */
 
 export * from './chrome-container-runner';
+export * from './local-chrome-container-runner';
 export * from './selfhost-session-backend';
 export * from './selfhost-remote-browser';
 

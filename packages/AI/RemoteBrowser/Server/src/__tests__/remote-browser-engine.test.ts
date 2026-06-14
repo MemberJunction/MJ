@@ -134,6 +134,7 @@ function makeProvider(opts: ProviderOpts = {}): MJAIRemoteBrowserProviderEntity 
 /** Points the engine's composed base cache at a fixed set of provider rows (no DB). */
 function stubBase(providers: MJAIRemoteBrowserProviderEntity[]): void {
     const base = RemoteBrowserEngineBase.Instance;
+    vi.spyOn(base, 'Config').mockResolvedValue(undefined);
     vi.spyOn(base, 'Providers', 'get').mockReturnValue(providers);
     vi.spyOn(base, 'ProviderByName').mockImplementation((n) =>
         providers.find((p) => p.Name.toLowerCase() === n.trim().toLowerCase()),
@@ -141,6 +142,7 @@ function stubBase(providers: MJAIRemoteBrowserProviderEntity[]): void {
     vi.spyOn(base, 'ProviderByDriverClass').mockImplementation((d) =>
         providers.find((p) => p.DriverClass.toLowerCase() === d.trim().toLowerCase()),
     );
+    vi.spyOn(base, 'ActiveProviders').mockImplementation(() => providers.filter((p) => p.Status === 'Active'));
     vi.spyOn(base, 'FeaturesFor').mockImplementation((p) => p.SupportedFeaturesObject ?? {});
 }
 
@@ -382,5 +384,72 @@ describe('RemoteBrowserEngine — screencast piping', () => {
         await expect(engine().StopScreencast(h.SessionID)).resolves.toBeUndefined();
         await expect(engine().StopScreencast('missing')).resolves.toBeUndefined();
         await engine().EndSession(h.SessionID);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Agent-session-keyed lifecycle — the realtime channel plane's lazy-start surface.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('RemoteBrowserEngine — agent-session-keyed lifecycle', () => {
+    it('lazily starts a browser for an agent session and is idempotent', async () => {
+        stubBase([makeProvider()]);
+        const first = await engine().StartSessionForAgentSession('agent-sess-1');
+        expect(first).toBeDefined();
+        // Idempotent — a second call returns the SAME live session, no second browser.
+        const second = await engine().StartSessionForAgentSession('agent-sess-1');
+        expect(second).toBe(first);
+        expect(engine().ActiveSessions.length).toBe(1);
+
+        expect(engine().GetSessionForAgentSession('agent-sess-1')).toBe(first);
+        await engine().EndSessionForAgentSession('agent-sess-1');
+    });
+
+    it('GetSessionForAgentSession returns undefined when none was started', () => {
+        stubBase([makeProvider()]);
+        expect(engine().GetSessionForAgentSession('never-started')).toBeUndefined();
+    });
+
+    it('resolves the single Active provider when no name is given', async () => {
+        stubBase([makeProvider({ name: 'Only One' })]);
+        const session = await engine().StartSessionForAgentSession('agent-sess-auto');
+        expect(session).toBeDefined();
+        await engine().EndSessionForAgentSession('agent-sess-auto');
+    });
+
+    it('resolves an explicitly-named provider', async () => {
+        stubBase([
+            makeProvider({ name: 'Alpha' }),
+            makeProvider({ name: 'Beta', driverClass: FAKE_DRIVER_CLASS }),
+        ]);
+        const session = await engine().StartSessionForAgentSession('agent-sess-named', undefined, 'Beta');
+        expect(session).toBeDefined();
+        await engine().EndSessionForAgentSession('agent-sess-named');
+    });
+
+    it('throws when no Active provider is configured', async () => {
+        stubBase([makeProvider({ status: 'Disabled' })]);
+        await expect(engine().StartSessionForAgentSession('agent-sess-none')).rejects.toThrow(/No Active remote-browser provider/);
+    });
+
+    it('throws when multiple Active providers are ambiguous and none is named', async () => {
+        stubBase([makeProvider({ name: 'Alpha' }), makeProvider({ name: 'Beta' })]);
+        await expect(engine().StartSessionForAgentSession('agent-sess-ambig')).rejects.toThrow(/Multiple Active/);
+    });
+
+    it('throws when the explicitly-named provider is unknown', async () => {
+        stubBase([makeProvider({ name: 'Alpha' })]);
+        await expect(
+            engine().StartSessionForAgentSession('agent-sess-bad', undefined, 'Nope'),
+        ).rejects.toThrow(/No remote-browser provider found/);
+    });
+
+    it('tears down the browser and forgets the mapping on EndSessionForAgentSession', async () => {
+        stubBase([makeProvider()]);
+        await engine().StartSessionForAgentSession('agent-sess-end');
+        expect(await engine().EndSessionForAgentSession('agent-sess-end')).toBe(true);
+        expect(engine().GetSessionForAgentSession('agent-sess-end')).toBeUndefined();
+        // Idempotent — ending an agent session with no browser is a benign no-op.
+        expect(await engine().EndSessionForAgentSession('agent-sess-end')).toBe(false);
     });
 });
