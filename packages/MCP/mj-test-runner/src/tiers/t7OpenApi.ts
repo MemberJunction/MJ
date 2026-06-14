@@ -115,21 +115,75 @@ function validateRequests(
         matched++;
     }
 
-    const summary = `Validated ${declared.length} declared request(s) against ${routes.length} spec route(s) from ${specPaths.length} spec file(s): ${matched} matched.`;
-    if (failures.length > 0) {
-        return {
-            Status: 'Fail',
-            Output: summary,
-            Errors: failures,
-            Details: { connector, class: identity.ClassName, declared: declared.length, matched, specFiles: specPaths.map(shortPath) },
-        };
+    // Bijective coverage (spec → declared): which documented GET routes the connector
+    // does NOT declare. ADVISORY only — a deliberately-scoped connector (e.g. a file-feed
+    // slice of a larger REST product) legitimately leaves spec routes uncovered; the real
+    // completeness gate is the workshop's compute-source-diff against the SCOPED universe.
+    const coverage = computeBijectiveCoverage(declared, routes);
+    const sdk = detectSdkCoverage(connector, declared);
+
+    const advisories: string[] = [];
+    if (coverage.orphanGetRoutes.length > 0) {
+        advisories.push(`bijective-coverage (advisory): ${coverage.coveredGetRoutes}/${coverage.totalGetRoutes} documented GET routes are declared by the connector; ${coverage.orphanGetRoutes.length} documented route(s) are NOT modeled (expected if the connector scopes a subset): ${coverage.orphanGetRoutes.slice(0, 8).join(', ')}${coverage.orphanGetRoutes.length > 8 ? ' …' : ''}`);
     }
-    return {
-        Status: 'Pass',
-        Output: summary,
-        Errors: [],
-        Details: { connector, class: identity.ClassName, declared: declared.length, matched, specFiles: specPaths.map(shortPath) },
+    if (sdk.sdkPresent) {
+        advisories.push(`sdk-diff (advisory): SDK/types file ${sdk.sdkFile} present; ${sdk.matchedObjects}/${declared.length} declared object name(s) found referenced in the SDK types${sdk.unmatched.length ? `; not found: ${sdk.unmatched.slice(0, 8).join(', ')}` : ''}`);
+    }
+
+    const summary = `Validated ${declared.length} declared request(s) against ${routes.length} spec route(s) from ${specPaths.length} spec file(s): ${matched} matched. ` +
+        `Bijective GET coverage ${coverage.coveredGetRoutes}/${coverage.totalGetRoutes}.${sdk.sdkPresent ? ` SDK present (${sdk.matchedObjects}/${declared.length} objs referenced).` : ''}`;
+    const details = {
+        connector, class: identity.ClassName, declared: declared.length, matched,
+        specFiles: specPaths.map(shortPath), bijectiveCoverage: coverage, sdk,
     };
+    if (failures.length > 0) {
+        return { Status: 'Fail', Output: summary, Errors: failures, Details: details };
+    }
+    return { Status: 'Pass', Output: summary, Errors: advisories, Details: details };
+}
+
+/** Spec→declared coverage: documented GET routes vs. the connector's declared GET paths. */
+function computeBijectiveCoverage(declared: DeclaredRequest[], routes: SpecRoute[]): {
+    totalGetRoutes: number; coveredGetRoutes: number; orphanGetRoutes: string[];
+} {
+    const getRoutes = routes.filter((r) => r.Methods.has('get'));
+    const declaredPaths = declared.map((d) => d.Path);
+    const orphan: string[] = [];
+    let covered = 0;
+    for (const r of getRoutes) {
+        // A spec GET route is "covered" if some declared path matches its template.
+        const isCovered = declaredPaths.some((p) => matchRoute(p, [r]) !== null);
+        if (isCovered) covered++; else orphan.push(r.Template);
+    }
+    return { totalGetRoutes: getRoutes.length, coveredGetRoutes: covered, orphanGetRoutes: orphan };
+}
+
+/** Best-effort SDK/types coverage: when a vendor SDK/types file exists, how many declared
+ * object names are referenced in it. ADVISORY (structural-name level, not a full type diff). */
+function detectSdkCoverage(connector: string, declared: DeclaredRequest[]): {
+    sdkPresent: boolean; sdkFile: string | null; matchedObjects: number; unmatched: string[];
+} {
+    const dirs = [resolve(REGISTRY_ROOT, connector, 'sources'), resolve(REGISTRY_ROOT, connector, 'source-cache')];
+    let sdkFile: string | null = null;
+    for (const dir of dirs) {
+        if (!existsSync(dir)) continue;
+        let entries: string[] = [];
+        try { entries = readdirSync(dir); } catch { continue; }
+        const hit = entries.find((n) => /\.d\.ts$|\.sdk\.(ts|json)$|sdk.*\.(ts|json)$|types?\.(ts|json)$/i.test(n));
+        if (hit) { sdkFile = resolve(dir, hit); break; }
+    }
+    if (!sdkFile) return { sdkPresent: false, sdkFile: null, matchedObjects: 0, unmatched: [] };
+
+    let text = '';
+    try { text = readFileSync(sdkFile, 'utf-8').toLowerCase(); } catch { return { sdkPresent: false, sdkFile: shortPath(sdkFile), matchedObjects: 0, unmatched: [] }; }
+    const objNames = [...new Set(declared.map((d) => d.Object.toLowerCase()))];
+    const matched: string[] = []; const unmatched: string[] = [];
+    for (const n of objNames) {
+        // singular/plural tolerant: match the object name or its de-pluralized stem.
+        const stem = n.replace(/s$/, '');
+        if (text.includes(n) || (stem.length > 2 && text.includes(stem))) matched.push(n); else unmatched.push(n);
+    }
+    return { sdkPresent: true, sdkFile: shortPath(sdkFile), matchedObjects: matched.length, unmatched };
 }
 
 // ── Spec discovery + parsing ─────────────────────────────────────────
@@ -150,8 +204,27 @@ function findOpenApiSpecs(connector: string): string[] {
         if (!existsSync(dir)) continue;
         for (const f of readdirSync(dir)) {
             const lower = f.toLowerCase();
-            if (lower.endsWith('.openapi.json') || lower.endsWith('.swagger.json') || lower === 'openapi.json' || lower === 'swagger.json') {
+            // Name-based match first (fast): any JSON whose name advertises an OpenAPI/Swagger spec,
+            // including vendor-prefixed/versioned names like `openwater-openapi-v2.json` (the agent
+            // must NOT silently skip a present spec just because it isn't named exactly `openapi.json`).
+            const nameLooksLikeSpec =
+                lower.endsWith('.json') && (lower.includes('openapi') || lower.includes('swagger'));
+            if (nameLooksLikeSpec) {
                 out.push(resolve(dir, f));
+                continue;
+            }
+            // Content-based fallback: any other .json that actually parses to an OpenAPI/Swagger
+            // document (has an `openapi`/`swagger` version key AND a `paths` object) is a real spec
+            // regardless of filename — so a vendor contract is never missed on a naming quirk.
+            if (lower.endsWith('.json')) {
+                try {
+                    const doc = JSON.parse(readFileSync(resolve(dir, f), 'utf-8')) as Record<string, unknown>;
+                    if ((doc.openapi || doc.swagger) && doc.paths && typeof doc.paths === 'object') {
+                        out.push(resolve(dir, f));
+                    }
+                } catch {
+                    /* not JSON / unreadable — not a spec */
+                }
             }
         }
     }

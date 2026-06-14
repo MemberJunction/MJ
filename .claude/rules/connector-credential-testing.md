@@ -36,6 +36,13 @@ Testing is the crux. The objective is one number: **maximize the assurance a con
 > **report it in the first minutes and pursue PATH 1**, rather than settling into credential-free proofs. The
 > cost of missing an easy self-serve credential is a whole tier of lost assurance; the cost of a 10-minute
 > signup is trivial. Bias toward getting real data when it's genuinely self-serve.
+>
+> **🚨 STANDING RULE (user-directed, 2026-06-14, explicitly allowed) — ALWAYS substitute a SELF-SERVE live DB for the user's credentials; NEVER use the user's/customer's production credential when a self-serve path exists, for READ or WRITE.** The single best proof a connector works is the full **hybrid-e2e** round-trip against a live DB — and that is almost always obtainable WITHOUT the user's creds. The agent must PROACTIVELY find and pursue the best legal self-serve live-DB path for THIS vendor, in priority order:
+> 1. **Vendor free Developer Edition / dev org** — the gold standard: a REAL instance with REAL sample data + the full API, self-serve in minutes, no card, no human gate, and the org is *yours*, never the customer's. **Salesforce → `developer.salesforce.com/signup`**; many SaaS vendors (HubSpot, Zendesk, etc.) have an equivalent free dev org. **Custom objects/fields are creatable in your own dev org**, so the custom-discovery path is testable against real custom data for free.
+> 2. **Vendor sandbox / test-mode with published test credentials** (`pk_test_…` / `sk_test_…`, Twilio test creds, PayPal/Square/Plaid sandboxes).
+> 3. **Free developer tier / instant API key** signup. 4. **Public demo / playground / sandbox** instances.
+>
+> **WRITE-BACK testing IS ALLOWED and ENCOURAGED on a self-serve org/sandbox that is YOURS** (a free Dev Edition, a test-mode account, disposable test data): run the FULL bidirectional / write-back / conflict / delete / idempotency hybrid-e2e, tagging every created record (`mj_test_run=<runID>`) and deleting exactly those in a `finally`. **The READ-ONLY contract (see `connector-test-conventions.md`) exists ONLY to protect a CUSTOMER's real records reached via a CUSTOMER credential — it does NOT restrict writes against your own disposable self-serve org.** So: prefer a self-serve org → do the complete read+write hybrid-e2e there → never touch the user's credential. Only when NO self-serve path exists at all does the read-only-against-user-credential or fully-credential-free fallback apply. Surface the self-serve plan to the user EARLY ("this vendor has a free Dev Edition — I'll prove read AND write against real data there, never your org").
 
 ## 0. Credential-obtainability triage (FIRST, and report it loudly)
 

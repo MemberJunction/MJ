@@ -66,9 +66,19 @@ Applies to vitest test files under `packages/Integration/connectors-registry/<ve
 ## Live e2e harness — separate from the vitest files; the HubSpot framework is the template
 
 > **🚨 READ-ONLY REVISION (BINDING) — supersedes the write/bidirectional/delete/dual-dialect material below.**
-> The current live contract is **READ-ONLY, ceiling T8**. The verification ladder is **T0..T8**; **T8 is the only
-> live rung and it is READ-ONLY** (TestConnection + discover + one read page — never create/update/delete/ack).
-> **There is no T9–T12.** The live gate `floor-check` enforces is the **read-only `hybrid-e2e`** primitive plus the
+> The current **LIVE** contract is **READ-ONLY, ceiling T8** — **WHEN testing against a CUSTOMER/USER credential.**
+> **T8 against a user-supplied credential is READ-ONLY** (TestConnection + discover + one read page — never create/update/delete/ack a customer's records).
+>
+> **⚠️ SELF-SERVE EXCEPTION (user-directed, 2026-06-14, explicitly allowed): the read-only contract protects a CUSTOMER's data reached via a CUSTOMER credential — it does NOT restrict your own disposable SELF-SERVE org.** The agent must PREFER a self-serve live DB (vendor free Developer Edition / sandbox / test-mode creds — never the user's creds; see `connector-credential-testing.md` § "🥇/STANDING RULE") and, on that self-serve org, run the **FULL read+write hybrid-e2e** (create/update/delete/bidirectional/conflict/idempotency), tagging created records (`mj_test_run=<runID>`) and deleting them in a `finally`. Write-back is forbidden ONLY against a customer credential. **Substitute a self-serve org for the user's credential every time one exists.**
+>
+> **⚠️ DISAMBIGUATION (2026-06-14) — "there is no T9–T12" means no LIVE/CREDENTIALED tier above T8. It does
+> NOT mean the runner's credential-free tiers T9–T12 don't exist — they DO, and the testing-agent MUST run
+> them every build.** The `mj-test-runner` ladder is **T0..T12**, where T9_EndpointReality / T10_TransportSmoke /
+> T11_SandboxProbe / T12_IdempotencyReplay are **CREDENTIAL-FREE** real-setting rungs (no creds, part of the
+> non-live suite). The "T10/T11" labels in THIS doc's §3.x material refer to the live `hybrid-e2e` **phase**
+> numbering — a SEPARATE scheme that collided with the runner-tier numbering and caused the runner's T9–T12 to be
+> silently skipped. Run BOTH: the runner's credential-free T0–T12 ladder AND (where creds exist) the read-only
+> live hybrid-e2e phases. See `.claude/agents/testing-agent.md`. The live gate `floor-check` enforces is the **read-only `hybrid-e2e`** primitive plus the
 > read-only `reality-probe` — NOT a write/bidirectional/delete/dual-dialect matrix. `phase0-slots.json`'s
 > `e2eLivePhases` reflects this (Phase B sub-phase 3.4 deletes removed; 3.2 reframed inbound-read-only;
 > `E2E.DualDialect` removed; all phases `dualDialect:false` = SQL-Server-only). **Write-path correctness

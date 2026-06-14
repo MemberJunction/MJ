@@ -23,7 +23,9 @@ Models are imperfect at any single step. The framework's mechanism for convergin
 /build-connector <vendor-name> [--context <path-or-inline>] [--budget <tokens>] [--max-tier <T0..T8>]
 ```
 
-There is **no `--credentials` flag** — a credential is NEVER passed as a path to the agent. Live testing is selected via the Step 0 **[A]** intake and the credential is held only by the broker (the agent submits a read-only job and gets scrubbed results back). Max live tier is **T8** (read-only); there is no T9–T12.
+There is **no `--credentials` flag** — a credential is NEVER passed as a path to the agent. Live testing is selected via the Step 0 **[A]** intake and the credential is held only by the broker (the agent submits a read-only job and gets scrubbed results back). Max **live (credentialed)** tier is **T8** (read-only).
+
+> **🚨 NAMING-COLLISION CORRECTION (2026-06-14): the runner's credential-free tiers T9–T12 DO exist and MUST run.** "No T9–T12" only ever meant "no *live/credentialed* tier above T8." The `mj-test-runner` ALSO implements four CREDENTIAL-FREE real-setting tiers — **T9_EndpointReality** (probe the real vendor endpoints unauth → status codes/headers), **T10_TransportSmoke** (fire the connector's real `FetchChanges` against an echo server → auth-header + fetch-path proof), **T11_SandboxProbe** (public sandbox fetch), **T12_IdempotencyReplay** (two-pass identity stability) — and the testing-agent MUST run all of them on every build (they are part of the **non-live** suite, not above the no-cred ceiling). Plus run **T8 with a dummy invalid credential when no real one exists** — it proves the connector reaches real-vendor auth (the only thing missing is the customer's credential). See `.claude/agents/testing-agent.md` "Do your BEST credential-free testing" + "Harness self-audit". Do NOT confuse these with the live `hybrid-e2e` **phase** labels (§3.x) elsewhere, which are a separate numbering scheme.
 
 Examples:
 - `/build-connector hubspot` — no context; discovers from public sources only.
