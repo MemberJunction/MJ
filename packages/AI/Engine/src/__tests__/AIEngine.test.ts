@@ -352,6 +352,47 @@ describe('AIEngine', () => {
     });
 
     // ======================================================================
+    // Agent base-catalog cache (#12)
+    // ======================================================================
+
+    describe('Agent base-catalog cache', () => {
+        it('returns undefined before a catalog is set', () => {
+            expect(engine.GetAgentBaseCatalog('agent-1')).toBeUndefined();
+        });
+
+        it('stores and retrieves a catalog by agent ID (same reference)', () => {
+            const catalog = { subAgentCount: 2, actionDetails: 'md' };
+            engine.SetAgentBaseCatalog('agent-1', catalog);
+            expect(engine.GetAgentBaseCatalog('agent-1')).toBe(catalog);
+        });
+
+        it('keeps catalogs isolated per agent ID', () => {
+            const a = { subAgentCount: 1 };
+            const b = { subAgentCount: 9 };
+            engine.SetAgentBaseCatalog('agent-a', a);
+            engine.SetAgentBaseCatalog('agent-b', b);
+            expect(engine.GetAgentBaseCatalog('agent-a')).toBe(a);
+            expect(engine.GetAgentBaseCatalog('agent-b')).toBe(b);
+        });
+
+        it('ClearAgentBaseCatalogCache wipes all entries', () => {
+            engine.SetAgentBaseCatalog('agent-1', { x: 1 });
+            engine.SetAgentBaseCatalog('agent-2', { x: 2 });
+            engine.ClearAgentBaseCatalogCache();
+            expect(engine.GetAgentBaseCatalog('agent-1')).toBeUndefined();
+            expect(engine.GetAgentBaseCatalog('agent-2')).toBeUndefined();
+        });
+
+        it('typed accessor returns the stored shape', () => {
+            interface Shape { subAgentCount: number; actionDetails: string; }
+            engine.SetAgentBaseCatalog('agent-1', { subAgentCount: 3, actionDetails: 'x' });
+            const got = engine.GetAgentBaseCatalog<Shape>('agent-1');
+            expect(got?.subAgentCount).toBe(3);
+            expect(got?.actionDetails).toBe('x');
+        });
+    });
+
+    // ======================================================================
     // AIActionParams / EntityAIActionParams type shapes
     // ======================================================================
 

@@ -6,8 +6,8 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
-import { BaseSingleton, MJGlobal, MJLruCache, UUIDsEqual } from "@memberjunction/global";
+import { BaseEntity, BaseEntityEvent, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
+import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
@@ -140,6 +140,72 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     private _loading: boolean = false;
     private _loadingPromise: Promise<void> | null = null;
     private _contextUser: UserInfo | undefined;
+
+    // ========================================================================
+    // Agent base-catalog cache (perf — server-only)
+    // ========================================================================
+    // Caches the "base" prompt-template catalog for an agent (resolved sub-agents + actions and
+    // their formatted markdown) which is INVARIANT across runs/steps for a given agent. BaseAgent
+    // rebuilt all of this on every prompt step; this lets the no-override fast path reuse it.
+    // The cache lives here (server-only AIEngine) rather than AIEngineBase because the catalog
+    // holds action/sub-agent domain objects and AIEngineBase is client+server (no actions dep).
+    // The VALUE shape is owned by BaseAgent — stored loosely as `object` and read back via a
+    // caller-supplied generic to avoid a cross-package type edge (and without using `any`).
+    private _agentBaseCatalogCache: Map<string, object> = new Map();
+    private _agentCatalogListenerSetUp: boolean = false;
+    /** Entities whose change must coarse-invalidate the agent base-catalog cache (lowercased). */
+    private static readonly AgentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
+        'ai agents',
+        'mj: ai agent actions',
+        'mj: ai agent relationships',
+        'mj: ai agent types',
+    ]);
+
+    /**
+     * Returns the cached base catalog for an agent, or undefined if not yet built / invalidated.
+     * The shape is defined and typed by the caller (BaseAgent) — pass the concrete type as `T`.
+     */
+    public GetAgentBaseCatalog<T extends object>(agentID: string): T | undefined {
+        this.ensureAgentCatalogListener();
+        return this._agentBaseCatalogCache.get(agentID) as T | undefined;
+    }
+
+    /** Stores the base catalog for an agent (built once, reused across runs until invalidated). */
+    public SetAgentBaseCatalog(agentID: string, catalog: object): void {
+        this.ensureAgentCatalogListener();
+        this._agentBaseCatalogCache.set(agentID, catalog);
+    }
+
+    /** Wipes the entire agent base-catalog cache. Called on relevant entity changes and on reload. */
+    public ClearAgentBaseCatalogCache(): void {
+        this._agentBaseCatalogCache.clear();
+    }
+
+    /**
+     * Subscribes (once) to MJGlobal BaseEntity events and coarse-wipes the agent base-catalog
+     * cache whenever an AI Agent / Agent Action / Agent Relationship / Agent Type row is
+     * saved, deleted, or remote-invalidated. A global wipe is intentional — rebuilds are cheap
+     * and these entities change rarely, so fine-grained per-agent invalidation isn't worth it.
+     */
+    private ensureAgentCatalogListener(): void {
+        if (this._agentCatalogListenerSetUp) return;
+        this._agentCatalogListenerSetUp = true;
+        try {
+            MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+                if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
+                    const e = event.args as BaseEntityEvent;
+                    if (e?.type === 'save' || e?.type === 'delete' || e?.type === 'remote-invalidate') {
+                        const name = e.baseEntity?.EntityInfo?.Name?.toLowerCase().trim();
+                        if (name && AIEngine.AgentCatalogInvalidatingEntities.has(name)) {
+                            this.ClearAgentBaseCatalogCache();
+                        }
+                    }
+                }
+            });
+        } catch (err) {
+            LogError(err);
+        }
+    }
 
     public static get Instance(): AIEngine {
         return super.getInstance<AIEngine>();
@@ -462,6 +528,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
             // Now load server-specific capabilities
             await this.RefreshServerSpecificMetadata(contextUser);
+
+            // Agent/action metadata may have changed on reload — drop the agent base-catalog cache.
+            this.ClearAgentBaseCatalogCache();
 
             this._loaded = true;
         } catch (error) {
