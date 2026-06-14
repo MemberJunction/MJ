@@ -1,6 +1,7 @@
 export * from './zoom-sdk';
 export * from './zoom-meeting-controls';
 export * from './zoom-bridge';
+export * from './zoom-rtms-sdk';
 
 import { LoadZoomBridge } from './zoom-bridge';
 
