@@ -21,9 +21,14 @@
 | Wave 3 payload (#13, #14) | ✅ done, tested, pushed | ai-agents 1216/1216 green |
 | Wave 3 #15 | ⛔ skipped (rationale) | `CopyScalarsAndArrays(.,true)` is a serialization-safety **filter**, not a throwaway clone; removing it changes persisted `OutputData` and risks circular-ref throws |
 | Wave 3 #16 | ⛔ skipped (rationale) | child templates render with their **own** `params.prompt`; system placeholders (output example/format) are prompt-specific, so "resolve once & share" would inject parent placeholders into children. Probe's own correction notes these are cheap synchronous formatters |
-| Wave 3 #12 (catalog cache + `subAgentChanges`) | 🔶 design nuance — see below | the big one; placement decision surfaced during impl |
+| Wave 3 #12 (catalog cache + `subAgentChanges`) | ✅ done, tested, pushed | cache on **`AIEngine`** (server-only) per your call; +13 sub-agent-changes, +5 cache tests; ai-agents 1229 / AIEngine 80 / ai-core-plus 168 green |
 
-### #12 placement nuance (needs a quick confirm)
+> **#12 micro-benchmark:** deferred — a meaningful benchmark needs a populated `AIEngine`/`ActionEngineServer` (DB-backed), which this sandbox doesn't have. Measurement approach + expected savings (~0.5–8 ms/step, GC-jitter the bigger win) are documented in §5.1; to be captured against a live env.
+
+### #12 placement (RESOLVED)
+Per your call, the cache lives on **`AIEngine`** (server-only `@memberjunction/aiengine`), which already depends on `actions-base` and is the right home for agent-internals — `AIEngineBase` (client+server) can't take an actions dependency. The catalog is stored loosely and read back via a caller-supplied generic so `AIEngine` needs no compile-time edge to the action/sub-agent domain types (no `any`). Everything else is exactly as reviewed: lazy build, coarse BaseEntity-event wipe (4 entities) + reload wipe, no-override fast path, clone-and-reformat on override, and the new `subAgentChanges` API mirroring `actionChanges`.
+
+#### (historical) the placement question that was resolved
 The reviewed design said cache the base catalog on **`AIEngineBase`**. In implementation the catalog necessarily contains **BaseAgent-domain objects** — resolved `MJActionEntityExtended[]` and the **formatted markdown** produced by `BaseAgent.formatSubAgentDetails`/`formatActionDetails`. `AIEngineBase` (`@memberjunction/ai-engine-base`) does not depend on `@memberjunction/actions` and has no access to those formatters, so housing the cache there forces either a new cross-package dependency or loose typing (against the no-`any` rule).
 
 **Recommended adjustment:** keep the **process-wide cache + coarse BaseEntity-event invalidation** exactly as designed, but house it as a `protected static` on **`BaseAgent`** (where the action/sub-agent types and the formatters already live). Invalidation still fires on save/delete of `AI Agents` / `MJ: AI Agent Actions` / `MJ: AI Agent Relationships` / `MJ: AI Agent Types` (subscribe once via MJGlobal BaseEntity events) **and** on `AIEngine` reload (`AdditionalLoading`). Same semantics, clean typing, no new package edges. `subAgentChanges` (new `ExecuteAgentParams` API) still lands in this PR.
