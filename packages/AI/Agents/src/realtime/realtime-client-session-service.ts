@@ -1192,11 +1192,22 @@ export class RealtimeClientSessionService {
     ): Promise<RealtimeSessionParams> {
         const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
+        const tools = this.buildStableToolSet(input.ExtraTools);
+
+        // One line per mint: confirms which tools + whether the channel-direct framing actually reach
+        // the model — settles "why does the co-agent delegate instead of calling browser_*" without
+        // runtime guesswork (channelExceptionInPrompt=false ⇒ stale build; browser_* missing from
+        // tools ⇒ the channel's tools never reached the mint).
+        console.log(
+            `[RealtimeCoAgent] mint model=${modelApiName} ` +
+            `tools=[${tools.map(t => t.Name).join(', ')}] ` +
+            `channelExceptionInPrompt=${systemPrompt.includes('interactive-surface')}`,
+        );
 
         return {
             Model: modelApiName,
             SystemPrompt: systemPrompt,
-            Tools: this.buildStableToolSet(input.ExtraTools),
+            Tools: tools,
             InitialContext: memoryContext || undefined,
             Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass)
         };
