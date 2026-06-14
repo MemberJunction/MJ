@@ -110,6 +110,8 @@
     "@memberjunction/messaging-adapters": "5.40.2",
     "@memberjunction/queue": "5.40.2",
     "@memberjunction/react-linter": "5.40.2",
+    "@memberjunction/remote-browser-selfhost": "5.40.2",
+    "@memberjunction/remote-browser-server": "5.40.2",
     "@memberjunction/scheduling-actions": "5.40.2",
     "@memberjunction/scheduling-engine": "5.40.2",
     "@memberjunction/scheduling-engine-base": "5.40.2",
