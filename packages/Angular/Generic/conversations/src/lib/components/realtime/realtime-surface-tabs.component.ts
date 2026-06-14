@@ -174,8 +174,14 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    * plugin, forwarded from `RealtimeSessionOverlayComponent.RegisterChannelTab`.
    */
   public RegisterChannelTab(registration: RealtimeChannelTabRegistration): void {
-    this.Model.RegisterChannelTab(registration);
-    this.cdr.markForCheck();
+    // Microtask defer: the overlay forwards this while handling agent/channel activity, which can
+    // land mid change-detection. Adding a tab to Model.Tabs synchronously then trips NG0100 on the
+    // tab-strip bindings (s-tab--active). A microtask lands the mutation in a fresh CD turn —
+    // imperceptible for an async reveal, and ordered with any follow-on RevealChannel.
+    Promise.resolve().then(() => {
+      this.Model.RegisterChannelTab(registration);
+      this.cdr.markForCheck();
+    });
   }
 
   /**
@@ -185,10 +191,16 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    * instead of having to find the tab themselves. No-op for unknown keys.
    */
   public RevealChannel(key: string): void {
-    this.setCollapsed(false);
-    this.Model.Focus(key);
-    this.Model.FlashTab(key);
-    this.cdr.markForCheck();
+    // Microtask defer (same NG0100 reason as RegisterChannelTab): the agent-activity reveal mutates
+    // ActiveKey/FlashKey, which feed the tab-strip class bindings; doing it mid-CD trips the
+    // ExpressionChanged check. Deferring lands it in a fresh CD turn and stays ordered after any
+    // RegisterChannelTab queued just before it.
+    Promise.resolve().then(() => {
+      this.setCollapsed(false);
+      this.Model.Focus(key);
+      this.Model.FlashTab(key);
+      this.cdr.markForCheck();
+    });
   }
 
   /**
