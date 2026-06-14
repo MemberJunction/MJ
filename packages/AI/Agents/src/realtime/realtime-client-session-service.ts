@@ -683,6 +683,70 @@ export class RealtimeClientSessionService {
     }
 
     /**
+     * Appends (or replaces) one transcript turn onto the co-agent's long-lived `AIPromptRun.Messages`,
+     * so the realtime co-agent's conversation is captured on its run exactly like every other MJ agent
+     * run — closing the observability gap where the run held only token totals, never the turns. The
+     * run viewer can then show what the co-agent heard and said. Mirrors {@link accumulatePromptRunUsage}'s
+     * load/append/save pattern; best-effort and tolerant (logs, never throws).
+     *
+     * `replacePrevious` swaps the last same-role message instead of appending — the streaming-correction
+     * case (an interim assistant turn finalized into its full text). The stored shape is the standard
+     * chat-message array (`[{ role, content }, …]`) the rest of MJ already reads from `Messages`.
+     *
+     * NOTE: load-append-save carries the same benign race as usage accumulation; realtime turns are
+     * sequential per session so collisions are rare. A dedicated child turn-row entity would remove the
+     * race (and the blob rewrite) entirely — a future increment. Tool-call turns (the browser_ and
+     * Whiteboard_ channel tools) are a separate increment that requires the client to relay them.
+     *
+     * @returns `true` when the turn was persisted onto the prompt run.
+     */
+    public async AppendPromptRunMessage(
+        promptRunID: string,
+        role: 'user' | 'assistant' | 'system',
+        content: string,
+        replacePrevious: boolean,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        try {
+            const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+            if (!(await promptRun.Load(promptRunID))) {
+                LogError(`AppendPromptRunMessage: co-agent prompt run ${promptRunID} not found — transcript turn dropped.`);
+                return false;
+            }
+            const messages = this.parsePromptRunMessages(promptRun.Messages);
+            const last = messages[messages.length - 1];
+            if (replacePrevious && last && last.role === role) {
+                last.content = content;
+            } else {
+                messages.push({ role, content });
+            }
+            promptRun.Messages = JSON.stringify(messages);
+            if (!(await promptRun.Save())) {
+                LogError(`AppendPromptRunMessage: prompt run ${promptRunID} save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                return false;
+            }
+            return true;
+        } catch (error) {
+            LogError(`AppendPromptRunMessage: append failed for prompt run ${promptRunID}: ${(error as Error).message}`);
+            return false;
+        }
+    }
+
+    /** Parses the prompt run's `Messages` JSON into a mutable chat-message array (tolerant: `[]` on empty/malformed). */
+    private parsePromptRunMessages(raw: string | null | undefined): Array<{ role: string; content: string }> {
+        if (!raw || !raw.trim()) {
+            return [];
+        }
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            return Array.isArray(parsed) ? (parsed as Array<{ role: string; content: string }>) : [];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
      * Executes a single tool call relayed from the browser and returns its serialized result.
      *
      * Builds a {@link RealtimeToolBroker} whose `DelegateToTarget` runs the target agent (threading

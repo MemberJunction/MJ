@@ -503,8 +503,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * The co-agent observability `AIAgentRun`/`AIPromptRun` are created at session start (see
      * {@link RealtimeClientSessionResolver.StartRealtimeClientSession}) and finalized on close;
      * incremental usage telemetry lands on the `AIPromptRun` via
-     * {@link RealtimeClientSessionResolver.RelayRealtimeUsage}. Still deferred: linking persisted
-     * transcript turns to those runs.
+     * {@link RealtimeClientSessionResolver.RelayRealtimeUsage}. Each persisted turn is ALSO appended
+     * to the co-agent `AIPromptRun.Messages` (best-effort), so the run captures the full conversation
+     * — observability parity with every other MJ agent run, not just token totals.
      *
      * @returns `true` when the transcript turn was persisted.
      */
@@ -525,8 +526,30 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!saved) {
             return false;
         }
+        // Mirror the turn onto the co-agent's long-lived prompt run so its Messages capture the full
+        // conversation (run-viewer observability parity). Best-effort — never fails the transcript relay.
+        const promptRunID = this.readPromptRunID(session);
+        if (promptRunID) {
+            await this.clientSessionService.AppendPromptRunMessage(
+                promptRunID,
+                this.mapTranscriptRoleToChatRole(role),
+                text,
+                replacesPrevious ?? false,
+                contextUser,
+                provider,
+            );
+        }
         await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
         return true;
+    }
+
+    /**
+     * Maps the relayed transcript role (`'User'`/`'AI'`/`'Assistant'`, case-insensitive) to the
+     * standard chat-message role stored in `AIPromptRun.Messages`. Anything that isn't an explicit
+     * user turn is treated as the assistant (the co-agent's own speech).
+     */
+    private mapTranscriptRoleToChatRole(role: string): 'user' | 'assistant' {
+        return role.trim().toLowerCase() === 'user' ? 'user' : 'assistant';
     }
 
     /**

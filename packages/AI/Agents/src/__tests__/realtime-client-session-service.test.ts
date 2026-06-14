@@ -661,6 +661,71 @@ function makeRunProvider(byName: (entityName: string) => FakeRun): IMetadataProv
     return { GetEntityObject: vi.fn(async (name: string) => byName(name)) } as unknown as IMetadataProvider;
 }
 
+describe('RealtimeClientSessionService.AppendPromptRunMessage', () => {
+    it('appends a turn to an empty Messages array', async () => {
+        const promptRun = makeRun({ ID: 'pr-1', Messages: null });
+        const svc = new RealtimeClientSessionService();
+
+        const ok = await svc.AppendPromptRunMessage('pr-1', 'user', 'hello', false, contextUser, makeRunProvider(() => promptRun));
+
+        expect(ok).toBe(true);
+        expect(JSON.parse(promptRun.Messages as string)).toEqual([{ role: 'user', content: 'hello' }]);
+    });
+
+    it('appends to existing Messages, preserving prior turns', async () => {
+        const promptRun = makeRun({ ID: 'pr-1', Messages: JSON.stringify([{ role: 'user', content: 'hi' }]) });
+        const svc = new RealtimeClientSessionService();
+
+        await svc.AppendPromptRunMessage('pr-1', 'assistant', 'hello back', false, contextUser, makeRunProvider(() => promptRun));
+
+        expect(JSON.parse(promptRun.Messages as string)).toEqual([
+            { role: 'user', content: 'hi' },
+            { role: 'assistant', content: 'hello back' },
+        ]);
+    });
+
+    it('replacePrevious swaps the last same-role message (streaming correction)', async () => {
+        const promptRun = makeRun({ ID: 'pr-1', Messages: JSON.stringify([
+            { role: 'user', content: 'hi' },
+            { role: 'assistant', content: 'partial' },
+        ]) });
+        const svc = new RealtimeClientSessionService();
+
+        await svc.AppendPromptRunMessage('pr-1', 'assistant', 'final full text', true, contextUser, makeRunProvider(() => promptRun));
+
+        expect(JSON.parse(promptRun.Messages as string)).toEqual([
+            { role: 'user', content: 'hi' },
+            { role: 'assistant', content: 'final full text' },
+        ]);
+    });
+
+    it('replacePrevious appends when the last message is a different role', async () => {
+        const promptRun = makeRun({ ID: 'pr-1', Messages: JSON.stringify([{ role: 'user', content: 'hi' }]) });
+        const svc = new RealtimeClientSessionService();
+
+        await svc.AppendPromptRunMessage('pr-1', 'assistant', 'reply', true, contextUser, makeRunProvider(() => promptRun));
+
+        expect(JSON.parse(promptRun.Messages as string)).toEqual([
+            { role: 'user', content: 'hi' },
+            { role: 'assistant', content: 'reply' },
+        ]);
+    });
+
+    it('returns false (never throws) when the prompt run cannot be loaded', async () => {
+        const promptRun = makeRun({ ID: 'missing', Load: vi.fn(async () => false) });
+        const svc = new RealtimeClientSessionService();
+
+        expect(await svc.AppendPromptRunMessage('missing', 'user', 'x', false, contextUser, makeRunProvider(() => promptRun))).toBe(false);
+    });
+
+    it('returns false when the save fails', async () => {
+        const promptRun = makeRun({ ID: 'pr-1', Messages: null, Save: vi.fn(async () => false), LatestResult: { CompleteMessage: 'db down' } });
+        const svc = new RealtimeClientSessionService();
+
+        expect(await svc.AppendPromptRunMessage('pr-1', 'user', 'x', false, contextUser, makeRunProvider(() => promptRun))).toBe(false);
+    });
+});
+
 describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
     it('completes both runs (Status, CompletedAt, Success) when they are still Running', async () => {
         const agentRun = makeRun({ ID: 'co-run-1' });
