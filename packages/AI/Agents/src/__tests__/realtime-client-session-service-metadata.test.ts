@@ -73,9 +73,14 @@ class MetadataExposedService extends RealtimeClientSessionService {
     protected override getAPIKeyForDriver(driverClass: string): string | undefined {
         return this.Keys[driverClass];
     }
+    /** DriverClasses whose instantiated model should report SupportsClientDirect=false. */
+    public NonClientDirectDrivers = new Set<string>();
     protected override createModelInstance(driverClass: string): BaseRealtimeModel | null {
         this.CreatedDrivers.push(driverClass);
-        return { Driver: driverClass } as unknown as BaseRealtimeModel;
+        return {
+            Driver: driverClass,
+            SupportsClientDirect: !this.NonClientDirectDrivers.has(driverClass),
+        } as unknown as BaseRealtimeModel;
     }
 
     public CallResolveCoAgent(input: PrepareClientSessionInput): MJAIAgentEntityExtended | null {
@@ -388,6 +393,35 @@ describe('resolveRealtimeModel — default (highest-PowerRank) selection', () =>
         const svc = new MetadataExposedService();
         svc.Keys = {};
         expect(await svc.CallResolveModel(coAgent)).toBeNull();
+    });
+
+    it('falls through to a usable lower-power model when the top model has no key', async () => {
+        // The bug this guards: a newly-seeded high-power provider (e.g. Grok/Inworld) with no env
+        // key must NOT dead-end resolution — it falls through to the keyed lower-power model.
+        engineState.Models = [
+            model('m-top', 'Realtime Top', 90),
+            model('m-keyed', 'Realtime Keyed', 10),
+        ];
+        engineState.ModelVendors = [vendor('m-top', 'NoKeyDriver', 1), vendor('m-keyed', 'KeyedDriver', 1)];
+        const svc = new MetadataExposedService();
+        svc.Keys = { KeyedDriver: 'k' };   // only the lower-power model has a key
+
+        expect((await svc.CallResolveModel(coAgent))?.ModelID).toBe('m-keyed');
+    });
+
+    it('falls through past a model whose driver does not support client-direct', async () => {
+        // A keyed top model whose driver cannot do client-direct sessions must not be chosen for a
+        // client-direct co-agent — resolution skips it to the next client-direct-capable model.
+        engineState.Models = [
+            model('m-top', 'Realtime Top', 90),
+            model('m-cd', 'Realtime ClientDirect', 10),
+        ];
+        engineState.ModelVendors = [vendor('m-top', 'NoCDDriver', 1), vendor('m-cd', 'CDDriver', 1)];
+        const svc = new MetadataExposedService();
+        svc.Keys = { NoCDDriver: 'k', CDDriver: 'k' };
+        svc.NonClientDirectDrivers.add('NoCDDriver');   // top model resolves but isn't client-direct
+
+        expect((await svc.CallResolveModel(coAgent))?.ModelID).toBe('m-cd');
     });
 
     it('findModelByID resolves from the cache and returns null when absent', () => {

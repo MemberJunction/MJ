@@ -983,11 +983,19 @@ export class RealtimeClientSessionService {
      * @returns The resolved model + identifiers, or `null`.
      */
     protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended): Promise<RealtimeModelResolution | null> {
-        const model = this.selectRealtimeModelEntity(coAgent);
-        if (!model) {
-            return null;
+        // Walk candidates in descending PowerRank, returning the FIRST that fully resolves to a usable
+        // client-direct driver (active vendor + API key + ClassFactory driver + SupportsClientDirect).
+        // Single-pick dead-ended whenever the highest-power model lacked a key or client-direct support
+        // — e.g. a newly-seeded provider (Grok/Inworld) with no env key outranking GPT Realtime — and
+        // surfaced "No usable Realtime model" instead of falling through to a model that works.
+        const candidates = this.selectRealtimeModelCandidates(coAgent);
+        for (const model of candidates) {
+            const resolution = this.resolveVendorAndInstantiate(model);
+            if (resolution && resolution.Model.SupportsClientDirect) {
+                return resolution;
+            }
         }
-        return this.resolveVendorAndInstantiate(model);
+        return null;
     }
 
     /**
@@ -1047,19 +1055,18 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Selects the highest-power active model of AIModelType `Realtime`. Mirrors
-     * `BaseAgent.selectRealtimeModelEntity`.
+     * The active models of AIModelType `Realtime`, sorted highest-PowerRank first — the candidate
+     * list {@link resolveRealtimeModel} walks until one yields a usable client-direct driver.
+     * Returns ALL candidates (not just the top pick) so a keyless or non-client-direct top model
+     * falls through to the next usable one instead of dead-ending the whole resolution.
      *
      * @param coAgent The co-agent (reserved for future per-agent model preference).
-     * @returns The chosen model entity, or `null`.
+     * @returns The candidate models in resolution order (empty array when none are active).
      */
-    private selectRealtimeModelEntity(coAgent: MJAIAgentEntityExtended): MJAIModelEntityExtended | null {
-        const realtimeModels = AIEngine.Instance.Models.filter(m => m.IsActive && this.isRealtimeModel(m));
-        if (realtimeModels.length === 0) {
-            return null;
-        }
-
-        return realtimeModels.sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+    private selectRealtimeModelCandidates(coAgent: MJAIAgentEntityExtended): MJAIModelEntityExtended[] {
+        return AIEngine.Instance.Models
+            .filter(m => m.IsActive && this.isRealtimeModel(m))
+            .sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
     }
 
     /**
@@ -1190,7 +1197,8 @@ export class RealtimeClientSessionService {
             `conversation with the user, always speaking in the FIRST PERSON as ${targetName} — own the work ` +
             `("I'm pulling that up", "I found three matches"); never refer to ${targetName} or the work in the ` +
             `third person. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
-            `tool and narrate progress while it runs — do not attempt to do the work yourself.`;
+            `tool and narrate progress while it runs — do not attempt to do the work yourself.` +
+            this.buildInteractiveSurfaceFraming(input.ExtraTools);
 
         const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);
         const voiceManner = BuildVoiceMannerSection(effectiveConfig);
@@ -1202,6 +1210,33 @@ export class RealtimeClientSessionService {
         return [framing, coAgentPrompt, voiceManner, targetIdentity, priorTranscript, history, memoryContext]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
+    }
+
+    /**
+     * Builds the "interactive-surface tools" exception clause appended to the co-agent framing when
+     * the client supplied channel tools (browser_*, Whiteboard_*, …) as ExtraTools. Without it the
+     * co-agent — told to route ALL work through invoke-target-agent — delegates browser/whiteboard
+     * requests to the target agent (which has no live channel of its own) instead of driving the
+     * surface itself, then hallucinates a "missing session id". The tools ARE already in its set
+     * ({@link buildStableToolSet} merges `[invokeTarget, ...extraTools]`); this clause tells the model
+     * to USE them directly. Returns empty for pure-voice sessions (no ExtraTools), keeping that
+     * framing untouched. Generic by design — it names browser_ and Whiteboard_ tools only as
+     * examples, so any future client channel is covered automatically.
+     *
+     * @param extraTools The client-supplied channel tools, when any.
+     * @returns The exception clause (leading space included), or '' when there are no extra tools.
+     */
+    protected buildInteractiveSurfaceFraming(extraTools?: RealtimeToolDefinition[]): string {
+        if (!extraTools || extraTools.length === 0) {
+            return '';
+        }
+        return ` ONE EXCEPTION: besides '${INVOKE_TARGET_AGENT_TOOL_NAME}' you have been given ` +
+            `interactive-surface tools (for example 'browser_*' to drive a LIVE web browser the user can ` +
+            `watch, or 'Whiteboard_*' to draw on a shared board). Those surfaces are operated by YOU, ` +
+            `directly — when the user asks to use one (e.g. "open/show a browser", "go to a site", "add ` +
+            `to the whiteboard"), call the matching tool yourself immediately and narrate what you're ` +
+            `doing. NEVER route an interactive-surface request through '${INVOKE_TARGET_AGENT_TOOL_NAME}', ` +
+            `and never claim you lack a session — calling the tool is all that's needed.`;
     }
 
     /**
