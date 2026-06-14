@@ -5,7 +5,7 @@
  * session lifecycle events that originate from PR #2787's Sessions/Channels
  * infrastructure. It does NOT subscribe directly to any Angular service or
  * realtime client — those concerns live behind an {@link ISessionsAdapter} the
- * host registers at bootstrap (typically `VoiceSessionsAdapter` in
+ * host registers at bootstrap (typically `RealtimeSessionsAdapter` in
  * `@memberjunction/ng-conversations`, but anything implementing the contract
  * works — a React host, a Node test harness, a server-side runner, etc.).
  *
@@ -13,7 +13,7 @@
  * - `session-started` — a new realtime session has fully started (sessionId is
  *   non-null, the realtime client is connected). Adapter implementations are
  *   responsible for emitting only AFTER all the prerequisites are satisfied
- *   (e.g., the Angular `VoiceSessionsAdapter` waits for both `Active$` AND a
+ *   (e.g., the Angular `RealtimeSessionsAdapter` waits for both `Active$` AND a
  *   non-null `agentSessionId`).
  * - `session-channel` — a channel (voice/whiteboard/whatever) opened or closed
  *   inside the session. The `state` union is intentionally narrow
