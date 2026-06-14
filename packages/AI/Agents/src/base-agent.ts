@@ -6932,11 +6932,9 @@ The context is now within limits. Please retry your request with the recovered c
                 displayMode: 'live' // Only show in live mode
             });
             
-            // Set PayloadAtStart
-            if (stepEntity && payload) {
-                stepEntity.PayloadAtStart = this.serializePayloadAtStart(payload);
-            }
-            
+            // PayloadAtStart was already serialized from this same `payload` by createStepEntity
+            // above (payloadAtStart: payload) — no need to re-serialize the (potentially large) payload here.
+
             let downstreamPayload = payload; // Start with current payload
             if (params.agent.PayloadSelfReadPaths) {
                 const downstreamPaths = JSON.parse(params.agent.PayloadSelfReadPaths);
@@ -10787,13 +10785,18 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.Status = 'Completed';
             }
 
-            this._agentRun.Result = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
+            // Serialize the (largest-it-ever-gets) final payload ONCE and reuse for both
+            // Result and FinalPayload instead of stringifying the same object three times.
+            const finalPayloadJson = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
+            this._agentRun.Result = finalPayloadJson;
             this._agentRun.FinalStep = finalStep.step;
             this._agentRun.Message = finalStep.message;
 
-            // Set the FinalPayloadObject - this will automatically stringify for the DB
+            // Set the FinalPayloadObject (populates the object cache; its setter also writes
+            // FinalPayload when the value changes). We then assign FinalPayload from the
+            // already-computed JSON to guarantee it's set regardless of the setter's change guard.
             this._agentRun.FinalPayloadObject = resolvedPayload;
-            this._agentRun.FinalPayload = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
+            this._agentRun.FinalPayload = finalPayloadJson;
             
             // Calculate total tokens from all prompts and sub-agents
             const tokenStats = this.calculateTokenStats();
