@@ -24,6 +24,13 @@
       "ClientPluginClass": "RealtimeRemoteBrowserChannel",
       "TransportType": "PubSub",
       "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "C84FA171-663C-480C-8ED3-A91FE27BCC64"
+    },
+    "sync": {
+      "lastModified": "2026-06-14T01:09:56.791Z",
+      "checksum": "e3bf6cd56fa1f9a72abe94c69a30e4e365979e2168c7a2a2ac737d13bf47a421"
     }
   }
 ]
