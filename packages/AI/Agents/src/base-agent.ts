@@ -1835,7 +1835,13 @@ export class BaseAgent {
             `You are the real-time voice for the agent "${params.agent.Name}". Hold a natural, ` +
             `low-latency conversation with the user. When actual work is required, call the ` +
             `'invoke-target-agent' tool and narrate progress while it runs — do not attempt to do ` +
-            `the work yourself.`;
+            `the work yourself. ONE EXCEPTION: besides 'invoke-target-agent' you may have been given ` +
+            `interactive-surface tools (for example 'browser_*' to drive a LIVE web browser the user ` +
+            `can watch, or 'Whiteboard_*' to draw on a shared board). Those surfaces are operated by ` +
+            `YOU, directly — when the user asks to use one (e.g. "open/show a browser", "go to a ` +
+            `site", "add to the whiteboard"), call the matching tool yourself immediately and narrate ` +
+            `what you're doing. NEVER route an interactive-surface request through 'invoke-target-agent', ` +
+            `and never claim you lack a session — calling the tool is all that's needed.`;
 
         const basePrompt = config.systemPrompt?.TemplateText ? config.systemPrompt.TemplateText : '';
         // Effective-config voice persona (realtime.voice.default) → short "Voice & manner" section.
