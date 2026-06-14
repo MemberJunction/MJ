@@ -221,9 +221,16 @@ export class xAIRealtime extends BaseRealtimeModel {
         if (params.Tools && params.Tools.length > 0) {
             session.tools = mapRealtimeTools(params.Tools);
         }
-        // Opt into USER mic-input transcription so BOTH sides of the conversation are captured (live
-        // captions + persisted turns), matching the server-bridged session.update path.
-        session.audio = { input: { transcription: { model: XAI_INPUT_TRANSCRIPTION_MODEL } } };
+        // Opt into USER mic-input transcription (both sides captured) AND explicit server-VAD turn
+        // detection with create_response. Without create_response Grok hears + transcribes the user
+        // (observed: speech_started + input_audio_transcription.* arrive) but never auto-generates a
+        // reply — no response.created/audio. server_vad + create_response makes it commit the turn and respond.
+        session.audio = {
+            input: {
+                transcription: { model: XAI_INPUT_TRANSCRIPTION_MODEL },
+                turn_detection: { type: 'server_vad', create_response: true },
+            },
+        };
         const response = await this.mintClientSecret({ session });
         return {
             Provider: 'xai',
@@ -552,7 +559,7 @@ export class xAIRealtimeSession implements IRealtimeSession {
             // Opt into USER input transcription so user-role transcripts flow server-bridged too
             // (the contract promises BOTH roles). The config bag spreads after this so a
             // per-conversation override can still replace the audio block.
-            audio: { input: { transcription: { model: XAI_INPUT_TRANSCRIPTION_MODEL } } },
+            audio: { input: { transcription: { model: XAI_INPUT_TRANSCRIPTION_MODEL }, turn_detection: { type: 'server_vad', create_response: true } } },
             ...config,
         };
         if (tools && tools.length > 0) {
