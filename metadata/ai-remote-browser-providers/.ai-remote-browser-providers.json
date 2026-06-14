@@ -24,7 +24,7 @@
       "Description": "Browser-as-a-service. Exposes a CDP connect endpoint plus a first-party AI-control harness (Stagehand act/extract/observe), a live-view stream with human takeover, stealth, proxy egress, session recording, persistent contexts, and CAPTCHA solving. The richest backend — offload orchestration and streaming entirely.",
       "ProviderType": "Service",
       "DriverClass": "BrowserbaseRemoteBrowser",
-      "Status": "Active",
+      "Status": "Disabled",
       "DefaultControlMode": "Collaborative",
       "SupportedFeatures": "{\"RawCdpControl\":true,\"NativeAIControl\":true,\"LiveView\":true,\"HumanTakeover\":true,\"ScreenStreaming\":true,\"Stealth\":true,\"ProxyEgress\":true,\"SessionRecording\":true,\"PersistentContext\":true,\"MultiTab\":true,\"FileDownloads\":true,\"CaptchaSolving\":true}"
     },
@@ -32,8 +32,8 @@
       "ID": "6C29BB4A-85CA-40BD-8AD0-545BAEB26792"
     },
     "sync": {
-      "lastModified": "2026-06-13T11:33:59.888Z",
-      "checksum": "f3ed4bf43e1f5da908e4054811a2d3670c856f1f483c5f723265df13300347c6"
+      "lastModified": "2026-06-14T22:05:07.870Z",
+      "checksum": "ece467d8f3d09ad8e8734eacae1b9716fe10c129316712ec52dba769fade00a3"
     }
   },
   {
@@ -42,7 +42,7 @@
       "Description": "Browser-as-a-service (steel.dev). CDP connect endpoint, a session viewer with human takeover, stealth, proxy egress, session recording, persistent contexts, and CAPTCHA solving. No first-party AI harness — driven by MJ computer-use (or OSS Stagehand-over-CDP) control strategies.",
       "ProviderType": "Service",
       "DriverClass": "SteelRemoteBrowser",
-      "Status": "Active",
+      "Status": "Disabled",
       "DefaultControlMode": "Collaborative",
       "SupportedFeatures": "{\"RawCdpControl\":true,\"LiveView\":true,\"HumanTakeover\":true,\"ScreenStreaming\":true,\"Stealth\":true,\"ProxyEgress\":true,\"SessionRecording\":true,\"PersistentContext\":true,\"MultiTab\":true,\"FileDownloads\":true,\"CaptchaSolving\":true}"
     },
@@ -50,8 +50,8 @@
       "ID": "3FBFE9C9-2F86-4028-A4F7-42B28D215B16"
     },
     "sync": {
-      "lastModified": "2026-06-13T11:33:59.900Z",
-      "checksum": "bcfe1a2edb011f298102fcae1c48c47acdcf7e3ad9b037896aaeb171bfe88250"
+      "lastModified": "2026-06-14T22:05:07.841Z",
+      "checksum": "a8fb8f4a0a9bcebc08e0a5c53ca3de33913ba5ef044f7c4435a78b3d3c70e694"
     }
   },
   {
@@ -60,7 +60,7 @@
       "Description": "Browser-as-a-service (browserless.io) — CDP-as-a-service with a live debug viewer, session recording, proxy egress, multi-tab, and downloads. Lean and inexpensive; defaults to ViewOnly (its viewer is debug-oriented rather than first-class human handoff).",
       "ProviderType": "Service",
       "DriverClass": "BrowserlessRemoteBrowser",
-      "Status": "Active",
+      "Status": "Disabled",
       "DefaultControlMode": "ViewOnly",
       "SupportedFeatures": "{\"RawCdpControl\":true,\"LiveView\":true,\"ScreenStreaming\":true,\"SessionRecording\":true,\"ProxyEgress\":true,\"MultiTab\":true,\"FileDownloads\":true}"
     },
@@ -68,8 +68,8 @@
       "ID": "797A8F96-7758-4449-98F5-21F623F9ECAE"
     },
     "sync": {
-      "lastModified": "2026-06-13T11:33:59.913Z",
-      "checksum": "5979914fa1a41aa9bad36db6cc4f79dd8fb44d201b45b4ec4a6de99f3d001593"
+      "lastModified": "2026-06-14T22:05:07.854Z",
+      "checksum": "91fb8e59b13110b2b464ae5489f55dc0d40f546966737f91b692a526f7ceb306"
     }
   },
   {
@@ -78,7 +78,7 @@
       "Description": "Browser-as-a-service (hyperbrowser.ai). CDP connect endpoint plus a first-party agentic browse API, live-view with human takeover, stealth, proxy egress, session recording, persistent contexts, multi-tab, downloads, and CAPTCHA solving.",
       "ProviderType": "Service",
       "DriverClass": "HyperbrowserRemoteBrowser",
-      "Status": "Active",
+      "Status": "Disabled",
       "DefaultControlMode": "Collaborative",
       "SupportedFeatures": "{\"RawCdpControl\":true,\"NativeAIControl\":true,\"LiveView\":true,\"HumanTakeover\":true,\"ScreenStreaming\":true,\"Stealth\":true,\"ProxyEgress\":true,\"SessionRecording\":true,\"PersistentContext\":true,\"MultiTab\":true,\"FileDownloads\":true,\"CaptchaSolving\":true}"
     },
@@ -86,8 +86,8 @@
       "ID": "A23E1DB9-E60B-4C6B-86B9-1F0544E58FC8"
     },
     "sync": {
-      "lastModified": "2026-06-13T11:33:59.922Z",
-      "checksum": "595a3b5fc57d9b2855c2ee942b1c38a2cb3d425a52b3607d4aa6566389b03fc3"
+      "lastModified": "2026-06-14T22:05:07.881Z",
+      "checksum": "9b886742b31a2ac86c40edcbb17880b640022a3fb96725300758a64b4d4378b9"
     }
   }
 ]

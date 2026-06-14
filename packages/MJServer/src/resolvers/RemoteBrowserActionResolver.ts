@@ -214,48 +214,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<string | undefined> {
-        // A realtime voice session is bound to the CO-AGENT (the voice agent), but the remoteBrowser
-        // config lives on the TARGET agent it voices — whose id is persisted in the session Config_.
-        // Read the TARGET's config FIRST (Sage's "Self-Hosted Chrome"), then fall back to the session's
-        // own agent for direct / non-co-agent sessions. Without this the co-agent (which has no
-        // remoteBrowser config) yields undefined and the engine can't pick among multiple Active providers.
-        const targetAgentID = this.readTargetAgentID(session);
-        for (const agentID of [targetAgentID, session.AgentID]) {
-            if (!agentID) {
-                continue;
-            }
-            const name = await this.readRemoteBrowserProviderForAgent(agentID, contextUser, provider);
-            if (name) {
-                return name;
-            }
-        }
-        return undefined;
-    }
-
-    /** Reads the voiced TARGET agent's id from the session's persisted `Config_` (`{ targetAgentID }`). */
-    private readTargetAgentID(session: MJAIAgentSessionEntity): string | undefined {
-        try {
-            const raw = session.Config_;
-            if (!raw || raw.trim().length === 0) {
-                return undefined;
-            }
-            const parsed = JSON.parse(raw) as { targetAgentID?: string };
-            const id = parsed?.targetAgentID?.trim();
-            return id && id.length > 0 ? id : undefined;
-        } catch {
-            return undefined;
-        }
-    }
-
-    /** Loads one agent and returns its `TypeConfiguration.remoteBrowser.provider`, or `undefined`. */
-    private async readRemoteBrowserProviderForAgent(
-        agentID: string,
-        contextUser: UserInfo,
-        provider: IMetadataProvider,
-    ): Promise<string | undefined> {
+        // The session's agent IS the co-agent (the realtime voice agent), and the interactive channels
+        // (Remote Browser, Whiteboard) are the CO-AGENT's abilities — so the remoteBrowser backend config
+        // lives on the co-agent's TypeConfiguration, not on the target agent it voices.
         try {
             const agent = await provider.GetEntityObject<MJAIAgentEntity>(AGENT_ENTITY, contextUser);
-            if (!(await agent.Load(agentID))) {
+            if (!(await agent.Load(session.AgentID))) {
                 return undefined;
             }
             const config = this.parseTypeConfiguration(agent.TypeConfiguration);
@@ -263,7 +227,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
             return name && name.length > 0 ? name : undefined;
         } catch (error) {
             LogError(
-                `ExecuteRemoteBrowserAction: failed to read agent ${agentID} TypeConfiguration: ${error instanceof Error ? error.message : String(error)}`,
+                `ExecuteRemoteBrowserAction: failed to read agent TypeConfiguration for session ${session.ID} — ` +
+                    `falling back to the single Active provider: ${error instanceof Error ? error.message : String(error)}`,
             );
             return undefined;
         }

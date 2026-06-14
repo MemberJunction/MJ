@@ -6,7 +6,6 @@
       "Description": "Simple demo agent showcasing loop agent capabilities. Can perform web searches, retrieve stock prices, get weather forecasts, look up census data, and fetch web page content. The AI dynamically determines the pathway and can execute multiple actions in parallel with no predetermined sequence.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
-      "TypeConfiguration": "{\"remoteBrowser\":{\"provider\":\"Self-Hosted Chrome\"}}",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
       "AgentTypePromptParams": {},
@@ -107,8 +106,8 @@
       "ID": "55399C30-C59B-47D2-A856-640DA89C46E4"
     },
     "sync": {
-      "lastModified": "2026-06-14T01:34:02.468Z",
-      "checksum": "950b3394314afafdedc22acb260f157a2711d661e8ac4ce532bea5230b93d822"
+      "lastModified": "2026-06-14T22:05:07.319Z",
+      "checksum": "ee3d81d2f2d59ae055413bc5215b2c09bee8d4275fa73e20bcead78004a6f3b4"
     }
   },
   {
