@@ -1,9 +1,14 @@
 # MemberJunction Hot-Path Performance Optimization Plan
 
-> **Status:** DRAFT — awaiting review comments before implementation
+> **Status:** REVIEWED — feedback incorporated (PR #2839, 2026-06-14); ready to implement
 > **Branch:** `claude/code-hotspot-analysis-dmoocz`
 > **Author:** Code-hotspot analysis (2026-06-14)
 > **Scope:** Net-new, high-frequency hot-path optimizations across the core data layer, GraphQL client/cache, Angular render path, and the AI agent/prompt runtime.
+
+> **Review outcome (PR #2839):** Waves 1, 2, 3 approved. Decisions folded in below:
+> - Cache size estimate (#5): **lazy + estimate by stringifying only the first row × row count** (§4.1).
+> - `gatherPromptTemplateData` (#12): replaced per-run memoization with a **cross-run base cache on `AIEngineBase` + BaseEntity-event invalidation + per-run override clone**, and **adds runtime `subAgentChanges`** mirroring `actionChanges` (§5.1).
+> - Sequencing: **Waves 1-3 ship as ONE PR; Wave 4 is its own PR** (§8).
 
 ---
 
@@ -49,13 +54,15 @@ These are already shipped or finished and must not be restated as new work:
 | 9 | Server | Cache full-field SELECT string per entity | MED | 2 |
 | 10 | GraphQL | Shared `FieldMapper` + targeted `__mj_` key rename (per-row alloc) | MED | 2 |
 | 11 | GraphQL | Memoize `getViewRunTimeFieldList` field-string; `Set`-based dedup | MED | 2 |
-| 12 | Agent | Memoize `gatherPromptTemplateData` invariant block per run | HIGH | 3 |
+| 12 | Agent | `AIEngineBase` base sub-agent/action catalog cache + event invalidation + new `subAgentChanges` runtime override | HIGH | 3 |
 | 13 | Agent | Remove duplicate `PayloadAtStart` serialize; reuse unchanged `PayloadAtEnd` | HIGH | 3 |
 | 14 | Agent | `finalizeAgentRun` triple-stringify → single | MED | 3 |
 | 15 | Agent | `finalizeStepEntity` throwaway deep-clone before stringify | LOW-MED | 3 |
 | 16 | Prompt | `resolveAllPlaceholders()` re-run per child template | MED | 3 |
 | 17 | Angular | Template-bound getters allocating/scanning per CD cycle | HIGH-MED | 4 |
-| 18 | Core | `UUIDsEqual` `===` fast-path short-circuit | LOW | 4 |
+| 18 | Core | `UUIDsEqual` `===` fast-path short-circuit | LOW | 1 |
+
+> **PR grouping (review-decided):** Waves 1-3 ship together in **PR A**; Wave 4 ships in **PR B**. (`UUIDsEqual` #18 lands with Wave 1 in PR A — the "Wave" column reflects logical grouping, not a 4th PR.)
 
 ---
 
@@ -110,9 +117,8 @@ These are already shipped or finished and must not be restated as new work:
   - `estimateSize(JSON.stringify(data))` fully serializes the entire result array just for a byte count (`length*2`), on every cache write incl. the per-save/delete `storeCachedResults`.
   - Single-row upsert/remove rebuilds a `Map` from the entire array (a `CompositeKey` + concatenated string per existing row), then re-stringifies (compounds with above).
 - **Fix:**
-  - Size: estimate from one sampled row × count (accounting is already documented as approximate).
+  - Size (**review-decided**): compute **lazily** and estimate from `JSON.stringify(results[0]).length × results.length` (first-row sample × count). Eviction accounting is already documented as approximate, so a single-row sample is acceptable; guard empty result sets (size 0) and skip the estimate entirely when nothing is cached.
   - Mutation: linear `findIndex` by PK + splice/replace; avoid per-row `CompositeKey` allocation and full Map rebuild.
-- **Decision for review:** sampling strategy for size estimate (first row vs. first-N average) and whether to keep an exact path behind a debug flag.
 
 ### 4.2 `Entities.find` → `EntityByName` (#7) — *corroborated by 2 probes*
 - **Where:** `graphQLDataProvider.ts:817/983/1925`, `databaseProviderBase.ts:994`.
@@ -146,10 +152,15 @@ These are already shipped or finished and must not be restated as new work:
 
 > Excludes everything done in #2836 `adfe5564f`/`6ec4556f9` (see §1.1). These are in untouched files/paths.
 
-### 5.1 Memoize `gatherPromptTemplateData` invariant block (#12) — *corroborated by 2 probes*
-- **Where:** `packages/AI/Agents/src/base-agent.ts:4998-5088`, called per prompt step via `preparePromptParams` (`:2819`).
-- **Problem:** rebuilds the entire sub-agent/action catalog every step — `Agents.filter().sort()` + O(subAgents×allAgents) `.map(find)`, O(actions×agentActions) action resolution, `JSON.parse(agentType.PromptParamsSchema)` + `JSON.parse(agent.AgentTypePromptParams)` every step, plus `formatSubAgentDetails`/`formatActionDetails` markdown rebuilds. All invariant for the run except `extraData`/`actionChanges`.
-- **Fix:** memoize the agent-invariant portion once per `Execute()` run (keyed by `agent.ID` + presence of `actionChanges`); recompute only the per-step vars. Move the two `JSON.parse` calls out of the loop.
+### 5.1 Cache the agent "base" sub-agent/action catalog on `AIEngineBase` (#12) — *corroborated by 2 probes; design per review*
+- **Where:** `packages/AI/Agents/src/base-agent.ts:4998-5088`, called per prompt step via `preparePromptParams` (`:2819`); cache lives in `packages/AI/BaseAIEngine` (delegated by `packages/AI/Engine`), alongside the indexes added in #2836 `adfe5564f`.
+- **Problem:** rebuilds the entire sub-agent/action catalog every step — `Agents.filter().sort()` + O(subAgents×allAgents) `.map(find)`, O(actions×agentActions) action resolution, `JSON.parse(agentType.PromptParamsSchema)` + `JSON.parse(agent.AgentTypePromptParams)` every step, plus `formatSubAgentDetails`/`formatActionDetails` markdown rebuilds.
+- **Why not a simple per-run memo:** actions (and, once added, sub-agents) can be **overridden per run** via `ExecuteAgentParams`, so the catalog is not globally invariant. The right layering is a process-lifetime *base* cache + per-run override application.
+- **Fix (3 parts):**
+  1. **`AIEngineBase` base cache.** Add a lazily-built, per-agent cache of the agent's **base** sub-agents + actions and their **formatted markdown** (`subAgentDetails`, `actionDetails`, parsed `agentTypePromptParams`). Built the first time a given agent is run; held until end of process. **Coarse-invalidated** via BaseEntity events on any change to `AI Agents`, `MJ: AI Agent Actions`, or `MJ: AI Agent Relationships` — on any such event, **wipe the whole base-catalog cache** and let it rebuild on next exec (rebuild cost is small; no fine-grained per-agent invalidation needed). This mirrors how #2836's BaseAIEngine indexes invalidate in `AdditionalLoading`, but adds event-driven invalidation since these entities can change mid-process.
+  2. **Add runtime `subAgentChanges`** to `ExecuteAgentParams`, mirroring the existing `actionChanges` (`agent-types.ts:1271`) — we support runtime action overrides but **not** sub-agent overrides today (confirmed: no `subAgentChanges` exists). Add the `SubAgentChange` type + the same scope/propagation semantics (`global`/`root`/`all-subagents`/`specific`) and the application logic in the agent hierarchy. This is a **net-new feature** delivered as part of this work.
+  3. **Per-run application.** In `gatherPromptTemplateData`: if there is **no** runtime `actionChanges`/`subAgentChanges` override, use the cached base catalog **directly** (zero rebuild). If overrides are present, **clone the cached base bits and mutate the copy** for that run (never mutate the shared cache). Move the two `JSON.parse` calls into the base-cache build so they run once per agent, not per step. Per-step variation (`extraData`, scratchpad/artifact vars, client tools) is still merged on top each step.
+- **Open sub-question (resolve during build):** confirm the cleanest place to subscribe to the BaseEntity events (engine-level subscription at first cache build) and that a global wipe is acceptable vs. per-agent keyed invalidation — review steer is "global wipe is fine."
 
 ### 5.2 Payload serialization (#13, #14, #15)
 - **#13:** delete the duplicate `PayloadAtStart` serialize (`base-agent.ts:6936-6937` — `createStepEntity` at `:6401` already serialized it); reuse `PayloadAtStart` string for `PayloadAtEnd` when `finalPayload === payload` (no change request applied); add a `{ref, json}` memo so step N's end and step N+1's start (same object ref) serialize once.
@@ -164,7 +175,9 @@ These are already shipped or finished and must not be restated as new work:
 ### Wave 3 testing
 - **Modify/extend:** existing `base-agent` and `AIPromptRunner` suites — update any test that asserted per-step recomputation or counted serialize calls.
 - **New tests:**
-  - `gatherPromptTemplateData`: invariant block computed once across N steps (spy on `JSON.parse`/format helpers → called once), recomputed when `actionChanges` present, per-step `extraData`/scratchpad still merged correctly, output identical to pre-refactor for a fixture agent.
+  - **Base-catalog cache:** built once per agent across N steps **and across multiple runs** (spy on `JSON.parse`/format helpers → called once per agent, not per step/run); cache **wiped and rebuilt** after a simulated BaseEntity event on `AI Agents` / `MJ: AI Agent Actions` / `MJ: AI Agent Relationships`; output identical to pre-refactor for a fixture agent.
+  - **`subAgentChanges` (new feature):** parity with `actionChanges` — scope semantics (`global`/`root`/`all-subagents`/`specific`), propagation to sub-agents, add/remove modes; mirror the existing `action-changes.test.ts` coverage in a new `sub-agent-changes.test.ts`.
+  - **Per-run override application:** no override → cached base used directly (cache object **not** mutated — assert reference identity preserved); override present → a **clone** is mutated and the shared cache stays intact (assert the base cache is unchanged after a run with overrides).
   - Payload serialization: `PayloadAtStart` serialized exactly once per step; `PayloadAtEnd` reuses string when unchanged; re-serializes when a `payloadChangeRequest` mutates; cross-step ref memo correctness; `finalizeAgentRun` produces identical `Result`/`FinalPayload`/`FinalPayloadObject` with a single stringify.
   - Placeholder resolution: resolved once for a K-child prompt (spy), child renders receive the same resolved values, single-template prompts unaffected.
 - **Determinism:** all new tests mock LLM + DB; assert no behavior change in rendered prompt text / persisted records (golden-fixture comparison).
@@ -224,14 +237,16 @@ This is a first-class deliverable, not an afterthought:
 
 ## 8. Sequencing & PR Strategy
 
-Each wave = one focused, independently-reviewable PR (off `next`):
+**Review-decided grouping:** Waves **1-3 ship together as ONE PR**; Wave **4 is its own PR**.
 
-1. **PR A — Wave 1 (MJCore core path):** field index, `TSType`, `EntityField` construction, derived-array memoization, `UUIDsEqual` fast path. *Lowest risk, highest leverage, no API changes.*
-2. **PR B — Wave 2 (server + GraphQL/cache):** depends on PR A's field index. LocalCacheManager, `EntityByName`, per-query scans, SELECT-string memo, FieldMapper.
-3. **PR C — Wave 3 (agent/prompt runtime):** independent of A/B. `gatherPromptTemplateData`, payload serialization, placeholder resolution.
-4. **PR D — Wave 4 (Angular):** independent; can run in parallel with C. Component-by-component conversion (could split if large).
+1. **PR A — Waves 1+2+3 (core + server/cache + agent/prompt runtime):**
+   - Wave 1 (MJCore core path): field index, `TSType`, `EntityField` construction, derived-array memoization, `UUIDsEqual` fast path.
+   - Wave 2 (server + GraphQL/cache): builds on Wave 1's field index — LocalCacheManager, `EntityByName`, per-query scans, SELECT-string memo, FieldMapper.
+   - Wave 3 (agent/prompt runtime): `AIEngineBase` base-catalog cache + `subAgentChanges` feature, payload serialization, placeholder resolution.
+   - Internally sequence the commits 1 → 2 → 3 so each builds/tests green on its own, but land them in a single PR.
+2. **PR B — Wave 4 (Angular):** separate PR; can run in parallel. Component-by-component conversion (split further only if it gets large).
 
-> Order rationale: Wave 1 is the dependency root and the safest; Waves 3 and 4 can proceed in parallel once Wave 1 lands.
+> Order rationale within PR A: Wave 1 is the dependency root and the safest; Wave 2 consumes its field index; Wave 3 is independent of 1/2 but bundled per review. Wave 4 (Angular) is fully independent and isolated in PR B.
 
 ---
 
@@ -245,10 +260,13 @@ Each wave = one focused, independently-reviewable PR (off `next`):
 
 ---
 
-## 10. Open Questions for Review
+## 10. Open Questions — Resolutions
 
-1. **#3** — `EntityField` direct `new` only, or also add the `ClassFactory.GetRegistration` memo (broader win, slightly more surface)? Recommendation: both.
-2. **#5** — size-estimate sampling: first row, or first-N average? Keep an exact path behind a debug flag?
-3. **Wave 4 granularity** — one PR for all components, or split (e.g. always-on shell + lists first, dashboards second)?
-4. Any components/areas you want explicitly added or removed from Wave 4's list?
-5. Appetite for adding micro-benchmark harnesses (§7.4) as committed artifacts vs. one-off measurement?
+1. **#3 `EntityField` construction** — *Decision:* do **both** (direct `new` on the field hot path **and** the `ClassFactory.GetRegistration` memo for general hardening). Wave 1 approved as written.
+2. **#5 cache size estimate** — *Resolved (review):* lazy + estimate via `JSON.stringify(first row) × row count`; no exact-path debug flag needed.
+3. **Sequencing** — *Resolved (review):* Waves 1-3 in one PR, Wave 4 in its own PR.
+4. **#12 agent catalog caching** — *Resolved (review):* `AIEngineBase` base cache + BaseEntity-event coarse wipe + per-run override clone; **add `subAgentChanges`** to mirror `actionChanges`. Global wipe on invalidation is acceptable (no per-agent keying required).
+
+### Still open (carry into implementation, not blockers)
+- Wave 4 component list — flag any additions/removals; current list in §6 stands unless told otherwise.
+- Micro-benchmark harnesses (§7.4) — commit as artifacts, or one-off measurement only? Defaulting to one-off unless you want them committed.
