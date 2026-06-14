@@ -108,10 +108,17 @@ const CONVERSATION_DETAIL_ARTIFACT_ENTITY = 'MJ: Conversation Detail Artifacts';
  */
 const WHITEBOARD_ARTIFACT_TYPE_NAME = 'Whiteboard';
 
-/** Maximum number of client-declared UI tools accepted at session mint. */
-const MAX_CLIENT_TOOLS = 16;
-/** Maximum accepted size (chars) of the serialized client tool declarations. */
-const MAX_CLIENT_TOOLS_JSON_CHARS = 64_000;
+/**
+ * Maximum number of client-declared UI tools accepted at session mint. Sized to comfortably fit
+ * MULTIPLE interactive channels at once plus headroom: the Whiteboard channel alone declares 17 tools
+ * and the Remote Browser channel 10, so a session with both is ~27 — the old cap of 16 silently rejected
+ * the ENTIRE set (parseClientTools is all-or-nothing), leaving the co-agent with only invoke-target-agent
+ * and forcing it to delegate every channel request. This is an abuse ceiling, not a working limit.
+ */
+const MAX_CLIENT_TOOLS = 64;
+/** Maximum accepted size (chars) of the serialized client tool declarations. Raised in step with
+ *  {@link MAX_CLIENT_TOOLS} — multi-channel tool sets with verbose descriptions + JSON schemas run large. */
+const MAX_CLIENT_TOOLS_JSON_CHARS = 256_000;
 /** Maximum accepted size (chars) of a persisted channel state blob. */
 const MAX_CHANNEL_STATE_CHARS = 2_000_000;
 
