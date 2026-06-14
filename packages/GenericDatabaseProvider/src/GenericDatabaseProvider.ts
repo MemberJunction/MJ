@@ -706,7 +706,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (!rows || rows.length === 0) return rows;
 
         // Step 1: Platform-specific datetime adjustment (virtual hook)
-        const datetimeFields = entityInfo.Fields.filter((field) => field.TSType === EntityFieldTSType.Date);
+        const datetimeFields = entityInfo.DatetimeFields; // memoized on EntityInfo (was Fields.filter per query)
         let processedRows: Record<string, unknown>[] = rows;
         if (datetimeFields.length > 0) {
             processedRows = await this.AdjustDatetimeFields(processedRows, datetimeFields, entityInfo);
@@ -1791,7 +1791,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     if (!params.Fields.find((f) => f.trim().toLowerCase() === ef.Name.toLowerCase())) fieldList.push(ef);
                 }
                 params.Fields.forEach((f) => {
-                    const field = entityInfo!.Fields.find((field) => field.Name.trim().toLowerCase() === f.trim().toLowerCase());
+                    const field = entityInfo!.FieldByName(f); // O(1) index (was O(F) Fields.find → O(F²) over the loop)
                     if (field) fieldList.push(field);
                     else LogError(`Field ${f} not found in entity ${entityInfo!.Name}`);
                 });
