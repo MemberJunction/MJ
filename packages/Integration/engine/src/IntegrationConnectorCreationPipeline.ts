@@ -271,7 +271,37 @@ export class IntegrationConnectorCreationPipeline {
             let runtimeAdded = 0;
             for (const d of runtimeObjects) {
                 const key = d.Name.toLowerCase();
-                if (seen.has(key)) continue;
+                if (seen.has(key)) {
+                    // §case-3 (data-only-discoverable): a DECLARED object the connector ALSO surfaces at
+                    // runtime, but the declared form carries NO fields (e.g. a file-feed stream declared by
+                    // NAME only — its columns are knowable solely from the records). Without this, the loop
+                    // skipped it, it stayed field-less + PK-less, and ApplyAll dropped it — so the user's data
+                    // for that object never landed. Discover its fields over the read path and populate the
+                    // existing declared object IN PLACE so it becomes syncable.
+                    const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
+                    if (existing && existing.Fields.length === 0) {
+                        try {
+                            const dfields = await opts.Connector.DiscoverFieldsViaFetch(opts.CompanyIntegration, d.Name, opts.ContextUser);
+                            existing.Fields = dfields.map(f => ({
+                                Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
+                                IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
+                                Precision: f.Precision ?? null, Scale: f.Scale ?? null, DefaultValue: f.DefaultValue ?? null,
+                                IsPrimaryKey: f.IsPrimaryKey ?? false, IsUniqueKey: f.IsUniqueKey, IsReadOnly: f.IsReadOnly,
+                                IsForeignKey: f.IsForeignKey ?? false, ForeignKeyTarget: f.ForeignKeyTarget ?? null,
+                            }));
+                            existing.PrimaryKeyFields = dfields.filter(f => f.IsPrimaryKey).map(f => f.Name);
+                            existing.Relationships = dfields
+                                .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                                .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' }));
+                            console.log(`[IntrospectPipeline] declared field-less object "${d.Name}" → discovered ${dfields.length} fields via read path`);
+                        } catch (err) {
+                            const msg = err instanceof Error ? err.message : String(err);
+                            emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for declared field-less "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
+                            console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for declared "${d.Name}": ${msg}`);
+                        }
+                    }
+                    continue;
+                }
                 seen.add(key);
                 let fields: ExternalFieldSchema[] = [];
                 try {

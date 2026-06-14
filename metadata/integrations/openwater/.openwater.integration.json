@@ -404,7 +404,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Program"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -423,7 +424,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "User"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -552,7 +554,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Program"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -571,7 +574,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Application"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -620,7 +624,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "User"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -734,7 +739,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Program"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -848,7 +854,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Application"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -867,7 +874,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "DeletedApplication"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=DeletedApplication&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -886,7 +894,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Invoice"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -1057,7 +1066,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Program"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -1201,7 +1211,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Program"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -1220,7 +1231,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Session"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Session&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -1263,7 +1275,7 @@
                   "IsReadOnly": false,
                   "IsPrimaryKey": false,
                   "IsUniqueKey": false,
-                  "IsForeignKey": true,
+                  "IsForeignKey": false,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID",
                   "MetadataSource": "Declared",
@@ -1494,7 +1506,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Program"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -1513,7 +1526,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Rounds"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Rounds&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -1526,7 +1540,7 @@
                   "IsReadOnly": false,
                   "IsPrimaryKey": false,
                   "IsUniqueKey": false,
-                  "IsForeignKey": true,
+                  "IsForeignKey": false,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID",
                   "MetadataSource": "Declared",
@@ -1551,7 +1565,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Application"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -1793,7 +1808,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Rounds"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Rounds&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -1892,7 +1908,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Invoice"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -2111,7 +2128,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Invoice"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -2325,7 +2343,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Application"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -2338,7 +2357,7 @@
                   "IsReadOnly": false,
                   "IsPrimaryKey": false,
                   "IsUniqueKey": false,
-                  "IsForeignKey": true,
+                  "IsForeignKey": false,
                   "Status": "Active",
                   "IntegrationObjectID": "@parent:ID",
                   "MetadataSource": "Declared",
@@ -2449,7 +2468,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "User"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -2559,7 +2579,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "User"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -2578,7 +2599,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "Application"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -3195,7 +3217,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "ScheduleRoom"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleRoom&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -3214,7 +3237,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "ScheduleDay"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleDay&IntegrationID=@parent:ID"
                 }
               },
               {
@@ -3233,7 +3257,8 @@
                   "MetadataSource": "Declared",
                   "Configuration": {
                     "ReferencedType": "ScheduleTimeSlot"
-                  }
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleTimeSlot&IntegrationID=@parent:ID"
                 }
               },
               {
