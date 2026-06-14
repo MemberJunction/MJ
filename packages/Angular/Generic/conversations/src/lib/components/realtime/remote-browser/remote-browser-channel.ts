@@ -166,7 +166,14 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
     const sessionId = this.Context?.AgentSessionID;
     if (!sessionId) {
-      return this.fail('No live browser session is available.');
+      // Diagnostic: distinguishes "channel never Initialized (no Context)" from "session id not yet
+      // set on the service" — the two distinct causes of a null id at tool-execution time.
+      console.warn('[RemoteBrowser] browser tool invoked but AgentSessionID is null', {
+        tool: toolName,
+        hasContext: !!this.Context,
+        agentSessionID: this.Context?.AgentSessionID ?? null,
+      });
+      return this.fail('No live browser session is available yet — the realtime session may still be connecting; try again in a moment.');
     }
 
     const data = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserActionResult>(
