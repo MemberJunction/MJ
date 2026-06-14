@@ -146,6 +146,18 @@ Automatic validation of AI outputs with configurable retry:
 - Validation syntax cleaning (removes `?`, `*`, `:type` markers from JSON keys)
 - Detailed validation attempt tracking
 
+**Output type coercion** (`AIPrompt.OutputType`): the raw model text is coerced before validation —
+`string` (verbatim), `number` (`parseFloat`, errors on `NaN`), `boolean` (`true/yes/1` ↔ `false/no/0`,
+case-insensitive + trimmed), `date` (`new Date`, errors on invalid), and `object` (JSON). For `object`,
+the text is first run through `CleanJSON` (strips markdown fences etc.); if that fails and
+`attemptJSONRepair` is set, it retries via JSON5 and then LLM-based repair. When an `OutputExample` is
+defined, validation-syntax markers are stripped from result keys automatically. With `skipValidation`,
+coercion failures return the raw output instead of throwing.
+
+**Validation behavior** (`AIPrompt.ValidationBehavior`): `Strict` retries up to `MaxRetries` on
+validation failure; `Warn` logs and returns the (invalid) output; `None` accepts as-is. The parsed
+`OutputExample` is cached by content so it isn't re-parsed on every run/retry.
+
 ### Streaming Support
 
 Real-time streaming of LLM responses:

@@ -1,0 +1,347 @@
+/**
+ * Combinatorial model-selection tests for the REAL AIPromptRunner.selectModel().
+ *
+ * A mock AIEngine (wired from realistic production-shaped fixtures) + a controllable
+ * credential gate (GetAIAPIKey) let these tests drive the actual selection logic across:
+ *   - SelectionStrategy: Default / Specific / ByPower (+ PowerPreference, MinPowerRank)
+ *   - Explicit model override + model-type compatibility + inactive-model exclusion
+ *   - Preferred-vendor boosting
+ *   - AIPromptModel associations, RequireSpecificModels, power-match fallback
+ *   - Configuration inheritance chains
+ *   - Credential availability gating + the short-circuit / forceFullModelEvaluation behavior
+ *
+ * Everything runs against the real private methods (reached via cast) so the tests catch
+ * regressions in the runner itself — only the engine + credential + API-key boundaries are mocked.
+ */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// ---------------------------------------------------------------------------
+// Mock state + a minimal AIEngine that mirrors the runner-facing contract.
+// Built inside vi.hoisted so the mock factory (also hoisted) can reference it.
+// ---------------------------------------------------------------------------
+const h = vi.hoisted(() => {
+  const norm = (s: unknown): string => (s == null ? '' : String(s).trim().toLowerCase());
+  const eq = (a: unknown, b: unknown): boolean => norm(a) === norm(b);
+
+  type State = {
+    vendorTypeDefinitions: Array<{ ID: string; Name: string }>;
+    vendors: Array<{ ID: string; Name: string; CredentialTypeID?: string | null }>;
+    modelTypes: Array<{ ID: string; Name: string }>;
+    configurations: Array<{ ID: string; Name: string; ParentID: string | null }>;
+    models: Array<Record<string, unknown>>;
+    modelVendors: Array<Record<string, unknown>>;
+    promptModels: Array<Record<string, unknown>>;
+    configuredDrivers: Set<string>;
+  };
+
+  const state: State = {
+    vendorTypeDefinitions: [], vendors: [], modelTypes: [], configurations: [],
+    models: [], modelVendors: [], promptModels: [], configuredDrivers: new Set(),
+  };
+
+  const engine = {
+    Config: vi.fn().mockResolvedValue(undefined),
+    get VendorTypeDefinitions() { return state.vendorTypeDefinitions; },
+    get Vendors() { return state.vendors; },
+    get ModelTypes() { return state.modelTypes; },
+    get Configurations() { return state.configurations; },
+    get Models() { return state.models; },
+    get ModelVendors() { return state.modelVendors; },
+    get PromptModels() { return state.promptModels; },
+    get InferenceProviderTypeID() {
+      return state.vendorTypeDefinitions.find(v => v.Name === 'Inference Provider')?.ID;
+    },
+    IsInferenceProvider(mv: { TypeID?: string }) {
+      const inf = state.vendorTypeDefinitions.find(v => v.Name === 'Inference Provider')?.ID;
+      if (!inf) {
+        const dev = state.vendorTypeDefinitions.find(v => v.Name === 'Model Developer')?.ID;
+        return !eq(mv?.TypeID, dev);
+      }
+      return eq(mv?.TypeID, inf);
+    },
+    get ModelsByID() { return new Map(state.models.map(m => [norm(m.ID), m])); },
+    get VendorsByID() { return new Map(state.vendors.map(v => [norm(v.ID), v])); },
+    get ModelTypesByID() { return new Map(state.modelTypes.map(t => [norm(t.ID), t])); },
+    get ConfigurationsByID() { return new Map(state.configurations.map(c => [norm(c.ID), c])); },
+    get ModelVendorsByModelID() {
+      const map = new Map<string, Array<Record<string, unknown>>>();
+      for (const mv of state.modelVendors) {
+        const k = norm(mv.ModelID);
+        (map.get(k) ?? map.set(k, []).get(k)!).push(mv);
+      }
+      return map;
+    },
+    get PromptModelsByPromptID() {
+      const map = new Map<string, Array<Record<string, unknown>>>();
+      for (const pm of state.promptModels) {
+        const k = norm(pm.PromptID);
+        (map.get(k) ?? map.set(k, []).get(k)!).push(pm);
+      }
+      return map;
+    },
+    GetConfigurationChain(id: string) {
+      const chain: Array<{ ID: string; Name: string; ParentID: string | null }> = [];
+      const seen = new Set<string>();
+      let cur: string | null = id;
+      while (cur) {
+        if (seen.has(norm(cur))) break;
+        const cfg = state.configurations.find(c => eq(c.ID, cur));
+        if (!cfg) break;
+        seen.add(norm(cur));
+        chain.push(cfg);
+        cur = cfg.ParentID;
+      }
+      return chain;
+    },
+    HasCredentialBindings() { return false; },
+    GetCredentialBindingsForTarget() { return []; },
+  };
+
+  const getApiKey = (driverClass: string): string =>
+    state.configuredDrivers.has(driverClass) ? 'sk-test-key' : '';
+
+  return { state, engine, getApiKey };
+});
+
+vi.mock('@memberjunction/aiengine', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, AIEngine: { Instance: h.engine } };
+});
+
+vi.mock('@memberjunction/ai', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, GetAIAPIKey: (driverClass: string) => h.getApiKey(driverClass) };
+});
+
+vi.mock('@memberjunction/credentials', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>().catch(() => ({}));
+  return {
+    ...actual,
+    CredentialEngine: {
+      Instance: {
+        Config: vi.fn().mockResolvedValue(undefined),
+        Credentials: [],
+        getCredentialById: () => null,
+        getCredential: vi.fn().mockResolvedValue({ values: {} }),
+      },
+    },
+  };
+});
+
+import { AIPromptRunner } from '../AIPromptRunner';
+import {
+  buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL, VENDOR, CONFIG, MODEL_TYPE,
+  makePromptModel, type AICatalog,
+} from './__fixtures__/ai-metadata.fixtures';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+type SelectModelResult = {
+  model: { ID: string; Name: string } | null;
+  vendorDriverClass?: string;
+  vendorApiName?: string;
+  selectionInfo?: {
+    modelsConsidered: Array<{ model: { ID: string }; vendor?: { ID: string }; available: boolean; unavailableReason?: string }>;
+    selectionReason: string;
+    fallbackUsed: boolean;
+  };
+  allCandidates?: Array<{ model: { ID: string }; driverClass: string }>;
+};
+
+function loadCatalog(catalog: AICatalog, configuredDrivers: string[] = DEFAULT_CONFIGURED_DRIVERS): void {
+  h.state.vendorTypeDefinitions = catalog.vendorTypeDefinitions;
+  h.state.vendors = catalog.vendors;
+  h.state.modelTypes = catalog.modelTypes;
+  h.state.configurations = catalog.configurations;
+  h.state.models = catalog.models as never;
+  h.state.modelVendors = catalog.modelVendors as never;
+  h.state.promptModels = catalog.promptModels as never;
+  h.state.configuredDrivers = new Set(configuredDrivers);
+}
+
+function makePrompt(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ID: 'prompt-1', Name: 'Test Prompt', Status: 'Active',
+    SelectionStrategy: 'Default', AIModelTypeID: MODEL_TYPE.LLM,
+    MinPowerRank: null, PowerPreference: null, RequireSpecificModels: false,
+    ...overrides,
+  };
+}
+
+async function selectModel(
+  runner: AIPromptRunner,
+  prompt: Record<string, unknown>,
+  opts: { explicitModelId?: string; configurationId?: string; vendorId?: string; forceFullModelEvaluation?: boolean } = {},
+): Promise<SelectModelResult> {
+  const params = { verbose: false, contextUser: undefined, forceFullModelEvaluation: opts.forceFullModelEvaluation };
+  return (runner as unknown as {
+    selectModel(p: unknown, e?: string, u?: unknown, c?: string, v?: string, params?: unknown): Promise<SelectModelResult>;
+  }).selectModel(prompt, opts.explicitModelId, undefined, opts.configurationId, opts.vendorId, params);
+}
+
+let runner: AIPromptRunner;
+let catalog: AICatalog;
+beforeEach(() => {
+  runner = new AIPromptRunner();
+  catalog = buildRealisticCatalog();
+  loadCatalog(catalog);
+});
+
+// ===========================================================================
+describe('selectModel — Default strategy (no prompt models)', () => {
+  it('selects the highest-PowerRank ACTIVE model of the type, excluding inactive models', async () => {
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    // Gemini 3 Pro (25) is inactive; highest active is Gemini 3 Flash (22).
+    expect(r.model?.ID).toBe(MODEL.Gemini3Flash);
+  });
+
+  it('honors MinPowerRank (filters the pool below the floor)', async () => {
+    // Floor at 21 leaves only Claude Opus (21) + Gemini Flash (22) active → Flash wins.
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default', MinPowerRank: 21 }));
+    expect(r.model?.ID).toBe(MODEL.Gemini3Flash);
+  });
+
+  it('falls to the next model when the top model has no credentialed vendor', async () => {
+    // Drop Gemini drivers → Flash unavailable → next highest active is Claude Opus (21).
+    // Claude Opus is offered by Anthropic (AIModelVendor.Priority 1) and Bedrock (Priority 5);
+    // createCandidatesForModel orders vendors by Priority DESC, so Bedrock is tried first.
+    loadCatalog(catalog, DEFAULT_CONFIGURED_DRIVERS.filter(d => d !== 'GeminiLLM' && d !== 'VertexLLM'));
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model?.ID).toBe(MODEL.ClaudeOpus45);
+    expect(r.vendorDriverClass).toBe('BedrockLLM'); // higher AIModelVendor.Priority wins
+  });
+
+  it('selects the lower-priority vendor when the higher-priority one is uncredentialed', async () => {
+    // Same as above but also drop Bedrock → Claude Opus now resolves to Anthropic.
+    loadCatalog(catalog, ['AnthropicLLM']);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model?.ID).toBe(MODEL.ClaudeOpus45);
+    expect(r.vendorDriverClass).toBe('AnthropicLLM');
+  });
+
+  it('returns null model when NO driver has credentials', async () => {
+    loadCatalog(catalog, []);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model).toBeNull();
+  });
+});
+
+describe('selectModel — ByPower strategy', () => {
+  it("PowerPreference 'Highest' selects the most powerful active model", async () => {
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'ByPower', PowerPreference: 'Highest' }));
+    expect(r.model?.ID).toBe(MODEL.Gemini3Flash); // 22, since Gemini Pro 25 is inactive
+  });
+
+  it("PowerPreference 'Lowest' selects the least powerful active model", async () => {
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'ByPower', PowerPreference: 'Lowest' }));
+    expect(r.model?.ID).toBe(MODEL.Llama70B); // 9 is the lowest active PowerRank
+  });
+});
+
+describe('selectModel — explicit model override', () => {
+  it('selects exactly the requested active model', async () => {
+    const r = await selectModel(runner, makePrompt(), { explicitModelId: MODEL.ClaudeSonnet45 });
+    expect(r.model?.ID).toBe(MODEL.ClaudeSonnet45);
+    expect(r.vendorDriverClass).toBe('AnthropicLLM');
+  });
+
+  it('returns null when the explicit model is INACTIVE', async () => {
+    const r = await selectModel(runner, makePrompt(), { explicitModelId: MODEL.GrokInactive });
+    expect(r.model).toBeNull();
+  });
+
+  it('returns null when the explicit model is the wrong model type', async () => {
+    const r = await selectModel(runner, makePrompt({ AIModelTypeID: MODEL_TYPE.Embeddings }), { explicitModelId: MODEL.GPT5 });
+    expect(r.model).toBeNull();
+  });
+});
+
+describe('selectModel — preferred vendor', () => {
+  it('boosts the preferred vendor for a multi-vendor model', async () => {
+    // Claude Opus is offered by Anthropic (1) and Bedrock (5). Prefer Bedrock.
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }), { explicitModelId: MODEL.ClaudeOpus45, vendorId: VENDOR.AmazonBedrock });
+    expect(r.model?.ID).toBe(MODEL.ClaudeOpus45);
+    expect(r.vendorDriverClass).toBe('BedrockLLM');
+  });
+});
+
+describe('selectModel — Specific strategy + AIPromptModel', () => {
+  it('selects from explicitly associated prompt models (specific vendor)', async () => {
+    catalog.promptModels.push(makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.GPT5, VendorID: VENDOR.OpenAI, Priority: 10 }));
+    loadCatalog(catalog);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Specific' }));
+    expect(r.model?.ID).toBe(MODEL.GPT5);
+    expect(r.vendorDriverClass).toBe('OpenAILLM');
+  });
+
+  it('orders multiple prompt models by Priority (higher first)', async () => {
+    catalog.promptModels.push(
+      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.GPT5Mini, VendorID: VENDOR.OpenAI, Priority: 1 }),
+      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Priority: 99 }),
+    );
+    loadCatalog(catalog);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Specific' }));
+    expect(r.model?.ID).toBe(MODEL.ClaudeOpus45);
+  });
+
+  it('Specific + RequireSpecificModels with no prompt models: returns null model with a descriptive reason', async () => {
+    // selectModel catches the internal "no candidates" throw and surfaces it via selectionInfo
+    // rather than rejecting, so callers get a null model + actionable reason.
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Specific', RequireSpecificModels: true }));
+    expect(r.model).toBeNull();
+    expect(r.selectionInfo?.selectionReason).toMatch(/Specific/);
+  });
+
+  it('power-match fallback: when RequireSpecificModels=false and the specific model lacks creds, falls back to a similar-power model', async () => {
+    // Configure ONLY Anthropic; the specific (OpenAI GPT-5) is uncredentialed → fall back.
+    catalog.promptModels.push(makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.GPT5, VendorID: VENDOR.OpenAI, Priority: 10 }));
+    loadCatalog(catalog, ['AnthropicLLM']);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Specific', RequireSpecificModels: false }));
+    expect(r.model).not.toBeNull();
+    expect(r.vendorDriverClass).toBe('AnthropicLLM'); // fell back to a credentialed Anthropic model
+  });
+});
+
+describe('selectModel — configuration inheritance', () => {
+  it('uses a prompt model scoped to a child config in the inheritance chain', async () => {
+    // Fast -> parent Standard. Prompt model is registered on the PARENT (Standard).
+    catalog.configurations = [
+      { ID: CONFIG.Standard, Name: 'Standard', ParentID: null },
+      { ID: CONFIG.Fast, Name: 'Fast', ParentID: CONFIG.Standard },
+    ];
+    catalog.promptModels.push(
+      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeSonnet45, VendorID: VENDOR.Anthropic, ConfigurationID: CONFIG.Standard, Priority: 5 }),
+    );
+    loadCatalog(catalog);
+    // Selecting under the CHILD config should still find the parent-scoped prompt model.
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Specific' }), { configurationId: CONFIG.Fast });
+    expect(r.model?.ID).toBe(MODEL.ClaudeSonnet45);
+  });
+});
+
+describe('selectModel — credential gating, short-circuit & forceFullModelEvaluation', () => {
+  it('default: stops evaluating after the first credentialed candidate (rest marked not-evaluated)', async () => {
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    const considered = r.selectionInfo!.modelsConsidered;
+    const notEvaluated = considered.filter(c => (c.unavailableReason ?? '').startsWith('Not evaluated'));
+    const available = considered.filter(c => c.available);
+    expect(available.length).toBe(1);          // exactly one winner probed
+    expect(notEvaluated.length).toBeGreaterThan(0); // the tail was short-circuited
+  });
+
+  it('forceFullModelEvaluation: probes EVERY candidate (no not-evaluated entries)', async () => {
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }), { forceFullModelEvaluation: true });
+    const considered = r.selectionInfo!.modelsConsidered;
+    const notEvaluated = considered.filter(c => (c.unavailableReason ?? '').startsWith('Not evaluated'));
+    expect(notEvaluated.length).toBe(0);
+    // With all common drivers configured, more than one candidate is available.
+    expect(considered.filter(c => c.available).length).toBeGreaterThan(1);
+  });
+
+  it('short-circuit still returns the correct first-available model when the top candidate is uncredentialed', async () => {
+    loadCatalog(catalog, DEFAULT_CONFIGURED_DRIVERS.filter(d => d !== 'GeminiLLM' && d !== 'VertexLLM'));
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default', forceFullModelEvaluation: false } as never));
+    expect(r.model?.ID).toBe(MODEL.ClaudeOpus45);
+  });
+});
