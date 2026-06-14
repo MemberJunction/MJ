@@ -123,13 +123,21 @@ export class RemoteBrowserActionResolver extends ResolverBase {
         }
 
         const providerName = await this.resolveProviderName(session, contextUser, provider);
-        const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(
-            agentSessionID,
-            contextUser,
-            providerName,
-        );
-        const result = await liveSession.ExecuteAction(action);
-        return { Success: result.Success, CurrentUrl: result.CurrentUrl, Detail: result.Detail };
+        try {
+            const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(
+                agentSessionID,
+                contextUser,
+                providerName,
+            );
+            const result = await liveSession.ExecuteAction(action);
+            return { Success: result.Success, CurrentUrl: result.CurrentUrl, Detail: result.Detail };
+        } catch (err) {
+            // Surface the real failure to BOTH the MJAPI terminal (for diagnosis) and the model (so it
+            // narrates the actual cause instead of the opaque client-side "no response from the server").
+            const message = err instanceof Error ? err.message : String(err);
+            LogError(`ExecuteRemoteBrowserAction failed (provider='${providerName}', kind='${kind}'): ${message}`);
+            return { Success: false, Detail: `Remote browser error (${providerName}): ${message}` };
+        }
     }
 
     /**
