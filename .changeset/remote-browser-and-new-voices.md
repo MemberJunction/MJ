@@ -14,6 +14,8 @@
 "@memberjunction/remote-browser-hyperbrowser": minor
 "@memberjunction/ai-xai": minor
 "@memberjunction/ai-inworld": minor
+"@memberjunction/ai-bridge-zoom": minor
+"@memberjunction/ng-conversations": minor
 "@memberjunction/ai-provider-bundle": minor
 "@memberjunction/ai-core-plus": minor
 "@memberjunction/ai-engine-base": minor
