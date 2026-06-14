@@ -32,7 +32,7 @@ import { ConversationStreamingService } from '../../services/conversation-stream
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
-import { VoiceSessionService } from '../../services/voice-session.service';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
@@ -412,8 +412,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   //   ✓ sessionStarted / sessionChannelStateChanged / sessionEnded — subscribed
   //     to ConversationsRuntime.Sessions.SessionLifecycle$ in ngOnInit. The
   //     runtime's SessionsObserver consumes whichever ISessionsAdapter the host
-  //     registered at bootstrap; the Angular default is VoiceSessionsAdapter,
-  //     which bridges VoiceSessionService's SessionStarted$ / ActiveChannels$
+  //     registered at bootstrap; the Angular default is RealtimeSessionsAdapter,
+  //     which bridges RealtimeSessionService's SessionStarted$ / ActiveChannels$
   //     (diffed for open/close) / SessionEnded$. Non-Angular hosts (React,
   //     Vue, Node) register their own adapter — the chat-area code is unchanged.
 
@@ -638,7 +638,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * overlay can be hosted here (it fills this conversation panel in place while
    * `Active$` is true). The trigger wiring lives in <mj-message-input>.
    */
-  public readonly VoiceSession = inject(VoiceSessionService);
+  public readonly VoiceSession = inject(RealtimeSessionService);
 
   /** Stateless loader for the call overlay's SESSION REVIEW mode (past realtime sessions). */
   private readonly realtimeReviewService = inject(RealtimeSessionReviewService);
@@ -812,8 +812,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Bridge ConversationsRuntime.Sessions.SessionLifecycle$ → chat-area's
     // informational session* outputs. The runtime's SessionsObserver subscribes
     // to whichever ISessionsAdapter the host registered at bootstrap (today:
-    // VoiceSessionsAdapter from ConversationsRuntimeBootstrap, bridging
-    // VoiceSessionService from PR #2787). Each event variant maps 1:1 to one
+    // RealtimeSessionsAdapter from ConversationsRuntimeBootstrap, bridging
+    // RealtimeSessionService from PR #2787). Each event variant maps 1:1 to one
     // of the three @Output() emitters declared above.
     ConversationsRuntime.Instance.Sessions.SessionLifecycle$
       .pipe(takeUntil(this.destroy$))

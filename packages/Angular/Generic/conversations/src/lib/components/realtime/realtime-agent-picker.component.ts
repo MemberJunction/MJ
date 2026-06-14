@@ -22,7 +22,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
  * A selectable realtime model option in the voice picker (narrow read-only projection of
  * `MJ: AI Models` — only the fields the dropdown renders).
  */
-export interface VoiceModelOption {
+export interface RealtimeModelOption {
     /** The `MJ: AI Models` row id. */
     ID: string;
     /** The model's display name. */
@@ -64,7 +64,7 @@ export interface VoiceAgentPick {
  */
 @Component({
     standalone: true,
-    selector: 'mj-voice-agent-picker',
+    selector: 'mj-realtime-agent-picker',
     imports: [MJButtonDirective],
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
@@ -233,7 +233,7 @@ export interface VoiceAgentPick {
         }
     `]
 })
-export class VoiceAgentPickerComponent extends BaseAngularComponent implements OnInit, AfterViewInit {
+export class RealtimeAgentPickerComponent extends BaseAngularComponent implements OnInit, AfterViewInit {
     /** Agents the user can call — same cached set the @mention / routing logic uses. */
     @Input() Agents: MJAIAgentEntityExtended[] = [];
 
@@ -252,7 +252,7 @@ export class VoiceAgentPickerComponent extends BaseAngularComponent implements O
     public SelectedAgentId: string | null = null;
 
     /** Active Realtime models the "Voice model" selector offers (empty until loaded / when none exist). */
-    public Models: VoiceModelOption[] = [];
+    public Models: RealtimeModelOption[] = [];
 
     /** The explicitly chosen voice model id, or `null` for "Auto (recommended)" (the default). */
     public SelectedModelId: string | null = null;
@@ -279,7 +279,7 @@ export class VoiceAgentPickerComponent extends BaseAngularComponent implements O
     private async loadVoiceModels(): Promise<void> {
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const result = await rv.RunView<VoiceModelOption>({
+            const result = await rv.RunView<RealtimeModelOption>({
                 EntityName: 'MJ: AI Models',
                 Fields: ['ID', 'Name'],
                 ExtraFilter: `IsActive = 1 AND AIModelType = 'Realtime'`,

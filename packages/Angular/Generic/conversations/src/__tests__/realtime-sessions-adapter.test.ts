@@ -1,6 +1,6 @@
 /**
- * @fileoverview Tests for VoiceSessionsAdapter — the Angular bridge from
- * `VoiceSessionService`'s native observables to the runtime's
+ * @fileoverview Tests for RealtimeSessionsAdapter — the Angular bridge from
+ * `RealtimeSessionService`'s native observables to the runtime's
  * `ISessionsAdapter` contract.
  *
  * Covers:
@@ -12,17 +12,17 @@
  * - session-ended bridge (forwards sessionId + narrowed reason verbatim).
  * - Dispose unsubscribes cleanly.
  *
- * Uses a hand-rolled VoiceSessionService stub to avoid pulling the full Angular
+ * Uses a hand-rolled RealtimeSessionService stub to avoid pulling the full Angular
  * DI tree — we only need the observable surface and CurrentAgentSessionId getter.
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
 import type { SessionLifecycleEvent } from '@memberjunction/conversations-runtime';
-import { VoiceSessionsAdapter } from '../lib/services/voice-sessions-adapter';
+import { RealtimeSessionsAdapter } from '../lib/services/realtime-sessions-adapter';
 
-/** Minimal VoiceSessionService stub. Only the observables + the one getter
- *  VoiceSessionsAdapter consumes. Any other API isn't needed for these tests. */
+/** Minimal RealtimeSessionService stub. Only the observables + the one getter
+ *  RealtimeSessionsAdapter consumes. Any other API isn't needed for these tests. */
 function makeStubVoiceService() {
     const sessionStarted$ = new Subject<{ sessionId: string; channelNames: string[] }>();
     const sessionEnded$ = new Subject<{ sessionId: string; reason: 'explicit' | 'error' }>();
@@ -41,7 +41,7 @@ function makeStubVoiceService() {
 
     return {
         // Pass-through to the adapter via `as never` — we typecast away from the real
-        // VoiceSessionService here because we only implement the surface the adapter
+        // RealtimeSessionService here because we only implement the surface the adapter
         // reads. This is fine for test purposes.
         service: service as never,
         // Control surface for tests:
@@ -54,12 +54,12 @@ function makeStubVoiceService() {
     };
 }
 
-describe('VoiceSessionsAdapter', () => {
+describe('RealtimeSessionsAdapter', () => {
     it('bridges SessionStarted$ to a session-started event PLUS synthetic open events per channel', () => {
-        // Synthetic opens close the asymmetry caused by VoiceSessionService emitting to
+        // Synthetic opens close the asymmetry caused by RealtimeSessionService emitting to
         // ActiveChannels$ BEFORE agentSessionId is set during StartVoiceSession.
         const stub = makeStubVoiceService();
-        const adapter = new VoiceSessionsAdapter(stub.service);
+        const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
 
@@ -74,7 +74,7 @@ describe('VoiceSessionsAdapter', () => {
 
     it('SessionStarted$ with empty channelNames emits ONLY the started event (no synthetic opens)', () => {
         const stub = makeStubVoiceService();
-        const adapter = new VoiceSessionsAdapter(stub.service);
+        const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
 
@@ -87,7 +87,7 @@ describe('VoiceSessionsAdapter', () => {
 
     it('bridges SessionEnded$ to a session-ended event with reason preserved', () => {
         const stub = makeStubVoiceService();
-        const adapter = new VoiceSessionsAdapter(stub.service);
+        const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
 
@@ -109,7 +109,7 @@ describe('VoiceSessionsAdapter', () => {
         // Pre-condition: initial channel is already established (the synthetic-open
         // from SessionStarted$ already happened in real life; here we just seed
         // the diff's "prev" state by emitting the initial array).
-        const adapter = new VoiceSessionsAdapter(stub.service);
+        const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
 
@@ -125,7 +125,7 @@ describe('VoiceSessionsAdapter', () => {
     it('mid-session: emits "open" for added channels and "closed" for removed channels', () => {
         const stub = makeStubVoiceService();
         stub.setSessionId('sess-1');
-        const adapter = new VoiceSessionsAdapter(stub.service);
+        const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
 
@@ -146,7 +146,7 @@ describe('VoiceSessionsAdapter', () => {
     it('real-world ordering: ActiveChannels$ during startChannels (sessionId null) skipped; SessionStarted$ then emits opens; teardown empties channels and emits closes', () => {
         // This is the canonical real-world scenario the synthetic-open fix exists for.
         const stub = makeStubVoiceService();
-        const adapter = new VoiceSessionsAdapter(stub.service);
+        const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
 
@@ -185,7 +185,7 @@ describe('VoiceSessionsAdapter', () => {
         // No session id set — simulates the moment after teardown nulls agentSessionId
         // but ActiveChannels$ is still about to emit [], OR the initial startChannels
         // window before mintSession resolves.
-        const adapter = new VoiceSessionsAdapter(stub.service);
+        const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
 
@@ -198,7 +198,7 @@ describe('VoiceSessionsAdapter', () => {
     it('Dispose unsubscribes from all bridged observables', () => {
         const stub = makeStubVoiceService();
         stub.setSessionId('sess-1');
-        const adapter = new VoiceSessionsAdapter(stub.service);
+        const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         const sub = adapter.SessionLifecycle$.subscribe((e) => events.push(e));
 
@@ -215,7 +215,7 @@ describe('VoiceSessionsAdapter', () => {
 
     it('Dispose is idempotent', () => {
         const stub = makeStubVoiceService();
-        const adapter = new VoiceSessionsAdapter(stub.service);
+        const adapter = new RealtimeSessionsAdapter(stub.service);
 
         expect(() => adapter.Dispose()).not.toThrow();
         expect(() => adapter.Dispose()).not.toThrow();

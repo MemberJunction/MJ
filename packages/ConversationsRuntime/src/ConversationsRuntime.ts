@@ -151,7 +151,7 @@ export class ConversationsRuntime
 
     /**
      * Register a sessions adapter — bridges the host's realtime session source
-     * (e.g., Angular's `VoiceSessionService`) to the framework-agnostic runtime
+     * (e.g., Angular's `RealtimeSessionService`) to the framework-agnostic runtime
      * `Sessions` observer. Typically called once at host bootstrap; multiple
      * swaps are supported (test harnesses, modality additions).
      *
@@ -209,8 +209,8 @@ export class ConversationsRuntime
      * Sessions/Channels lifecycle observer — surfaces realtime session lifecycle
      * events from the registered {@link ISessionsAdapter}. Defaults to a no-op
      * adapter so headless consumers still construct cleanly; the Angular host's
-     * `ConversationsRuntimeBootstrap` swaps in a `VoiceSessionsAdapter` that
-     * bridges `VoiceSessionService` from PR #2787.
+     * `ConversationsRuntimeBootstrap` swaps in a `RealtimeSessionsAdapter` that
+     * bridges `RealtimeSessionService` from PR #2787.
      *
      * Subscribe to `Sessions.SessionLifecycle$` for `session-started` /
      * `session-channel` / `session-ended` events. See {@link SessionsObserver}.

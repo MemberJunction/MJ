@@ -1,5 +1,5 @@
 /**
- * Unit tests for the pure narration-template helpers used by VoiceSessionService — the DB-driven
+ * Unit tests for the pure narration-template helpers used by RealtimeSessionService — the DB-driven
  * `{{ progressMessage }}` / `{{ priorNarrations }}` / `{{ updateNumber }}` substitution plus the
  * built-in fallback for deployments that haven't synced the
  * `Realtime Co-Agent - Progress Narration` prompt.

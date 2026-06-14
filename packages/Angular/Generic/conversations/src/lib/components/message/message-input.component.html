@@ -36,13 +36,13 @@
        prior agent participation, or on demand via the caret next to the phone button
        (any conversation). Anchored above the composer. -->
   @if (showVoiceAgentPicker) {
-    <mj-voice-agent-picker
+    <mj-realtime-agent-picker
       [Provider]="Provider"
       [Agents]="voicePickerAgents"
       [DefaultAgentId]="voicePickerDefaultAgentId"
       (AgentPicked)="onVoiceAgentPicked($event)"
       (Cancelled)="onVoiceAgentPickerCancelled()">
-    </mj-voice-agent-picker>
+    </mj-realtime-agent-picker>
   }
 </div>
 
