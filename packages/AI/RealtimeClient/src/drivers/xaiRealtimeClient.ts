@@ -259,6 +259,13 @@ export class xAIRealtimeClient extends BaseRealtimeClient {
     protected sessionConfig: JSONObject | null = null;
 
     // ── Response state machine (mirrors the OpenAI client driver) ──────────────
+    /**
+     * Whether the CURRENT user turn has already emitted a transcription. Grok streams input
+     * transcription as repeated `.completed` events (each the full growing text), so the first emission
+     * of a turn appends a caption and the rest are flagged ReplacesPrevious — one in-place bubble, not a
+     * stack of growing duplicates. Reset on each `input_audio_buffer.speech_started` (new turn).
+     */
+    private userTurnTranscribed = false;
     /** Accumulates the in-flight assistant transcript across delta frames. */
     private pendingAssistantText = '';
     /** True while the model has a response in flight; gates narration + queues the tool result. */
@@ -740,10 +747,20 @@ export class xAIRealtimeClient extends BaseRealtimeClient {
         this.playback?.Enqueue(base64ToArrayBuffer(deltaBase64));
     }
 
-    /** Emits the final transcription of the user's spoken input (always `Kind: 'normal'`). */
+    /**
+     * Emits the user's spoken-input transcription. Grok STREAMS this — repeated
+     * `input_audio_transcription.completed` events, each carrying the full text so far — unlike OpenAI's
+     * single final. So the FIRST emission of a turn appends a fresh caption and every later one is flagged
+     * ReplacesPrevious, collapsing the stream into ONE in-place-updating user bubble. The per-turn flag
+     * resets on the next `speech_started` ({@link onSpeechStarted}).
+     */
     private onUserTranscript(transcript: string): void {
         if (transcript && transcript.trim().length > 0) {
-            this.emitTranscript({ Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal' });
+            this.emitTranscript({
+                Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal',
+                ReplacesPrevious: this.userTurnTranscribed,
+            });
+            this.userTurnTranscribed = true;
         }
     }
 
@@ -771,6 +788,9 @@ export class xAIRealtimeClient extends BaseRealtimeClient {
      * emits a terminal `response.done`.
      */
     private onSpeechStarted(): void {
+        // A new user turn begins: the next transcription emission appends a fresh caption, and the rest
+        // of this turn's streamed transcriptions replace it in place (see onUserTranscript).
+        this.userTurnTranscribed = false;
         if (!this.responseActive && !this.IsAudioPlaying) {
             this.setState('listening');
             return;

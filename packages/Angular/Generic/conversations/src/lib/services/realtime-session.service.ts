@@ -1098,6 +1098,13 @@ export class RealtimeSessionService {
         this.appendCaption({ Role: 'Assistant', Text: transcript.Text });
         await this.relayTranscript('assistant', transcript.Text);
       }
+    } else if (transcript.ReplacesPrevious) {
+      // STREAMING user transcription: providers like Grok emit the growing utterance as repeated
+      // events (each the full text so far), flagging all but the first ReplacesPrevious. Update the
+      // in-place User caption + persisted turn instead of stacking a new bubble per increment — the
+      // same correction semantics the assistant branch uses. (OpenAI sends one final → the else path.)
+      this.replaceLastCaption('User', transcript.Text);
+      await this.relayTranscript('user', transcript.Text, true);
     } else {
       await this.onUserTranscript(transcript.Text);
     }

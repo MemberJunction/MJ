@@ -247,10 +247,23 @@ describe('xAIRealtimeClient', () => {
             expect(states).toEqual(['speaking', 'listening']);
         });
 
-        it('should emit the final user transcription (always normal kind)', () => {
+        it('should emit the final user transcription (always normal kind), first of a turn not replacing', () => {
             const { transcripts } = collect(client);
             client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'what is MJ?' });
-            expect(transcripts).toEqual([{ Role: 'User', Text: 'what is MJ?', IsFinal: true, Kind: 'normal' }]);
+            expect(transcripts).toEqual([{ Role: 'User', Text: 'what is MJ?', IsFinal: true, Kind: 'normal', ReplacesPrevious: false }]);
+        });
+
+        it('collapses Grok streamed user transcriptions into one turn — later events flag ReplacesPrevious', () => {
+            const { transcripts } = collect(client);
+            // Grok streams the growing utterance as repeated completed events within ONE turn.
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'what' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'what is' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'what is MJ?' });
+            expect(transcripts.map(t => t.ReplacesPrevious)).toEqual([false, true, true]);
+            // A new turn (speech_started) resets the flag so the next utterance appends a fresh caption.
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'and Skip?' });
+            expect(transcripts.at(-1)).toEqual({ Role: 'User', Text: 'and Skip?', IsFinal: true, Kind: 'normal', ReplacesPrevious: false });
         });
 
         it('should emit nothing for empty transcript payloads', () => {
