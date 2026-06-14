@@ -2,7 +2,7 @@ import type { Type } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
-import { BaseRealtimeChannelClient } from '../channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
 import {
   ApplyWhiteboardAgentTool, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
   WHITEBOARD_TOOL_PREFIX, WhiteboardState, WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
@@ -91,6 +91,22 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
 
   public override GetSurfaceComponent(): Type<RealtimeWhiteboardHostComponent> {
     return RealtimeWhiteboardHostComponent;
+  }
+
+  /** First-run intro shown the first time the user opens the Whiteboard tab (once per user). */
+  public override GetOnboardingDetails(): ChannelOnboardingDetails {
+    return {
+      Heading: 'Whiteboard',
+      Description:
+        'A shared canvas the agent can sketch, write and annotate on live during the call — ' +
+        'whatever it draws appears here instantly, and anything you add is something it can see too.',
+      Tips: [
+        'Watch the board fill in as you talk — the agent updates it in real time.',
+        'Add your own notes or shapes; the agent perceives your edits and can build on them.',
+        'Use Focus to give the board the whole screen, and save it to artifacts to keep it.'
+      ],
+      IconClass: 'fa-solid fa-chalkboard'
+    };
   }
 
   /** Persist the board (host-debounced) on EVERY board mutation — user edits AND agent tools. */

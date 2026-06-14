@@ -94,6 +94,26 @@ export interface RealtimeChannelContext {
 }
 
 /**
+ * The first-run INTRO content for an interactive channel — the concise "what is this surface
+ * and how do I use it" copy the overlay shows the very first time a user opens this channel's
+ * tab (persisted "seen" per user, so it's shown ONCE per channel per user).
+ *
+ * A channel opts in by overriding {@link BaseRealtimeChannelClient.GetOnboardingDetails}; the
+ * default returns `null`, so the base Voice/text channel (which has no plugin at all) AND any
+ * plugin that doesn't override it show nothing.
+ */
+export interface ChannelOnboardingDetails {
+  /** Short title, usually the surface name (e.g. `"Whiteboard"`). */
+  Heading: string;
+  /** One or two sentences: what the surface is and what the user can expect to see on it. */
+  Description: string;
+  /** Optional quick-tip bullets (kept to 2-3 short, scannable lines). */
+  Tips?: string[];
+  /** Optional Font Awesome icon class for the intro panel (e.g. `'fa-solid fa-chalkboard'`). */
+  IconClass?: string;
+}
+
+/**
  * Base class for CLIENT-SIDE interactive-channel plugins (per
  * `plans/ai-agent-sessions.md` → "Interactive Channels" / "Pluggable Channel Interfaces").
  *
@@ -207,6 +227,21 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    */
   public HasSurface(): boolean {
     return this.GetSurfaceComponent() != null;
+  }
+
+  /**
+   * The channel's FIRST-RUN INTRO content, or `null` when the channel offers no onboarding.
+   * The overlay shows this once per channel per user — the first time the user opens this
+   * channel's surface tab — and remembers "seen" via the user's settings (NOT localStorage),
+   * so it never re-appears on later sessions or other devices.
+   *
+   * Default: `null` (no intro). The base Voice/text channel has no plugin at all, so it never
+   * shows an intro; an interactive channel with a surface worth explaining (whiteboard, remote
+   * browser, …) overrides this to return its {@link ChannelOnboardingDetails}. A plugin that
+   * doesn't override it simply shows nothing — onboarding is strictly opt-in.
+   */
+  public GetOnboardingDetails(): ChannelOnboardingDetails | null {
+    return null;
   }
 
   /**

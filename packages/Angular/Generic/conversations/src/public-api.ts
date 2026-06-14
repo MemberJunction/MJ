@@ -108,6 +108,7 @@ export * from './lib/utils/realtime-session-timeline';
 // Pluggable interactive-channel contract (registry-resolved client plugins) + pane host
 export * from './lib/components/realtime/channels/base-realtime-channel-client';
 export * from './lib/components/realtime/channels/realtime-channel-pane.component';
+export * from './lib/components/realtime/channels/channel-onboarding-panel.component';
 // Live whiteboard channel plugin + artifact viewer (thin consumers of the generic board).
 // NOTE: the whiteboard itself (engine, tools, components, export builders) lives in
 // @memberjunction/ng-whiteboard — import board types/components from there directly.

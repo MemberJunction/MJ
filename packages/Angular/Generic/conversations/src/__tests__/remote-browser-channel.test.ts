@@ -148,6 +148,15 @@ describe('RemoteBrowserChannel — plugin contract + ApplyAgentTool round-trip',
     expect(channel.GetSurfaceComponent()).toBe(RemoteBrowserSurfaceComponent);
   });
 
+  it('supplies first-run onboarding details (heading, description, tips, icon)', () => {
+    const details = channel.GetOnboardingDetails();
+    expect(details).not.toBeNull();
+    expect(details?.Heading).toBe('Remote Browser');
+    expect(details?.IconClass).toBe('fa-solid fa-globe');
+    expect(details?.Description?.length).toBeGreaterThan(0);
+    expect((details?.Tips?.length ?? 0)).toBeGreaterThan(0);
+  });
+
   it('drives the ExecuteRemoteBrowserAction mutation with flat variables and reports success', async () => {
     channel.Initialize(makeContext(log, { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://example.com', Detail: null } }));
 

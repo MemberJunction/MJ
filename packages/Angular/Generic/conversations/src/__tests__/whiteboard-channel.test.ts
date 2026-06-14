@@ -97,6 +97,15 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(channel.GetSurfaceComponent()).toBe(RealtimeWhiteboardHostComponent);
   });
 
+  it('supplies first-run onboarding details (heading, description, tips, icon)', () => {
+    const details = channel.GetOnboardingDetails();
+    expect(details).not.toBeNull();
+    expect(details?.Heading).toBe('Whiteboard');
+    expect(details?.IconClass).toBe('fa-solid fa-chalkboard');
+    expect(details?.Description?.length).toBeGreaterThan(0);
+    expect((details?.Tips?.length ?? 0)).toBeGreaterThan(0);
+  });
+
   it('ApplyAgentTool with NO surface bound falls back to the pure engine (collapsed panel)', () => {
     const resultJson = channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'hello' }));
     const result = JSON.parse(resultJson) as WhiteboardToolResult;

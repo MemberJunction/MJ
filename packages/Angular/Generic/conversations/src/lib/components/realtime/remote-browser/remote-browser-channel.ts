@@ -1,7 +1,7 @@
 import type { Type } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
-import { BaseRealtimeChannelClient } from '../channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
 import { RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
 import {
   MapToolToAction, REMOTE_BROWSER_TOOL_DEFINITIONS, REMOTE_BROWSER_TOOL_PREFIX,
@@ -116,6 +116,23 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
   public override GetSurfaceComponent(): Type<RemoteBrowserSurfaceComponent> {
     return RemoteBrowserSurfaceComponent;
+  }
+
+  /** First-run intro shown the first time the user opens the Browser tab (once per user). */
+  public override GetOnboardingDetails(): ChannelOnboardingDetails {
+    return {
+      Heading: 'Remote Browser',
+      Description:
+        'The agent drives a live web browser on the server and you can watch it work right here. ' +
+        'This is a periodically-refreshing screenshot of that page — view-only in this version, ' +
+        'so you watch rather than click.',
+      Tips: [
+        'Ask the agent to look something up, open a site or fill in a form — it controls the page.',
+        'The view updates every few seconds; brief pauses just mean the next snapshot is loading.',
+        'The current page URL is shown so you always know where the agent has navigated.'
+      ],
+      IconClass: 'fa-solid fa-globe'
+    };
   }
 
   /**
