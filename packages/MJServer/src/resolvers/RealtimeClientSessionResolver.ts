@@ -553,6 +553,52 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
+     * Relays a co-agent CHANNEL tool-call (browser_ / Whiteboard_ etc.) onto the session's co-agent
+     * AIPromptRun.Messages — run-only observability so the run captures what the co-agent DID, not just
+     * what it said. Deliberately NOT a ConversationDetail turn (the chat thread stays speech-only).
+     * Ownership-gated; best-effort (a missing prompt run / save failure simply returns false).
+     *
+     * @returns `true` when the tool turn was recorded on the run.
+     */
+    @Mutation(() => Boolean)
+    async RelayRealtimeToolTurn(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Arg('toolName', () => String) toolName: string,
+        @Ctx() { userPayload, providers }: AppContext,
+        @Arg('argsJson', () => String, { nullable: true }) argsJson?: string,
+        @Arg('resultJson', () => String, { nullable: true }) resultJson?: string,
+    ): Promise<boolean> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
+        const promptRunID = this.readPromptRunID(session);
+        if (!promptRunID) {
+            return false;
+        }
+        return this.clientSessionService.AppendPromptRunMessage(
+            promptRunID,
+            'assistant',
+            this.formatToolTurn(toolName, argsJson, resultJson),
+            false,
+            contextUser,
+            provider,
+        );
+    }
+
+    /**
+     * Formats a co-agent tool call into a compact, human-readable run line: `🔧 <tool> <args> → <result>`,
+     * clipping args/result so a verbose payload never bloats the Messages blob.
+     */
+    private formatToolTurn(toolName: string, argsJson?: string, resultJson?: string): string {
+        const clip = (raw: string | undefined, max: number): string => {
+            const t = (raw ?? '').trim();
+            return t.length > max ? `${t.slice(0, max)}…` : t;
+        };
+        const args = clip(argsJson, 200);
+        const result = clip(resultJson, 300);
+        return `🔧 ${toolName}${args ? ` ${args}` : ''}${result ? ` → ${result}` : ''}`;
+    }
+
+    /**
      * Cancel in-flight relayed tool delegations for a session — the CLIENT-DIRECT cancel channel.
      *
      * The browser calls this on an EXPLICIT user cancel (the call overlay's per-card ✕ — a

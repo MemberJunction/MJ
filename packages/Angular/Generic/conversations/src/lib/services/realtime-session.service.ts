@@ -1149,6 +1149,10 @@ export class RealtimeSessionService {
       // are fast, in-browser surface mutations (e.g. drawing on the whiteboard).
       const resultJson = await this.executeClientTool(clientHandler, call);
       this.client?.SendToolResult(call.CallID, resultJson);
+      // Observability: record the channel tool call on the co-agent's run (run-only — NOT a chat
+      // turn). Without this the run shows speech but never the browser_/Whiteboard_ actions the
+      // co-agent took. Fire-and-forget; never disturbs the live surface mutation.
+      void this.relayToolTurn(call.ToolName, call.ArgumentsJson, resultJson);
       return;
     }
     this._connectionState$.next('thinking');
@@ -1457,6 +1461,33 @@ export class RealtimeSessionService {
       });
     } catch (error) {
       console.error('[RealtimeSession] Failed to relay transcript:', error);
+    }
+  }
+
+  /**
+   * Relays a co-agent CHANNEL tool-call turn (browser_ / Whiteboard_ etc.) to the session's run for
+   * observability via `RelayRealtimeToolTurn` — so the co-agent's AIPromptRun shows what it DID, not
+   * just what it said. Run-only by design: deliberately NOT a `ConversationDetail` turn, so the chat
+   * thread stays speech-only. Best-effort — a failed relay never disturbs the live call.
+   */
+  private async relayToolTurn(toolName: string, argsJson: string, resultJson: string): Promise<void> {
+    if (!this.agentSessionId) {
+      return;
+    }
+    try {
+      const mutation = `
+        mutation RelayRealtimeToolTurn($agentSessionId: String!, $toolName: String!, $argsJson: String, $resultJson: String) {
+          RelayRealtimeToolTurn(agentSessionId: $agentSessionId, toolName: $toolName, argsJson: $argsJson, resultJson: $resultJson)
+        }
+      `;
+      await this.gql().ExecuteGQL(mutation, {
+        agentSessionId: this.agentSessionId,
+        toolName,
+        argsJson,
+        resultJson
+      });
+    } catch (error) {
+      console.error('[RealtimeSession] Failed to relay tool turn:', error);
     }
   }
 
