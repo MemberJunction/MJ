@@ -228,7 +228,7 @@ export class xAIRealtime extends BaseRealtimeModel {
         session.audio = {
             input: {
                 transcription: { model: XAI_INPUT_TRANSCRIPTION_MODEL },
-                turn_detection: { type: 'server_vad', create_response: true },
+                turn_detection: { type: 'server_vad', create_response: true, interrupt_response: true },
             },
         };
         const response = await this.mintClientSecret({ session });
@@ -559,7 +559,7 @@ export class xAIRealtimeSession implements IRealtimeSession {
             // Opt into USER input transcription so user-role transcripts flow server-bridged too
             // (the contract promises BOTH roles). The config bag spreads after this so a
             // per-conversation override can still replace the audio block.
-            audio: { input: { transcription: { model: XAI_INPUT_TRANSCRIPTION_MODEL }, turn_detection: { type: 'server_vad', create_response: true } } },
+            audio: { input: { transcription: { model: XAI_INPUT_TRANSCRIPTION_MODEL }, turn_detection: { type: 'server_vad', create_response: true, interrupt_response: true } } },
             ...config,
         };
         if (tools && tools.length > 0) {
