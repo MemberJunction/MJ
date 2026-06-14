@@ -598,8 +598,9 @@ describe('ActionEngineServer', () => {
             const logEntry = await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, true);
 
             expect(mockEntity.NewRecord).toHaveBeenCalled();
-            expect(mockEntity.Save).toHaveBeenCalled();
             expect(logEntry).toBe(mockEntity);
+            // Save is queued fire-and-forget — it runs on the microtask queue, not synchronously.
+            await vi.waitFor(() => expect(mockEntity.Save).toHaveBeenCalled());
         });
 
         it('should not save when saveRecord is false', async () => {
@@ -643,7 +644,8 @@ describe('ActionEngineServer', () => {
             const params = { Action: { ID: 'a1', Name: 'Test' }, Params: [] };
             await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, true);
 
-            expect(LogError).toHaveBeenCalled();
+            // The save is now fire-and-forget (queued), so the failure is logged asynchronously.
+            await vi.waitFor(() => expect(LogError).toHaveBeenCalled());
         });
     });
 
@@ -662,7 +664,8 @@ describe('ActionEngineServer', () => {
 
             await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
 
-            expect(logEntity.Save).toHaveBeenCalled();
+            // Save is queued fire-and-forget — assert it runs on the microtask queue.
+            await vi.waitFor(() => expect(logEntity.Save).toHaveBeenCalled());
         });
 
         it('should log error when save fails', async () => {
@@ -680,7 +683,55 @@ describe('ActionEngineServer', () => {
 
             await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
 
-            expect(LogError).toHaveBeenCalled();
+            // Save is queued fire-and-forget — the failure is logged asynchronously.
+            await vi.waitFor(() => expect(LogError).toHaveBeenCalled());
+        });
+    });
+
+    describe('queueLogSave (fire-and-forget chain)', () => {
+        function fakeLog(saveLog: string[], failOn: number[] = []) {
+            const fails = new Set(failOn);
+            let idx = 0;
+            return {
+                ID: 'log-1',
+                LatestResult: { Message: 'err' },
+                async Save() {
+                    const n = ++idx;
+                    saveLog.push(`start:${n}`);
+                    await new Promise((r) => setTimeout(r, 5));
+                    saveLog.push(`end:${n}`);
+                    return !fails.has(n);
+                },
+            };
+        }
+        const q = (logEntity: unknown, name = 'Test') =>
+            (engine as unknown as Record<string, Function>)['queueLogSave'](logEntity, name);
+        const chains = () => (engine as unknown as { _logSaveChains: Map<unknown, Promise<boolean>> })._logSaveChains;
+
+        it('chains same-instance saves: INSERT completes before UPDATE starts', async () => {
+            const log: string[] = [];
+            const entity = fakeLog(log);
+            q(entity); // started INSERT
+            q(entity); // ended UPDATE
+            await Promise.all(chains().values());
+            await new Promise((r) => setTimeout(r, 0)); // let the second link settle
+            expect(log).toEqual(['start:1', 'end:1', 'start:2', 'end:2']);
+        });
+
+        it('self-cleans the Map entry after the save settles (no unbounded growth on the singleton)', async () => {
+            const entity = fakeLog([]);
+            q(entity);
+            expect(chains().has(entity)).toBe(true); // present while in flight
+            await chains().get(entity); // the queued chain promise
+            await new Promise((r) => setTimeout(r, 0)); // allow the finally() cleanup to run
+            expect(chains().has(entity)).toBe(false); // dropped once settled
+        });
+
+        it('logs (does not throw) when a queued save fails', async () => {
+            const log: string[] = [];
+            const entity = fakeLog(log, [1]);
+            await q(entity);
+            await vi.waitFor(() => expect(LogError).toHaveBeenCalled());
         });
     });
 

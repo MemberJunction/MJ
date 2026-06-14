@@ -1,6 +1,6 @@
 # Follow-up Task: Codebase-wide "Fire-and-Forget" Logging/Telemetry Audit
 
-**Status:** Not started — backlog
+**Status:** First sweep DONE (2026-06-13) — AIModelRunner + ActionEngineServer converted; see "Sweep results" below. Remaining candidate areas (communication/notification logs, scheduled-job run logs, integration sync logs, MJServer audit resolvers) not yet examined.
 **Created:** 2026-06-13
 **Origin:** Spun out of the AIPromptRunner performance work (see "Done so far" below). The user's guidance: adopt a fire-and-forget mindset for persistence that is *observability, not part of the success contract* — do the work, log failures, but don't make the hot path wait on a DB round-trip when nothing downstream needs the write to have landed.
 
@@ -19,7 +19,37 @@ Two reference implementations now exist; copy their shape:
 4. **Failures are logged, never swallowed silently, and never thrown into the hot path.** Attach `.then(ok => log if !ok).catch(log)` so the promise always settles.
 5. **Provide a flush** (`WaitForPending*`) for tests and for callers that genuinely need durability before proceeding.
 
-## Candidate sites to audit (not yet verified — this is the task)
+## Sweep results (2026-06-13)
+
+A third reference implementation now exists for the **singleton** case:
+3. **`packages/Actions/Engine/src/generic/ActionEngine.ts`** — `queueLogSave()` / `_logSaveChains`.
+   Because `ActionEngineServer` is a long-lived singleton (not per-run like AIPromptRunner/
+   AIModelRunner), there's no natural "flush" point, so each chain **self-cleans its Map entry on
+   settle** (`current.finally(() => if still latest, delete)`) to avoid unbounded Map growth. Copy
+   this variant when converting any singleton's telemetry writes.
+
+### Converted (observability → fire-and-forget)
+- **`packages/AI/Prompts/src/AIModelRunner.ts`** — the 3 embedding/model-run `AIPromptRun` saves
+  (create 'Running' + complete + fail). Per-instance chain + `WaitForPendingPromptRunSaves()`.
+  Tested: `AIModelRunner.fire-and-forget.test.ts`.
+- **`packages/Actions/Engine/src/generic/ActionEngine.ts`** — `StartActionLog` INSERT +
+  `EndActionLog` UPDATE (and the `StartAndEndActionLog` single-insert path). Singleton self-cleaning
+  chain. Verified every `result.LogEntry.ID` consumer (BaseAgent `TargetLogID`, pipeline `logRef`,
+  MCPServer `runId`) only reads the **client-generated** ID — none reads back persisted DB state, and
+  `AIAgentRunStep.TargetLogID` is a polymorphic soft ref (no hard FK). Existing ActionEngine tests
+  updated to the async contract (`vi.waitFor`) + new ordering/self-clean tests added.
+
+### Examined and LEFT (NOT converted — with reason)
+- **`packages/APIKeys/Engine/src/UsageLogger.ts`** — the saved log's `ID` is returned to the caller
+  as `LogId` in the authorization response; synchronous persistence is part of that contract.
+- **`packages/Angular/Explorer/dashboards/src/Scheduling/services/scheduling-instrumentation.service.ts`**
+  — user-initiated CRUD; the boolean `Save()` result drives the UI (refresh vs. error). Contract write.
+- **`packages/geo/geo-core/src/GeoCodeSyncService.ts`** — the create-row `Save()` **return value drives
+  the concurrent-batch race fallback** (on a unique-key violation it loads the existing row), so
+  fire-and-forget would break that handling. Left as-is. (The geocoding work is already off the user
+  path via the AfterSave hook.)
+
+## Candidate sites to audit (not yet verified — remaining work)
 
 Sweep for `await <entity>.Save()` where the result is only used for logging and nothing downstream depends on the row being persisted synchronously. Likely candidates:
 
