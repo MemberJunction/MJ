@@ -1672,7 +1672,7 @@ export const MJAIAgentExampleSchema = z.object({
     SourceConversationDetail: z.string().nullable().describe(`
         * * Field Name: SourceConversationDetail
         * * Display Name: Source Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(100)`),
     SourceAIAgentRun: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRun
         * * Display Name: Source AI Agent Run
@@ -1981,7 +1981,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Internal comments about this note, not included in agent context injection.`),
-    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Provisional'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -1991,8 +1991,9 @@ export const MJAIAgentNoteSchema = z.object({
     *   * Active
     *   * Archived
     *   * Pending
+    *   * Provisional
     *   * Revoked
-        * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).`),
+        * * Description: Lifecycle status of the note. Pending = awaiting approval, Active = vetted and injectable, Provisional = written in-flight by an agent (immediately injectable, awaiting Memory Manager hardening to Active), Revoked = superseded/withdrawn, Archived = retired by consolidation or decay.`),
     SourceConversationID: z.string().nullable().describe(`
         * * Field Name: SourceConversationID
         * * Display Name: Source Conversation
@@ -2036,7 +2037,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping. NULL means this is a global note.`),
     PrimaryScopeRecordID: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeRecordID
-        * * Display Name: Primary Scope Record
+        * * Display Name: Primary Scope Record ID
         * * SQL Data Type: nvarchar(100)
         * * Description: The record ID within the primary scope entity. NULL means global note. When set with empty SecondaryScopes, indicates primary-scope-only note.`),
     SecondaryScopes: z.string().nullable().describe(`
@@ -2062,7 +2063,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Description: Optional expiration timestamp. Notes past this date are candidates for archival. NULL means no expiration.`),
     ConsolidatedIntoNoteID: z.string().nullable().describe(`
         * * Field Name: ConsolidatedIntoNoteID
-        * * Display Name: Consolidated Into Note ID
+        * * Display Name: Consolidated Into Note
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
         * * Description: Self-referential FK. Points to the consolidated note that replaced this one when revoked during consolidation or contradiction resolution.`),
@@ -2074,7 +2075,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Description: Tracks re-summarization depth. 0=raw extraction, 1=first consolidation, etc. Capped at 3 to prevent semantic drift.`),
     DerivedFromNoteIDs: z.string().nullable().describe(`
         * * Field Name: DerivedFromNoteIDs
-        * * Display Name: Derived From Note I Ds
+        * * Display Name: Derived From Note IDs
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of source note IDs that were consolidated into this note. Enables provenance chain resolution and rollback.`),
     ProtectionTier: z.union([z.literal('Ephemeral'), z.literal('Immutable'), z.literal('Protected'), z.literal('Standard')]).describe(`
@@ -2094,6 +2095,17 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Importance Score
         * * SQL Data Type: decimal(5, 2)
         * * Description: Composite importance score (0-10) computed from 7 signals: recency, LLM-importance, relevance, uniqueness, correction boost, goal alignment, user mark. Replaces raw AccessCount for authority and retention decisions.`),
+    AuthorType: z.union([z.literal('Agent'), z.literal('MemoryManager'), z.literal('User')]).describe(`
+        * * Field Name: AuthorType
+        * * Display Name: Author Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: MemoryManager
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * MemoryManager
+    *   * User
+        * * Description: Type of author that created the note: Agent = written in-flight during an agent run, MemoryManager = extracted/consolidated by the scheduled Memory Manager, User = manually created by a person.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -2113,7 +2125,7 @@ export const MJAIAgentNoteSchema = z.object({
     SourceConversationDetail: z.string().nullable().describe(`
         * * Field Name: SourceConversationDetail
         * * Display Name: Source Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(100)`),
     SourceAIAgentRun: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRun
         * * Display Name: Source AI Agent Run
@@ -3219,7 +3231,7 @@ each time the agent processes a prompt step.`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail Info
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(100)`),
     LastRun: z.string().nullable().describe(`
         * * Field Name: LastRun
         * * Display Name: Last Run Info
@@ -3939,7 +3951,7 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Context Compression Threshold
+        * * Display Name: Context Compression Message Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
@@ -3949,7 +3961,7 @@ export const MJAIAgentSchema = z.object({
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
-        * * Display Name: Retention Count
+        * * Display Name: Context Compression Message Retention Count
         * * SQL Data Type: int
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
@@ -4025,7 +4037,7 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`),
     FinalPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Retry'), z.literal('Warn')]).describe(`
         * * Field Name: FinalPayloadValidationMode
-        * * Display Name: Final Validation Mode
+        * * Display Name: Final Payload Validation Mode
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Retry
     * * Value List Type: List
@@ -4036,7 +4048,7 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`),
     FinalPayloadValidationMaxRetries: z.number().describe(`
         * * Field Name: FinalPayloadValidationMaxRetries
-        * * Display Name: Final Validation Max Retries
+        * * Display Name: Final Payload Validation Max Retries
         * * SQL Data Type: int
         * * Default Value: 3
         * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
@@ -4082,7 +4094,7 @@ if this limit is exceeded.`),
         * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.`),
     StartingPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Warn')]).describe(`
         * * Field Name: StartingPayloadValidationMode
-        * * Display Name: Starting Validation Mode
+        * * Display Name: Starting Payload Validation Mode
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Fail
     * * Value List Type: List
@@ -4232,7 +4244,7 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold
+        * * Display Name: Inline Storage Threshold Bytes
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -4242,7 +4254,7 @@ if this limit is exceeded.`),
         * * Description: JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.`),
     ScopeConfig: z.string().nullable().describe(`
         * * Field Name: ScopeConfig
-        * * Display Name: Scope Configuration
+        * * Display Name: Scope Config
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`),
     NoteRetentionDays: z.number().nullable().describe(`
@@ -4314,13 +4326,19 @@ if this limit is exceeded.`),
         * * Display Name: Type Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Agent-type-specific configuration JSON, validated against the agent type's ConfigSchema (when one is published) in the server-side entity subclass. For Realtime-type co-agents this holds the realtime profile: preferred model, per-provider voice settings, tone/speaking style (folded into the session system prompt at mint), user-override policy, and narration pacing. Null = type defaults apply.`),
+    AllowMemoryWrite: z.boolean().describe(`
+        * * Field Name: AllowMemoryWrite
+        * * Display Name: Allow Memory Write
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Agent Name
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Context Compression Prompt Name
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
@@ -4328,35 +4346,35 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     DefaultArtifactType: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactType
-        * * Display Name: Default Artifact Type Name
+        * * Display Name: Default Artifact Type
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner User Name
+        * * Display Name: Owner User
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
-        * * Display Name: Attachment Storage Provider Name
+        * * Display Name: Attachment Storage Provider
         * * SQL Data Type: nvarchar(50)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category Name
+        * * Display Name: Category
         * * SQL Data Type: nvarchar(200)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
-        * * Display Name: Default Storage Account Name
+        * * Display Name: Default Storage Account
         * * SQL Data Type: nvarchar(200)`),
     DefaultCoAgent: z.string().nullable().describe(`
         * * Field Name: DefaultCoAgent
-        * * Display Name: Default Co-Agent Name
+        * * Display Name: Default Co-Agent
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent Agent
+        * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
     RootDefaultCoAgentID: z.string().nullable().describe(`
         * * Field Name: RootDefaultCoAgentID
-        * * Display Name: Root Default Co-Agent
+        * * Display Name: Root Default Co-Agent ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -12073,10 +12091,10 @@ export const MJConversationDetailArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ConversationDetail: z.string().describe(`
+    ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail Summary
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(100)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version Summary
@@ -12178,10 +12196,10 @@ export const MJConversationDetailAttachmentSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
         * * Description: Foreign key to the ArtifactVersion created alongside this attachment by the storage-unification path. When set, the agent resolver routes via the artifact path (manifest + tool dispatch) and skips inline embedding of the attachment to avoid double-processing. NULL for pre-v5.35 attachment rows authored before storage unification.`),
-    ConversationDetail: z.string().describe(`
+    ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail Record
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(100)`),
     Modality: z.string().describe(`
         * * Field Name: Modality
         * * Display Name: Modality Record
@@ -12239,10 +12257,10 @@ export const MJConversationDetailRatingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ConversationDetail: z.string().describe(`
+    ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(100)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -12436,7 +12454,7 @@ export const MJConversationDetailSchema = z.object({
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Reference
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(100)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Reference
@@ -22671,7 +22689,7 @@ export const MJReportSchema = z.object({
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail Name
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(100)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context Name
@@ -25566,7 +25584,7 @@ export const MJTaskSchema = z.object({
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail Name
-        * * SQL Data Type: nvarchar(MAX)`),
+        * * SQL Data Type: nvarchar(100)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
@@ -33234,7 +33252,7 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
     /**
     * * Field Name: SourceConversationDetail
     * * Display Name: Source Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(100)
     */
     get SourceConversationDetail(): string | null {
         return this.Get('SourceConversationDetail');
@@ -34017,13 +34035,14 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     *   * Active
     *   * Archived
     *   * Pending
+    *   * Provisional
     *   * Revoked
-    * * Description: Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).
+    * * Description: Lifecycle status of the note. Pending = awaiting approval, Active = vetted and injectable, Provisional = written in-flight by an agent (immediately injectable, awaiting Memory Manager hardening to Active), Revoked = superseded/withdrawn, Archived = retired by consolidation or decay.
     */
-    get Status(): 'Active' | 'Archived' | 'Pending' | 'Revoked' {
+    get Status(): 'Active' | 'Archived' | 'Pending' | 'Provisional' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: 'Active' | 'Archived' | 'Pending' | 'Revoked') {
+    set Status(value: 'Active' | 'Archived' | 'Pending' | 'Provisional' | 'Revoked') {
         this.Set('Status', value);
     }
 
@@ -34126,7 +34145,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
     /**
     * * Field Name: PrimaryScopeRecordID
-    * * Display Name: Primary Scope Record
+    * * Display Name: Primary Scope Record ID
     * * SQL Data Type: nvarchar(100)
     * * Description: The record ID within the primary scope entity. NULL means global note. When set with empty SecondaryScopes, indicates primary-scope-only note.
     */
@@ -34192,7 +34211,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
     /**
     * * Field Name: ConsolidatedIntoNoteID
-    * * Display Name: Consolidated Into Note ID
+    * * Display Name: Consolidated Into Note
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
     * * Description: Self-referential FK. Points to the consolidated note that replaced this one when revoked during consolidation or contradiction resolution.
@@ -34220,7 +34239,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
     /**
     * * Field Name: DerivedFromNoteIDs
-    * * Display Name: Derived From Note I Ds
+    * * Display Name: Derived From Note IDs
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of source note IDs that were consolidated into this note. Enables provenance chain resolution and rollback.
     */
@@ -34265,6 +34284,25 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     }
 
     /**
+    * * Field Name: AuthorType
+    * * Display Name: Author Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: MemoryManager
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * MemoryManager
+    *   * User
+    * * Description: Type of author that created the note: Agent = written in-flight during an agent run, MemoryManager = extracted/consolidated by the scheduled Memory Manager, User = manually created by a person.
+    */
+    get AuthorType(): 'Agent' | 'MemoryManager' | 'User' {
+        return this.Get('AuthorType');
+    }
+    set AuthorType(value: 'Agent' | 'MemoryManager' | 'User') {
+        this.Set('AuthorType', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -34303,7 +34341,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     /**
     * * Field Name: SourceConversationDetail
     * * Display Name: Source Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(100)
     */
     get SourceConversationDetail(): string | null {
         return this.Get('SourceConversationDetail');
@@ -37249,7 +37287,7 @@ each time the agent processes a prompt step.
     /**
     * * Field Name: ConversationDetail
     * * Display Name: Conversation Detail Info
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(100)
     */
     get ConversationDetail(): string | null {
         return this.Get('ConversationDetail');
@@ -39269,7 +39307,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Context Compression Threshold
+    * * Display Name: Context Compression Message Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -39295,7 +39333,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
-    * * Display Name: Retention Count
+    * * Display Name: Context Compression Message Retention Count
     * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.
     */
@@ -39467,7 +39505,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidationMode
-    * * Display Name: Final Validation Mode
+    * * Display Name: Final Payload Validation Mode
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Retry
     * * Value List Type: List
@@ -39486,7 +39524,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidationMaxRetries
-    * * Display Name: Final Validation Max Retries
+    * * Display Name: Final Payload Validation Max Retries
     * * SQL Data Type: int
     * * Default Value: 3
     * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
@@ -39596,7 +39634,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: StartingPayloadValidationMode
-    * * Display Name: Starting Validation Mode
+    * * Display Name: Starting Payload Validation Mode
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Fail
     * * Value List Type: List
@@ -39906,7 +39944,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold
+    * * Display Name: Inline Storage Threshold Bytes
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -39932,7 +39970,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ScopeConfig
-    * * Display Name: Scope Configuration
+    * * Display Name: Scope Config
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}
     */
@@ -40101,8 +40139,22 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: AllowMemoryWrite
+    * * Display Name: Allow Memory Write
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.
+    */
+    get AllowMemoryWrite(): boolean {
+        return this.Get('AllowMemoryWrite');
+    }
+    set AllowMemoryWrite(value: boolean) {
+        this.Set('AllowMemoryWrite', value);
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent Agent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -40111,7 +40163,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Context Compression Prompt Name
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -40129,7 +40181,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultArtifactType
-    * * Display Name: Default Artifact Type Name
+    * * Display Name: Default Artifact Type
     * * SQL Data Type: nvarchar(100)
     */
     get DefaultArtifactType(): string | null {
@@ -40138,7 +40190,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner User Name
+    * * Display Name: Owner User
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string {
@@ -40147,7 +40199,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProvider
-    * * Display Name: Attachment Storage Provider Name
+    * * Display Name: Attachment Storage Provider
     * * SQL Data Type: nvarchar(50)
     */
     get AttachmentStorageProvider(): string | null {
@@ -40156,7 +40208,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: Category
-    * * Display Name: Category Name
+    * * Display Name: Category
     * * SQL Data Type: nvarchar(200)
     */
     get Category(): string | null {
@@ -40165,7 +40217,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultStorageAccount
-    * * Display Name: Default Storage Account Name
+    * * Display Name: Default Storage Account
     * * SQL Data Type: nvarchar(200)
     */
     get DefaultStorageAccount(): string | null {
@@ -40174,7 +40226,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultCoAgent
-    * * Display Name: Default Co-Agent Name
+    * * Display Name: Default Co-Agent
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultCoAgent(): string | null {
@@ -40183,7 +40235,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent Agent
+    * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -40192,7 +40244,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootDefaultCoAgentID
-    * * Display Name: Root Default Co-Agent
+    * * Display Name: Root Default Co-Agent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootDefaultCoAgentID(): string | null {
@@ -60699,9 +60751,9 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
     /**
     * * Field Name: ConversationDetail
     * * Display Name: Conversation Detail Summary
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(100)
     */
-    get ConversationDetail(): string {
+    get ConversationDetail(): string | null {
         return this.Get('ConversationDetail');
     }
 
@@ -61002,9 +61054,9 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
     /**
     * * Field Name: ConversationDetail
     * * Display Name: Conversation Detail Record
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(100)
     */
-    get ConversationDetail(): string {
+    get ConversationDetail(): string | null {
         return this.Get('ConversationDetail');
     }
 
@@ -61184,9 +61236,9 @@ export class MJConversationDetailRatingEntity extends BaseEntity<MJConversationD
     /**
     * * Field Name: ConversationDetail
     * * Display Name: Conversation Detail
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(100)
     */
-    get ConversationDetail(): string {
+    get ConversationDetail(): string | null {
         return this.Get('ConversationDetail');
     }
 
@@ -61715,7 +61767,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     /**
     * * Field Name: Parent
     * * Display Name: Parent Reference
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
         return this.Get('Parent');
@@ -87918,7 +87970,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
     /**
     * * Field Name: ConversationDetail
     * * Display Name: Conversation Detail Name
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(100)
     */
     get ConversationDetail(): string | null {
         return this.Get('ConversationDetail');
@@ -95507,7 +95559,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     /**
     * * Field Name: ConversationDetail
     * * Display Name: Conversation Detail Name
-    * * SQL Data Type: nvarchar(MAX)
+    * * SQL Data Type: nvarchar(100)
     */
     get ConversationDetail(): string | null {
         return this.Get('ConversationDetail');
