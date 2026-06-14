@@ -628,4 +628,48 @@ describe('ClassFactory', () => {
       expect(factory.GetAllRegistrationsByMetadata(Animal, null as unknown as () => boolean)).toEqual([]);
     });
   });
+
+  describe('GetRegistration memoization (hot-path perf)', () => {
+    it('returns the same registration object on repeated calls (cached)', () => {
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      const first = factory.GetRegistration(Animal, 'pet');
+      const second = factory.GetRegistration(Animal, 'pet');
+      expect(first).not.toBeNull();
+      expect(first).toBe(second);
+    });
+
+    it('caches a "no registration" (null) result and still returns null', () => {
+      // Vehicle has no registration — exercises the cached-null path.
+      expect(factory.GetRegistration(Vehicle, 'anything')).toBeNull();
+      expect(factory.GetRegistration(Vehicle, 'anything')).toBeNull();
+    });
+
+    it('invalidates the cache when a new registration is added (no stale null)', () => {
+      expect(factory.GetRegistration(Animal, 'pet')).toBeNull(); // primes the null cache
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      const reg = factory.GetRegistration(Animal, 'pet');
+      expect(reg).not.toBeNull();
+      expect(reg!.SubClass).toBe(Dog);
+    });
+
+    it('invalidates the cache when a higher-priority registration changes the winner', () => {
+      factory.Register(Animal, Dog, 'pet', 5, true);
+      expect(factory.GetRegistration(Animal, 'pet')!.SubClass).toBe(Dog); // primes cache
+      factory.Register(Animal, Cat, 'pet', 10, true); // higher priority wins
+      expect(factory.GetRegistration(Animal, 'pet')!.SubClass).toBe(Cat);
+    });
+
+    it('memoizes case-insensitively by key (same result for different casings)', () => {
+      factory.Register(Animal, Dog, 'canine', 0, true);
+      const lower = factory.GetRegistration(Animal, 'canine');
+      const upper = factory.GetRegistration(Animal, 'CANINE');
+      expect(lower).not.toBeNull();
+      expect(lower).toBe(upper);
+    });
+
+    it('returns null for a falsy base class', () => {
+      expect(factory.GetRegistration(null)).toBeNull();
+      expect(factory.GetRegistration(undefined)).toBeNull();
+    });
+  });
 });
