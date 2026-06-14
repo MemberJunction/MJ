@@ -46,6 +46,7 @@ vi.mock('openai', () => ({
 import { xAIRealtime, xAIRealtimeSession, IxAIRealtimeConnection } from '../models/xaiRealtime';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
+import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
 
 /**
  * In-memory fake connection: records every outbound `send`, lets tests fire server events to all
@@ -140,6 +141,19 @@ class TestablexAIRealtime extends xAIRealtime {
     }
 }
 
+/** Driver subclass that captures the mint request + returns a fake ephemeral secret (no network). */
+class ClientDirectTestablexAI extends xAIRealtime {
+    public MintBody: ClientSecretCreateParams | null = null;
+    protected override async mintClientSecret(body: ClientSecretCreateParams): Promise<ClientSecretCreateResponse> {
+        this.MintBody = body;
+        return {
+            value: 'ephem-xai-123',
+            expires_at: 1893456000,
+            session: { type: 'realtime' } as ClientSecretCreateResponse['session'],
+        };
+    }
+}
+
 describe('xAIRealtime construction', () => {
     beforeEach(() => {
         openAICtor.mockClear();
@@ -150,14 +164,35 @@ describe('xAIRealtime construction', () => {
         expect(openAICtor).toHaveBeenCalledWith({ apiKey: 'xai-key', baseURL: 'https://api.x.ai/v1' });
     });
 
-    it('does NOT advertise client-direct support (server-bridged path only)', () => {
-        expect(new TestablexAIRealtime('k').SupportsClientDirect).toBe(false);
+    it('advertises client-direct support (Grok Voice supports browser-direct WebSocket sessions)', () => {
+        expect(new TestablexAIRealtime('k').SupportsClientDirect).toBe(true);
     });
 
-    it('CreateClientSession throws because client-direct is unsupported', async () => {
-        await expect(
-            new TestablexAIRealtime('k').CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'hi' })
-        ).rejects.toThrow(/does not support client-direct/);
+    it('CreateClientSession mints a well-formed config (Provider xai, token, model, instructions, tools)', async () => {
+        const driver = new ClientDirectTestablexAI('k');
+        const cfg = await driver.CreateClientSession({
+            Model: 'grok-voice',
+            SystemPrompt: 'be the voice',
+            Tools: [{ Name: 'invoke-target-agent', Description: 'run target', ParametersSchema: { type: 'object' } }],
+        });
+        expect(cfg.Provider).toBe('xai');
+        expect(cfg.Model).toBe('grok-voice');
+        expect(cfg.EphemeralToken).toBe('ephem-xai-123');
+        expect(cfg.ExpiresAt).toBe(new Date(1893456000 * 1000).toISOString());
+        const sc = cfg.SessionConfig as Record<string, unknown>;
+        expect(sc.type).toBe('realtime');
+        expect(sc.model).toBe('grok-voice');
+        expect(sc.instructions).toBe('be the voice');
+        expect(Array.isArray(sc.tools)).toBe(true);
+        // User input transcription opted in so both sides of the conversation are captured.
+        expect((sc.audio as Record<string, unknown>).input).toBeDefined();
+        // The mint request carried the same server-controlled session config.
+        expect((driver.MintBody?.session as Record<string, unknown> | undefined)?.instructions).toBe('be the voice');
+    });
+
+    it('CreateClientSession omits tools when none are provided', async () => {
+        const cfg = await new ClientDirectTestablexAI('k').CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'hi' });
+        expect((cfg.SessionConfig as Record<string, unknown>).tools).toBeUndefined();
     });
 });
 

@@ -8,6 +8,7 @@ import {
     RealtimeToolCall,
     RealtimeUsage,
     RealtimeSessionError,
+    ClientRealtimeSessionConfig,
     JSONObject,
 } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
@@ -24,6 +25,10 @@ import type {
     RealtimeConversationItemUserMessage,
     RealtimeSessionCreateRequest,
 } from 'openai/resources/realtime/realtime';
+import type {
+    ClientSecretCreateParams,
+    ClientSecretCreateResponse,
+} from 'openai/resources/realtime/client-secrets';
 
 /**
  * xAI's Grok Voice Agent API is OpenAI-Realtime-API compatible. Pointing the `openai` SDK's
@@ -171,6 +176,63 @@ export class xAIRealtime extends BaseRealtimeModel {
         const session = new xAIRealtimeSession(connection);
         session.applyInitialConfig(params);
         return session;
+    }
+
+    /**
+     * xAI's Grok Voice Agent API supports the client-direct topology: it mints a short-lived
+     * ephemeral client secret (POST https://api.x.ai/v1/realtime/client_secrets) that the browser
+     * uses to open its OWN WebSocket to wss://api.x.ai/v1/realtime, while the server still controls
+     * the system prompt + tools via the returned SessionConfig. The endpoint is OpenAI-Realtime
+     * compatible, so the xAI-pointed SDK client's clientSecrets.create() targets api.x.ai automatically.
+     * Paired with the browser-side 'xai' BaseRealtimeClient driver (xAIRealtimeClient).
+     */
+    public override get SupportsClientDirect(): boolean {
+        return true;
+    }
+
+    /**
+     * Mints the ephemeral client secret via xAI's OpenAI-compatible Realtime client-secrets API
+     * (POST https://api.x.ai/v1/realtime/client_secrets — resolved from the xAI-pointed client's base
+     * URL). Overridable seam for testing — unit tests return a fake response so no network call is made.
+     *
+     * @param body The client-secret create request (carries the realtime session config).
+     * @returns The client-secret create response (token value + expiry + echoed session).
+     */
+    protected async mintClientSecret(body: ClientSecretCreateParams): Promise<ClientSecretCreateResponse> {
+        return this._openAI.realtime.clientSecrets.create(body);
+    }
+
+    /**
+     * Mints an ephemeral, server-scoped realtime session credential for a browser to open its own
+     * connection to Grok Voice (client-direct topology). The server builds the session config
+     * (system prompt + tools + model + input transcription) so it retains control of behavior even
+     * though the browser owns the socket. Mirrors the OpenAI driver — xAI's endpoint is
+     * OpenAI-Realtime-API compatible.
+     *
+     * @param params Session configuration (model, system prompt, tools).
+     * @returns The minted {@link ClientRealtimeSessionConfig} the browser authenticates + applies.
+     */
+    public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+        const session: RealtimeSessionCreateRequest = {
+            type: 'realtime',
+            model: params.Model,
+            instructions: params.SystemPrompt,
+        };
+        if (params.Tools && params.Tools.length > 0) {
+            session.tools = mapRealtimeTools(params.Tools);
+        }
+        // Opt into USER mic-input transcription so BOTH sides of the conversation are captured (live
+        // captions + persisted turns), matching the server-bridged session.update path.
+        session.audio = { input: { transcription: { model: XAI_INPUT_TRANSCRIPTION_MODEL } } };
+        const response = await this.mintClientSecret({ session });
+        return {
+            Provider: 'xai',
+            Model: params.Model,
+            EphemeralToken: response.value,
+            ExpiresAt: new Date(response.expires_at * 1000).toISOString(),
+            // The provider-native session config the browser applies verbatim (plain JSON).
+            SessionConfig: JSON.parse(JSON.stringify(session)) as JSONObject,
+        };
     }
 }
 
