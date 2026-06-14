@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { decideBooleanOverlay, decideAbsentDeactivations, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
+import { decideBooleanOverlay, decideAbsentDeactivations, decideSchemaLimitViolations, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
 
 describe('decideBooleanOverlay', () => {
     describe('undefined discovered (no-opinion case — the bug class)', () => {
@@ -164,5 +164,49 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
             }),
         );
         expect(out.FieldIDsToDeactivate).toEqual([]);
+    });
+});
+
+describe('decideSchemaLimitViolations (§B — operator/env table+column caps at the RSU gate)', () => {
+    const cols = (...counts: Array<[string, number]>) => counts.map(([Name, ColumnCount]) => ({ Name, ColumnCount }));
+
+    it('DEFAULT (both caps null = unbounded) -> no violation regardless of size', () => {
+        const v = decideSchemaLimitViolations({ TableCount: 9999, ColumnCountByTable: cols(['big', 9999]), MaxTables: null, MaxColumnsPerTable: null });
+        expect(v).toEqual([]);
+    });
+
+    it('rejects when the table count exceeds MaxTables', () => {
+        const v = decideSchemaLimitViolations({ TableCount: 12, ColumnCountByTable: [], MaxTables: 10, MaxColumnsPerTable: null });
+        expect(v.length).toBe(1);
+        expect(v[0]).toContain('MJ_INTEGRATION_MAX_TABLES limit (10)');
+    });
+
+    it('allows a selection at exactly the table cap (boundary)', () => {
+        const v = decideSchemaLimitViolations({ TableCount: 10, ColumnCountByTable: [], MaxTables: 10, MaxColumnsPerTable: null });
+        expect(v).toEqual([]);
+    });
+
+    it('rejects + names the table(s) whose column count exceeds MaxColumnsPerTable', () => {
+        const v = decideSchemaLimitViolations({
+            TableCount: 2,
+            ColumnCountByTable: cols(['ok', 5], ['fat', 80], ['alsofat', 90]),
+            MaxTables: null,
+            MaxColumnsPerTable: 50,
+        });
+        expect(v.length).toBe(1);
+        expect(v[0]).toContain('MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE limit (50)');
+        expect(v[0]).toContain('fat (80 columns)');
+        expect(v[0]).toContain('alsofat (90 columns)');
+        expect(v[0]).not.toContain('ok (');
+    });
+
+    it('reports BOTH violations when table-count AND a column-count are over', () => {
+        const v = decideSchemaLimitViolations({ TableCount: 12, ColumnCountByTable: cols(['fat', 80]), MaxTables: 10, MaxColumnsPerTable: 50 });
+        expect(v.length).toBe(2);
+    });
+
+    it('within both caps -> no violation', () => {
+        const v = decideSchemaLimitViolations({ TableCount: 3, ColumnCountByTable: cols(['a', 10], ['b', 20]), MaxTables: 10, MaxColumnsPerTable: 50 });
+        expect(v).toEqual([]);
     });
 });

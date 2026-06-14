@@ -136,6 +136,8 @@ export { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrenc
 export type { AdaptiveConcurrencyOptions, AdaptiveItemOutcome, AdaptiveRunResult } from './AdaptiveConcurrency.js';
 export type { FetchWarning } from './BaseIntegrationConnector.js';
 export type { FieldMergeLog, ObjectMergeLog } from './IntegrationSchemaSync.js';
+export { decideSchemaLimitViolations } from './IntegrationSchemaSync.js';
+export type { SchemaLimitInput } from './IntegrationSchemaSync.js';
 
 // ── Auth helpers (shared OAuth2/token primitives for connectors) ──
 export { OAuth2TokenManager } from './auth-helpers/index.js';

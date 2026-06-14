@@ -160,6 +160,47 @@ export function decideAbsentDeactivations(input: AbsentDeactivationInput): {
   return { ObjectIDsToDeactivate, FieldIDsToDeactivate };
 }
 
+/** §B — input for {@link decideSchemaLimitViolations}: the selected table/column counts + the operator caps. */
+export interface SchemaLimitInput {
+  /** Number of tables the user selected to materialize. */
+  TableCount: number;
+  /** Per selected table: its name + the column count it would materialize. */
+  ColumnCountByTable: Array<{ Name: string; ColumnCount: number }>;
+  /** Operator cap on table count (from MJ_INTEGRATION_MAX_TABLES). null = unbounded. */
+  MaxTables: number | null;
+  /** Operator cap on columns per table (from MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE). null = unbounded. */
+  MaxColumnsPerTable: number | null;
+}
+
+/**
+ * §B — PURE decision for the create-tables/RSU table+column caps. Returns a list of human-readable
+ * violation messages (empty = within limits). These caps are OPERATOR/env guardrails (a user must not be
+ * able to raise their own cap via the same API they apply with). Over-limit is REJECTED, never truncated.
+ * `null` caps mean unbounded (the default), so the common case returns []. Pure ⇒ unit-testable without the
+ * resolver/DB; the resolver builds the input from the selection and throws if this returns any violation.
+ */
+export function decideSchemaLimitViolations(input: SchemaLimitInput): string[] {
+  const violations: string[] = [];
+  if (input.MaxTables !== null && input.TableCount > input.MaxTables) {
+    violations.push(
+      `Selected ${input.TableCount} tables, which exceeds the deployment's MJ_INTEGRATION_MAX_TABLES limit (${input.MaxTables}). ` +
+      `The apply was REJECTED — no tables were created. Narrow the selection (the cap is an operator/env setting).`,
+    );
+  }
+  if (input.MaxColumnsPerTable !== null) {
+    const max = input.MaxColumnsPerTable;
+    const offenders = input.ColumnCountByTable.filter((t) => t.ColumnCount > max);
+    if (offenders.length > 0) {
+      violations.push(
+        `These selected table(s) exceed the deployment's MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE limit (${max}): ` +
+        `${offenders.map((o) => `${o.Name} (${o.ColumnCount} columns)`).join(', ')}. ` +
+        `The apply was REJECTED — no tables were created. Narrow the columns (the cap is an operator/env setting).`,
+      );
+    }
+  }
+  return violations;
+}
+
 /** Per-object provenance summary. */
 export interface ObjectMergeLog {
   ObjectName: string;

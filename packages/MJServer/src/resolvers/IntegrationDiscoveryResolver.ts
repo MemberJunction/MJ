@@ -28,6 +28,7 @@ import {
     IntegrationSyncOptions,
     SourceSchemaInfo,
     IntegrationSchemaSync,
+    decideSchemaLimitViolations,
     IntegrationConnectorCreationPipeline,
     IntegrationActionGenerator
 } from "@memberjunction/integration-engine";
@@ -3634,29 +3635,18 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const v = parseInt(process.env[name] ?? '', 10);
             return Number.isFinite(v) && v > 0 ? v : null;
         };
-        const maxTables = envInt('MJ_INTEGRATION_MAX_TABLES');
-        const maxColumnsPerTable = envInt('MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE');
-        if (maxTables === null && maxColumnsPerTable === null) return; // unbounded — no work
-
-        if (maxTables !== null && objects.length > maxTables) {
-            throw new Error(
-                `Selected ${objects.length} tables, which exceeds the deployment's MJ_INTEGRATION_MAX_TABLES limit (${maxTables}). ` +
-                `The apply was REJECTED — no tables were created. Narrow the selection (the cap is an operator/env setting).`
-            );
-        }
-        if (maxColumnsPerTable !== null) {
-            const fullCountByName = new Map(filteredSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.Fields.length]));
-            const offenders = objects
-                .map(o => ({ name: o.SourceObjectName, count: o.Fields?.length ?? fullCountByName.get(o.SourceObjectName.toLowerCase()) ?? 0 }))
-                .filter(o => o.count > maxColumnsPerTable);
-            if (offenders.length > 0) {
-                const list = offenders.map(o => `${o.name} (${o.count} columns)`).join(', ');
-                throw new Error(
-                    `These selected table(s) exceed the deployment's MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE limit (${maxColumnsPerTable}): ${list}. ` +
-                    `The apply was REJECTED — no tables were created. Narrow the columns (the cap is an operator/env setting).`
-                );
-            }
-        }
+        const fullCountByName = new Map(filteredSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.Fields.length]));
+        // Delegate the cap decision to the engine's pure, unit-tested decideSchemaLimitViolations.
+        const violations = decideSchemaLimitViolations({
+            TableCount: objects.length,
+            ColumnCountByTable: objects.map(o => ({
+                Name: o.SourceObjectName,
+                ColumnCount: o.Fields?.length ?? fullCountByName.get(o.SourceObjectName.toLowerCase()) ?? 0,
+            })),
+            MaxTables: envInt('MJ_INTEGRATION_MAX_TABLES'),
+            MaxColumnsPerTable: envInt('MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE'),
+        });
+        if (violations.length > 0) throw new Error(violations.join(' '));
     }
 
     private async buildSchemaForConnector(
