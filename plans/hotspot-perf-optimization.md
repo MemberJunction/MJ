@@ -10,6 +10,26 @@
 > - `gatherPromptTemplateData` (#12): replaced per-run memoization with a **cross-run base cache on `AIEngineBase` + BaseEntity-event invalidation + per-run override clone**, and **adds runtime `subAgentChanges`** mirroring `actionChanges` (§5.1).
 > - Sequencing: **Waves 1-3 ship as ONE PR; Wave 4 is its own PR** (§8).
 
+## Implementation Progress (live)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Wave 1 (#1-#4, #18) | ✅ done, tested, pushed | MJCore 1262/1262, MJGlobal 457+6 green |
+| Wave 2 cache (#5, #6) | ✅ done, tested, pushed | +5 size-estimate tests; 117 cache tests green |
+| Wave 2 GraphQL (#7, #10) | ✅ done, tested, pushed | shared FieldMapper + EntityByName; 265 green |
+| Wave 2 server (#8, #9-O(F²)) | ✅ done, tested, pushed | GenericDB 795, SQLServer 74 green |
+| Wave 3 payload (#13, #14) | ✅ done, tested, pushed | ai-agents 1216/1216 green |
+| Wave 3 #15 | ⛔ skipped (rationale) | `CopyScalarsAndArrays(.,true)` is a serialization-safety **filter**, not a throwaway clone; removing it changes persisted `OutputData` and risks circular-ref throws |
+| Wave 3 #16 | ⛔ skipped (rationale) | child templates render with their **own** `params.prompt`; system placeholders (output example/format) are prompt-specific, so "resolve once & share" would inject parent placeholders into children. Probe's own correction notes these are cheap synchronous formatters |
+| Wave 3 #12 (catalog cache + `subAgentChanges`) | 🔶 design nuance — see below | the big one; placement decision surfaced during impl |
+
+### #12 placement nuance (needs a quick confirm)
+The reviewed design said cache the base catalog on **`AIEngineBase`**. In implementation the catalog necessarily contains **BaseAgent-domain objects** — resolved `MJActionEntityExtended[]` and the **formatted markdown** produced by `BaseAgent.formatSubAgentDetails`/`formatActionDetails`. `AIEngineBase` (`@memberjunction/ai-engine-base`) does not depend on `@memberjunction/actions` and has no access to those formatters, so housing the cache there forces either a new cross-package dependency or loose typing (against the no-`any` rule).
+
+**Recommended adjustment:** keep the **process-wide cache + coarse BaseEntity-event invalidation** exactly as designed, but house it as a `protected static` on **`BaseAgent`** (where the action/sub-agent types and the formatters already live). Invalidation still fires on save/delete of `AI Agents` / `MJ: AI Agent Actions` / `MJ: AI Agent Relationships` / `MJ: AI Agent Types` (subscribe once via MJGlobal BaseEntity events) **and** on `AIEngine` reload (`AdditionalLoading`). Same semantics, clean typing, no new package edges. `subAgentChanges` (new `ExecuteAgentParams` API) still lands in this PR.
+
+
+
 ---
 
 ## 1. Purpose & Method
