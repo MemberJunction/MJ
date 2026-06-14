@@ -631,11 +631,17 @@ export class xAIRealtimeClient extends BaseRealtimeClient {
         try {
             event = JSON.parse(data) as XAIRealtimeEvent;
         } catch {
+            console.debug('[xAIRealtimeClient] ◀ inbound NON-JSON frame:', String(data).slice(0, 200));
             return; // non-JSON frame — ignore
         }
         if (event === null || typeof event !== 'object') {
             return; // valid JSON but not an event object (e.g. "null", a number) — ignore
         }
+        // DIAGNOSTIC: log every inbound event type so a "connected but silent" session is debuggable —
+        // surfaces error frames + any event whose name diverges from the OpenAI-compatible set (which
+        // the handleEvent switch would otherwise drop silently). Error frames also log their payload.
+        console.debug('[xAIRealtimeClient] ◀ inbound:', event.type,
+            event.type === 'error' ? JSON.stringify(event).slice(0, 400) : '');
         this.handleEvent(event);
     }
 
@@ -855,6 +861,12 @@ export class xAIRealtimeClient extends BaseRealtimeClient {
 
     /** JSON-serializes + sends a client event over the socket (only when open). */
     private sendEvent(event: XAIRealtimeClientEvent): void {
+        // DIAGNOSTIC: log outbound control frames (skip the high-frequency mic audio) so we can see
+        // session.update / conversation.item.create / response.create actually went out — the other
+        // half of diagnosing a silent session.
+        if (event.type !== 'input_audio_buffer.append') {
+            console.debug('[xAIRealtimeClient] ▶ outbound:', event.type);
+        }
         this.socket?.send(JSON.stringify(event));
     }
 }
