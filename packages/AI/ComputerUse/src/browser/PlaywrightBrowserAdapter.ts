@@ -441,7 +441,8 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
             return;
         }
         // The screencast defaults to JPEG; match it so the client's `data:image/jpeg` decode succeeds.
-        const buffer = await this.page.screenshot({ type: 'jpeg', quality: 80, fullPage: false });
+        // Quality 60 matches the live screencast stream (keeps forced keyframes light on the wire).
+        const buffer = await this.page.screenshot({ type: 'jpeg', quality: 60, fullPage: false });
         const frame = new ScreencastFrame();
         frame.DataBase64 = buffer.toString('base64');
         frame.Width = this.config.ViewportWidth;

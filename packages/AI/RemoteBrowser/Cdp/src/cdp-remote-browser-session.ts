@@ -28,6 +28,7 @@ import {
     ActionExecutionResult,
     PlaywrightBrowserAdapter,
     ScreencastFrame,
+    ScreencastOptions,
 } from '@memberjunction/computer-use';
 import { mapHumanInput, mapRemoteBrowserAction } from './map-action';
 import { ICdpSessionBackend } from './cdp-session-backend';
@@ -66,6 +67,23 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
      * never fires — so this adds no traffic when the page is genuinely animating.
      */
     private static readonly SCREENCAST_KEYFRAME_IDLE_MS = 1000;
+
+    /**
+     * Frame-sizing caps for the live view. WITHOUT these, CDP streams frames at the full viewport ×
+     * the host's device-pixel-ratio (2× on Retina) at full quality — so a heavy, image-dense page
+     * (Amazon, Gemini) produces multi-MB JPEG frames that choke / get dropped on the subscription
+     * transport, while a light page (Wikipedia) squeaks through: the "works on some sites, blank on
+     * others" bug. CDP scales frames down to fit MaxWidth/MaxHeight server-side, so this also slashes
+     * bandwidth and the PushStatusUpdates flood. A live "watch the agent browse" view does not need
+     * 1:1 fidelity. JPEG quality 60 is plenty for a thumbnail-scale stream.
+     */
+    private static readonly SCREENCAST_OPTIONS: ScreencastOptions = {
+        Format: 'jpeg',
+        Quality: 60,
+        MaxWidth: 1280,
+        MaxHeight: 800,
+        EveryNthFrame: 1,
+    };
 
     /** Active idle-keyframe timer while a screencast is running; `null` when not streaming. */
     private screencastKeyframeTimer: ReturnType<typeof setInterval> | null = null;
@@ -197,7 +215,7 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
         await this.adapter.StartScreencast((frame) => {
             this.lastFrameAt = Date.now();
             onFrame(this.mapScreencastFrame(frame));
-        });
+        }, CdpRemoteBrowserSession.SCREENCAST_OPTIONS);
         // Push an immediate first frame so the user sees the current page the moment the stream starts,
         // rather than a blank surface until the page next repaints (CDP only emits frames on a repaint).
         await this.pushImmediateFrame();
