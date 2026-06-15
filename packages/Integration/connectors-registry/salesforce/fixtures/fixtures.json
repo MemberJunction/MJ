@@ -1,0 +1,539 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "LoginUrl",
+  "Configuration": {
+    "AuthFlow": "client_credentials",
+    "authFlow": "client_credentials",
+    "clientId": "fixture-client-id",
+    "clientSecret": "fixture-client-secret",
+    "apiVersion": "61.0"
+  },
+  "Objects": [
+    {
+      "Name": "Account"
+    },
+    {
+      "Name": "Contact"
+    }
+  ],
+  "Routes": [
+    {
+      "Path": "/services/oauth2/token",
+      "Method": "POST",
+      "Status": 200,
+      "Body": {
+        "access_token": "mock-access-token",
+        "instance_url": "{{MOCK_ORIGIN}}",
+        "token_type": "Bearer",
+        "issued_at": "1700000000000",
+        "id": "https://mock.local/id/00Dxx/005xx"
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/sobjects/Account/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "Account",
+        "label": "Account",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": true,
+        "fields": [
+          {
+            "name": "Id",
+            "label": "Record ID",
+            "type": "id",
+            "length": 18,
+            "nillable": false,
+            "defaultedOnCreate": true,
+            "externalId": false,
+            "calculated": false,
+            "updateable": false,
+            "createable": false,
+            "referenceTo": [],
+            "inlineHelpText": null
+          },
+          {
+            "name": "Name",
+            "label": "Account Name",
+            "type": "string",
+            "length": 255,
+            "nillable": false,
+            "defaultedOnCreate": false,
+            "externalId": false,
+            "calculated": false,
+            "updateable": true,
+            "createable": true,
+            "referenceTo": [],
+            "inlineHelpText": "The name of the account"
+          },
+          {
+            "name": "Industry",
+            "label": "Industry",
+            "type": "picklist",
+            "length": 40,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "externalId": false,
+            "calculated": false,
+            "updateable": true,
+            "createable": true,
+            "referenceTo": [],
+            "inlineHelpText": null
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "System Modstamp",
+            "type": "datetime",
+            "nillable": false,
+            "defaultedOnCreate": true,
+            "externalId": false,
+            "calculated": false,
+            "updateable": true,
+            "createable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "Deleted",
+            "type": "boolean",
+            "nillable": false,
+            "defaultedOnCreate": true,
+            "externalId": false,
+            "calculated": false,
+            "updateable": true,
+            "createable": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/sobjects/Contact/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "Contact",
+        "label": "Contact",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": true,
+        "fields": [
+          {
+            "name": "Id",
+            "label": "Record ID",
+            "type": "id",
+            "length": 18,
+            "nillable": false,
+            "defaultedOnCreate": true,
+            "externalId": false,
+            "calculated": false,
+            "updateable": false,
+            "createable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastName",
+            "label": "Last Name",
+            "type": "string",
+            "length": 80,
+            "nillable": false,
+            "defaultedOnCreate": false,
+            "externalId": false,
+            "calculated": false,
+            "updateable": true,
+            "createable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "Email",
+            "label": "Email",
+            "type": "email",
+            "length": 80,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "externalId": false,
+            "calculated": false,
+            "updateable": true,
+            "createable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "AccountId",
+            "label": "Account ID",
+            "type": "reference",
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "externalId": false,
+            "calculated": false,
+            "updateable": true,
+            "createable": true,
+            "referenceTo": [
+              "Account"
+            ]
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "System Modstamp",
+            "type": "datetime",
+            "nillable": false,
+            "defaultedOnCreate": true,
+            "externalId": false,
+            "calculated": false,
+            "updateable": true,
+            "createable": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/sobjects/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "encoding": "UTF-8",
+        "maxBatchSize": 200,
+        "sobjects": [
+          {
+            "name": "Account",
+            "label": "Account",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": false
+          },
+          {
+            "name": "Contact",
+            "label": "Contact",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": false
+          },
+          {
+            "name": "Widget__c",
+            "label": "Widget",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": true
+          },
+          {
+            "name": "ApexLog",
+            "label": "Apex Log",
+            "queryable": true,
+            "createable": false,
+            "updateable": false,
+            "deletable": false,
+            "custom": false
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/query/01gMOCKLOC",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "totalSize": 2,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "Account"
+            },
+            "Id": "001A000000000002",
+            "Name": "Fixture Account B",
+            "Industry": "Finance",
+            "SystemModstamp": "2026-03-11T12:00:00.000Z",
+            "IsDeleted": false
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/queryAll",
+      "Method": "GET",
+      "Match": "FROM Account",
+      "Status": 200,
+      "Body": {
+        "totalSize": 2,
+        "done": false,
+        "nextRecordsUrl": "/services/data/v61.0/query/01gMOCKLOC",
+        "records": [
+          {
+            "attributes": {
+              "type": "Account"
+            },
+            "Id": "001A000000000001",
+            "Name": "Fixture Account A",
+            "Industry": "Technology",
+            "SystemModstamp": "2026-03-10T10:00:00.000Z",
+            "IsDeleted": false,
+            "Rating__c": "Hot",
+            "CustomScore__c": 42
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/queryAll",
+      "Method": "GET",
+      "Match": "FROM Contact",
+      "Status": 200,
+      "Body": {
+        "totalSize": 2,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "Contact"
+            },
+            "Id": "003C000000000001",
+            "LastName": "Fixture Contact One",
+            "Email": "example+1@example.com",
+            "AccountId": "001A000000000001",
+            "SystemModstamp": "2026-03-10T11:00:00.000Z"
+          },
+          {
+            "attributes": {
+              "type": "Contact"
+            },
+            "Id": "003C000000000002",
+            "LastName": "Fixture Contact Two",
+            "Email": "example+2@example.com",
+            "AccountId": "001A000000000002",
+            "SystemModstamp": "2026-03-11T11:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "totalSize": 0,
+        "done": true,
+        "records": []
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "sobjects": "/services/data/v61.0/sobjects",
+        "identity": "https://mock.local/id"
+      }
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "Account",
+      "Description": "update A (Name change) + create C",
+      "Routes": [
+        {
+          "Path": "/services/oauth2/token",
+          "Method": "POST",
+          "Status": 200,
+          "Body": {
+            "access_token": "mock-access-token",
+            "instance_url": "{{MOCK_ORIGIN}}",
+            "token_type": "Bearer"
+          }
+        },
+        {
+          "Path": "/services/data/v61.0/sobjects/Account/describe",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "name": "Account",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "fields": [
+              {
+                "name": "Id",
+                "type": "id",
+                "length": 18,
+                "nillable": false,
+                "updateable": false,
+                "createable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "Name",
+                "type": "string",
+                "length": 255,
+                "nillable": false,
+                "updateable": true,
+                "createable": true,
+                "referenceTo": []
+              },
+              {
+                "name": "Industry",
+                "type": "picklist",
+                "nillable": true,
+                "updateable": true,
+                "createable": true,
+                "referenceTo": []
+              },
+              {
+                "name": "SystemModstamp",
+                "type": "datetime",
+                "nillable": false,
+                "updateable": true,
+                "createable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "IsDeleted",
+                "type": "boolean",
+                "nillable": false,
+                "updateable": true,
+                "createable": false,
+                "referenceTo": []
+              }
+            ]
+          }
+        },
+        {
+          "Path": "/services/data/v61.0/queryAll",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "totalSize": 3,
+            "done": true,
+            "records": [
+              {
+                "attributes": {
+                  "type": "Account"
+                },
+                "Id": "001A000000000001",
+                "Name": "Fixture Account A (updated)",
+                "Industry": "Technology",
+                "SystemModstamp": "2026-04-01T09:00:00.000Z",
+                "IsDeleted": false
+              },
+              {
+                "attributes": {
+                  "type": "Account"
+                },
+                "Id": "001A000000000002",
+                "Name": "Fixture Account B",
+                "Industry": "Finance",
+                "SystemModstamp": "2026-03-11T12:00:00.000Z",
+                "IsDeleted": false
+              },
+              {
+                "attributes": {
+                  "type": "Account"
+                },
+                "Id": "001A000000000003",
+                "Name": "Fixture Account C",
+                "Industry": "Retail",
+                "SystemModstamp": "2026-04-02T10:00:00.000Z",
+                "IsDeleted": false
+              }
+            ]
+          },
+          "Match": "FROM Account"
+        }
+      ]
+    },
+    {
+      "Object": "Account",
+      "Description": "delete A (tombstone via IsDeleted)",
+      "Routes": [
+        {
+          "Path": "/services/oauth2/token",
+          "Method": "POST",
+          "Status": 200,
+          "Body": {
+            "access_token": "mock-access-token",
+            "instance_url": "{{MOCK_ORIGIN}}",
+            "token_type": "Bearer"
+          }
+        },
+        {
+          "Path": "/services/data/v61.0/sobjects/Account/describe",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "name": "Account",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "fields": [
+              {
+                "name": "Id",
+                "type": "id",
+                "length": 18,
+                "nillable": false,
+                "updateable": false,
+                "createable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "Name",
+                "type": "string",
+                "length": 255,
+                "nillable": false,
+                "updateable": true,
+                "createable": true,
+                "referenceTo": []
+              },
+              {
+                "name": "SystemModstamp",
+                "type": "datetime",
+                "nillable": false,
+                "updateable": true,
+                "createable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "IsDeleted",
+                "type": "boolean",
+                "nillable": false,
+                "updateable": true,
+                "createable": false,
+                "referenceTo": []
+              }
+            ]
+          }
+        },
+        {
+          "Path": "/services/data/v61.0/queryAll",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "totalSize": 1,
+            "done": true,
+            "records": [
+              {
+                "attributes": {
+                  "type": "Account"
+                },
+                "Id": "001A000000000001",
+                "Name": "Fixture Account A (updated)",
+                "SystemModstamp": "2026-04-03T08:00:00.000Z",
+                "IsDeleted": true
+              }
+            ]
+          },
+          "Match": "FROM Account"
+        }
+      ]
+    }
+  ]
+}
