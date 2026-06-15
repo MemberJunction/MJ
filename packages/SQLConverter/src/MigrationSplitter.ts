@@ -94,8 +94,11 @@ const MJSYNC_SESSION_HEADER = /MetadataSync push operation/i;
 const MJSYNC_HASHED_VAR = /@\w+_[0-9a-f]{8}\b/;
 /** Real schema DDL — the genuine transpilation surface. */
 const SCHEMA_DDL = /\b(CREATE\s+TABLE|ALTER\s+TABLE|CREATE\s+(?:UNIQUE\s+)?(?:CLUSTERED\s+|NONCLUSTERED\s+)?INDEX|DROP\s+(?:TABLE|INDEX|CONSTRAINT)|ADD\s+CONSTRAINT)\b/i;
-/** Data DML — transpilable, but in an mj-sync file it is just the metadata seed. */
-const DATA_DML = /\b(INSERT\s+INTO|UPDATE\s+|DELETE\s+FROM)\b/i;
+/** Data DML — transpilable, but in an mj-sync file it is just the metadata seed.
+ * No trailing \b: `UPDATE ${flyway:defaultSchema}.T` starts with `$` (non-word),
+ * so a trailing word-boundary assertion would silently fail to match. The leading
+ * `\b` + required whitespace (`\s+`) already prevents false matches inside words. */
+const DATA_DML = /\b(INSERT\s+INTO|UPDATE\s+|DELETE\s+FROM)/i;
 
 /** Max lines to walk up from a banner to its `/*` opener (header blocks are ~6-8 lines). */
 const MAX_HEADER_WALKUP = 25;
