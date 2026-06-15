@@ -688,49 +688,83 @@ describe('ActionEngineServer', () => {
         });
     });
 
-    describe('queueLogSave (fire-and-forget chain)', () => {
+    describe('action-execution log saves (fire-and-forget, per-invocation)', () => {
+        // Fake log entity whose Save() records call order AND whether EndedAt was set at save time —
+        // so a test can prove the End UPDATE only runs after the Start INSERT, with EndedAt populated.
         function fakeLog(saveLog: string[], failOn: number[] = []) {
             const fails = new Set(failOn);
             let idx = 0;
+            let endedAt: Date | undefined;
             return {
                 ID: 'log-1',
-                LatestResult: { Message: 'err' },
+                NewRecord: vi.fn(),
+                LatestResult: { CompleteMessage: 'err' },
+                set ActionID(_v: string) {},
+                set StartedAt(_v: Date) {},
+                set UserID(_v: string) {},
+                set Params(_v: string) {},
+                set ResultCode(_v: string | undefined) {},
+                set Message(_v: string | undefined) {},
+                set EndedAt(v: Date) { endedAt = v; },
+                get EndedAt(): Date | undefined { return endedAt; },
                 async Save() {
                     const n = ++idx;
-                    saveLog.push(`start:${n}`);
+                    saveLog.push(`start:${n}(ended=${endedAt !== undefined})`);
                     await new Promise((r) => setTimeout(r, 5));
                     saveLog.push(`end:${n}`);
                     return !fails.has(n);
                 },
             };
         }
-        const q = (logEntity: unknown, name = 'Test') =>
-            (engine as unknown as Record<string, Function>)['queueLogSave'](logEntity, name);
-        const chains = () => (engine as unknown as { _logSaveChains: Map<unknown, Promise<boolean>> })._logSaveChains;
+        const mockMetaReturning = (entity: unknown) =>
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+                return { GetEntityObject: vi.fn().mockResolvedValue(entity) };
+            });
+        const start = (params: unknown) => (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, true);
+        const end = (entity: unknown, params: unknown, result: unknown) =>
+            (engine as unknown as Record<string, Function>)['EndActionLog'](entity as never, params as never, result as never);
 
-        it('chains same-instance saves: INSERT completes before UPDATE starts', async () => {
+        it('runs the End UPDATE only AFTER the Start INSERT commits, with EndedAt set (no silent no-op)', async () => {
             const log: string[] = [];
             const entity = fakeLog(log);
-            q(entity); // started INSERT
-            q(entity); // ended UPDATE
-            await Promise.all(chains().values());
-            await new Promise((r) => setTimeout(r, 0)); // let the second link settle
-            expect(log).toEqual(['start:1', 'end:1', 'start:2', 'end:2']);
+            mockMetaReturning(entity);
+            const params = { Action: { ID: 'a1', Name: 'T' }, Params: [] };
+            const result = { Result: { ResultCode: 'OK' }, Message: 'Done' };
+
+            await start(params);
+            await end(entity, params, result);
+
+            // INSERT (ended=false) fully completes before the UPDATE (ended=true) even starts — so the End
+            // mutation is a genuine dirty change against the committed row, never absorbed into a no-op.
+            await vi.waitFor(() => expect(log).toEqual(['start:1(ended=false)', 'end:1', 'start:2(ended=true)', 'end:2']));
         });
 
-        it('self-cleans the Map entry after the save settles (no unbounded growth on the singleton)', async () => {
-            const entity = fakeLog([]);
-            q(entity);
-            expect(chains().has(entity)).toBe(true); // present while in flight
-            await chains().get(entity); // the queued chain promise
-            await new Promise((r) => setTimeout(r, 0)); // allow the finally() cleanup to run
-            expect(chains().has(entity)).toBe(false); // dropped once settled
+        it('isolates parallel invocations: each End awaits its OWN Start INSERT', async () => {
+            const logA: string[] = [];
+            const logB: string[] = [];
+            const a = fakeLog(logA);
+            const b = fakeLog(logB);
+            const pa = { Action: { ID: 'a', Name: 'A' }, Params: [] };
+            const pb = { Action: { ID: 'b', Name: 'B' }, Params: [] };
+            const res = { Result: { ResultCode: 'OK' }, Message: 'd' };
+
+            mockMetaReturning(a);
+            await start(pa);
+            mockMetaReturning(b);
+            await start(pb);
+            await end(a, pa, res);
+            await end(b, pb, res);
+
+            await vi.waitFor(() => {
+                expect(logA).toEqual(['start:1(ended=false)', 'end:1', 'start:2(ended=true)', 'end:2']);
+                expect(logB).toEqual(['start:1(ended=false)', 'end:1', 'start:2(ended=true)', 'end:2']);
+            });
         });
 
-        it('logs (does not throw) when a queued save fails', async () => {
-            const log: string[] = [];
-            const entity = fakeLog(log, [1]);
-            await q(entity);
+        it('logs (never swallows) a failed save', async () => {
+            const entity = fakeLog([], [1]); // the INSERT fails
+            mockMetaReturning(entity);
+            await start({ Action: { ID: 'a1', Name: 'T' }, Params: [] });
             await vi.waitFor(() => expect(LogError).toHaveBeenCalled());
         });
     });

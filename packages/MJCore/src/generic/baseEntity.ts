@@ -2125,12 +2125,21 @@ export abstract class BaseEntity<T = unknown> {
             for (const field of this._Fields) {
                 const value = this._raw[field.Name];
                 if (value !== undefined) {
+                    // Suppress deprecated/disabled-field assertions during load-time hydration: populating a
+                    // field from the loaded row is NOT a user read/write, so a deprecated column still present
+                    // in the table must not emit a deprecation warning on every load. (The eager Hydrate()
+                    // path already does this via SetMany(ignoreActiveStatusAssertions=true); this is the lazy
+                    // counterpart.) The prior assertion state is restored so genuine post-load reads/writes
+                    // still warn.
+                    const priorActiveStatusAssertions = field.ActiveStatusAssertions;
+                    field.ActiveStatusAssertions = false;
                     // Date conversion mirrors what SetLocal / Get does for raw string/number dates.
                     if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                         field.Value = new Date(value);
                     } else {
                         field.Value = value;
                     }
+                    field.ActiveStatusAssertions = priorActiveStatusAssertions;
                 }
             }
             // Raw data has been promoted into Fields — release the reference so we don't carry
