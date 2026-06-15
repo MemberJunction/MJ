@@ -435,6 +435,20 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     });
   });
 
+  it('forwards a scroll HumanInput to the relay mutation with viewport coords + wheel deltas', () => {
+    channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    surface.HumanInput.emit({ kind: 'scroll', x: 100, y: 200, deltaX: 12, deltaY: -48 });
+
+    const relayCall = log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'));
+    expect(relayCall).toBeTruthy();
+    expect(relayCall?.Variables).toMatchObject({
+      agentSessionID: 'session-1', kind: 'scroll', x: 100, y: 200, button: null, key: null, deltaX: 12, deltaY: -48
+    });
+  });
+
   it('forwards a key HumanInput with the key string (null pointer coords)', () => {
     channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
     const surface = makeSurface();

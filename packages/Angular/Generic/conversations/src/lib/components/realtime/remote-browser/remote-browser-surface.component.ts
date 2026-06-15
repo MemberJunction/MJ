@@ -11,22 +11,33 @@ const SNAPSHOT_POLL_MS = 700;
 /** Min interval between forwarded pointer-move samples during takeover (~20 moves/sec). */
 const POINTER_MOVE_THROTTLE_MS = 50;
 
+/** Min interval between forwarded scroll samples during takeover; the deltas coalesce between sends (~25/sec). */
+const SCROLL_THROTTLE_MS = 40;
+
+/** Radius (px) of the synthetic cursor ring drawn on the overlay so the user can see their pointer. */
+const SYNTHETIC_CURSOR_RADIUS = 6;
+
 /**
  * One human-takeover input the surface emits to the channel while the user "drives" the live view.
  * Mirrors the server's `RemoteBrowserHumanInput` union (flattened for transport): pointer moves/clicks
- * carry VIEWPORT coordinates, a key carries the pressed key string.
+ * and scrolls carry VIEWPORT coordinates, a scroll also carries wheel deltas, a key carries the pressed
+ * key string.
  */
 export interface RemoteBrowserHumanInputEvent {
   /** Which input occurred. */
-  kind: 'pointer-move' | 'pointer-click' | 'key';
-  /** Viewport X (pointer kinds only). */
+  kind: 'pointer-move' | 'pointer-click' | 'key' | 'scroll';
+  /** Viewport X (pointer + scroll kinds only). */
   x?: number;
-  /** Viewport Y (pointer kinds only). */
+  /** Viewport Y (pointer + scroll kinds only). */
   y?: number;
   /** Mouse button (pointer-click only). */
   button?: 'left' | 'middle' | 'right';
   /** The pressed key (key kind only). */
   key?: string;
+  /** Horizontal wheel delta in pixels (scroll kind only; positive = right). */
+  deltaX?: number;
+  /** Vertical wheel delta in pixels (scroll kind only; positive = down). */
+  deltaY?: number;
 }
 
 /**
@@ -129,7 +140,15 @@ export type RemoteBrowserSnapshotFetcher = () => Promise<RemoteBrowserSnapshotVi
       </div>
       <div class="rb-viewport">
         @if (Streaming) {
-          <canvas #frameCanvas class="rb-screenshot" [class.rb-hidden]="!HasFrame" [class.rb-screenshot--interactive]="CanTakeOver"></canvas>
+          <div class="rb-canvas-stack" [class.rb-hidden]="!HasFrame">
+            <canvas #frameCanvas class="rb-screenshot" [class.rb-screenshot--interactive]="CanTakeOver"></canvas>
+            @if (CanTakeOver) {
+              <!-- Synthetic cursor overlay: same internal resolution + CSS box as the frame canvas, so a
+                   point drawn at viewport coords aligns exactly. CDP screencast frames don't include the OS
+                   cursor, so we render the user's pointer locally for immediate, round-trip-free feedback. -->
+              <canvas #cursorCanvas class="rb-screenshot rb-cursor-overlay"></canvas>
+            }
+          </div>
           @if (!HasFrame) {
             <div class="rb-placeholder">
               <mj-loading text="Waiting for the browser…" size="medium"></mj-loading>
@@ -206,12 +225,35 @@ export type RemoteBrowserSnapshotFetcher = () => Promise<RemoteBrowserSnapshotVi
       background: var(--mj-bg-surface);
     }
     .rb-screenshot--interactive {
-      cursor: crosshair;
+      /* Hide the OS cursor — we render a synthetic cursor on the overlay so there's exactly one pointer
+         and it reads naturally for clicking on a web page (not the old crosshair). */
+      cursor: none;
       outline: none;
     }
     .rb-screenshot--interactive:focus-visible {
       border-color: var(--mj-border-focus);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+    }
+    /* Frame canvas + synthetic-cursor overlay share one box; the stack shrinks to the frame canvas so the
+       absolutely-positioned overlay (inset:0, same object-fit) lines up pixel-for-pixel with it. */
+    .rb-canvas-stack {
+      position: relative;
+      display: inline-flex;
+      max-width: 100%;
+      max-height: 100%;
+      min-height: 0;
+    }
+    .rb-cursor-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      /* Transparent passthrough layer — no chrome of its own, and never steals pointer/wheel events from
+         the frame canvas underneath (those listeners drive takeover). */
+      border: none;
+      box-shadow: none;
+      background: transparent;
+      pointer-events: none;
     }
     .rb-driving {
       flex: 0 0 auto;
@@ -305,6 +347,9 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   /** The canvas the pushed screencast frames are painted onto (present only while {@link Streaming}). */
   @ViewChild('frameCanvas') private frameCanvas?: ElementRef<HTMLCanvasElement>;
 
+  /** The transparent overlay the synthetic cursor is drawn onto (present only while {@link CanTakeOver}). */
+  @ViewChild('cursorCanvas') private cursorCanvas?: ElementRef<HTMLCanvasElement>;
+
   /** Whether at least one screenshot OR frame has been rendered (drives the "Live" indicator). */
   public get HasSnapshot(): boolean {
     return this.ScreenshotDataUrl !== null || this.HasFrame;
@@ -329,10 +374,24 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   private takeoverCanvas: HTMLCanvasElement | null = null;
   /** Timestamp (ms) of the last forwarded pointer-move, for throttling the high-frequency stream. */
   private lastPointerMoveAt = 0;
+  /** Timestamp (ms) of the last forwarded scroll, for throttling the high-frequency wheel stream. */
+  private lastScrollAt = 0;
+  /** Horizontal wheel delta accumulated since the last forwarded scroll (coalesced across throttled events). */
+  private pendingScrollDeltaX = 0;
+  /** Vertical wheel delta accumulated since the last forwarded scroll (coalesced across throttled events). */
+  private pendingScrollDeltaY = 0;
+
+  /** Last canvas-relative mouse position in VIEWPORT pixel space, or `null` when the pointer is off-canvas. */
+  private cursorViewportPoint: { x: number; y: number } | null = null;
+  /** True while a synthetic-cursor repaint is queued, so rapid moves coalesce to one `requestAnimationFrame`. */
+  private cursorPaintScheduled = false;
+
   /** Bound handlers — stored so the exact same references can be removed on detach. */
   private readonly onCanvasMouseMove = (e: MouseEvent): void => this.handlePointerMove(e);
   private readonly onCanvasClick = (e: MouseEvent): void => this.handlePointerClick(e);
   private readonly onCanvasKeyDown = (e: KeyboardEvent): void => this.handleKeyDown(e);
+  private readonly onCanvasMouseLeave = (): void => this.handleMouseLeave();
+  private readonly onCanvasWheel = (e: WheelEvent): void => this.handleWheel(e);
 
   ngOnInit(): void {
     // In streaming mode the server pushes frames — never start the poll (it would be redundant traffic).
@@ -483,18 +542,21 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Binds the pointer/keyboard listeners to the canvas OUTSIDE the zone (mousemove is high-frequency). */
+  /** Binds the pointer/keyboard/wheel listeners to the canvas OUTSIDE the zone (mousemove/wheel are high-frequency). */
   private attachTakeoverListeners(canvas: HTMLCanvasElement): void {
     canvas.tabIndex = 0; // focusable so it can receive keydown
     this.zone.runOutsideAngular(() => {
       canvas.addEventListener('mousemove', this.onCanvasMouseMove);
       canvas.addEventListener('click', this.onCanvasClick);
       canvas.addEventListener('keydown', this.onCanvasKeyDown);
+      canvas.addEventListener('mouseleave', this.onCanvasMouseLeave);
+      // `passive: false` so preventDefault stops the host page from scrolling while the user drives the page.
+      canvas.addEventListener('wheel', this.onCanvasWheel, { passive: false });
     });
     this.takeoverCanvas = canvas;
   }
 
-  /** Removes the listeners from the currently-bound canvas (no-op when none are bound). */
+  /** Removes the listeners from the currently-bound canvas (no-op when none are bound) and clears the cursor. */
   private detachTakeoverListeners(): void {
     const canvas = this.takeoverCanvas;
     if (!canvas) {
@@ -503,19 +565,65 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     canvas.removeEventListener('mousemove', this.onCanvasMouseMove);
     canvas.removeEventListener('click', this.onCanvasClick);
     canvas.removeEventListener('keydown', this.onCanvasKeyDown);
+    canvas.removeEventListener('mouseleave', this.onCanvasMouseLeave);
+    canvas.removeEventListener('wheel', this.onCanvasWheel);
     this.takeoverCanvas = null;
+    this.cursorViewportPoint = null;
+    this.clearSyntheticCursor();
   }
 
-  /** Throttled pointer-move → emits a viewport-mapped move (runs outside the zone; no CD per move). */
+  /**
+   * Pointer-move → tracks the cursor for the synthetic-cursor overlay (every move, immediate, no
+   * round-trip) AND emits a throttled viewport-mapped move to the server. Runs outside the zone (no CD
+   * per move).
+   */
   private handlePointerMove(event: MouseEvent): void {
+    const point = this.toViewportCoords(event);
+    if (point) {
+      // Always update the local cursor for instant feedback — independent of the server-relay throttle.
+      this.cursorViewportPoint = point;
+      this.scheduleCursorPaint();
+    }
     const now = Date.now();
     if (now - this.lastPointerMoveAt < POINTER_MOVE_THROTTLE_MS) {
       return;
     }
     this.lastPointerMoveAt = now;
-    const point = this.toViewportCoords(event);
     if (point) {
       this.emitInput({ kind: 'pointer-move', x: point.x, y: point.y });
+    }
+  }
+
+  /** Mouse leaves the canvas → hide the synthetic cursor (nothing to relay). */
+  private handleMouseLeave(): void {
+    this.cursorViewportPoint = null;
+    this.scheduleCursorPaint();
+  }
+
+  /**
+   * Wheel/trackpad/Magic-Mouse scroll over the canvas → forwards a viewport-mapped scroll to the server.
+   * Calls `preventDefault` so the host page doesn't scroll while the user drives the live page. Throttled
+   * to {@link SCROLL_THROTTLE_MS}, coalescing the skipped deltas so no scroll distance is lost.
+   */
+  private handleWheel(event: WheelEvent): void {
+    event.preventDefault();
+    this.pendingScrollDeltaX += event.deltaX;
+    this.pendingScrollDeltaY += event.deltaY;
+    const point = this.toViewportCoords(event);
+    if (point) {
+      this.cursorViewportPoint = point;
+      this.scheduleCursorPaint();
+    }
+    const now = Date.now();
+    if (now - this.lastScrollAt < SCROLL_THROTTLE_MS) {
+      return; // accumulate into pendingScrollDelta* until the throttle window opens
+    }
+    this.lastScrollAt = now;
+    const target = point ?? this.cursorViewportPoint;
+    if (target && (this.pendingScrollDeltaX !== 0 || this.pendingScrollDeltaY !== 0)) {
+      this.emitInput({ kind: 'scroll', x: target.x, y: target.y, deltaX: this.pendingScrollDeltaX, deltaY: this.pendingScrollDeltaY });
+      this.pendingScrollDeltaX = 0;
+      this.pendingScrollDeltaY = 0;
     }
   }
 
@@ -561,6 +669,86 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
       return null;
     }
     return MapToViewportCoords(event.clientX, event.clientY, canvas.getBoundingClientRect(), canvas.width, canvas.height);
+  }
+
+  // ----- synthetic cursor (local feedback — CDP frames don't include the OS cursor) -----------
+
+  /**
+   * Schedules a synthetic-cursor repaint on the next animation frame, coalescing a burst of moves to one
+   * paint (the newest position wins). Runs outside the zone — drawing the cursor never triggers Angular CD.
+   */
+  private scheduleCursorPaint(): void {
+    if (this.cursorPaintScheduled) {
+      return;
+    }
+    this.cursorPaintScheduled = true;
+    this.zone.runOutsideAngular(() => requestAnimationFrame(() => this.paintSyntheticCursor()));
+  }
+
+  /**
+   * Draws (or clears) the synthetic cursor on the overlay canvas at {@link cursorViewportPoint}. The overlay
+   * shares the frame canvas's internal resolution (sized here to match), so a point drawn at viewport coords
+   * aligns exactly with the page underneath. A small brand-tinted ring with a center dot reads as a pointer
+   * without obscuring what it's over. No-op after destroy or when the overlay isn't mounted.
+   */
+  private paintSyntheticCursor(): void {
+    this.cursorPaintScheduled = false;
+    const overlay = this.cursorCanvas?.nativeElement;
+    const frame = this.frameCanvas?.nativeElement;
+    if (this.destroyed || !overlay || !frame) {
+      return;
+    }
+    // Keep the overlay's internal resolution locked to the frame canvas so coordinate spaces match.
+    if (overlay.width !== frame.width || overlay.height !== frame.height) {
+      overlay.width = frame.width;
+      overlay.height = frame.height;
+    }
+    const ctx = overlay.getContext('2d');
+    if (!ctx) {
+      return;
+    }
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    const point = this.cursorViewportPoint;
+    if (!point) {
+      return; // pointer left the canvas — leave the overlay cleared
+    }
+    const ring = this.resolveCssColor('--mj-brand-primary', '#264FAF');
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, SYNTHETIC_CURSOR_RADIUS, 0, Math.PI * 2);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = ring;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = ring;
+    ctx.fill();
+  }
+
+  /** Clears the synthetic-cursor overlay (e.g. on detach). No-op when the overlay isn't mounted. */
+  private clearSyntheticCursor(): void {
+    const overlay = this.cursorCanvas?.nativeElement;
+    const ctx = overlay?.getContext('2d');
+    if (overlay && ctx) {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+  }
+
+  /**
+   * Resolves a CSS custom property (design token) to its computed color value off the host element, so the
+   * canvas-drawn cursor honors theming. Falls back to the supplied default when the token is unset or the
+   * host isn't measurable.
+   *
+   * @param token The CSS custom property name (e.g. `'--mj-brand-primary'`).
+   * @param fallback The color to use when the token resolves empty.
+   * @returns The resolved color string.
+   */
+  private resolveCssColor(token: string, fallback: string): string {
+    const host = this.frameCanvas?.nativeElement;
+    if (!host) {
+      return fallback;
+    }
+    const value = getComputedStyle(host).getPropertyValue(token).trim();
+    return value.length > 0 ? value : fallback;
   }
 
   /** Maps a DOM `MouseEvent.button` (0/1/2) to the relayed button union, defaulting to `'left'`. */

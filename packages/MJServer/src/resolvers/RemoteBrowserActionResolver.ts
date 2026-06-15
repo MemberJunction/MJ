@@ -386,7 +386,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * agent⇄human floor, so we just relay. Finer floor / `AgentOnly` gating is a follow-up.
    *
    * @param agentSessionID The `AIAgentSession` id the browser is bound to.
-   * @param kind The input kind (`'pointer-move' | 'pointer-click' | 'key'`).
+   * @param kind The input kind (`'pointer-move' | 'pointer-click' | 'key' | 'scroll'`).
    * @returns `true` when the input was routed, else `false`.
    */
   @Mutation(() => Boolean)
@@ -398,6 +398,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('y', () => Float, { nullable: true }) y?: number,
     @Arg('button', () => String, { nullable: true }) button?: string,
     @Arg('key', () => String, { nullable: true }) key?: string,
+    @Arg('deltaX', () => Float, { nullable: true }) deltaX?: number,
+    @Arg('deltaY', () => Float, { nullable: true }) deltaY?: number,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
@@ -407,7 +409,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       return false;
     }
 
-    const input = this.buildHumanInput({ kind, x, y, button, key });
+    const input = this.buildHumanInput({ kind, x, y, button, key, deltaX, deltaY });
     if (!input) {
       return false;
     }
@@ -711,13 +713,14 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   /**
    * Builds a strongly-typed {@link RemoteBrowserHumanInput} from the relayed `kind` + fields, validating
    * each kind's required field(s). Returns `null` for an unknown kind or a kind missing its required
-   * field(s): pointer-move/click need finite `x`,`y`; key needs a non-empty `key`. The `button` is clamped
-   * to the allowed union (`'left' | 'middle' | 'right'`), defaulting unknown/absent values to `'left'`.
+   * field(s): pointer-move/click need finite `x`,`y`; key needs a non-empty `key`; scroll needs finite
+   * `x`,`y`,`deltaX`,`deltaY`. The `button` is clamped to the allowed union
+   * (`'left' | 'middle' | 'right'`), defaulting unknown/absent values to `'left'`.
    *
    * @param input The relayed input kind + all optional fields.
    * @returns The built human input, or `null` when the kind is unknown / incomplete.
    */
-  private buildHumanInput(input: { kind: string; x?: number; y?: number; button?: string; key?: string }): RemoteBrowserHumanInput | null {
+  private buildHumanInput(input: { kind: string; x?: number; y?: number; button?: string; key?: string; deltaX?: number; deltaY?: number }): RemoteBrowserHumanInput | null {
     switch (input.kind) {
       case 'pointer-move':
         return Number.isFinite(input.x) && Number.isFinite(input.y) ? { Kind: 'pointer-move', X: input.x as number, Y: input.y as number } : null;
@@ -727,6 +730,10 @@ export class RemoteBrowserActionResolver extends ResolverBase {
           : null;
       case 'key':
         return input.key && input.key.length > 0 ? { Kind: 'key', Key: input.key } : null;
+      case 'scroll':
+        return Number.isFinite(input.x) && Number.isFinite(input.y) && Number.isFinite(input.deltaX) && Number.isFinite(input.deltaY)
+          ? { Kind: 'scroll', X: input.x as number, Y: input.y as number, DeltaX: input.deltaX as number, DeltaY: input.deltaY as number }
+          : null;
       default:
         return null;
     }

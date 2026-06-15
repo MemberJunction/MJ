@@ -121,6 +121,9 @@ export function mapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
  * - `pointer-move` → {@link MouseMoveAction} at `X`/`Y` (cursor move, no click).
  * - `pointer-click` → {@link ClickAction} at `X`/`Y`, carrying the chosen mouse `Button`.
  * - `key` → {@link KeypressAction} carrying the key/combination string.
+ * - `scroll` → {@link ScrollAction} carrying `DeltaX`/`DeltaY`. The adapter dispatches a CDP mouse-wheel
+ *   (`page.mouse.wheel`) at the CURRENT cursor position; the surface emits a `pointer-move` before/with
+ *   each scroll, so the cursor already sits over the scroll target's `X`/`Y` and the wheel lands there.
  *
  * @param input The Base human-takeover input to translate; narrow on `input.Kind`.
  * @returns The equivalent computer-use {@link BrowserAction}.
@@ -146,6 +149,12 @@ export function mapHumanInput(input: RemoteBrowserHumanInput): BrowserAction {
         case 'key': {
             const mapped = new KeypressAction();
             mapped.Key = input.Key;
+            return mapped;
+        }
+        case 'scroll': {
+            const mapped = new ScrollAction();
+            mapped.DeltaX = input.DeltaX;
+            mapped.DeltaY = input.DeltaY;
             return mapped;
         }
         default:

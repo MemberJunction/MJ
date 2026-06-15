@@ -186,15 +186,34 @@ export interface RemoteBrowserKeyInput {
 }
 
 /**
+ * A human mouse-wheel / trackpad scroll into the browser viewport (Magic Mouse scroll, trackpad
+ * two-finger scroll, wheel). `X` / `Y` are the viewport pixel position the scroll occurred over (so a
+ * scroll targets the element under the pointer); `DeltaX` / `DeltaY` are the scroll deltas in pixels
+ * (positive `DeltaY` = down, positive `DeltaX` = right — matching the DOM `WheelEvent` convention).
+ */
+export interface RemoteBrowserScrollInput {
+    Kind: 'scroll';
+    /** Viewport X coordinate the scroll occurred over. */
+    X: number;
+    /** Viewport Y coordinate the scroll occurred over. */
+    Y: number;
+    /** Horizontal scroll delta in pixels (positive = right). */
+    DeltaX: number;
+    /** Vertical scroll delta in pixels (positive = down). */
+    DeltaY: number;
+}
+
+/**
  * The full human-takeover input vocabulary — a discriminated union over `Kind`. When a human "grabs
- * the wheel" in `Collaborative` (or watches in `ViewOnly`) their pointer/keyboard events arrive as
- * these and route into the backend browser via {@link IRemoteBrowserSession.RouteHumanInput}.
+ * the wheel" in `Collaborative` (or watches in `ViewOnly`) their pointer/keyboard/scroll events arrive
+ * as these and route into the backend browser via {@link IRemoteBrowserSession.RouteHumanInput}.
  * Strongly typed with no `any`; narrow on `input.Kind`.
  */
 export type RemoteBrowserHumanInput =
     | RemoteBrowserPointerMoveInput
     | RemoteBrowserPointerClickInput
-    | RemoteBrowserKeyInput;
+    | RemoteBrowserKeyInput
+    | RemoteBrowserScrollInput;
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
 // The live-session handle.
@@ -297,7 +316,7 @@ export interface IRemoteBrowserSession {
     StopScreencast(): Promise<void>;
 
     /**
-     * Routes a human takeover input (pointer move/click, key) into the backend browser.
+     * Routes a human takeover input (pointer move/click, key, scroll) into the backend browser.
      *
      * **Capability-gated** by `HumanTakeover` — only valid in `Collaborative` (and pointer-only
      * observation in `ViewOnly`). Backends without it throw.

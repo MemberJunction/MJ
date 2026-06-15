@@ -72,10 +72,12 @@ const STOP_SCREENCAST_MUTATION = `
  */
 const RELAY_HUMAN_INPUT_MUTATION = `
   mutation RelayRemoteBrowserHumanInput(
-    $agentSessionID: String!, $kind: String!, $x: Float, $y: Float, $button: String, $key: String
+    $agentSessionID: String!, $kind: String!, $x: Float, $y: Float, $button: String, $key: String,
+    $deltaX: Float, $deltaY: Float
   ) {
     RelayRemoteBrowserHumanInput(
-      agentSessionID: $agentSessionID, kind: $kind, x: $x, y: $y, button: $button, key: $key
+      agentSessionID: $agentSessionID, kind: $kind, x: $x, y: $y, button: $button, key: $key,
+      deltaX: $deltaX, deltaY: $deltaY
     )
   }
 `;
@@ -322,6 +324,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       y: input.y ?? null,
       button: input.button ?? null,
       key: input.key ?? null,
+      deltaX: input.deltaX ?? null,
+      deltaY: input.deltaY ?? null,
     });
   }
 

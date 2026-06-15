@@ -151,11 +151,22 @@ describe('mapHumanInput', () => {
         expect((result as KeypressAction).Key).toBe('Escape');
     });
 
+    it('maps scroll → ScrollAction carrying the wheel deltas (CDP mouse-wheel at the current cursor)', () => {
+        const result = mapHumanInput({ Kind: 'scroll', X: 100, Y: 200, DeltaX: 12, DeltaY: -48 });
+        expect(result).toBeInstanceOf(ScrollAction);
+        const scroll = result as ScrollAction;
+        expect(scroll.DeltaX).toBe(12);
+        expect(scroll.DeltaY).toBe(-48);
+        // No selector — it's a delta wheel landing at the (move-positioned) cursor.
+        expect(scroll.Selector).toBeUndefined();
+    });
+
     it('covers every RemoteBrowserHumanInput.Kind', () => {
         const samples: RemoteBrowserHumanInput[] = [
             { Kind: 'pointer-move', X: 0, Y: 0 },
             { Kind: 'pointer-click', X: 0, Y: 0 },
             { Kind: 'key', Key: 'A' },
+            { Kind: 'scroll', X: 0, Y: 0, DeltaX: 0, DeltaY: 1 },
         ];
         for (const input of samples) {
             expect(mapHumanInput(input)).toBeDefined();
