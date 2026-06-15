@@ -704,6 +704,30 @@ if (hybridE2E && hybridE2E.assertions) {
     if (a.captureEngaged === false) {
         failures.push({ rule: 'capture-not-engaged', detail: 'custom-column capture did not engage (overflow column absent on created tables, or zero customs captured while custom-marker fields were observed) — the GZ #29/#31 silent no-op class. Waivable only with vendor-confirmed-no-customs evidence.' });
     }
+    // FAIL-OPEN GUARD (#H20) — binds EVERY mode, credential or not. The three checks above fire only on a
+    // DEFINITE bad value (=== true/false), so a null/undefined assertion (the e2e couldn't determine the
+    // outcome) slips through as a PASS. There is NO `mode==='live'`-only exemption — that exemption WAS
+    // "testing is lazy because there aren't creds" encoded in the gate. The credential-free MOCK is a
+    // PROGRAMMABLE vendor (deterministic replay against a fresh DB): it can measure idempotency
+    // (2nd-pass zero-growth), ordering (firstSyncComplete), capture (overflow column) and rows-landed
+    // exactly as a live run. So the anti-vacuous bar binds mock and live identically. (Only a real WRITE
+    // round-trip + true rate behavior need a credential; those are asserted on the live path elsewhere.)
+    {
+        const idempotencyMeasured = a.idempotentZeroWork === true || a.secondSyncGrew === false;
+        const unmeasured = [];
+        if (!idempotencyMeasured) unmeasured.push('second-sync idempotency');
+        if (a.firstSyncComplete !== true && a.firstSyncComplete !== false) unmeasured.push('firstSyncComplete');
+        if (a.captureEngaged !== true && a.captureEngaged !== false) unmeasured.push('captureEngaged');
+        if (unmeasured.length > 0) {
+            failures.push({ rule: 'e2e-assertion-unverified', detail: `hybrid-e2e (mode='${hybridE2E.mode}') left ${unmeasured.length} outcome assertion(s) UNMEASURED (null/undefined): ${unmeasured.join(', ')} — an empirical gate that could not determine the outcome must NOT pass open, credential or not; the mock is a programmable vendor that CAN measure these. The green would falsely imply idempotency/ordering/capture were proven.` });
+        }
+        // Anti-vacuous rows-landed: a green e2e that landed ZERO rows proves nothing (mock included — the
+        // fixtures carry data, so 0 rows is a broken sync, not an empty source). syncLandedRows is the
+        // per-mode anti-vacuous signal; it must be TRUE (set false on rowsProcessed=0 / mapCount=0).
+        if (a.syncLandedRows !== true) {
+            failures.push({ rule: 'e2e-landed-zero-rows', detail: `hybrid-e2e (mode='${hybridE2E.mode}') did not assert syncLandedRows=true — a sync that landed zero rows is a vacuous green, credential or not. The mock fixtures carry data; 0 rows means the sync is broken, not that the source is empty.` });
+        }
+    }
 }
 
 // ── EXTRACTION_REPORT_MATRIX.csv coverage + PK-defer rate (JS over cat'd bytes). ──
