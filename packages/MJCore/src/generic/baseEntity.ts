@@ -1784,7 +1784,7 @@ export abstract class BaseEntity<T = unknown> {
             if (value === undefined) return null;
             // Date conversion mirrors the hydrated path. Mutating _raw to cache the converted
             // Date avoids reparsing on every read.
-            const fi = this._EntityInfo?.Fields.find(f => f.Name === FieldName);
+            const fi = this._EntityInfo?.FieldByName(FieldName);
             if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                 const d = new Date(value);
                 this._raw[FieldName] = d;

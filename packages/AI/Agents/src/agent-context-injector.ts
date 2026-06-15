@@ -1,6 +1,6 @@
 import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
-import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity } from "@memberjunction/core-entities";
+import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, InjectableNoteStatusSQLList } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata } from "@memberjunction/aiengine";
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
 import { RerankerConfiguration, RerankerService } from "@memberjunction/ai-reranker";
@@ -290,6 +290,182 @@ export class AgentContextInjector {
         return sorted.slice(0, params.maxExamples);
     }
 
+    /**
+     * Build filter with 8-level scoping priority for notes.
+     * Combines MJ-internal scoping (AgentID, UserID, CompanyID) with
+     * multi-tenant scoping (PrimaryScopeEntityID, PrimaryScopeRecordID, SecondaryScopes).
+     */
+    private buildNotesScopingFilter(params: GetNotesParams): string {
+        const filters: string[] = [`Status IN (${InjectableNoteStatusSQLList()})`];
+
+        // Build MJ-internal scoping filter using OR conditions with priority
+        const scopeConditions: string[] = [];
+
+        // Priority 1: AgentID + UserID + CompanyID
+        if (params.agentId && params.userId && params.companyId) {
+            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID='${params.userId}' AND CompanyID='${params.companyId}')`);
+        }
+
+        // Priority 2: AgentID + UserID
+        if (params.agentId && params.userId) {
+            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID='${params.userId}' AND CompanyID IS NULL)`);
+        }
+
+        // Priority 3: AgentID + CompanyID
+        if (params.agentId && params.companyId) {
+            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID IS NULL AND CompanyID='${params.companyId}')`);
+        }
+
+        // Priority 4: UserID + CompanyID
+        if (params.userId && params.companyId) {
+            scopeConditions.push(`(AgentID IS NULL AND UserID='${params.userId}' AND CompanyID='${params.companyId}')`);
+        }
+
+        // Priority 5: AgentID only
+        if (params.agentId) {
+            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID IS NULL AND CompanyID IS NULL)`);
+        }
+
+        // Priority 6: UserID only
+        if (params.userId) {
+            scopeConditions.push(`(AgentID IS NULL AND UserID='${params.userId}' AND CompanyID IS NULL)`);
+        }
+
+        // Priority 7: CompanyID only
+        if (params.companyId) {
+            scopeConditions.push(`(AgentID IS NULL AND UserID IS NULL AND CompanyID='${params.companyId}')`);
+        }
+
+        // Priority 8: Global (all NULL)
+        scopeConditions.push(`(AgentID IS NULL AND UserID IS NULL AND CompanyID IS NULL)`);
+
+        if (scopeConditions.length > 0) {
+            filters.push(`(${scopeConditions.join(' OR ')})`);
+        }
+
+        // Add multi-tenant secondary scoping if primary or secondary scopes are provided
+        if (params.primaryScopeRecordId || params.secondaryScopes) {
+            const scopeFilter = this.buildSecondaryScopeFilter(params.primaryScopeEntityId, params.primaryScopeRecordId, params.secondaryScopes, params.secondaryScopeConfig);
+            filters.push(`(${scopeFilter})`);
+        }
+
+        return filters.join(' AND ');
+    }
+
+    /**
+     * Build filter for multi-tenant secondary scoping with per-dimension inheritance.
+     * Returns notes at all applicable scope levels (global -> primary -> full).
+     *
+     * Inheritance modes per dimension:
+     * - 'cascading': Notes without this dimension match queries with it (broader retrieval)
+     * - 'strict': Notes must exactly match the dimension value
+     */
+    private buildSecondaryScopeFilter(
+        primaryScopeEntityId: string | undefined,
+        primaryScopeRecordId: string | undefined,
+        secondaryScopes: Record<string, SecondaryScopeValue> | undefined,
+        scopeConfig?: SecondaryScopeConfig | null
+    ): string {
+        const conditions: string[] = [];
+
+        // Always include global notes (no scope set at all)
+        conditions.push('(PrimaryScopeRecordID IS NULL AND (SecondaryScopes IS NULL OR SecondaryScopes = \'{}\'))');
+
+        const hasSecondary = secondaryScopes && Object.keys(secondaryScopes).length > 0;
+        const allowSecondaryOnly = scopeConfig?.allowSecondaryOnly ?? false;
+
+        // Build primary scope match clause: both entity ID and record ID must match
+        const primaryMatchClause = primaryScopeEntityId
+            ? `PrimaryScopeEntityID = '${primaryScopeEntityId}' AND PrimaryScopeRecordID = '${primaryScopeRecordId}'`
+            : `PrimaryScopeRecordID = '${primaryScopeRecordId}'`;
+
+        if (primaryScopeRecordId) {
+            // Include primary-scope-only notes (matches org, no secondary scopes)
+            conditions.push(`(
+                ${primaryMatchClause}
+                AND (SecondaryScopes IS NULL OR SecondaryScopes = '{}')
+            )`);
+
+            // Include fully-scoped notes if secondary scopes are provided
+            if (hasSecondary) {
+                const secondaryCondition = this.buildPerDimensionFilter(
+                    secondaryScopes!,
+                    scopeConfig
+                );
+
+                conditions.push(`(
+                    ${primaryMatchClause}
+                    AND ${secondaryCondition}
+                )`);
+            }
+        } else if (allowSecondaryOnly && hasSecondary) {
+            // Secondary-only scoping: no primary required
+            const secondaryCondition = this.buildPerDimensionFilter(
+                secondaryScopes!,
+                scopeConfig
+            );
+
+            conditions.push(`(
+                PrimaryScopeRecordID IS NULL
+                AND SecondaryScopes IS NOT NULL
+                AND SecondaryScopes != '{}'
+                AND ${secondaryCondition}
+            )`);
+        }
+
+        return conditions.join(' OR ');
+    }
+
+    /**
+     * Build SQL filter conditions for secondary dimensions with per-dimension inheritance.
+     *
+     * For each dimension in the runtime scope:
+     * - 'cascading' mode: Match if dimension value matches OR dimension is absent in note
+     * - 'strict' mode: Match only if dimension value matches exactly
+     */
+    private buildPerDimensionFilter(
+        secondary: Record<string, SecondaryScopeValue>,
+        scopeConfig?: SecondaryScopeConfig | null
+    ): string {
+        const dimensionConditions: string[] = [];
+        const defaultMode = scopeConfig?.defaultInheritanceMode ?? 'cascading';
+
+        // Build a map of dimension configs for quick lookup
+        const dimConfigMap = new Map<string, SecondaryDimension>();
+        if (scopeConfig?.dimensions) {
+            for (const dim of scopeConfig.dimensions) {
+                dimConfigMap.set(dim.name, dim);
+            }
+        }
+
+        for (const [key, rawValue] of Object.entries(secondary)) {
+            const dimConfig = dimConfigMap.get(key);
+            const inheritanceMode = dimConfig?.inheritanceMode ?? defaultMode;
+            // Stringify all values (numbers, booleans) for SQL comparison via JSON_VALUE
+            const values = Array.isArray(rawValue) ? rawValue.map(String) : [String(rawValue)];
+
+            // Escape single quotes in values to prevent SQL injection
+            const escapedValues = values.map(v => v.replace(/'/g, "''"));
+
+            if (inheritanceMode === 'strict') {
+                const matchClause = escapedValues.length === 1
+                    ? `JSON_VALUE(SecondaryScopes, '$.${key}') = '${escapedValues[0]}'`
+                    : `JSON_VALUE(SecondaryScopes, '$.${key}') IN (${escapedValues.map(v => `'${v}'`).join(', ')})`;
+                dimensionConditions.push(matchClause);
+            } else {
+                const matchClause = escapedValues.length === 1
+                    ? `JSON_VALUE(SecondaryScopes, '$.${key}') = '${escapedValues[0]}'`
+                    : `JSON_VALUE(SecondaryScopes, '$.${key}') IN (${escapedValues.map(v => `'${v}'`).join(', ')})`;
+                dimensionConditions.push(
+                    `(JSON_VALUE(SecondaryScopes, '$.${key}') IS NULL OR ${matchClause})`
+                );
+            }
+        }
+
+        return dimensionConditions.length > 0
+            ? `(${dimensionConditions.join(' AND ')})`
+            : '1=1';
+    }
 
     /**
      * Filter examples using multi-dimensional scoping priority.
@@ -556,6 +732,13 @@ export class AgentContextInjector {
      * Format notes for injection into agent prompt.
      * Includes memory policy explaining scope precedence for conflict resolution.
      *
+     * Provisional notes (written in-flight by an agent, awaiting Memory Manager
+     * hardening) render in their own block FIRST and carry higher precedence
+     * under recency-wins semantics: a freshly stated preference must beat a
+     * months-old vetted one. The trust tradeoff is deliberate (PR #2761) and
+     * contained upstream by the write-path guards (descriptive types only,
+     * scope clamp, per-run cap, TTL).
+     *
      * @param notes - Array of notes to format
      * @param includeMemoryPolicy - Whether to include the memory policy preamble (default: true)
      */
@@ -568,38 +751,73 @@ export class AgentContextInjector {
         if (includeMemoryPolicy) {
             lines.push('<memory_policy>');
             lines.push('Precedence (highest to lowest):');
-            lines.push('1) Current user message overrides all stored memory');
-            lines.push('2) User-specific notes override company-level');
-            lines.push('3) Company notes override global defaults');
-            lines.push('4) When same scope, prefer most recent by date');
+            lines.push('1) The current user message overrides all stored memory');
+            lines.push('2) Provisional notes (marked "(provisional)") are the newest signal — when a');
+            lines.push('   provisional note and an established note conflict on the same topic, follow');
+            lines.push('   the provisional one (recency wins)');
+            lines.push('3) User-specific notes override company-level');
+            lines.push('4) Company notes override global defaults');
+            lines.push('5) Within the same scope and status, prefer the most recent by recorded date (shown on each note)');
             lines.push('');
             lines.push('Conflict resolution:');
-            lines.push('- If two notes contradict, prefer the more specific scope');
+            lines.push('- Same level and neither provisional: prefer the more specific scope, then the more recent');
             lines.push('- Ask clarifying question only if conflict materially affects response');
             lines.push('</memory_policy>');
             lines.push('');
         }
 
-        lines.push(`📝 AGENT NOTES (${notes.length})`);
-        lines.push('');
+        const provisional = notes.filter(n => n.Status === 'Provisional');
+        const established = notes.filter(n => n.Status !== 'Provisional');
 
-        for (const note of notes) {
-            lines.push(`[${note.Type}] ${note.Note}`);
-
-            const scope = this.determineNoteScope(note);
-            const secondaryScope = this.determineSecondaryScope(note);
-
-            if (secondaryScope) {
-                lines.push(`  Scope: ${secondaryScope}`);
-            } else if (scope) {
-                lines.push(`  Scope: ${scope}`);
-            }
-
+        if (provisional.length > 0) {
+            lines.push(`📝 RECENT NOTES (${provisional.length} provisional — newest signal)`);
             lines.push('');
+            for (const note of provisional) {
+                this.appendNoteLines(lines, note, true);
+            }
+        }
+
+        if (established.length > 0) {
+            lines.push(`📝 AGENT NOTES (${established.length})`);
+            lines.push('');
+            for (const note of established) {
+                this.appendNoteLines(lines, note, false);
+            }
         }
 
         lines.push('---');
         return lines.join('\n');
+    }
+
+    /** Render one note (and its scope line) into the injection output. */
+    private appendNoteLines(lines: string[], note: MJAIAgentNoteEntity, provisional: boolean): void {
+        const date = this.formatNoteDate(note);
+        lines.push(`[${note.Type}${date ? `, ${date}` : ''}]${provisional ? ' (provisional)' : ''} ${note.Note}`);
+
+        const scope = this.determineNoteScope(note);
+        const secondaryScope = this.determineSecondaryScope(note);
+
+        if (secondaryScope) {
+            lines.push(`  Scope: ${secondaryScope}`);
+        } else if (scope) {
+            lines.push(`  Scope: ${scope}`);
+        }
+
+        lines.push('');
+    }
+
+    /**
+     * Compact recorded date for a note line ('YYYY-MM-DD', '' when missing) so
+     * the memory policy's "prefer the most recent" tiebreaker is actually
+     * resolvable by the model — contradictory notes can coexist between the
+     * hardening pass and the (less frequent) contradiction-resolution phase.
+     * Absolute dates (not "2 days ago") keep the rendered message byte-stable
+     * between note-set changes; the prompt's Current Date/Time block gives the
+     * model what it needs for recency arithmetic. Kept private to this single
+     * consumer — promote to @memberjunction/global if a second consumer appears.
+     */
+    private formatNoteDate(note: MJAIAgentNoteEntity): string {
+        return note.__mj_CreatedAt ? new Date(note.__mj_CreatedAt).toISOString().slice(0, 10) : '';
     }
 
     /**

@@ -25,6 +25,7 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'scopeConfiguration', sectionName: 'Scope Configuration', isExpanded: true },
             { sectionKey: 'retentionArchiving', sectionName: 'Retention & Archiving', isExpanded: true },
             { sectionKey: 'retrievalRanking', sectionName: 'Retrieval & Ranking', isExpanded: true },
+            { sectionKey: 'contextMemoryManagement', sectionName: 'Context & Memory Management', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
             { sectionKey: 'mJAIAgentArtifactTypes', sectionName: 'AI Agent Artifact Types', isExpanded: false },
