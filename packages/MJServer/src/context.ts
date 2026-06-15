@@ -1,5 +1,4 @@
 import { IncomingMessage } from 'http';
-import * as url from 'url';
 import { default as jwt } from 'jsonwebtoken';
 import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
@@ -462,6 +461,22 @@ export const getUserPayload = async (
  * Extracts auth headers and builds a RequestContext from an Express request.
  * Shared by both the unified auth middleware and the WebSocket context.
  */
+/**
+ * Extracts the hostname from a request `Origin` header using the WHATWG `URL` API (replacing the
+ * deprecated, security-flagged `url.parse()` — Node DEP0169). Returns `undefined` for a missing,
+ * empty, or unparseable origin, matching the prior `url.parse().hostname ?? undefined` semantics.
+ */
+function parseRequestHostname(origin: string | undefined): string | undefined {
+  if (!origin) {
+    return undefined;
+  }
+  try {
+    return new URL(origin).hostname || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function extractAuthInputs(req: IncomingMessage): {
   bearerToken: string;
   sessionId: string;
@@ -471,7 +486,7 @@ function extractAuthInputs(req: IncomingMessage): {
   requestContext: RequestContext;
 } {
   const sessionIdRaw = req.headers['x-session-id'];
-  const requestDomain = url.parse(req.headers.origin || '');
+  const requestDomain = parseRequestHostname(req.headers.origin);
   const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
   const bearerToken = req.headers.authorization ?? '';
   const systemApiKey = String(req.headers['x-mj-api-key']);
@@ -489,7 +504,7 @@ function extractAuthInputs(req: IncomingMessage): {
   return {
     bearerToken,
     sessionId,
-    requestDomain: requestDomain?.hostname ?? undefined,
+    requestDomain,
     systemApiKey,
     userApiKey,
     requestContext,
