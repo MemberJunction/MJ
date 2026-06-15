@@ -390,6 +390,56 @@ describe('AIEngine', () => {
             expect(got?.subAgentCount).toBe(3);
             expect(got?.actionDetails).toBe('x');
         });
+
+        // ------------------------------------------------------------------
+        // Fix 3 (cache-poisoning): the cache hands out the stored object by
+        // reference, so callers on the no-override fast path MUST clone before
+        // mutating. base-agent.gatherPromptTemplateData does exactly this for
+        // baseAgentTypePromptParams ({ ...catalog.baseAgentTypePromptParams }).
+        // These tests prove (a) the contract (same reference is returned) and
+        // (b) that the documented clone-before-mutate discipline leaves the
+        // stored catalog untouched across a simulated fast-path "run".
+        // ------------------------------------------------------------------
+        interface CatalogShape {
+            baseAgentTypePromptParams: Record<string, unknown>;
+            activeActions: Array<{ Name: string }>;
+        }
+
+        it('hands out the stored catalog object by reference (callers must treat it read-only)', () => {
+            const stored: CatalogShape = {
+                baseAgentTypePromptParams: { includeScratchpadDocs: true, temperature: 0.5 },
+                activeActions: [{ Name: 'A' }, { Name: 'B' }],
+            };
+            engine.SetAgentBaseCatalog('agent-ref', stored);
+            const got = engine.GetAgentBaseCatalog<CatalogShape>('agent-ref');
+            // Same top-level reference AND same nested references — proving the cache does not
+            // defensively copy, which is exactly why fast-path consumers must clone before mutating.
+            expect(got).toBe(stored);
+            expect(got!.baseAgentTypePromptParams).toBe(stored.baseAgentTypePromptParams);
+            expect(got!.activeActions).toBe(stored.activeActions);
+        });
+
+        it('clone-before-mutate (the fast-path discipline) leaves the cached catalog intact', () => {
+            const stored: CatalogShape = {
+                baseAgentTypePromptParams: { includeScratchpadDocs: true, temperature: 0.5 },
+                activeActions: [{ Name: 'A' }, { Name: 'B' }],
+            };
+            engine.SetAgentBaseCatalog('agent-clone', stored);
+
+            // Simulate a fast-path "run": shallow-clone the params object before handing it to the
+            // prompt, exactly as gatherPromptTemplateData now does, then mutate the clone.
+            const catalog = engine.GetAgentBaseCatalog<CatalogShape>('agent-clone')!;
+            const handedOut = { ...catalog.baseAgentTypePromptParams };
+            handedOut.temperature = 0.99;
+            handedOut.injectedAtRun = 'run-1';
+
+            // The cached object must NOT be poisoned by the run's mutation of its clone.
+            const after = engine.GetAgentBaseCatalog<CatalogShape>('agent-clone')!;
+            expect(after.baseAgentTypePromptParams.temperature).toBe(0.5);
+            expect(after.baseAgentTypePromptParams).not.toHaveProperty('injectedAtRun');
+            // And the original object identity is preserved across the run.
+            expect(after).toBe(stored);
+        });
     });
 
     // ======================================================================

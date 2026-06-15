@@ -65,4 +65,28 @@ describe('LocalCacheManager.estimateResultsSize', () => {
         expect(() => asInternal(cm).estimateResultsSize(rows)).not.toThrow();
         expect(asInternal(cm).estimateResultsSize(rows)).toBeGreaterThan(0);
     });
+
+    it('does not throw on a circular-reference row and returns a finite non-negative number (Fix 4)', () => {
+        // A circular row makes JSON.stringify throw. Because rows are sampled at random, an
+        // unguarded throw would be non-deterministic. Eviction sizing is approximate and must
+        // never affect correctness, so it must never throw. Build a large set (forces the
+        // sampling path) where one row is circular.
+        const circular: Record<string, unknown> = { ID: 'c', Name: 'loop' };
+        circular.self = circular;
+        const rows: Record<string, unknown>[] = Array.from({ length: 200 }, (_, i) => ({ ID: String(i), Name: 'Widget' }));
+        rows[100] = circular;
+
+        let result = 0;
+        expect(() => { result = asInternal(cm).estimateResultsSize(rows); }).not.toThrow();
+        expect(Number.isFinite(result)).toBe(true);
+        expect(result).toBeGreaterThanOrEqual(0);
+    });
+
+    it('does not throw when EVERY sampled row is circular (small-set full-measure path)', () => {
+        const mk = () => { const o: Record<string, unknown> = { ID: 'x' }; o.self = o; return o; };
+        const rows = [mk(), mk(), mk()]; // <= 3 rows → full-measure branch, all circular
+        let result = -1;
+        expect(() => { result = asInternal(cm).estimateResultsSize(rows); }).not.toThrow();
+        expect(result).toBe(0); // each row contributes 0 on stringify failure
+    });
 });

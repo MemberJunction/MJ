@@ -795,7 +795,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         return CompositeKey.FromKeyValuePairs(pairs);
     }
 
-    /** Delimiter for cheap PK keying — NUL is effectively impossible inside a real PK value. */
+    /**
+     * Delimiter for cheap PK keying. The NUL character (U+0000) is used because it is effectively
+     * impossible inside a real PK value. This prevents composite-key collisions: with a space
+     * delimiter, composite PKs ("A","B C") and ("A B","C") would both serialize to "A B C" and
+     * target the WRONG row in UpsertSingleEntity/RemoveSingleEntity. With NUL they become distinct.
+     * This string is only ever compared cheap-key-to-cheap-key (cheapRowKey vs
+     * cheapKeyFromCompositeKey), never against CompositeKey.ToConcatenatedString(), so the exact
+     * delimiter is internal — only mutual consistency between the two builders matters. Both
+     * builders iterate the PK fields in the SAME order: cheapRowKey iterates pkFieldNames (which
+     * callers derive from key.KeyValuePairs.map(kv => kv.FieldName)) and cheapKeyFromCompositeKey
+     * iterates key.KeyValuePairs directly — so position i refers to the same PK field in both.
+     */
     private static readonly ROW_KEY_DELIM = ' ';
 
     /**
@@ -2306,7 +2317,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const rowCount = results?.length ?? 0;
         if (rowCount === 0) return 0;
 
-        const sumLen = (idx: number): number => JSON.stringify(results![idx])?.length ?? 0;
+        // Per-row stringify guarded against circular references. Eviction sizing is explicitly
+        // approximate and never affects correctness, so a circular (or otherwise non-serializable)
+        // row must NOT throw — it would do so non-deterministically here because rows are sampled
+        // at random. On failure we contribute 0 length for that row (a harmless under-estimate).
+        const sumLen = (idx: number): number => {
+            try {
+                return JSON.stringify(results![idx])?.length ?? 0;
+            } catch {
+                return 0;
+            }
+        };
 
         const sampleCount = Math.min(rowCount, Math.max(3, Math.ceil(rowCount * 0.10)));
         if (sampleCount >= rowCount) {

@@ -2572,6 +2572,25 @@ export class EntityInfo extends BaseInfo {
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
             this._Fields = [];
+
+            // Reset every lazy field-derived memo cache whenever _Fields is (re)assigned.
+            // These caches (FieldByName map, PrimaryKeys, UniqueKeys, ForeignKeys, EncryptedFields,
+            // DatetimeFields, NameField, FirstPrimaryKey) are populated lazily off this.Fields and
+            // were previously relying on an implicit "_Fields is write-once after construction"
+            // invariant. Today copyInitData/_Fields assignment only happens here in the constructor,
+            // so the caches are already null/undefined at this point — but resetting them explicitly
+            // is behavior-preserving (they simply rebuild lazily on next access) and removes the
+            // load-bearing write-once assumption, so any future re-init path can never serve a stale
+            // cache derived from the old field set.
+            this._fieldByNameMap = null;
+            this._firstPrimaryKeyCache = undefined;
+            this._primaryKeysCache = null;
+            this._uniqueKeysCache = null;
+            this._foreignKeysCache = null;
+            this._encryptedFieldsCache = null;
+            this._datetimeFieldsCache = null;
+            this._nameFieldCache = undefined;
+
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {

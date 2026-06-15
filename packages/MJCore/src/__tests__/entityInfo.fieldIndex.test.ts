@@ -135,3 +135,36 @@ describe('EntityInfo derived-array memoization (#4, #8)', () => {
         expect(e.NameField?.Name).toBe('Name');
     });
 });
+
+describe('EntityInfo derived-array caches: defensive reset on _Fields (re)assignment', () => {
+    // NOTE: In the current codebase, EntityInfo instances are ALWAYS freshly constructed —
+    // copyInitData() and the `this._Fields = []` (re)assignment happen exclusively inside the
+    // constructor (there is no public/protected SetParams/ReInit entry point). So no live
+    // staleness bug exists today. The constructor now defensively resets all eight lazy memo
+    // caches at the point where `_Fields` is assigned, removing the load-bearing "write-once"
+    // invariant. We can't trigger a true re-init from a unit test, but these assertions document
+    // the invariant by proving two distinct instances never cross-contaminate their caches and
+    // that each instance's caches always reflect its OWN field set.
+    it('two distinct instances expose independent, correct field-derived caches', () => {
+        const a = makeEntity();
+        const b = new EntityInfo({
+            ID: 'e-b', Name: 'Others', SchemaName: 'app', BaseTable: 'Other',
+            EntityFields: [
+                { ID: 'b1', EntityID: 'e-b', Name: 'Key', Type: 'uniqueidentifier', IsPrimaryKey: true, IsUnique: true, Sequence: 1, Status: 'Active' },
+                { ID: 'b2', EntityID: 'e-b', Name: 'Label', Type: 'nvarchar', IsNameField: true, Sequence: 2, Status: 'Active' },
+            ],
+        });
+
+        // Prime a's caches first, then b's — b must not inherit a's memoized values.
+        expect(a.PrimaryKeys.map(f => f.Name)).toEqual(['ID']);
+        expect(a.DatetimeFields.map(f => f.Name)).toEqual(['CreatedAt']);
+        expect(a.FieldByName('Count')?.Name).toBe('Count');
+
+        expect(b.PrimaryKeys.map(f => f.Name)).toEqual(['Key']);
+        expect(b.DatetimeFields).toEqual([]);
+        expect(b.FieldByName('Count')).toBeUndefined();
+        expect(b.FieldByName('Label')?.Name).toBe('Label');
+        expect(b.NameField?.Name).toBe('Label');
+        expect(b.FirstPrimaryKey.Name).toBe('Key');
+    });
+});

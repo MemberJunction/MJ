@@ -5052,6 +5052,14 @@ The context is now within limits. Please retry your request with the recovered c
             }
 
             // Actions: reuse cached active set unless runtime actionChanges apply (then clone + re-format).
+            //
+            // FAST-PATH SHARING CONTRACT: on the no-override path, `activeActions` (and therefore
+            // `_effectiveActions`) and `uniqueActiveSubAgents` above are the SAME array references
+            // held by the process-wide AIEngine catalog cache. Downstream consumers MUST treat them
+            // as read-only — they are only ever read (`.find`/`.map`/`.length`/`.some`), never mutated
+            // in place. On the override path a fresh array is built via filter/applyActionChanges, so
+            // the cached arrays are never the mutated ones. Keeping the references (vs. copying) avoids
+            // a per-step allocation; if a future consumer needs to mutate, it must `.slice()` first.
             let activeActions = catalog.activeActions;
             let actionDetails = catalog.actionDetails;
             if (actionChanges?.length) {
@@ -5060,6 +5068,11 @@ The context is now within limits. Please retry your request with the recovered c
                 this._dynamicActionLimits = result.dynamicLimits;
                 actionDetails = this.formatActionDetails(activeActions);
             } else {
+                // No actionChanges this step → no dynamically-added actions, hence no dynamic limits.
+                // gatherPromptTemplateData runs once per step, and _dynamicActionLimits is keyed to the
+                // actionChanges of the CURRENT step (read at validation time in checkActionExecutionLimits).
+                // Resetting to {} is correct and required: it prevents a prior step's actionChanges limits
+                // from leaking into a step that has none. It is NOT relied upon to persist across steps.
                 this._dynamicActionLimits = {};
             }
             // Store for later validation in executeActionsStep
@@ -5067,10 +5080,16 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Agent type prompt params: reuse cached base merge unless a runtime override is present.
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
-            let agentTypePromptParams = catalog.baseAgentTypePromptParams;
+            let agentTypePromptParams: Record<string, unknown>;
             if (runtimePromptParamOverrides) {
                 const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
                 agentTypePromptParams = this.buildAgentTypePromptParams(agentType, agent, runtimePromptParamOverrides);
+            } else {
+                // Fast path: shallow-clone the cached base params before handing them out. The cached
+                // object lives in the process-wide AIEngine catalog and is shared across every run of
+                // this agent; the audit shows it is read-only downstream today, but the clone is cheap
+                // and removes any cache-poisoning foot-gun should a future consumer write to it.
+                agentTypePromptParams = { ...catalog.baseAgentTypePromptParams };
             }
 
             // Build client tool details for the prompt (per-run; depends on extraData)
