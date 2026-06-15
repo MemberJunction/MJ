@@ -48,6 +48,14 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
 export type AuthenticationErrorCallback = (error: Error) => void;
 
 /**
+ * Shared, stateless FieldMapper instance. FieldMapper holds no per-call state (only static
+ * prefix constants), so a single shared instance is reused everywhere instead of allocating a
+ * new FieldMapper per row in the RunView(s) deserialization loops (ConvertBackToMJFields) and
+ * per query in the field-list builders.
+ */
+const SharedFieldMapper = new FieldMapper();
+
+/**
  * The GraphQLProviderConfigData class is used to configure the GraphQLDataProvider. It is passed to the Config method of the GraphQLDataProvider
  */
 export class GraphQLProviderConfigData extends ProviderConfigDataBase {
@@ -814,7 +822,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
 
                 // get entity metadata
-                const e = this.Entities.find(e => e.Name === entity);
+                const e = this.EntityByName(entity);
                 if (!e)
                     throw new Error(`Entity ${entity} not found in metadata`);
 
@@ -980,7 +988,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
 
                     // get entity metadata
-                    const e = this.Entities.find(e => e.Name === entity);
+                    const e = this.EntityByName(entity);
                     if (!e){
                         throw new Error(`Entity ${entity} not found in metadata`);
                     }
@@ -1307,7 +1315,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     protected getViewRunTimeFieldList(e: EntityInfo, v: MJUserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
         const fieldList = [];
-        const mapper = new FieldMapper();
         if (params.Fields) {
             for (const kv of e.PrimaryKeys) {
                 if (params.Fields.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
@@ -1316,7 +1323,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             // now add any other fields that were passed in
             params.Fields.forEach(f => {
-              fieldList.push(mapper.MapFieldName(f))
+              fieldList.push(SharedFieldMapper.MapFieldName(f))
             });
         }
         else {
@@ -1327,7 +1334,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // include all fields since no fields were passed in
                 e.Fields.forEach(f => {
                     if (!f.IsBinaryFieldType) {
-                      fieldList.push(mapper.MapFieldName(f.CodeName));
+                      fieldList.push(SharedFieldMapper.MapFieldName(f.CodeName));
                     }
                 });
             }
@@ -1350,7 +1357,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             // simply don't include it in the field list
                         }
                         else
-                            fieldList.push(mapper.MapFieldName(c.EntityField.CodeName));
+                            fieldList.push(SharedFieldMapper.MapFieldName(c.EntityField.CodeName));
                     }
                 });
             }
@@ -1689,9 +1696,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             // only pass along writable fields, AND the PKEY value if this is an update
             const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
-            const mapper = new FieldMapper();
-            const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => mapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                const inner = `                ${mutationName}(input: $input) {
+                ${entity.Fields.map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -1739,7 +1745,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             val = '';
                     }
                 }
-                vars.input[mapper.MapFieldName(f.CodeName)] = val;
+                vars.input[SharedFieldMapper.MapFieldName(f.CodeName)] = val;
             }
 
             // Carry restore lineage across the network.
@@ -1774,7 +1780,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         else
                             val = f.OldValue;
                     }
-                    ov.push({Key: mapper.MapFieldName(f.CodeName), Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
+                    ov.push({Key: SharedFieldMapper.MapFieldName(f.CodeName), Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
                 });
                 vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
             }
@@ -1874,8 +1880,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
-            const mapper = new FieldMapper();
-            const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
+                const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
                                     ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType)
                                       .map((f) => {
@@ -1912,8 +1917,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @returns
      */
     protected ConvertBackToMJFields(ret: any): any {
-        const mapper = new FieldMapper();
-        mapper.ReverseMapFields(ret);
+        SharedFieldMapper.ReverseMapFields(ret);
         return ret; // clean object to pass back here
     }
 
@@ -1922,7 +1926,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         for (let i = 0; i < entityInfo.RelatedEntities.length; i++) {
             if (EntityRelationshipsToLoad.indexOf(entityInfo.RelatedEntities[i].RelatedEntity) >= 0) {
                 const r = entityInfo.RelatedEntities[i];
-                const re = this.Entities.find(e => UUIDsEqual(e.ID, r.RelatedEntityID));
+                const re = this.EntityByID(r.RelatedEntityID);
                 let uniqueCodeName: string = '';
                 if (r.Type.toLowerCase().trim() === 'many to many') {
                     uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/\s/g, '')}`;
@@ -2266,7 +2270,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (!valResult.IsValid)
             return false;
 
-        const e = this.Entities.find(e => e.Name === entityName)
+        const e = this.EntityByName(entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
 
@@ -2289,7 +2293,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async SetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
-        const e = this.Entities.find(e => e.Name === entityName)
+        const e = this.EntityByName(entityName)
         if (!e){
             throw new Error(`Entity ${entityName} not found in metadata`);
         }

@@ -1,8 +1,9 @@
 import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
+import { MemoryWriteRequest } from "../MemoryWriteManager";
 
 // Re-export universal types for backward compatibility
-export type { ForEachOperation, WhileOperation, ArtifactToolCall };
+export type { ForEachOperation, WhileOperation, ArtifactToolCall, MemoryWriteRequest };
 
 /**
  * Response structure for Loop Agent Type
@@ -59,6 +60,17 @@ export interface LoopAgentResponse<P = any> {
      * injected into the next turn's prompt via _ARTIFACT_TOOL_RESULTS.
      */
     artifactToolCalls?: ArtifactToolCall[];
+
+    /**
+     * Durable memory writes — record facts/preferences that persist across
+     * runs. Processed inline on the same turn as other response fields (zero
+     * turn cost). Each write lands as a Provisional agent note — immediately
+     * injectable into future runs, later hardened or pruned by the Memory
+     * Manager. Only honored when the agent has AllowMemoryWrite enabled; the
+     * framework enforces type restriction, scope clamping, deduplication,
+     * and per-run caps.
+     */
+    memoryWrites?: MemoryWriteRequest[];
 
     /**
      * Internal reasoning for debugging

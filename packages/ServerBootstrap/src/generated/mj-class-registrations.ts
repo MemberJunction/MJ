@@ -48,8 +48,9 @@ import {
     CerebrasLLM,
 } from '@memberjunction/ai-cerebras';
 
-// @memberjunction/ai-cohere (1 classes)
+// @memberjunction/ai-cohere (2 classes)
 import {
+    CohereEmbedding,
     CohereReranker,
 } from '@memberjunction/ai-cohere';
 
@@ -64,8 +65,9 @@ import {
     FireworksLLM,
 } from '@memberjunction/ai-fireworks';
 
-// @memberjunction/ai-gemini (3 classes)
+// @memberjunction/ai-gemini (4 classes)
 import {
+    GeminiEmbedding2,
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
@@ -1212,10 +1214,12 @@ export const CLASS_REGISTRATIONS: any[] = [
     BettyBotLLM,
     FLUXImageGenerator,
     CerebrasLLM,
+    CohereEmbedding,
     CohereReranker,
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
     FireworksLLM,
+    GeminiEmbedding2,
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
@@ -2067,7 +2071,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 858;
+export const CLASS_REGISTRATIONS_COUNT = 860;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -60,6 +60,7 @@ import {
     ConversationUtility,
     ActionChange,
     ActionChangeScope,
+    SubAgentChange,
     MediaOutput,
     FileOutputRef,
     ParseFileOutputRef,
@@ -80,6 +81,7 @@ import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
+import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
 import {
     PipelineExecutor,
     PipelineToolRegistry,
@@ -238,6 +240,28 @@ interface ParallelSubAgentDispatch {
     request: AgentSubAgentRequest<unknown>;
     subAgentEntity: MJAIAgentEntityExtended;
     relationship?: MJAIAgentRelationshipEntity;
+}
+
+/**
+ * The agent-invariant "base" catalog cached (process-wide) on AIEngine and reused across runs/steps.
+ * Holds the resolved sub-agents + actions and their formatted markdown, plus the base merged
+ * agent-type prompt params (with NO runtime overrides applied). Runtime `actionChanges` /
+ * `subAgentChanges` / `__agentTypePromptParams` overrides are layered on top per run from a clone.
+ */
+interface AgentBaseCatalog {
+    /** Resolved active sub-agents (direct ParentID children + active relationships), de-duped. */
+    uniqueActiveSubAgents: MJAIAgentEntityExtended[];
+    subAgentCount: number;
+    /** Markdown describing uniqueActiveSubAgents (the base set). */
+    subAgentDetails: string;
+    /** Actions matched to the agent's active AIAgentAction junctions, BEFORE filtering by action Status — needed as the input to applyActionChanges. */
+    baseActionsRaw: MJActionEntityExtended[];
+    /** baseActionsRaw filtered to Status='Active' — the fast-path effective action set. */
+    activeActions: MJActionEntityExtended[];
+    /** Markdown describing activeActions (the base set). */
+    actionDetails: string;
+    /** Agent-type prompt params merged from schema defaults + agent config (NO runtime overrides). */
+    baseAgentTypePromptParams: Record<string, unknown>;
 }
 
 export class BaseAgent {
@@ -812,6 +836,12 @@ export class BaseAgent {
     private _artifactToolManager: ArtifactToolManager = new ArtifactToolManager();
 
     /**
+     * Manages in-flight durable memory writes for the current agent run.
+     * Only consulted when the agent has AllowMemoryWrite enabled.
+     */
+    private _memoryWriteManager: MemoryWriteManager = new MemoryWriteManager();
+
+    /**
      * Effective actions available to this agent after applying actionChanges.
      * Populated during gatherPromptTemplateData() and used for validation in executeActionsStep().
      * @private
@@ -1261,6 +1291,7 @@ export class BaseAgent {
             // Reset scratchpad and artifact tools for each new execution (ephemeral per run)
             this._scratchpadManager.Clear();
             this._artifactToolManager.Clear();
+            this._memoryWriteManager.Clear();
 
             // Initialize artifact tools with any input artifacts attached to the run.
             // Artifacts arrive as a typed first-class field on ExecuteAgentParams —
@@ -2820,7 +2851,8 @@ export class BaseAgent {
             params.agent,
             params.contextUser,
             params.data,
-            params.actionChanges
+            params.actionChanges,
+            params.subAgentChanges
         );
 
         // Set up the hierarchical prompt execution
@@ -2898,6 +2930,14 @@ export class BaseAgent {
                 this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`, true, params);
+            }
+
+            // Enable the memory-writes response field + docs only for agents that opted in
+            // via AllowMemoryWrite. Disabled agents never see the docs, so a well-behaved
+            // LLM never emits the field (the turn loop still guards against drift).
+            const memoryWritesDocsEnabled = agentTypePromptParams?.includeMemoryWritesDocs !== false;
+            if (memoryWritesDocsEnabled && params.agent.AllowMemoryWrite === true) {
+                promptParams.data['_MEMORY_WRITES_ENABLED'] = true;
             }
 
             // Inject pipeline tool docs when pipelines are enabled and at least one source exists.
@@ -4822,6 +4862,149 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Executes a batch of in-flight memory writes, recording each as its own
+     * `Tool` AIAgentRunStep (a sibling of the Prompt step that requested them)
+     * with full inputs/outcomes captured in InputData/OutputData.
+     *
+     * Writes run SEQUENTIALLY (not Promise.all like artifact tools) by design:
+     * each persisted note is embedded and synced into the in-memory vector
+     * service on Save, so write N must be visible to write N+1's near-duplicate
+     * check (this is also what makes same-run supersede-own work). The per-run
+     * cap bounds the cost of the serialization.
+     *
+     * Step naming convention: `Memory Write` for log/UI clarity.
+     *
+     * @protected
+     */
+    protected async executeMemoryWritesAsSteps(
+        writes: MemoryWriteRequest[],
+        params: ExecuteAgentParams,
+    ): Promise<MemoryWriteResult[]> {
+        const results: MemoryWriteResult[] = [];
+        for (const write of writes) {
+            const writeStep = await this.createStepEntity({
+                stepType: 'Tool',
+                stepName: 'Memory Write',
+                contextUser: params.contextUser,
+                inputData: {
+                    note: write.note,
+                    type: write.type,
+                    scopeHint: write.scopeHint,
+                },
+            });
+
+            const result = await this._memoryWriteManager.ExecuteWrite(write, {
+                agentId: params.agent.ID,
+                contextUser: params.contextUser,
+                agentRunId: this._agentRun?.ID,
+                conversationId: this._agentRun?.ConversationID || undefined,
+                conversationDetailId: params.conversationDetailId,
+                userId: params.userId || params.contextUser?.ID,
+                companyId: params.companyId,
+                verbose: params.verbose,
+                provider: this.ProviderToUse,
+            });
+
+            const failed = result.disposition === 'error' || result.disposition === 'rejected-type';
+            await this.finalizeStepEntity(
+                writeStep,
+                !failed,
+                failed ? result.reason : undefined,
+                {
+                    disposition: result.disposition,
+                    noteId: result.noteId,
+                    finalScope: result.finalScope,
+                    reason: result.reason,
+                    durationMs: result.durationMs,
+                },
+            );
+            results.push(result);
+        }
+        return results;
+    }
+
+    /**
+     * Turn-loop entry point for in-flight memory writes, gated on the agent's
+     * AllowMemoryWrite flag. When disabled but the LLM emitted writes anyway
+     * (prompt drift / injection attempt), records ONE summary skip step —
+     * observable without per-write noise — and tells the agent the memories
+     * were NOT saved so it stops re-emitting. When enabled, executes the
+     * writes as run steps and injects the results message.
+     *
+     * @protected
+     */
+    protected async processMemoryWritesForTurn(
+        memoryWrites: MemoryWriteRequest[],
+        params: ExecuteAgentParams,
+    ): Promise<void> {
+        if (params.agent.AllowMemoryWrite !== true) {
+            this.logStatus(`[MemoryWrites] LLM emitted ${memoryWrites.length} memory write(s) but AllowMemoryWrite=false — skipping`, true, params);
+            const skipStep = await this.createStepEntity({
+                stepType: 'Tool',
+                stepName: 'Memory Writes: skipped (AllowMemoryWrite=false)',
+                contextUser: params.contextUser,
+                inputData: { requestedWriteCount: memoryWrites.length },
+            });
+            await this.finalizeStepEntity(skipStep, true, undefined, { skipped: true, reason: 'AllowMemoryWrite=false' });
+            params.conversationMessages.push({
+                role: 'user',
+                content: 'Memory write result: this agent does not have durable memory writes enabled — the requested memories were NOT saved. Do not emit memoryWrites again.',
+                metadata: {
+                    turnAdded: this._promptTurnCount,
+                    messageType: 'tool-result',
+                    expirationTurns: 3,
+                    expirationMode: 'Compact',
+                    compactMode: 'First N Chars',
+                    compactLength: 200,
+                    compactPromptId: '',
+                },
+            });
+            return;
+        }
+
+        this.logStatus(`[MemoryWrites] LLM requested ${memoryWrites.length} memory write(s)`, true, params);
+        const writeResults = await this.executeMemoryWritesAsSteps(memoryWrites, params);
+        this.injectMemoryWriteResultsMessage(params, writeResults);
+    }
+
+    /**
+     * Pushes a single user-role message containing memory-write outcomes into
+     * the conversation, mirroring `injectArtifactToolResultsMessage`'s
+     * inject-once-then-expire pattern. Closing the loop here is what stops the
+     * LLM from re-emitting the same memory on subsequent turns.
+     *
+     * @protected
+     */
+    protected injectMemoryWriteResultsMessage(
+        params: ExecuteAgentParams,
+        results: MemoryWriteResult[],
+    ): void {
+        if (results.length === 0) return;
+        const header = results.length === 1
+            ? 'Memory write result:'
+            : `Memory write results (${results.length} writes):`;
+        const body = results.map((r, i) => {
+            const note = r.request.note.length > 120 ? `${r.request.note.slice(0, 120)}…` : r.request.note;
+            return `${i + 1}. "${note}" — **${r.disposition}**${r.reason ? `: ${r.reason}` : ''}`;
+        }).join('\n');
+
+        const message: AgentChatMessage = {
+            role: 'user',
+            content: `${header}\n${body}`,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'tool-result',
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 300,
+                compactPromptId: '',
+            },
+        };
+        params.conversationMessages.push(message);
+    }
+
+    /**
      * Builds a per-run {@link PipelineToolRegistry} that unifies the three pipeline-able
      * substrates behind one namespace: built-in transforms, the agent's effective Actions, and
      * the run's artifact tools. Transforms register first so their reserved names win; a source
@@ -4999,48 +5182,76 @@ The context is now within limits. Please retry your request with the recovered c
         agent: MJAIAgentEntityExtended,
         _contextUser?: UserInfo,
         extraData?: any,
-        actionChanges?: ActionChange[]
+        actionChanges?: ActionChange[],
+        subAgentChanges?: SubAgentChange[]
     ): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
 
-            // Find sub-agents using AIEngine
-            const activeSubAgents = engine.Agents.filter(a => UUIDsEqual(a.ParentID, agent.ID) && a.Status === 'Active')
-                .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
-            const activeAgentRelationships = engine.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, agent.ID) && ar.Status === 'Active');
-            // now combine the child sub-agents from the direct parentID relationships with the agentRelationships array, distinct to not repeat
-            // unique ID values
-            const uniqueActiveSubAgentIDs = new Set<string>();
-            activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
-            activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
-            const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs).map(id => engine.Agents.find(a => UUIDsEqual(a.ID, id)));
-
-            // Load available actions from database configuration
-            const agentActions = engine.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active');
-            let actions: MJActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)));
-
-            // Apply runtime action changes if provided
-            if (actionChanges?.length) {
-                const isRoot = this._depth === 0;
-                const result = this.applyActionChanges(actions, actionChanges, agent.ID, isRoot);
-                actions = result.actions;
-                this._dynamicActionLimits = result.dynamicLimits;
+            // Build (or reuse) the agent-invariant base catalog. This is process-wide cached on
+            // AIEngine and wiped on Agent/AgentAction/AgentRelationship/AgentType changes + reloads.
+            // It turns the per-step rebuild (sub-agent + action resolution, markdown, JSON.parse of
+            // agent-type params) into a once-per-agent cost; the common no-override step reuses it wholesale.
+            let catalog = engine.GetAgentBaseCatalog<AgentBaseCatalog>(agent.ID);
+            if (!catalog) {
+                catalog = this.buildAgentBaseCatalog(agent, engine);
+                engine.SetAgentBaseCatalog(agent.ID, catalog);
             }
 
-            // Filter to only active actions and store for later validation in executeActionsStep
-            const activeActions = actions.filter(a => a.Status === 'Active');
+            const isRoot = this._depth === 0;
+
+            // Sub-agents: reuse cached base unless runtime subAgentChanges apply (then clone + re-format).
+            let uniqueActiveSubAgents = catalog.uniqueActiveSubAgents;
+            let subAgentDetails = catalog.subAgentDetails;
+            let subAgentCount = catalog.subAgentCount;
+            if (subAgentChanges?.length) {
+                uniqueActiveSubAgents = this.applySubAgentChanges(catalog.uniqueActiveSubAgents, subAgentChanges, agent.ID, isRoot, engine);
+                subAgentCount = uniqueActiveSubAgents.length;
+                subAgentDetails = this.formatSubAgentDetails(uniqueActiveSubAgents);
+            }
+
+            // Actions: reuse cached active set unless runtime actionChanges apply (then clone + re-format).
+            //
+            // FAST-PATH SHARING CONTRACT: on the no-override path, `activeActions` (and therefore
+            // `_effectiveActions`) and `uniqueActiveSubAgents` above are the SAME array references
+            // held by the process-wide AIEngine catalog cache. Downstream consumers MUST treat them
+            // as read-only — they are only ever read (`.find`/`.map`/`.length`/`.some`), never mutated
+            // in place. On the override path a fresh array is built via filter/applyActionChanges, so
+            // the cached arrays are never the mutated ones. Keeping the references (vs. copying) avoids
+            // a per-step allocation; if a future consumer needs to mutate, it must `.slice()` first.
+            let activeActions = catalog.activeActions;
+            let actionDetails = catalog.actionDetails;
+            if (actionChanges?.length) {
+                const result = this.applyActionChanges([...catalog.baseActionsRaw], actionChanges, agent.ID, isRoot);
+                activeActions = result.actions.filter(a => a.Status === 'Active');
+                this._dynamicActionLimits = result.dynamicLimits;
+                actionDetails = this.formatActionDetails(activeActions);
+            } else {
+                // No actionChanges this step → no dynamically-added actions, hence no dynamic limits.
+                // gatherPromptTemplateData runs once per step, and _dynamicActionLimits is keyed to the
+                // actionChanges of the CURRENT step (read at validation time in checkActionExecutionLimits).
+                // Resetting to {} is correct and required: it prevents a prior step's actionChanges limits
+                // from leaking into a step that has none. It is NOT relied upon to persist across steps.
+                this._dynamicActionLimits = {};
+            }
+            // Store for later validation in executeActionsStep
             this._effectiveActions = activeActions;
 
-            // Build agent type prompt params (merged from schema defaults, agent config, and runtime overrides)
-            const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+            // Agent type prompt params: reuse cached base merge unless a runtime override is present.
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
-            const agentTypePromptParams = this.buildAgentTypePromptParams(
-                agentType,
-                agent,
-                runtimePromptParamOverrides
-            );
+            let agentTypePromptParams: Record<string, unknown>;
+            if (runtimePromptParamOverrides) {
+                const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+                agentTypePromptParams = this.buildAgentTypePromptParams(agentType, agent, runtimePromptParamOverrides);
+            } else {
+                // Fast path: shallow-clone the cached base params before handing them out. The cached
+                // object lives in the process-wide AIEngine catalog and is shared across every run of
+                // this agent; the audit shows it is read-only downstream today, but the clone is cheap
+                // and removes any cache-poisoning foot-gun should a future consumer write to it.
+                agentTypePromptParams = { ...catalog.baseAgentTypePromptParams };
+            }
 
-            // Build client tool details for the prompt
+            // Build client tool details for the prompt (per-run; depends on extraData)
             const clientToolDetails = this.buildClientToolPromptSection(agent, extraData);
 
             // Build app context section if provided in extraData
@@ -5050,10 +5261,10 @@ The context is now within limits. Please retry your request with the recovered c
                 agentName: agent.Name,
                 agentDescription: agent.Description,
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
-                subAgentCount: uniqueActiveSubAgents.length,
-                subAgentDetails: this.formatSubAgentDetails(uniqueActiveSubAgents),
+                subAgentCount: subAgentCount,
+                subAgentDetails: subAgentDetails,
                 actionCount: activeActions.length,
-                actionDetails: this.formatActionDetails(activeActions),
+                actionDetails: actionDetails,
                 clientToolDetails: clientToolDetails,
                 appContext: appContext,
             };
@@ -5085,6 +5296,115 @@ The context is now within limits. Please retry your request with the recovered c
         } catch (error) {
             throw new Error(`Error gathering context data: ${error.message}`);
         }
+    }
+
+    /**
+     * Builds the agent-invariant {@link AgentBaseCatalog} — the resolved sub-agents + actions and
+     * their formatted markdown, plus the base agent-type prompt params. Computed once per agent and
+     * cached on AIEngine (see gatherPromptTemplateData); does NOT apply any runtime overrides.
+     *
+     * @protected
+     */
+    protected buildAgentBaseCatalog(agent: MJAIAgentEntityExtended, engine: AIEngine): AgentBaseCatalog {
+        // Resolve sub-agents: direct ParentID children + active relationships, de-duped, ordered.
+        const activeSubAgents = engine.Agents.filter(a => UUIDsEqual(a.ParentID, agent.ID) && a.Status === 'Active')
+            .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
+        const activeAgentRelationships = engine.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, agent.ID) && ar.Status === 'Active');
+        const uniqueActiveSubAgentIDs = new Set<string>();
+        activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
+        activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
+        const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs).map(id => engine.Agents.find(a => UUIDsEqual(a.ID, id)));
+
+        // Resolve actions from the agent's active AIAgentAction junctions.
+        const agentActions = engine.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active');
+        const baseActionsRaw: MJActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)));
+        const activeActions = baseActionsRaw.filter(a => a.Status === 'Active');
+
+        // Base agent-type prompt params (schema defaults + agent config; NO runtime overrides).
+        const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+        const baseAgentTypePromptParams = this.buildAgentTypePromptParams(agentType, agent, undefined);
+
+        return {
+            uniqueActiveSubAgents,
+            subAgentCount: uniqueActiveSubAgents.length,
+            subAgentDetails: this.formatSubAgentDetails(uniqueActiveSubAgents),
+            baseActionsRaw,
+            activeActions,
+            actionDetails: this.formatActionDetails(activeActions),
+            baseAgentTypePromptParams,
+        };
+    }
+
+    /**
+     * Applies runtime {@link SubAgentChange}s to a base sub-agent set — the sub-agent counterpart of
+     * {@link applyActionChanges}. Returns a NEW array (never mutates the cached base set).
+     *
+     * @protected
+     */
+    protected applySubAgentChanges(
+        baseSubAgents: MJAIAgentEntityExtended[],
+        subAgentChanges: SubAgentChange[],
+        agentId: string,
+        isRoot: boolean,
+        engine: AIEngine
+    ): MJAIAgentEntityExtended[] {
+        let subAgents = [...baseSubAgents];
+
+        for (const change of subAgentChanges) {
+            if (!this.doesChangeScopeApply(change.scope, agentId, isRoot, change.agentIds)) {
+                continue;
+            }
+
+            if (change.mode === 'add') {
+                for (const subAgentId of change.subAgentIds) {
+                    if (!subAgents.some(a => UUIDsEqual(a.ID, subAgentId))) {
+                        const toAdd = engine.Agents.find(a => UUIDsEqual(a.ID, subAgentId));
+                        if (toAdd) {
+                            subAgents.push(toAdd);
+                        } else {
+                            LogStatus(`Sub-agent with ID '${subAgentId}' not found in AIEngine - skipping add`);
+                        }
+                    }
+                }
+            } else if (change.mode === 'remove') {
+                subAgents = subAgents.filter(a => !change.subAgentIds.some(id => UUIDsEqual(id, a.ID)));
+            }
+        }
+
+        return subAgents;
+    }
+
+    /**
+     * Filters/transforms sub-agent changes for propagation to a sub-agent — the sub-agent counterpart
+     * of {@link filterActionChangesForSubAgent} (same propagation rules).
+     *
+     * @protected
+     */
+    protected filterSubAgentChangesForSubAgent(
+        subAgentChanges: SubAgentChange[] | undefined
+    ): SubAgentChange[] | undefined {
+        if (!subAgentChanges?.length) {
+            return undefined;
+        }
+
+        const filtered: SubAgentChange[] = [];
+        for (const change of subAgentChanges) {
+            switch (change.scope) {
+                case 'root':
+                    continue; // only applies to root — don't propagate
+                case 'global':
+                    filtered.push(change);
+                    break;
+                case 'all-subagents':
+                    filtered.push({ ...change, scope: 'global' });
+                    break;
+                case 'specific':
+                    filtered.push(change);
+                    break;
+            }
+        }
+
+        return filtered.length > 0 ? filtered : undefined;
     }
 
     /**
@@ -5187,7 +5507,8 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
             { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' },
             { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' },
-            { docsFlag: 'includePipelineDocs', responseTypeKey: 'pipeline' }
+            { docsFlag: 'includePipelineDocs', responseTypeKey: 'pipeline' },
+            { docsFlag: 'includeMemoryWritesDocs', responseTypeKey: 'memoryWrites' }
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
@@ -5478,8 +5799,9 @@ The context is now within limits. Please retry your request with the recovered c
 
             const parentStepCountsToPass = [...this._parentStepCounts, stepCount + 1];
 
-            // Filter action changes for sub-agent propagation
+            // Filter action / sub-agent changes for sub-agent propagation
             const subAgentActionChanges = this.filterActionChangesForSubAgent(params.actionChanges);
+            const subAgentSubAgentChanges = this.filterSubAgentChangesForSubAgent(params.subAgentChanges);
 
             // Execute the sub-agent with cancellation and streaming support
             // Use subAgentRequest.context if provided, otherwise fall back to params.context
@@ -5509,6 +5831,7 @@ The context is now within limits. Please retry your request with the recovered c
                 context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
+                subAgentChanges: subAgentSubAgentChanges, // propagate filtered sub-agent changes to sub-agent
                 PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
                 SecondaryScopes: params.SecondaryScopes,
@@ -6932,11 +7255,9 @@ The context is now within limits. Please retry your request with the recovered c
                 displayMode: 'live' // Only show in live mode
             });
             
-            // Set PayloadAtStart
-            if (stepEntity && payload) {
-                stepEntity.PayloadAtStart = this.serializePayloadAtStart(payload);
-            }
-            
+            // PayloadAtStart was already serialized from this same `payload` by createStepEntity
+            // above (payloadAtStart: payload) — no need to re-serialize the (potentially large) payload here.
+
             let downstreamPayload = payload; // Start with current payload
             if (params.agent.PayloadSelfReadPaths) {
                 const downstreamPaths = JSON.parse(params.agent.PayloadSelfReadPaths);
@@ -7147,6 +7468,12 @@ The context is now within limits. Please retry your request with the recovered c
                 this.injectArtifactToolResultsMessage(params, toolResults);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
+            }
+
+            // Execute in-flight memory writes if provided (zero turn cost — processed inline)
+            const memoryWrites = initialNextStep.memoryWrites as MemoryWriteRequest[] | undefined;
+            if (memoryWrites?.length) {
+                await this.processMemoryWritesForTurn(memoryWrites, params);
             }
 
             // Execute a tool pipeline if provided (zero turn cost — processed inline). Each step's
@@ -10787,13 +11114,18 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.Status = 'Completed';
             }
 
-            this._agentRun.Result = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
+            // Serialize the (largest-it-ever-gets) final payload ONCE and reuse for both
+            // Result and FinalPayload instead of stringifying the same object three times.
+            const finalPayloadJson = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
+            this._agentRun.Result = finalPayloadJson;
             this._agentRun.FinalStep = finalStep.step;
             this._agentRun.Message = finalStep.message;
 
-            // Set the FinalPayloadObject - this will automatically stringify for the DB
+            // Set the FinalPayloadObject (populates the object cache; its setter also writes
+            // FinalPayload when the value changes). We then assign FinalPayload from the
+            // already-computed JSON to guarantee it's set regardless of the setter's change guard.
             this._agentRun.FinalPayloadObject = resolvedPayload;
-            this._agentRun.FinalPayload = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
+            this._agentRun.FinalPayload = finalPayloadJson;
             
             // Calculate total tokens from all prompts and sub-agents
             const tokenStats = this.calculateTokenStats();
