@@ -46,7 +46,7 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
-import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus } from '@memberjunction/core';
+import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
@@ -226,6 +226,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
   const startupLog = new StartupLogger();
+  // Wire the GLOBAL verbose-logging gate to the resolved server level, so cross-package
+  // LogStatusEx({ verboseOnly: true }) lines (cache, scheduling, integration, MCP, …) honor the
+  // configured level instead of defaulting to hidden. Without this, "verbose-only" is "always hidden".
+  SetVerboseLogging(startupLog.IsAtLeast('verbose'));
   const lap = (label: string, since: number) => startupLog.EndPhase(label, since);
 
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);

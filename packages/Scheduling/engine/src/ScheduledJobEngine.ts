@@ -306,11 +306,15 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             try {
                 const result = await this.DispatchScheduledJobs(contextUser);
                 if (result.swept > 0 || result.dispatched > 0 || result.lockedOut > 0 || result.skippedAtCapacity > 0) {
-                    console.log(
-                        `📅 Scheduled Jobs: swept=${result.swept}, dispatched=${result.dispatched}, ` +
-                        `lockedOut=${result.lockedOut}, skippedAtCapacity=${result.skippedAtCapacity}, ` +
-                        `inflight=${this.inflightJobPromises.size}/${this.MaxConcurrentJobs}`
-                    );
+                    // Per-tick dispatch bookkeeping — verbose-only. The actual job runs are shown by the
+                    // always-on ▶️ Starting / ✅ Completed lines; this batch summary is just internal detail.
+                    LogStatusEx({
+                        message:
+                            `📅 Scheduled Jobs: swept=${result.swept}, dispatched=${result.dispatched}, ` +
+                            `lockedOut=${result.lockedOut}, skippedAtCapacity=${result.skippedAtCapacity}, ` +
+                            `inflight=${this.inflightJobPromises.size}/${this.MaxConcurrentJobs}`,
+                        verboseOnly: true,
+                    });
                 }
             } catch (error) {
                 this.logError('Error during DispatchScheduledJobs', error);
@@ -1377,11 +1381,16 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         this.log(`Cleaned ${cleanedCount} stale lock(s)`);
     }
 
+    /**
+     * Engine chatter (polling start/stop, lock-sproc checks, config changes, lock queueing). Verbose-only
+     * so it stays out of the default startup/run log — it honors the GLOBAL verbose flag (set from the
+     * server's configured level). Actual job RUNS (▶️ start / ✅ complete) use console.log and always show;
+     * failures go through logError and always show.
+     */
     private log(message: string): void {
         LogStatusEx({
             message: `[ScheduledJobEngine] ${message}`,
-            verboseOnly: false,
-            isVerboseEnabled: () => false
+            verboseOnly: true,
         });
     }
 
