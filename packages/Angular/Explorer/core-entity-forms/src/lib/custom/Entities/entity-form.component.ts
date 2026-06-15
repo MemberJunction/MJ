@@ -1018,6 +1018,14 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
      * Recomputes {@link AvailableParentEntities} and {@link SiblingEntities} from
      * the current {@link entity}. Called from `loadExplorerData()` once the entity
      * metadata is resolved — never during change detection.
+     *
+     * Accepted staleness tradeoff: these IS-A lists are built from `md.Entities`
+     * once per entity-load and are NOT reactive — a mid-session metadata reload
+     * (a newly added/removed entity) would not refresh them until this form
+     * re-loads. That is acceptable for the entity form (its IS-A parent/sibling
+     * set is effectively static within an editing session); we deliberately do
+     * NOT wire observable reactivity here. The former getters re-filtered/sorted
+     * hundreds of rows on every CD, which was the perf cost we removed.
      */
     private recomputeIsaEntityLists(): void {
         if (!this.entity) {

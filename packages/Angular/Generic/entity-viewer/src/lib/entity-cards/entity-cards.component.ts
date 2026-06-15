@@ -208,11 +208,21 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
       this.pendingScrollToSelected = true;
     }
 
-    // Rebuild the precomputed VMs whenever any input that affects card rendering
+    // Rebuild the precomputed VMs whenever any input that affects card *content*
     // changes. cardTemplate is included because effectiveTemplate derives from it.
-    if (changes['records'] || changes['selectedRecordId'] || changes['filterText'] ||
-        changes['hiddenFieldMatches'] || changes['entity'] || changes['cardTemplate']) {
+    // A selection-only change must NOT trigger a full rebuild — that would re-run
+    // the expensive per-card buildPkString()/CompositeKey allocations and the 4
+    // RegExp-building highlightMatch() calls for every card on every selection
+    // click (O(n) heavy work). Instead we only flip the cheap isSelected flags.
+    const contentChanged = !!(changes['records'] || changes['filterText'] ||
+        changes['hiddenFieldMatches'] || changes['entity'] || changes['cardTemplate']);
+    if (contentChanged) {
+      // Full rebuild also recomputes isSelected correctly (buildCardViewModel does).
       this.buildCardViewModels();
+    } else if (changes['selectedRecordId']) {
+      // Selection-only change: just update the isSelected flags on the existing
+      // VMs (string compare per card — no rebuild, no regex, no allocation).
+      this.updateSelectionFlags();
     }
   }
 
@@ -552,6 +562,20 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   private buildCardViewModels(): void {
     const records = this.effectiveRecords;
     this.cardViewModels = records.map((record, index) => this.buildCardViewModel(record, index));
+  }
+
+  /**
+   * Cheaply update the isSelected flag on the EXISTING card view-models in place,
+   * preserving the array and every VM object reference. Called when ONLY
+   * selectedRecordId changes — avoids a full buildCardViewModels() rebuild (which
+   * re-runs buildPkString() allocations + RegExp-building highlightMatch() calls
+   * per card). Uses the already-computed vm.pkString, so this is a plain string
+   * compare per card with zero allocation or regex work.
+   */
+  private updateSelectionFlags(): void {
+    for (const vm of this.cardViewModels) {
+      vm.isSelected = vm.pkString.length > 0 && vm.pkString === this.selectedRecordId;
+    }
   }
 
   /**

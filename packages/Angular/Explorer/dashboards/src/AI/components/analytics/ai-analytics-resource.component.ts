@@ -376,6 +376,13 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
      * Build the four option lists from AIEngineBase's cached metadata. Called once
      * after the engine is loaded (ngOnInit). Mirrors the exact map/filter/sort the
      * former getters performed, so the values are identical — just computed once.
+     *
+     * Accepted staleness tradeoff: these lists are built once after engine load and
+     * are NOT reactive — a mid-session AIEngineBase metadata reload (new model/agent/
+     * prompt/vendor) would not refresh them until this component is re-created. That
+     * is acceptable for an analytics surface (its option lists are near-static within
+     * a session); we deliberately do NOT wire observable reactivity here. The former
+     * getters re-read the engine on every CD, which was the perf cost we removed.
      */
     private recomputeOptionLists(): void {
         const engine = AIEngineBase.Instance;
