@@ -2,6 +2,9 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
          ParallelChatCompletionsCallbacks, GetAIAPIKey,
          EmbedTextResult,
          EmbedTextParams,
+         EmbedContentParams,
+         EmbedContentResult,
+         ChatMessageContent,
          BaseEmbeddings} from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
@@ -1091,6 +1094,46 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         }
 
         return await inferencePromise;
+    }
+
+    /**
+     * Generates a single embedding vector from multimodal content (text and/or interleaved
+     * image/audio/video/document blocks) using the given model's embedding provider.
+     *
+     * This is the multimodal counterpart to {@link EmbedText}. Text-only content is routed through
+     * EmbedText so it reuses that method's caching, in-flight dedup, and empty-text guard. Actual
+     * media content takes the uncached provider path — multimodal payloads carry large base64 media
+     * that make a text-style cache key impractical and rarely repeat; providers that can't embed the
+     * media reject it.
+     *
+     * @param model   the embedding model to use (provides DriverClass + APIName)
+     * @param content text, or interleaved text+media blocks, to embed into one fused vector
+     * @param apiKey  optional API key override
+     * @returns the embedding result, or null if the provider instance couldn't be created
+     */
+    public async EmbedContent(
+        model: MJAIModelEntityExtended,
+        content: ChatMessageContent,
+        apiKey?: string
+    ): Promise<EmbedContentResult | null> {
+        // Text-only content reuses the cached EmbedText path (EmbedContentResult === EmbedTextResult).
+        if (typeof content === 'string') {
+            return this.EmbedText(model, content, apiKey);
+        }
+
+        const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+            BaseEmbeddings,
+            model.DriverClass,
+            apiKey
+        );
+
+        if (!embedding) {
+            LogError(`AIEngine: Failed to create embedding instance for model ${model.Name}. Skipping embedding generation.`);
+            return null;
+        }
+
+        const params: EmbedContentParams = { content, model: model.APIName };
+        return await embedding.EmbedContent(params);
     }
 
     // ========================================================================

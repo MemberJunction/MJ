@@ -2454,7 +2454,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
     if (!agent) {
       console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
-      await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [] });
+      await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [], entityMentions: [] });
       return;
     }
 

@@ -14889,6 +14889,46 @@
   },
   {
     "fields": {
+      "Name": "Gemini Embedding 2",
+      "Description": "Google's natively multimodal embedding model — maps text, images, video, audio, and PDF into one shared 3072-dimensional vector space (Matryoshka: truncatable down to 128 dims). 8,192 token input context; retrieval task instructions are carried in the text. GA April 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
+      "IsActive": true,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiEmbedding2",
+            "APIName": "gemini-embedding-2",
+            "MaxInputTokens": 8192,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
       "Name": "Mercury Edit 2",
       "PowerRank": 13,
       "Description": "Inception Labs' purpose-built diffusion LLM for next-edit prediction in IDEs and code editors. Released May 12, 2026. Same base pricing as Mercury 2 with significantly cheaper cached input. Optimized for very low-latency code-edit suggestion workflows where most prompt tokens are repeated context. OpenAI-compatible API.",
