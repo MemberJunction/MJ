@@ -662,7 +662,7 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
                 analyzerName: this.name,
                 category: this.category,
                 title: 'Sequential Queries Could Be Parallelized',
-                message: `${allEvents.length} RunView calls executed sequentially`,
+                message: `${allEvents.length} RunView calls executed sequentially: ${entities.join(', ')}`,
                 suggestion: `Use RunViews (batch) to execute these queries in parallel for better performance`,
                 relatedEventIds: allEvents.map(e => e.id),
                 metadata: { entities },

@@ -3476,10 +3476,12 @@ export class MemoryManagerAgent extends BaseAgent {
 
             LogStatus('Memory Manager: Starting analysis cycle');
 
-            const lastRunTime = await this.GetLastRunTime(params.agent.ID, params.contextUser!);
-
-            // Load agents that have memory injection enabled
-            const agentsUsingMemory = await this.LoadAgentsUsingMemory(params.contextUser!);
+            // Phase 1: the last-run-time and the memory-enabled agent set are independent — load in
+            // parallel (avoids two back-to-back sequential RunViews flagged by the parallelization telemetry).
+            const [lastRunTime, agentsUsingMemory] = await Promise.all([
+                this.GetLastRunTime(params.agent.ID, params.contextUser!),
+                this.LoadAgentsUsingMemory(params.contextUser!)
+            ]);
 
             if (this._verbose) {
                 const sinceMessage = lastRunTime ? `since ${lastRunTime.toISOString()}` : 'all history';
@@ -3496,13 +3498,21 @@ export class MemoryManagerAgent extends BaseAgent {
                 return { finalStep, stepCount: 1 };
             }
 
-            // Step 1: Load conversations with new activity (includes rating data)
+            // Phase 2: conversations-with-new-activity and high-value agent runs both depend only on
+            // (lastRunTime, agentsUsingMemory) — never on each other — so load them in parallel, each
+            // recorded in its own run step.
             const step1 = await this.CreateRunStep('Decision', 'Load Conversations With New Activity', {
                 since: lastRunTime?.toISOString() || null,
                 agentCount: agentsUsingMemory.length,
                 agentIds: agentsUsingMemory.map(a => a.ID)
             });
-            const conversations = await this.LoadConversationsWithNewActivity(lastRunTime, agentsUsingMemory, params.contextUser!);
+            const step2 = await this.CreateRunStep('Decision', 'Load High-Value Agent Runs', {
+                since: lastRunTime?.toISOString() || null
+            });
+            const [conversations, agentRuns] = await Promise.all([
+                this.LoadConversationsWithNewActivity(lastRunTime, agentsUsingMemory, params.contextUser!),
+                this.LoadHighValueAgentRuns(lastRunTime, params.contextUser!)
+            ]);
             const totalMessages = conversations.reduce((sum, c) => sum + c.messages.length, 0);
             await this.FinalizeRunStep(step1, true, {
                 conversationCount: conversations.length,
@@ -3511,19 +3521,11 @@ export class MemoryManagerAgent extends BaseAgent {
                 negativeCount: conversations.filter(c => c.hasNegativeRating).length,
                 unratedCount: conversations.filter(c => c.isUnrated).length
             });
-            if (this._verbose) {
-                LogStatus(`Memory Manager: Found ${conversations.length} conversations with new activity`);
-            }
-
-            // Step 2: Load high-value agent runs
-            const step2 = await this.CreateRunStep('Decision', 'Load High-Value Agent Runs', {
-                since: lastRunTime?.toISOString() || null
-            });
-            const agentRuns = await this.LoadHighValueAgentRuns(lastRunTime, params.contextUser!);
             await this.FinalizeRunStep(step2, true, {
                 runCount: agentRuns.length
             });
             if (this._verbose) {
+                LogStatus(`Memory Manager: Found ${conversations.length} conversations with new activity`);
                 LogStatus(`Memory Manager: Found ${agentRuns.length} high-value agent runs`);
             }
 
