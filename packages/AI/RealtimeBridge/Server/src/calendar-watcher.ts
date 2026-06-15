@@ -5,6 +5,7 @@ import {
     LogStatus,
     RunView,
 } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIBridgeProviderEntity,
     MJAIBridgeAgentIdentityEntity,
@@ -210,7 +211,7 @@ export class CalendarWatcher {
         identity: MJAIBridgeAgentIdentityEntity,
         result: CalendarSweepResult,
     ): Promise<void> {
-        const provider = this.engine.Providers.find(p => p.ID === identity.ProviderID);
+        const provider = this.engine.Providers.find(p => UUIDsEqual(p.ID, identity.ProviderID));
         const source = this.sourceResolver(identity, provider);
         if (!source) {
             result.IdentitiesWithoutSource++;

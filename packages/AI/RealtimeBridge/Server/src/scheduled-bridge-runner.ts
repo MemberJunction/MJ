@@ -5,6 +5,7 @@ import {
     LogStatus,
     RunView,
 } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIBridgeProviderEntity,
     MJAIAgentSessionBridgeEntity,
@@ -193,7 +194,7 @@ export class ScheduledBridgeRunner {
      * @param result The running pass result to update.
      */
     private async startOne(row: MJAIAgentSessionBridgeEntity, result: ScheduledRunResult): Promise<void> {
-        const provider = this.engine.Providers.find(p => p.ID === row.ProviderID);
+        const provider = this.engine.Providers.find(p => UUIDsEqual(p.ID, row.ProviderID));
         if (!provider) {
             result.Unresolved++;
             LogError(
