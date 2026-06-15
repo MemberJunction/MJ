@@ -46,6 +46,10 @@ export * from './lib/whiteboard-export';
 // Sandboxed HTML-widget input bridge (MJWhiteboard.submit contract + host validation).
 export * from './lib/whiteboard-widget-bridge';
 
+// View-scoped srcdoc builder pipe for sandboxed HTML widgets (rebuilt per mount,
+// identity-stable while mounted — see the pipe's TSDoc for the lifecycle contract).
+export * from './lib/whiteboard-srcdoc.pipe';
+
 // Right-click context-menu model (pure — decides WHAT is offered, not how it renders).
 export * from './lib/whiteboard-context-menu';
 
@@ -53,6 +57,7 @@ export * from './lib/whiteboard-context-menu';
 export * from './lib/whiteboard-board.component';
 export * from './lib/whiteboard-toolbar.component';
 export * from './lib/whiteboard-zoom.component';
+export * from './lib/whiteboard-pages.component';
 export * from './lib/whiteboard-agent-sees-popover.component';
 export * from './lib/whiteboard-host.component';
 export * from './lib/whiteboard-snapshot.component';

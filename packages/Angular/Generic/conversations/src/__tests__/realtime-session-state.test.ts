@@ -6,7 +6,7 @@ import type {
   VoiceDelegationNarration,
   VoiceDelegationProgress,
   VoiceDelegationResult
-} from '../lib/services/voice-session.service';
+} from '../lib/services/realtime-session.service';
 
 /** Test harness: drives the four session streams the state merges. */
 function buildStreams(): {

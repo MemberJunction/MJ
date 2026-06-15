@@ -392,10 +392,10 @@
        ALSO hosted in SESSION REVIEW mode (RealtimeReview set, no live call): the
        overlay renders what went down in a PAST session, with a "Start live session"
        button that resumes it as a new call. -->
-  @if ((VoiceSession.Active$ | async) || RealtimeReview) {
+  @if ((RealtimeSession.Active$ | async) || RealtimeReview) {
     <mj-realtime-session-overlay
       [AgentName]="realtimeOverlayAgentName"
-      [Hidden]="(VoiceSession.Minimized$ | async) === true"
+      [Hidden]="(RealtimeSession.Minimized$ | async) === true"
       [CurrentUser]="currentUser"
       [EnvironmentID]="environmentId"
       [ReviewData]="RealtimeReview"
@@ -403,13 +403,13 @@
       (StartLiveRequested)="onReviewStartLive($event)"
       (ReviewClosed)="onReviewClosed()">
     </mj-realtime-session-overlay>
-    @if (VoiceSession.Minimized$ | async) {
-      <button type="button" class="voice-call-pill" (click)="VoiceSession.SetMinimized(false)"
+    @if (RealtimeSession.Minimized$ | async) {
+      <button type="button" class="voice-call-pill" (click)="RealtimeSession.SetMinimized(false)"
               title="Return to the live call" aria-label="Return to the live call">
         <span class="voice-call-pill__pulse" aria-hidden="true"></span>
         <i class="fa-solid fa-phone-volume" aria-hidden="true"></i>
         <span class="voice-call-pill__text">
-          <span class="voice-call-pill__name">On call · {{ VoiceSession.CurrentAgentName }}</span>
+          <span class="voice-call-pill__name">On call · {{ RealtimeSession.CurrentAgentName }}</span>
           <span class="voice-call-pill__hint">Tap to return</span>
         </span>
       </button>

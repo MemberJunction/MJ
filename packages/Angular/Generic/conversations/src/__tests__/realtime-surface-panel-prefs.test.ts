@@ -6,8 +6,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   ClampSurfacePanelWidth,
+  IsSurfacePanelDrag,
   ParseSurfacePanelPref,
   SerializeSurfacePanelPref,
+  SurfacePanelDragWidth,
+  SURFACE_PANEL_DRAG_CLICK_TOLERANCE,
   SURFACE_PANEL_MIN_WIDTH,
   SURFACE_PANEL_MAX_FRACTION,
   SURFACE_PANEL_PREF_KEY
@@ -38,6 +41,55 @@ describe('ClampSurfacePanelWidth', () => {
   it('returns the minimum for any non-finite candidate width (NaN, Infinity)', () => {
     expect(ClampSurfacePanelWidth(NaN, 2000)).toBe(SURFACE_PANEL_MIN_WIDTH);
     expect(ClampSurfacePanelWidth(Infinity, 2000)).toBe(SURFACE_PANEL_MIN_WIDTH);
+  });
+});
+
+describe('SurfacePanelDragWidth', () => {
+  it('grows the RIGHT-side panel when the pointer moves left', () => {
+    expect(SurfacePanelDragWidth(500, 1000, 900, 2000)).toBe(600);
+  });
+
+  it('shrinks the panel when the pointer moves right', () => {
+    expect(SurfacePanelDragWidth(500, 1000, 1100, 2000)).toBe(400);
+  });
+
+  it('returns the start width unchanged for a zero-delta gesture (bare click)', () => {
+    expect(SurfacePanelDragWidth(500, 1000, 1000, 2000)).toBe(500);
+  });
+
+  it('clamps the live width to the minimum', () => {
+    expect(SurfacePanelDragWidth(360, 1000, 1500, 2000)).toBe(SURFACE_PANEL_MIN_WIDTH);
+  });
+
+  it('clamps the live width to 70% of the overlay', () => {
+    expect(SurfacePanelDragWidth(500, 1000, 0, 2000)).toBe(2000 * SURFACE_PANEL_MAX_FRACTION);
+  });
+
+  it('enforces only the minimum when the overlay width is unknown', () => {
+    expect(SurfacePanelDragWidth(500, 1000, 0, 0)).toBe(1500);
+  });
+});
+
+describe('IsSurfacePanelDrag (click-vs-drag guard)', () => {
+  it('treats a zero-movement gesture as a CLICK (never adopt/persist)', () => {
+    expect(IsSurfacePanelDrag(1000, 1000)).toBe(false);
+  });
+
+  it('treats sub-tolerance jitter as a CLICK', () => {
+    expect(IsSurfacePanelDrag(1000, 1000 + SURFACE_PANEL_DRAG_CLICK_TOLERANCE - 1)).toBe(false);
+    expect(IsSurfacePanelDrag(1000, 1000 - (SURFACE_PANEL_DRAG_CLICK_TOLERANCE - 1))).toBe(false);
+  });
+
+  it('treats movement at or beyond the tolerance as a DRAG, in either direction', () => {
+    expect(IsSurfacePanelDrag(1000, 1000 + SURFACE_PANEL_DRAG_CLICK_TOLERANCE)).toBe(true);
+    expect(IsSurfacePanelDrag(1000, 1000 - SURFACE_PANEL_DRAG_CLICK_TOLERANCE)).toBe(true);
+    expect(IsSurfacePanelDrag(1000, 700)).toBe(true);
+  });
+
+  it('never reports a drag for degenerate (non-finite) coordinates', () => {
+    expect(IsSurfacePanelDrag(NaN, 1000)).toBe(false);
+    expect(IsSurfacePanelDrag(1000, NaN)).toBe(false);
+    expect(IsSurfacePanelDrag(Infinity, 0)).toBe(false);
   });
 });
 

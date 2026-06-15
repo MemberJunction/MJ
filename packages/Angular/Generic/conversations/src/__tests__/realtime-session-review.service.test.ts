@@ -6,11 +6,12 @@ import type {
   VoiceDelegationNarration,
   VoiceDelegationProgress,
   VoiceDelegationResult
-} from '../lib/services/voice-session.service';
+} from '../lib/services/realtime-session.service';
 import {
   BuildReviewDelegationCard,
   BuildReviewThreadItems,
   MAX_REVIEW_LEGS,
+  MergeChainChannelStates,
   RealtimeSessionReview,
   RealtimeSessionReviewLeg,
   RealtimeSessionReviewRun,
@@ -828,5 +829,45 @@ describe('RealtimeSessionState.LoadHistoricalItems', () => {
     expect(state.Cards).toEqual([]);
     expect(state.Narration).toBeNull();
     expect(state.ActiveCallId).toBeNull();
+  });
+});
+
+describe('MergeChainChannelStates (multi-leg board restore)', () => {
+  const wb = (json: string | null) => ({ ChannelName: 'Whiteboard', StateJson: json });
+
+  it('an earlier leg\'s SAVED board survives a final leg that never saved one', () => {
+    const merged = MergeChainChannelStates([
+      [wb('{"version":2,"pages":[]}')], // leg 1 drew
+      [wb(null)]                        // leg 2 (newest) never touched the board
+    ]);
+    expect(merged).toEqual([wb('{"version":2,"pages":[]}')]);
+  });
+
+  it('the NEWEST leg with a saved state wins per channel', () => {
+    const merged = MergeChainChannelStates([
+      [wb('{"old":true}')],
+      [wb('{"new":true}')],
+      [wb('')] // newest, empty — registers nothing
+    ]);
+    expect(merged).toEqual([wb('{"new":true}')]);
+  });
+
+  it('channel names dedupe case-insensitively and other channels merge independently', () => {
+    const merged = MergeChainChannelStates([
+      [{ ChannelName: 'whiteboard', StateJson: '{"a":1}' }, { ChannelName: 'Notes', StateJson: null }],
+      [{ ChannelName: 'Whiteboard', StateJson: null }, { ChannelName: 'Notes', StateJson: '{"n":1}' }]
+    ]);
+    expect(merged).toHaveLength(2);
+    expect(merged.find(s => s.ChannelName.toLowerCase() === 'whiteboard')?.StateJson).toBe('{"a":1}');
+    expect(merged.find(s => s.ChannelName === 'Notes')?.StateJson).toBe('{"n":1}');
+  });
+
+  it('channels no leg ever saved keep a null-state entry (existence still reviewable)', () => {
+    expect(MergeChainChannelStates([[wb(null)], [wb(null)]])).toEqual([wb(null)]);
+  });
+
+  it('tolerates empty chains and blank channel names', () => {
+    expect(MergeChainChannelStates([])).toEqual([]);
+    expect(MergeChainChannelStates([[{ ChannelName: '  ', StateJson: '{"x":1}' }]])).toEqual([]);
   });
 });

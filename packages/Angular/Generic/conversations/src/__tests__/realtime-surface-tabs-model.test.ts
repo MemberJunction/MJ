@@ -21,7 +21,7 @@ describe('RealtimeSurfaceTabsModel', () => {
   });
 
   describe('OpenArtifactTab', () => {
-    it('adds + focuses + flashes a new artifact tab and emits Changed$', () => {
+    it('adds + flashes a new artifact tab WITHOUT stealing focus (glow, don\'t grab) and emits Changed$', () => {
       const changed = vi.fn();
       model.Changed$.subscribe(changed);
 
@@ -35,23 +35,38 @@ describe('RealtimeSurfaceTabsModel', () => {
         Kind: 'artifact'
       });
       expect(tab.Data?.Artifact).toEqual(weather);
-      expect(model.ActiveKey).toBe('artifact:av-1');
+      expect(model.ActiveKey).toBe('activity'); // a finished artifact never steals the screen
       expect(model.FlashKey).toBe('artifact:av-1');
+      expect(model.IsUnseen('artifact:av-1')).toBe(true); // persistent glow until visited
       expect(changed).toHaveBeenCalledTimes(1);
     });
 
-    it('can add without focusing (focus=false) but still flashes', () => {
-      model.OpenArtifactTab(weather, false);
-      expect(model.ActiveKey).toBe('activity');
+    it('can add WITH focus (the user-asked path) — focused tabs are never marked unseen', () => {
+      model.OpenArtifactTab(weather, true);
+      expect(model.ActiveKey).toBe('artifact:av-1');
       expect(model.FlashKey).toBe('artifact:av-1');
+      expect(model.IsUnseen('artifact:av-1')).toBe(false);
     });
 
-    it('dedupes by artifact version: re-opening focuses the existing tab without re-flashing', () => {
+    it('history carryover (markUnseen=false) adds without glow or focus', () => {
+      model.OpenArtifactTab(weather, false, false);
+      expect(model.ActiveKey).toBe('activity');
+      expect(model.IsUnseen('artifact:av-1')).toBe(false);
+    });
+
+    it('visiting an unseen tab clears its glow', () => {
       model.OpenArtifactTab(weather);
+      expect(model.IsUnseen('artifact:av-1')).toBe(true);
+      model.Focus('artifact:av-1');
+      expect(model.IsUnseen('artifact:av-1')).toBe(false);
+    });
+
+    it('dedupes by artifact version: re-opening with focus focuses the existing tab without re-flashing', () => {
+      model.OpenArtifactTab(weather, true);
       model.ClearFlash();
       model.Focus('activity');
 
-      const tab = model.OpenArtifactTab(weather);
+      const tab = model.OpenArtifactTab(weather, true);
 
       expect(model.Tabs).toHaveLength(2);
       expect(tab.Key).toBe('artifact:av-1');
@@ -59,12 +74,12 @@ describe('RealtimeSurfaceTabsModel', () => {
       expect(model.FlashKey).toBeNull();
     });
 
-    it('keeps artifact tabs in arrival order before any channel tabs', () => {
+    it('orders the strip channels… | artifacts (arrival order)… | Activity pinned LAST', () => {
       model.RegisterChannelTab({ Key: 'whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' });
       model.OpenArtifactTab(weather);
       model.OpenArtifactTab(summary);
 
-      expect(model.Tabs.map(t => t.Key)).toEqual(['activity', 'artifact:av-1', 'artifact:av-2', 'whiteboard']);
+      expect(model.Tabs.map(t => t.Key)).toEqual(['whiteboard', 'artifact:av-1', 'artifact:av-2', 'activity']);
     });
 
     it('replaces the Tabs array immutably', () => {
@@ -75,11 +90,11 @@ describe('RealtimeSurfaceTabsModel', () => {
   });
 
   describe('RegisterChannelTab', () => {
-    it('adds a channel tab without stealing focus by default', () => {
+    it('adds a channel tab LEADING the strip (before Activity) without stealing focus by default', () => {
       model.RegisterChannelTab({ Key: 'whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' });
-      expect(model.Tabs.map(t => t.Key)).toEqual(['activity', 'whiteboard']);
-      expect(model.Tabs[1].Kind).toBe('channel');
-      expect(model.Tabs[1].Data?.Content).toBeUndefined();
+      expect(model.Tabs.map(t => t.Key)).toEqual(['whiteboard', 'activity']);
+      expect(model.Tabs[0].Kind).toBe('channel');
+      expect(model.Tabs[0].Data?.Content).toBeUndefined();
       expect(model.ActiveKey).toBe('activity');
     });
 
@@ -93,7 +108,7 @@ describe('RealtimeSurfaceTabsModel', () => {
       model.RegisterChannelTab({ Key: 'whiteboard', Title: 'Whiteboard · live', Icon: 'fa-solid fa-chalkboard' });
 
       expect(model.Tabs).toHaveLength(2);
-      expect(model.Tabs[1].Title).toBe('Whiteboard · live');
+      expect(model.Tabs[0].Title).toBe('Whiteboard · live');
     });
   });
 
@@ -162,7 +177,7 @@ describe('RealtimeSurfaceTabsModel', () => {
     });
 
     it('keeps the current focus when a NON-active tab is removed', () => {
-      model.OpenArtifactTab(weather); // focused
+      model.OpenArtifactTab(weather, true); // focused (user-asked path)
       model.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' });
 
       model.RemoveTab('Whiteboard');

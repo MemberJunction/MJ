@@ -1,4 +1,26 @@
 import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
+import { IRealtimeAudioMeter, REALTIME_AUDIO_BIN_COUNT } from '../audio/audioMeter';
+
+/**
+ * A point-in-time snapshot of the session's audible activity, sampled by the host
+ * (typically per animation frame) via {@link BaseRealtimeClient.GetAudioActivity} to drive
+ * audio-reactive call visuals — the orb that vibrates with the agent's voice and the
+ * true-spectrum EQ.
+ *
+ * CAPABILITY-SHAPED, like usage telemetry: every member is `null` when that direction has
+ * no meter. Hosts must degrade gracefully — levels-without-bins renders envelope breathing,
+ * full `null` falls back to turn-state-driven animation.
+ */
+export interface RealtimeAudioActivity {
+    /** RMS level (0..1) of the USER's microphone, or `null` when un-metered. */
+    InputLevel: number | null;
+    /** RMS level (0..1) of the AGENT's audio output, or `null` when un-metered. */
+    OutputLevel: number | null;
+    /** Mic frequency spectrum as {@link REALTIME_AUDIO_BIN_COUNT} normalized bins, or `null`. */
+    InputBins: number[] | null;
+    /** Agent-output frequency spectrum as {@link REALTIME_AUDIO_BIN_COUNT} normalized bins, or `null`. */
+    OutputBins: number[] | null;
+}
 
 /**
  * A transcript event emitted by a realtime client for either side of the conversation.
@@ -23,6 +45,15 @@ export interface RealtimeClientTranscript {
      * spoken-progress update triggered by {@link BaseRealtimeClient.RequestSpokenUpdate}.
      */
     Kind: 'normal' | 'narration';
+    /**
+     * MACHINE-READABLE correction marker: `true` when this FINAL transcript SUPERSEDES the
+     * session's immediately-preceding final transcript of the same role — e.g. ElevenLabs'
+     * post-barge-in `agent_response_correction`, which re-finalizes the assistant turn with
+     * the text that was ACTUALLY spoken before the interruption cut it off. Hosts that
+     * persist finals must UPDATE the previous turn in place instead of appending a
+     * duplicate. Absent/`false` on ordinary turns and on interim deltas.
+     */
+    ReplacesPrevious?: boolean;
 }
 
 /**
@@ -160,6 +191,14 @@ export interface RealtimeClientError {
  *    driver; its shape may change between the two driver halves without notice. Hosts and
  *    intermediaries treat it as an opaque blob — and so must any code outside the matching
  *    driver pair.
+ * 9. **Audio metering is a CAPABILITY, not an obligation — but wire what you own.** A
+ *    driver that owns (or can tap) an audio plane should attach
+ *    {@link BaseRealtimeClient.attachInputAudioMeter} / {@link attachOutputAudioMeter} so
+ *    {@link GetAudioActivity} reports real levels: the mic stream everywhere
+ *    (`RealtimeAudioMeter.ForStream`), the shared `RealtimePcmPlayback.CreateMeter()` on
+ *    client-owned-audio drivers, the remote WebRTC stream on peer-connection drivers.
+ *    Meters must be released on disconnect ({@link closeAudioMeters}). A driver with no
+ *    tappable plane simply attaches nothing — hosts fall back to turn-state animation.
  */
 export abstract class BaseRealtimeClient {
     // ── Registered handlers (single-handler style, like IRealtimeSession) ─────
@@ -169,6 +208,48 @@ export abstract class BaseRealtimeClient {
     private errorHandler?: (error: RealtimeClientError) => void;
     private interruptionHandler?: () => void;
     private usageHandler?: (usage: RealtimeClientUsage) => void;
+
+    // ── Audio-activity metering (capability surface — see driver obligation #9) ─
+    /** Meter over the USER's microphone, when the driver attached one. */
+    private inputAudioMeter: IRealtimeAudioMeter | null = null;
+    /** Meter over the AGENT's audio output, when the driver attached one. */
+    private outputAudioMeter: IRealtimeAudioMeter | null = null;
+
+    /**
+     * The session's current audible activity, or `null` when this driver attached no
+     * meters at all (hosts then keep their turn-state-driven visuals). Sampled by hosts
+     * per animation frame — implementations are cheap, allocation-light reads of an
+     * `AnalyserNode`; no per-call provider traffic.
+     */
+    public GetAudioActivity(): RealtimeAudioActivity | null {
+        if (!this.inputAudioMeter && !this.outputAudioMeter) {
+            return null;
+        }
+        return {
+            InputLevel: this.inputAudioMeter ? this.inputAudioMeter.Level() : null,
+            OutputLevel: this.outputAudioMeter ? this.outputAudioMeter.Level() : null,
+            InputBins: this.inputAudioMeter ? this.inputAudioMeter.Bins(REALTIME_AUDIO_BIN_COUNT) : null,
+            OutputBins: this.outputAudioMeter ? this.outputAudioMeter.Bins(REALTIME_AUDIO_BIN_COUNT) : null
+        };
+    }
+
+    /** Attaches (replacing + closing any previous) the USER-microphone meter. `null` detaches. */
+    protected attachInputAudioMeter(meter: IRealtimeAudioMeter | null): void {
+        this.inputAudioMeter?.Close();
+        this.inputAudioMeter = meter;
+    }
+
+    /** Attaches (replacing + closing any previous) the AGENT-output meter. `null` detaches. */
+    protected attachOutputAudioMeter(meter: IRealtimeAudioMeter | null): void {
+        this.outputAudioMeter?.Close();
+        this.outputAudioMeter = meter;
+    }
+
+    /** Releases both meters — every driver calls this from its disconnect/teardown path. */
+    protected closeAudioMeters(): void {
+        this.attachInputAudioMeter(null);
+        this.attachOutputAudioMeter(null);
+    }
 
     /**
      * Opens the provider connection using the server-minted ephemeral credential and applies

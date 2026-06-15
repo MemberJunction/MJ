@@ -5,7 +5,7 @@ import { RealtimeToolDefinition } from '@memberjunction/ai';
  * Host services handed to a {@link BaseRealtimeChannelClient} at {@link BaseRealtimeChannelClient.Initialize}.
  *
  * The context is the plugin's ONLY line back to the live session — channels never talk to
- * `VoiceSessionService` (or any host component) directly, which is what keeps them drop-in
+ * `RealtimeSessionService` (or any host component) directly, which is what keeps them drop-in
  * plugins. Every member is host-implemented:
  *
  *  - the SESSION SERVICE supplies {@link SendContextNote} (perception feed into the live
@@ -42,6 +42,16 @@ export interface RealtimeChannelContext {
    * {@link BaseRealtimeChannelClient.RequestFocusExit}.
    */
   SetFocusMode(on: boolean): void;
+
+  /**
+   * Asks the live model to SPEAK a response to the supplied instructions RIGHT NOW —
+   * the channel's "react to this" path, e.g. a widget submission the user expects an
+   * audible reaction to ({@link SendContextNote} deliberately never triggers speech).
+   * Rides the realtime client's spoken-update channel, so on some providers the spoken
+   * reply is narration-kind (ephemeral, not persisted as a caption). OPTIONAL member:
+   * older host contexts may not supply it — plugins must call it null-safely.
+   */
+  RequestSpokenResponse?(instructions: string): void;
 
   /**
    * Persists a snapshot of the channel's state as a first-class versioned artifact

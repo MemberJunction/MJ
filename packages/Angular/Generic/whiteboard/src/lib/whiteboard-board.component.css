@@ -187,6 +187,16 @@
   pointer-events: none;
 }
 
+/* marquee (rubber-band) multi-selection rectangle — select tool drag on empty canvas */
+.wb-marquee {
+  position: absolute;
+  border: 1px dashed var(--mj-brand-primary);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  pointer-events: none;
+  z-index: 40;
+}
+
 /* ---------- text labels ---------- */
 .tlabel {
   font-size: 12px;

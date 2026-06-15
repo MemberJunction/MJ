@@ -70,8 +70,7 @@ import { GlobalTasksPanelComponent } from './components/global-tasks/global-task
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
 import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
 import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.component';
-import { VoiceOverlayComponent } from './components/voice/voice-overlay.component';
-import { VoiceAgentPickerComponent } from './components/voice/voice-agent-picker.component';
+import { RealtimeAgentPickerComponent } from './components/realtime/realtime-agent-picker.component';
 import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
 import { RealtimeWhiteboardHostComponent } from '@memberjunction/ng-whiteboard';
 import { LoadRealtimeWhiteboardChannel } from './components/realtime/whiteboard/whiteboard-channel';
@@ -92,7 +91,7 @@ import { MJChatMessageBubbleDefaultComponent } from './components/slots/mj-chat-
 // Tree-shaking prevention for interactive-channel CLIENT PLUGINS: they are resolved
 // dynamically through the MJ ClassFactory (keyed by the `MJ: AI Agent Channels` registry's
 // ClientPluginClass), so these static calls are what keep their @RegisterClass side effects
-// from being eliminated by the bundler. They live here (not in VoiceSessionService) because
+// from being eliminated by the bundler. They live here (not in RealtimeSessionService) because
 // channel plugins carry Angular surface components — the service stays component-free.
 LoadRealtimeWhiteboardChannel();
 // Whiteboard ARTIFACT VIEWER plugin — resolved by the artifact plugin host via the
@@ -185,8 +184,7 @@ const COMPONENTS = [
     MJChatDemonstrationSurfaceDefaultComponent,
     MJChatMessageBubbleDefaultComponent,
     // Realtime / voice (PR #2787)
-    VoiceOverlayComponent,
-    VoiceAgentPickerComponent,
+    RealtimeAgentPickerComponent,
     RealtimeSessionOverlayComponent,
     RealtimeWhiteboardHostComponent
   ],
@@ -204,8 +202,7 @@ const COMPONENTS = [
     MJChatDemonstrationSurfaceDefaultComponent,
     MJChatMessageBubbleDefaultComponent,
     // Realtime / voice (PR #2787)
-    VoiceOverlayComponent,
-    VoiceAgentPickerComponent,
+    RealtimeAgentPickerComponent,
     RealtimeSessionOverlayComponent,
     RealtimeWhiteboardHostComponent
   ]

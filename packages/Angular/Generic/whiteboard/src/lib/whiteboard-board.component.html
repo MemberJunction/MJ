@@ -73,6 +73,13 @@
            [style.width.px]="preview.W" [style.height.px]="preview.H"></div>
     }
 
+    <!-- marquee (rubber-band) multi-selection rectangle -->
+    @if (MarqueeRect; as mq) {
+      <div class="wb-marquee"
+           [style.left.px]="mq.X" [style.top.px]="mq.Y"
+           [style.width.px]="mq.W" [style.height.px]="mq.H"></div>
+    }
+
     <!-- board items -->
     @for (item of BoxItems; track item.ID) {
       @switch (item.Kind) {
@@ -253,10 +260,13 @@
             <div class="html-card__body">
               @if (IsNearViewport(item)) {
                 <!-- SANDBOXED: allow-scripts ONLY (no allow-same-origin) — opaque origin,
-                     no access to the app DOM, session, cookies or storage. See HtmlSrcdoc(). -->
+                     no access to the app DOM, session, cookies or storage. The srcdoc is
+                     built by the view-scoped wbWidgetSrcdoc pipe: rebuilt per MOUNT (page
+                     switches / lazy toggle / board re-creation always render fresh) and
+                     identity-stable while mounted (no reload churn). See whiteboard-srcdoc.pipe.ts. -->
                 <iframe class="html-card__frame"
                         sandbox="allow-scripts"
-                        [srcdoc]="HtmlSrcdoc(item)"
+                        [srcdoc]="item.Html | wbWidgetSrcdoc"
                         [attr.data-item-id]="item.ID"
                         [attr.title]="HtmlTitle(item)"></iframe>
               } @else {
@@ -386,6 +396,10 @@
       }
     </div>
   }
+
+  <!-- page strip (OneNote-style tabs; switching works in ReadOnly, mutations don't) -->
+  <mj-realtime-whiteboard-pages [State]="State" [ReadOnly]="ReadOnly"
+                                (ChipContextMenu)="OnPageChipContextMenu($event)"/>
 
   <!-- minimap -->
   @if (MinimapOpen) {

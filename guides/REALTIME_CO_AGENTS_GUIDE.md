@@ -26,6 +26,7 @@ This is the developer guide for the whole stack: the model primitive, the `Realt
 8. [Observability & Administration](#8-observability--administration)
 9. [Security Model](#9-security-model)
 10. [Known Gaps & Deferred Work](#10-known-gaps--deferred-work)
+11. [Audio-Reactive Call Visuals](#11-audio-reactive-call-visuals-audio-activity-metering)
 
 ---
 
@@ -62,24 +63,27 @@ Every candidate from steps 1–3 is validated by `findValidCoAgent()`: it must e
 
 This chain is how deployments give individual agents a distinct voice persona (a different co-agent with a different prompt/voice) without touching code or the global seed.
 
+Two further metadata layers refine *which target a co-agent fronts* and *how it sounds/behaves* — **pairing rows** and the **effective configuration** merge. Both are opt-in with zero-config defaults identical to the pre-feature behavior; see [§4 — Co-agent pairing & effective configuration](#co-agent-pairing--effective-configuration).
+
 ---
 
 ## 2. The Triple-Registry Plugin Architecture
 
-Realtime is pluggable along **three independent axes**, all resolved through `MJGlobal.ClassFactory` + metadata. Nothing in the hosts (the session runner, the resolver, the Angular overlay) names a concrete provider or channel.
+Realtime is pluggable along **three independent axes**, all resolved through `MJGlobal.ClassFactory` + metadata. Nothing in the hosts (the session runner, the resolver, the Angular overlay) names a concrete provider or channel. The third axis — interactive channels — has **two halves**, one base class per side of the wire, resolved from the same registry row:
 
 | Registry | Base class | ClassFactory key comes from | Shipped implementations |
 |---|---|---|---|
 | **Server model drivers** | `BaseRealtimeModel` (`packages/AI/Core/src/generic/baseRealtime.ts`) | `MJ: AI Model Vendors.DriverClass` on a model of `AIModelType = 'Realtime'` | `OpenAIRealtime` (`packages/AI/Providers/OpenAI/src/models/openAIRealtime.ts`), `GeminiRealtime` (`packages/AI/Providers/Gemini/src/geminiRealtime.ts`), `ElevenLabsRealtime` (`packages/AI/Providers/ElevenLabs/src/elevenLabsRealtime.ts`), `AssemblyAIRealtime` (`packages/AI/Providers/AssemblyAI/src/assemblyAIRealtime.ts`) |
 | **Client model drivers** | `BaseRealtimeClient` (`packages/AI/RealtimeClient/src/generic/baseRealtimeClient.ts`) | `ClientRealtimeSessionConfig.Provider` — the string the server driver stamps when it mints (`'openai'`, `'gemini'`, `'elevenlabs'`, `'assemblyai'`) | `OpenAIRealtimeClient`, `GeminiRealtimeClient`, `ElevenLabsRealtimeClient`, `AssemblyAIRealtimeClient` (same package) |
-| **Client channel plugins** | `BaseRealtimeChannelClient` (`packages/Angular/Generic/conversations/src/lib/components/realtime/channels/base-realtime-channel-client.ts`) | `MJ: AI Agent Channels.ClientPluginClass` | `RealtimeWhiteboardChannel` (key `'RealtimeWhiteboardChannel'`) — a thin plugin over `@memberjunction/ng-whiteboard` |
+| **Channel plugins — client half** | `BaseRealtimeChannelClient` (`packages/Angular/Generic/conversations/src/lib/components/realtime/channels/base-realtime-channel-client.ts`) | `MJ: AI Agent Channels.ClientPluginClass` | `RealtimeWhiteboardChannel` (key `'RealtimeWhiteboardChannel'`) — a thin plugin over `@memberjunction/ng-whiteboard` |
+| **Channel plugins — server half** | `BaseRealtimeChannelServer` (`packages/AI/Core/src/generic/baseRealtimeChannelServer.ts`), resolved per session by `RealtimeChannelServerHost` (`packages/AI/Agents/src/realtime/realtime-channel-server-host.ts`) | `MJ: AI Agent Channels.ServerPluginClass` | `WhiteboardChannelServer` (key `'WhiteboardChannelServer'`, in `@memberjunction/ai-agents`) — validates/canonicalizes the board's persisted state of record |
 
 Server model drivers are resolved by `BaseAgent.resolveRealtimeModel()` (server-bridged) and `RealtimeClientSessionService.resolveVendorAndInstantiate()` (client-direct): highest-`PowerRank` active `Realtime` model → highest-`Priority` active vendor whose `DriverClass` has a resolvable API key (`GetAIAPIKey`, e.g. `AI_VENDOR_API_KEY__OpenAIRealtime`) → `ClassFactory.CreateInstance<BaseRealtimeModel>(BaseRealtimeModel, driverClass, apiKey)`. An explicit `preferredModelId` bypasses ranking and **fails with a specific reason** rather than silently falling back (`resolvePreferredRealtimeModel`).
 
 Client model drivers are resolved in `VoiceSessionService.createRealtimeClient()` by the server-reported `Provider` key. Channel plugins are resolved in `VoiceSessionService.loadActiveChannels()` from the active `MJ: AI Agent Channels` rows.
 
 > [!NOTE]
-> The channel registry also carries a `ServerPluginClass` column (seeded `'WhiteboardChannelServer'` for the Whiteboard) and a `TransportType` (`PubSub` / `WebRTC` / `WebSocket`). Server-side channel plugin *resolution* is not yet consumed by any code path — the server currently handles channel persistence generically (`SaveSessionChannelState` / `SaveSessionChannelArtifact`). The column is the registered seam for future server-side channel behavior.
+> The channel registry is the one registry with **two halves**: each row carries both a `ClientPluginClass` (resolved in the browser by `VoiceSessionService`) and a `ServerPluginClass` (resolved server-side by `RealtimeChannelServerHost` when `SessionManager.CreateSession` mints the session — one fresh instance per session, exactly mirroring the client half's resolution: ACTIVE rows only, ClassFactory registration checked first, unregistered keys skipped with a log, never fatal). The server half's lifecycle hooks are the durable session events — session started, channel state saved (pre-persistence, with normalization power), session closed (any provenance) — see [§5](#5-channels--the-heart-of-the-system) for the full contract. The registry also carries a `TransportType` (`PubSub` / `WebRTC` / `WebSocket`) for the future media-plane work.
 
 ### The four-provider capability matrix
 
@@ -92,8 +96,8 @@ The base contracts are deliberately tolerant of provider asymmetry: several memb
 | What the token locks | Prompt + tools + transcription (tamper-proof) | Model + generation params only — prompt/tools ride the driver-applied `SessionConfig` | Agent identity; the prompt rides the `conversation_initiation_client_data` override (enabled on the managed agent); tools are bound to the server-side agent config | Nothing beyond auth — the whole session object rides the driver-applied first `session.update` frame |
 | Transcripts | Interim **deltas** + finals, both roles | Interim **deltas** + finals, both roles | **Finals only**, both roles; `agent_response_correction` re-finalizes a barged-in turn with what was actually spoken | User turns: deltas + final; agent turns: **final only** (post-barge-in final carries the truncated text — no correction event) |
 | `SendContextNote` | Emulated (conversation-item injection without a response trigger) | Emulated (`turnComplete: false` client content) | **Native** — `contextual_update`, the platform's purpose-built non-interrupting channel; sent even mid-response | Emulated via the **mutable `system_prompt`** — notes accumulate under a "Background updates" heading and the full prompt is re-sent via `session.update` |
-| `RequestSpokenUpdate` | Native-ish (`response.create` with per-response instructions) | Emulated (instruction turn), queued behind in-flight responses | **Emulated** as a `user_message` turn (queued; fidelity caveat — the model may reference "you asked me for an update") | **Native** — `reply.create` carries per-response instructions (queued behind in-flight replies) |
-| `SendText` (typed input) | Native user-item injection | Native client-content turn | Native `user_message` (takes the floor server-side) | **Emulated** via `reply.create` instructions — the protocol has no typed-user-input event; best-effort fidelity |
+| `RequestSpokenUpdate` | Native-ish (`response.create` with per-response instructions) | Emulated (instruction turn via **realtime text** — `sendRealtimeInput({ text })`; mid-call `sendClientContent` is history-seeding-only on native-audio models and never triggers generation), queued behind in-flight responses | **Emulated** as a `user_message` turn (queued; fidelity caveat — the model may reference "you asked me for an update") | **Native** — `reply.create` carries per-response instructions (queued behind in-flight replies) |
+| `SendText` (typed input) | Native user-item injection | Realtime-text turn (`sendRealtimeInput({ text })` — same native-audio caveat as `RequestSpokenUpdate`) | Native `user_message` (takes the floor server-side) | **Emulated** via `reply.create` instructions — the protocol has no typed-user-input event; best-effort fidelity |
 | Cancel (`CancelActiveResponse`) | Wire-level `response.cancel` + local flush | Local playout flush (client owns the audio plane) | No cancel frame — local playout flush; residual server generation is simply never played | No cancel frame — local flush **plus suppression** of residual `reply.audio` frames until the next reply boundary |
 | Mid-session `RegisterTools` | Idempotent re-declare via `session.update` | Connect-bound (the `StartSession` params path is the only effective one) | **Cannot** re-declare on an open conversation — identical set no-ops, a different set warns and is ignored (next session picks it up via the ensure flow) | **Native** re-declare — `tools` is a mutable `session.update` field |
 | Usage events (`OnUsage`) | Per-response deltas from `response.done.usage` | Per-turn deltas from `usageMetadata` | **None** — the Agents socket reports no token usage (platform-side accounting) | **None** — flat per-session-hour billing; the terminal `session.ended` frame carries duration seconds only |
@@ -144,8 +148,9 @@ Covered in depth in [§5](#5-channels--the-heart-of-the-system); the short versi
 
 1. Subclass `BaseRealtimeChannelClient<YourSurfaceComponent>`, implementing the channel contract (tools + perception + surface + state of record).
 2. `@RegisterClass(BaseRealtimeChannelClient, '<YourClientPluginClass>')` + a `Load...()` no-op called from a static code path (the Whiteboard's is called from `conversations.module.ts`).
-3. Seed an `MJ: AI Agent Channels` row (`Name`, `ClientPluginClass`, `ServerPluginClass`, `TransportType`, `IsActive: true`) in `metadata/ai-agent-channels/` and push with `mj sync`.
-4. Done — `VoiceSessionService.startChannels()` resolves every active registry row at session start, declares the plugin's tools to the model, registers its prefix-routed local executor, and the overlay registers a surface tab per plugin. The shell carries **zero** channel-specific wiring.
+3. *(Optional but recommended)* Subclass `BaseRealtimeChannelServer` for the **server half** — at minimum a state-of-record guard like `WhiteboardChannelServer`'s (validate/normalize each landed save in `OnChannelStateSave`). `@RegisterClass(BaseRealtimeChannelServer, '<YourServerPluginClass>')` + a `Load...Server()` no-op called from a static server path (the Whiteboard's is called from MJServer's `agentSessions/index.ts`). A row whose server key is unregistered simply runs with no server plugin — it is never an error.
+4. Seed an `MJ: AI Agent Channels` row (`Name`, `ClientPluginClass`, `ServerPluginClass`, `TransportType`, `IsActive: true`) in `metadata/ai-agent-channels/` and push with `mj sync`.
+5. Done — `VoiceSessionService.startChannels()` resolves every active registry row at session start in the browser, and `RealtimeChannelServerHost` resolves the same rows' server halves when the session mints. The model gets the plugin's tools, the overlay gets a surface tab, the server gets the lifecycle hooks. The shells carry **zero** channel-specific wiring.
 
 ---
 
@@ -236,6 +241,66 @@ Continuity is real, not cosmetic — a `lastSessionId` on `StartRealtimeClientSe
 
 Both are **strictly best-effort and ownership-checked**: a prior session owned by another user, an oversized state (> 2,000,000 chars per state and in total), or a malformed payload is logged and skipped — a session start never fails because of restore.
 
+### Co-agent pairing & effective configuration
+
+Migration `V202606121100__v5.41.x__Realtime_CoAgent_Pairing_And_TypeConfig.sql` adds two opt-in metadata layers on top of the co-agent resolution chain.
+
+#### Pairing semantics — universal vs constrained
+
+**`AIAgentPairedAgent`** (`MJ: AI Agent Paired Agents`) is an OPT-IN junction between a Realtime-type co-agent and the targets it can front (`CoAgentID`, `TargetAgentID`, `IsDefault`, `Sequence`). **Pairings are never mandated:**
+
+| Co-agent state | Runtime `targetAgentId` supplied | Behavior |
+|---|---|---|
+| **Zero pairing rows (universal)** | yes | Today's behavior, untouched — fronts the supplied agent. Zero-config deployments need zero metadata. |
+| Zero pairing rows | no | Clear error — a universal co-agent has no default target to fall back to. |
+| **Has pairing rows (constrained)** | yes, in the list | Accepted (canonical row casing wins). |
+| Has pairing rows | yes, NOT in the list | Clear structured error — the rows RESTRICT the co-agent to its prebuilt target list. |
+| Has pairing rows | no | The `IsDefault` row stands in; no default row → clear error asking for an explicit target. |
+
+Resolution lives in `RealtimeClientSessionResolver.resolveConstrainedTargetAgentID()` (rows loaded by `Sequence`). Pairing is a **targeting** constraint, not a security boundary — `CanRun` on the *resolved* target remains the security gate, applied immediately after; a failed pairing query therefore degrades to the universal behavior (logged) rather than breaking calls. Server-side write invariants (`MJAIAgentPairedAgentEntityServer.ValidateAsync` in `MJCoreEntitiesServer`): the co-agent must be an **Active** agent of the **Realtime** type, at most **one `IsDefault = 1` row per co-agent**, and `CoAgentID ≠ TargetAgentID` (defense in depth over the CHECK constraint).
+
+#### The effective-configuration merge
+
+Realtime behavior is configured in three JSON layers, **deep-merged per key (later wins; plain objects merge, arrays/primitives replace)**:
+
+```
+AIAgentType.DefaultConfiguration  ←  AIAgent.TypeConfiguration  ←  runtime overrides (configOverridesJson)
+(type-level defaults)                 (per-agent layer)              (per-session, authorization-gated)
+```
+
+The pure implementation is `packages/AI/Agents/src/realtime/realtime-coagent-config.ts` (`DeepMergeConfigs`, `ParseRealtimeTypeConfiguration` — tolerant, malformed layers contribute nothing — and `ResolveEffectiveRealtimeConfig`, which normalizes into the typed `RealtimeCoAgentConfig`). The canonical shape (the Realtime type's `ConfigSchema` is seeded to it):
+
+```jsonc
+{ "realtime": {
+    "modelPreference": "<AI Model name or ID>",
+    "voice": { "default": { "tone": "…", "speakingStyle": "…" },
+               "providers": { "openai": { "voice": "alloy" }, "elevenlabs": { "voiceId": "…" },
+                              "gemini": { "voice": "…" }, "assemblyai": { "voice": "…" } } },
+    "allowUserModelOverride": true,
+    "narration": { "paceMs": 8000 } } }
+```
+
+**How each knob is applied at mint** (`RealtimeClientSessionService.PrepareClientSession`, mirrored on the server-bridged path in `BaseAgent`):
+
+- **`modelPreference`** (Name or ID) participates in realtime-model selection *between* the explicit runtime choice and the default: explicit `preferredModelId` (strict, fails loud, authorization-gated when deviating) → configured preference (**tolerant** — an unsatisfiable metadata preference logs and falls through, mirroring the chain's metadata steps) → highest-PowerRank default.
+- **`voice.default` (tone / speakingStyle)** is appended to the server-built companion system prompt as a short **"Voice & manner"** section, right after the co-agent's own prompt.
+- **`voice.providers.<provider>`** is matched to the resolved vendor's `DriverClass` by normalized prefix (`openai` ↔ `OpenAIRealtime`, …) and merged into the session's open **`Config` bag** — the same opaque per-driver pact every other config entry rides (a caller-supplied runtime `Config` wins per key). Server-bridged reach today: **OpenAI** spreads the bag into `session.update`; **Gemini** merges it last; **AssemblyAI** maps `voice` → `output.voice`. **ElevenLabs** provisions voice on its managed agent and does not consume a per-session bag (per-driver TODO). **Client-direct reach**: `OpenAIRealtime.CreateClientSession` does not yet fold `params.Config` into the minted session (per-driver TODO) — the resolver instead surfaces the full resolved config as **`EffectiveConfigJson`** on `StartRealtimeClientSessionResult` so client drivers can apply provider voice settings browser-side.
+- **`narration.paceMs`** drives spoken-progress spacing: server-bridged, it feeds `RealtimeSessionRunnerDeps.NarrationPaceMs` (replacing the built-in 8 s spacing floor); client-direct, pacing is enforced client-side, so the value is surfaced as **`NarrationPaceMs`** on the start result.
+
+**Runtime override precedence & authorization** (`configOverridesJson` on `StartRealtimeClientSession`):
+
+| Request | Gate | Outcome |
+|---|---|---|
+| Plain start (no overrides, no explicit model) | `CanRun` on the target only | Never touches the new gate. |
+| Target selection (within a pairing list / universal) and `coAgentId` choice | `CanRun` only | Normal user flow — deliberately ungated. |
+| `configOverridesJson` | **`Realtime: Advanced Session Controls`** authorization (hierarchy-aware, fail-closed when the seed is absent) | Unauthorized → structured rejection (never a silent ignore). Must be a JSON object. |
+| `preferredModelId` **equal** to the metadata `modelPreference` | none (not a deviation) | Allowed for everyone. |
+| `preferredModelId` **deviating** from metadata | the authorization **AND** effective `allowUserModelOverride ≠ false` (the policy blocks even authorized callers) | Denial is a structured rejection naming the reason. |
+
+Gate implementation: `RealtimeClientSessionResolver.assertRuntimeOverridesAuthorized()` → the pure `EvaluateRuntimeOverrideAuthorization()` decision (unit-tested matrix) + `AuthorizationEvaluator.UserCanExecuteWithAncestors` over the request provider's cached Authorizations. The authorization is seeded in `metadata/authorizations/.realtime.json`.
+
+**Write-side schema enforcement**: when an agent type publishes `ConfigSchema`, `MJAIAgentEntityServer.ValidateAsync` (in `MJCoreEntitiesServer`) validates `TypeConfiguration` against it with a dependency-free JSON-Schema-subset validator (`json-schema-lite.ts`: type / required / properties / enum / items / additionalProperties). Non-object configuration always fails; a malformed `ConfigSchema` only WARNS (a metadata bug on the type row must not brick agent saves).
+
 ---
 
 ## 5. Channels — The Heart of the System
@@ -249,11 +314,11 @@ Every interactive channel implements two directions:
 
 ### The definition registry
 
-`MJ: AI Agent Channels` rows define what channels exist (see [§4 schema](#4-session-lifecycle)). At session start `VoiceSessionService` reads the **active** rows and instantiates one plugin per row via the ClassFactory (`ClientPluginClass` key) — one fresh instance per session, never a singleton. Registry failures degrade to "no channels"; the voice session always proceeds.
+`MJ: AI Agent Channels` rows define what channels exist (see [§4 schema](#4-session-lifecycle)). At session start `VoiceSessionService` reads the **active** rows and instantiates one plugin per row via the ClassFactory (`ClientPluginClass` key) — one fresh instance per session, never a singleton. Registry failures degrade to "no channels"; the voice session always proceeds. The **server half** mirrors this exactly: when `SessionManager.CreateSession` mints the durable session, `RealtimeChannelServerHost` reads the same active rows and resolves each `ServerPluginClass` into one fresh `BaseRealtimeChannelServer` instance per session (unregistered keys skip with a log, never fatal).
 
 ### Per-session state of record
 
-Each attached channel gets an `AIAgentSessionChannel` row. Its `Config` column is the channel's **state of record** — written by the `SaveSessionChannelState` mutation through a client-side debounce (3 s, latest-state-wins, flushed at teardown with the session id captured while live so the final save lands even on the just-closed session). The model's perception feed is *derived* from this state, never the source of truth. A `Closed` session still accepts state saves (the final flush legitimately lands after `CloseAgentSession`).
+Each attached channel gets an `AIAgentSessionChannel` row. Its `Config` column is the channel's **state of record** — written by the `SaveSessionChannelState` mutation through a client-side debounce (3 s, latest-state-wins, flushed at teardown with the session id captured while live so the final save lands even on the just-closed session). The model's perception feed is *derived* from this state, never the source of truth. A `Closed` session still accepts state saves (the final flush legitimately lands after `CloseAgentSession`). Before persistence, each landed save routes through the channel's **server plugin** (when one resolved — see below), which may validate/normalize the payload; a plugin can transform a save but can never lose or block one.
 
 ### The `BaseRealtimeChannelClient` contract
 
@@ -271,6 +336,24 @@ A concrete plugin contributes everything its channel needs, so the host shell ca
 | `Initialize(ctx)` / `Dispose()` | Lifecycle bracket; `Context` is the plugin's **only** line to the session |
 
 The host context (`RealtimeChannelContext`) supplies: `SendContextNote` (the perception feed), `RequestSave` (debounced state-of-record persistence), `SaveAsArtifact` (snapshot to a first-class versioned `MJ: Artifacts` record), `SetFocusMode` (the focus-layout request), and `AgentName`.
+
+### The server half — `BaseRealtimeChannelServer`
+
+The same registry row's `ServerPluginClass` resolves a **server-side** plugin (`BaseRealtimeChannelServer` in `@memberjunction/ai`, beside `BaseRealtimeModel`), hosted per session by the `RealtimeChannelServerHost` singleton in `@memberjunction/ai-agents`. Because today's shipped topology is client-direct (channel tools execute in the browser), the server half's contract is the **durable lifecycle**, not socket ownership — a pragmatic adaptation of the plan's `IAgentChannelServer` (see the base class doc header for the deviation notes; socket/transport members are deferred with the unified-transport track):
+
+| Member | Role |
+|---|---|
+| `ChannelName` | Must match the registry row's `Name` (the host routes by the row name and warns on a mismatch) |
+| `Initialize(ctx)` / `Dispose()` | Lifecycle bracket; `ctx` is plain session facts (`AgentSessionID`, `AgentID`, `UserID`, `ConversationID`) |
+| `OnSessionStarted()` | Fired right after the durable session row persists (`SessionManager.CreateSession`) |
+| `OnChannelStateSave(stateJson)` | Fired when the client's debounced state save lands, **pre-persistence**; return a replacement string to normalize the persisted state of record, or `null` to keep the original. Throw/garbage → original persisted — a plugin can never lose or block a save |
+| `OnSessionClosed(closeReason)` | Fired from **every** close provenance — explicit hang-up, janitor sweeps, shutdown drain, error teardown all funnel through `SessionManager.CloseSession` |
+
+Hard rules baked into the host: **one fresh instance per session** (never a singleton); every hook is wrapped in try/catch (a throwing plugin is logged and the session/persistence proceeds untouched); resolution is skip-with-log for unregistered keys; and disposal is **deferred briefly** after close (15 s linger) so the client's legitimate post-close final state flush still routes through `OnChannelStateSave`.
+
+The reference implementation is `WhiteboardChannelServer` (`packages/AI/Agents/src/realtime/whiteboard-channel-server.ts`, key `'WhiteboardChannelServer'` — the value the Whiteboard row's `ServerPluginClass` has carried since the seed): it guards the persisted state of record by validating that each landed save parses as a JSON object (flagging corrupt payloads loudly *now* instead of at the next resume's `RestoreState`) and canonicalizing valid payloads to compact JSON. Register a new server half with `@RegisterClass(BaseRealtimeChannelServer, '<key>')` plus a `Load...Server()` no-op called from a static server path (the Whiteboard's is invoked from MJServer's `agentSessions/index.ts`).
+
+**Scope notes / deferred:** server-executed **tool contribution** from channel servers (feeding `RealtimeSessionRunner.ExtraTools`) is a documented TODO on the base class — no current code path gives the server-bridged runner per-session channel instances (server-bridged runs don't mint sessions through `SessionManager`, and client-direct sessions never construct a server-side runner). Socket/media members (`OnClientMessage`, `SendToClient`) remain deferred with the unified-transport track.
 
 ### The implicit voice/text channel
 
@@ -426,6 +509,7 @@ The plan's complementary timeline treatment — the conversation rendering a com
 Authorization is overwhelmingly reuse of existing primitives, plus a small number of session-specific gates:
 
 - **`CanRun` on the *target* agent gates session creation** — `AIAgentPermissionHelper.HasPermission(targetAgentId, user, 'run')` in both `SessionManager.CreateSession` and `RealtimeClientSessionResolver.assertCanRunTarget`. The co-agent is internal orchestration; the meaningful permission is on the agent doing real work. Denial throws before any row is written.
+- **Runtime overrides are authorization-gated** — `configOverridesJson` and a *deviating* explicit `preferredModelId` require the seeded **`Realtime: Advanced Session Controls`** authorization (hierarchy-aware via `AuthorizationEvaluator`; fail-closed when the seed is absent); a deviating model is additionally subject to the effective `allowUserModelOverride` policy. Denial is a structured rejection, never a silent ignore — unauthorized users still get a fully working session on the co-agent's configured defaults. Pairing rows restrict *which* targets a constrained co-agent fronts, but they are a targeting constraint layered on top of `CanRun`, never a replacement for it (see [§4](#co-agent-pairing--effective-configuration)).
 - **Session ownership on every inbound operation** — every relay (`ExecuteRealtimeSessionTool`, `RelayRealtimeTranscript`, `SaveSessionChannelState`, `SaveSessionChannelArtifact`, `CancelRealtimeSessionTool`, `RelayRealtimeUsage`) loads the session and enforces `UUIDsEqual(session.UserID, contextUser.ID)`; tool/transcript relays additionally reject `Closed` sessions, while state/artifact saves, the cancel channel, and usage relay accept them (the final flush legitimately lands post-close, and a cancel can legitimately race teardown). Channel-state **restore** and **prior-transcript hydration** are ownership-checked too — another user's prior session never leaks state *or* words.
 - **The target agent cannot be swapped mid-session** — it is stored server-side in the session's config at start and read back on every relay; the browser never re-supplies it.
 - **Tools execute under the session's `contextUser`** with the request-scoped provider — a realtime model calling a tool can do exactly what the user could do, no more. The provider owning the conversation is never an authorization bypass.
@@ -444,17 +528,72 @@ Honest ledger of what is *not* done on this branch, so nobody reads aspiration i
 | Item | Status |
 |---|---|
 | Server-bridged client media plane (browser audio ↔ server socket, the plan's P5 / WebRTC transport) | **Not built** — client-direct is the shipped audio path; server-bridged runs are fully wired up to the provider socket but have no client media transport |
-| Transcript `Replaces` marker | **Open contract gap** — ElevenLabs' post-barge-in `agent_response_correction` re-finalizes an assistant turn, but `RealtimeTranscript`/`RealtimeClientTranscript` carry no machine-readable link from the correction to the final it supersedes; hosts persisting finals get both. Convention for now: a final assistant transcript arriving immediately after an interruption is the authoritative replacement |
-| Provider `session.resume` windows | **Unused** — AssemblyAI holds a 30-second resume window (`session.resume` against the `session_id` from `session.ready`) and Gemini's token can carry `sessionResumption`; MJ's resume model is its own chain (`LastSessionID` + channel-state restore + transcript hydration) and never reattaches a provider session |
+| Transcript `Replaces` marker | **Shipped** — `RealtimeClientTranscript.ReplacesPrevious` is the machine-readable correction marker: the ElevenLabs driver stamps it on `agent_response_correction`, the overlay replaces the caption in place, and `RelayRealtimeTranscript(replacesPrevious)` UPDATES the persisted turn instead of appending (insert fallback when no prior turn exists). The server-bridged `RealtimeTranscript` type can adopt the same field when that path needs it |
+| Provider `session.resume` windows | **AssemblyAI shipped** — the client driver captures `session_id` from `session.ready` and, on an unexpected socket drop, makes ONE reattach inside the provider's 30-second window (`session.resume` first frame; `'connecting'` shown while reattaching; mic worklet + playout engine survive; a failed/second drop falls through to the pre-existing fatal path). Gemini's `sessionResumption` token remains unused — it needs server-mint participation (documented TODO); MJ's own chain resume (`LastSessionID`) is unchanged and complementary |
 | Transcript-turn → co-agent-run linkage | **Deferred** (noted in `RelayRealtimeTranscript`'s doc comment) — turns are session-stamped but not linked to the observability runs |
 | *Chat* conversation-history hydration into the companion prompt | **MVP gap** — the resolver passes `ConversationMessages: []` (the service supports it). Distinct from the **shipped** prior-*session* transcript hydration on resume (§4) |
 | Collapsed session block inline in the conversation timeline | **UX direction only** — session review mode (see §8) ships the replay; the inline collapsed-block rendering in message history is not built |
 | Unified session transport (`SessionEnvelope` / `ISessionTransport`) | **Independent track** per the plan — voice deliberately does not depend on it |
 | Video channel / video modality | **Deferred** — `BaseRealtimeModel`'s contract anticipates it |
-| Server-side channel plugin execution (`ServerPluginClass` consumption) | **Seam only** — registered in metadata, not resolved by any code path |
+| Server-side channel plugin execution (`ServerPluginClass` consumption) | **Shipped with scope notes** — `BaseRealtimeChannelServer` (in `@memberjunction/ai`) is resolved per session by `RealtimeChannelServerHost` from the ACTIVE registry rows and wired into the durable lifecycle: session start (`SessionManager.CreateSession`), pre-persistence channel-state saves (`SaveSessionChannelState`), and session close from every provenance incl. the janitor (`SessionManager.CloseSession`); `WhiteboardChannelServer` ships as the reference (state-of-record validation/canonicalization). **Not** covered: socket/media members (deferred with the unified-transport track) and server-tool contribution to `RealtimeSessionRunner` (documented TODO — no code path gives the server-bridged runner per-session channel instances yet). See [§5](#5-channels--the-heart-of-the-system) |
 | Non-target server tools on the client-direct relay (action wiring through `executeNonTargetTool`) | **Later phase** — structured "not available" today; the server-bridged path already executes actions |
 | Channel-grained permissions, multi-party sessions, audio retention/consent | **Out of scope** for this iteration (see plan) |
-| `RealtimeClientSessionService` ↔ `BaseAgent` prepare-logic duplication | **Known debt** — the service's doc header calls for a future shared `RealtimeSessionPreparer`; until then the two are kept in sync intentionally (the shared `realtime-narration.ts` module is the first extracted piece) |
+| `RealtimeClientSessionService` ↔ `BaseAgent` prepare-logic duplication | **Known debt** — the service's doc header calls for a future shared `RealtimeSessionPreparer`; until then the two are kept in sync intentionally (the shared `realtime-narration.ts` and `realtime-coagent-config.ts` modules are the first extracted pieces — both paths consume the same effective-config merge) |
+| Per-driver voice plumbing for the effective config (`realtime.voice.providers`) | **Partially shipped** — provider-matched settings flow into the open `Config` bag (server-bridged: OpenAI spread, Gemini merge-last, AssemblyAI `voice` mapping). **TODOs**: `OpenAIRealtime.CreateClientSession` does not fold `params.Config` into the minted client-direct session (clients apply `EffectiveConfigJson` instead); the ElevenLabs server driver provisions voice on its managed agent and consumes no per-session bag |
+
+---
+
+## 11. Audio-Reactive Call Visuals (Audio Activity Metering)
+
+The call overlay is a PROGRESSIVE-DISCLOSURE console (see `realtime-disclosure.ts` +
+`ng-conversations`' README): a first-ever call is **pure audio** — a breathing hero orb and
+three controls, with the caption thread / composer dock / surface panel / gear unlocking by
+level (0–4) as the user acts or across sessions via a per-user UserInfoEngine milestones
+ratchet (`mj.realtimeVoice.uxMilestones.v1`; the gear's Simple/Standard/Pro/Auto density
+control is the escape hatch). Content never flips the console open — the ONE auto-reveal is
+a channel's first agent activity (`ChannelActivity$`), which opens the surface panel as a
+peek with that channel's tab focused; finished artifacts arrive as unfocused, glowing tabs.
+
+That pure-audio hero orb doesn't *act out* speech — it **reacts to the actual
+waveform**, vibrating like a speaker cone with the agent's voice and flipping color when the
+user talks. Three layers, each degrading gracefully:
+
+### The capability contract (client drivers)
+
+`BaseRealtimeClient.GetAudioActivity(): RealtimeAudioActivity | null` is a **capability, not
+an obligation** (driver obligation #9): per-direction RMS levels (0..1) plus 9 normalized
+frequency bins, or `null` for any direction the driver couldn't meter — full `null` when no
+meters exist at all. Drivers attach meters through the protected
+`attachInputAudioMeter` / `attachOutputAudioMeter` hooks and MUST release them on disconnect
+(`closeAudioMeters()`).
+
+Metering sources per driver (all four currently meter BOTH directions):
+
+| Driver | Agent audio (output) | User mic (input) |
+|---|---|---|
+| OpenAI (WebRTC) | `RealtimeAudioMeter.ForStream` on the remote track's stream (attached in `ontrack`) | `ForStream` on the mic stream at Connect |
+| Gemini / ElevenLabs / AssemblyAI (client-owned audio) | `RealtimePcmPlayback.CreateMeter()` — an `AnalyserNode` on the playout engine's master gain | `ForStream` on the mic stream |
+
+`RealtimeAudioMeter` (in `packages/AI/RealtimeClient/src/audio/audioMeter.ts`) is defensive
+by contract: factories return `null` where Web Audio is unavailable (tests, SSR), and the DSP
+math (`ComputeRmsLevel`, `BucketizeFrequencyData`) is exported pure for unit testing.
+
+### The sampling loop (call overlay)
+
+`VoiceSessionService.GetAudioActivity()` is a plain passthrough; the overlay runs ONE
+`requestAnimationFrame` loop **outside Angular** that samples it, runs the frame through
+`RealtimeAudioVisualSmoother` (attack/decay envelopes + direction hysteresis — see
+`realtime-audio-visuals.ts` in ng-conversations), and writes CSS custom properties
+(`--voice-out`, `--voice-in`, `--eq-1..9`) plus `data-audio-live` / `data-voice-dir`
+attributes directly on the rendered overlay element. Zero change detection per frame.
+
+### The render gate (CSS)
+
+All audio-reactive rules key off `[data-audio-live='true']`: orb scale follows the smoothed
+output envelope, the EQ bars become a true spectrum, and `[data-voice-dir='user']` recolors
+orb + bars green (the established "user audio" palette). When a driver attaches no meters the
+attribute stays `false` and the original turn-state keyframe animations remain in charge —
+**the fallback is the pre-existing behavior, not a degraded new one**.
 
 ---
 
@@ -463,6 +602,7 @@ Honest ledger of what is *not* done on this branch, so nobody reads aspiration i
 | Concern | Where |
 |---|---|
 | Model primitive + driver obligations | `packages/AI/Core/src/generic/baseRealtime.ts` |
+| Channel plugin contract — server half (+ host + reference impl) | `packages/AI/Core/src/generic/baseRealtimeChannelServer.ts`, `packages/AI/Agents/src/realtime/realtime-channel-server-host.ts`, `packages/AI/Agents/src/realtime/whiteboard-channel-server.ts` |
 | Server drivers | `packages/AI/Providers/OpenAI/src/models/openAIRealtime.ts`, `packages/AI/Providers/Gemini/src/geminiRealtime.ts`, `packages/AI/Providers/ElevenLabs/src/elevenLabsRealtime.ts`, `packages/AI/Providers/AssemblyAI/src/assemblyAIRealtime.ts` |
 | Browser drivers + shared PCM audio plane | `packages/AI/RealtimeClient/` ([README](../packages/AI/RealtimeClient/README.md)) — `src/drivers/*`, `src/audio/*` |
 | Agent type / runner / broker / client-session service / shared narration / memory builder | `packages/AI/Agents/src/agent-types/realtime-agent-type.ts`, `src/realtime/*` (incl. `realtime-narration.ts`), `src/agent-memory-context-builder.ts` |

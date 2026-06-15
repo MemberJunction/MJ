@@ -31,8 +31,10 @@ export * from './lib/services/collection-state.service';
 export * from './lib/services/conversation-attachment.service';
 export * from './lib/services/ui-command-handler.service';
 export * from './lib/services/conversation-bridge.service';
-export * from './lib/services/voice-session.service';
-export * from './lib/services/voice-sessions-adapter';
+export * from './lib/services/realtime-session.service';
+export * from './lib/services/realtime-pairing';
+export * from './lib/services/user-authorization';
+export * from './lib/services/realtime-sessions-adapter';
 export * from './lib/services/realtime-session-review.service';
 export * from './lib/services/delegation-result-parser';
 
@@ -85,8 +87,7 @@ export * from './lib/components/slots/mj-chat-message-bubble-default.component';
 export * from './lib/events/chat-events';
 
 // Realtime / voice (PR #2787 — co-agent realtime sessions)
-export * from './lib/components/voice/voice-overlay.component';
-export * from './lib/components/voice/voice-agent-picker.component';
+export * from './lib/components/realtime/realtime-agent-picker.component';
 // Real-time "call mode" overlay + its componentized parts
 export * from './lib/components/realtime/realtime-session-overlay.component';
 export * from './lib/components/realtime/realtime-session-state';
@@ -97,9 +98,10 @@ export * from './lib/components/realtime/realtime-activity-rail.component';
 export * from './lib/components/realtime/realtime-surface-tabs.component';
 export * from './lib/components/realtime/realtime-surface-tabs.model';
 export * from './lib/components/realtime/realtime-surface-panel-prefs';
+export * from './lib/components/realtime/realtime-disclosure';
+export * from './lib/components/realtime/realtime-audio-visuals';
 export * from './lib/components/realtime/realtime-composer.component';
 export * from './lib/components/realtime/realtime-channel-strip.component';
-export * from './lib/components/realtime/realtime-controls.component';
 // Conversation-timeline collapse of past realtime sessions (one card per session) + its pure grouping pass
 export * from './lib/components/realtime/realtime-session-timeline-card.component';
 export * from './lib/utils/realtime-session-timeline';

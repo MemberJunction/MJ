@@ -2,12 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Subject } from 'rxjs';
 import { IMetadataProvider } from '@memberjunction/core';
 import {
-  VoiceSessionService,
+  RealtimeSessionService,
   VoiceConnectionState,
   VoiceDelegationNarration,
   VoiceDelegationProgress,
   VoiceDelegationResult
-} from '../lib/services/voice-session.service';
+} from '../lib/services/realtime-session.service';
 
 /**
  * The NARRATION PACING / AGGREGATION state machine — the provider-agnostic policy that
@@ -85,7 +85,7 @@ interface VoiceSessionNarrationInternals {
   wireClientHandlers(client: unknown): void;
 }
 
-function internals(service: VoiceSessionService): VoiceSessionNarrationInternals {
+function internals(service: RealtimeSessionService): VoiceSessionNarrationInternals {
   return service as unknown as VoiceSessionNarrationInternals;
 }
 
@@ -107,7 +107,7 @@ function createDeferred<T>(): Deferred<T> {
 
 /** One harness per test: service + fake client + controllable tool-execution deferreds. */
 interface Harness {
-  service: VoiceSessionService;
+  service: RealtimeSessionService;
   client: FakeRealtimeClient;
   i: VoiceSessionNarrationInternals;
   /** One deferred per ExecuteRealtimeSessionTool invocation, in call order. */
@@ -117,7 +117,7 @@ interface Harness {
 }
 
 function createHarness(): Harness {
-  const service = new VoiceSessionService();
+  const service = new RealtimeSessionService();
   const client = new FakeRealtimeClient();
   const i = internals(service);
   const pendingTools: Array<Deferred<{ ExecuteRealtimeSessionTool: string }>> = [];
@@ -163,7 +163,7 @@ function progress(h: Harness, callId: string, message: string): void {
   h.i.dispatchProgress({ CallID: callId, Step: 'subagent_execution', Message: message });
 }
 
-describe('VoiceSessionService — narration timing (5s anchor + session-global 8s floor)', () => {
+describe('RealtimeSessionService — narration timing (5s anchor + session-global 8s floor)', () => {
   let h: Harness;
 
   beforeEach(() => {
@@ -314,7 +314,7 @@ describe('VoiceSessionService — narration timing (5s anchor + session-global 8
   });
 });
 
-describe('VoiceSessionService — narration aggregation (digest buffer)', () => {
+describe('RealtimeSessionService — narration aggregation (digest buffer)', () => {
   let h: Harness;
 
   beforeEach(() => {
@@ -421,7 +421,7 @@ describe('VoiceSessionService — narration aggregation (digest buffer)', () => 
   });
 });
 
-describe('VoiceSessionService — busy / audio-playing retry', () => {
+describe('RealtimeSessionService — busy / audio-playing retry', () => {
   let h: Harness;
 
   beforeEach(() => {
@@ -535,7 +535,7 @@ describe('VoiceSessionService — busy / audio-playing retry', () => {
   });
 });
 
-describe('VoiceSessionService — narration instructions + spoken-history capture', () => {
+describe('RealtimeSessionService — narration instructions + spoken-history capture', () => {
   let h: Harness;
 
   beforeEach(() => {
@@ -630,7 +630,7 @@ describe('VoiceSessionService — narration instructions + spoken-history captur
   });
 });
 
-describe('VoiceSessionService — progress dispatch + stale filtering + push-status parsing', () => {
+describe('RealtimeSessionService — progress dispatch + stale filtering + push-status parsing', () => {
   let h: Harness;
 
   beforeEach(() => {
@@ -722,7 +722,7 @@ describe('VoiceSessionService — progress dispatch + stale filtering + push-sta
   });
 });
 
-describe('VoiceSessionService — delegation lifecycle (thinking state, results, errors)', () => {
+describe('RealtimeSessionService — delegation lifecycle (thinking state, results, errors)', () => {
   let h: Harness;
 
   beforeEach(() => {

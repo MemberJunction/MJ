@@ -25,7 +25,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (367 classes)
+// @memberjunction/core-entities (368 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -40,6 +40,7 @@ import {
     MJAIAgentCategoryEntity,
     MJAIAgentChannelEntity,
     MJAIAgentClientToolEntity,
+    MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
@@ -667,6 +668,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentCategoryEntity,
     MJAIAgentChannelEntity,
     MJAIAgentClientToolEntity,
+    MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
@@ -1205,7 +1207,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 551;
+export const CLASS_REGISTRATIONS_COUNT = 552;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

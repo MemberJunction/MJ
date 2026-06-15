@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -11,6 +11,7 @@ import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMetadata } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
@@ -21,8 +22,14 @@ import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
-import { VoiceSessionService } from '../../services/voice-session.service';
-import { VoiceAgentPick } from '../voice/voice-agent-picker.component';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
+import { RealtimeAgentPick } from '../realtime/realtime-agent-picker.component';
+import {
+  BuildRealtimeConfigOverridesJson,
+  FilterRealtimeCoAgents,
+  LoadCoAgentPairings,
+  PairingsAllowTarget
+} from '../../services/realtime-pairing';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
@@ -230,7 +237,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     private mentionAutocomplete: MentionAutocompleteService,
     private attachmentService: ConversationAttachmentService,
     private bridge: ConversationBridgeService,
-    private voiceSession: VoiceSessionService
+    private voiceSession: RealtimeSessionService
   ) {
   super();}
 
@@ -336,7 +343,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Display name of the agent the voice session fronts. Resolved here (this component
-   * owns the conversation's routing context) and passed to VoiceSessionService at
+   * owns the conversation's routing context) and passed to RealtimeSessionService at
    * session start so the chat-area-hosted overlay can read it from the service.
    */
   private resolveVoiceAgentName(): string {
@@ -353,7 +360,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /** True while the "Start a voice call with…" agent picker popover is open. */
-  public showVoiceAgentPicker: boolean = false;
+  public showRealtimeAgentPicker: boolean = false;
+
+  /**
+   * `MJ: User Settings` key persisting the user's co-agent choice for realtime calls
+   * (server-side, cross-device — never localStorage). Stored shape: `{"coAgentId":
+   * string | null}` — `null` is an explicit "Auto" choice that overwrites an older pick.
+   */
+  private static readonly CoAgentPrefKey = 'mj.realtimeVoice.coAgent.v1';
+
+  /**
+   * The persisted co-agent preference, loaded just before the picker opens (and read by
+   * the instant-start path). `null` = no preference / explicit "Auto".
+   */
+  public voicePickerDefaultCoAgentId: string | null = null;
 
   /**
    * Agents the voice picker offers — the same cached set the @mention
@@ -364,6 +384,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     return this.mentionAutocomplete.getAvailableAgents();
   }
 
+  /**
+   * The ACTIVE Realtime-type co-agent candidates — the same run-permission-filtered
+   * cached set as {@link voicePickerAgents}, narrowed to the Realtime agent type. The
+   * picker shows its co-agent selector only when more than one exists.
+   */
+  public get voicePickerCoAgents(): MJAIAgentEntityExtended[] {
+    return FilterRealtimeCoAgents(this.mentionAutocomplete.getAvailableAgents());
+  }
+
   /** The agent the default resolution would call — preselected in the picker. */
   public get voicePickerDefaultAgentId(): string | null {
     return this.resolveCurrentAgentId();
@@ -371,7 +400,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Start a real-time voice session fronting the conversation's current agent.
-   * Client-direct: the VoiceSessionService mints an ephemeral token and connects
+   * Client-direct: the RealtimeSessionService mints an ephemeral token and connects
    * the browser straight to the realtime provider over WebRTC. The "call mode"
    * overlay itself is hosted by the conversation chat area (driven by Active$).
    *
@@ -391,7 +420,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // to call. Falls through to the immediate path if the agent cache is
     // empty (nothing to pick from — the resolved default is the only option).
     if (!this.findLastNonSageAgentId() && this.voicePickerAgents.length > 0) {
-      this.showVoiceAgentPicker = true;
+      await this.openRealtimeAgentPicker();
       return;
     }
     const targetAgentId = this.resolveCurrentAgentId();
@@ -399,62 +428,137 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       this.toastService.error('No agent available for a voice session.');
       return;
     }
-    await this.startVoiceWithAgent(targetAgentId, this.resolveVoiceAgentName());
+    const coAgentId = await this.resolveInstantCoAgentId(targetAgentId);
+    await this.startVoiceWithAgent(targetAgentId, this.resolveVoiceAgentName(), null, coAgentId);
   }
 
   /**
-   * Caret-next-to-the-phone click: open the agent/model picker ON DEMAND, even when the
-   * conversation already has agent history (where the plain phone click instant-starts).
-   * The resolved agent is preselected, so "open → Start" matches the instant path while
-   * keeping the voice-model choice one click away. Falls through to the instant path
-   * when there is nothing to pick from.
+   * Caret-next-to-the-phone click: open the agent/co-agent/model picker ON DEMAND, even
+   * when the conversation already has agent history (where the plain phone click
+   * instant-starts). The resolved agent is preselected, so "open → Start" matches the
+   * instant path while keeping the co-agent (and, for authorized users, voice-model)
+   * choice one click away. Falls through to the instant path when there is nothing to
+   * pick from.
    */
-  public onVoiceOptions(): void {
+  public async onVoiceOptions(): Promise<void> {
     if (!this.canStartVoice) {
       return;
     }
     if (this.voicePickerAgents.length > 0) {
-      this.showVoiceAgentPicker = true;
+      await this.openRealtimeAgentPicker();
       return;
     }
     void this.onStartVoice();
   }
 
-  /** User confirmed an agent (+ optional voice model) in the voice picker — start the call. */
-  public async onVoiceAgentPicked(pick: VoiceAgentPick): Promise<void> {
-    this.showVoiceAgentPicker = false;
+  /** Loads the persisted co-agent preference, then shows the picker (pref preselected). */
+  private async openRealtimeAgentPicker(): Promise<void> {
+    this.voicePickerDefaultCoAgentId = await this.loadPersistedCoAgentId();
+    this.showRealtimeAgentPicker = true;
+  }
+
+  /** User confirmed an agent (+ optional co-agent / voice model) in the voice picker — start the call. */
+  public async onRealtimeAgentPicked(pick: RealtimeAgentPick): Promise<void> {
+    this.showRealtimeAgentPicker = false;
+    this.persistCoAgentChoice(pick.CoAgentId);
     await this.startVoiceWithAgent(
       pick.Agent.ID,
       pick.Agent.Name || this.resolveVoiceAgentName(),
-      pick.PreferredModelId ?? undefined
+      pick.PreferredModelId,
+      pick.CoAgentId,
+      BuildRealtimeConfigOverridesJson(pick.PreferredModelId)
     );
   }
 
+  /**
+   * Reads the persisted co-agent preference from `MJ: User Settings` (via
+   * `UserInfoEngine`'s cached settings). Defensive: any failure or malformed payload
+   * resolves to `null` (Auto — the server's co-agent resolution chain).
+   */
+  private async loadPersistedCoAgentId(): Promise<string | null> {
+    try {
+      await UserInfoEngine.Instance.Config();
+      const raw = UserInfoEngine.Instance.GetSetting(MessageInputComponent.CoAgentPrefKey);
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw) as { coAgentId?: string | null };
+      return typeof parsed.coAgentId === 'string' && parsed.coAgentId.length > 0 ? parsed.coAgentId : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Persists the user's co-agent choice (including explicit "Auto" = null) cross-device. */
+  private persistCoAgentChoice(coAgentId: string | null): void {
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(
+        MessageInputComponent.CoAgentPrefKey,
+        JSON.stringify({ coAgentId: coAgentId ?? null })
+      );
+    } catch (error) {
+      console.warn('[MessageInput] Failed to persist co-agent preference:', error);
+    }
+  }
+
+  /**
+   * Co-agent for the INSTANT start path (plain phone click, no picker): the persisted
+   * preference is honored when it's still a valid candidate AND its pairing rows (if
+   * any) allow the resolved target. Anything else falls back to `null` — the server's
+   * co-agent resolution chain — so a stale/deactivated/incompatible preference can never
+   * block the friction-free start (pairings constrain a chosen co-agent; they never
+   * mandate one).
+   */
+  private async resolveInstantCoAgentId(targetAgentId: string): Promise<string | null> {
+    const preferred = await this.loadPersistedCoAgentId();
+    if (!preferred) {
+      return null;
+    }
+    const isValidCandidate = this.voicePickerCoAgents.some(a => UUIDsEqual(a.ID, preferred));
+    if (!isValidCandidate) {
+      return null;
+    }
+    const pairings = await LoadCoAgentPairings(this.ProviderToUse, preferred);
+    return PairingsAllowTarget(pairings, targetAgentId) ? preferred : null;
+  }
+
   /** User dismissed the voice picker without starting a call. */
-  public onVoiceAgentPickerCancelled(): void {
-    this.showVoiceAgentPicker = false;
+  public onRealtimeAgentPickerCancelled(): void {
+    this.showRealtimeAgentPicker = false;
   }
 
   /**
    * Shared session-start path for both the immediate (existing conversation)
    * and picker (new conversation / caret options) flows. The agent NAME is passed
-   * through to VoiceSessionService so the chat-area-hosted overlay banner (AgentName$)
+   * through to RealtimeSessionService so the chat-area-hosted overlay banner (AgentName$)
    * shows who the call fronts without re-resolving. An explicit voice-model choice
-   * (picker only) rides along as `preferredModelId` — the server uses exactly that
-   * model or fails with a clear reason (no silent fallback).
+   * (authorization-gated, picker only) rides along as `preferredModelId` — the server
+   * uses exactly that model or fails with a clear reason (no silent fallback) — and is
+   * mirrored into `configOverridesJson` (`{"realtime":{"modelPreference":…}}`, the
+   * pinned override envelope). An explicit co-agent choice (picker pick or persisted
+   * preference) rides along as `coAgentId`.
    *
    * Interactive-channel tools (e.g. the live whiteboard's `Whiteboard_*` set) are NOT
    * passed here — the session service resolves the active channel plugins from the
    * `MJ: AI Agent Channels` registry and aggregates their tool sets at mint itself.
    */
-  private async startVoiceWithAgent(agentId: string, agentName: string, preferredModelId?: string): Promise<void> {
+  private async startVoiceWithAgent(
+    agentId: string,
+    agentName: string,
+    preferredModelId?: string | null,
+    coAgentId?: string | null,
+    configOverridesJson?: string | null
+  ): Promise<void> {
     try {
       await this.voiceSession.StartVoiceSession(
         agentId,
         this.conversationId,
         null,
         agentName,
-        preferredModelId ?? null
+        preferredModelId ?? null,
+        null,
+        coAgentId ?? null,
+        configOverridesJson ?? null
       );
     } catch (error) {
       console.error('Failed to start voice session:', error);
@@ -2601,91 +2705,34 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Name the conversation based on the first message using GraphQL AI client
-   *
-   * IMPORTANT: This runs asynchronously in the background and has a 30-second timeout
-   * to prevent long delays. Failures are logged but don't affect the user experience.
+   * Names the conversation from its first message via the SHARED naming helper
+   * ({@link GenerateAndApplyConversationName}) — the same implementation the realtime
+   * session path uses. This wrapper keeps the composer-specific concerns local:
+   * mention stripping and the sidebar rename animation event.
    */
   private async nameConversation(message: string): Promise<void> {
-    try {
-      // Load the Name Conversation prompt to get its ID
-      await AIEngineBase.Instance.Config(false);
-      const p = AIEngineBase.Instance.Prompts.find(pr => pr.Name === 'Name Conversation');
-      if (!p) {
-        console.warn('⚠️ Name Conversation prompt not found');
-        return;
-      }
+    // Convert message to plain text (strips JSON-encoded mentions like @{"id":"...","name":"Sage"} to @Sage)
+    const plainTextMessage = this.mentionParser.toPlainText(
+      message,
+      this.mentionAutocomplete.getAvailableAgents(),
+      this.mentionAutocomplete.getAvailableUsers()
+    );
 
-      const promptId = p.ID;
+    const result = await GenerateAndApplyConversationName({
+      ConversationId: this.conversationId,
+      MessageText: plainTextMessage,
+      Provider: this.ProviderToUse as GraphQLDataProvider,
+      CurrentUser: this.currentUser
+    });
 
-      // Use GraphQL AI client to run the prompt (same client as agent)
-      const provider = this.ProviderToUse as GraphQLDataProvider;
-      if (!provider) {
-        console.warn('⚠️ GraphQLDataProvider not available');
-        return;
-      }
-
-      // Convert message to plain text (strips JSON-encoded mentions like @{"id":"...","name":"Sage"} to @Sage)
-      const plainTextMessage = this.mentionParser.toPlainText(
-        message,
-        this.mentionAutocomplete.getAvailableAgents(),
-        this.mentionAutocomplete.getAvailableUsers()
-      );
-
-      const aiClient = new GraphQLAIClient(provider);
-
-      // Add 30-second timeout to prevent long delays
-      // If this times out, the conversation will keep its default name
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Conversation naming timed out after 30 seconds')), 30000);
+    if (result) {
+      // Emit event for animation in conversation list
+      this.conversationRenamed.emit({
+        conversationId: this.conversationId,
+        name: result.Name,
+        description: result.Description
       });
-
-      const result = await Promise.race([
-        aiClient.RunAIPrompt({
-          promptId: promptId,
-          messages: [{ role: 'user', content: plainTextMessage }],
-        }),
-        timeoutPromise
-      ]);
-
-      if (result && result.success && (result.parsedResult || result.output)) {
-        // Use parsedResult if available, otherwise clean and parse output
-        // (CleanAndParseJSON handles markdown code blocks like ```json ... ```)
-        const parsed = result.parsedResult ||
-          (result.output ? CleanAndParseJSON(result.output) : null);
-
-        if (parsed) {
-          const { name, description } = parsed;
-
-          if (name) {
-            // Update the conversation name and description in database AND state immediately
-            await this.engine.SaveConversation(
-              this.conversationId,
-              { Name: name, Description: description || '' },
-              this.currentUser
-            );
-
-            // Emit event for animation in conversation list
-            this.conversationRenamed.emit({
-              conversationId: this.conversationId,
-              name: name,
-              description: description || ''
-            });
-
-            console.log(`✅ Conversation renamed to: "${name}"`);
-          }
-        }
-      } else {
-        console.warn('⚠️ Failed to generate conversation name - using default');
-      }
-    } catch (error) {
-      // Log timeout or other errors but don't disrupt user experience
-      if (error instanceof Error && error.message.includes('timed out')) {
-        console.warn('⏱️ Conversation naming timed out - conversation will keep default name');
-      } else {
-        console.error('❌ Error naming conversation:', error);
-      }
-      // Don't show error to user - naming failures should be silent
+      console.log(`✅ Conversation renamed to: "${result.Name}"`);
     }
   }
 

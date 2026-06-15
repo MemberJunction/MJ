@@ -1179,6 +1179,100 @@ export const MJAIAgentClientToolSchema = z.object({
 export type MJAIAgentClientToolEntityType = z.infer<typeof MJAIAgentClientToolSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Co Agents
+ */
+export const MJAIAgentCoAgentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CoAgentID: z.string().describe(`
+        * * Field Name: CoAgentID
+        * * Display Name: Co-Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: The relationship OWNER. For Type=CoAgent this is the Realtime-type co-agent (the live voice); it must be an Active agent of the Realtime type (enforced server-side). For reserved future types, the agent the relationship is read FROM.`),
+    TargetAgentID: z.string().nullable().describe(`
+        * * Field Name: TargetAgentID
+        * * Display Name: Target Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: A specific paired agent — for Type=CoAgent, an underlying agent this co-agent can front. Exactly one of TargetAgentID / TargetAgentTypeID is set per row.`),
+    TargetAgentTypeID: z.string().nullable().describe(`
+        * * Field Name: TargetAgentTypeID
+        * * Display Name: Target Agent Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
+        * * Description: A whole agent TYPE as the paired side — for Type=CoAgent, this co-agent applies to every agent of the type (with IsDefault=1, it is the type-level default co-agent, replacing a column-based default that would create an AIAgent↔AIAgentType FK cycle). Exactly one of TargetAgentID / TargetAgentTypeID is set per row.`),
+    Type: z.union([z.literal('CoAgent'), z.literal('Delegate'), z.literal('Fallback'), z.literal('Observer'), z.literal('Peer'), z.literal('Reviewer')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Relationship Type
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: CoAgent
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CoAgent
+    *   * Delegate
+    *   * Fallback
+    *   * Observer
+    *   * Peer
+    *   * Reviewer
+        * * Description: Nature of the relationship, read CoAgentID → target side. CoAgent = the owner can front the target in realtime sessions (the ONLY type implemented today). Peer (agent-to-agent conversation partners), Delegate (handoff/escalation), Fallback (substitute when owner unavailable), Reviewer (target reviews owner output), Observer (target observes owner sessions) are RESERVED for future features — the vocabulary ships now so generated string-union types stay stable.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1: for a TargetAgentID row, this target is the co-agent's default underlying agent (used when a session starts against the co-agent without an explicit runtime target); for a TargetAgentTypeID row, this co-agent is the default co-agent for agents of that type. At most one default per (CoAgentID, Type) is enforced server-side.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display/priority order of this pairing in target-agent pickers and resolution ties (ascending).`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Whether this pairing participates in resolution. Disabled rows are kept for audit/toggling but ignored by the resolution chain and pickers.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional per-relationship configuration JSON (shape owned by the Type, e.g. a future Peer arena's turn budget). NULL for plain pairings.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CoAgent: z.string().nullable().describe(`
+        * * Field Name: CoAgent
+        * * Display Name: Co-Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    TargetAgent: z.string().nullable().describe(`
+        * * Field Name: TargetAgent
+        * * Display Name: Target Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    TargetAgentType: z.string().nullable().describe(`
+        * * Field Name: TargetAgentType
+        * * Display Name: Target Agent Type Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAIAgentCoAgentEntityType = z.infer<typeof MJAIAgentCoAgentSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Configurations
  */
 export const MJAIAgentConfigurationSchema = z.object({
@@ -2911,12 +3005,12 @@ export const MJAIAgentRunSchema = z.object({
         * * Default Value: getutcdate()`),
     TotalPromptTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsed
-        * * Display Name: Total Prompt Tokens
+        * * Display Name: Prompt Tokens
         * * SQL Data Type: int
         * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalCompletionTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsed
-        * * Display Name: Total Completion Tokens
+        * * Display Name: Completion Tokens
         * * SQL Data Type: int
         * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalTokensUsedRollup: z.number().nullable().describe(`
@@ -2926,12 +3020,12 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`),
     TotalPromptTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsedRollup
-        * * Display Name: Total Prompt Tokens (Rollup)
+        * * Display Name: Prompt Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`),
     TotalCompletionTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsedRollup
-        * * Display Name: Total Completion Tokens (Rollup)
+        * * Display Name: Completion Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`),
     TotalCostRollup: z.number().nullable().describe(`
@@ -2947,7 +3041,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run`),
     ConversationDetailSequence: z.number().nullable().describe(`
         * * Field Name: ConversationDetailSequence
-        * * Display Name: Conversation Detail Sequence
+        * * Display Name: Detail Sequence
         * * SQL Data Type: int
         * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution`),
     CancellationReason: z.union([z.literal('System'), z.literal('Timeout'), z.literal('User Request')]).nullable().describe(`
@@ -2982,7 +3076,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: JSON serialization of the final Payload state at the end of the agent run`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Message
+        * * Display Name: Final Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Final message from the agent to the end user at the end of a run`),
     LastRunID: z.string().nullable().describe(`
@@ -3011,19 +3105,19 @@ each time the agent processes a prompt step.`),
         * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.`),
     OverrideModelID: z.string().nullable().describe(`
         * * Field Name: OverrideModelID
-        * * Display Name: Model Override
+        * * Display Name: Override Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.`),
     OverrideVendorID: z.string().nullable().describe(`
         * * Field Name: OverrideVendorID
-        * * Display Name: Vendor Override
+        * * Display Name: Override Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
         * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
     Data: z.string().nullable().describe(`
         * * Field Name: Data
-        * * Display Name: Data
+        * * Display Name: Input Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
     Verbose: z.boolean().nullable().describe(`
@@ -3067,7 +3161,7 @@ each time the agent processes a prompt step.`),
         * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)`),
     PrimaryScopeRecordID: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeRecordID
-        * * Display Name: Primary Scope Record ID
+        * * Display Name: Primary Scope Record
         * * SQL Data Type: nvarchar(100)
         * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.`),
     SecondaryScopes: z.string().nullable().describe(`
@@ -3077,7 +3171,7 @@ each time the agent processes a prompt step.`),
         * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`),
     ExternalReferenceID: z.string().nullable().describe(`
         * * Field Name: ExternalReferenceID
-        * * Display Name: External Reference ID
+        * * Display Name: External Reference
         * * SQL Data Type: nvarchar(200)
         * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`),
     CompanyID: z.string().nullable().describe(`
@@ -3087,17 +3181,17 @@ each time the agent processes a prompt step.`),
         * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.`),
     TotalCacheReadTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCacheReadTokensUsed
-        * * Display Name: Total Cache Read Tokens
+        * * Display Name: Cache Read Tokens
         * * SQL Data Type: int
         * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.`),
     TotalCacheWriteTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCacheWriteTokensUsed
-        * * Display Name: Total Cache Write Tokens
+        * * Display Name: Cache Write Tokens
         * * SQL Data Type: int
         * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`),
     LastHeartbeatAt: z.date().nullable().describe(`
         * * Field Name: LastHeartbeatAt
-        * * Display Name: Last Heartbeat At
+        * * Display Name: Last Heartbeat
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.`),
     AgentSessionID: z.string().nullable().describe(`
@@ -3108,59 +3202,59 @@ each time the agent processes a prompt step.`),
         * * Description: Links this run to the long-lived AIAgentSession it executed within. NULL for runs outside any real-time session. This is the persisted session reference and is distinct from the per-connection transport sessionID.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent (Ref)
+        * * Display Name: Agent Info
         * * SQL Data Type: nvarchar(255)`),
     ParentRun: z.string().nullable().describe(`
         * * Field Name: ParentRun
-        * * Display Name: Parent Run (Ref)
+        * * Display Name: Parent Run Info
         * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation (Ref)
+        * * Display Name: Conversation Info
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User (Ref)
+        * * Display Name: User Info
         * * SQL Data Type: nvarchar(100)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail (Ref)
+        * * Display Name: Conversation Detail Info
         * * SQL Data Type: nvarchar(MAX)`),
     LastRun: z.string().nullable().describe(`
         * * Field Name: LastRun
-        * * Display Name: Last Run (Ref)
+        * * Display Name: Last Run Info
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration (Ref)
+        * * Display Name: Configuration Info
         * * SQL Data Type: nvarchar(100)`),
     OverrideModel: z.string().nullable().describe(`
         * * Field Name: OverrideModel
-        * * Display Name: Model Override (Ref)
+        * * Display Name: Override Model Info
         * * SQL Data Type: nvarchar(50)`),
     OverrideVendor: z.string().nullable().describe(`
         * * Field Name: OverrideVendor
-        * * Display Name: Vendor Override (Ref)
+        * * Display Name: Override Vendor Info
         * * SQL Data Type: nvarchar(50)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
-        * * Display Name: Scheduled Job Run (Ref)
+        * * Display Name: Scheduled Job Run Info
         * * SQL Data Type: nvarchar(200)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run (Ref)
+        * * Display Name: Test Run Info
         * * SQL Data Type: nvarchar(255)`),
     PrimaryScopeEntity: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntity
-        * * Display Name: Primary Scope Entity (Ref)
+        * * Display Name: Primary Scope Entity Info
         * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
-        * * Display Name: Root Parent Run ID
+        * * Display Name: Root Parent Run
         * * SQL Data Type: uniqueidentifier`),
     RootLastRunID: z.string().nullable().describe(`
         * * Field Name: RootLastRunID
-        * * Display Name: Root Last Run ID
+        * * Display Name: Root Last Run
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -3752,12 +3846,16 @@ export const MJAIAgentTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
         * * Description: Default file storage account for agents of this type. Lowest priority in the resolution chain (Type → Category tree → Agent → Runtime override). When set, all agents of this type use this storage account unless overridden at a more specific level. FK to FileStorageAccount.`),
-    DefaultCoAgentID: z.string().nullable().describe(`
-        * * Field Name: DefaultCoAgentID
-        * * Display Name: Default Co-Agent
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
-        * * Description: Default co-agent (a Realtime-type AI Agent) that voices agents of this type in real-time sessions. Overridden by AIAgent.DefaultCoAgentID and by the runtime coAgentId parameter; NULL falls through to the global default co-agent.`),
+    ConfigSchema: z.string().nullable().describe(`
+        * * Field Name: ConfigSchema
+        * * Display Name: Configuration Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema (draft-07) describing the shape of TypeConfiguration payloads on agents of this type. When present, agent saves validate their TypeConfiguration against it server-side (MJAIAgentEntityServer.ValidateAsync); null = TypeConfiguration is freeform for this type.`),
+    DefaultConfiguration: z.string().nullable().describe(`
+        * * Field Name: DefaultConfiguration
+        * * Display Name: Default Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Type-level DEFAULT configuration JSON for agents of this type — the base layer of the effective-configuration merge: type DefaultConfiguration <- agent TypeConfiguration <- runtime overrides (later layers win per key, deep-merged). Must itself conform to ConfigSchema when one is published. Null = no type defaults.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
         * * Display Name: System Prompt Content
@@ -3766,10 +3864,6 @@ export const MJAIAgentTypeSchema = z.object({
         * * Field Name: DefaultStorageAccount
         * * Display Name: Default Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
-    DefaultCoAgent: z.string().nullable().describe(`
-        * * Field Name: DefaultCoAgent
-        * * Display Name: Default Co-Agent Name
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJAIAgentTypeEntityType = z.infer<typeof MJAIAgentTypeSchema>;
@@ -3845,17 +3939,17 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Compression Message Threshold
+        * * Display Name: Context Compression Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Compression Prompt
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
-        * * Display Name: Compression Retention Count
+        * * Display Name: Retention Count
         * * SQL Data Type: int
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
@@ -3931,7 +4025,7 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`),
     FinalPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Retry'), z.literal('Warn')]).describe(`
         * * Field Name: FinalPayloadValidationMode
-        * * Display Name: Final Payload Validation Mode
+        * * Display Name: Final Validation Mode
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Retry
     * * Value List Type: List
@@ -3942,7 +4036,7 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`),
     FinalPayloadValidationMaxRetries: z.number().describe(`
         * * Field Name: FinalPayloadValidationMaxRetries
-        * * Display Name: Final Payload Validation Max Retries
+        * * Display Name: Final Validation Max Retries
         * * SQL Data Type: int
         * * Default Value: 3
         * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
@@ -3988,7 +4082,7 @@ if this limit is exceeded.`),
         * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.`),
     StartingPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Warn')]).describe(`
         * * Field Name: StartingPayloadValidationMode
-        * * Display Name: Starting Payload Validation Mode
+        * * Display Name: Starting Validation Mode
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Fail
     * * Value List Type: List
@@ -4019,7 +4113,7 @@ if this limit is exceeded.`),
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner
+        * * Display Name: Owner User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -4138,7 +4232,7 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold (Bytes)
+        * * Display Name: Inline Storage Threshold
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -4214,14 +4308,19 @@ if this limit is exceeded.`),
         * * Display Name: Default Co-Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
-        * * Description: Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overrides the agent type's DefaultCoAgentID; overridden by the runtime coAgentId parameter; NULL falls through to the type-level default, then the global default co-agent.`),
+        * * Description: Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overridden by the runtime coAgentId parameter; NULL falls through to a type-level AIAgentCoAgent default row, then the global default co-agent.`),
+    TypeConfiguration: z.string().nullable().describe(`
+        * * Field Name: TypeConfiguration
+        * * Display Name: Type Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Agent-type-specific configuration JSON, validated against the agent type's ConfigSchema (when one is published) in the server-side entity subclass. For Realtime-type co-agents this holds the realtime profile: preferred model, per-provider voice settings, tone/speaking style (folded into the session system prompt at mint), user-override policy, and narration pacing. Null = type defaults apply.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent Agent Name
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Compression Prompt Text
+        * * Display Name: Context Compression Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
@@ -4233,7 +4332,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner Name
+        * * Display Name: Owner User Name
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
@@ -4253,7 +4352,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent Agent
         * * SQL Data Type: uniqueidentifier`),
     RootDefaultCoAgentID: z.string().nullable().describe(`
         * * Field Name: RootDefaultCoAgentID
@@ -12194,7 +12293,7 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Error message if this conversation turn encountered a problem.`),
     HiddenToUser: z.boolean().describe(`
         * * Field Name: HiddenToUser
-        * * Display Name: Hidden To User
+        * * Display Name: Hidden to User
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Flag indicating if this message should be hidden from end users (system messages, function calls, etc.).`),
@@ -12253,7 +12352,7 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Duration in milliseconds representing how long the AI response processing took to complete for this conversation detail.`),
     IsPinned: z.boolean().describe(`
         * * Field Name: IsPinned
-        * * Display Name: Is Pinned
+        * * Display Name: Pinned
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this message is pinned within the conversation for easy reference`),
@@ -12308,7 +12407,7 @@ export const MJConversationDetailSchema = z.object({
         * * Description: JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.`),
     OriginalMessageChanged: z.boolean().describe(`
         * * Field Name: OriginalMessageChanged
-        * * Display Name: Original Message Changed
+        * * Display Name: Message Modified
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.`),
@@ -31842,6 +31941,283 @@ export class MJAIAgentClientToolEntity extends BaseEntity<MJAIAgentClientToolEnt
 
 
 /**
+ * MJ: AI Agent Co Agents - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentCoAgent
+ * * Base View: vwAIAgentCoAgents
+ * * @description Agent-to-agent affinity registry. Today: OPT-IN co-agent pairings — which underlying agents (or whole agent types) a Realtime-type co-agent can front in live sessions. A co-agent with NO rows is universal (fronts any single agent supplied at runtime — the zero-config default); rows restrict the co-agent to a prebuilt target list. The Type column reserves future relationship natures (Peer/Delegate/Fallback/Reviewer/Observer). Distinct from AIAgentRelationship, which wires agent-to-SUB-AGENT invocation (mappings, message modes); this table is peer affinity with no invocation config.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Co Agents')
+export class MJAIAgentCoAgentEntity extends BaseEntity<MJAIAgentCoAgentEntityType> {
+    /**
+    * Loads the MJ: AI Agent Co Agents record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Co Agents record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentCoAgentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Co Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Exactly one of Target Agent or Target Agent Type must be specified. You cannot provide both, and you cannot leave both empty.
+    * * Table-Level: An agent cannot be assigned as both the Co-Agent and the Target Agent on the same record.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateExclusiveTargetAgentOrType(result);
+        this.ValidateTargetAgentNotEqualToCoAgent(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Exactly one of Target Agent or Target Agent Type must be specified. You cannot provide both, and you cannot leave both empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateExclusiveTargetAgentOrType(result: ValidationResult) {
+    	const hasAgent = this.TargetAgentID != null;
+    	const hasAgentType = this.TargetAgentTypeID != null;
+    
+    	if (hasAgent && hasAgentType) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetAgentID",
+    			"Cannot specify both a Target Agent and a Target Agent Type. Please choose only one.",
+    			this.TargetAgentID,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (!hasAgent && !hasAgentType) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetAgentID",
+    			"Either a Target Agent or a Target Agent Type must be specified.",
+    			null,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * An agent cannot be assigned as both the Co-Agent and the Target Agent on the same record.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTargetAgentNotEqualToCoAgent(result: ValidationResult) {
+    	// If TargetAgentID is specified, it must not be the same as CoAgentID
+    	if (this.TargetAgentID != null && this.CoAgentID === this.TargetAgentID) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetAgentID",
+    			"The Target Agent cannot be the same as the Co-Agent.",
+    			this.TargetAgentID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CoAgentID
+    * * Display Name: Co-Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: The relationship OWNER. For Type=CoAgent this is the Realtime-type co-agent (the live voice); it must be an Active agent of the Realtime type (enforced server-side). For reserved future types, the agent the relationship is read FROM.
+    */
+    get CoAgentID(): string {
+        return this.Get('CoAgentID');
+    }
+    set CoAgentID(value: string) {
+        this.Set('CoAgentID', value);
+    }
+
+    /**
+    * * Field Name: TargetAgentID
+    * * Display Name: Target Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: A specific paired agent — for Type=CoAgent, an underlying agent this co-agent can front. Exactly one of TargetAgentID / TargetAgentTypeID is set per row.
+    */
+    get TargetAgentID(): string | null {
+        return this.Get('TargetAgentID');
+    }
+    set TargetAgentID(value: string | null) {
+        this.Set('TargetAgentID', value);
+    }
+
+    /**
+    * * Field Name: TargetAgentTypeID
+    * * Display Name: Target Agent Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
+    * * Description: A whole agent TYPE as the paired side — for Type=CoAgent, this co-agent applies to every agent of the type (with IsDefault=1, it is the type-level default co-agent, replacing a column-based default that would create an AIAgent↔AIAgentType FK cycle). Exactly one of TargetAgentID / TargetAgentTypeID is set per row.
+    */
+    get TargetAgentTypeID(): string | null {
+        return this.Get('TargetAgentTypeID');
+    }
+    set TargetAgentTypeID(value: string | null) {
+        this.Set('TargetAgentTypeID', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Relationship Type
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: CoAgent
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CoAgent
+    *   * Delegate
+    *   * Fallback
+    *   * Observer
+    *   * Peer
+    *   * Reviewer
+    * * Description: Nature of the relationship, read CoAgentID → target side. CoAgent = the owner can front the target in realtime sessions (the ONLY type implemented today). Peer (agent-to-agent conversation partners), Delegate (handoff/escalation), Fallback (substitute when owner unavailable), Reviewer (target reviews owner output), Observer (target observes owner sessions) are RESERVED for future features — the vocabulary ships now so generated string-union types stay stable.
+    */
+    get Type(): 'CoAgent' | 'Delegate' | 'Fallback' | 'Observer' | 'Peer' | 'Reviewer' {
+        return this.Get('Type');
+    }
+    set Type(value: 'CoAgent' | 'Delegate' | 'Fallback' | 'Observer' | 'Peer' | 'Reviewer') {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1: for a TargetAgentID row, this target is the co-agent's default underlying agent (used when a session starts against the co-agent without an explicit runtime target); for a TargetAgentTypeID row, this co-agent is the default co-agent for agents of that type. At most one default per (CoAgentID, Type) is enforced server-side.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display/priority order of this pairing in target-agent pickers and resolution ties (ascending).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Whether this pairing participates in resolution. Disabled rows are kept for audit/toggling but ignored by the resolution chain and pickers.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional per-relationship configuration JSON (shape owned by the Type, e.g. a future Peer arena's turn budget). NULL for plain pairings.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CoAgent
+    * * Display Name: Co-Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CoAgent(): string | null {
+        return this.Get('CoAgent');
+    }
+
+    /**
+    * * Field Name: TargetAgent
+    * * Display Name: Target Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetAgent(): string | null {
+        return this.Get('TargetAgent');
+    }
+
+    /**
+    * * Field Name: TargetAgentType
+    * * Display Name: Target Agent Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get TargetAgentType(): string | null {
+        return this.Get('TargetAgentType');
+    }
+}
+
+
+/**
  * MJ: AI Agent Configurations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentConfiguration
@@ -36372,7 +36748,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsed
-    * * Display Name: Total Prompt Tokens
+    * * Display Name: Prompt Tokens
     * * SQL Data Type: int
     * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -36385,7 +36761,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsed
-    * * Display Name: Total Completion Tokens
+    * * Display Name: Completion Tokens
     * * SQL Data Type: int
     * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -36411,7 +36787,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsedRollup
-    * * Display Name: Total Prompt Tokens (Rollup)
+    * * Display Name: Prompt Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.
     */
@@ -36424,7 +36800,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsedRollup
-    * * Display Name: Total Completion Tokens (Rollup)
+    * * Display Name: Completion Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.
     */
@@ -36464,7 +36840,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ConversationDetailSequence
-    * * Display Name: Conversation Detail Sequence
+    * * Display Name: Detail Sequence
     * * SQL Data Type: int
     * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution
     */
@@ -36531,7 +36907,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Message
+    * * Display Name: Final Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Final message from the agent to the end user at the end of a run
     */
@@ -36600,7 +36976,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModelID
-    * * Display Name: Model Override
+    * * Display Name: Override Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.
@@ -36614,7 +36990,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendorID
-    * * Display Name: Vendor Override
+    * * Display Name: Override Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.
@@ -36628,7 +37004,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Data
-    * * Display Name: Data
+    * * Display Name: Input Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.
     */
@@ -36736,7 +37112,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeRecordID
-    * * Display Name: Primary Scope Record ID
+    * * Display Name: Primary Scope Record
     * * SQL Data Type: nvarchar(100)
     * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.
     */
@@ -36762,7 +37138,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ExternalReferenceID
-    * * Display Name: External Reference ID
+    * * Display Name: External Reference
     * * SQL Data Type: nvarchar(200)
     * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.
     */
@@ -36788,7 +37164,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TotalCacheReadTokensUsed
-    * * Display Name: Total Cache Read Tokens
+    * * Display Name: Cache Read Tokens
     * * SQL Data Type: int
     * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.
     */
@@ -36801,7 +37177,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TotalCacheWriteTokensUsed
-    * * Display Name: Total Cache Write Tokens
+    * * Display Name: Cache Write Tokens
     * * SQL Data Type: int
     * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.
     */
@@ -36814,7 +37190,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: LastHeartbeatAt
-    * * Display Name: Last Heartbeat At
+    * * Display Name: Last Heartbeat
     * * SQL Data Type: datetimeoffset
     * * Description: Timestamp of the most recent liveness heartbeat written by the owning process while this run is in progress. Used by the agent-run watchdog to detect runs orphaned by a process restart/crash or a failed terminal-state write: a Running row whose LastHeartbeatAt has gone stale (or is NULL with an old StartedAt) is force-failed. Always stamped on the database clock (GETUTCDATE), never process time.
     */
@@ -36841,7 +37217,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent (Ref)
+    * * Display Name: Agent Info
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -36850,7 +37226,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ParentRun
-    * * Display Name: Parent Run (Ref)
+    * * Display Name: Parent Run Info
     * * SQL Data Type: nvarchar(255)
     */
     get ParentRun(): string | null {
@@ -36859,7 +37235,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation (Ref)
+    * * Display Name: Conversation Info
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -36868,7 +37244,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: User
-    * * Display Name: User (Ref)
+    * * Display Name: User Info
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -36877,7 +37253,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail (Ref)
+    * * Display Name: Conversation Detail Info
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -36886,7 +37262,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: LastRun
-    * * Display Name: Last Run (Ref)
+    * * Display Name: Last Run Info
     * * SQL Data Type: nvarchar(255)
     */
     get LastRun(): string | null {
@@ -36895,7 +37271,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration (Ref)
+    * * Display Name: Configuration Info
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -36904,7 +37280,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModel
-    * * Display Name: Model Override (Ref)
+    * * Display Name: Override Model Info
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideModel(): string | null {
@@ -36913,7 +37289,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendor
-    * * Display Name: Vendor Override (Ref)
+    * * Display Name: Override Vendor Info
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideVendor(): string | null {
@@ -36922,7 +37298,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ScheduledJobRun
-    * * Display Name: Scheduled Job Run (Ref)
+    * * Display Name: Scheduled Job Run Info
     * * SQL Data Type: nvarchar(200)
     */
     get ScheduledJobRun(): string | null {
@@ -36931,7 +37307,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run (Ref)
+    * * Display Name: Test Run Info
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -36940,7 +37316,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntity
-    * * Display Name: Primary Scope Entity (Ref)
+    * * Display Name: Primary Scope Entity Info
     * * SQL Data Type: nvarchar(255)
     */
     get PrimaryScopeEntity(): string | null {
@@ -36949,7 +37325,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: RootParentRunID
-    * * Display Name: Root Parent Run ID
+    * * Display Name: Root Parent Run
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentRunID(): string | null {
@@ -36958,7 +37334,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: RootLastRunID
-    * * Display Name: Root Last Run ID
+    * * Display Name: Root Last Run
     * * SQL Data Type: uniqueidentifier
     */
     get RootLastRunID(): string | null {
@@ -38517,17 +38893,29 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
-    * * Field Name: DefaultCoAgentID
-    * * Display Name: Default Co-Agent
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
-    * * Description: Default co-agent (a Realtime-type AI Agent) that voices agents of this type in real-time sessions. Overridden by AIAgent.DefaultCoAgentID and by the runtime coAgentId parameter; NULL falls through to the global default co-agent.
+    * * Field Name: ConfigSchema
+    * * Display Name: Configuration Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema (draft-07) describing the shape of TypeConfiguration payloads on agents of this type. When present, agent saves validate their TypeConfiguration against it server-side (MJAIAgentEntityServer.ValidateAsync); null = TypeConfiguration is freeform for this type.
     */
-    get DefaultCoAgentID(): string | null {
-        return this.Get('DefaultCoAgentID');
+    get ConfigSchema(): string | null {
+        return this.Get('ConfigSchema');
     }
-    set DefaultCoAgentID(value: string | null) {
-        this.Set('DefaultCoAgentID', value);
+    set ConfigSchema(value: string | null) {
+        this.Set('ConfigSchema', value);
+    }
+
+    /**
+    * * Field Name: DefaultConfiguration
+    * * Display Name: Default Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Type-level DEFAULT configuration JSON for agents of this type — the base layer of the effective-configuration merge: type DefaultConfiguration <- agent TypeConfiguration <- runtime overrides (later layers win per key, deep-merged). Must itself conform to ConfigSchema when one is published. Null = no type defaults.
+    */
+    get DefaultConfiguration(): string | null {
+        return this.Get('DefaultConfiguration');
+    }
+    set DefaultConfiguration(value: string | null) {
+        this.Set('DefaultConfiguration', value);
     }
 
     /**
@@ -38546,15 +38934,6 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     */
     get DefaultStorageAccount(): string | null {
         return this.Get('DefaultStorageAccount');
-    }
-
-    /**
-    * * Field Name: DefaultCoAgent
-    * * Display Name: Default Co-Agent Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get DefaultCoAgent(): string | null {
-        return this.Get('DefaultCoAgent');
     }
 }
 
@@ -38895,7 +39274,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Compression Message Threshold
+    * * Display Name: Context Compression Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -38908,7 +39287,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Compression Prompt
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -38921,7 +39300,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
-    * * Display Name: Compression Retention Count
+    * * Display Name: Retention Count
     * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.
     */
@@ -39093,7 +39472,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidationMode
-    * * Display Name: Final Payload Validation Mode
+    * * Display Name: Final Validation Mode
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Retry
     * * Value List Type: List
@@ -39112,7 +39491,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidationMaxRetries
-    * * Display Name: Final Payload Validation Max Retries
+    * * Display Name: Final Validation Max Retries
     * * SQL Data Type: int
     * * Default Value: 3
     * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
@@ -39222,7 +39601,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: StartingPayloadValidationMode
-    * * Display Name: Starting Payload Validation Mode
+    * * Display Name: Starting Validation Mode
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Fail
     * * Value List Type: List
@@ -39285,7 +39664,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner
+    * * Display Name: Owner User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -39532,7 +39911,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold (Bytes)
+    * * Display Name: Inline Storage Threshold
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -39704,7 +40083,7 @@ if this limit is exceeded.
     * * Display Name: Default Co-Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
-    * * Description: Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overrides the agent type's DefaultCoAgentID; overridden by the runtime coAgentId parameter; NULL falls through to the type-level default, then the global default co-agent.
+    * * Description: Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overridden by the runtime coAgentId parameter; NULL falls through to a type-level AIAgentCoAgent default row, then the global default co-agent.
     */
     get DefaultCoAgentID(): string | null {
         return this.Get('DefaultCoAgentID');
@@ -39714,8 +40093,21 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: TypeConfiguration
+    * * Display Name: Type Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Agent-type-specific configuration JSON, validated against the agent type's ConfigSchema (when one is published) in the server-side entity subclass. For Realtime-type co-agents this holds the realtime profile: preferred model, per-provider voice settings, tone/speaking style (folded into the session system prompt at mint), user-override policy, and narration pacing. Null = type defaults apply.
+    */
+    get TypeConfiguration(): string | null {
+        return this.Get('TypeConfiguration');
+    }
+    set TypeConfiguration(value: string | null) {
+        this.Set('TypeConfiguration', value);
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -39724,7 +40116,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Compression Prompt Text
+    * * Display Name: Context Compression Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -39751,7 +40143,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner Name
+    * * Display Name: Owner User Name
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string {
@@ -39796,7 +40188,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent Agent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -60992,7 +61384,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: HiddenToUser
-    * * Display Name: Hidden To User
+    * * Display Name: Hidden to User
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Flag indicating if this message should be hidden from end users (system messages, function calls, etc.).
@@ -61135,7 +61527,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: IsPinned
-    * * Display Name: Is Pinned
+    * * Display Name: Pinned
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this message is pinned within the conversation for easy reference
@@ -61263,7 +61655,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: OriginalMessageChanged
-    * * Display Name: Original Message Changed
+    * * Display Name: Message Modified
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.

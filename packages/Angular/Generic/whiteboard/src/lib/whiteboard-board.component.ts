@@ -3,7 +3,6 @@ import {
   Input, OnDestroy, OnInit, Output, ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
@@ -12,15 +11,21 @@ import {
   BuildResizeCommitPatch, IsResizableKind,
   WHITEBOARD_DEFAULTS, WhiteboardBounds, WhiteboardConnectorItem, WhiteboardFontFamily,
   WhiteboardHighlightItem, WhiteboardHtmlItem, WhiteboardImageItem, WhiteboardInkItem,
-  WhiteboardItem, WhiteboardItemPatch, WhiteboardMarkdownItem, WhiteboardPoint,
-  WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
+  WhiteboardItem, WhiteboardItemPatch, WhiteboardMarkdownItem, WhiteboardPageInfo,
+  WhiteboardPoint, WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
 } from './whiteboard-state';
 import { WhiteboardTool, WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import {
-  EvaluateWidgetSubmitMessage, InjectWhiteboardSubmitHelper, WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS,
-  WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
+  EvaluateWidgetInteractionMessage, EvaluateWidgetSubmitMessage,
+  WHITEBOARD_WIDGET_INTERACTION_MAX_CHARS, WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS,
+  WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
 } from './whiteboard-widget-bridge';
-import { BuildWhiteboardContextMenu, WhiteboardContextMenuAction, WhiteboardContextMenuActionID } from './whiteboard-context-menu';
+import { WhiteboardWidgetSrcdocPipe } from './whiteboard-srcdoc.pipe';
+import {
+  BuildWhiteboardContextMenu, BuildWhiteboardPageContextMenu,
+  WhiteboardContextMenuAction, WhiteboardContextMenuActionID
+} from './whiteboard-context-menu';
+import { RealtimeWhiteboardPagesComponent, WhiteboardPageChipContextMenuEvent } from './whiteboard-pages.component';
 
 /** The agent presence cursor state (input-driven; the host animates it to mutation points). */
 export interface WhiteboardAgentPresence {
@@ -69,10 +74,11 @@ export interface WhiteboardContentAppliedEventArgs {
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 type BoardInteraction =
-  | { Type: 'move'; ItemID: string; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; DX: number; DY: number; Moved: boolean }
+  | { Type: 'move'; ItemID: string; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; DX: number; DY: number; Moved: boolean; Group: boolean }
   | { Type: 'resize'; ItemID: string; Handle: ResizeHandle; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; CurBounds: WhiteboardBounds }
   | { Type: 'pen'; Points: WhiteboardPoint[] }
   | { Type: 'shape'; StartX: number; StartY: number; CurX: number; CurY: number }
+  | { Type: 'marquee'; StartX: number; StartY: number; CurX: number; CurY: number; Additive: boolean }
   | { Type: 'pan'; StartClientX: number; StartClientY: number; OrigPanX: number; OrigPanY: number };
 
 interface PendingConnector {
@@ -151,7 +157,7 @@ const POP_IN_MS = 3200;
 @Component({
   standalone: true,
   selector: 'mj-realtime-whiteboard',
-  imports: [CommonModule, MarkdownModule, CodeEditorModule],
+  imports: [CommonModule, MarkdownModule, CodeEditorModule, RealtimeWhiteboardPagesComponent, WhiteboardWidgetSrcdocPipe],
   templateUrl: './whiteboard-board.component.html',
   styleUrl: './whiteboard-board.component.css'
 })
@@ -209,6 +215,15 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
    */
   @Output() WidgetSubmitted = new EventEmitter<WhiteboardWidgetSubmitEvent>();
   /**
+   * AMBIENT widget telemetry: the injected recorder observed passive form activity
+   * (clicks / changes / typing / focus) inside a sandboxed HTML widget — no widget-authored
+   * script involved. The batch was validated (marker + tracked source + size cap + shape)
+   * and pre-summarized into one compact human line. Integration layers forward it to their
+   * agent runtime as low-priority background context (MJ's channel plugin throttles per
+   * widget and frames it as a do-not-respond `[whiteboard]` note).
+   */
+  @Output() WidgetInteraction = new EventEmitter<WhiteboardWidgetInteractionEvent>();
+  /**
    * Cancelable BEFORE event: an in-board editor commit (inline sticky/text/shape edit or
    * the markdown/HTML rich editor's Apply/Done) is about to write to the state engine.
    * Set `Cancel = true` synchronously to discard the commit; handlers may also rewrite
@@ -219,6 +234,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   @Output() ContentApplied = new EventEmitter<WhiteboardContentAppliedEventArgs>();
 
   @ViewChild('canvas') private canvasRef?: ElementRef<HTMLDivElement>;
+  /** The page strip — the context menu's "Rename page" routes to its inline editor. */
+  @ViewChild(RealtimeWhiteboardPagesComponent) private pagesStrip?: RealtimeWhiteboardPagesComponent;
 
   // viewport
   public PanX = 0;
@@ -238,21 +255,15 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     Top: number;
     /** Board-coordinate click point — "add … here" placement target. */
     Point: WhiteboardPoint;
-    /** Target item, or null for the empty-canvas menu. */
+    /** Target item, or null for the empty-canvas / page-chip menus. */
     ItemID: string | null;
+    /** Target page (a right-clicked page chip), or null for item/canvas menus. */
+    PageID: string | null;
     Actions: WhiteboardContextMenuAction[];
   } | null = null;
   private editIsNew = false;
   private pendingFocus = false;
   private userStickyCount = 0;
-
-  /**
-   * Per-item memoized `srcdoc` payloads for HTML widgets. The SafeHtml instance MUST be
-   * stable across change-detection cycles — handing the iframe a fresh object every CD
-   * pass would reload (and reset) the widget continuously.
-   */
-  private htmlSrcdocCache = new Map<string, { Html: string; Safe: SafeHtml }>();
-  private sanitizer = inject(DomSanitizer);
 
   /** Agent items that just popped in (drive the .pop-in violet flash). */
   public PopInIDs = new Set<string>();
@@ -274,18 +285,19 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
           this.cdr.markForCheck();
         }, POP_IN_MS));
       }
-      if (change.Op === 'remove') {
-        this.htmlSrcdocCache.delete(change.ItemID);
-      }
-      else if (change.Op === 'replace') {
-        this.htmlSrcdocCache.clear(); // whole scene swapped (undo/redo/load)
-      }
+      // NOTE: HTML-widget srcdoc payloads need no invalidation here — the
+      // `wbWidgetSrcdoc` pipe is view-scoped (rebuilt per mount, memoized per source),
+      // so journal ops can neither leave a re-mounted frame a stale document nor
+      // force-reload a still-mounted widget whose Html didn't change.
       // close the rich editor when its target item no longer exists (erased / undone)
       if (this.RichEditor && !this.State.GetItem(this.RichEditor.ItemID)) {
         this.RichEditor = null;
       }
-      // close the context menu when its target item no longer exists
+      // close the context menu when its target item / page no longer exists
       if (this.ContextMenu?.ItemID && !this.State.GetItem(this.ContextMenu.ItemID)) {
+        this.ContextMenu = null;
+      }
+      if (this.ContextMenu?.PageID && !this.State.FindPage(this.ContextMenu.PageID)) {
         this.ContextMenu = null;
       }
       this.syncWidgetMessageListener();
@@ -311,6 +323,48 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       const editor = this.canvasRef?.nativeElement.querySelector<HTMLElement>('.wb-edit');
       editor?.focus();
     }
+    this.observeCanvasSize();
+  }
+
+  // ── Hidden-host layout recovery ─────────────────────────────────────────────
+  //
+  // The board is often CREATED inside a display:none tab pane (a review session's
+  // Whiteboard tab, a collapsed surface panel): the canvas measures 0×0, so the
+  // viewport-lazy culling computes everything as off-screen and the board renders
+  // BLANK until some interaction forces a re-measure. A ResizeObserver watches for
+  // the first REAL layout: it re-runs change detection (fixing the culling) and —
+  // when the viewport is still untouched — frames the content via FitToContent so a
+  // reviewed board opens centered instead of wherever pan (0,0) happens to land.
+
+  /** Observer driving {@link onCanvasResize}; created once the canvas element exists. */
+  private canvasResizeObserver: ResizeObserver | null = null;
+  /** True once the canvas has had a real (non-zero) layout. */
+  private hadRealLayout = false;
+  /** True once the user pans/zooms — the auto-fit must never fight a chosen viewport. */
+  private viewportTouched = false;
+
+  /** Attaches the ResizeObserver exactly once (no-op where ResizeObserver is unavailable). */
+  private observeCanvasSize(): void {
+    const el = this.canvasRef?.nativeElement;
+    if (!el || this.canvasResizeObserver || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    this.canvasResizeObserver = new ResizeObserver(() => this.onCanvasResize());
+    this.canvasResizeObserver.observe(el);
+    this.onCanvasResize();
+  }
+
+  /** First non-zero layout: recompute culling and (if untouched) frame the content. */
+  private onCanvasResize(): void {
+    const el = this.canvasRef?.nativeElement;
+    if (!el || el.clientWidth === 0 || el.clientHeight === 0 || this.hadRealLayout) {
+      return;
+    }
+    this.hadRealLayout = true;
+    if (!this.viewportTouched) {
+      this.FitToContent();
+    }
+    this.cdr.markForCheck();
   }
 
   // ────────────────────────────────────────────── render-model getters
@@ -429,17 +483,26 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     return item.H ?? null;
   }
 
+  /** Whether the item is part of the current (single OR multi) selection. */
   public IsSelected(item: WhiteboardItem): boolean {
-    return UUIDsEqual(this.State.SelectedID, item.ID);
+    return this.State.IsItemSelected(item.ID);
   }
 
+  /** Dragging visuals: the grabbed item, plus every other member during a GROUP drag. */
   public IsDragging(item: WhiteboardItem): boolean {
-    return this.Interaction?.Type === 'move' && this.Interaction.ItemID === item.ID && this.Interaction.Moved;
+    const i = this.Interaction;
+    if (i?.Type !== 'move' || !i.Moved) {
+      return false;
+    }
+    return UUIDsEqual(i.ItemID, item.ID) || (i.Group && this.State.IsItemSelected(item.ID));
   }
 
-  /** 8 handles render on the selected, resizable item (gate: {@link IsResizableKind}). */
+  /**
+   * 8 handles render on the selected, resizable item (gate: {@link IsResizableKind}) —
+   * but only for a SINGLE selection; a multi-selection shows the outline treatment only.
+   */
   public ShowHandles(item: WhiteboardItem): boolean {
-    return this.IsSelected(item) && IsResizableKind(item.Kind);
+    return this.IsSelected(item) && this.State.SelectedIDs.length === 1 && IsResizableKind(item.Kind);
   }
 
   public readonly Handles: ResizeHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -461,6 +524,21 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       W: Math.abs(s.CurX - s.StartX),
       H: Math.abs(s.CurY - s.StartY)
     };
+  }
+
+  /** Live marquee (rubber-band) selection rectangle, or null when none is in flight. */
+  public get MarqueeRect(): WhiteboardBounds | null {
+    if (this.Interaction?.Type !== 'marquee') {
+      return null;
+    }
+    const m = this.Interaction;
+    const rect: WhiteboardBounds = {
+      X: Math.min(m.StartX, m.CurX),
+      Y: Math.min(m.StartY, m.CurY),
+      W: Math.abs(m.CurX - m.StartX),
+      H: Math.abs(m.CurY - m.StartY)
+    };
+    return rect.W >= 3 || rect.H >= 3 ? rect : null;
   }
 
   public StickyRotation(item: WhiteboardStickyItem): string {
@@ -653,7 +731,9 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     const p = this.toBoard(event);
     switch (this.Tool) {
       case 'select':
-        this.State.Select(null);
+        // marquee (rubber-band) selection starts on empty canvas; a tiny drag (a plain
+        // click) clears the selection at pointerup unless shift is held (additive)
+        this.Interaction = { Type: 'marquee', StartX: p.X, StartY: p.Y, CurX: p.X, CurY: p.Y, Additive: event.shiftKey };
         break;
       case 'pan':
         this.Interaction = { Type: 'pan', StartClientX: event.clientX, StartClientY: event.clientY, OrigPanX: this.PanX, OrigPanY: this.PanY };
@@ -701,10 +781,20 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     switch (this.Tool) {
       case 'select': {
         event.stopPropagation();
-        this.State.Select(item.ID);
+        if (event.shiftKey) {
+          // shift-click toggles membership in the multi-selection (no drag from it)
+          this.State.ToggleSelect(item.ID);
+          break;
+        }
+        // pointerdown on an already multi-selected item keeps the selection and drags
+        // the whole GROUP; a click without movement collapses to that item at pointerup
+        const group = this.State.IsItemSelected(item.ID) && this.State.SelectedIDs.length > 1;
+        if (!group) {
+          this.State.Select(item.ID);
+        }
         const p = this.toBoard(event);
         const bounds = this.State.ItemBounds(item);
-        this.Interaction = { Type: 'move', ItemID: item.ID, StartX: p.X, StartY: p.Y, OrigBounds: bounds, DX: 0, DY: 0, Moved: false };
+        this.Interaction = { Type: 'move', ItemID: item.ID, StartX: p.X, StartY: p.Y, OrigBounds: bounds, DX: 0, DY: 0, Moved: false, Group: group };
         break;
       }
       case 'eraser':
@@ -778,7 +868,12 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         i.CurX = p.X;
         i.CurY = p.Y;
         break;
+      case 'marquee':
+        i.CurX = p.X;
+        i.CurY = p.Y;
+        break;
       case 'pan':
+        this.viewportTouched = true; // a chosen viewport — the first-layout auto-fit must not fight it
         this.PanX = i.OrigPanX + (event.clientX - i.StartClientX);
         this.PanY = i.OrigPanY + (event.clientY - i.StartClientY);
         break;
@@ -795,9 +890,37 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     switch (i.Type) {
       case 'move':
         if (i.Moved) {
-          this.State.MoveItem(i.ItemID, i.OrigBounds.X + i.DX, i.OrigBounds.Y + i.DY, 'user');
+          if (i.Group) {
+            // group drag: every selected item moves by the same delta — ONE undo step
+            this.State.MoveSelectedBy(i.DX, i.DY, 'user');
+          }
+          else {
+            this.State.MoveItem(i.ItemID, i.OrigBounds.X + i.DX, i.OrigBounds.Y + i.DY, 'user');
+          }
+        }
+        else if (i.Group) {
+          // click (no drag) on a multi-selected item collapses the selection to it
+          this.State.Select(i.ItemID);
         }
         break;
+      case 'marquee': {
+        const rect: WhiteboardBounds = {
+          X: Math.min(i.StartX, i.CurX),
+          Y: Math.min(i.StartY, i.CurY),
+          W: Math.abs(i.CurX - i.StartX),
+          H: Math.abs(i.CurY - i.StartY)
+        };
+        if (rect.W < 3 && rect.H < 3) {
+          // a plain click on empty canvas clears the selection (shift-click keeps it)
+          if (!i.Additive) {
+            this.State.Select(null);
+          }
+          break;
+        }
+        const hits = this.State.ItemsIntersecting(rect).map((it) => it.ID);
+        this.State.SelectMany(i.Additive ? [...this.State.SelectedIDs, ...hits] : hits);
+        break;
+      }
       case 'resize': {
         const item = this.State.GetItem(i.ItemID);
         // per-kind commit: full-box kinds take X/Y/W/H; content-driven-height kinds
@@ -945,30 +1068,9 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   // ────────────────────────────────────────────── rich widgets (markdown / html)
-
-  /**
-   * The sandboxed iframe's `srcdoc` for an HTML widget.
-   *
-   * SECURITY — why `bypassSecurityTrustHtml` is correct here: Angular's sanitizer would
-   * strip the scripts/styles that make the widget interactive, but the payload NEVER
-   * touches the app's DOM — it only becomes the `srcdoc` of an iframe whose `sandbox`
-   * attribute is `allow-scripts` ONLY. Without `allow-same-origin` the frame runs in a
-   * unique opaque origin: its scripts cannot reach the parent document, the MJ session,
-   * cookies, or any storage, and adding `allow-same-origin` (which would let the frame
-   * script remove its own sandbox) is deliberately ruled out. The trusted value is
-   * memoized per item so the iframe doesn't reload on every change-detection pass.
-   */
-  public HtmlSrcdoc(item: WhiteboardHtmlItem): SafeHtml {
-    const cached = this.htmlSrcdocCache.get(item.ID);
-    if (cached && cached.Html === item.Html) {
-      return cached.Safe;
-    }
-    // Every widget gets the MJWhiteboard.submit input-bridge helper, prepended exactly
-    // once (idempotent) — see whiteboard-widget-bridge.ts for the postMessage contract.
-    const safe = this.sanitizer.bypassSecurityTrustHtml(InjectWhiteboardSubmitHelper(item.Html));
-    this.htmlSrcdocCache.set(item.ID, { Html: item.Html, Safe: safe });
-    return safe;
-  }
+  // The sandboxed iframe's `srcdoc` is produced by the view-scoped `wbWidgetSrcdoc`
+  // pipe (see whiteboard-srcdoc.pipe.ts for the per-mount lifecycle contract and the
+  // full security rationale for bypassing Angular's sanitizer into the sandbox).
 
   // ────────────────────────────────────────────── widget input bridge (MJWhiteboard.submit)
 
@@ -994,7 +1096,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
    * {@link WidgetSubmitted} event pair.
    */
   private onWindowMessage = (event: MessageEvent): void => {
-    const outcome = EvaluateWidgetSubmitMessage(event.data, this.resolveWidgetFromSource(event.source));
+    const widget = this.resolveWidgetFromSource(event.source);
+    const outcome = EvaluateWidgetSubmitMessage(event.data, widget);
     if (outcome.Kind === 'submit') {
       const submitting: WhiteboardWidgetSubmittingEventArgs = { Event: outcome.Event, Cancel: false };
       this.WidgetSubmitting.emit(submitting);
@@ -1010,8 +1113,35 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     else if (outcome.Reason === 'unknown-source') {
       console.warn('Whiteboard widget submit dropped: message source is not a tracked widget frame.');
     }
-    // 'not-submit' is unrelated postMessage traffic — ignore silently.
+    else {
+      // 'not-submit' — may be the injected recorder's AMBIENT interaction batch instead.
+      this.handleInteractionMessage(event.data, widget);
+    }
   };
+
+  /**
+   * Second leg of the message listener: evaluate a non-submit message against the ambient
+   * interaction contract and surface accepted batches through {@link WidgetInteraction}.
+   * `'not-interaction'` is unrelated postMessage traffic — ignored silently, like the
+   * submit path's `'not-submit'`.
+   */
+  private handleInteractionMessage(messageData: unknown, widget: { ItemID: string; Title?: string } | null): void {
+    const outcome = EvaluateWidgetInteractionMessage(messageData, widget);
+    if (outcome.Kind === 'interaction') {
+      this.WidgetInteraction.emit(outcome.Event);
+      this.cdr.markForCheck();
+      return;
+    }
+    if (outcome.Reason === 'oversize') {
+      console.warn(`Whiteboard widget interaction dropped: batch exceeds ${WHITEBOARD_WIDGET_INTERACTION_MAX_CHARS} chars.`);
+    }
+    else if (outcome.Reason === 'unknown-source') {
+      console.warn('Whiteboard widget interaction dropped: message source is not a tracked widget frame.');
+    }
+    else if (outcome.Reason === 'bad-shape') {
+      console.warn('Whiteboard widget interaction dropped: events batch is malformed.');
+    }
+  }
 
   /** Resolve a message `event.source` to the tracked widget iframe (window → item) it belongs to. */
   private resolveWidgetFromSource(source: MessageEventSource | null): { ItemID: string; Title?: string } | null {
@@ -1042,8 +1172,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
    */
   public IsNearViewport(item: WhiteboardItem): boolean {
     const el = this.canvasRef?.nativeElement;
-    if (!el) {
-      return true; // before the first layout, render rather than blank out
+    if (!el || el.clientWidth === 0 || el.clientHeight === 0) {
+      // Before the first layout — or while the host pane is display:none (an
+      // unfocused tab) — there is no real viewport to cull against: render rather
+      // than blank out (culling resumes on the first real layout).
+      return true;
     }
     const margin = 320;
     const b = this.State.ItemBounds(item);
@@ -1227,6 +1360,20 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       case 'add-html':
         this.placeHtml(menu.Point);
         break;
+      case 'add-page':
+        // same path as the strip's "+" — an auto-named page the engine switches to
+        this.State.AddPage(undefined, 'user');
+        break;
+      case 'page-rename':
+        if (menu.PageID) {
+          this.pagesStrip?.BeginRename(menu.PageID);
+        }
+        break;
+      case 'page-delete':
+        if (menu.PageID) {
+          this.State.RemovePage(menu.PageID, 'user'); // engine guards the last page
+        }
+        break;
     }
   }
 
@@ -1238,10 +1385,34 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     }
   }
 
+  /**
+   * Right-click on a PAGE CHIP in the page strip (forwarded by the strip's
+   * `ChipContextMenu` output) → the page action menu: Rename (routes back into the
+   * strip's inline-rename editor) and Delete (offered only when more than one page
+   * exists — the engine's last-page guard). Never opens in ReadOnly.
+   */
+  public OnPageChipContextMenu(payload: WhiteboardPageChipContextMenuEvent): void {
+    if (this.ReadOnly) {
+      return;
+    }
+    const actions = BuildWhiteboardPageContextMenu(payload.Page, {
+      CanDelete: this.State.Pages.length > 1,
+      ReadOnly: this.ReadOnly
+    });
+    if (actions.length === 0) {
+      return;
+    }
+    this.showContextMenu(payload.Event, actions, null, payload.Page.ID);
+  }
+
   private openContextMenu(event: MouseEvent, item: WhiteboardItem | null): void {
+    this.showContextMenu(event, BuildWhiteboardContextMenu(item), item ? item.ID : null, null);
+  }
+
+  /** Position + open the shared context-menu panel for any target (item / canvas / page chip). */
+  private showContextMenu(event: MouseEvent, actions: WhiteboardContextMenuAction[], itemId: string | null, pageId: string | null): void {
     const el = this.canvasRef?.nativeElement;
     const rect = el ? el.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
-    const actions = BuildWhiteboardContextMenu(item);
     // keep the menu inside the canvas (estimate: ~200px wide, ~31px per row + padding)
     const menuW = 200;
     const menuH = actions.length * 31 + 12;
@@ -1251,7 +1422,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       Left: left,
       Top: top,
       Point: this.toBoard(event),
-      ItemID: item ? item.ID : null,
+      ItemID: itemId,
+      PageID: pageId,
       Actions: actions
     };
   }
@@ -1263,6 +1435,18 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this.zoomCentered(next ?? ZOOM_STEPS[ZOOM_STEPS.length - 1]);
   }
 
+  /**
+   * Continuous zoom by a multiplicative factor at the viewport center — the
+   * hold-to-zoom tick path (the zoom cluster emits ~3.5% factors every 50 ms while a
+   * +/− button is held). Clamped to the same 25%–200% limits as the stepped zoom.
+   */
+  public ZoomByFactor(factor: number): void {
+    if (!Number.isFinite(factor) || factor <= 0) {
+      return;
+    }
+    this.zoomCentered(this.clampZoom(this.Zoom * factor));
+  }
+
   public ZoomOut(): void {
     const lower = [...ZOOM_STEPS].reverse().find((z) => z < this.Zoom - 0.001);
     this.zoomCentered(lower ?? ZOOM_STEPS[0]);
@@ -1272,8 +1456,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   public FitToContent(): void {
     const bounds = this.State.ContentBounds();
     const el = this.canvasRef?.nativeElement;
-    if (!bounds || !el || bounds.W === 0 || bounds.H === 0) {
-      return;
+    if (!bounds || !el || bounds.W === 0 || bounds.H === 0 || el.clientWidth === 0 || el.clientHeight === 0) {
+      return; // a hidden (0×0) host cannot be fit against — wait for a real layout
     }
     const pad = 60;
     const zoom = this.clampZoom(Math.min((el.clientWidth - pad * 2) / bounds.W, (el.clientHeight - pad * 2) / bounds.H));
@@ -1349,6 +1533,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   private zoomCentered(next: number): void {
+    this.viewportTouched = true; // user-driven zoom — disable the first-layout auto-fit
     const el = this.canvasRef?.nativeElement;
     if (!el) {
       this.Zoom = next;
@@ -1408,8 +1593,19 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   private transientBounds(itemId: string): WhiteboardBounds | null {
     const i = this.Interaction;
-    if (i?.Type === 'move' && i.ItemID === itemId && i.Moved) {
-      return { X: i.OrigBounds.X + i.DX, Y: i.OrigBounds.Y + i.DY, W: i.OrigBounds.W, H: i.OrigBounds.H };
+    if (i?.Type === 'move' && i.Moved) {
+      if (i.ItemID === itemId) {
+        return { X: i.OrigBounds.X + i.DX, Y: i.OrigBounds.Y + i.DY, W: i.OrigBounds.W, H: i.OrigBounds.H };
+      }
+      // GROUP drag: every other selected member previews at the same live delta
+      // (state is untouched mid-drag, so ItemBounds still reports the original spot)
+      if (i.Group && this.State.IsItemSelected(itemId)) {
+        const item = this.State.GetItem(itemId);
+        if (item) {
+          const b = this.State.ItemBounds(item);
+          return { X: b.X + i.DX, Y: b.Y + i.DY, W: b.W, H: b.H };
+        }
+      }
     }
     if (i?.Type === 'resize' && i.ItemID === itemId) {
       return i.CurBounds;

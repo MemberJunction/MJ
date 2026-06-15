@@ -5,8 +5,25 @@ import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeChannelClient } from '../channels/base-realtime-channel-client';
 import {
   ApplyWhiteboardAgentTool, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
-  WHITEBOARD_TOOL_PREFIX, WhiteboardState, WhiteboardWidgetSubmitEvent
+  WHITEBOARD_TOOL_PREFIX, WhiteboardState, WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
 } from '@memberjunction/ng-whiteboard';
+
+/**
+ * Per-widget throttle window for AMBIENT interaction context notes: at most one note per
+ * widget per this many ms — within the window the LATEST summary wins (chatty widgets
+ * collapse to one trailing-edge note instead of flooding the model's context).
+ */
+export const WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS = 4000;
+
+/** Per-widget ambient-note throttle bookkeeping. */
+interface InteractionThrottleEntry {
+  /** When this widget's last ambient note was sent (epoch ms). */
+  LastSentAt: number;
+  /** Trailing-edge timer for a deferred note, or null when the window is idle. */
+  Timer: ReturnType<typeof setTimeout> | null;
+  /** The latest event received within the open window (sent when the timer fires). */
+  Pending: WhiteboardWidgetInteractionEvent | null;
+}
 
 /**
  * The LIVE WHITEBOARD as a pluggable interactive channel — the canonical
@@ -49,6 +66,8 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   private surfaceSubs: Subscription[] = [];
   /** Board-mutation subscription driving the debounced state-of-record save. */
   private stateChangedSub: Subscription | null = null;
+  /** Per-widget ambient-interaction note throttles (ItemID → window state). */
+  private interactionThrottles = new Map<string, InteractionThrottleEntry>();
 
   public get ChannelName(): string {
     return 'Whiteboard';
@@ -111,8 +130,22 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
       // event ran first). Surface it to the agent so it can react to quiz answers /
       // micro-form input it asked for.
       instance.WidgetSubmitted.subscribe((submit: WhiteboardWidgetSubmitEvent) => {
+        // Durable awareness first (the note persists in the model's context)…
         this.Context?.SendContextNote(
           `[whiteboard] the user submitted input in widget "${submit.Title || submit.ItemID}": ${submit.DataJson}`);
+        // …then make the model REACT — a submission is explicit user input the user is
+        // waiting on; without this trigger, SendContextNote alone produces dead silence
+        // ("I clicked Submit and nothing happened").
+        this.Context?.RequestSpokenResponse?.(
+          `The user just submitted input in the whiteboard widget "${submit.Title || submit.ItemID}": ${submit.DataJson}. ` +
+          `React to it now in your own voice — acknowledge their choice and continue naturally.`);
+      }),
+      // AMBIENT widget telemetry (the injected recorder, NOT widget-authored script):
+      // clicks / changes / typing summarized by the board. Pure background perception —
+      // throttled per widget so chatty widgets don't flood the model's context, and framed
+      // with do-not-respond etiquette (explicit MJWhiteboard.submit input arrives above).
+      instance.WidgetInteraction.subscribe((interaction: WhiteboardWidgetInteractionEvent) => {
+        this.onWidgetInteraction(interaction);
       }),
       // The board's Focus toggle — ask the shell to collapse/restore the main call column.
       instance.FocusModeChange.subscribe((focused: boolean) => {
@@ -127,6 +160,54 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
 
   public override UnbindSurface(): void {
     this.releaseSurface();
+  }
+
+  /**
+   * Routes one ambient widget-interaction batch to the agent as a throttled background
+   * context note: outside an open window the note goes out immediately and opens a
+   * {@link WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS} window; within the window the LATEST
+   * event is stashed and a trailing-edge timer sends it when the window closes (one note
+   * per widget per window, latest summary wins).
+   */
+  private onWidgetInteraction(interaction: WhiteboardWidgetInteractionEvent): void {
+    const now = Date.now();
+    const entry = this.interactionThrottles.get(interaction.ItemID);
+    if (!entry || (entry.Timer === null && now - entry.LastSentAt >= WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS)) {
+      this.sendInteractionNote(interaction);
+      this.interactionThrottles.set(interaction.ItemID, { LastSentAt: now, Timer: null, Pending: null });
+      return;
+    }
+    entry.Pending = interaction; // latest wins within the window
+    if (entry.Timer === null) {
+      const wait = Math.max(0, entry.LastSentAt + WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS - now);
+      entry.Timer = setTimeout(() => {
+        entry.Timer = null;
+        const pending = entry.Pending;
+        entry.Pending = null;
+        if (pending) {
+          entry.LastSentAt = Date.now();
+          this.sendInteractionNote(pending);
+        }
+      }, wait);
+    }
+  }
+
+  /** The ambient-note framing: background etiquette rides in the note itself (like scene deltas). */
+  private sendInteractionNote(interaction: WhiteboardWidgetInteractionEvent): void {
+    this.Context?.SendContextNote(
+      `[whiteboard] ambient activity in widget "${interaction.Title || interaction.ItemID}" ` +
+      '(background — do NOT respond unless it is significant or you are asked; ' +
+      `explicit submissions arrive separately): ${interaction.Summary}`);
+  }
+
+  /** Cancels all pending ambient-note timers and resets the per-widget throttle windows. */
+  private clearInteractionThrottles(): void {
+    for (const entry of this.interactionThrottles.values()) {
+      if (entry.Timer !== null) {
+        clearTimeout(entry.Timer);
+      }
+    }
+    this.interactionThrottles.clear();
   }
 
   /**
@@ -191,12 +272,13 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     super.Dispose(); // releases the surface binding + context
   }
 
-  /** Unsubscribes surface outputs and drops the host reference. */
+  /** Unsubscribes surface outputs, cancels pending ambient notes and drops the host reference. */
   private releaseSurface(): void {
     for (const sub of this.surfaceSubs) {
       sub.unsubscribe();
     }
     this.surfaceSubs = [];
+    this.clearInteractionThrottles();
     this.host = null;
   }
 }
@@ -205,7 +287,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
  * Tree-shaking prevention: the whiteboard channel is resolved dynamically through the
  * ClassFactory (by the registry row's `ClientPluginClass` key), so this static call is
  * what keeps its `@RegisterClass` side effect from being eliminated by the bundler.
- * Called by `VoiceSessionService` alongside the realtime-client driver Load calls.
+ * Called by `RealtimeSessionService` alongside the realtime-client driver Load calls.
  */
 export function LoadRealtimeWhiteboardChannel(): void {
   // intentional no-op — the import side effect performs the registration

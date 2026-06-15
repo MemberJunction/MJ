@@ -439,10 +439,15 @@ function documentCss(): string {
   .ink-chip .chip { position: static; }
   .exp-empty { padding: 48px 0; text-align: center; color: ${PALETTE.TextMuted}; font-size: 13px; }
   .exp-foot { margin-top: 12px; font-size: 11px; color: ${PALETTE.TextMuted}; }
+  .exp-page { margin-bottom: 22px; }
+  .exp-page__name { margin: 0 0 8px; font-size: 15px; }
+  .exp-page__idx { color: ${PALETTE.TextMuted}; font-weight: 400; font-size: 12px; }
   @media print {
     body { background: #ffffff; padding: 0; }
     .board, .it { box-shadow: none !important; }
     .board-wrap { overflow: visible; }
+    .exp-page { break-inside: avoid; }
+    .exp-page + .exp-page { break-before: page; }
   }
   @page { margin: 12mm; }`;
 }
@@ -452,6 +457,9 @@ function documentCss(): string {
  * only, light paper-friendly palette, header (title / generated-at / agent byline), the
  * positioned board, ownership chips, item-count footer and print-friendly `@media print`
  * rules. Deterministic for a given state + options; all text is HTML-escaped.
+ *
+ * Renders the ACTIVE page only — see {@link BuildWhiteboardExportHtmlAllPages} for the
+ * every-page document.
  */
 export function BuildWhiteboardExportHtml(state: WhiteboardState, opts: WhiteboardExportOptions): string {
   const b = exportBounds(state);
@@ -555,6 +563,9 @@ function boxItemSvg(item: WhiteboardItem, state: WhiteboardState, ox: number, oy
  * Build a standalone SVG document of the board snapshot: box items as SVG rects / shapes /
  * single-line text, plus the same vector layer (ink, connectors, highlight outlines).
  * All text is escaped; output is deterministic for a given state.
+ *
+ * Renders the ACTIVE page only — see {@link BuildWhiteboardExportSvgPages} for one SVG
+ * document per page.
  */
 export function BuildWhiteboardExportSvg(state: WhiteboardState): string {
   const b = exportBounds(state);
@@ -579,4 +590,92 @@ export function BuildWhiteboardExportSvg(state: WhiteboardState): string {
     `<path d="M0,0 L7,3 L0,6 Z" fill="${PALETTE.ConnectorUser}"/></marker></defs>` +
     `<rect x="0" y="0" width="${n(b.W)}" height="${n(b.H)}" fill="${PALETTE.PaperBg}"/>` +
     `${parts.join('')}</svg>`;
+}
+
+// ────────────────────────────────────────────── multi-page export
+
+/** One page's rendered export document — the per-page output of the all-pages builders. */
+export interface WhiteboardPageExport {
+  /** The page's stable id (e.g. `page-2`). */
+  PageID: string;
+  /** The page's display name — callers typically suffix download filenames with it. */
+  PageName: string;
+  /** The fully rendered export document for that page. */
+  Content: string;
+}
+
+/**
+ * Enumerate per-page snapshot states WITHOUT mutating the live engine: the board's
+ * persisted JSON is rehydrated once per page with that page forced active, so the pure
+ * single-page builders (which always render the ACTIVE page) can render ANY page.
+ * Pure: the live `state` is only read (`ToJSON` / `Pages`), never switched.
+ */
+function buildPageStates(state: WhiteboardState): { Page: { ID: string; Name: string }; BoardState: WhiteboardState }[] {
+  const raw = JSON.parse(state.ToJSON()) as Record<string, unknown>;
+  return state.Pages.map((page) => {
+    raw['activePageId'] = page.ID;
+    return { Page: { ID: page.ID, Name: page.Name }, BoardState: WhiteboardState.FromJSON(JSON.stringify(raw)) };
+  });
+}
+
+/**
+ * Build one standalone SVG document PER PAGE (SVG is a single-image format, so "all
+ * pages" means one file per page — the host downloads them sequentially, suffixing each
+ * filename with the page name). Page order matches the board's page strip; each entry's
+ * content is exactly what {@link BuildWhiteboardExportSvg} produces for that page.
+ */
+export function BuildWhiteboardExportSvgPages(state: WhiteboardState): WhiteboardPageExport[] {
+  return buildPageStates(state).map(({ Page, BoardState }) => ({
+    PageID: Page.ID,
+    PageName: Page.Name,
+    Content: BuildWhiteboardExportSvg(BoardState)
+  }));
+}
+
+/**
+ * Build ONE fully self-contained HTML document containing EVERY page of the board —
+ * each page renders as its own titled section ("name (n of m)") with the same
+ * board/chip/vector rendering as the single-page export, and the print CSS breaks
+ * between pages. The footer totals span all pages. Deterministic and escape-safe like
+ * the single-page builder. (The board's JSON/state persistence already carries all
+ * pages inherently — this is the human-readable counterpart.)
+ */
+export function BuildWhiteboardExportHtmlAllPages(state: WhiteboardState, opts: WhiteboardExportOptions): string {
+  const pages = buildPageStates(state);
+  const title = escapeHtml(opts.Title);
+  const agent = escapeHtml(opts.AgentName);
+  let totalElements = 0;
+  let totalUser = 0;
+  let totalAgent = 0;
+  const sections = pages.map(({ Page, BoardState }, index) => {
+    totalElements += BoardState.ElementCount;
+    totalUser += BoardState.CountByAuthor('user');
+    totalAgent += BoardState.CountByAuthor('agent');
+    const b = exportBounds(BoardState);
+    const inner = BoardState.Items.length === 0
+      ? `<div class="exp-empty">This page is empty.</div>`
+      : vectorLayerSvg(BoardState, b) + boxLayerHtml(BoardState, b, opts.AgentName);
+    return `<section class="exp-page">
+<h2 class="exp-page__name">${escapeHtml(Page.Name)} <span class="exp-page__idx">(${index + 1} of ${pages.length})</span></h2>
+<div class="board-wrap"><div class="board" style="width:${n(b.W)}px;height:${n(b.H)}px;">${inner}</div></div>
+</section>`;
+  }).join('\n');
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>${documentCss()}</style>
+</head>
+<body>
+<header class="exp-head">
+<h1>${title}</h1>
+<div class="exp-meta">Generated ${escapeHtml(opts.GeneratedAt)} &middot; Live session with ${agent} &middot; ${pages.length} ${pages.length === 1 ? 'page' : 'pages'}</div>
+</header>
+<main>
+${sections}
+</main>
+<footer class="exp-foot">${totalElements} elements across ${pages.length} ${pages.length === 1 ? 'page' : 'pages'} &middot; you ${totalUser} &middot; ${agent} ${totalAgent}</footer>
+</body>
+</html>`;
 }

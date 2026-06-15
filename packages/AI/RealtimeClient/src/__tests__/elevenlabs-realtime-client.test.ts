@@ -301,7 +301,9 @@ describe('ElevenLabsRealtimeClient', () => {
             const finals = transcripts.filter((t) => t.Role === 'Assistant');
             expect(finals).toEqual([
                 { Role: 'Assistant', Text: 'The full answer is forty-two and', IsFinal: true, Kind: 'normal' },
-                { Role: 'Assistant', Text: 'The full answer is', IsFinal: true, Kind: 'normal' },
+                // The correction is MACHINE-READABLY marked as superseding the previous final
+                // (the §10 "Transcript Replaces marker" contract) so hosts update in place.
+                { Role: 'Assistant', Text: 'The full answer is', IsFinal: true, Kind: 'normal', ReplacesPrevious: true },
             ]);
         });
 
@@ -724,5 +726,53 @@ describe('ElevenLabsRealtimeClient', () => {
             client.Fake.onclose?.();
             expect(errors).toEqual([]);
         });
+    });
+});
+
+
+// ── Absorbed-tool-result nudge (live finding: delegation outlasts the turn) ────
+describe('tool-result nudge — result lands after the turn closed', () => {
+    let client: TestElevenLabsClient;
+
+    beforeEach(async () => {
+        vi.useFakeTimers();
+        client = new TestElevenLabsClient();
+        await connect(client);
+        client.Emit({
+            type: 'client_tool_call',
+            client_tool_call: { tool_name: 'invoke-target-agent', tool_call_id: 'tc1', parameters: {} },
+        });
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    const userMessages = () =>
+        client.Fake.SentFrames().filter((f) => (f as { type?: string }).type === 'user_message');
+
+    it('nudges via user_message when NO model output follows the tool result', () => {
+        client.SendToolResult('tc1', '{"success":true,"output":"42"}');
+        vi.advanceTimersByTime(1601);
+
+        const nudges = userMessages();
+        expect(nudges).toHaveLength(1);
+        expect((nudges[0] as { text: string }).text).toContain('Tell the user the outcome now');
+        // the nudge itself marks a response active (it WILL trigger one)
+        expect(client.IsBusy).toBe(true);
+    });
+
+    it('does NOT nudge when real model output arrives within the window', () => {
+        client.SendToolResult('tc1', '{"success":true}');
+        emitAudio(client);
+        vi.advanceTimersByTime(2000);
+        expect(userMessages()).toHaveLength(0);
+    });
+
+    it('does NOT nudge after an interruption (user took the floor)', () => {
+        client.SendToolResult('tc1', '{"success":true}');
+        client.Emit({ type: 'interruption', interruption_event: { event_id: 9 } });
+        vi.advanceTimersByTime(2000);
+        expect(userMessages()).toHaveLength(0);
     });
 });
