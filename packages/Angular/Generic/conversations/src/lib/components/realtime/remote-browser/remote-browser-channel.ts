@@ -1,8 +1,9 @@
 import type { Type } from '@angular/core';
+import type { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
-import { RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
+import { RemoteBrowserHumanInputEvent, RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
 import {
   MapToolToAction,
   REMOTE_BROWSER_TOOL_DEFINITIONS,
@@ -61,6 +62,21 @@ const START_SCREENCAST_MUTATION = `
 const STOP_SCREENCAST_MUTATION = `
   mutation StopRemoteBrowserScreencast($agentSessionID: String!) {
     StopRemoteBrowserScreencast(agentSessionID: $agentSessionID)
+  }
+`;
+
+/**
+ * HUMAN-TAKEOVER mutation — relays ONE pointer/keyboard input the user performed on the live canvas into the
+ * server-hosted browser (Collaborative control). Best-effort: the server returns `false` when the backend
+ * lacks `HumanTakeover` or no live browser exists; the channel doesn't act on the boolean.
+ */
+const RELAY_HUMAN_INPUT_MUTATION = `
+  mutation RelayRemoteBrowserHumanInput(
+    $agentSessionID: String!, $kind: String!, $x: Float, $y: Float, $button: String, $key: String
+  ) {
+    RelayRemoteBrowserHumanInput(
+      agentSessionID: $agentSessionID, kind: $kind, x: $x, y: $y, button: $button, key: $key
+    )
   }
 `;
 
@@ -154,7 +170,9 @@ interface RemoteBrowserToolResult {
  *    live screenshot.
  *  - **Surface**: {@link RemoteBrowserSurfaceComponent}, created dynamically in the channel
  *    tab; the plugin hands it the session's provider + id in {@link BindSurface} so it can
- *    poll `RemoteBrowserSnapshot`. View-only in v1 (no takeover input).
+ *    poll `RemoteBrowserSnapshot`. HUMAN TAKEOVER is enabled by default (Collaborative): the
+ *    user can click/type into the live canvas and those events relay to the server browser via
+ *    {@link RELAY_HUMAN_INPUT_MUTATION} (server-gated on the backend's `HumanTakeover` capability).
  *
  * The channel keeps NO client-side state of record — the browser's state lives entirely on
  * the server — so {@link SerializeState} / {@link RestoreState} use the base no-op behavior.
@@ -163,6 +181,9 @@ interface RemoteBrowserToolResult {
 export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowserSurfaceComponent> {
   /** The live bound surface, when the channel tab's pane is instantiated. */
   private surface: RemoteBrowserSurfaceComponent | null = null;
+
+  /** Subscription to the bound surface's `HumanInput` output, torn down on unbind/dispose. */
+  private humanInputSub: Subscription | null = null;
 
   /**
    * Whether the server confirmed it is PUSHING screencast frames for this session (`ScreenStreaming`
@@ -201,11 +222,11 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       Heading: 'Remote Browser',
       Description:
         'The agent drives a live web browser on the server and you can watch it work right here. ' +
-        'This is a periodically-refreshing screenshot of that page — view-only in this version, ' +
-        'so you watch rather than click.',
+        'You can also grab the wheel: click and type directly on the live page and the agent picks ' +
+        'up right where you left off.',
       Tips: [
         'Ask the agent to look something up, open a site or fill in a form — it controls the page.',
-        'The view updates every few seconds; brief pauses just mean the next snapshot is loading.',
+        "Click on the live view to take over, then click and type to drive it yourself — the \"You're driving\" badge shows when takeover is active.",
         'The current page URL is shown so you always know where the agent has navigated.',
       ],
       IconClass: 'fa-solid fa-globe',
@@ -223,19 +244,31 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * poll is then skipped) and {@link OnScreencastFrame} paints each pushed frame. When the backend lacks
    * the capability (`Streaming: false`) the surface keeps the snapshot poll already running — graceful
    * fallback, no further action.
+   *
+   * HUMAN TAKEOVER is enabled BY DEFAULT (Collaborative): the surface is flipped `Interactive = true` and
+   * its `HumanInput` output subscribed, forwarding each pointer/keyboard event to the server via
+   * {@link RELAY_HUMAN_INPUT_MUTATION}. Takeover only takes effect on the canvas (screencast) path; the
+   * `<img>` poll fallback stays view-only. The server gates the actual routing on the backend's
+   * `HumanTakeover` capability, so this is safe to enable unconditionally.
    */
   public BindSurface(instance: RemoteBrowserSurfaceComponent): void {
     this.surface = instance;
     instance.Fetch = () => this.fetchSnapshot();
+    instance.Interactive = true;
+    this.humanInputSub = instance.HumanInput.subscribe((input) => this.relayHumanInput(input));
     void this.startScreencast(instance);
   }
 
   public override UnbindSurface(): void {
+    this.humanInputSub?.unsubscribe();
+    this.humanInputSub = null;
     void this.stopScreencast();
     this.surface = null;
   }
 
   public override Dispose(): void {
+    this.humanInputSub?.unsubscribe();
+    this.humanInputSub = null;
     void this.stopScreencast();
     super.Dispose();
   }
@@ -268,6 +301,28 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       this.streaming = true;
       instance.Streaming = true;
     }
+  }
+
+  /**
+   * Relays ONE human-takeover input from the surface to the server's {@link RELAY_HUMAN_INPUT_MUTATION}.
+   * Best-effort and fire-and-forget: never throws, and the boolean result is ignored (the server already
+   * gates routing on the backend's `HumanTakeover` capability). No-op when no live session id exists.
+   *
+   * @param input The flattened pointer/keyboard input the user performed on the live canvas.
+   */
+  private relayHumanInput(input: RemoteBrowserHumanInputEvent): void {
+    const sessionId = this.Context?.AgentSessionID;
+    if (!sessionId) {
+      return;
+    }
+    void this.Context?.ExecuteServerAction(RELAY_HUMAN_INPUT_MUTATION, {
+      agentSessionID: sessionId,
+      kind: input.kind,
+      x: input.x ?? null,
+      y: input.y ?? null,
+      button: input.button ?? null,
+      key: input.key ?? null,
+    });
   }
 
   /** Asks the server to stop the screencast (best-effort) and clears the streaming flag. */

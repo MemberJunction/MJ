@@ -22,7 +22,7 @@ import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
-import { IRemoteBrowserSession, RemoteBrowserAction, RemoteBrowserCapabilityNotSupportedError } from '@memberjunction/remote-browser-base';
+import { IRemoteBrowserSession, RemoteBrowserAction, RemoteBrowserHumanInput, RemoteBrowserCapabilityNotSupportedError } from '@memberjunction/remote-browser-base';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -368,6 +368,64 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     return true;
   }
 
+  /**
+   * Relays ONE human-takeover input (pointer move/click or key press) from the user watching the live
+   * screencast into the session's server-hosted browser — the "grab the wheel" path. Ownership-gated.
+   * The surface captures the event on the live-view canvas, maps display→viewport coordinates, and calls
+   * this; the resolver builds a strongly-typed {@link RemoteBrowserHumanInput} and routes it over CDP via
+   * {@link IRemoteBrowserSession.RouteHumanInput}.
+   *
+   * Gracefully best-effort, never throws past the ownership gate:
+   * - No live browser for the session → `false`.
+   * - Unknown/incomplete input (`buildHumanInput` returns null) → `false`.
+   * - Backend lacks `HumanTakeover` ({@link RemoteBrowserCapabilityNotSupportedError}) → `false` (the
+   *   live view stays view-only for that backend).
+   * - Any other failure → logged + `false`.
+   *
+   * NOTE: this prototype does NOT reject by control mode here — the engine's floor arbiter governs the
+   * agent⇄human floor, so we just relay. Finer floor / `AgentOnly` gating is a follow-up.
+   *
+   * @param agentSessionID The `AIAgentSession` id the browser is bound to.
+   * @param kind The input kind (`'pointer-move' | 'pointer-click' | 'key'`).
+   * @returns `true` when the input was routed, else `false`.
+   */
+  @Mutation(() => Boolean)
+  async RelayRemoteBrowserHumanInput(
+    @Arg('agentSessionID', () => String) agentSessionID: string,
+    @Arg('kind', () => String) kind: string,
+    @Ctx() { userPayload, providers }: AppContext,
+    @Arg('x', () => Float, { nullable: true }) x?: number,
+    @Arg('y', () => Float, { nullable: true }) y?: number,
+    @Arg('button', () => String, { nullable: true }) button?: string,
+    @Arg('key', () => String, { nullable: true }) key?: string,
+  ): Promise<boolean> {
+    const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    if (!liveSession) {
+      return false;
+    }
+
+    const input = this.buildHumanInput({ kind, x, y, button, key });
+    if (!input) {
+      return false;
+    }
+
+    try {
+      liveSession.RouteHumanInput(input);
+      return true;
+    } catch (err) {
+      if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
+        // Backend can't take human input — the live view stays view-only. Not an error condition.
+        return false;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      LogError(`RelayRemoteBrowserHumanInput failed (kind='${kind}'): ${message}`);
+      return false;
+    }
+  }
+
   // ----- internals -------------------------------------------------------------------------
 
   /**
@@ -648,5 +706,34 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       default:
         return null;
     }
+  }
+
+  /**
+   * Builds a strongly-typed {@link RemoteBrowserHumanInput} from the relayed `kind` + fields, validating
+   * each kind's required field(s). Returns `null` for an unknown kind or a kind missing its required
+   * field(s): pointer-move/click need finite `x`,`y`; key needs a non-empty `key`. The `button` is clamped
+   * to the allowed union (`'left' | 'middle' | 'right'`), defaulting unknown/absent values to `'left'`.
+   *
+   * @param input The relayed input kind + all optional fields.
+   * @returns The built human input, or `null` when the kind is unknown / incomplete.
+   */
+  private buildHumanInput(input: { kind: string; x?: number; y?: number; button?: string; key?: string }): RemoteBrowserHumanInput | null {
+    switch (input.kind) {
+      case 'pointer-move':
+        return Number.isFinite(input.x) && Number.isFinite(input.y) ? { Kind: 'pointer-move', X: input.x as number, Y: input.y as number } : null;
+      case 'pointer-click':
+        return Number.isFinite(input.x) && Number.isFinite(input.y)
+          ? { Kind: 'pointer-click', X: input.x as number, Y: input.y as number, Button: this.clampButton(input.button) }
+          : null;
+      case 'key':
+        return input.key && input.key.length > 0 ? { Kind: 'key', Key: input.key } : null;
+      default:
+        return null;
+    }
+  }
+
+  /** Clamps a relayed mouse-button string to the allowed union, defaulting to `'left'`. */
+  private clampButton(button: string | undefined): 'left' | 'middle' | 'right' {
+    return button === 'middle' || button === 'right' ? button : 'left';
   }
 }

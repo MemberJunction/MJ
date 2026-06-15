@@ -2,13 +2,16 @@
 // Angular libs require the JIT compiler in this node test environment), so load the compiler FIRST.
 import '@angular/compiler';
 import { describe, it, expect, beforeEach } from 'vitest';
+import { EventEmitter } from '@angular/core';
 import { JSONValue } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
 import {
   LoadRealtimeRemoteBrowserChannel, RemoteBrowserChannel
 } from '../lib/components/realtime/remote-browser/remote-browser-channel';
-import { RemoteBrowserSurfaceComponent } from '../lib/components/realtime/remote-browser/remote-browser-surface.component';
+import {
+  MapToViewportCoords, RemoteBrowserHumanInputEvent, RemoteBrowserSurfaceComponent
+} from '../lib/components/realtime/remote-browser/remote-browser-surface.component';
 import {
   MapToolToAction, REMOTE_BROWSER_TOOL_DEFINITIONS, REMOTE_BROWSER_TOOL_NAMES,
   REMOTE_BROWSER_TOOL_PREFIX, RemoteBrowserToolArgError
@@ -318,6 +321,8 @@ describe('RemoteBrowserChannel — live screencast (pushed frames)', () => {
   function makeSurface(): RemoteBrowserSurfaceComponent & { RenderedFrames: string[] } {
     const surface = {
       Streaming: false,
+      Interactive: false,
+      HumanInput: new EventEmitter<RemoteBrowserHumanInputEvent>(),
       RenderedFrames: [] as string[],
       RenderFrame(dataBase64: string) {
         this.RenderedFrames.push(dataBase64);
@@ -384,5 +389,101 @@ describe('RemoteBrowserChannel — live screencast (pushed frames)', () => {
     // After unbind, late frames are ignored (not streaming, no surface).
     channel.OnScreencastFrame('CCCC');
     expect(surface.RenderedFrames).toEqual([]);
+  });
+});
+
+describe('RemoteBrowserChannel — human takeover (relay surface input to the server)', () => {
+  let channel: RemoteBrowserChannel;
+  let log: CtxLog;
+
+  beforeEach(() => {
+    channel = new RemoteBrowserChannel();
+    log = { Notes: [], Calls: [] };
+  });
+
+  /** Minimal surface double exposing the takeover wiring: Interactive flag + HumanInput emitter. */
+  function makeSurface(): RemoteBrowserSurfaceComponent & { HumanInput: EventEmitter<RemoteBrowserHumanInputEvent> } {
+    const surface = {
+      Streaming: false,
+      Interactive: false,
+      HumanInput: new EventEmitter<RemoteBrowserHumanInputEvent>(),
+      RenderFrame() { /* unused here */ }
+    };
+    return surface as unknown as RemoteBrowserSurfaceComponent & { HumanInput: EventEmitter<RemoteBrowserHumanInputEvent> };
+  }
+
+  it('enables takeover by default on bind (Interactive = true)', () => {
+    channel.Initialize(makeContext(log, { StartRemoteBrowserScreencast: { Streaming: true } }));
+    const surface = makeSurface();
+
+    channel.BindSurface(surface);
+
+    expect(surface.Interactive).toBe(true);
+  });
+
+  it('forwards a pointer-click HumanInput to the relay mutation with viewport coords + button', () => {
+    channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    surface.HumanInput.emit({ kind: 'pointer-click', x: 320, y: 480, button: 'left' });
+
+    const relayCall = log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'));
+    expect(relayCall).toBeTruthy();
+    expect(relayCall?.Variables).toMatchObject({
+      agentSessionID: 'session-1', kind: 'pointer-click', x: 320, y: 480, button: 'left', key: null
+    });
+  });
+
+  it('forwards a key HumanInput with the key string (null pointer coords)', () => {
+    channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    surface.HumanInput.emit({ kind: 'key', key: 'Enter' });
+
+    const relayCall = log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'));
+    expect(relayCall?.Variables).toMatchObject({
+      agentSessionID: 'session-1', kind: 'key', x: null, y: null, button: null, key: 'Enter'
+    });
+  });
+
+  it('stops forwarding after UnbindSurface (subscription torn down)', () => {
+    channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+    channel.UnbindSurface();
+
+    surface.HumanInput.emit({ kind: 'pointer-move', x: 1, y: 2 });
+
+    expect(log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'))).toBeUndefined();
+  });
+});
+
+describe('MapToViewportCoords (display → viewport coordinate mapping)', () => {
+  it('maps a click on a scaled-up canvas back to viewport pixels', () => {
+    // Canvas internal resolution 1280x720, displayed at 640x360 (2x downscale) at offset (100, 50).
+    // A click at display (420, 230) → local (320, 180) → viewport (640, 360).
+    const rect = { left: 100, top: 50, width: 640, height: 360 };
+    expect(MapToViewportCoords(420, 230, rect, 1280, 720)).toEqual({ x: 640, y: 360 });
+  });
+
+  it('maps 1:1 when the display size equals the internal resolution', () => {
+    const rect = { left: 0, top: 0, width: 800, height: 600 };
+    expect(MapToViewportCoords(120, 90, rect, 800, 600)).toEqual({ x: 120, y: 90 });
+  });
+
+  it('rounds to integer viewport coordinates', () => {
+    const rect = { left: 0, top: 0, width: 300, height: 300 };
+    // 101/300 * 1000 = 336.67 → 337 ; 100/300 * 1000 = 333.33 → 333
+    expect(MapToViewportCoords(101, 100, rect, 1000, 1000)).toEqual({ x: 337, y: 333 });
+  });
+
+  it('returns null on a zero-size rect (divide-by-zero guard)', () => {
+    expect(MapToViewportCoords(10, 10, { left: 0, top: 0, width: 0, height: 0 }, 1280, 720)).toBeNull();
+  });
+
+  it('returns null on an un-sized canvas', () => {
+    expect(MapToViewportCoords(10, 10, { left: 0, top: 0, width: 640, height: 360 }, 0, 0)).toBeNull();
   });
 });

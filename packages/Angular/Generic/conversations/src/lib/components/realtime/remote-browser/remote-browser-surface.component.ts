@@ -1,12 +1,76 @@
 import {
-  ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, Input, NgZone, OnDestroy, OnInit,
-  ViewChild, inject
+  ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, NgZone, OnDestroy,
+  OnInit, Output, ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 /** How often the surface polls the server for a fresh page screenshot while bound (~1.4 fps). */
 const SNAPSHOT_POLL_MS = 700;
+
+/** Min interval between forwarded pointer-move samples during takeover (~20 moves/sec). */
+const POINTER_MOVE_THROTTLE_MS = 50;
+
+/**
+ * One human-takeover input the surface emits to the channel while the user "drives" the live view.
+ * Mirrors the server's `RemoteBrowserHumanInput` union (flattened for transport): pointer moves/clicks
+ * carry VIEWPORT coordinates, a key carries the pressed key string.
+ */
+export interface RemoteBrowserHumanInputEvent {
+  /** Which input occurred. */
+  kind: 'pointer-move' | 'pointer-click' | 'key';
+  /** Viewport X (pointer kinds only). */
+  x?: number;
+  /** Viewport Y (pointer kinds only). */
+  y?: number;
+  /** Mouse button (pointer-click only). */
+  button?: 'left' | 'middle' | 'right';
+  /** The pressed key (key kind only). */
+  key?: string;
+}
+
+/**
+ * Keys forwarded into the page during takeover even though they aren't single printable characters —
+ * navigation/editing keys the page (not the host app) should receive. `preventDefault` is applied only to
+ * forwarded keys so the host app's own shortcuts on un-forwarded keys still work.
+ */
+const FORWARDED_CONTROL_KEYS = new Set<string>([
+  'Enter', 'Tab', 'Backspace', 'Delete', 'Escape',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'Home', 'End', 'PageUp', 'PageDown',
+]);
+
+/**
+ * Maps a display-space pointer position on the live canvas to the server browser's VIEWPORT pixel space.
+ *
+ * The canvas's internal resolution (`canvasWidth`/`canvasHeight`, set from each pushed frame) IS the
+ * viewport pixel space; the canvas is displayed scaled to its bounding rect. So a display point maps as
+ * `vx = (clientX - rect.left) / rect.width * canvasWidth` (and likewise for y), rounded to ints. Returns
+ * `null` for a zero-size rect or un-sized canvas (divide-by-zero / not-ready guard).
+ *
+ * Pure + framework-free so it's unit-testable without a DOM.
+ *
+ * @param clientX The pointer's viewport X in the DOM (`event.clientX`).
+ * @param clientY The pointer's viewport Y in the DOM (`event.clientY`).
+ * @param rect The canvas's bounding rect (`getBoundingClientRect()`).
+ * @param canvasWidth The canvas's internal pixel width (= frame/viewport width).
+ * @param canvasHeight The canvas's internal pixel height (= frame/viewport height).
+ * @returns Integer viewport coordinates, or `null` when mapping isn't possible.
+ */
+export function MapToViewportCoords(
+  clientX: number,
+  clientY: number,
+  rect: { left: number; top: number; width: number; height: number },
+  canvasWidth: number,
+  canvasHeight: number,
+): { x: number; y: number } | null {
+  if (rect.width <= 0 || rect.height <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
+    return null;
+  }
+  const x = Math.round((clientX - rect.left) / rect.width * canvasWidth);
+  const y = Math.round((clientY - rect.top) / rect.height * canvasHeight);
+  return { x, y };
+}
 
 /**
  * One snapshot of the server-hosted browser — the shape the surface's {@link RemoteBrowserSurfaceComponent.Fetch}
@@ -57,10 +121,15 @@ export type RemoteBrowserSnapshotFetcher = () => Promise<RemoteBrowserSnapshotVi
         <span class="rb-live" [class.rb-live--on]="HasSnapshot" aria-hidden="true"></span>
         <span class="rb-live-label">{{ HasSnapshot ? 'Live' : 'Connecting…' }}</span>
         <span class="rb-url" [title]="CurrentUrl || ''">{{ CurrentUrl || 'No page loaded yet' }}</span>
+        @if (CanTakeOver) {
+          <span class="rb-driving" title="Click and type to control the live page">
+            <i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> You're driving
+          </span>
+        }
       </div>
       <div class="rb-viewport">
         @if (Streaming) {
-          <canvas #frameCanvas class="rb-screenshot" [class.rb-hidden]="!HasFrame"></canvas>
+          <canvas #frameCanvas class="rb-screenshot" [class.rb-hidden]="!HasFrame" [class.rb-screenshot--interactive]="CanTakeOver"></canvas>
           @if (!HasFrame) {
             <div class="rb-placeholder">
               <mj-loading text="Waiting for the browser…" size="medium"></mj-loading>
@@ -136,6 +205,26 @@ export type RemoteBrowserSnapshotFetcher = () => Promise<RemoteBrowserSnapshotVi
       box-shadow: var(--mj-shadow-sm, 0 1px 3px color-mix(in srgb, var(--mj-text-primary) 12%, transparent));
       background: var(--mj-bg-surface);
     }
+    .rb-screenshot--interactive {
+      cursor: crosshair;
+      outline: none;
+    }
+    .rb-screenshot--interactive:focus-visible {
+      border-color: var(--mj-border-focus);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+    }
+    .rb-driving {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px;
+      border-radius: var(--mj-radius-full, 999px);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+    }
     .rb-placeholder {
       display: flex;
       align-items: center;
@@ -170,11 +259,41 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
       this.stopPolling();
       this.zone.run(() => this.cdr.markForCheck());
     }
+    // Takeover only attaches on the canvas path — (de)attach as streaming flips.
+    this.syncTakeoverListeners();
   }
   get Streaming(): boolean {
     return this._streaming;
   }
   private _streaming = false;
+
+  /**
+   * Whether HUMAN TAKEOVER is enabled — the user watching the live view can click/type into the page and
+   * those events are relayed into the server browser (Collaborative control). Takeover only attaches to the
+   * canvas render path (pushed screencast); the `<img>` poll fallback stays view-only. When enabled while
+   * already streaming the setter attaches listeners; flipping it off (or streaming off) detaches them.
+   */
+  @Input()
+  set Interactive(value: boolean) {
+    if (value === this._interactive) {
+      return;
+    }
+    this._interactive = value;
+    this.syncTakeoverListeners();
+    this.zone.run(() => this.cdr.markForCheck());
+  }
+  get Interactive(): boolean {
+    return this._interactive;
+  }
+  private _interactive = false;
+
+  /** Emits each human-takeover input (pointer move/click, key) the user performs on the live canvas. */
+  @Output() HumanInput = new EventEmitter<RemoteBrowserHumanInputEvent>();
+
+  /** True when takeover is both enabled AND on the canvas path — drives the cursor + "driving" pill. */
+  public get CanTakeOver(): boolean {
+    return this._interactive && this._streaming;
+  }
 
   /** The current screenshot as a `data:` URL, or `null` before the first snapshot arrives. */
   public ScreenshotDataUrl: string | null = null;
@@ -206,6 +325,15 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   /** True while a paint is scheduled, so rapid frames coalesce to one `requestAnimationFrame`. */
   private framePaintScheduled = false;
 
+  /** The canvas element takeover listeners are currently bound to, or `null` when detached. */
+  private takeoverCanvas: HTMLCanvasElement | null = null;
+  /** Timestamp (ms) of the last forwarded pointer-move, for throttling the high-frequency stream. */
+  private lastPointerMoveAt = 0;
+  /** Bound handlers — stored so the exact same references can be removed on detach. */
+  private readonly onCanvasMouseMove = (e: MouseEvent): void => this.handlePointerMove(e);
+  private readonly onCanvasClick = (e: MouseEvent): void => this.handlePointerClick(e);
+  private readonly onCanvasKeyDown = (e: KeyboardEvent): void => this.handleKeyDown(e);
+
   ngOnInit(): void {
     // In streaming mode the server pushes frames — never start the poll (it would be redundant traffic).
     if (this.Streaming) {
@@ -218,6 +346,7 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroyed = true;
     this.stopPolling();
+    this.detachTakeoverListeners();
   }
 
   /** Starts the interval poll OUTSIDE Angular's zone so it doesn't trigger CD on every tick. */
@@ -325,11 +454,123 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     }
     ctx.drawImage(this.frameImage, 0, 0);
     if (!this.HasFrame) {
-      // First frame arrived — re-enter the zone to clear the placeholder + flip the "Live" indicator.
+      // First frame arrived — re-enter the zone to clear the placeholder + flip the "Live" indicator,
+      // and attach takeover listeners now that the canvas element exists in the DOM.
       this.zone.run(() => {
         this.HasFrame = true;
         this.cdr.markForCheck();
       });
+      this.syncTakeoverListeners();
     }
+  }
+
+  // ----- human takeover (Collaborative control) --------------------------------------------
+
+  /**
+   * Attaches or detaches the canvas takeover listeners so they're bound exactly when takeover is live —
+   * {@link CanTakeOver} is true AND the canvas element exists. Idempotent: re-binds only when the target
+   * canvas changed, detaches when the conditions no longer hold. Safe to call from any state-flip path
+   * (the `Interactive`/`Streaming` setters, the first-frame paint, destroy).
+   */
+  private syncTakeoverListeners(): void {
+    const canvas = this.CanTakeOver && !this.destroyed ? (this.frameCanvas?.nativeElement ?? null) : null;
+    if (canvas === this.takeoverCanvas) {
+      return; // already in the desired state
+    }
+    this.detachTakeoverListeners();
+    if (canvas) {
+      this.attachTakeoverListeners(canvas);
+    }
+  }
+
+  /** Binds the pointer/keyboard listeners to the canvas OUTSIDE the zone (mousemove is high-frequency). */
+  private attachTakeoverListeners(canvas: HTMLCanvasElement): void {
+    canvas.tabIndex = 0; // focusable so it can receive keydown
+    this.zone.runOutsideAngular(() => {
+      canvas.addEventListener('mousemove', this.onCanvasMouseMove);
+      canvas.addEventListener('click', this.onCanvasClick);
+      canvas.addEventListener('keydown', this.onCanvasKeyDown);
+    });
+    this.takeoverCanvas = canvas;
+  }
+
+  /** Removes the listeners from the currently-bound canvas (no-op when none are bound). */
+  private detachTakeoverListeners(): void {
+    const canvas = this.takeoverCanvas;
+    if (!canvas) {
+      return;
+    }
+    canvas.removeEventListener('mousemove', this.onCanvasMouseMove);
+    canvas.removeEventListener('click', this.onCanvasClick);
+    canvas.removeEventListener('keydown', this.onCanvasKeyDown);
+    this.takeoverCanvas = null;
+  }
+
+  /** Throttled pointer-move → emits a viewport-mapped move (runs outside the zone; no CD per move). */
+  private handlePointerMove(event: MouseEvent): void {
+    const now = Date.now();
+    if (now - this.lastPointerMoveAt < POINTER_MOVE_THROTTLE_MS) {
+      return;
+    }
+    this.lastPointerMoveAt = now;
+    const point = this.toViewportCoords(event);
+    if (point) {
+      this.emitInput({ kind: 'pointer-move', x: point.x, y: point.y });
+    }
+  }
+
+  /** Click → focuses the canvas (so subsequent keys are captured) and emits a viewport-mapped click. */
+  private handlePointerClick(event: MouseEvent): void {
+    this.takeoverCanvas?.focus();
+    const point = this.toViewportCoords(event);
+    if (point) {
+      this.emitInput({ kind: 'pointer-click', x: point.x, y: point.y, button: this.mapButton(event.button) });
+    }
+  }
+
+  /**
+   * Keydown → forwards printable keys + a curated set of control keys ({@link FORWARDED_CONTROL_KEYS}) into
+   * the page, calling `preventDefault` ONLY on forwarded keys so the host app keeps its own shortcuts on
+   * everything else. Modifiers ride as the raw `event.key` string for this prototype.
+   */
+  private handleKeyDown(event: KeyboardEvent): void {
+    const key = event.key;
+    const isPrintable = key.length === 1;
+    if (!isPrintable && !FORWARDED_CONTROL_KEYS.has(key)) {
+      return; // leave non-forwarded keys to the host app
+    }
+    event.preventDefault();
+    this.emitInput({ kind: 'key', key });
+  }
+
+  /** Re-enters the zone to emit one human input (so subscribers see it inside Angular). */
+  private emitInput(input: RemoteBrowserHumanInputEvent): void {
+    this.zone.run(() => this.HumanInput.emit(input));
+  }
+
+  /**
+   * Maps a DOM pointer event on the live canvas to VIEWPORT coordinates via {@link MapToViewportCoords}
+   * (the pure, unit-tested mapping). Returns `null` when no canvas is bound or mapping isn't possible yet.
+   *
+   * @param event The pointer event on the canvas.
+   * @returns The integer viewport coordinates, or `null` when mapping isn't possible yet.
+   */
+  private toViewportCoords(event: MouseEvent): { x: number; y: number } | null {
+    const canvas = this.takeoverCanvas;
+    if (!canvas) {
+      return null;
+    }
+    return MapToViewportCoords(event.clientX, event.clientY, canvas.getBoundingClientRect(), canvas.width, canvas.height);
+  }
+
+  /** Maps a DOM `MouseEvent.button` (0/1/2) to the relayed button union, defaulting to `'left'`. */
+  private mapButton(button: number): 'left' | 'middle' | 'right' {
+    if (button === 1) {
+      return 'middle';
+    }
+    if (button === 2) {
+      return 'right';
+    }
+    return 'left';
   }
 }
