@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { UserInfo, Metadata, EntityInfo } from '@memberjunction/core';
+import { UserInfo, Metadata, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 
 /**
@@ -36,7 +36,7 @@ export class MentionAutocompleteService {
    * Initialize the service by loading agents and users
    * Prevents concurrent initialization with promise lock
    */
-  async initialize(currentUser: UserInfo): Promise<void> {
+  async initialize(currentUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
     // If already initialized, return immediately
     if (this.isInitialized) {
       return;
@@ -48,7 +48,7 @@ export class MentionAutocompleteService {
     }
 
     // Create initialization promise and store it
-    this.initializationPromise = this._initializeInternal(currentUser);
+    this.initializationPromise = this._initializeInternal(currentUser, provider);
 
     try {
       await this.initializationPromise;
@@ -60,7 +60,7 @@ export class MentionAutocompleteService {
   /**
    * Internal initialization logic
    */
-  private async _initializeInternal(currentUser: UserInfo): Promise<void> {
+  private async _initializeInternal(currentUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
     try {
       // Load agents from AIEngineBase
       await AIEngineBase.Instance.Config(false);
@@ -80,7 +80,7 @@ export class MentionAutocompleteService {
       this.usersCache = [currentUser];
 
       // Load entities the current user can read (candidates for #entity mentions)
-      this.entitiesCache = this.loadReadableEntities(currentUser);
+      this.entitiesCache = this.loadReadableEntities(currentUser, provider);
 
       this.isInitialized = true;
     } catch (error) {
@@ -116,9 +116,9 @@ export class MentionAutocompleteService {
    * Load entities the current user has read permission for.
    * These are the candidates surfaced for #entity mentions.
    */
-  private loadReadableEntities(user: UserInfo): EntityInfo[] {
+  private loadReadableEntities(user: UserInfo, provider?: IMetadataProvider): EntityInfo[] {
     try {
-      const md = new Metadata();
+      const md = provider ?? new Metadata();
       return (md.Entities || []).filter(entity => {
         try {
           return entity.GetUserPermisions(user).CanRead;
