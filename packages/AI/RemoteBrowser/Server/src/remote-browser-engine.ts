@@ -171,6 +171,16 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
      */
     private agentSessionToEngineSession = new Map<string, string>();
 
+    /**
+     * In-flight lazy-start promises, keyed by `AIAgentSession` id (lowercased). At session start the
+     * screencast mutation, the agent's first `browser_*` action, and the audio-stream mutation all call
+     * {@link StartSessionForAgentSession} nearly simultaneously. Each is async, so without coalescing they
+     * all observe "no session yet" and each launches a SEPARATE Chrome — the duplicate-browser leak, and the
+     * cause of the live view / screenshots landing on different browser instances (intermittent blank canvas).
+     * Concurrent callers await the SAME promise here so exactly one browser is started per agent session.
+     */
+    private startingSessions = new Map<string, Promise<IRemoteBrowserSession>>();
+
     /** Monotonic counter feeding the generated session-id suffix (unique within this process). */
     private sessionCounter = 0;
 
@@ -282,10 +292,41 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
         if (existing) {
             return existing;
         }
+        // Coalesce concurrent lazy-starts (screencast + first action + audio stream) onto one promise so we
+        // launch exactly ONE browser per agent session — see startingSessions.
+        const key = this.agentSessionKey(agentSessionID);
+        const inflight = this.startingSessions.get(key);
+        if (inflight) {
+            return inflight;
+        }
+        const startPromise = this.lazyStartBrowserForAgentSession(agentSessionID, key, contextUser, providerName);
+        this.startingSessions.set(key, startPromise);
+        try {
+            return await startPromise;
+        } finally {
+            this.startingSessions.delete(key);
+        }
+    }
+
+    /**
+     * Actually launches the one browser for an agent session (serialized by {@link startingSessions}).
+     * Re-checks the live-session map first in case another path bound one between the coalescing guard and
+     * here, so a late winner reuses rather than double-launches.
+     */
+    private async lazyStartBrowserForAgentSession(
+        agentSessionID: string,
+        key: string,
+        contextUser?: UserInfo,
+        providerName?: string,
+    ): Promise<IRemoteBrowserSession> {
+        const existing = this.GetSessionForAgentSession(agentSessionID);
+        if (existing) {
+            return existing;
+        }
         await this.Config(false, contextUser);
         const resolvedProviderName = this.resolveAgentSessionProviderName(providerName);
         const handle = await this.StartSession({ ProviderName: resolvedProviderName, ContextUser: contextUser });
-        this.agentSessionToEngineSession.set(this.agentSessionKey(agentSessionID), handle.SessionID);
+        this.agentSessionToEngineSession.set(key, handle.SessionID);
         LogStatus(
             `[RemoteBrowserEngine] Lazily started browser for agent session ${agentSessionID} ` +
                 `(engine session ${handle.SessionID}, provider '${resolvedProviderName}').`,

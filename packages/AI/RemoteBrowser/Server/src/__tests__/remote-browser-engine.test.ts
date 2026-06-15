@@ -405,6 +405,26 @@ describe('RemoteBrowserEngine — agent-session-keyed lifecycle', () => {
         await engine().EndSessionForAgentSession('agent-sess-1');
     });
 
+    it('coalesces CONCURRENT lazy-starts into ONE browser (no duplicate-browser leak)', async () => {
+        stubBase([makeProvider()]);
+        // At session start the screencast, the agent's first browser action, and the audio stream all call
+        // this near-simultaneously. Without coalescing each would observe "no session yet" and launch its
+        // own Chrome — the leak that left orphaned browsers and split the live view across instances.
+        const results = await Promise.all([
+            engine().StartSessionForAgentSession('agent-sess-race'),
+            engine().StartSessionForAgentSession('agent-sess-race'),
+            engine().StartSessionForAgentSession('agent-sess-race'),
+            engine().StartSessionForAgentSession('agent-sess-race'),
+        ]);
+        // Every concurrent caller gets the SAME live session...
+        expect(results[1]).toBe(results[0]);
+        expect(results[2]).toBe(results[0]);
+        expect(results[3]).toBe(results[0]);
+        // ...and exactly ONE browser was launched (would be 4 before the coalescing fix).
+        expect(engine().ActiveSessions.length).toBe(1);
+        await engine().EndSessionForAgentSession('agent-sess-race');
+    });
+
     it('GetSessionForAgentSession returns undefined when none was started', () => {
         stubBase([makeProvider()]);
         expect(engine().GetSessionForAgentSession('never-started')).toBeUndefined();
