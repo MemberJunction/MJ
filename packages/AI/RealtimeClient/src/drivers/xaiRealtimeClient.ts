@@ -346,7 +346,7 @@ export class xAIRealtimeClient extends BaseRealtimeClient {
         // master gain; user side meters the mic stream. Null-safe — test fakes / no-WebAudio
         // environments simply leave the session un-metered.
         this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
-        this.attachInputAudioMeter(RealtimeAudioMeter.ForStream(micStream));
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
         this.setState('listening');
     }
 

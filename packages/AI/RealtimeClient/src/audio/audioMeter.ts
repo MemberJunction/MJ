@@ -86,38 +86,69 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
     private readonly analyser: AnalyserNode;
     /** A context this meter created and therefore owns (closed in {@link Close}), or null. */
     private readonly ownedContext: AudioContext | null;
+    /** Cloned tracks this meter owns (stopped in {@link Close}); empty when it taps tracks it doesn't own. */
+    private readonly ownedTracks: MediaStreamTrack[];
     private readonly timeDomain: Uint8Array<ArrayBuffer>;
     private readonly frequency: Uint8Array<ArrayBuffer>;
     private closed = false;
 
-    private constructor(analyser: AnalyserNode, ownedContext: AudioContext | null) {
+    private constructor(analyser: AnalyserNode, ownedContext: AudioContext | null, ownedTracks: MediaStreamTrack[] = []) {
         this.analyser = analyser;
         this.ownedContext = ownedContext;
+        this.ownedTracks = ownedTracks;
         this.timeDomain = new Uint8Array(analyser.fftSize);
         this.frequency = new Uint8Array(analyser.frequencyBinCount);
     }
 
     /**
-     * Meters a `MediaStream` (mic capture, or OpenAI's remote WebRTC stream) via a private
-     * `AudioContext`. Returns `null` when Web Audio / the stream isn't usable (tests, SSR,
-     * stopped tracks) — callers treat null as "no metering available".
+     * Shared builder: taps `stream` with a private `AudioContext` + analyser-only sink. A fresh
+     * `AudioContext` starts SUSPENDED and, with no destination route, nothing auto-starts its clock —
+     * so the analyser would read pure silence forever; we resume it (the session always starts from a
+     * user gesture, so this is permitted). `ownedTracks` are clones this meter must stop on Close.
+     */
+    private static buildStreamMeter(stream: MediaStream, ownedTracks: MediaStreamTrack[]): RealtimeAudioMeter {
+        const context = new AudioContext();
+        const source = context.createMediaStreamSource(stream);
+        const analyser = RealtimeAudioMeter.createAnalyser(context);
+        source.connect(analyser);
+        if (context.state === 'suspended') {
+            void context.resume();
+        }
+        return new RealtimeAudioMeter(analyser, context, ownedTracks);
+    }
+
+    /**
+     * Meters a `MediaStream` (e.g. a remote WebRTC stream) via a private `AudioContext`. Returns
+     * `null` when Web Audio / the stream isn't usable (tests, SSR, stopped tracks) — callers treat
+     * null as "no metering available". For the LOCAL microphone use {@link ForMicStream} instead.
      */
     public static ForStream(stream: MediaStream): RealtimeAudioMeter | null {
         try {
-            const context = new AudioContext();
-            const source = context.createMediaStreamSource(stream);
-            const analyser = RealtimeAudioMeter.createAnalyser(context);
-            source.connect(analyser);
-            // Analyser-only sink: nothing routes to destination — metering must never
-            // double-play the audio it observes. BUT a freshly-created AudioContext starts
-            // SUSPENDED, and with no destination route nothing auto-starts its clock — so the
-            // analyser would read pure silence forever (the "Listening meter never moves while
-            // I speak" bug). The realtime session is always started from a user gesture, so
-            // resuming here is permitted; without it the mic meter is dead on arrival.
-            if (context.state === 'suspended') {
-                void context.resume();
+            return RealtimeAudioMeter.buildStreamMeter(stream, []);
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Meters the LOCAL microphone. Identical to {@link ForStream} EXCEPT it taps a CLONE of the mic's
+     * audio track(s), not the track(s) themselves.
+     *
+     * Why the clone matters: the WebRTC realtime drivers add the mic track to an `RTCPeerConnection`
+     * (`pc.addTrack`). Once a local track feeds the WebRTC pipeline, Chromium reads pure SILENCE from a
+     * parallel `MediaStreamAudioSourceNode` over the SAME track — so the "Listening" meter never moves
+     * while the user speaks even though the mic is live. A cloned track is independent of the PC sender
+     * and meters reliably; it is stopped in {@link Close}. Harmless for the WS drivers (the clone is just
+     * an extra short-lived track). Returns `null` when Web Audio / the stream has no usable audio track.
+     */
+    public static ForMicStream(stream: MediaStream): RealtimeAudioMeter | null {
+        try {
+            const audioTracks = stream.getAudioTracks();
+            if (audioTracks.length === 0) {
+                return null;
             }
-            return new RealtimeAudioMeter(analyser, context);
+            const clones = audioTracks.map((t) => t.clone());
+            return RealtimeAudioMeter.buildStreamMeter(new MediaStream(clones), clones);
         } catch {
             return null;
         }
@@ -173,6 +204,14 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
             this.analyser.disconnect();
         } catch {
             /* already disconnected */
+        }
+        // Stop any cloned tracks this meter owns (mic-meter clones) so they don't linger.
+        for (const track of this.ownedTracks) {
+            try {
+                track.stop();
+            } catch {
+                /* already stopped */
+            }
         }
         if (this.ownedContext) {
             void this.ownedContext.close();
