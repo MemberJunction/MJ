@@ -97,14 +97,16 @@ export class MentionParserService {
       }
     }
 
-    // Extract first agent mention and all user mentions
+    // Extract first agent mention, all user mentions, and all entity mentions
     const agentMention = mentions.find(m => m.type === 'agent') || null;
     const userMentions = mentions.filter(m => m.type === 'user');
+    const entityMentions = mentions.filter(m => m.type === 'entity');
 
     return {
       mentions,
       agentMention,
-      userMentions
+      userMentions,
+      entityMentions
     };
   }
 
