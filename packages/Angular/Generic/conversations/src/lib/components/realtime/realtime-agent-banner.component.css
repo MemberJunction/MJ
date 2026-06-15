@@ -1,0 +1,437 @@
+:host {
+  display: block;
+  --sage: var(--mj-color-violet-400, #a78bfa);
+  --sage-bg: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 14%, transparent);
+  --sage-border: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 45%, transparent);
+}
+
+/* The UNIFIED APP-BAR (Redesign A): orb · name · Co-Agent pill · "speaking as" ·
+   state pill · disclosure-gated action cluster (captions / gear / minimize / End). */
+.banner {
+  position: relative; /* anchors the gear popover */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 10px 22px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mj-brand-primary) 10%, transparent), transparent);
+  flex-shrink: 0;
+}
+
+.banner__id {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.banner__name {
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--mj-text-primary);
+  flex-shrink: 0;
+}
+.banner__for {
+  font-size: 11.5px;
+  color: var(--mj-text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 5; /* gives way before the name/pill, after the model suffix */
+}
+.banner__for b {
+  color: var(--mj-text-secondary);
+}
+/* Subtle realtime-model suffix (e.g. "· GPT Realtime 2") in the identity line. */
+.banner__model {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 10; /* first to give way when the banner narrows */
+  min-width: 0;
+}
+
+.banner__state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+.banner__state--busy {
+  background: var(--mj-status-warning-bg);
+  border-color: var(--mj-status-warning);
+}
+.banner__state--busy .fa-spinner {
+  color: var(--mj-status-warning);
+}
+.banner__state-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+}
+.banner__state--busy .banner__state-label {
+  color: var(--mj-status-warning-text, var(--mj-status-warning));
+}
+
+/* ---------- Glowing agent orb ---------- */
+.agent-orb {
+  --orb-size: 34px;
+  width: var(--orb-size);
+  height: var(--orb-size);
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+  background: radial-gradient(circle at 35% 30%,
+    var(--mj-brand-accent, var(--mj-brand-primary)),
+    var(--mj-brand-primary) 60%,
+    var(--mj-brand-primary-active, var(--mj-brand-primary)));
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent),
+    0 0 30px color-mix(in srgb, var(--mj-brand-primary) 45%, transparent);
+}
+.agent-orb::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--mj-brand-accent, var(--mj-brand-primary)) 40%, transparent);
+  animation: orb-ring 2.4s ease-out infinite;
+}
+.agent-orb[data-state="speaking"] {
+  animation: orb-bob 0.9s ease-in-out infinite;
+}
+.agent-orb[data-state="listening"] {
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--mj-status-success) 16%, transparent),
+    0 0 30px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-status-success) 60%, white), var(--mj-brand-primary) 65%);
+}
+.agent-orb[data-state="thinking"] {
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--mj-status-warning) 14%, transparent),
+    0 0 26px color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+}
+
+@keyframes orb-ring { 0% { transform: scale(1); opacity: .6 } 100% { transform: scale(1.5); opacity: 0 } }
+@keyframes orb-bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
+
+/* ---------- Audio-reactive mode ----------
+   The overlay's rAF meter loop writes --voice-out / --voice-in + data attributes on
+   .call-overlay; custom properties INHERIT into this component and :host-context()
+   reaches the ancestor's attributes — so the app-bar orb rides the SAME live signal as
+   the hero (scaled subtler at app-bar size). Un-metered sessions keep the keyframes. */
+:host-context(.call-overlay[data-audio-live='true']) .agent-orb:not(.agent-orb--review) {
+  animation: none;
+  transform: scale(calc(1 + var(--voice-out, 0) * 0.14));
+  transition: transform 70ms linear;
+}
+:host-context(.call-overlay[data-audio-live='true']) .agent-orb:not(.agent-orb--review)::after {
+  animation: none;
+  opacity: calc(0.15 + var(--voice-out, 0) * 0.85);
+}
+:host-context(.call-overlay[data-audio-live='true'][data-voice-dir='user']) .agent-orb:not(.agent-orb--review) {
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--mj-status-success) 16%, transparent),
+    0 0 30px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-status-success) 60%, white), var(--mj-brand-primary) 65%);
+}
+
+/* ---------- Voice activity waveform ---------- */
+.waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+}
+.waveform span {
+  width: 3px;
+  border-radius: 3px;
+  background: var(--mj-brand-primary);
+  animation: wave 1.1s ease-in-out infinite;
+}
+.waveform span:nth-child(1) { height: 30%; animation-delay: 0s }
+.waveform span:nth-child(2) { height: 65%; animation-delay: .1s }
+.waveform span:nth-child(3) { height: 100%; animation-delay: .2s }
+.waveform span:nth-child(4) { height: 55%; animation-delay: .3s }
+.waveform span:nth-child(5) { height: 85%; animation-delay: .15s }
+.waveform span:nth-child(6) { height: 40%; animation-delay: .25s }
+.waveform span:nth-child(7) { height: 70%; animation-delay: .05s }
+.waveform span:nth-child(8) { height: 35%; animation-delay: .35s }
+.waveform--idle span {
+  animation: none;
+  height: 18% !important;
+  background: var(--mj-text-disabled);
+}
+@keyframes wave { 0%, 100% { transform: scaleY(.4) } 50% { transform: scaleY(1) } }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--mj-radius-full, 9999px);
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  line-height: 1.4;
+}
+.pill i { font-size: 10px; }
+.pill--sage {
+  background: var(--sage-bg);
+  color: var(--mj-color-violet-300, var(--mj-text-secondary));
+  border-color: var(--sage-border);
+}
+
+/* ---------- Session review variant ---------- */
+.banner--review {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mj-text-muted) 10%, transparent), transparent);
+}
+/* Static orb: no pulse ring, dimmed glow — the session is history, nothing is live. */
+.agent-orb--review {
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--mj-text-muted) 12%, transparent);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-text-muted) 55%, var(--mj-bg-surface)),
+    var(--mj-text-muted) 65%);
+}
+.agent-orb--review::after {
+  animation: none;
+  border-color: color-mix(in srgb, var(--mj-text-muted) 30%, transparent);
+}
+.pill--review {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-text-link, var(--mj-brand-primary));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+}
+.pill--close-reason {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  border-color: var(--mj-border-default);
+}
+.banner__range {
+  flex-shrink: 3;
+}
+.banner__state--review {
+  background: var(--mj-bg-surface-card);
+}
+.banner__state--review i {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+.banner__state-label--review {
+  color: var(--mj-text-secondary);
+}
+
+/* Gear-gated developer link to the live agent session record */
+.dev-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px dashed var(--mj-border-strong);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.dev-link:hover {
+  color: var(--mj-text-link, var(--mj-brand-primary));
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+.dev-link i {
+  font-size: 9px;
+}
+
+/* ---------- App-bar action cluster (disclosure-gated; Redesign A) ---------- */
+.bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.iconb {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--mj-radius-md, 8px);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 140ms ease;
+}
+.iconb:hover {
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-strong);
+  background: var(--mj-bg-surface-hover);
+}
+.iconb--on {
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+}
+.bar-sep {
+  width: 1px;
+  height: 26px;
+  background: var(--mj-border-default);
+}
+.end-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 18px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid var(--mj-status-error);
+  background: var(--mj-status-error);
+  color: var(--mj-text-inverse, #fff);
+  cursor: pointer;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-status-error) 35%, transparent);
+  transition: filter 140ms ease;
+}
+.end-pill:hover {
+  filter: brightness(0.92);
+}
+.start-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 18px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid var(--mj-brand-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+  cursor: pointer;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+  transition: filter 140ms ease;
+}
+.start-live-pill:hover {
+  filter: brightness(1.05);
+}
+
+/* ---------- Gear popover: density escape hatch + developer links ---------- */
+.gear-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 14px;
+  z-index: 70;
+  width: 268px;
+  border: 1px solid var(--mj-border-strong);
+  border-radius: var(--mj-radius-lg, 12px);
+  background: var(--mj-bg-surface-elevated);
+  box-shadow: var(--mj-shadow-xl, 0 12px 32px rgba(0, 0, 0, 0.18));
+  padding: 12px 14px 10px;
+  animation: gear-pop-in 160ms ease;
+}
+@keyframes gear-pop-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.gp-h {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mj-text-muted);
+  margin-bottom: 9px;
+}
+.gp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gp-l {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+}
+.gp-seg {
+  display: inline-flex;
+  flex: 1;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 8px);
+  background: var(--mj-bg-surface);
+  padding: 2px;
+  gap: 2px;
+}
+.gp-seg button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.gp-seg button.on {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+}
+.gp-note {
+  font-size: 10.5px;
+  color: var(--mj-text-muted);
+  line-height: 1.45;
+  margin-top: 8px;
+}
+.gp-div {
+  height: 1px;
+  background: var(--mj-border-default);
+  margin: 10px -14px;
+}
+.gp-link {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--mj-text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.gp-link:hover {
+  color: var(--mj-text-primary);
+}
+.gp-link i {
+  width: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--mj-text-muted);
+}
+.gp-link:hover i {
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+}

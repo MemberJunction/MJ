@@ -59,6 +59,11 @@ vi.mock('@memberjunction/ai', () => {
     constructor(apiKey: string) { this._apiKey = apiKey; }
     get apiKey() { return this._apiKey; }
   }
+  class MockBaseRealtimeModel {
+    protected _apiKey: string;
+    constructor(apiKey: string) { this._apiKey = apiKey; }
+    get apiKey() { return this._apiKey; }
+  }
   class MockGeneratedImage {
     data: Buffer | null = null;
     base64: string = '';
@@ -85,6 +90,8 @@ vi.mock('@memberjunction/ai', () => {
     ImageVariationParams: class {},
     ImageModelInfo: class {},
     GeneratedImage: MockGeneratedImage,
+    BaseRealtimeModel: MockBaseRealtimeModel,
+    BaseEmbeddings: class {},
   };
 });
 

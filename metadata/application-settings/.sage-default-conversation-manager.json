@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "ApplicationID": null,
+      "Name": "Conversations.DefaultAgentID",
+      "Value": "@lookup:MJ: AI Agents.Name=Sage",
+      "Comments": "Global default conversation-manager agent. Used by @memberjunction/conversations-runtime's DefaultAgentResolver as step 3 of the resolution chain (explicit widget input → app-scoped Application Setting → THIS global setting → code-const Sage fallback). An app-scoped row with the same Name takes precedence for that application. Deployments wanting a different system-wide default agent rewrite the Value to a different @lookup reference (e.g. another agent's Name); deployments wanting a per-app default add a new row with the appropriate ApplicationID."
+    },
+    "primaryKey": {
+      "ID": "CDE69927-4649-46BC-B4BB-8ECF11187FD1"
+    },
+    "sync": {
+      "lastModified": "2026-06-12T23:03:42.912Z",
+      "checksum": "428fc4f63e567f67cd0a3e869dc650003a832cd36ac919bf4916065b933972d6"
+    }
+  }
+]

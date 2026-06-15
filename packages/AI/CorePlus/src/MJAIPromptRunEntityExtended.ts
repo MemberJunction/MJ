@@ -4,11 +4,34 @@ import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 
 /**
- * Extended MJAIPromptRunEntity class with helper methods for extracting 
+ * Tracks how a malformed JSON response was repaired during prompt execution.
+ * Stored transiently on the prompt run entity and persisted into ValidationSummary JSON.
+ */
+export interface JSONRepairInfo {
+    /** Whether the JSON was repaired */
+    repaired: true;
+    /** Which repair strategy succeeded */
+    method: 'JSON5' | 'AIRepair';
+    /** The original JSON parse error message */
+    originalError: string;
+    /** First 200 characters of the raw LLM output (for diagnostics) */
+    rawOutputPrefix: string;
+    /** The prompt run ID of the repair prompt execution (AI repair only) */
+    repairPromptRunId?: string;
+}
+
+/**
+ * Extended MJAIPromptRunEntity class with helper methods for extracting
  * conversation messages and data from the stored JSON.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Runs')
 export class MJAIPromptRunEntityExtended extends MJAIPromptRunEntity {
+    /**
+     * Transient property to carry JSON repair info from attemptJSONRepair
+     * to the ValidationSummary persistence step. Not saved to the database directly —
+     * it is serialized into the ValidationSummary JSON field.
+     */
+    public _jsonRepairInfo: JSONRepairInfo | null = null;
     
     /**
      * Parses and extracts all message data from the Messages field.

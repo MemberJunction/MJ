@@ -220,6 +220,40 @@ const loggingSettingsSchema = z.object({
   }).optional().default({}),
 });
 
+const corsSchema = z.object({
+  /** Allowed origins for CORS. Default ['*'] preserves backward-compatible "allow all" behavior. */
+  allowedOrigins: z.array(z.string()).default(['*']),
+  /** Whether to include credentials (cookies, auth headers) in CORS responses. */
+  allowCredentials: z.boolean().default(true),
+  /** How long (seconds) browsers may cache preflight responses. Default 24 hours. */
+  maxAge: z.number().default(86400),
+});
+
+const rateLimitSchema = z.object({
+  /** Master switch — when false (default), no rate limiting is applied. */
+  enabled: z.boolean().default(false),
+  global: z.object({
+    /** Sliding window duration in milliseconds. */
+    windowMs: z.number().default(60_000),
+    /** Maximum requests per window per IP. */
+    maxRequests: z.number().default(300),
+    /** Response body sent when the limit is exceeded. */
+    message: z.string().default('Too many requests, please try again later'),
+  }).default({}),
+  auth: z.object({
+    /** Sliding window duration in milliseconds for auth endpoints. */
+    windowMs: z.number().default(900_000),
+    /** Maximum failed auth attempts per window per IP. */
+    maxAttempts: z.number().default(15),
+  }).default({}),
+  graphql: z.object({
+    /** Sliding window duration in milliseconds for GraphQL operations. */
+    windowMs: z.number().default(60_000),
+    /** Maximum GraphQL operations per window per IP. */
+    maxRequests: z.number().default(100),
+  }).default({}),
+});
+
 const feedbackGithubSettingsSchema = z.object({
   owner: z.string().optional(),
   repo: z.string().optional(),
@@ -314,6 +348,8 @@ const configInfoSchema = z.object({
   cacheSettings: cacheSettingsSchema.optional().default({}),
   loggingSettings: loggingSettingsSchema.optional().default({}),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
+  cors: corsSchema.optional().default({}),
+  rateLimiting: rateLimitSchema.optional().default({}),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -365,6 +401,8 @@ export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type LoggingSettingsConfig = z.infer<typeof loggingSettingsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
+export type CorsConfig = z.infer<typeof corsSchema>;
+export type RateLimitConfig = z.infer<typeof rateLimitSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**

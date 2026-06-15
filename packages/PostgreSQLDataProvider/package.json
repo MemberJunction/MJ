@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/postgresql-dataprovider",
   "type": "module",
-  "version": "5.40.0",
+  "version": "5.40.2",
   "description": "MemberJunction: PostgreSQL Data Provider",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,12 +20,12 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/ai-vectordb": "5.40.0",
-    "@memberjunction/core": "5.40.0",
-    "@memberjunction/generic-database-provider": "5.40.0",
-    "@memberjunction/global": "5.40.0",
-    "@memberjunction/query-processor": "5.40.0",
-    "@memberjunction/sql-dialect": "5.40.0",
+    "@memberjunction/ai-vectordb": "5.40.2",
+    "@memberjunction/core": "5.40.2",
+    "@memberjunction/generic-database-provider": "5.40.2",
+    "@memberjunction/global": "5.40.2",
+    "@memberjunction/query-processor": "5.40.2",
+    "@memberjunction/sql-dialect": "5.40.2",
     "pg": "^8.13.3"
   },
   "devDependencies": {

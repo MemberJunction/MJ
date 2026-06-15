@@ -649,7 +649,12 @@ ${validationFunctions}`
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
           const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
-          typeString = `union([${sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
+          // z.union() requires at least 2 members. When there's only one allowed
+          // value (single-value CHECK constraint), emit z.literal() directly.
+          const literals = sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`);
+          typeString = literals.length === 1
+            ? literals[0].substring(2) // strip leading 'z.' since caller prepends it
+            : `union([${literals.join(', ')}])`;
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
             typeString += `.or(z.${TypeScriptTypeFromSQLType(e.Type)}()) `;

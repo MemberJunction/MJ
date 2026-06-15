@@ -643,6 +643,11 @@ export abstract class CodeGenDatabaseProvider {
                 parts.push(paramRef);
             }
         }
+
+        if (parts.length === 0 && !excludePrimaryKey) {
+            console.warn(`[CodeGen] generateInsertFieldString produced an empty column list for entity "${entity.Name}" (${entity.SchemaName}.${entity.BaseTable}). This typically means all columns are PKs with no additional data columns.`);
+        }
+
         return parts.join(',\n                ');
     }
 

@@ -42,11 +42,12 @@ function captureRawBody(req: express.Request, _res: express.Response, buf: Buffe
 }
 
 async function handleWebhook(req: express.Request, res: express.Response): Promise<void> {
-    const driverKey = req.params.driverKey;
-    if (!driverKey) {
+    const rawDriverKey = req.params.driverKey;
+    if (!rawDriverKey) {
         res.status(400).json({ error: 'Missing driver key in path.' });
         return;
     }
+    const driverKey: string = Array.isArray(rawDriverKey) ? rawDriverKey[0] : rawDriverKey;
 
     const contextUser = getSystemUser();
     if (!contextUser) {
