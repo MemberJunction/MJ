@@ -13,10 +13,16 @@ export type CheckConstraintParserResult = { Description: string, Code: string, M
 
 export type SmartFieldIdentificationResult = {
     /**
-     * One or more fields that together form the human-readable record name.
-     * For person entities: ["FirstName", "LastName"]
-     * For simple entities: ["Name"]
-     * Displayed concatenated with spaces in card titles, tooltips, etc.
+     * RANKED candidate list for the entity's human-readable record name, best first.
+     * For person entities: ["FirstName", "LastName"]; for simple entities: ["Name"].
+     *
+     * IMPORTANT: although the LLM may propose several fields, MemberJunction's metadata
+     * supports exactly ONE `IsNameField` per entity — `EntityInfo.NameField`, the
+     * base-view FK-name virtual columns, and `RelatedEntityNameFieldMap` resolution all
+     * assume a single winner. `applyNameFieldUpdates` therefore flags only the FIRST
+     * eligible candidate (and clears any other auto-updatable `IsNameField` flags).
+     * Composite display names are NOT implemented downstream; treat extra entries as
+     * fallback candidates, not as a concatenation recipe.
      */
     nameFields: string[];
     nameFieldsReason: string;

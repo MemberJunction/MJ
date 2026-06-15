@@ -6,12 +6,13 @@ import { RealtimeWhiteboardPagesComponent } from './whiteboard-pages.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
 import { RealtimeWhiteboardHostComponent } from './whiteboard-host.component';
 import { WhiteboardSnapshotComponent } from './whiteboard-snapshot.component';
+import { WhiteboardWidgetSrcdocPipe } from './whiteboard-srcdoc.pipe';
 
 /**
- * Convenience NgModule that re-exports every standalone whiteboard component, for
- * consumers organized around NgModules. All components in this package are STANDALONE —
- * apps using standalone bootstrapping can import the component classes directly and skip
- * this module entirely.
+ * Convenience NgModule that re-exports every standalone whiteboard component (and the
+ * `wbWidgetSrcdoc` pipe), for consumers organized around NgModules. All components in
+ * this package are STANDALONE — apps using standalone bootstrapping can import the
+ * component classes directly and skip this module entirely.
  */
 @NgModule({
   imports: [
@@ -21,7 +22,8 @@ import { WhiteboardSnapshotComponent } from './whiteboard-snapshot.component';
     RealtimeWhiteboardPagesComponent,
     RealtimeWhiteboardAgentSeesPopoverComponent,
     RealtimeWhiteboardHostComponent,
-    WhiteboardSnapshotComponent
+    WhiteboardSnapshotComponent,
+    WhiteboardWidgetSrcdocPipe
   ],
   exports: [
     RealtimeWhiteboardBoardComponent,
@@ -30,7 +32,8 @@ import { WhiteboardSnapshotComponent } from './whiteboard-snapshot.component';
     RealtimeWhiteboardPagesComponent,
     RealtimeWhiteboardAgentSeesPopoverComponent,
     RealtimeWhiteboardHostComponent,
-    WhiteboardSnapshotComponent
+    WhiteboardSnapshotComponent,
+    WhiteboardWidgetSrcdocPipe
   ]
 })
 export class WhiteboardModule {}

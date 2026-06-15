@@ -29,8 +29,15 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
   styleUrl: './realtime-composer.component.css'
 })
 export class RealtimeComposerComponent {
-  /** The overlay's current disclosure level (0–4) — picks the strip vs dock shape. */
-  @Input() Level = 0;
+  /**
+   * Whether the typed-input dock is OPEN. A two-way door owned by the user: the strip's
+   * Type control (or the T hotkey) opens it; the dock's hide control closes it — typing
+   * never becomes permanent chrome. Default closed (voice-first), reset per session.
+   */
+  @Input() Open = false;
+
+  /** Emitted when the user opens (Type control / typing) or closes (hide control) the dock. */
+  @Output() OpenChanged = new EventEmitter<boolean>();
 
   /** Whether captions are currently shown (drives the captions control's active state). */
   @Input() CaptionsOn = true;
@@ -67,7 +74,7 @@ export class RealtimeComposerComponent {
 
   /** True while the big-controls phone-call strip renders (instead of the dock). */
   public get StripMode(): boolean {
-    return this.Level < 2;
+    return !this.Open;
   }
 
   /** Toggle the local microphone mute. */

@@ -8,11 +8,22 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
     },
 }));
 
-// --- Mock the client-direct service so CloseSession's run finalization is observable (no DB). ---
+// --- Mock the client-direct service so CloseSession's run finalization is observable (no DB),
+//     plus the channel-plugin host so the start/close lifecycle notifications are observable. ---
 const finalizeCoAgentRunMock = vi.fn(async () => undefined);
+const hostSessionStartedMock = vi.fn(async () => undefined);
+const hostSessionClosedMock = vi.fn(async () => undefined);
 vi.mock('@memberjunction/ai-agents', () => ({
     RealtimeClientSessionService: class {
         FinalizeCoAgentRun = finalizeCoAgentRunMock;
+    },
+    RealtimeChannelServerHost: {
+        get Instance() {
+            return {
+                OnSessionStarted: hostSessionStartedMock,
+                OnSessionClosed: hostSessionClosedMock,
+            };
+        },
     },
 }));
 
@@ -77,6 +88,10 @@ function makeSessionEntity(overrides: Partial<FakeEntity> = {}): FakeEntity {
 beforeEach(() => {
     hasPermissionMock.mockReset();
     finalizeCoAgentRunMock.mockClear();
+    hostSessionStartedMock.mockReset();
+    hostSessionStartedMock.mockResolvedValue(undefined);
+    hostSessionClosedMock.mockReset();
+    hostSessionClosedMock.mockResolvedValue(undefined);
     runViewMock.mockReset();
     runViewMock.mockResolvedValue({ Success: true, Results: [] });
 });
@@ -359,5 +374,92 @@ describe('SessionManager.MarkIdle', () => {
         const ok = await mgr.MarkIdle('session-1', makeUser(), provider);
         expect(ok).toBe(true);
         expect(session.Save).not.toHaveBeenCalled();
+    });
+});
+
+describe('SessionManager — server-side channel plugin lifecycle notifications', () => {
+    it('CreateSession notifies the channel-plugin host with the session context after the row persists', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const session = makeSessionEntity({ ID: 'session-new', AgentID: 'agent-1', UserID: 'user-1' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        await mgr.CreateSession(
+            { agentID: 'agent-1', userID: 'user-1', conversationID: 'conv-existing' },
+            makeUser(),
+            provider,
+        );
+
+        expect(hostSessionStartedMock).toHaveBeenCalledTimes(1);
+        const [ctx, user, prov] = hostSessionStartedMock.mock.calls[0] as unknown[];
+        expect(ctx).toEqual({
+            AgentSessionID: 'session-new',
+            AgentID: 'agent-1',
+            UserID: 'user-1',
+            ConversationID: 'conv-existing',
+        });
+        expect((user as { ID: string }).ID).toBe('user-1');
+        expect(prov).toBe(provider);
+    });
+
+    it('CreateSession does NOT notify the host when the session save fails (no half-open plugins)', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const session = makeSessionEntity({ Save: vi.fn(async () => false) });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        await expect(
+            mgr.CreateSession({ agentID: 'agent-1', userID: 'user-1', conversationID: 'conv-1' }, makeUser(), provider),
+        ).rejects.toThrow();
+        expect(hostSessionStartedMock).not.toHaveBeenCalled();
+    });
+
+    it('a throwing host start notification never breaks session creation (best-effort)', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        hostSessionStartedMock.mockRejectedValue(new Error('plugin layer boom'));
+        const session = makeSessionEntity({ ID: 'session-new' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const result = await mgr.CreateSession(
+            { agentID: 'agent-1', userID: 'user-1', conversationID: 'conv-1' },
+            makeUser(),
+            provider,
+        );
+        expect(result.ID).toBe('session-new');
+    });
+
+    it('CloseSession notifies the host with the stamped close reason (janitor provenance included)', async () => {
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        await mgr.CloseSession('session-1', makeUser(), provider, 'Janitor');
+
+        expect(hostSessionClosedMock).toHaveBeenCalledTimes(1);
+        expect(hostSessionClosedMock).toHaveBeenCalledWith('session-1', 'Janitor');
+    });
+
+    it('an idempotent re-close still notifies the host with the ORIGINAL close reason (race cleanup)', async () => {
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Closed', CloseReason: 'Explicit' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSession('session-1', makeUser(), provider, 'Janitor');
+
+        expect(ok).toBe(true);
+        expect(session.Save).not.toHaveBeenCalled(); // still a DB no-op
+        expect(hostSessionClosedMock).toHaveBeenCalledWith('session-1', 'Explicit');
+    });
+
+    it('a throwing host close notification never breaks session close (best-effort)', async () => {
+        hostSessionClosedMock.mockRejectedValue(new Error('plugin layer boom'));
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSession('session-1', makeUser(), provider);
+        expect(ok).toBe(true);
+        expect(session.Status).toBe('Closed');
     });
 });

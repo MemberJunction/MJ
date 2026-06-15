@@ -130,8 +130,15 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
       // event ran first). Surface it to the agent so it can react to quiz answers /
       // micro-form input it asked for.
       instance.WidgetSubmitted.subscribe((submit: WhiteboardWidgetSubmitEvent) => {
+        // Durable awareness first (the note persists in the model's context)…
         this.Context?.SendContextNote(
           `[whiteboard] the user submitted input in widget "${submit.Title || submit.ItemID}": ${submit.DataJson}`);
+        // …then make the model REACT — a submission is explicit user input the user is
+        // waiting on; without this trigger, SendContextNote alone produces dead silence
+        // ("I clicked Submit and nothing happened").
+        this.Context?.RequestSpokenResponse?.(
+          `The user just submitted input in the whiteboard widget "${submit.Title || submit.ItemID}": ${submit.DataJson}. ` +
+          `React to it now in your own voice — acknowledge their choice and continue naturally.`);
       }),
       // AMBIENT widget telemetry (the injected recorder, NOT widget-authored script):
       // clicks / changes / typing summarized by the board. Pure background perception —

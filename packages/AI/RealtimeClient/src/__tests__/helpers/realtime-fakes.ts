@@ -260,12 +260,12 @@ export function makeOpenAIConfig(sessionConfig: JSONObject = { instructions: 'be
 
 /** Fake Gemini Live session: records every outbound send for assertions. */
 export class FakeGeminiSession implements GeminiLiveClientSession {
-    public RealtimeInputs: Array<{ audio?: GeminiBlob }> = [];
+    public RealtimeInputs: Array<{ audio?: GeminiBlob; text?: string }> = [];
     public ClientContents: Array<{ turns?: Content[]; turnComplete?: boolean }> = [];
     public ToolResponses: Array<{ functionResponses: FunctionResponse[] }> = [];
     public Closed = false;
 
-    public sendRealtimeInput(params: { audio?: GeminiBlob }): void {
+    public sendRealtimeInput(params: { audio?: GeminiBlob; text?: string }): void {
         this.RealtimeInputs.push(params);
     }
     public sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void {

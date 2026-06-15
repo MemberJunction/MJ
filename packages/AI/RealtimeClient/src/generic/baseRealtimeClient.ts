@@ -45,6 +45,15 @@ export interface RealtimeClientTranscript {
      * spoken-progress update triggered by {@link BaseRealtimeClient.RequestSpokenUpdate}.
      */
     Kind: 'normal' | 'narration';
+    /**
+     * MACHINE-READABLE correction marker: `true` when this FINAL transcript SUPERSEDES the
+     * session's immediately-preceding final transcript of the same role — e.g. ElevenLabs'
+     * post-barge-in `agent_response_correction`, which re-finalizes the assistant turn with
+     * the text that was ACTUALLY spoken before the interruption cut it off. Hosts that
+     * persist finals must UPDATE the previous turn in place instead of appending a
+     * duplicate. Absent/`false` on ordinary turns and on interim deltas.
+     */
+    ReplacesPrevious?: boolean;
 }
 
 /**
