@@ -202,7 +202,42 @@ With defaults (`MaxConcurrentJobs=5`, lease=10 min), the worst-case starvation i
 
 - Raise `MaxConcurrentJobs` so healthy jobs have headroom while zombies hold slots.
 - Shorten `LeaseTimeoutMs` to accelerate reclaim (subject to the constraint above).
+- **Heartbeat from your plugin** to replace the fixed lease with liveness — see the next section (GH #2749).
 - Bound `plugin.Execute()` in your job plugins — the structural cure, tracked as a follow-up.
+
+### Heartbeat-based lease renewal (#2749)
+
+The fixed lease is a blunt instrument: it's an absolute-clock deadline set at acquire time, blind to whether a job is actually making progress. A job that hangs at minute 1 still holds its slot until the lease expires; a healthy long job that legitimately needs longer than the lease gets reclaimed mid-flight.
+
+The cure is **liveness**. A running plugin periodically calls `context.heartbeat()` to push its lock's `ExpectedCompletionAt` forward. A job that *stops* beating becomes reclaimable by the existing sweep shortly after its last beat — regardless of absolute clock time. The sweep itself is unchanged; heartbeating simply keeps a healthy job's `ExpectedCompletionAt` ahead of `now`.
+
+```typescript
+async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
+    for (const batch of batches) {
+        await this.processBatch(batch);
+        // Signal forward progress. Safe to call every iteration — it self-throttles.
+        await context.heartbeat?.();
+    }
+    return { Success: true };
+}
+```
+
+**The contract:**
+
+- **Opt-in.** A plugin that never calls `heartbeat()` keeps today's fixed acquire-time lease behavior. Nothing breaks.
+- **Self-throttling.** Call it on every loop iteration / progress tick if you like — an effective DB write happens at most once per ~5 minutes (`HEARTBEAT_INTERVAL_MS`); the rest are cheap no-ops.
+- **Never throws.** It swallows and logs its own errors, so `void context.heartbeat?.()` fire-and-forget is safe. A best-effort renewal must never fault the actual job.
+- **No-op in `Concurrent` mode** — there's no lock to extend.
+
+**Why the engine does NOT auto-heartbeat.** It would be tempting to renew the lease automatically at every `await` boundary. We deliberately don't: an auto-beat would keep renewing the lease *while a plugin is wedged in `await something()`* — masking exactly the hang we want to detect. Renewal MUST be driven by the plugin's own forward progress.
+
+**Constants & interaction with the sweep.** Each effective beat sets `ExpectedCompletionAt = now + HEARTBEAT_LEASE_MS` (6 min — one minute larger than the 5-min throttle window, so a healthy on-schedule job never lets its lease lapse). The renewal is atomic and token-checked via `spExtendScheduledJobLease`: if another holder has already reclaimed the lease, the beat no-ops (logged as a slot handoff) rather than stomping the fresh holder's lock — the same lost-mutex protection as the release sproc.
+
+**Operator footgun.** Heartbeating deliberately *shortens* the effective reclaim window: `HEARTBEAT_LEASE_MS` (6 min) is independent of and smaller than the default 10-min acquire-time lease. That's intended — a tighter reclaim window in exchange for liveness. If you configure a long `LeaseTimeoutMinutes` *and* the job heartbeats, the effective reclaim window collapses to ~6 min. This is not a bug.
+
+**When to reach for `MaxRuntimeMinutes` instead.** Heartbeating requires a place to beat from — a loop, a progress callback, a per-step boundary. A job whose work is a *single long-running call* (one slow synchronous action, a long external request) has no such boundary and can't beat mid-flight. For those, set the job's `MaxRuntimeMinutes` column: it bumps the acquire-time lease to `max(default, MaxRuntimeMinutes)` (it only ever *extends* the default, never shrinks it) so the sweep doesn't reclaim the slot before the call can finish.
+
+**Built-in driver coverage.** All three shipped drivers opt in: the Agent driver beats per agent step (via `onProgress`), the Integration Sync driver beats per sync batch, and the Action driver beats per parameter prepared plus once right before `RunAction` (a single long action still needs `MaxRuntimeMinutes` — that's the documented caveat above).
 
 ### Leaked promise behavior
 

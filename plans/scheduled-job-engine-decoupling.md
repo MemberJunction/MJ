@@ -190,7 +190,7 @@ This is a manifestation of the same **shared mutable entity hazard** that motiva
 
 These are deliberately out of scope, with follow-up issues tracked:
 
-1. **Heartbeat-based lease renewal.** The structural cure for residual starvation when ≥cap jobs hang simultaneously. Real design questions (heartbeat interval, plugin opt-in pattern, per-job `MaxRuntimeMinutes` overrides) deserve their own PR. Tunable lease (#5 above) is the pre-heartbeat operational lever.
+1. ~~**Heartbeat-based lease renewal.**~~ **LANDED in #2749.** The structural cure for residual starvation when ≥cap jobs hang simultaneously: a running plugin opts in by calling `context.heartbeat()`, replacing the fixed lease with plugin-driven liveness. Per-job `MaxRuntimeMinutes` covers single-long-call jobs that can't beat mid-flight. See [`scheduled-job-engine-heartbeat-lease.md`](scheduled-job-engine-heartbeat-lease.md) and the README "Heartbeat-based lease renewal (#2749)" section. Tunable lease (#5 above) remains the operational lever for non-heartbeating plugins.
 2. **Plugin-side hang prevention.** Bounding `plugin.Execute()` in known long-running drivers — especially the agent-runner driver that triggered the Izzy incident (unbounded model-failover retry loop). Per-driver work, tracked separately.
 3. **Auto job-list refresh.** DB-side trigger or table-version polling so the engine picks up runtime job changes without explicit `OnJobChanged`. Pre-existing limitation; this PR documents it but doesn't fix it.
 4. **Worker thread isolation.** Would let us actually terminate hung plugins (instead of leaking their promises). Multi-week design effort; separate PR if/when needed.
