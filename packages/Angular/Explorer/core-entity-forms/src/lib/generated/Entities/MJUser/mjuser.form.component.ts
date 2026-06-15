@@ -81,7 +81,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJResourcePermissionsSharedByUserID', sectionName: 'Resource Permissions (Shared By User ID)', isExpanded: false },
             { sectionKey: 'mJScheduledActions', sectionName: 'Scheduled Actions', isExpanded: false },
             { sectionKey: 'mJScheduledJobRuns', sectionName: 'Scheduled Job Runs', isExpanded: false },
-            { sectionKey: 'mJScheduledJobsOwnerUserID', sectionName: 'Scheduled Jobs (Owner User)', isExpanded: false },
+            { sectionKey: 'mJScheduledJobsOwnerUserID', sectionName: 'Scheduled Jobs (Owner)', isExpanded: false },
             { sectionKey: 'mJSearchScopes', sectionName: 'Search Scopes', isExpanded: false },
             { sectionKey: 'mJTagAuditLogs', sectionName: 'Tag Audit Logs', isExpanded: false },
             { sectionKey: 'mJTagSuggestions', sectionName: 'Tag Suggestions', isExpanded: false },
