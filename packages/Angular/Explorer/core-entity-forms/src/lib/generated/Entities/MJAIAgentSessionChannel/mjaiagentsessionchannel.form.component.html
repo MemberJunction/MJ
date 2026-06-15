@@ -56,6 +56,15 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="SocketUrl"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="URL"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="LastActiveAt"
             Type="datepicker"
             [EditMode]="EditMode"
@@ -76,21 +85,12 @@
     <mj-collapsible-panel
         SectionKey="configuration"
         SectionName="Configuration"
-        Icon="fa fa-sliders-h"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
-            FieldName="SocketUrl"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="URL"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="Config"
             Type="code"
             [EditMode]="EditMode"
@@ -103,7 +103,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

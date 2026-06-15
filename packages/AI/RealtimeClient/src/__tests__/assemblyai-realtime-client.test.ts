@@ -104,8 +104,12 @@ class TestAssemblyAIClient extends AssemblyAIRealtimeClient {
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;
 
+    /** Number of sockets the driver asked for (1 = initial; 2 = a resume reattach). */
+    public SocketCreates = 0;
+
     protected override createSocket(url: string): IAssemblyAIClientSocket {
         this.LastUrl = url;
+        this.SocketCreates++;
         return this.Fake;
     }
     protected override async createMicCapture(
@@ -764,11 +768,12 @@ describe('AssemblyAIRealtimeClient', () => {
             expect(states[states.length - 1]).toBe('error');
         });
 
-        it('should surface an UNEXPECTED socket close as a FATAL error (credential / session death)', async () => {
+        it('should surface an UNEXPECTED socket close as FATAL once the one-shot resume is exhausted', async () => {
             const { errors, states } = collect(client);
             await connect(client);
 
-            client.Fake.onclose?.();
+            client.Fake.onclose?.(); // first drop → the resume reattach (see the resume suite)
+            client.Fake.onclose?.(); // resume socket dies too → NOW it's fatal
 
             expect(errors).toEqual([{ Message: 'AssemblyAI agent session closed unexpectedly', Fatal: true }]);
             expect(states[states.length - 1]).toBe('error');
@@ -781,5 +786,79 @@ describe('AssemblyAIRealtimeClient', () => {
             client.Fake.onclose?.();
             expect(errors).toEqual([]);
         });
+    });
+});
+
+describe('session.resume reconnect window', () => {
+    let client: TestAssemblyAIClient;
+
+    beforeEach(async () => {
+        client = new TestAssemblyAIClient();
+        await connect(client); // session.ready carries session_id 'sess_1'
+    });
+
+    function collectStatesAndErrors() {
+        const states: string[] = [];
+        const errors: Array<{ Message: string; Fatal?: boolean }> = [];
+        client.OnStateChange((s) => states.push(s));
+        client.OnError((e) => errors.push(e));
+        return { states, errors };
+    }
+
+    it('an unexpected drop reattaches ONCE: session.resume first frame, listening restored, no fatal', () => {
+        const { states, errors } = collectStatesAndErrors();
+        client.Fake.Sent.length = 0;
+
+        client.Fake.onclose?.(); // unexpected provider drop
+        expect(client.SocketCreates).toBe(2); // a fresh reattach socket
+        expect(states).toContain('connecting'); // hosts render "reconnecting…"
+
+        client.Fake.Open();
+        const first = client.Fake.SentFrames()[0] as { type?: string; session_id?: string };
+        expect(first.type).toBe('session.resume');
+        expect(first.session_id).toBe('sess_1');
+
+        client.Fake.EmitServer({ type: 'session.ready', session_id: 'sess_1' });
+        expect(states[states.length - 1]).toBe('listening');
+        expect(errors.filter((e) => e.Fatal)).toHaveLength(0);
+    });
+
+    it('a SECOND unexpected drop is fatal (one resume per session)', () => {
+        const { states, errors } = collectStatesAndErrors();
+        client.Fake.onclose?.();
+        client.Fake.Open();
+        client.Fake.EmitServer({ type: 'session.ready', session_id: 'sess_1' });
+
+        client.Fake.onclose?.(); // dropped again — no second resume
+        expect(client.SocketCreates).toBe(2);
+        expect(errors.some((e) => e.Fatal)).toBe(true);
+        expect(states[states.length - 1]).toBe('error');
+    });
+
+    it('a failed resume handshake (socket error) falls through to the fatal path', () => {
+        const { states, errors } = collectStatesAndErrors();
+        client.Fake.onclose?.();
+        client.Fake.onerror?.('reattach refused');
+        expect(errors.some((e) => e.Fatal)).toBe(true);
+        expect(states[states.length - 1]).toBe('error');
+    });
+
+    it('a consumer Disconnect never attempts a resume', async () => {
+        const { errors } = collectStatesAndErrors();
+        await client.Disconnect();
+        client.Fake.onclose?.(); // the close the consumer caused
+        expect(client.SocketCreates).toBe(1);
+        expect(errors).toHaveLength(0);
+    });
+
+    it('mic chunks flow into the reattached socket (audio plane survives the drop)', () => {
+        client.Fake.onclose?.();
+        client.Fake.Open();
+        client.Fake.EmitServer({ type: 'session.ready', session_id: 'sess_1' });
+        client.Fake.Sent.length = 0;
+
+        client.OnPcmChunk?.('AAAA');
+        const frames = client.Fake.SentFrames() as Array<{ type?: string }>;
+        expect(frames.some((f) => f.type === 'input.audio')).toBe(true);
     });
 });

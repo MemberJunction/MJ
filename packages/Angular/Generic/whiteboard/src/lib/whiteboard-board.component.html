@@ -260,10 +260,13 @@
             <div class="html-card__body">
               @if (IsNearViewport(item)) {
                 <!-- SANDBOXED: allow-scripts ONLY (no allow-same-origin) — opaque origin,
-                     no access to the app DOM, session, cookies or storage. See HtmlSrcdoc(). -->
+                     no access to the app DOM, session, cookies or storage. The srcdoc is
+                     built by the view-scoped wbWidgetSrcdoc pipe: rebuilt per MOUNT (page
+                     switches / lazy toggle / board re-creation always render fresh) and
+                     identity-stable while mounted (no reload churn). See whiteboard-srcdoc.pipe.ts. -->
                 <iframe class="html-card__frame"
                         sandbox="allow-scripts"
-                        [srcdoc]="HtmlSrcdoc(item)"
+                        [srcdoc]="item.Html | wbWidgetSrcdoc"
                         [attr.data-item-id]="item.ID"
                         [attr.title]="HtmlTitle(item)"></iframe>
               } @else {

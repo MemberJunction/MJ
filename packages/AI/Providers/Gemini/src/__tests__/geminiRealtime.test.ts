@@ -27,7 +27,7 @@ import { GeminiRealtime, type GeminiLiveSession, type GeminiConnectArgs } from '
 /*  network.                                                          */
 /* ------------------------------------------------------------------ */
 class FakeLiveSession implements GeminiLiveSession {
-    public RealtimeInputs: Array<{ audio?: GeminiBlob; media?: GeminiBlob }> = [];
+    public RealtimeInputs: Array<{ audio?: GeminiBlob; media?: GeminiBlob; text?: string }> = [];
     public ClientContents: Array<{ turns?: Content[]; turnComplete?: boolean }> = [];
     public ToolResponses: Array<{ functionResponses: FunctionResponse[] | FunctionResponse }> = [];
     public Closed = false;
@@ -35,7 +35,7 @@ class FakeLiveSession implements GeminiLiveSession {
     /** The driver-supplied callback that translates inbound server messages. */
     public Emit: (message: LiveServerMessage) => void = () => {};
 
-    public sendRealtimeInput(params: { audio?: GeminiBlob; media?: GeminiBlob }): void {
+    public sendRealtimeInput(params: { audio?: GeminiBlob; media?: GeminiBlob; text?: string }): void {
         this.RealtimeInputs.push(params);
     }
     public sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void {
@@ -412,14 +412,14 @@ describe('GeminiRealtime', () => {
             expect(sent.turns![0]).toEqual({ role: 'user', parts: [{ text: '[progress] delegated run is gathering data' }] });
         });
 
-        it('RequestSpokenUpdate emulates per-response instructions as a turn-complete user turn', () => {
+        it('RequestSpokenUpdate emulates per-response instructions as a realtime-text user turn', () => {
             expect(session.RequestSpokenUpdate).toBeDefined();
             session.RequestSpokenUpdate?.('Briefly say the report agent is drafting.');
 
-            expect(driver.Fake.ClientContents).toHaveLength(1);
-            const sent = driver.Fake.ClientContents[0];
-            expect(sent.turnComplete).toBe(true);
-            expect(sent.turns![0]).toEqual({ role: 'user', parts: [{ text: 'Briefly say the report agent is drafting.' }] });
+            // realtime text, NOT clientContent: native-audio Live models only generate from
+            // sendRealtimeInput mid-call (clientContent is history seeding).
+            expect(driver.Fake.RealtimeInputs).toEqual([{ text: 'Briefly say the report agent is drafting.' }]);
+            expect(driver.Fake.ClientContents).toHaveLength(0);
         });
 
         it('queues interim-update sends while a model turn is in flight and flushes on turnComplete', () => {
@@ -432,15 +432,15 @@ describe('GeminiRealtime', () => {
             session.SendContextNote?.('note while busy');
             session.RequestSpokenUpdate?.('update while busy');
             expect(driver.Fake.ClientContents).toHaveLength(0); // deferred — mid-turn client content interrupts on Gemini
+            expect(driver.Fake.RealtimeInputs).toHaveLength(0);
 
             driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
 
-            // Both flushed in order: the note (turnComplete:false), then the update (turnComplete:true).
-            expect(driver.Fake.ClientContents).toHaveLength(2);
+            // Both flushed in order: the note (clientContent), then the update (realtime text).
+            expect(driver.Fake.ClientContents).toHaveLength(1);
             expect(driver.Fake.ClientContents[0].turnComplete).toBe(false);
             expect((driver.Fake.ClientContents[0].turns![0].parts![0] as { text: string }).text).toBe('note while busy');
-            expect(driver.Fake.ClientContents[1].turnComplete).toBe(true);
-            expect((driver.Fake.ClientContents[1].turns![0].parts![0] as { text: string }).text).toBe('update while busy');
+            expect(driver.Fake.RealtimeInputs).toEqual([{ text: 'update while busy' }]);
         });
 
         it('a flushed RequestSpokenUpdate starts a new turn, so later queued sends keep waiting', () => {
@@ -455,12 +455,12 @@ describe('GeminiRealtime', () => {
             driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
 
             // The spoken update flushes and re-marks the turn active; the trailing note stays queued.
-            expect(driver.Fake.ClientContents).toHaveLength(1);
-            expect(driver.Fake.ClientContents[0].turnComplete).toBe(true);
+            expect(driver.Fake.RealtimeInputs).toEqual([{ text: 'first queued update' }]);
+            expect(driver.Fake.ClientContents).toHaveLength(0);
 
             driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
-            expect(driver.Fake.ClientContents).toHaveLength(2);
-            expect(driver.Fake.ClientContents[1].turnComplete).toBe(false);
+            expect(driver.Fake.ClientContents).toHaveLength(1);
+            expect(driver.Fake.ClientContents[0].turnComplete).toBe(false);
         });
 
         it('an interruption (barge-in) also releases the queue', () => {

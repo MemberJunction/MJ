@@ -596,3 +596,64 @@ describe('item-tool descriptions — the shared active-page sentence', () => {
     expect(WHITEBOARD_ACTIVE_PAGE_NOTE).toContain(WHITEBOARD_TOOL_NAMES.SwitchPage);
   });
 });
+
+describe('Whiteboard_MoveItem — move and/or resize', () => {
+  let state: WhiteboardState;
+  let id: string;
+
+  beforeEach(() => {
+    state = new WhiteboardState();
+    id = state.AddItem({ Kind: 'sticky', X: 10, Y: 20, Text: 'box' }, 'agent')!.ID;
+  });
+
+  function run(args: Record<string, unknown>) {
+    return parseResult(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.MoveItem, JSON.stringify(args)));
+  }
+
+  it('moves with x+y (the original contract)', () => {
+    const r = run({ itemId: id, x: 100, y: 200 });
+    expect(r.success).toBe(true);
+    const item = state.GetItem(id)!;
+    expect(item.X).toBe(100);
+    expect(item.Y).toBe(200);
+  });
+
+  it('RESIZES with w/h — the capability the agent previously lacked entirely', () => {
+    const r = run({ itemId: id, w: 300, h: 180 });
+    expect(r.success).toBe(true);
+    const item = state.GetItem(id) as { W?: number; H?: number };
+    expect(item.W).toBe(300);
+    expect(item.H).toBe(180);
+    expect(r.summary).toContain('resized');
+  });
+
+  it('moves AND resizes in one call (single undo step via the batch)', () => {
+    const r = run({ itemId: id, x: 50, y: 60, w: 240, h: 120 });
+    expect(r.success).toBe(true);
+    const item = state.GetItem(id) as { X: number; Y: number; W?: number; H?: number };
+    expect([item.X, item.Y, item.W, item.H]).toEqual([50, 60, 240, 120]);
+    state.Undo();
+    const undone = state.GetItem(id) as { X: number; Y: number };
+    expect([undone.X, undone.Y]).toEqual([10, 20]);
+  });
+
+  it('clamps degenerate sizes to the 24px minimum', () => {
+    run({ itemId: id, w: 1, h: -50 });
+    const item = state.GetItem(id) as { W?: number; H?: number };
+    expect(item.W).toBe(24);
+    expect(item.H).toBe(24);
+  });
+
+  it('requires itemId plus at least one operation', () => {
+    expect(run({ itemId: id }).success).toBe(false);
+    expect(run({ x: 1, y: 2 }).success).toBe(false);
+  });
+
+  it('unknown ids fail with SELF-CORRECTION context: active page name, item ids, switch hint', () => {
+    const r = run({ itemId: 'ghost-99', x: 0, y: 0 });
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('Page 1');
+    expect(r.error).toContain(id);
+    expect(r.error).toContain(WHITEBOARD_TOOL_NAMES.SwitchPage);
+  });
+});

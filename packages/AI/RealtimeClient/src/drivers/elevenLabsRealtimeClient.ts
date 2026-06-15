@@ -582,11 +582,13 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * Post-barge-in correction: re-finalizes the assistant turn with the text that was
      * ACTUALLY spoken before the interruption cut it off. Emitted as a fresh FINAL assistant
      * transcript, `Kind: 'normal'` (the interruption already reset the response kind; a
-     * truncated narration's correction is still just what was audibly said).
+     * truncated narration's correction is still just what was audibly said) — stamped
+     * {@link RealtimeClientTranscript.ReplacesPrevious} so hosts UPDATE the superseded turn
+     * in place instead of persisting both (closes the §10 "Transcript `Replaces` marker" gap).
      */
     private handleAgentResponseCorrection(correctedText: string | undefined): void {
         if (correctedText && correctedText.trim().length > 0) {
-            this.emitTranscript({ Role: 'Assistant', Text: correctedText, IsFinal: true, Kind: 'normal' });
+            this.emitTranscript({ Role: 'Assistant', Text: correctedText, IsFinal: true, Kind: 'normal', ReplacesPrevious: true });
         }
     }
 

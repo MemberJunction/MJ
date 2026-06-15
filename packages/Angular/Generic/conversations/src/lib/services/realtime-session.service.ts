@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
-import { Metadata, IMetadataProvider, RunView } from '@memberjunction/core';
+import { Metadata, IMetadataProvider } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
@@ -122,7 +123,7 @@ export interface RealtimeChannelFocusEvent {
 
 /**
  * The narrow projection of an ACTIVE `MJ: AI Agent Channels` registry row the service
- * loads at session start (read-only lookup — `ResultType: 'simple'`, narrowed Fields).
+ * reads at session start from {@link AIEngineBase}'s cached `AgentChannels`.
  */
 interface RealtimeChannelDefinitionRow {
   ID: string;
@@ -504,7 +505,13 @@ export class RealtimeSessionService {
    *   Realtime-type agent) — the highest-precedence step of the server's co-agent resolution
    *   chain. When set, the server uses exactly that co-agent and FAILS with a clear reason if
    *   it can't (no silent fallback). Omit to let server metadata drive the choice: the target
-   *   agent's `DefaultCoAgentID`, then its agent type's, then the global Realtime Co-Agent.
+   *   agent's `DefaultCoAgentID`, then the type-level `AIAgentCoAgent` default row, then the global Realtime Co-Agent.
+   * @param configOverridesJson Optional JSON payload of SESSION CONFIG overrides (e.g.
+   *   `{"realtime":{"modelPreference":"<modelId>"}}`), forwarded verbatim on the mint
+   *   mutation. The server enforces the `Realtime: Advanced Session Controls`
+   *   authorization on any overrides — hosts only populate this from authorization-gated
+   *   pickers, and never synthesize overrides beyond what the user explicitly chose.
+   *   Omit/`null` for the server's defaults (today's behavior).
    */
   public async StartVoiceSession(
     targetAgentId: string,
@@ -513,7 +520,8 @@ export class RealtimeSessionService {
     agentName?: string | null,
     preferredModelId?: string | null,
     clientTools?: RealtimeToolDefinition[] | null,
-    coAgentId?: string | null
+    coAgentId?: string | null,
+    configOverridesJson?: string | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
@@ -530,7 +538,7 @@ export class RealtimeSessionService {
       // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
       // tool sets must be declared to the realtime model at session mint.
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId);
+      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
@@ -564,7 +572,7 @@ export class RealtimeSessionService {
         channelNames: this._activeChannels$.value.map(c => c.ChannelName),
       });
     } catch (error) {
-      console.error('[VoiceSession] Failed to start session:', error);
+      console.error('[RealtimeSession] Failed to start session:', error);
       this._connectionState$.next('error');
       await this.teardown(false);
     }
@@ -698,26 +706,21 @@ export class RealtimeSessionService {
   }
 
   /**
-   * Reads the ACTIVE `MJ: AI Agent Channels` rows (read-only lookup: simple results,
-   * narrowed fields). Failures are logged and degrade to an empty list — channel
-   * availability must never block the voice session.
+   * Reads the ACTIVE `MJ: AI Agent Channels` rows from {@link AIEngineBase}'s cached
+   * `AgentChannels` (provider-scoped engine instance, lazy `Config` — no RunView
+   * round-trip; the engine's BaseEntity-event reactivity keeps the registry fresh).
+   * Failures are logged and degrade to an empty list — channel availability must
+   * never block the voice session.
    */
   private async fetchChannelDefinitions(): Promise<RealtimeChannelDefinitionRow[]> {
     try {
-      const rv = RunView.FromMetadataProvider(this.Provider);
-      const result = await rv.RunView<RealtimeChannelDefinitionRow>({
-        EntityName: 'MJ: AI Agent Channels',
-        ExtraFilter: 'IsActive = 1',
-        Fields: ['ID', 'Name', 'ClientPluginClass'],
-        ResultType: 'simple'
-      });
-      if (!result.Success) {
-        console.warn('[VoiceSession] Failed to load channel registry:', result.ErrorMessage);
-        return [];
-      }
-      return result.Results ?? [];
+      const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.Provider, AIEngineBase) as AIEngineBase;
+      await engine.Config(false, undefined, this.Provider);
+      return (engine.AgentChannels ?? [])
+        .filter(c => c.IsActive)
+        .map<RealtimeChannelDefinitionRow>(c => ({ ID: c.ID, Name: c.Name, ClientPluginClass: c.ClientPluginClass }));
     } catch (error) {
-      console.warn('[VoiceSession] Channel registry unavailable — starting with no channels:', error);
+      console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', error);
       return [];
     }
   }
@@ -731,17 +734,17 @@ export class RealtimeSessionService {
   private resolveChannelPlugin(row: RealtimeChannelDefinitionRow): BaseRealtimeChannelClient | null {
     const key = row.ClientPluginClass?.trim();
     if (!key) {
-      console.warn(`[VoiceSession] Channel '${row.Name}' has no ClientPluginClass — skipping.`);
+      console.warn(`[RealtimeSession] Channel '${row.Name}' has no ClientPluginClass — skipping.`);
       return null;
     }
     const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseRealtimeChannelClient, key);
     if (!registration) {
-      console.warn(`[VoiceSession] No client plugin registered for channel '${row.Name}' (key '${key}') — skipping.`);
+      console.warn(`[RealtimeSession] No client plugin registered for channel '${row.Name}' (key '${key}') — skipping.`);
       return null;
     }
     const plugin = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeChannelClient>(BaseRealtimeChannelClient, key);
     if (!plugin) {
-      console.warn(`[VoiceSession] Failed to instantiate client plugin for channel '${row.Name}' (key '${key}').`);
+      console.warn(`[RealtimeSession] Failed to instantiate client plugin for channel '${row.Name}' (key '${key}').`);
       return null;
     }
     return plugin;
@@ -767,10 +770,24 @@ export class RealtimeSessionService {
     return {
       AgentName: this.CurrentAgentName,
       SendContextNote: (text: string) => this.SendContextNote(text),
+      RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
       SaveAsArtifact: (name: string, contentJson: string) => this.saveChannelArtifact(plugin.ChannelName, name, contentJson),
       SetFocusMode: (on: boolean) => this._channelFocus$.next({ Channel: plugin, Focused: on })
     };
+  }
+
+  /**
+   * A channel asked the live model to SPEAK in reaction to channel input (e.g. a widget
+   * submission) — routed through the client's spoken-update channel. No-op when the
+   * session isn't live; empty instructions are dropped.
+   */
+  private requestChannelSpokenResponse(instructions: string): void {
+    const trimmed = instructions?.trim() ?? '';
+    if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
+      return;
+    }
+    this.client.RequestSpokenUpdate(trimmed);
   }
 
   /**
@@ -792,7 +809,7 @@ export class RealtimeSessionService {
       }
       states = parsed as Record<string, string>;
     } catch {
-      console.warn('[VoiceSession] PriorChannelStatesJson was malformed — starting channels fresh');
+      console.warn('[RealtimeSession] PriorChannelStatesJson was malformed — starting channels fresh');
       return;
     }
     for (const plugin of this._activeChannels$.value) {
@@ -801,10 +818,10 @@ export class RealtimeSessionService {
         try {
           const restored = plugin.RestoreState(state);
           if (!restored) {
-            console.warn(`[VoiceSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
+            console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
           }
         } catch (error) {
-          console.warn(`[VoiceSession] Channel '${plugin.ChannelName}' restore threw — starting fresh`, error);
+          console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' restore threw — starting fresh`, error);
         }
       }
     }
@@ -836,12 +853,12 @@ export class RealtimeSessionService {
       ) as { SaveSessionChannelArtifact?: { Success: boolean; ErrorMessage?: string; ArtifactID?: string } };
       const payload = result?.SaveSessionChannelArtifact;
       if (!payload?.Success) {
-        console.warn(`[VoiceSession] Save-as-artifact failed for '${channelName}': ${payload?.ErrorMessage ?? 'unknown error'}`);
+        console.warn(`[RealtimeSession] Save-as-artifact failed for '${channelName}': ${payload?.ErrorMessage ?? 'unknown error'}`);
         return null;
       }
       return payload.ArtifactID ?? null;
     } catch (error) {
-      console.warn(`[VoiceSession] Save-as-artifact errored for '${channelName}':`, error);
+      console.warn(`[RealtimeSession] Save-as-artifact errored for '${channelName}':`, error);
       return null;
     }
   }
@@ -897,7 +914,7 @@ export class RealtimeSessionService {
       try {
         plugin.Dispose();
       } catch (error) {
-        console.error(`[VoiceSession] Channel '${plugin.ChannelName}' Dispose failed:`, error);
+        console.error(`[RealtimeSession] Channel '${plugin.ChannelName}' Dispose failed:`, error);
       }
     }
     if (this._activeChannels$.value.length > 0) {
@@ -951,7 +968,7 @@ export class RealtimeSessionService {
     try {
       return JSON.parse(sessionConfigJson) as JSONObject;
     } catch (error) {
-      console.error('[VoiceSession] Failed to parse/apply SessionConfigJson:', error);
+      console.error('[RealtimeSession] Failed to parse/apply SessionConfigJson:', error);
       return {};
     }
   }
@@ -966,7 +983,7 @@ export class RealtimeSessionService {
       void this.handleToolCall(call);
     });
     client.OnError((error: RealtimeClientError) => {
-      console.error('[VoiceSession] Provider error event:', error);
+      console.error('[RealtimeSession] Provider error event:', error);
     });
     // Usage telemetry: accumulate the driver's per-response token DELTAS and relay them to
     // the server (onto the co-agent AIPromptRun) debounced + once at teardown. Providers
@@ -1042,6 +1059,12 @@ export class RealtimeSessionService {
         if (this.spokenNarrations.length > RealtimeSessionService.MaxPriorNarrations) {
           this.spokenNarrations.shift();
         }
+      } else if (transcript.ReplacesPrevious) {
+        // CORRECTION (e.g. ElevenLabs post-barge-in re-finalization): this final
+        // SUPERSEDES the previous final assistant turn — replace the caption in place
+        // and tell the server to update the persisted turn instead of appending.
+        this.replaceLastCaption('Assistant', transcript.Text);
+        await this.relayTranscript('assistant', transcript.Text, true);
       } else {
         this.appendCaption({ Role: 'Assistant', Text: transcript.Text });
         await this.relayTranscript('assistant', transcript.Text);
@@ -1049,6 +1072,24 @@ export class RealtimeSessionService {
     } else {
       await this.onUserTranscript(transcript.Text);
     }
+  }
+
+  /**
+   * Replaces the LAST caption of `role` in place (correction semantics); falls back to a
+   * plain append when no such caption exists yet (e.g. the superseded turn predates this
+   * client's caption window).
+   */
+  private replaceLastCaption(role: 'User' | 'Assistant', text: string): void {
+    const captions = this._captions$.value;
+    for (let i = captions.length - 1; i >= 0; i--) {
+      if (captions[i].Role === role) {
+        const next = [...captions];
+        next[i] = { Role: role, Text: text };
+        this._captions$.next(next);
+        return;
+      }
+    }
+    this.appendCaption({ Role: role, Text: text });
   }
 
   /** Finalizes the user turn: push a caption + relay the final transcript. */
@@ -1099,7 +1140,7 @@ export class RealtimeSessionService {
       this.emitDelegationResult(call.CallID, resultJson);
       this.client?.SendToolResult(call.CallID, resultJson);
     } catch (error) {
-      console.error('[VoiceSession] Tool execution failed:', error);
+      console.error('[RealtimeSession] Tool execution failed:', error);
       // Feed the error back so the model can narrate it rather than going silent.
       // success:false matters: ParseDelegationResultJson treats anything else as
       // success, which would flip the overlay's working card to a SUCCESS card
@@ -1132,7 +1173,7 @@ export class RealtimeSessionService {
     try {
       return await handler(call.ToolName, call.ArgumentsJson);
     } catch (error) {
-      console.error('[VoiceSession] Client tool execution failed:', error);
+      console.error('[RealtimeSession] Client tool execution failed:', error);
       return JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : String(error)
@@ -1255,12 +1296,12 @@ export class RealtimeSessionService {
         | { AbortedCount?: number; Success?: boolean; ErrorMessage?: string }
         | undefined;
       if (!payload?.Success) {
-        console.warn(`[VoiceSession] Cancel reported failure: ${payload?.ErrorMessage ?? 'unknown error'}`);
+        console.warn(`[RealtimeSession] Cancel reported failure: ${payload?.ErrorMessage ?? 'unknown error'}`);
         return 0;
       }
       return typeof payload.AbortedCount === 'number' ? payload.AbortedCount : 0;
     } catch (error) {
-      console.error('[VoiceSession] Failed to cancel in-flight delegation(s):', error);
+      console.error('[RealtimeSession] Failed to cancel in-flight delegation(s):', error);
       return 0;
     }
   }
@@ -1274,11 +1315,12 @@ export class RealtimeSessionService {
     lastSessionId?: string | null,
     preferredModelId?: string | null,
     clientTools?: RealtimeToolDefinition[] | null,
-    coAgentId?: string | null
+    coAgentId?: string | null,
+    configOverridesJson?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
     const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson) {
           AgentSessionId
           ConversationId
           Provider
@@ -1298,7 +1340,8 @@ export class RealtimeSessionService {
       lastSessionId: lastSessionId ?? null,
       preferredModelId: preferredModelId ?? null,
       clientToolsJson: clientTools && clientTools.length > 0 ? JSON.stringify(clientTools) : null,
-      coAgentId: coAgentId ?? null
+      coAgentId: coAgentId ?? null,
+      configOverridesJson: configOverridesJson ?? null
     };
     const result = await this.gql().ExecuteGQL(mutation, variables);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
@@ -1354,31 +1397,37 @@ export class RealtimeSessionService {
       const result = await this.gql().ExecuteGQL(mutation, { agentSessionId: sessionId, channelName, stateJson });
       return (result?.SaveSessionChannelState as boolean) ?? false;
     } catch (error) {
-      console.error('[VoiceSession] Failed to save channel state:', error);
+      console.error('[RealtimeSession] Failed to save channel state:', error);
       return false;
     }
   }
 
   // ── Transcript relay (GraphQL) ─────────────────────────────────────────────
 
-  /** Relays a final transcript turn to MJ via `RelayRealtimeTranscript`. */
-  private async relayTranscript(role: 'user' | 'assistant', text: string): Promise<void> {
+  /**
+   * Relays a final transcript turn to MJ via `RelayRealtimeTranscript`.
+   * @param replacesPrevious CORRECTION semantics: the server updates the session's most
+   *   recent persisted turn of this role IN PLACE instead of appending (e.g. ElevenLabs'
+   *   post-barge-in `agent_response_correction`).
+   */
+  private async relayTranscript(role: 'user' | 'assistant', text: string, replacesPrevious: boolean = false): Promise<void> {
     if (!this.agentSessionId) {
       return;
     }
     try {
       const mutation = `
-        mutation RelayRealtimeTranscript($agentSessionId: String!, $role: String!, $text: String!) {
-          RelayRealtimeTranscript(agentSessionId: $agentSessionId, role: $role, text: $text)
+        mutation RelayRealtimeTranscript($agentSessionId: String!, $role: String!, $text: String!, $replacesPrevious: Boolean) {
+          RelayRealtimeTranscript(agentSessionId: $agentSessionId, role: $role, text: $text, replacesPrevious: $replacesPrevious)
         }
       `;
       await this.gql().ExecuteGQL(mutation, {
         agentSessionId: this.agentSessionId,
         role,
-        text
+        text,
+        replacesPrevious
       });
     } catch (error) {
-      console.error('[VoiceSession] Failed to relay transcript:', error);
+      console.error('[RealtimeSession] Failed to relay transcript:', error);
     }
   }
 
@@ -1436,7 +1485,7 @@ export class RealtimeSessionService {
       `;
       await this.gql().ExecuteGQL(mutation, { agentSessionId: sessionId, inputTokens: input, outputTokens: output });
     } catch (error) {
-      console.error('[VoiceSession] Failed to relay usage telemetry:', error);
+      console.error('[RealtimeSession] Failed to relay usage telemetry:', error);
       // Re-accumulate so a later debounce / the teardown flush retries the same deltas.
       this.pendingUsageInput += input;
       this.pendingUsageOutput += output;
@@ -1470,7 +1519,7 @@ export class RealtimeSessionService {
       .PushStatusUpdates(transportSessionId)
       .subscribe({
         next: (raw: string) => this.onDelegationStatusMessage(raw),
-        error: (err: unknown) => console.error('[VoiceSession] Delegation progress stream error:', err)
+        error: (err: unknown) => console.error('[RealtimeSession] Delegation progress stream error:', err)
       });
   }
 
@@ -1704,7 +1753,7 @@ export class RealtimeSessionService {
       `;
       await this.gql().ExecuteGQL(mutation, { agentSessionId });
     } catch (error) {
-      console.error('[VoiceSession] Failed to close server session:', error);
+      console.error('[RealtimeSession] Failed to close server session:', error);
     }
   }
 

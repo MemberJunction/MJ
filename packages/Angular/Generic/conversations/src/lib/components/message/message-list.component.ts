@@ -367,6 +367,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     const componentRef = this.messageContainerRef.createComponent(RealtimeSessionTimelineCardComponent);
     componentRef.instance.Group = group;
     componentRef.instance.Meta = meta;
+    componentRef.instance.UserName = this.currentUser?.Name || 'You';
     componentRef.instance.OpenRequested.subscribe((sessionId: string) => this.realtimeSessionOpenRequested.emit(sessionId));
     this._renderedMessages.set(key, { kind: 'realtime-session', ref: componentRef });
   }
