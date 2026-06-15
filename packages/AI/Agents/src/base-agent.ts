@@ -60,6 +60,7 @@ import {
     ConversationUtility,
     ActionChange,
     ActionChangeScope,
+    SubAgentChange,
     MediaOutput,
     FileOutputRef,
     ParseFileOutputRef,
@@ -238,6 +239,28 @@ interface ParallelSubAgentDispatch {
     request: AgentSubAgentRequest<unknown>;
     subAgentEntity: MJAIAgentEntityExtended;
     relationship?: MJAIAgentRelationshipEntity;
+}
+
+/**
+ * The agent-invariant "base" catalog cached (process-wide) on AIEngine and reused across runs/steps.
+ * Holds the resolved sub-agents + actions and their formatted markdown, plus the base merged
+ * agent-type prompt params (with NO runtime overrides applied). Runtime `actionChanges` /
+ * `subAgentChanges` / `__agentTypePromptParams` overrides are layered on top per run from a clone.
+ */
+interface AgentBaseCatalog {
+    /** Resolved active sub-agents (direct ParentID children + active relationships), de-duped. */
+    uniqueActiveSubAgents: MJAIAgentEntityExtended[];
+    subAgentCount: number;
+    /** Markdown describing uniqueActiveSubAgents (the base set). */
+    subAgentDetails: string;
+    /** Actions matched to the agent's active AIAgentAction junctions, BEFORE filtering by action Status — needed as the input to applyActionChanges. */
+    baseActionsRaw: MJActionEntityExtended[];
+    /** baseActionsRaw filtered to Status='Active' — the fast-path effective action set. */
+    activeActions: MJActionEntityExtended[];
+    /** Markdown describing activeActions (the base set). */
+    actionDetails: string;
+    /** Agent-type prompt params merged from schema defaults + agent config (NO runtime overrides). */
+    baseAgentTypePromptParams: Record<string, unknown>;
 }
 
 export class BaseAgent {
@@ -2820,7 +2843,8 @@ export class BaseAgent {
             params.agent,
             params.contextUser,
             params.data,
-            params.actionChanges
+            params.actionChanges,
+            params.subAgentChanges
         );
 
         // Set up the hierarchical prompt execution
@@ -4999,48 +5023,76 @@ The context is now within limits. Please retry your request with the recovered c
         agent: MJAIAgentEntityExtended,
         _contextUser?: UserInfo,
         extraData?: any,
-        actionChanges?: ActionChange[]
+        actionChanges?: ActionChange[],
+        subAgentChanges?: SubAgentChange[]
     ): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
 
-            // Find sub-agents using AIEngine
-            const activeSubAgents = engine.Agents.filter(a => UUIDsEqual(a.ParentID, agent.ID) && a.Status === 'Active')
-                .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
-            const activeAgentRelationships = engine.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, agent.ID) && ar.Status === 'Active');
-            // now combine the child sub-agents from the direct parentID relationships with the agentRelationships array, distinct to not repeat
-            // unique ID values
-            const uniqueActiveSubAgentIDs = new Set<string>();
-            activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
-            activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
-            const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs).map(id => engine.Agents.find(a => UUIDsEqual(a.ID, id)));
-
-            // Load available actions from database configuration
-            const agentActions = engine.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active');
-            let actions: MJActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)));
-
-            // Apply runtime action changes if provided
-            if (actionChanges?.length) {
-                const isRoot = this._depth === 0;
-                const result = this.applyActionChanges(actions, actionChanges, agent.ID, isRoot);
-                actions = result.actions;
-                this._dynamicActionLimits = result.dynamicLimits;
+            // Build (or reuse) the agent-invariant base catalog. This is process-wide cached on
+            // AIEngine and wiped on Agent/AgentAction/AgentRelationship/AgentType changes + reloads.
+            // It turns the per-step rebuild (sub-agent + action resolution, markdown, JSON.parse of
+            // agent-type params) into a once-per-agent cost; the common no-override step reuses it wholesale.
+            let catalog = engine.GetAgentBaseCatalog<AgentBaseCatalog>(agent.ID);
+            if (!catalog) {
+                catalog = this.buildAgentBaseCatalog(agent, engine);
+                engine.SetAgentBaseCatalog(agent.ID, catalog);
             }
 
-            // Filter to only active actions and store for later validation in executeActionsStep
-            const activeActions = actions.filter(a => a.Status === 'Active');
+            const isRoot = this._depth === 0;
+
+            // Sub-agents: reuse cached base unless runtime subAgentChanges apply (then clone + re-format).
+            let uniqueActiveSubAgents = catalog.uniqueActiveSubAgents;
+            let subAgentDetails = catalog.subAgentDetails;
+            let subAgentCount = catalog.subAgentCount;
+            if (subAgentChanges?.length) {
+                uniqueActiveSubAgents = this.applySubAgentChanges(catalog.uniqueActiveSubAgents, subAgentChanges, agent.ID, isRoot, engine);
+                subAgentCount = uniqueActiveSubAgents.length;
+                subAgentDetails = this.formatSubAgentDetails(uniqueActiveSubAgents);
+            }
+
+            // Actions: reuse cached active set unless runtime actionChanges apply (then clone + re-format).
+            //
+            // FAST-PATH SHARING CONTRACT: on the no-override path, `activeActions` (and therefore
+            // `_effectiveActions`) and `uniqueActiveSubAgents` above are the SAME array references
+            // held by the process-wide AIEngine catalog cache. Downstream consumers MUST treat them
+            // as read-only — they are only ever read (`.find`/`.map`/`.length`/`.some`), never mutated
+            // in place. On the override path a fresh array is built via filter/applyActionChanges, so
+            // the cached arrays are never the mutated ones. Keeping the references (vs. copying) avoids
+            // a per-step allocation; if a future consumer needs to mutate, it must `.slice()` first.
+            let activeActions = catalog.activeActions;
+            let actionDetails = catalog.actionDetails;
+            if (actionChanges?.length) {
+                const result = this.applyActionChanges([...catalog.baseActionsRaw], actionChanges, agent.ID, isRoot);
+                activeActions = result.actions.filter(a => a.Status === 'Active');
+                this._dynamicActionLimits = result.dynamicLimits;
+                actionDetails = this.formatActionDetails(activeActions);
+            } else {
+                // No actionChanges this step → no dynamically-added actions, hence no dynamic limits.
+                // gatherPromptTemplateData runs once per step, and _dynamicActionLimits is keyed to the
+                // actionChanges of the CURRENT step (read at validation time in checkActionExecutionLimits).
+                // Resetting to {} is correct and required: it prevents a prior step's actionChanges limits
+                // from leaking into a step that has none. It is NOT relied upon to persist across steps.
+                this._dynamicActionLimits = {};
+            }
+            // Store for later validation in executeActionsStep
             this._effectiveActions = activeActions;
 
-            // Build agent type prompt params (merged from schema defaults, agent config, and runtime overrides)
-            const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+            // Agent type prompt params: reuse cached base merge unless a runtime override is present.
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
-            const agentTypePromptParams = this.buildAgentTypePromptParams(
-                agentType,
-                agent,
-                runtimePromptParamOverrides
-            );
+            let agentTypePromptParams: Record<string, unknown>;
+            if (runtimePromptParamOverrides) {
+                const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+                agentTypePromptParams = this.buildAgentTypePromptParams(agentType, agent, runtimePromptParamOverrides);
+            } else {
+                // Fast path: shallow-clone the cached base params before handing them out. The cached
+                // object lives in the process-wide AIEngine catalog and is shared across every run of
+                // this agent; the audit shows it is read-only downstream today, but the clone is cheap
+                // and removes any cache-poisoning foot-gun should a future consumer write to it.
+                agentTypePromptParams = { ...catalog.baseAgentTypePromptParams };
+            }
 
-            // Build client tool details for the prompt
+            // Build client tool details for the prompt (per-run; depends on extraData)
             const clientToolDetails = this.buildClientToolPromptSection(agent, extraData);
 
             // Build app context section if provided in extraData
@@ -5050,10 +5102,10 @@ The context is now within limits. Please retry your request with the recovered c
                 agentName: agent.Name,
                 agentDescription: agent.Description,
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
-                subAgentCount: uniqueActiveSubAgents.length,
-                subAgentDetails: this.formatSubAgentDetails(uniqueActiveSubAgents),
+                subAgentCount: subAgentCount,
+                subAgentDetails: subAgentDetails,
                 actionCount: activeActions.length,
-                actionDetails: this.formatActionDetails(activeActions),
+                actionDetails: actionDetails,
                 clientToolDetails: clientToolDetails,
                 appContext: appContext,
             };
@@ -5085,6 +5137,115 @@ The context is now within limits. Please retry your request with the recovered c
         } catch (error) {
             throw new Error(`Error gathering context data: ${error.message}`);
         }
+    }
+
+    /**
+     * Builds the agent-invariant {@link AgentBaseCatalog} — the resolved sub-agents + actions and
+     * their formatted markdown, plus the base agent-type prompt params. Computed once per agent and
+     * cached on AIEngine (see gatherPromptTemplateData); does NOT apply any runtime overrides.
+     *
+     * @protected
+     */
+    protected buildAgentBaseCatalog(agent: MJAIAgentEntityExtended, engine: AIEngine): AgentBaseCatalog {
+        // Resolve sub-agents: direct ParentID children + active relationships, de-duped, ordered.
+        const activeSubAgents = engine.Agents.filter(a => UUIDsEqual(a.ParentID, agent.ID) && a.Status === 'Active')
+            .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
+        const activeAgentRelationships = engine.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, agent.ID) && ar.Status === 'Active');
+        const uniqueActiveSubAgentIDs = new Set<string>();
+        activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
+        activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
+        const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs).map(id => engine.Agents.find(a => UUIDsEqual(a.ID, id)));
+
+        // Resolve actions from the agent's active AIAgentAction junctions.
+        const agentActions = engine.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active');
+        const baseActionsRaw: MJActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)));
+        const activeActions = baseActionsRaw.filter(a => a.Status === 'Active');
+
+        // Base agent-type prompt params (schema defaults + agent config; NO runtime overrides).
+        const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+        const baseAgentTypePromptParams = this.buildAgentTypePromptParams(agentType, agent, undefined);
+
+        return {
+            uniqueActiveSubAgents,
+            subAgentCount: uniqueActiveSubAgents.length,
+            subAgentDetails: this.formatSubAgentDetails(uniqueActiveSubAgents),
+            baseActionsRaw,
+            activeActions,
+            actionDetails: this.formatActionDetails(activeActions),
+            baseAgentTypePromptParams,
+        };
+    }
+
+    /**
+     * Applies runtime {@link SubAgentChange}s to a base sub-agent set — the sub-agent counterpart of
+     * {@link applyActionChanges}. Returns a NEW array (never mutates the cached base set).
+     *
+     * @protected
+     */
+    protected applySubAgentChanges(
+        baseSubAgents: MJAIAgentEntityExtended[],
+        subAgentChanges: SubAgentChange[],
+        agentId: string,
+        isRoot: boolean,
+        engine: AIEngine
+    ): MJAIAgentEntityExtended[] {
+        let subAgents = [...baseSubAgents];
+
+        for (const change of subAgentChanges) {
+            if (!this.doesChangeScopeApply(change.scope, agentId, isRoot, change.agentIds)) {
+                continue;
+            }
+
+            if (change.mode === 'add') {
+                for (const subAgentId of change.subAgentIds) {
+                    if (!subAgents.some(a => UUIDsEqual(a.ID, subAgentId))) {
+                        const toAdd = engine.Agents.find(a => UUIDsEqual(a.ID, subAgentId));
+                        if (toAdd) {
+                            subAgents.push(toAdd);
+                        } else {
+                            LogStatus(`Sub-agent with ID '${subAgentId}' not found in AIEngine - skipping add`);
+                        }
+                    }
+                }
+            } else if (change.mode === 'remove') {
+                subAgents = subAgents.filter(a => !change.subAgentIds.some(id => UUIDsEqual(id, a.ID)));
+            }
+        }
+
+        return subAgents;
+    }
+
+    /**
+     * Filters/transforms sub-agent changes for propagation to a sub-agent — the sub-agent counterpart
+     * of {@link filterActionChangesForSubAgent} (same propagation rules).
+     *
+     * @protected
+     */
+    protected filterSubAgentChangesForSubAgent(
+        subAgentChanges: SubAgentChange[] | undefined
+    ): SubAgentChange[] | undefined {
+        if (!subAgentChanges?.length) {
+            return undefined;
+        }
+
+        const filtered: SubAgentChange[] = [];
+        for (const change of subAgentChanges) {
+            switch (change.scope) {
+                case 'root':
+                    continue; // only applies to root — don't propagate
+                case 'global':
+                    filtered.push(change);
+                    break;
+                case 'all-subagents':
+                    filtered.push({ ...change, scope: 'global' });
+                    break;
+                case 'specific':
+                    filtered.push(change);
+                    break;
+            }
+        }
+
+        return filtered.length > 0 ? filtered : undefined;
     }
 
     /**
@@ -5478,8 +5639,9 @@ The context is now within limits. Please retry your request with the recovered c
 
             const parentStepCountsToPass = [...this._parentStepCounts, stepCount + 1];
 
-            // Filter action changes for sub-agent propagation
+            // Filter action / sub-agent changes for sub-agent propagation
             const subAgentActionChanges = this.filterActionChangesForSubAgent(params.actionChanges);
+            const subAgentSubAgentChanges = this.filterSubAgentChangesForSubAgent(params.subAgentChanges);
 
             // Execute the sub-agent with cancellation and streaming support
             // Use subAgentRequest.context if provided, otherwise fall back to params.context
@@ -5509,6 +5671,7 @@ The context is now within limits. Please retry your request with the recovered c
                 context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
+                subAgentChanges: subAgentSubAgentChanges, // propagate filtered sub-agent changes to sub-agent
                 PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
                 SecondaryScopes: params.SecondaryScopes,
@@ -6932,11 +7095,9 @@ The context is now within limits. Please retry your request with the recovered c
                 displayMode: 'live' // Only show in live mode
             });
             
-            // Set PayloadAtStart
-            if (stepEntity && payload) {
-                stepEntity.PayloadAtStart = this.serializePayloadAtStart(payload);
-            }
-            
+            // PayloadAtStart was already serialized from this same `payload` by createStepEntity
+            // above (payloadAtStart: payload) — no need to re-serialize the (potentially large) payload here.
+
             let downstreamPayload = payload; // Start with current payload
             if (params.agent.PayloadSelfReadPaths) {
                 const downstreamPaths = JSON.parse(params.agent.PayloadSelfReadPaths);
@@ -10787,13 +10948,18 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.Status = 'Completed';
             }
 
-            this._agentRun.Result = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
+            // Serialize the (largest-it-ever-gets) final payload ONCE and reuse for both
+            // Result and FinalPayload instead of stringifying the same object three times.
+            const finalPayloadJson = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
+            this._agentRun.Result = finalPayloadJson;
             this._agentRun.FinalStep = finalStep.step;
             this._agentRun.Message = finalStep.message;
 
-            // Set the FinalPayloadObject - this will automatically stringify for the DB
+            // Set the FinalPayloadObject (populates the object cache; its setter also writes
+            // FinalPayload when the value changes). We then assign FinalPayload from the
+            // already-computed JSON to guarantee it's set regardless of the setter's change guard.
             this._agentRun.FinalPayloadObject = resolvedPayload;
-            this._agentRun.FinalPayload = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
+            this._agentRun.FinalPayload = finalPayloadJson;
             
             // Calculate total tokens from all prompts and sub-agents
             const tokenStats = this.calculateTokenStats();

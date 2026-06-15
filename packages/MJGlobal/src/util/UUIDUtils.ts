@@ -48,5 +48,9 @@ export function NormalizeUUID(uuid: string | null | undefined): string {
 export function UUIDsEqual(uuid1: string | null | undefined, uuid2: string | null | undefined): boolean {
     if (uuid1 == null && uuid2 == null) return true;
     if (uuid1 == null || uuid2 == null) return false;
+    // Fast path: identical references / already-equal strings (same value, same platform casing)
+    // are the overwhelmingly common case in tight `.find()`/`.some()` loops. Short-circuit before
+    // allocating two normalized copies via trim().toLowerCase().
+    if (uuid1 === uuid2) return true;
     return uuid1.trim().toLowerCase() === uuid2.trim().toLowerCase();
 }
