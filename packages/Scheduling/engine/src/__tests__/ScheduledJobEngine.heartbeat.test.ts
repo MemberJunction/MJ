@@ -168,6 +168,15 @@ vi.mock('@memberjunction/scheduling-engine-base', () => {
         ContextUser: { ID: 'user-1' },
         ProviderToUse: {
             MJCoreSchemaName: '__mj',
+            // PlatformKey + Dialect feed ScheduledJobEngine.buildLockSprocCall, which
+            // builds the dialect-appropriate sproc call (used by tryAcquireLock /
+            // releaseLockIfTokenMatches). Mimic the SQL Server dialect so the engine
+            // exercises its EXEC path under test. (Mirrors decoupling.test.ts.)
+            PlatformKey: 'sqlserver',
+            Dialect: {
+                ProcedureCallSyntax: (schema: string, name: string, params: string[]) =>
+                    `EXEC [${schema}].[${name}] ${params.join(', ')}`
+            },
             ExecuteSQL: vi.fn().mockImplementation(async () => {
                 const next = mockExecuteSQLQueue.shift();
                 if (next === undefined) {
