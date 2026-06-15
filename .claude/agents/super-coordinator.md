@@ -59,7 +59,21 @@ Two amendment loops live INSIDE the planner-emitted workflow (the runtime execut
 
 Max rounds per loop: 3.
 
-The amendment loop is the difference between **broken orchestration** (single failure → `return` → 2M tokens wasted, nothing shippable) and **working orchestration** (failure → re-dispatch with evidence → producer mechanical-fixes → 1-2 more rounds → shippable). Mechanical reviewer findings (singular-vs-plural FK targets, missing co-grouped slots, TS type mismatches) resolve in 1–2 amendment rounds. Genuinely unresolvable issues escalate honestly.
+### Failure-class router (consensus A2 — route by WHO can fix it; never re-run CodeBuild for a non-code failure)
+
+A red rung / non-`Complete` status does **not** automatically mean re-run `code-builder`. First **classify the failure by who can fix it**, then route to that fixer ONLY. Re-running the most expensive stage (CodeBuild) against a failure it cannot fix is the single biggest amendment-loop token leak (the Salesforce run re-ran CodeBuild 3× against a *truncated-matrix artifact* bug — a non-code failure — for nothing):
+
+| Failure class | Signal | Route to (NOT code-builder unless `code`) |
+|---|---|---|
+| **code** | TypeScript/build error, wrong protocol-base, capability getter ↔ per-op column mismatch, a CRUD method that 501s while its flag is true | `code-builder` with `BuildErrors`/`classifiedFailures` |
+| **artifact** | matrix row-count < emitted IOs, truncated/`__SEE_FILE__` return, EXTRACTION_REPORT_MATRIX.csv malformed, a count derived from a truncated return | regenerate the artifact deterministically (`build-matrix-from-metadata`, reconcile from the metadata FILE) — **do NOT touch the connector** |
+| **metadata** | unresolved `@lookup`, raw (non-SQL) IOF type, overlong `Description`, enum/width violation, missing per-op column for a true capability | `ioiof-extractor` / `metadata-writer` amendment — **not** code-builder |
+| **env** | DB/MJAPI down, stale nested integration dist, `additionalSchemaInfo` cross-connector contamination, turbo-staleness | EnvPreflight remediation — re-run after fixing the environment; the connector is innocent |
+| **primitive** | a locked primitive itself errored/threw (not the connector's output) | surface as a workshop bug; do not loop the connector |
+
+The rule: **a failure routes to exactly one fixer, the cheapest one that owns it; CodeBuild is invoked only for `code`-class failures.** An `artifact`/`metadata`/`env`/`primitive` failure re-dispatched to `code-builder` burns the most expensive stage and changes nothing — classify first, route once.
+
+The amendment loop is the difference between **broken orchestration** (single failure → `return` → 2M tokens wasted, nothing shippable) and **working orchestration** (failure → CLASSIFY → re-dispatch to the OWNING fixer with evidence → mechanical-fix → 1-2 more rounds → shippable). Mechanical reviewer findings (singular-vs-plural FK targets, missing co-grouped slots, TS type mismatches) resolve in 1–2 amendment rounds. Genuinely unresolvable issues escalate honestly.
 
 **Verify before invoking workflow**: read the planner-emitted `.workflow.js` and confirm both amendment loops are present (look for `while (amendmentRound < MAX_AMENDMENT_ROUNDS)` and `while (codeRound < MAX_CODE_BUILD_ROUNDS)` blocks). If absent, the planner produced a malformed workflow — re-dispatch to planner with the missing-loops critique as feedback.
 
