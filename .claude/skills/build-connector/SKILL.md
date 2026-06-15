@@ -166,6 +166,20 @@ Anti-thrash: if a higher tier fails on something a lower tier could have caught,
 
 Mechanical fixes (singular-vs-plural FK target naming, missing co-grouped `DeleteIDLocation`, TypeScript type-mismatch) resolve in 1–2 rounds. Genuinely unresolvable issues surface as `EscalatedDeadlock` after the producer attempts and fails — which is honest escalation, not silent abandonment.
 
+### Terminal gate — `/test-connector` (ALWAYS, creds or not)
+
+The behavioral verification matrix is owned by the **`test-connector` skill** — a peer of building, not a
+buried stage. build-connector ALWAYS invokes it as the terminal gate (the Execute workflow's
+`hybrid-e2e` + `floor-check` are its credential-free enforcement spine): deploy-dry-run → spec-conformance
+→ rich auto-fixtures → forward/delta-CRUD/idempotent/custom-col/pagination, every cell **anti-vacuous**
+and held to the SAME bar with or without a credential (the mock is a programmable vendor; only a real
+write round-trip + true rate behavior are credential-only). A build is not "done" until it PASSES. It is
+also **independently invokable** — `/test-connector <vendor> --mode live --ad-hoc` — to re-prove an
+already-built connector **when a credential arrives later** (upgrading the read-only ceiling to
+live-verified, no rebuild) or as a regression check. See `.claude/skills/test-connector/SKILL.md`. (The
+floor-check + hybrid-e2e enforcement edits that make the mock path anti-vacuous are in
+`connector-builder-workshop/TESTING_GATE_PATCH.md` — fold into the active floor-check rewrite.)
+
 ### Gate — Floor-check verdict
 
 After the Workflow returns, read the final `floor-check` verdict:
