@@ -671,5 +671,65 @@ describe('ClassFactory', () => {
       expect(factory.GetRegistration(null)).toBeNull();
       expect(factory.GetRegistration(undefined)).toBeNull();
     });
+
+    it('does NOT cache a falsy-baseClass null (only resolved lookups are memoized)', () => {
+      // GetRegistration short-circuits to null for a falsy base BEFORE touching the cache, so a
+      // later real registration under a real base is unaffected by any prior falsy call.
+      expect(factory.GetRegistration(null, 'pet')).toBeNull();
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      expect(factory.GetRegistration(Animal, 'pet')!.SubClass).toBe(Dog);
+    });
+
+    it('keeps separate cache buckets per (baseClass, key) — one key does not poison another', () => {
+      factory.Register(Animal, Dog, 'canine', 0, true);
+      factory.Register(Animal, Cat, 'feline', 0, true);
+      const canine = factory.GetRegistration(Animal, 'canine');
+      const feline = factory.GetRegistration(Animal, 'feline');
+      expect(canine!.SubClass).toBe(Dog);
+      expect(feline!.SubClass).toBe(Cat);
+      // Re-read from cache — still distinct, still the same cached objects.
+      expect(factory.GetRegistration(Animal, 'canine')).toBe(canine);
+      expect(factory.GetRegistration(Animal, 'feline')).toBe(feline);
+    });
+
+    it('caches the null-key bucket distinctly from a named-key bucket', () => {
+      factory.Register(Animal, Dog, null, 0, true);
+      const noKey = factory.GetRegistration(Animal, null);
+      const nullAgain = factory.GetRegistration(Animal); // key omitted == null bucket
+      expect(noKey).not.toBeNull();
+      expect(noKey).toBe(nullAgain);
+    });
+  });
+
+  describe('GetRegistration ↔ CreateInstance ↔ GetAllRegistrations interplay', () => {
+    it('CreateInstance reflects a post-cache-prime registration change (cache invalidated on Register)', () => {
+      factory.Register(Animal, Dog, 'pet', 5, true);
+      // Prime the GetRegistration cache via CreateInstance.
+      expect(factory.CreateInstance<Animal>(Animal, 'pet')).toBeInstanceOf(Dog);
+      // A higher-priority registration must change what CreateInstance builds next.
+      factory.Register(Animal, Cat, 'pet', 10, true);
+      expect(factory.CreateInstance<Animal>(Animal, 'pet')).toBeInstanceOf(Cat);
+    });
+
+    it('GetAllRegistrations is unaffected by the GetRegistration memo (always live)', () => {
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      factory.GetRegistration(Animal, 'pet'); // prime memo
+      factory.Register(Animal, Cat, 'pet', 0, true);
+      // GetAllRegistrations re-filters every call — it sees both immediately.
+      expect(factory.GetAllRegistrations(Animal, 'pet').length).toBe(2);
+      // And GetRegistration (memoized) now reflects the new winner too.
+      expect(factory.GetRegistration(Animal, 'pet')!.SubClass).toBe(Cat);
+    });
+
+    it('memoized winner survives an unrelated registration to a DIFFERENT base class', () => {
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      const before = factory.GetRegistration(Animal, 'pet');
+      // Registering to Vehicle still clears the whole cache, but the resolved winner is identical,
+      // so the next read returns an equal (re-resolved) registration object for Animal/pet.
+      factory.Register(Vehicle, Car, 'sedan', 0, true);
+      const after = factory.GetRegistration(Animal, 'pet');
+      expect(after!.SubClass).toBe(before!.SubClass);
+      expect(after!.SubClass).toBe(Dog);
+    });
   });
 });

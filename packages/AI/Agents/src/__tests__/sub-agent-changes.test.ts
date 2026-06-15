@@ -145,4 +145,125 @@ describe('Sub-Agent Changes', () => {
             expect(filterSubAgentChangesForSubAgent([change])).toEqual([change]);
         });
     });
+
+    // =============================================================================================
+    // Deepened edge coverage (mirrors base-agent.ts applySubAgentChanges /
+    // filterSubAgentChangesForSubAgent / doesChangeScopeApply exactly).
+    // =============================================================================================
+
+    describe('doesChangeScopeApply — full truth table', () => {
+        it('global applies regardless of root/child', () => {
+            expect(doesChangeScopeApply('global', 'a', true)).toBe(true);
+            expect(doesChangeScopeApply('global', 'a', false)).toBe(true);
+        });
+        it('root applies only to root', () => {
+            expect(doesChangeScopeApply('root', 'a', true)).toBe(true);
+            expect(doesChangeScopeApply('root', 'a', false)).toBe(false);
+        });
+        it('all-subagents applies only to non-root', () => {
+            expect(doesChangeScopeApply('all-subagents', 'a', true)).toBe(false);
+            expect(doesChangeScopeApply('all-subagents', 'a', false)).toBe(true);
+        });
+        it('specific requires the agentId to be in agentIds', () => {
+            expect(doesChangeScopeApply('specific', 'a', false, ['a', 'b'])).toBe(true);
+            expect(doesChangeScopeApply('specific', 'z', false, ['a', 'b'])).toBe(false);
+        });
+        it("specific with NO agentIds applies to nobody (?? false)", () => {
+            expect(doesChangeScopeApply('specific', 'a', false, undefined)).toBe(false);
+            expect(doesChangeScopeApply('specific', 'a', false, [])).toBe(false);
+        });
+        it('unknown scope value applies to nobody (default branch)', () => {
+            expect(doesChangeScopeApply('nonsense' as ActionChangeScope, 'a', true)).toBe(false);
+        });
+    });
+
+    describe('applySubAgentChanges — deeper edge cases', () => {
+        it('an empty change list returns a fresh copy of the base set (no mutation, equal contents)', () => {
+            const result = applySubAgentChanges(base, [], 'agent-x', true);
+            expect(result).not.toBe(base);
+            expect(result.map(a => a.ID)).toEqual(['sub-1', 'sub-2']);
+        });
+
+        it('a non-applicable scope leaves the set untouched', () => {
+            // root-scoped change evaluated against a child agent — skipped entirely.
+            const result = applySubAgentChanges(base, [{ scope: 'root', mode: 'add', subAgentIds: ['sub-3'] }], 'child', false);
+            expect(result.map(a => a.ID)).toEqual(['sub-1', 'sub-2']);
+        });
+
+        it('removing a non-existent sub-agent is a no-op', () => {
+            const result = applySubAgentChanges(base, [{ scope: 'global', mode: 'remove', subAgentIds: ['not-here'] }], 'agent-x', true);
+            expect(result.map(a => a.ID)).toEqual(['sub-1', 'sub-2']);
+        });
+
+        it('duplicate add IDs within one change only add once', () => {
+            const result = applySubAgentChanges(base, [{ scope: 'global', mode: 'add', subAgentIds: ['sub-3', 'sub-3'] }], 'agent-x', true);
+            expect(result.map(a => a.ID)).toEqual(['sub-1', 'sub-2', 'sub-3']);
+        });
+
+        it('add then remove of the same ID across two changes nets to removed', () => {
+            const result = applySubAgentChanges(base, [
+                { scope: 'global', mode: 'add', subAgentIds: ['sub-3'] },
+                { scope: 'global', mode: 'remove', subAgentIds: ['sub-3'] },
+            ], 'agent-x', true);
+            expect(result.map(a => a.ID)).toEqual(['sub-1', 'sub-2']);
+        });
+
+        it('remove then re-add of the same ID nets to present (and re-appended at the end)', () => {
+            const result = applySubAgentChanges(base, [
+                { scope: 'global', mode: 'remove', subAgentIds: ['sub-1'] },
+                { scope: 'global', mode: 'add', subAgentIds: ['sub-1'] },
+            ], 'agent-x', true);
+            expect(result.map(a => a.ID).sort()).toEqual(['sub-1', 'sub-2']);
+        });
+
+        it('mixed scopes are each evaluated independently against the same agent', () => {
+            // For a CHILD agent: root-scoped add is skipped, all-subagents add applies, specific (miss) skipped.
+            const result = applySubAgentChanges(base, [
+                { scope: 'root', mode: 'add', subAgentIds: ['sub-3'] },
+                { scope: 'all-subagents', mode: 'add', subAgentIds: ['sub-4'] },
+                { scope: 'specific', mode: 'add', subAgentIds: ['sub-3'], agentIds: ['someone-else'] },
+            ], 'child-1', false);
+            expect(result.map(a => a.ID)).toEqual(['sub-1', 'sub-2', 'sub-4']);
+        });
+
+        it('changes apply in order — a later add can re-introduce an earlier removal target', () => {
+            const result = applySubAgentChanges(base, [
+                { scope: 'global', mode: 'remove', subAgentIds: ['sub-1', 'sub-2'] },
+                { scope: 'global', mode: 'add', subAgentIds: ['sub-2', 'sub-3'] },
+            ], 'agent-x', true);
+            expect(result.map(a => a.ID)).toEqual(['sub-2', 'sub-3']);
+        });
+    });
+
+    describe('filterSubAgentChangesForSubAgent — propagation over a mixed list', () => {
+        it('drops root, keeps global, rewrites all-subagents→global, keeps specific — preserving order', () => {
+            const changes: SubAgentChange[] = [
+                { scope: 'root', mode: 'add', subAgentIds: ['sub-1'] },
+                { scope: 'global', mode: 'add', subAgentIds: ['sub-2'] },
+                { scope: 'all-subagents', mode: 'remove', subAgentIds: ['sub-3'] },
+                { scope: 'specific', mode: 'add', subAgentIds: ['sub-4'], agentIds: ['x'] },
+            ];
+            expect(filterSubAgentChangesForSubAgent(changes)).toEqual([
+                { scope: 'global', mode: 'add', subAgentIds: ['sub-2'] },
+                { scope: 'global', mode: 'remove', subAgentIds: ['sub-3'] },
+                { scope: 'specific', mode: 'add', subAgentIds: ['sub-4'], agentIds: ['x'] },
+            ]);
+        });
+
+        it('returns undefined when every change is root-scoped (all dropped)', () => {
+            const changes: SubAgentChange[] = [
+                { scope: 'root', mode: 'add', subAgentIds: ['sub-1'] },
+                { scope: 'root', mode: 'remove', subAgentIds: ['sub-2'] },
+            ];
+            expect(filterSubAgentChangesForSubAgent(changes)).toBeUndefined();
+        });
+
+        it('the all-subagents→global rewrite is a copy, not a mutation of the input', () => {
+            const original: SubAgentChange = { scope: 'all-subagents', mode: 'remove', subAgentIds: ['sub-4'] };
+            const out = filterSubAgentChangesForSubAgent([original]);
+            expect(out).toEqual([{ scope: 'global', mode: 'remove', subAgentIds: ['sub-4'] }]);
+            // The source change object must be untouched.
+            expect(original.scope).toBe('all-subagents');
+        });
+    });
 });

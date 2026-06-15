@@ -94,4 +94,46 @@ describe('UUIDsEqual', () => {
     it('should handle empty strings as equal', () => {
         expect(UUIDsEqual('', '')).toBe(true);
     });
+
+    // ---- Additional branch coverage (Wave perf fast-path + edge cases) ----
+
+    it('takes the === fast path for the SAME object reference', () => {
+        const ref = upperUUID;
+        // Identical reference — short-circuits before any normalization allocation.
+        expect(UUIDsEqual(ref, ref)).toBe(true);
+    });
+
+    it('takes the === fast path for two strings that are already byte-identical', () => {
+        // Distinct objects, identical content — the === branch still fires before normalization.
+        expect(UUIDsEqual(String(lowerUUID), String(lowerUUID))).toBe(true);
+    });
+
+    it('returns false when the values differ only in length (no accidental prefix match)', () => {
+        expect(UUIDsEqual('abc', 'abcd')).toBe(false);
+        expect(UUIDsEqual('abcd', 'abc')).toBe(false);
+    });
+
+    it('returns false when values differ only by internal whitespace (trim only strips ends)', () => {
+        // NormalizeUUID trims leading/trailing whitespace but does NOT collapse internal spaces.
+        expect(UUIDsEqual('a b', 'ab')).toBe(false);
+    });
+
+    it('treats values differing only by surrounding whitespace AND case as equal', () => {
+        expect(UUIDsEqual('  ' + upperUUID, lowerUUID + '  ')).toBe(true);
+    });
+
+    it('returns false for an empty string vs a non-empty value', () => {
+        expect(UUIDsEqual('', lowerUUID)).toBe(false);
+        expect(UUIDsEqual(lowerUUID, '')).toBe(false);
+    });
+
+    it('treats whitespace-only vs empty string as equal (both normalize to "")', () => {
+        expect(UUIDsEqual('   ', '')).toBe(true);
+    });
+
+    it('treats null vs empty string as NOT equal (null short-circuits before normalization)', () => {
+        // null and '' are different: the null guard returns false before '' could normalize to ''.
+        expect(UUIDsEqual(null, '')).toBe(false);
+        expect(UUIDsEqual('', null)).toBe(false);
+    });
 });

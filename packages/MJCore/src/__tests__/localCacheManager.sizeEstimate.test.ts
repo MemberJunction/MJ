@@ -89,4 +89,57 @@ describe('LocalCacheManager.estimateResultsSize', () => {
         expect(() => { result = asInternal(cm).estimateResultsSize(rows); }).not.toThrow();
         expect(result).toBe(0); // each row contributes 0 on stringify failure
     });
+
+    // ---------------------------------------------------------------------------------------------
+    // Additional edge coverage (non-overlapping with the cases above):
+    //   - the exact full-measure ↔ sampling boundary (3 rows vs 4 rows)
+    //   - rows carrying `undefined` field values (JSON.stringify drops them — never throws)
+    //   - a single very wide row
+    //   - a very large N (sampling path scales linearly, no overflow, finite)
+    // ---------------------------------------------------------------------------------------------
+
+    it('exactly 3 rows uses the full-measure branch (deterministic, exact size)', () => {
+        // sampleCount = min(3, max(3, ceil(3*0.1)=1)) = 3 >= 3 → full measure (no Math.random).
+        const rows = [{ ID: '1', V: 'aaaa' }, { ID: '2', V: 'bbbb' }, { ID: '3', V: 'cccc' }];
+        const expected = rows.reduce((acc, r) => acc + JSON.stringify(r).length, 0) * 2;
+        // Deterministic because it never enters the random-sampling branch.
+        expect(asInternal(cm).estimateResultsSize(rows)).toBe(expected);
+        expect(asInternal(cm).estimateResultsSize(rows)).toBe(expected); // repeatable
+    });
+
+    it('4 rows crosses into the sampling branch but still lands near the true size for homogeneous data', () => {
+        // sampleCount = min(4, max(3, ceil(4*0.1)=1)) = 3 < 4 → sampling path.
+        const rows = Array.from({ length: 4 }, (_, i) => ({ ID: String(i), V: 'fixed-width-value' }));
+        const trueSize = rows.reduce((acc, r) => acc + JSON.stringify(r).length, 0) * 2;
+        const est = asInternal(cm).estimateResultsSize(rows);
+        // All rows are identical width, so any 3-of-4 sample averages to the exact per-row size.
+        expect(est).toBe(trueSize);
+    });
+
+    it('handles rows with undefined field values without throwing (stringify omits them)', () => {
+        const rows = Array.from({ length: 100 }, (_, i) => ({ ID: String(i), maybe: undefined, Name: 'X' }));
+        let result = 0;
+        expect(() => { result = asInternal(cm).estimateResultsSize(rows); }).not.toThrow();
+        expect(Number.isFinite(result)).toBe(true);
+        expect(result).toBeGreaterThan(0);
+    });
+
+    it('handles a single very wide row (full-measure, scaled x2)', () => {
+        const wide: Record<string, string> = {};
+        for (let i = 0; i < 500; i++) wide['col' + i] = 'value-' + i;
+        const expected = JSON.stringify(wide).length * 2;
+        expect(asInternal(cm).estimateResultsSize([wide])).toBe(expected);
+    });
+
+    it('produces a finite, positive, linearly-scaling estimate for a very large N', () => {
+        const row = () => ({ ID: 'abcdef', Name: 'Widget', Note: 'some moderately sized note field' });
+        const n = 100_000;
+        const rows = Array.from({ length: n }, row);
+        const perRow = JSON.stringify(row()).length;
+        const est = asInternal(cm).estimateResultsSize(rows);
+        expect(Number.isFinite(est)).toBe(true);
+        // Homogeneous rows → estimate ≈ perRow * n * 2; allow generous sampling tolerance.
+        expect(est).toBeGreaterThan(perRow * n * 2 * 0.8);
+        expect(est).toBeLessThan(perRow * n * 2 * 1.2);
+    });
 });
