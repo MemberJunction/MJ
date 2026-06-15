@@ -492,7 +492,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
         role: 'user',
         content: [
           { type: 'text', content: instruction },
-          { type: 'image_url', content: `data:image/jpeg;base64,${screenshotBase64}` },
+          // Declare the explicit MIME so the modality check matches a concrete
+          // 'image/jpeg' driver capability (not just a wildcard probe).
+          { type: 'image_url', content: `data:image/jpeg;base64,${screenshotBase64}`, mimeType: 'image/jpeg' },
         ],
       },
     ];

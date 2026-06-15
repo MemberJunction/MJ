@@ -3712,7 +3712,11 @@ export class AIPromptRunner {
     const lower = mimeType.toLowerCase();
     return caps.SupportedMimeTypes.some((pattern) => {
       const p = pattern.toLowerCase();
+      // Wildcard on EITHER side must match (the requested mime is often a modality
+      // probe like 'image/*' — e.g. an image_url block with no explicit mimeType —
+      // and must match a driver that declares any concrete 'image/<x>' type).
       if (p.endsWith('/*')) return lower.startsWith(p.slice(0, -1));
+      if (lower.endsWith('/*')) return p.startsWith(lower.slice(0, -1));
       return lower === p;
     });
   }

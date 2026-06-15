@@ -109,7 +109,14 @@ export class RealtimeAudioMeter implements IRealtimeAudioMeter {
             const analyser = RealtimeAudioMeter.createAnalyser(context);
             source.connect(analyser);
             // Analyser-only sink: nothing routes to destination — metering must never
-            // double-play the audio it observes.
+            // double-play the audio it observes. BUT a freshly-created AudioContext starts
+            // SUSPENDED, and with no destination route nothing auto-starts its clock — so the
+            // analyser would read pure silence forever (the "Listening meter never moves while
+            // I speak" bug). The realtime session is always started from a user gesture, so
+            // resuming here is permitted; without it the mic meter is dead on arrival.
+            if (context.state === 'suspended') {
+                void context.resume();
+            }
             return new RealtimeAudioMeter(analyser, context);
         } catch {
             return null;

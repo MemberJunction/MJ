@@ -67,6 +67,14 @@ describe('driverSupportsModality', () => {
   it('rejects a MIME not on the supported list', () => {
     expect(priv(runner).driverSupportsModality({ SupportedMimeTypes: ['image/*'] }, 'audio/mpeg')).toBe(false);
   });
+  it('matches a wildcard REQUEST (image/*) against a CONCRETE supported type (image/jpeg)', () => {
+    // An image_url block with no explicit mimeType probes the driver as 'image/*'; it must
+    // match a driver that declares any concrete image type, or vision images get stripped.
+    expect(priv(runner).driverSupportsModality({ SupportedMimeTypes: ['image/jpeg', 'image/png'] }, 'image/*')).toBe(true);
+  });
+  it('rejects a wildcard REQUEST whose family the driver does not support', () => {
+    expect(priv(runner).driverSupportsModality({ SupportedMimeTypes: ['image/jpeg'] }, 'audio/*')).toBe(false);
+  });
 });
 
 describe('annotateManifestForUnsupportedMedia', () => {
