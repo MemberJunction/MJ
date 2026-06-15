@@ -11,12 +11,13 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (4 classes)
+// @memberjunction/ai-realtime-client (5 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     OpenAIRealtimeClient,
+    xAIRealtimeClient,
 } from '@memberjunction/ai-realtime-client';
 
 // @memberjunction/ai-vectors-memory (2 classes)
@@ -544,6 +545,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     OpenAIRealtimeClient,
+    xAIRealtimeClient,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     AIAgentPermissionProvider,
@@ -1005,7 +1007,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 459;
+export const CLASS_REGISTRATIONS_COUNT = 460;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
