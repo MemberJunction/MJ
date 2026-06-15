@@ -155,6 +155,7 @@ const RAW_FETCH_SCHEMA = {
         credSchemasBundle: { type: 'string' },    // all credential-type schema files, each preceded by '@@@FILE:<path>@@@'
         extractorScriptContent: { type: 'string' }, // all extractor scripts under connectors-registry/<vendor>/scripts/ concatenated ('' if none)
         planContent: { type: 'string' },          // the planner-emitted plans/<vendor>.workflow.js ('' if absent)
+        specConformanceJson: { type: 'string' },  // stdout of floor/spec-conformance.mjs over (SourcesFile, metadataFile) — the A6 inline conformance diff ('' if no OpenAPI spec)
     },
     additionalProperties: false,
 };
@@ -200,7 +201,10 @@ const fetched = await agent(
         `9. Run \`for f in metadata/credential-types/schemas/*.json; do echo "@@@FILE:$f@@@"; cat "$f"; done\` -> credSchemasBundle (each schema preceded by its @@@FILE marker; '' if none).\n` +
         `10. Run \`for f in packages/Integration/connectors-registry/${vendorSlug}/scripts/*.ts packages/Integration/connectors-registry/${vendorSlug}/scripts/*.mjs; do [ -f "$f" ] && { echo "@@@FILE:$f@@@"; cat "$f"; }; done\` -> extractorScriptContent ('' if none).\n` +
         `11. \`cat packages/Integration/connector-builder-workshop/plans/${vendorSlug}.workflow.js\` -> planContent ('' if absent).\n` +
-        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent }.`,
+        ((journal.sources && journal.sources.SourcesFile)
+            ? `12. If \`test -f ${journal.sources.SourcesFile}\` exits 0 AND that file is an OpenAPI/Swagger spec, run \`node packages/Integration/connector-builder-workshop/floor/spec-conformance.mjs '${journal.sources.SourcesFile}' '${metadataFile}'\` -> return its stdout VERBATIM as specConformanceJson (the A6 conformance diff; '' if it errors or the source is not an OpenAPI spec). Fixed script — run it exactly, do not edit its output.\n`
+            : `12. No SourcesFile on the journal: return specConformanceJson=''.\n`) +
+        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, specConformanceJson }.`,
     { agentType: 'independent-reviewer', schema: RAW_FETCH_SCHEMA, phase: 'load-bijection', label: `floor-fetch:${runID}` }
 );
 
@@ -735,9 +739,16 @@ if (hybridE2E && hybridE2E.assertions) {
 // violation, the flat DAG) is structurally invisible to extract→verify→review — they operate on the
 // metadata FILE; nothing pushes it. journal.deployDryRun is produced by a scratch-DB `mj sync push`
 // + full-catalog ApplyAll. A connector is NOT "done" until it deploys clean with the DAG built. ──
-const deploy = journal.deployDryRun ?? null;
+// The deploy-dry-run evidence is either an explicit journal.deployDryRun OR derived from the hybrid-e2e,
+// whose env bring-up ALREADY does `mj sync push` (scratch DB) + full-catalog ApplyAll — a passing
+// hybrid-e2e IS a clean deploy. So this gate needs no separate producer stage in the contested workflow
+// template: it reads the explicit field when present, else derives from the e2e that always runs.
+const deploy = journal.deployDryRun ?? (hybridE2E
+    ? { pushClean: hybridE2E.pass === true, applyAllRan: hybridE2E.assertions?.applyAllRan === true,
+        fkEdgesResolved: hybridE2E.assertions?.fkEdgesResolved, derivedFrom: 'hybrid-e2e' }
+    : null);
 if (!deploy) {
-    failures.push({ rule: 'deploy-dry-run-missing', detail: 'deploy-dry-run did not run — the build never pushed the metadata to a scratch DB + ApplyAll, so FK-rollback / soft-PK-non-column / enum / flat-DAG defects are unproven. Deployability is a build gate, not a human\'s job (consensus B).' });
+    failures.push({ rule: 'deploy-dry-run-missing', detail: 'no deploy evidence — neither journal.deployDryRun nor a hybrid-e2e ran. The build never pushed the metadata to a scratch DB + ApplyAll, so FK-rollback / soft-PK-non-column / enum / flat-DAG defects are unproven. Deployability is a build gate, not a human\'s job (consensus B).' });
 } else {
     if (deploy.pushClean !== true) {
         failures.push({ rule: 'deploy-push-failed', detail: `scratch-DB mj-sync-push did not complete clean: ${String(deploy.error ?? deploy.message ?? 'see deployDryRun').slice(0, 240)} — dense forward-ref FK @lookup rollback / unresolved lookup / enum-width violation must be caught here, at build time.` });
@@ -755,7 +766,13 @@ if (!deploy) {
 // spec". This is the free, deterministic check that auto-catches the wrong-paths class. Gate only when a
 // spec was actually found (enumerate-catalog measured a real OpenAPI/SDL universe); otherwise record the
 // scraped-source ceiling for the per-capability confidence rollup. ──
-const conformance = journal.specConformance ?? null;
+// Conformance is computed INLINE: the floor agent runs floor/spec-conformance.mjs over (SourcesFile,
+// metadataFile) and returns specConformanceJson — the same self-running pattern as enumerate-catalog, so
+// A6 needs no producer stage in the contested workflow template. Falls back to journal.specConformance.
+let conformance = journal.specConformance ?? null;
+if (!conformance && fetched && typeof fetched.specConformanceJson === 'string' && fetched.specConformanceJson.trim() !== '') {
+    try { conformance = JSON.parse(fetched.specConformanceJson); } catch { /* leave null → missing */ }
+}
 const hasMachineSpec = !!(journal.sources && /openapi|swagger|graphql|sdl|introspection/i.test(JSON.stringify(journal.sources)));
 if (hasMachineSpec) {
     if (!conformance) {
