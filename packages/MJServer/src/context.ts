@@ -9,6 +9,7 @@ import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-pro
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
 import { buildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
+import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -29,6 +30,20 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 // long-lived sessions every hour.) Reviewers asked to audit all user access with
 // timestamp/IP/browser — that payload lives in the Details JSON; the table has no
 // dedicated columns. Best-effort throughout: an audit failure NEVER blocks auth.
+/**
+ * Memoized "is the server log level `debug`?" check for the per-request log
+ * gates below. Resolved once from `telemetry.level` (the single log-level knob)
+ * — config is immutable after boot, so caching is safe and keeps the hot request
+ * path free of repeated config reads.
+ */
+let isDebugLevelCache: boolean | undefined;
+function isDebugLogLevel(): boolean {
+  if (isDebugLevelCache === undefined) {
+    isDebugLevelCache = StartupLogger.resolveLevelFromConfig() === 'debug';
+  }
+  return isDebugLevelCache;
+}
+
 const SESSION_AUDIT_TYPE = 'Session Established';
 const LOGIN_FAILED_AUDIT_TYPE = 'Login Failed';
 const SESSION_AUDIT_CACHE_MAX = 50_000;
@@ -268,9 +283,12 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
 
-        // Use provider to extract user info for logging
-        const userInfo = extractUserInfoFromPayload(payload);
-        console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
+        // Per-request token confirmation — debug-only (one of the worst
+        // "constantly on" offenders on an authenticated server).
+        if (isDebugLogLevel()) {
+          const userInfo = extractUserInfoFromPayload(payload);
+          console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
+        }
         resolve(payload);
       } else {
         console.warn('Invalid token');
@@ -588,7 +606,9 @@ export const contextFunction =
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reqAny = req as any;
     const operationName: string | undefined = reqAny.body?.operationName;
-    if (operationName !== 'IntrospectionQuery') {
+    // Per-request GraphQL boundary line — debug-only. Kept (not deleted) so the
+    // data is available when an operator opts into debug, but off by default.
+    if (operationName !== 'IntrospectionQuery' && isDebugLogLevel()) {
       console.dir(buildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
     }
 

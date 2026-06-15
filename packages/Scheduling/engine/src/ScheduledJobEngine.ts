@@ -159,7 +159,11 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         }
         const old = this._maxConcurrentJobs;
         this._maxConcurrentJobs = value;
-        this.log(`MaxConcurrentJobs changed from ${old} to ${value}`);
+        // Only log a genuine change — a no-op set (old === new, e.g. applying the
+        // schema default at startup) logs nothing.
+        if (old !== value) {
+            this.log(`MaxConcurrentJobs changed from ${old} to ${value}`);
+        }
     }
 
     /**
@@ -176,7 +180,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         }
         const old = this._leaseTimeoutMs;
         this._leaseTimeoutMs = value;
-        this.log(`LeaseTimeoutMs changed from ${old} to ${value}`);
+        // Only log a genuine change — a no-op set (old === new) logs nothing.
+        if (old !== value) {
+            this.log(`LeaseTimeoutMs changed from ${old} to ${value}`);
+        }
     }
 
     /**
@@ -1323,7 +1330,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async cleanupStaleLocks(_contextUser: UserInfo): Promise<void> {
         const now = new Date();
-        console.log(`  🔍 Checking for stale locks (current time: ${now.toISOString()})...`);
 
         // Use the engine's already-loaded cache instead of round-tripping to
         // the DB — this method runs in StartPolling's upfront block, IMMEDIATELY
@@ -1340,8 +1346,11 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             (job.ExpectedCompletionAt == null || job.ExpectedCompletionAt < now)
         );
 
+        // "None found" is the common, uninteresting case — stay silent (the
+        // "Checking…/No stale locks found" chatter was the noise). Only stale
+        // locks that are actually FOUND/cleared are genuinely actionable and
+        // are logged below.
         if (stale.length === 0) {
-            console.log(`  ✓ No stale locks found`);
             return;
         }
 
@@ -1354,18 +1363,18 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 const lockResult = await this.tryAcquireLock(job.ID);
                 if (lockResult.acquired) {
                     await this.releaseLockIfTokenMatches(job.ID, lockResult.token!);
-                    console.log(`    🔓 Cleared stale lock on "${job.Name}" (was held by ${job.LockedByInstance})`);
+                    this.log(`Cleared stale lock on "${job.Name}" (was held by ${job.LockedByInstance})`);
                     cleanedCount++;
                 } else {
                     // Another instance acquired between our cache load and acquire.
-                    console.log(`    ℹ️  Stale lock on "${job.Name}" was cleared by another holder`);
+                    this.log(`Stale lock on "${job.Name}" was cleared by another holder`);
                 }
             } catch (error) {
                 this.logError(`Failed to clean stale lock for job ${job.Name}`, error);
             }
         }
 
-        console.log(`  ✅ Cleaned ${cleanedCount} stale lock(s)`);
+        this.log(`Cleaned ${cleanedCount} stale lock(s)`);
     }
 
     private log(message: string): void {
