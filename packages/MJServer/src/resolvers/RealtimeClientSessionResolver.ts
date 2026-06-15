@@ -31,7 +31,6 @@ import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
-    MJAIPromptRunEntity,
     MJArtifactEntity,
     MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
@@ -93,7 +92,6 @@ const REALTIME_AGENT_TYPE_NAME = 'Realtime';
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const CO_AGENT_ENTITY = 'MJ: AI Agent Co Agents';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
-const PROMPT_RUN_ENTITY = 'MJ: AI Prompt Runs';
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
 const SESSION_CHANNEL_ENTITY = 'MJ: AI Agent Session Channels';
 const ARTIFACT_ENTITY = 'MJ: Artifacts';
@@ -682,7 +680,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!promptRunID) {
             return false; // no observability prompt run for this session — logged in the helper
         }
-        return this.accumulatePromptRunUsage(promptRunID, inputDelta, outputDelta, contextUser, provider);
+        // Delegate to the service so usage writes share the per-run serialization with transcript-message
+        // appends — otherwise the frequent usage save clobbers freshly-appended Messages (and vice-versa).
+        return this.clientSessionService.AccumulatePromptRunUsage(promptRunID, inputDelta, outputDelta, contextUser, provider);
     }
 
     /** Clamps a relayed token delta: negative / non-finite values become 0. */
@@ -709,40 +709,6 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         } catch {
             LogError(`RelayRealtimeUsage: session ${session.ID} has no parseable config — usage delta dropped.`);
             return null;
-        }
-    }
-
-    /**
-     * Loads the co-agent `AIPromptRun` and ACCUMULATES the relayed deltas onto
-     * `TokensPrompt` / `TokensCompletion`, recomputing `TokensUsed` as their sum. Best-effort:
-     * load/save failures log and return `false`, never throw.
-     */
-    private async accumulatePromptRunUsage(
-        promptRunID: string,
-        inputDelta: number,
-        outputDelta: number,
-        contextUser: UserInfo,
-        provider: IMetadataProvider,
-    ): Promise<boolean> {
-        try {
-            const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>(PROMPT_RUN_ENTITY, contextUser);
-            if (!(await promptRun.Load(promptRunID))) {
-                LogError(`RelayRealtimeUsage: co-agent prompt run ${promptRunID} not found — usage delta dropped.`);
-                return false;
-            }
-            promptRun.TokensPrompt = (promptRun.TokensPrompt ?? 0) + inputDelta;
-            promptRun.TokensCompletion = (promptRun.TokensCompletion ?? 0) + outputDelta;
-            promptRun.TokensUsed = (promptRun.TokensPrompt ?? 0) + (promptRun.TokensCompletion ?? 0);
-            const saved = await promptRun.Save();
-            if (!saved) {
-                LogError(
-                    `RelayRealtimeUsage: prompt run ${promptRunID} save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`,
-                );
-            }
-            return saved;
-        } catch (error) {
-            LogError(`RelayRealtimeUsage: usage accumulation failed for prompt run ${promptRunID}: ${(error as Error).message}`);
-            return false;
         }
     }
 

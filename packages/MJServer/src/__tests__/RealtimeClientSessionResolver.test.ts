@@ -89,12 +89,21 @@ const onChannelStateSaveMock = vi.fn(
 // ParseRealtimeTypeConfiguration) stays REAL — the resolver's pairing/override gate is under test.
 vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
+    // The prompt-run persistence methods only use the test-supplied provider + LogError, so forward them to a
+    // REAL service instance — the resolver's transcript/usage tests assert their actual load/modify/save effect.
+    const RealService = actual.RealtimeClientSessionService as new () => {
+        AppendPromptRunMessage: (...a: unknown[]) => Promise<boolean>;
+        AccumulatePromptRunUsage: (...a: unknown[]) => Promise<boolean>;
+    };
+    const realService = new RealService();
     return {
         ...actual,
         RealtimeClientSessionService: class {
             PrepareClientSession = prepareClientSessionMock;
             ExecuteRelayedTool = executeRelayedToolMock;
             CancelInFlightDelegations = cancelInFlightMock;
+            AppendPromptRunMessage = (...a: unknown[]) => realService.AppendPromptRunMessage(...a);
+            AccumulatePromptRunUsage = (...a: unknown[]) => realService.AccumulatePromptRunUsage(...a);
         },
         RealtimeChannelServerHost: {
             get Instance() {

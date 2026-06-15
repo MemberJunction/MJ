@@ -727,6 +727,59 @@ describe('RealtimeClientSessionService.AppendPromptRunMessage', () => {
     });
 });
 
+describe('RealtimeClientSessionService — prompt-run write serialization (no clobber)', () => {
+    /**
+     * Models the production race: each GetEntityObject yields a FRESH entity whose Load copies from a shared
+     * backing store and Save writes the whole row back. Without serialization, a concurrent usage save would
+     * persist the stale Messages it loaded and wipe a freshly-appended turn (and vice-versa).
+     */
+    function makeStatefulRunProvider(store: { Messages: string | null; TokensPrompt: number; TokensCompletion: number; TokensUsed: number }): IMetadataProvider {
+        return {
+            GetEntityObject: vi.fn(async () => {
+                const entity: Record<string, unknown> = {
+                    Load: async () => {
+                        entity.Messages = store.Messages;
+                        entity.TokensPrompt = store.TokensPrompt;
+                        entity.TokensCompletion = store.TokensCompletion;
+                        entity.TokensUsed = store.TokensUsed;
+                        return true;
+                    },
+                    Save: async () => {
+                        store.Messages = entity.Messages as string | null;
+                        store.TokensPrompt = entity.TokensPrompt as number;
+                        store.TokensCompletion = entity.TokensCompletion as number;
+                        store.TokensUsed = entity.TokensUsed as number;
+                        return true;
+                    },
+                    LatestResult: { CompleteMessage: '' },
+                };
+                return entity;
+            }),
+        } as unknown as IMetadataProvider;
+    }
+
+    it('interleaved usage checkpoints and message appends preserve BOTH (neither clobbers the other)', async () => {
+        const store = { Messages: null as string | null, TokensPrompt: 0, TokensCompletion: 0, TokensUsed: 0 };
+        const provider = makeStatefulRunProvider(store);
+        const svc = new RealtimeClientSessionService();
+
+        // Fire many appends and usage checkpoints concurrently against the same run.
+        const ops: Promise<boolean>[] = [];
+        for (let i = 0; i < 8; i++) {
+            ops.push(svc.AppendPromptRunMessage('pr-1', i % 2 === 0 ? 'user' : 'assistant', `turn ${i}`, false, contextUser, provider));
+            ops.push(svc.AccumulatePromptRunUsage('pr-1', 100, 25, contextUser, provider));
+        }
+        await Promise.all(ops);
+
+        // All 8 turns survived (usage saves didn't revert Messages) ...
+        expect(JSON.parse(store.Messages as string)).toHaveLength(8);
+        // ... and all 8 usage deltas accumulated (appends didn't revert tokens).
+        expect(store.TokensPrompt).toBe(800);
+        expect(store.TokensCompletion).toBe(200);
+        expect(store.TokensUsed).toBe(1000);
+    });
+});
+
 describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
     it('completes both runs (Status, CompletedAt, Success) when they are still Running', async () => {
         const agentRun = makeRun({ ID: 'co-run-1' });
