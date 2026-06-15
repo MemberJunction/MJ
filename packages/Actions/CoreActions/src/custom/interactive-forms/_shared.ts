@@ -95,6 +95,11 @@ export async function lintFormSpec(spec: ComponentSpec, contextUser: UserInfo): 
     const FORM_ROLE_SUPPRESSED_RULES = new Set([
         "component-props-validation",
         "callback-event-validation",
+        // The form host (mj-react-component) creates `callbacks`/`utilities`/`components`/
+        // `styles` once per instance (stable refs), so depending on them in useEffect does
+        // not loop here. This rule only flags those host-provided prop names, making it a
+        // false positive on the form-role surface.
+        "useeffect-unstable-dependencies",
     ]);
     try {
         const result = await ComponentLinter.lintComponent(
