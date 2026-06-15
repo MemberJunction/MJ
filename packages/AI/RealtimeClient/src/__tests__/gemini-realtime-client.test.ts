@@ -22,12 +22,12 @@ import {
 
 /** Fake Gemini Live session: records every outbound send for assertions. */
 class FakeGeminiSession implements GeminiLiveClientSession {
-    public RealtimeInputs: Array<{ audio?: GeminiBlob }> = [];
+    public RealtimeInputs: Array<{ audio?: GeminiBlob; text?: string }> = [];
     public ClientContents: Array<{ turns?: Content[]; turnComplete?: boolean }> = [];
     public ToolResponses: Array<{ functionResponses: FunctionResponse[] }> = [];
     public Closed = false;
 
-    public sendRealtimeInput(params: { audio?: GeminiBlob }): void {
+    public sendRealtimeInput(params: { audio?: GeminiBlob; text?: string }): void {
         this.RealtimeInputs.push(params);
     }
     public sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void {
@@ -319,14 +319,12 @@ describe('GeminiRealtimeClient', () => {
             await connect(client);
         });
 
-        it('should send the instructions as a turn-completing user turn and mark busy', () => {
+        it('should send the instructions as a realtime-text user turn and mark busy', () => {
             client.RequestSpokenUpdate('Say one short first-person sentence.');
-            expect(client.Fake.ClientContents).toEqual([
-                {
-                    turns: [{ role: 'user', parts: [{ text: 'Say one short first-person sentence.' }] }],
-                    turnComplete: true,
-                },
-            ]);
+            // realtime text, NOT clientContent — see SendText: only realtime input triggers
+            // generation mid-call on native-audio Live models.
+            expect(client.Fake.RealtimeInputs).toEqual([{ text: 'Say one short first-person sentence.' }]);
+            expect(client.Fake.ClientContents).toHaveLength(0);
             expect(client.IsBusy).toBe(true);
         });
 
@@ -352,12 +350,10 @@ describe('GeminiRealtimeClient', () => {
             expect(client.IsBusy).toBe(true);
 
             client.RequestSpokenUpdate('narrate later');
-            expect(client.Fake.ClientContents).toHaveLength(0);
+            expect(client.Fake.RealtimeInputs).toHaveLength(0);
 
             client.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
-            expect(client.Fake.ClientContents).toEqual([
-                { turns: [{ role: 'user', parts: [{ text: 'narrate later' }] }], turnComplete: true },
-            ]);
+            expect(client.Fake.RealtimeInputs).toEqual([{ text: 'narrate later' }]);
             expect(client.IsBusy).toBe(true);
         });
     });
@@ -478,12 +474,13 @@ describe('GeminiRealtimeClient', () => {
             await connect(client);
         });
 
-        it('should send a turn-completing user turn and reflect speaking when idle', () => {
+        it('should send a realtime-text user turn and reflect speaking when idle', () => {
             const { states } = collect(client);
             client.SendText('hello there');
-            expect(client.Fake.ClientContents).toEqual([
-                { turns: [{ role: 'user', parts: [{ text: 'hello there' }] }], turnComplete: true },
-            ]);
+            // realtime text, NOT clientContent: native-audio Live models only generate from
+            // sendRealtimeInput mid-call (clientContent is history seeding).
+            expect(client.Fake.RealtimeInputs).toEqual([{ text: 'hello there' }]);
+            expect(client.Fake.ClientContents).toHaveLength(0);
             expect(states).toEqual(['speaking']);
             expect(client.IsBusy).toBe(true);
         });
@@ -498,12 +495,11 @@ describe('GeminiRealtimeClient', () => {
 
             client.SendText('typed mid-turn');
             // SendText implies barge-in: local playback flushed, turn marked inactive, the
-            // typed turn goes out NOW (on the wire, client content itself interrupts Gemini).
+            // typed turn goes out NOW as realtime text (which interrupts in-flight generation
+            // the same way spoken input does).
             expect(client.Playback.FlushCount).toBe(1);
             expect(client.IsAudioPlaying).toBe(false);
-            expect(client.Fake.ClientContents).toEqual([
-                { turns: [{ role: 'user', parts: [{ text: 'typed mid-turn' }] }], turnComplete: true },
-            ]);
+            expect(client.Fake.RealtimeInputs).toEqual([{ text: 'typed mid-turn' }]);
             expect(client.IsBusy).toBe(true); // the typed turn's reply is now in flight
         });
 
@@ -526,18 +522,16 @@ describe('GeminiRealtimeClient', () => {
             // the cancel drains the queue: the tool result goes first (starting a new turn),
             // so the typed text queues behind it — tool-result delivery is never dropped
             expect(client.Fake.ToolResponses).toHaveLength(1);
-            expect(client.Fake.ClientContents).toHaveLength(0);
+            expect(client.Fake.RealtimeInputs).toHaveLength(0);
 
             client.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
-            expect(client.Fake.ClientContents).toEqual([
-                { turns: [{ role: 'user', parts: [{ text: 'typed mid-narration' }] }], turnComplete: true },
-            ]);
+            expect(client.Fake.RealtimeInputs).toEqual([{ text: 'typed mid-narration' }]);
         });
 
         it('should no-op when the session is not open', () => {
             const fresh = new TestGeminiClient();
             fresh.SendText('into the void');
-            expect(fresh.Fake.ClientContents).toHaveLength(0);
+            expect(fresh.Fake.RealtimeInputs).toHaveLength(0);
         });
     });
 

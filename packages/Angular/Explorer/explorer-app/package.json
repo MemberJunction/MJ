@@ -5,10 +5,11 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "npm run clean && ngc && npm run copy-assets",
+    "build": "ngc && npm run copy-assets",
     "copy-assets": "cpy 'src/lib/styles/**' dist/styles --flat && cpy 'src/lib/assets/**' dist/assets && cpy src/lib/styles.scss dist --flat",
     "watch": "ngc --watch",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "build:clean": "npm run clean && npm run build"
   },
   "keywords": [
     "memberjunction",

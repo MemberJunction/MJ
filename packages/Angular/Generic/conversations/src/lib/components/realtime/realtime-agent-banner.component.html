@@ -73,9 +73,9 @@
     <div class="bar-actions">
       @if (ShowPureAudio) {
         <button type="button" class="iconb" (click)="PureAudioRequested.emit()"
-                title="Return to pure audio — just the orb and the voice"
-                aria-label="Return to the pure-audio view">
-          <i class="fa-regular fa-circle" aria-hidden="true"></i>
+                title="Pure audio — simplest view, just the orb and the voice (sticks until you change it in the gear)"
+                aria-label="Switch to the simple pure-audio view">
+          <i class="fa-solid fa-headphones" aria-hidden="true"></i>
         </button>
       }
       @if (ShowCaptionsControl) {

@@ -122,6 +122,15 @@ export interface RealtimeSessionRunnerDeps {
      */
     NarrationInstructionsTemplate?: string | null;
 
+    /**
+     * Optional narration pace override (ms) — the minimum gap between spoken progress updates,
+     * normally sourced from the co-agent's EFFECTIVE realtime configuration
+     * (`realtime.narration.paceMs`: type `DefaultConfiguration` ← agent `TypeConfiguration` ←
+     * runtime overrides). When absent or not a positive finite number, the runner's built-in
+     * default (8000 ms) applies. `BaseAgent` supplies this on the server-bridged path.
+     */
+    NarrationPaceMs?: number | null;
+
     /** Optional verbose-aware status logger. */
     LogStatus?: RealtimeStatusLogger;
 
@@ -531,9 +540,21 @@ export class RealtimeSessionRunner {
             ? this.narrationBurstStartedAt + RealtimeSessionRunner.FirstNarrationDelayMs
             : 0;
         const spacingFloor = this.lastNarrationAt > 0
-            ? this.lastNarrationAt + RealtimeSessionRunner.NarrationIntervalMs
+            ? this.lastNarrationAt + this.narrationIntervalMs()
             : 0;
         return Math.max(50, Math.max(firstAnchor, spacingFloor) - now);
+    }
+
+    /**
+     * The effective spoken-update spacing: the deps' configuration-driven
+     * {@link RealtimeSessionRunnerDeps.NarrationPaceMs} when it is a positive finite number,
+     * else the built-in {@link RealtimeSessionRunner.NarrationIntervalMs} default.
+     */
+    private narrationIntervalMs(): number {
+        const pace = this.deps.NarrationPaceMs;
+        return typeof pace === 'number' && Number.isFinite(pace) && pace > 0
+            ? pace
+            : RealtimeSessionRunner.NarrationIntervalMs;
     }
 
     /**

@@ -115,18 +115,21 @@ describe('GeminiRealtimeClient (extended)', () => {
             client.RequestSpokenUpdate('typed reply'); // triggering — drain must stop after this
             client.SendContextNote('note 2'); // must stay queued
             expect(client.Fake.ClientContents).toHaveLength(0);
+            expect(client.Fake.RealtimeInputs).toHaveLength(0);
 
             completeTurn(client);
+            // drain order: the note (clientContent) goes first, then the narration trigger
+            // (realtime text) starts a new turn and stops the drain
             expect(client.Fake.ClientContents).toEqual([
                 { turns: [{ role: 'user', parts: [{ text: 'note 1' }] }], turnComplete: false },
-                { turns: [{ role: 'user', parts: [{ text: 'typed reply' }] }], turnComplete: true },
             ]);
+            expect(client.Fake.RealtimeInputs).toEqual([{ text: 'typed reply' }]);
             expect(client.IsBusy).toBe(true);
 
             // the second note drains only when the typed-reply turn completes
             completeTurn(client);
-            expect(client.Fake.ClientContents).toHaveLength(3);
-            expect(client.Fake.ClientContents[2]).toEqual({
+            expect(client.Fake.ClientContents).toHaveLength(2);
+            expect(client.Fake.ClientContents[1]).toEqual({
                 turns: [{ role: 'user', parts: [{ text: 'note 2' }] }],
                 turnComplete: false,
             });
@@ -175,22 +178,22 @@ describe('GeminiRealtimeClient (extended)', () => {
 
             // interruption flushes playback and yields the floor, but the turn boundary is
             // turnComplete — the queue and busy lock are untouched until then
-            expect(client.Fake.ClientContents).toHaveLength(0);
+            expect(client.Fake.RealtimeInputs).toHaveLength(0);
             expect(client.IsBusy).toBe(true);
 
             completeTurn(client);
-            expect(client.Fake.ClientContents).toHaveLength(1);
+            expect(client.Fake.RealtimeInputs).toEqual([{ text: 'queued update' }]);
         });
 
         it('should tolerate duplicate turnComplete frames without re-draining or throwing', () => {
             beginModelTurn(client);
             client.SendText('once only');
             completeTurn(client);
-            expect(client.Fake.ClientContents).toHaveLength(1);
+            expect(client.Fake.RealtimeInputs).toHaveLength(1);
 
             // duplicate boundary while the triggered turn is in flight → drain stops immediately
             expect(() => completeTurn(client)).not.toThrow();
-            expect(client.Fake.ClientContents).toHaveLength(1);
+            expect(client.Fake.RealtimeInputs).toHaveLength(1);
         });
 
         it('should deliver a queued tool result exactly once across multiple turn boundaries', () => {
