@@ -286,6 +286,30 @@ export class ConfigurePhase {
       emitter, 'db-trust-cert', 'Trust self-signed server certificate? (common for local instances)', false, yes
     );
 
+    // Database type
+    if (!config.DatabaseType) {
+      if (yes) {
+        config.DatabaseType = 'sqlserver';
+      } else {
+        const dbTypeChoice = await this.promptSelect(
+          emitter,
+          'db-type',
+          'Database engine:',
+          [
+            { Label: 'SQL Server (default, requires Docker on Mac)', Value: 'sqlserver' },
+            { Label: 'PostgreSQL (recommended with devenv.nix)', Value: 'postgres' },
+          ],
+          'sqlserver'
+        );
+        config.DatabaseType = dbTypeChoice as InstallConfig['DatabaseType'];
+      }
+    }
+
+    // Adjust port default based on database type
+    if (config.DatabaseType === 'postgres' && !config.DatabasePort) {
+      config.DatabasePort = 5432;
+    }
+
     // CodeGen credentials
     config.CodeGenUser = config.CodeGenUser ?? await this.promptInput(
       emitter, 'codegen-user', 'CodeGen database login:', 'MJ_CodeGen', yes
@@ -401,9 +425,12 @@ export class ConfigurePhase {
    * @param config - Fully resolved config.
    */
   private async writeEnvFile(envPath: string, config: InstallConfig): Promise<void> {
-    const trustCert = config.DatabaseTrustCert ? 'DB_TRUST_SERVER_CERTIFICATE=1' : '';
+    const trustCert = config.DatabaseType !== 'postgres' && config.DatabaseTrustCert
+      ? 'DB_TRUST_SERVER_CERTIFICATE=1'
+      : '';
 
     const content = `#Database Setup
+DB_TYPE='${config.DatabaseType}'
 DB_HOST='${config.DatabaseHost}'
 DB_PORT=${config.DatabasePort}
 CODEGEN_DB_USERNAME='${config.CodeGenUser}'
@@ -475,6 +502,7 @@ ASK_SKIP_ORGANIZATION_ID=1
     port: ${config.DatabasePort},
     database: '${config.DatabaseName}',
     mjCoreSchema: '__mj',
+    dbType: '${config.DatabaseType}',
   },
   encryptionKeys: {
     MJ_BASE_ENCRYPTION_KEY: process.env.MJ_BASE_ENCRYPTION_KEY || '',

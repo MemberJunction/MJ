@@ -9,6 +9,11 @@ import { InstallerError } from '../errors/InstallerError.js';
 
 const mockFs = createMockFileSystem();
 const mockSql = createMockSqlAdapter();
+const mockPg = {
+  CheckConnectivity: vi.fn<(host: string, port: number) => Promise<{ Reachable: boolean; ErrorMessage?: string; LatencyMs: number }>>()
+    .mockResolvedValue({ Reachable: true, LatencyMs: 10 }),
+  ProvisionDatabase: vi.fn<(params: unknown) => Promise<void>>().mockResolvedValue(undefined),
+};
 
 vi.mock('../adapters/FileSystemAdapter.js', () => {
   return {
@@ -39,6 +44,15 @@ vi.mock('../adapters/SqlServerAdapter.js', () => {
   return {
     SqlServerAdapter: class {
       CheckConnectivity = mockSql.CheckConnectivity;
+    },
+  };
+});
+
+vi.mock('../adapters/PostgresAdapter.js', () => {
+  return {
+    PostgresAdapter: class {
+      CheckConnectivity = mockPg.CheckConnectivity;
+      ProvisionDatabase = mockPg.ProvisionDatabase;
     },
   };
 });
@@ -80,6 +94,8 @@ describe('DatabaseProvisionPhase', () => {
     // Clear call history and reset implementations to defaults
     mockFs.WriteText.mockClear().mockResolvedValue(undefined);
     mockSql.CheckConnectivity.mockClear().mockResolvedValue({ Reachable: true, LatencyMs: 12 });
+    mockPg.CheckConnectivity.mockClear().mockResolvedValue({ Reachable: true, LatencyMs: 10 });
+    mockPg.ProvisionDatabase.mockClear().mockResolvedValue(undefined);
   });
 
   // -----------------------------------------------------------------------
@@ -264,6 +280,86 @@ describe('DatabaseProvisionPhase', () => {
       expect(validateScript).toContain('USE [TestDB]');
       expect(validateScript).toContain("name = 'CG'");
       expect(validateScript).toContain("name = 'API'");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // PostgreSQL path
+  // -----------------------------------------------------------------------
+
+  describe('postgres path', () => {
+    it('should return ScriptsGenerated=[] and ValidationPassed=true when DatabaseType is postgres', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseType = 'postgres';
+
+      const result = await phase.Run(ctx);
+
+      expect(result.ScriptsGenerated).toHaveLength(0);
+      expect(result.ValidationPassed).toBe(true);
+    });
+
+    it('should not write any SQL script files when DatabaseType is postgres', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseType = 'postgres';
+
+      await phase.Run(ctx);
+
+      expect(mockFs.WriteText).not.toHaveBeenCalled();
+    });
+
+    it('should throw DB_UNREACHABLE when PostgreSQL connectivity fails', async () => {
+      mockPg.CheckConnectivity.mockResolvedValue({
+        Reachable: false,
+        LatencyMs: 5000,
+        ErrorMessage: 'Connection refused at localhost:5432. Is PostgreSQL running?',
+      });
+
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseType = 'postgres';
+
+      try {
+        await phase.Run(ctx);
+        expect.unreachable('Expected InstallerError to be thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(InstallerError);
+        const ie = err as InstallerError;
+        expect(ie.Code).toBe('DB_UNREACHABLE');
+        expect(ie.Phase).toBe('database');
+      }
+    });
+
+    it('should call ProvisionDatabase with host, port, and user params from config', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseType = 'postgres';
+      ctx.Config.DatabaseHost = 'pg.local';
+      ctx.Config.DatabasePort = 5433;
+      ctx.Config.DatabaseName = 'MJDB';
+      ctx.Config.CodeGenUser = 'cg_user';
+      ctx.Config.CodeGenPassword = 'cg_pass';
+      ctx.Config.APIUser = 'api_user';
+      ctx.Config.APIPassword = 'api_pass';
+
+      await phase.Run(ctx);
+
+      expect(mockPg.ProvisionDatabase).toHaveBeenCalledOnce();
+      expect(mockPg.ProvisionDatabase).toHaveBeenCalledWith({
+        Host: 'pg.local',
+        Port: 5433,
+        DbName: 'MJDB',
+        CodeGenUser: 'cg_user',
+        CodeGenPassword: 'cg_pass',
+        ApiUser: 'api_user',
+        ApiPassword: 'api_pass',
+      });
+    });
+
+    it('should not call SQL Server connectivity when DatabaseType is postgres', async () => {
+      const ctx = makeContext({ Yes: true });
+      ctx.Config.DatabaseType = 'postgres';
+
+      await phase.Run(ctx);
+
+      expect(mockSql.CheckConnectivity).not.toHaveBeenCalled();
     });
   });
 });

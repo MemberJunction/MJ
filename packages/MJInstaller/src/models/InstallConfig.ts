@@ -35,6 +35,15 @@ export interface InstallConfig {
   /** Whether to trust self-signed TLS certificates (common for local dev instances). */
   DatabaseTrustCert: boolean;
 
+  /**
+   * Database engine selection.
+   * - `'sqlserver'` (default) — Microsoft SQL Server. `DatabaseProvisionPhase` generates
+   *   idempotent T-SQL scripts and prompts the user to run them in SSMS.
+   * - `'postgres'` — PostgreSQL. `DatabaseProvisionPhase` executes `psql` directly;
+   *   no SSMS or manual script step required.
+   */
+  DatabaseType: 'sqlserver' | 'postgres';
+
   // ── CodeGen credentials ───────────────────────────────────────────────
 
   /**
@@ -150,6 +159,7 @@ export const InstallConfigDefaults: PartialInstallConfig = {
   DatabaseHost: 'localhost',
   DatabasePort: 1433,
   DatabaseTrustCert: false,
+  DatabaseType: 'sqlserver',
   APIPort: 4000,
   ExplorerPort: 4200,
   AuthProvider: 'none',
@@ -172,6 +182,7 @@ const ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_DB_PORT',           Field: 'DatabasePort',     Parse: (v) => parseInt(v, 10) },
   { EnvVar: 'MJ_INSTALL_DB_NAME',           Field: 'DatabaseName',     Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_DB_TRUST_CERT',     Field: 'DatabaseTrustCert', Parse: parseBooleanEnv },
+  { EnvVar: 'MJ_INSTALL_DB_TYPE',           Field: 'DatabaseType',     Parse: (v) => v as InstallConfig['DatabaseType'] },
   { EnvVar: 'MJ_INSTALL_CODEGEN_USER',      Field: 'CodeGenUser',      Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_CODEGEN_PASSWORD',  Field: 'CodeGenPassword',  Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_API_USER',          Field: 'APIUser',          Parse: (v) => v },
@@ -291,7 +302,7 @@ export async function loadConfigFile(filePath: string): Promise<PartialInstallCo
   const known = parsed as Record<string, unknown>;
   const config: PartialInstallConfig = {};
   const KNOWN_KEYS: ReadonlySet<string> = new Set<string>([
-    'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
+    'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert', 'DatabaseType',
     'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
     'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
     'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',

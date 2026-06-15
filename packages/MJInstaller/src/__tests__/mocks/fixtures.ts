@@ -12,6 +12,7 @@ export function sampleConfig(): InstallConfig {
     DatabasePort: 1433,
     DatabaseName: 'MemberJunction',
     DatabaseTrustCert: true,
+    DatabaseType: 'sqlserver' as const,
     CodeGenUser: 'MJ_CodeGen',
     CodeGenPassword: 'test_password_1',
     APIUser: 'MJ_Connect',

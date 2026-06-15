@@ -39,14 +39,15 @@ describe('InstallConfigDefaults', () => {
     expect(InstallConfigDefaults.AuthProvider).toBe('none');
   });
 
-  it('should have exactly 7 keys', () => {
+  it('should have exactly 8 keys', () => {
     const keys = Object.keys(InstallConfigDefaults);
-    expect(keys).toHaveLength(7);
+    expect(keys).toHaveLength(8);
     expect(keys).toEqual(
       expect.arrayContaining([
         'DatabaseHost',
         'DatabasePort',
         'DatabaseTrustCert',
+        'DatabaseType',
         'APIPort',
         'ExplorerPort',
         'AuthProvider',

@@ -20,8 +20,10 @@
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
+    "tsc-alias": "^1.8.15",
     "typescript": "^5.9.3",
-    "tsc-alias": "^1.8.15"
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.9"
   },
   "repository": {
     "type": "git",

@@ -1,7 +1,10 @@
 /**
  * Phase C — Database Provisioning
  *
- * Generates idempotent SQL scripts for database setup and prompts the user
+ * Provisions the database for the selected engine:
+ *
+ * **SQL Server path** (`DatabaseType === 'sqlserver'`, default):
+ * Generates idempotent T-SQL scripts for database setup and prompts the user
  * to execute them manually in SSMS or Azure Data Studio. Then validates
  * that SQL Server is reachable at the configured host:port.
  *
@@ -12,12 +15,18 @@
  * 2. **`mj-db-validate.sql`** — Verifies the schema, users, and roles exist.
  *    Run this to confirm the setup script was executed correctly.
  *
- * The phase does **not** execute SQL directly — it generates scripts and asks
- * the user to run them. This design avoids requiring a SQL driver dependency
- * in the installer and gives users full visibility into what's being executed.
+ * The SQL Server path does **not** execute SQL directly — it generates scripts
+ * and asks the user to run them. This design avoids requiring a SQL driver
+ * dependency in the installer and gives users full visibility.
+ *
+ * **PostgreSQL path** (`DatabaseType === 'postgres'`):
+ * Uses {@link PostgresAdapter} to run `psql` directly. Connectivity is checked
+ * first; then idempotent `CREATE ROLE IF NOT EXISTS` and `GRANT` statements
+ * are executed as the `postgres` superuser. No manual script step is required.
  *
  * @module phases/DatabaseProvisionPhase
- * @see SqlServerAdapter — used for TCP connectivity validation.
+ * @see SqlServerAdapter — used for TCP connectivity validation (SQL Server path).
+ * @see PostgresAdapter — used for connectivity check and provisioning (PostgreSQL path).
  * @see ConfigurePhase — provides the database credentials used in script generation.
  */
 
@@ -27,6 +36,7 @@ import type { PartialInstallConfig } from '../models/InstallConfig.js';
 import { InstallerError } from '../errors/InstallerError.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { SqlServerAdapter } from '../adapters/SqlServerAdapter.js';
+import { PostgresAdapter } from '../adapters/PostgresAdapter.js';
 
 /**
  * Input context for the database provisioning phase.
@@ -74,16 +84,34 @@ export interface DatabaseProvisionResult {
 export class DatabaseProvisionPhase {
   private fileSystem = new FileSystemAdapter();
   private sqlAdapter = new SqlServerAdapter();
+  private pgAdapter = new PostgresAdapter();
 
   /**
-   * Execute the database provisioning phase: generate scripts, prompt user,
-   * and validate connectivity.
+   * Execute the database provisioning phase.
+   *
+   * Dispatches to the appropriate engine path based on `context.Config.DatabaseType`:
+   * - `'postgres'` — uses {@link PostgresAdapter} to provision directly via `psql`.
+   * - `'sqlserver'` (default) — generates T-SQL scripts and prompts the user to run them.
    *
    * @param context - Database provision input with directory, config, mode, and emitter.
    * @returns Script paths and validation result.
-   * @throws {InstallerError} With code `DB_UNREACHABLE` if SQL Server connectivity fails after script execution.
+   * @throws {InstallerError} With code `DB_UNREACHABLE` if database connectivity fails.
    */
   async Run(context: DatabaseProvisionContext): Promise<DatabaseProvisionResult> {
+    if (context.Config.DatabaseType === 'postgres') {
+      return this.runPostgres(context);
+    }
+    return this.runSqlServer(context);
+  }
+
+  /**
+   * SQL Server provisioning path: generate scripts, prompt user, and validate connectivity.
+   *
+   * @param context - Database provision input.
+   * @returns Script paths and validation result.
+   * @throws {InstallerError} With code `DB_UNREACHABLE` if SQL Server connectivity fails after script execution.
+   */
+  private async runSqlServer(context: DatabaseProvisionContext): Promise<DatabaseProvisionResult> {
     const { Config: config, Emitter: emitter } = context;
 
     // Step 1: Generate SQL scripts
@@ -146,6 +174,67 @@ export class DatabaseProvisionPhase {
 
     return {
       ScriptsGenerated: [scriptPath, validatePath],
+      ValidationPassed: true,
+    };
+  }
+
+  /**
+   * PostgreSQL provisioning path: check connectivity and provision roles via `psql`.
+   *
+   * Verifies that PostgreSQL is reachable, then runs idempotent `CREATE ROLE IF NOT EXISTS`
+   * and `GRANT` statements as the `postgres` superuser. No manual script step is required.
+   *
+   * @param context - Database provision input.
+   * @returns Empty scripts array and validation result.
+   * @throws {InstallerError} With code `DB_UNREACHABLE` if PostgreSQL is not reachable.
+   */
+  private async runPostgres(context: DatabaseProvisionContext): Promise<DatabaseProvisionResult> {
+    const { Config: config, Emitter: emitter } = context;
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'database',
+      Message: 'Provisioning PostgreSQL database and roles...',
+    });
+
+    const host = config.DatabaseHost ?? 'localhost';
+    const port = config.DatabasePort ?? 5432;
+    const dbName = config.DatabaseName ?? 'MemberJunction';
+    const codeGenUser = config.CodeGenUser ?? 'mj_codegen';
+    const codeGenPassword = config.CodeGenPassword ?? 'dev_codegen';
+    const apiUser = config.APIUser ?? 'mj_connect';
+    const apiPassword = config.APIPassword ?? 'dev_connect';
+
+    // Verify connectivity first
+    const connectivity = await this.pgAdapter.CheckConnectivity(host, port);
+    if (!connectivity.Reachable) {
+      throw new InstallerError(
+        'database',
+        'DB_UNREACHABLE',
+        `Cannot connect to PostgreSQL at ${host}:${port}. ${connectivity.ErrorMessage ?? ''}`,
+        `Ensure PostgreSQL is running (try: devenv up). Then re-run mj install.`
+      );
+    }
+
+    // Provision roles and grants
+    await this.pgAdapter.ProvisionDatabase({
+      Host: host,
+      Port: port,
+      DbName: dbName,
+      CodeGenUser: codeGenUser,
+      CodeGenPassword: codeGenPassword,
+      ApiUser: apiUser,
+      ApiPassword: apiPassword,
+    });
+
+    emitter.Emit('log', {
+      Type: 'log',
+      Level: 'info',
+      Message: `PostgreSQL provisioned at ${host}:${port} — roles ${codeGenUser}, ${apiUser} created.`,
+    });
+
+    return {
+      ScriptsGenerated: [],
       ValidationPassed: true,
     };
   }

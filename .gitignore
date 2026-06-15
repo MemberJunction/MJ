@@ -203,3 +203,8 @@ demo/
 # Credential broker runtime mailbox (job/result files — never committed)
 **/.cred-mailbox/
 openspec/
+
+# Nix / devenv
+.devenv/
+.direnv/
+.envrc.local

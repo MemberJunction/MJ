@@ -30,6 +30,7 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { SqlServerAdapter } from '../adapters/SqlServerAdapter.js';
+import { PostgresAdapter } from '../adapters/PostgresAdapter.js';
 import { Diagnostics, type DiagnosticCheck, type EnvironmentInfo } from '../models/Diagnostics.js';
 
 /** Hard minimum Node.js major version. Update this when MJ raises the floor. */
@@ -95,6 +96,7 @@ export class PreflightPhase {
   private processRunner = new ProcessRunner();
   private fileSystem = new FileSystemAdapter();
   private sqlAdapter = new SqlServerAdapter();
+  private pgAdapter = new PostgresAdapter();
 
   /**
    * Run all preflight checks and return the results.
@@ -141,11 +143,27 @@ export class PreflightPhase {
     this.emitDiagnostic(emitter, explorerPortCheck);
 
     if (!context.SkipDB) {
-      emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: 'Checking SQL Server connectivity...' });
-      const sqlCheck = await this.checkSqlConnectivity(context.Config);
-      diagnostics.AddCheck(sqlCheck);
-      this.emitDiagnostic(emitter, sqlCheck);
-      if (sqlCheck.Status === 'fail') hardFailures.push(sqlCheck.Message);
+      const isPostgres = context.Config.DatabaseType === 'postgres';
+      const dbLabel = isPostgres ? 'PostgreSQL' : 'SQL Server';
+      emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: `Checking ${dbLabel} connectivity...` });
+
+      if (isPostgres) {
+        // Also check that psql binary is available
+        const psqlCheck = await this.checkPsqlBinary();
+        diagnostics.AddCheck(psqlCheck);
+        this.emitDiagnostic(emitter, psqlCheck);
+        if (psqlCheck.Status === 'fail') hardFailures.push(psqlCheck.Message);
+
+        const pgCheck = await this.checkPgConnectivity(context.Config);
+        diagnostics.AddCheck(pgCheck);
+        this.emitDiagnostic(emitter, pgCheck);
+        if (pgCheck.Status === 'fail') hardFailures.push(pgCheck.Message);
+      } else {
+        const sqlCheck = await this.checkSqlConnectivity(context.Config);
+        diagnostics.AddCheck(sqlCheck);
+        this.emitDiagnostic(emitter, sqlCheck);
+        if (sqlCheck.Status === 'fail') hardFailures.push(sqlCheck.Message);
+      }
     }
 
     emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: 'Checking OS...' });
@@ -341,6 +359,45 @@ export class PreflightPhase {
 
       server.listen(port, '127.0.0.1');
     });
+  }
+
+  private async checkPsqlBinary(): Promise<DiagnosticCheck> {
+    try {
+      await this.processRunner.RunSimple('psql', ['--version']);
+      return {
+        Name: 'psql binary',
+        Status: 'pass',
+        Message: 'psql is on PATH',
+      };
+    } catch {
+      return {
+        Name: 'psql binary',
+        Status: 'fail',
+        Message: 'psql not found on PATH. Required for PostgreSQL provisioning.',
+        SuggestedFix: 'Run "devenv up" to enter the Nix dev shell (installs psql automatically), or install postgresql via Homebrew: brew install postgresql@16',
+      };
+    }
+  }
+
+  private async checkPgConnectivity(config: PartialInstallConfig): Promise<DiagnosticCheck> {
+    const host = config.DatabaseHost ?? 'localhost';
+    const port = config.DatabasePort ?? 5432;
+    const result = await this.pgAdapter.CheckConnectivity(host, port);
+
+    if (result.Reachable) {
+      return {
+        Name: 'PostgreSQL connectivity',
+        Status: 'pass',
+        Message: `PostgreSQL reachable at ${host}:${port} (${result.LatencyMs}ms)`,
+      };
+    }
+
+    return {
+      Name: 'PostgreSQL connectivity',
+      Status: 'fail',
+      Message: result.ErrorMessage ?? `Cannot reach PostgreSQL at ${host}:${port}`,
+      SuggestedFix: `Run "devenv up" to start PostgreSQL, or ensure PostgreSQL is running at ${host}:${port}.`,
+    };
   }
 
   private async checkSqlConnectivity(config: PartialInstallConfig): Promise<DiagnosticCheck> {

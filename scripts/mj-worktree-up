@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# mj-worktree-up — create a git worktree with an isolated PostgreSQL instance.
+#
+# Usage:
+#   ./scripts/mj-worktree-up <branch-name> [--port <N>]
+#
+# Creates a git worktree at ../MJ-<branch> (sibling of the current worktree),
+# allocates an unused port in 5433–5500 for PostgreSQL isolation, writes
+# .envrc.local with the port override, then starts the devenv shell.
+#
+# Examples:
+#   ./scripts/mj-worktree-up feature/my-thing
+#   ./scripts/mj-worktree-up fix/auth-bug --port 5435
+
+set -euo pipefail
+
+BRANCH="${1:?Usage: mj-worktree-up <branch-name> [--port N]}"
+PORT=""
+
+# Parse optional --port flag
+while [[ $# -gt 1 ]]; do
+  case "$2" in
+    --port) PORT="${3:?--port requires a value}"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+# Auto-allocate port 5433–5500 if not specified
+if [ -z "$PORT" ]; then
+  for p in $(seq 5433 5500); do
+    if ! lsof -i ":$p" &>/dev/null 2>&1; then
+      PORT=$p
+      break
+    fi
+  done
+  if [ -z "$PORT" ]; then
+    echo "ERROR: No free port found in range 5433–5500. Stop some worktrees first."
+    exit 1
+  fi
+fi
+
+# Derive worktree directory name from branch (replace / with -)
+WORKTREE_DIR="../MJ-${BRANCH//\//-}"
+
+echo "Creating worktree: $WORKTREE_DIR"
+echo "Branch:            $BRANCH"
+echo "PostgreSQL port:   $PORT"
+echo ""
+
+# Create the worktree (branch must already exist or -b creates it)
+if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+  git worktree add "$WORKTREE_DIR" "$BRANCH"
+else
+  git worktree add -b "$BRANCH" "$WORKTREE_DIR"
+fi
+
+# Write .envrc.local with port override
+cat > "$WORKTREE_DIR/.envrc.local" <<EOF
+# Per-worktree PostgreSQL port — do not commit this file.
+export DEVENV_POSTGRES_PORT=$PORT
+EOF
+
+echo "Created .envrc.local (DEVENV_POSTGRES_PORT=$PORT)"
+
+# Allow direnv and start devenv services in background
+cd "$WORKTREE_DIR"
+direnv allow
+echo ""
+echo "Starting devenv (PostgreSQL will start in background)..."
+devenv up --detach || true   # --detach may not be available on all versions; non-fatal
+
+echo ""
+echo "Done! To start working:"
+echo "  cd $WORKTREE_DIR"
+echo "  mj migrate        # first-time migration for this worktree"
+echo "  npm run build"
+echo "  npm run start:api"
