@@ -18,23 +18,16 @@ export const REMOTE_BROWSER_TOOL_NAMES = {
   Back: 'browser_Back',
   Forward: 'browser_Forward',
   Wait: 'browser_Wait',
-  GetPageText: 'browser_GetPageText'
+  GetPageText: 'browser_GetPageText',
+  DescribePage: 'browser_DescribePage',
+  LocateElement: 'browser_LocateElement',
 } as const;
 
 /**
  * The discriminated `kind` the server's `ExecuteRemoteBrowserAction` mutation switches on.
  * Each Remote Browser tool maps to exactly one of these (see {@link MapToolToAction}).
  */
-export type RemoteBrowserActionKind =
-  | 'navigate'
-  | 'click'
-  | 'type'
-  | 'key'
-  | 'scroll'
-  | 'back'
-  | 'forward'
-  | 'wait'
-  | 'getPageText';
+export type RemoteBrowserActionKind = 'navigate' | 'click' | 'type' | 'key' | 'scroll' | 'back' | 'forward' | 'wait' | 'getPageText';
 
 /**
  * A normalized Remote Browser action — the flat field set the `ExecuteRemoteBrowserAction`
@@ -135,7 +128,7 @@ export function MapToolToAction(toolName: string, args: Record<string, ToolArgVa
         Kind: 'scroll',
         DeltaX: asNumber(args['deltaX']),
         DeltaY: asNumber(args['deltaY']),
-        Selector: asString(args['selector'])
+        Selector: asString(args['selector']),
       };
     }
     case REMOTE_BROWSER_TOOL_NAMES.Back:
@@ -164,22 +157,23 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
     ParametersSchema: {
       type: 'object',
       properties: {
-        url: { type: 'string', description: 'Absolute URL to open (include the scheme, e.g. https://…).' }
+        url: { type: 'string', description: 'Absolute URL to open (include the scheme, e.g. https://…).' },
       },
-      required: ['url']
-    }
+      required: ['url'],
+    },
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Click,
-    Description: 'Click an element in the shared browser, by CSS selector or by viewport x/y coordinates. Provide a selector when you know it; otherwise provide both x and y.',
+    Description:
+      'Click an element in the shared browser, by CSS selector or by viewport x/y coordinates. Provide a selector when you know it; otherwise provide both x and y.',
     ParametersSchema: {
       type: 'object',
       properties: {
         selector: { type: 'string', description: 'CSS selector of the element to click (preferred).' },
         x: { type: 'number', description: 'Viewport X in CSS px (used when no selector is given).' },
-        y: { type: 'number', description: 'Viewport Y in CSS px (used when no selector is given).' }
-      }
-    }
+        y: { type: 'number', description: 'Viewport Y in CSS px (used when no selector is given).' },
+      },
+    },
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Type,
@@ -188,10 +182,10 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
       type: 'object',
       properties: {
         text: { type: 'string', description: 'The text to type.' },
-        selector: { type: 'string', description: 'Optional CSS selector to focus before typing.' }
+        selector: { type: 'string', description: 'Optional CSS selector to focus before typing.' },
       },
-      required: ['text']
-    }
+      required: ['text'],
+    },
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Key,
@@ -199,10 +193,10 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
     ParametersSchema: {
       type: 'object',
       properties: {
-        key: { type: 'string', description: 'Key name, e.g. "Enter", "Tab", "Escape", "ArrowDown".' }
+        key: { type: 'string', description: 'Key name, e.g. "Enter", "Tab", "Escape", "ArrowDown".' },
       },
-      required: ['key']
-    }
+      required: ['key'],
+    },
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Scroll,
@@ -212,19 +206,19 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
       properties: {
         deltaX: { type: 'number', description: 'Horizontal scroll delta in px (positive = right).' },
         deltaY: { type: 'number', description: 'Vertical scroll delta in px (positive = down).' },
-        selector: { type: 'string', description: 'Optional CSS selector of a scrollable element; omit to scroll the page.' }
-      }
-    }
+        selector: { type: 'string', description: 'Optional CSS selector of a scrollable element; omit to scroll the page.' },
+      },
+    },
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Back,
     Description: 'Navigate the shared browser back to the previous page in its history.',
-    ParametersSchema: { type: 'object', properties: {} }
+    ParametersSchema: { type: 'object', properties: {} },
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Forward,
     Description: 'Navigate the shared browser forward to the next page in its history.',
-    ParametersSchema: { type: 'object', properties: {} }
+    ParametersSchema: { type: 'object', properties: {} },
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Wait,
@@ -233,13 +227,31 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
       type: 'object',
       properties: {
         ms: { type: 'number', description: 'Milliseconds to wait. Omit when waiting on a selector.' },
-        selector: { type: 'string', description: 'Optional CSS selector to wait for.' }
-      }
-    }
+        selector: { type: 'string', description: 'Optional CSS selector to wait for.' },
+      },
+    },
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.GetPageText,
     Description: 'Read the visible text content of the current page in the shared browser, so you can understand what is on screen.',
-    ParametersSchema: { type: 'object', properties: {} }
-  }
+    ParametersSchema: { type: 'object', properties: {} },
+  },
+  {
+    Name: REMOTE_BROWSER_TOOL_NAMES.DescribePage,
+    Description:
+      "Look at the current page and get a concise text description of what is visible — use this to 'see' the page since you cannot view images directly.",
+    ParametersSchema: { type: 'object', properties: {} },
+  },
+  {
+    Name: REMOTE_BROWSER_TOOL_NAMES.LocateElement,
+    Description:
+      "Find a UI element by visual description (e.g. 'the blue Sign In button', 'the search box') and get its approximate pixel center (x,y) so you can browser_Click it. Returns whether it was found, its label, and coordinates.",
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: "Visual description of the element to find (e.g. 'the blue Sign In button')." },
+      },
+      required: ['description'],
+    },
+  },
 ];

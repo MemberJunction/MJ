@@ -202,7 +202,50 @@ robustness is lost.
 
 ---
 
-## 8. Reference map
+## 8. The realtime client surface — live view, agent perception, human takeover
+
+The Remote Browser channel renders in the realtime overlay's Browser tab (`RemoteBrowserSurfaceComponent`).
+Three layers sit on top of the action vocabulary, each capability-gated so a backend opts in purely by
+advertising a flag — no per-provider client code.
+
+### 8a. Live view — CDP screencast (push), screenshot poll (fallback)
+The surface shows the live page two ways, picked by the `ScreenStreaming` capability:
+- **Screencast (default for capable backends)** — on `BindSurface` the channel calls the
+  `StartRemoteBrowserScreencast` mutation; the server runs `IRemoteBrowserSession.StartScreencast` and
+  publishes each `RemoteBrowserScreencastFrame` on the existing `PUSH_STATUS_UPDATES_TOPIC` for the user's
+  session (the same push channel as delegation progress — no new WS infra). The conversations service's
+  push subscription routes those frames to the channel → the surface paints them on a `<canvas>` (one
+  reused `Image` + `requestAnimationFrame`, drop-old coalescing, outside the Angular zone). Stopped on
+  `UnbindSurface`/`Dispose`. (LiveKit/WebRTC video is the planned efficiency upgrade behind the same surface.)
+- **Screenshot poll (fallback)** — the original `RemoteBrowserSnapshot` query every 700ms, used only when
+  `StartRemoteBrowserScreencast` reports `Streaming: false` (backend lacks `ScreenStreaming`).
+
+### 8b. Agent perception — the visual interpreter (for non-omnimodal realtime models)
+Realtime voice models (GPT Realtime, Grok Voice) are **audio/text only — they cannot see the screenshot**.
+So beyond the URL/`Detail` perception fed back after each action, the agent gets two **vision-query** tools
+(distinct from the navigate/click action path) that let it *kinda see*:
+- `browser_DescribePage` — a concise text description of what's currently visible.
+- `browser_LocateElement(description)` — find a UI element by **visual** description (works on messy sites
+  that lack good a11y/DOM structure) and get its approximate pixel centroid `(x, y)` so the agent can then
+  `browser_Click` it.
+
+Both relay to the `InterpretRemoteBrowserPage` server mutation, which `CaptureScreenshot`s the viewport and
+runs the **"Remote Browser Visual Interpreter"** AI Prompt (pinned to a fast vision model, **Gemini 3.1
+Flash-Lite**, via its `MJ: AI Prompt Models` association — tunable in metadata, not code) over the image,
+returning strict JSON `{ description, elements: [{ label, x, y, confidence }] }`. This is the bridge to
+visual sites until realtime models become omnimodal; it complements (doesn't replace) a11y/`GetVisibleText`
+perception.
+
+### 8c. Human takeover (Collaborative mode)
+The session resolves a control **mode** (`AgentOnly` / `ViewOnly` / `Collaborative`) and the engine runs a
+floor arbiter (agent⇄human). In `Collaborative`, the surface captures pointer/keyboard events on the live
+view, maps display coordinates → viewport coordinates, and relays them as `RemoteBrowserHumanInput`
+(`pointer-move` / `pointer-click` / `key`) → `IRemoteBrowserSession.RouteHumanInput` (capability-gated on
+`HumanTakeover`). See `RelayRemoteBrowserHumanInput`.
+
+---
+
+## 9. Reference map
 
 | Package | Role |
 |---|---|

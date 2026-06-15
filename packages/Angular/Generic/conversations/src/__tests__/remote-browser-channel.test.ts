@@ -227,6 +227,84 @@ describe('RemoteBrowserChannel — plugin contract + ApplyAgentTool round-trip',
   });
 });
 
+describe('RemoteBrowserChannel — visual interpreter (browser_DescribePage / browser_LocateElement)', () => {
+  let channel: RemoteBrowserChannel;
+  let log: CtxLog;
+
+  beforeEach(() => {
+    channel = new RemoteBrowserChannel();
+    log = { Notes: [], Calls: [] };
+  });
+
+  it('routes browser_DescribePage to the InterpretRemoteBrowserPage mutation and returns the description', async () => {
+    channel.Initialize(makeContext(log, {
+      InterpretRemoteBrowserPage: { Description: 'A login page with email and password fields.', Elements: [], Detail: null }
+    }));
+
+    const resultJson = await channel.ApplyAgentTool('browser_DescribePage', '{}');
+    const result = JSON.parse(resultJson) as { description: string };
+
+    expect(log.Calls).toHaveLength(1);
+    expect(log.Calls[0].Query).toContain('InterpretRemoteBrowserPage');
+    // DescribePage carries no target query.
+    expect(log.Calls[0].Variables).toMatchObject({ agentSessionID: 'session-1', query: null });
+    expect(result.description).toBe('A login page with email and password fields.');
+  });
+
+  it('routes browser_LocateElement to the interpret mutation with the query and returns found + centroid', async () => {
+    channel.Initialize(makeContext(log, {
+      InterpretRemoteBrowserPage: {
+        Description: 'A login page.',
+        Elements: [{ Label: 'Sign In button', X: 320, Y: 480, Confidence: 0.9 }],
+        Detail: null
+      }
+    }));
+
+    const resultJson = await channel.ApplyAgentTool('browser_LocateElement', JSON.stringify({ description: 'the blue Sign In button' }));
+    const result = JSON.parse(resultJson) as {
+      found: boolean;
+      element: { label: string; x: number; y: number } | null;
+      all: Array<{ Label: string; X: number; Y: number; Confidence: number }>;
+    };
+
+    expect(log.Calls).toHaveLength(1);
+    expect(log.Calls[0].Query).toContain('InterpretRemoteBrowserPage');
+    expect(log.Calls[0].Variables).toMatchObject({ agentSessionID: 'session-1', query: 'the blue Sign In button' });
+    expect(result.found).toBe(true);
+    expect(result.element).toEqual({ label: 'Sign In button', x: 320, y: 480 });
+    expect(result.all).toHaveLength(1);
+  });
+
+  it('reports found:false with a null element when no element is localized', async () => {
+    channel.Initialize(makeContext(log, {
+      InterpretRemoteBrowserPage: { Description: 'A login page.', Elements: [], Detail: null }
+    }));
+
+    const resultJson = await channel.ApplyAgentTool('browser_LocateElement', JSON.stringify({ description: 'the logout link' }));
+    const result = JSON.parse(resultJson) as { found: boolean; element: unknown | null };
+    expect(result.found).toBe(false);
+    expect(result.element).toBeNull();
+  });
+
+  it('rejects browser_LocateElement without a description (no server call)', async () => {
+    channel.Initialize(makeContext(log, { InterpretRemoteBrowserPage: { Description: null, Elements: [], Detail: null } }));
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_LocateElement', '{}'));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('description');
+    expect(log.Calls).toHaveLength(0);
+  });
+
+  it('keeps the null-session guard for the interpreter tools (no server call)', async () => {
+    channel.Initialize(makeContext(log, null, null));
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_DescribePage', '{}'));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('No live browser session');
+    expect(log.Calls).toHaveLength(0);
+  });
+});
+
 describe('RemoteBrowserChannel — live screencast (pushed frames)', () => {
   let channel: RemoteBrowserChannel;
   let log: CtxLog;

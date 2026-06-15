@@ -4,8 +4,12 @@ import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
 import { RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
 import {
-  MapToolToAction, REMOTE_BROWSER_TOOL_DEFINITIONS, REMOTE_BROWSER_TOOL_PREFIX,
-  RemoteBrowserAction, RemoteBrowserToolArgError
+  MapToolToAction,
+  REMOTE_BROWSER_TOOL_DEFINITIONS,
+  REMOTE_BROWSER_TOOL_NAMES,
+  REMOTE_BROWSER_TOOL_PREFIX,
+  RemoteBrowserAction,
+  RemoteBrowserToolArgError,
 } from './remote-browser-tools';
 
 /**
@@ -80,6 +84,44 @@ const REMOTE_BROWSER_SNAPSHOT_QUERY = `
 /** The narrow projection of the `RemoteBrowserSnapshot` query payload the channel reads. */
 interface RemoteBrowserSnapshotResult {
   RemoteBrowserSnapshot: RemoteBrowserSnapshotView | null;
+}
+
+/**
+ * VISION-QUERY mutation (separate from {@link EXECUTE_REMOTE_BROWSER_ACTION_MUTATION} — this OBSERVES the page,
+ * it does not drive it). The server captures the live screenshot and runs a fast vision model over it, so the
+ * non-omnimodal voice agent can "see" the page: a text description and/or localized elements with pixel
+ * centroids. Backs both `browser_DescribePage` (no target) and `browser_LocateElement` (a target description).
+ */
+const INTERPRET_PAGE_MUTATION = `
+  mutation InterpretRemoteBrowserPage($agentSessionID: String!, $query: String) {
+    InterpretRemoteBrowserPage(agentSessionID: $agentSessionID, query: $query) {
+      Description
+      Elements {
+        Label
+        X
+        Y
+        Confidence
+      }
+      Detail
+    }
+  }
+`;
+
+/** One element localized by the visual interpreter — label + pixel centroid + confidence. */
+interface RemoteBrowserInterpretedElement {
+  Label: string;
+  X: number;
+  Y: number;
+  Confidence: number;
+}
+
+/** The narrow projection of the `InterpretRemoteBrowserPage` mutation payload the channel reads. */
+interface InterpretRemoteBrowserPageResult {
+  InterpretRemoteBrowserPage: {
+    Description: string | null;
+    Elements: RemoteBrowserInterpretedElement[];
+    Detail: string | null;
+  } | null;
 }
 
 /** The result payload (serialized to JSON) the channel returns to the model per tool call. */
@@ -164,9 +206,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       Tips: [
         'Ask the agent to look something up, open a site or fill in a form — it controls the page.',
         'The view updates every few seconds; brief pauses just mean the next snapshot is loading.',
-        'The current page URL is shown so you always know where the agent has navigated.'
+        'The current page URL is shown so you always know where the agent has navigated.',
       ],
-      IconClass: 'fa-solid fa-globe'
+      IconClass: 'fa-solid fa-globe',
     };
   }
 
@@ -221,8 +263,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     if (!sessionId) {
       return;
     }
-    const data = await this.Context?.ExecuteServerAction<StartRemoteBrowserScreencastResult>(
-      START_SCREENCAST_MUTATION, { agentSessionID: sessionId });
+    const data = await this.Context?.ExecuteServerAction<StartRemoteBrowserScreencastResult>(START_SCREENCAST_MUTATION, { agentSessionID: sessionId });
     if (data?.StartRemoteBrowserScreencast?.Streaming === true) {
       this.streaming = true;
       instance.Streaming = true;
@@ -250,8 +291,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     if (!sessionId) {
       return null;
     }
-    const data = await this.Context?.ExecuteServerAction<RemoteBrowserSnapshotResult>(
-      REMOTE_BROWSER_SNAPSHOT_QUERY, { agentSessionID: sessionId });
+    const data = await this.Context?.ExecuteServerAction<RemoteBrowserSnapshotResult>(REMOTE_BROWSER_SNAPSHOT_QUERY, { agentSessionID: sessionId });
     return data?.RemoteBrowserSnapshot ?? null;
   }
 
@@ -263,6 +303,19 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * payload so the model can narrate the problem.
    */
   public async ApplyAgentTool(toolName: string, argsJson: string): Promise<string> {
+    // VISION-QUERY branch: the two interpreter tools OBSERVE the page (run a vision model over a screenshot)
+    // rather than drive it, so they route to the separate interpret mutation, not MapToolToAction.
+    if (toolName === REMOTE_BROWSER_TOOL_NAMES.DescribePage) {
+      return this.interpretPage(undefined);
+    }
+    if (toolName === REMOTE_BROWSER_TOOL_NAMES.LocateElement) {
+      const description = this.asArgString(this.parseArgs(argsJson)['description']);
+      if (!description) {
+        return this.fail('browser_LocateElement requires a "description" of the element to find.');
+      }
+      return this.interpretPage(description);
+    }
+
     let action: RemoteBrowserAction;
     try {
       action = MapToolToAction(toolName, this.parseArgs(argsJson));
@@ -284,7 +337,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
 
     const data = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserActionResult>(
-      EXECUTE_REMOTE_BROWSER_ACTION_MUTATION, this.buildVariables(sessionId, action));
+      EXECUTE_REMOTE_BROWSER_ACTION_MUTATION,
+      this.buildVariables(sessionId, action),
+    );
     const result = data?.ExecuteRemoteBrowserAction ?? null;
     if (!result) {
       return this.fail('The browser action could not be executed (no response from the server).');
@@ -313,8 +368,58 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       key: action.Key ?? null,
       deltaX: action.DeltaX ?? null,
       deltaY: action.DeltaY ?? null,
-      ms: action.Ms ?? null
+      ms: action.Ms ?? null,
     };
+  }
+
+  /**
+   * Runs the VISION-QUERY path for the `browser_DescribePage` / `browser_LocateElement` tools: awaits the
+   * `InterpretRemoteBrowserPage` mutation (server captures a screenshot + runs a fast vision model) and returns
+   * a concise JSON string the model reads. For a describe (no `query`) it returns `{ description }`; for a locate
+   * it returns `{ found, element, all }` so the agent can `browser_Click` the centroid. Never throws — a null
+   * session, no response, or a server detail-only result all map to a result string the model can narrate.
+   *
+   * @param query The visual target to locate, or `undefined` for a plain page description.
+   * @returns A JSON string describing the interpretation for the model.
+   */
+  private async interpretPage(query: string | undefined): Promise<string> {
+    const sessionId = this.Context?.AgentSessionID;
+    if (!sessionId) {
+      console.warn('[RemoteBrowser] interpret tool invoked but AgentSessionID is null', {
+        hasContext: !!this.Context,
+        agentSessionID: this.Context?.AgentSessionID ?? null,
+      });
+      return this.fail('No live browser session is available yet — the realtime session may still be connecting; try again in a moment.');
+    }
+
+    const data = await this.Context?.ExecuteServerAction<InterpretRemoteBrowserPageResult>(INTERPRET_PAGE_MUTATION, {
+      agentSessionID: sessionId,
+      query: query ?? null,
+    });
+    const result = data?.InterpretRemoteBrowserPage ?? null;
+    if (!result) {
+      return this.fail('The page could not be interpreted (no response from the server).');
+    }
+
+    if (query === undefined) {
+      // DescribePage — hand back the description (or the server's detail note when nothing was interpreted).
+      return JSON.stringify({ description: result.Description ?? result.Detail ?? null });
+    }
+
+    // LocateElement — surface whether anything matched, the best match, and all candidates.
+    const elements = result.Elements ?? [];
+    const best = elements[0];
+    return JSON.stringify({
+      found: elements.length > 0,
+      element: best ? { label: best.Label, x: best.X, y: best.Y } : null,
+      all: elements,
+      ...(result.Detail ? { detail: result.Detail } : {}),
+    });
+  }
+
+  /** Coerces a parsed tool-arg to a non-empty string, or `undefined` when absent / wrong-typed. */
+  private asArgString(value: JSONValue | undefined): string | undefined {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
   }
 
   /** Parses the tool-args JSON into a plain object; returns `{}` for empty/malformed input. */
@@ -325,9 +430,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
     try {
       const parsed: unknown = JSON.parse(trimmed);
-      return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? (parsed as Record<string, JSONValue>)
-        : {};
+      return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, JSONValue>) : {};
     } catch {
       return {};
     }
