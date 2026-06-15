@@ -81,6 +81,7 @@ import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
+import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
 import {
     PipelineExecutor,
     PipelineToolRegistry,
@@ -835,6 +836,12 @@ export class BaseAgent {
     private _artifactToolManager: ArtifactToolManager = new ArtifactToolManager();
 
     /**
+     * Manages in-flight durable memory writes for the current agent run.
+     * Only consulted when the agent has AllowMemoryWrite enabled.
+     */
+    private _memoryWriteManager: MemoryWriteManager = new MemoryWriteManager();
+
+    /**
      * Effective actions available to this agent after applying actionChanges.
      * Populated during gatherPromptTemplateData() and used for validation in executeActionsStep().
      * @private
@@ -1284,6 +1291,7 @@ export class BaseAgent {
             // Reset scratchpad and artifact tools for each new execution (ephemeral per run)
             this._scratchpadManager.Clear();
             this._artifactToolManager.Clear();
+            this._memoryWriteManager.Clear();
 
             // Initialize artifact tools with any input artifacts attached to the run.
             // Artifacts arrive as a typed first-class field on ExecuteAgentParams —
@@ -2922,6 +2930,14 @@ export class BaseAgent {
                 this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] Artifacts present but tools disabled by agent config (includeArtifactToolsDocs=false)`, true, params);
+            }
+
+            // Enable the memory-writes response field + docs only for agents that opted in
+            // via AllowMemoryWrite. Disabled agents never see the docs, so a well-behaved
+            // LLM never emits the field (the turn loop still guards against drift).
+            const memoryWritesDocsEnabled = agentTypePromptParams?.includeMemoryWritesDocs !== false;
+            if (memoryWritesDocsEnabled && params.agent.AllowMemoryWrite === true) {
+                promptParams.data['_MEMORY_WRITES_ENABLED'] = true;
             }
 
             // Inject pipeline tool docs when pipelines are enabled and at least one source exists.
@@ -4846,6 +4862,149 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Executes a batch of in-flight memory writes, recording each as its own
+     * `Tool` AIAgentRunStep (a sibling of the Prompt step that requested them)
+     * with full inputs/outcomes captured in InputData/OutputData.
+     *
+     * Writes run SEQUENTIALLY (not Promise.all like artifact tools) by design:
+     * each persisted note is embedded and synced into the in-memory vector
+     * service on Save, so write N must be visible to write N+1's near-duplicate
+     * check (this is also what makes same-run supersede-own work). The per-run
+     * cap bounds the cost of the serialization.
+     *
+     * Step naming convention: `Memory Write` for log/UI clarity.
+     *
+     * @protected
+     */
+    protected async executeMemoryWritesAsSteps(
+        writes: MemoryWriteRequest[],
+        params: ExecuteAgentParams,
+    ): Promise<MemoryWriteResult[]> {
+        const results: MemoryWriteResult[] = [];
+        for (const write of writes) {
+            const writeStep = await this.createStepEntity({
+                stepType: 'Tool',
+                stepName: 'Memory Write',
+                contextUser: params.contextUser,
+                inputData: {
+                    note: write.note,
+                    type: write.type,
+                    scopeHint: write.scopeHint,
+                },
+            });
+
+            const result = await this._memoryWriteManager.ExecuteWrite(write, {
+                agentId: params.agent.ID,
+                contextUser: params.contextUser,
+                agentRunId: this._agentRun?.ID,
+                conversationId: this._agentRun?.ConversationID || undefined,
+                conversationDetailId: params.conversationDetailId,
+                userId: params.userId || params.contextUser?.ID,
+                companyId: params.companyId,
+                verbose: params.verbose,
+                provider: this.ProviderToUse,
+            });
+
+            const failed = result.disposition === 'error' || result.disposition === 'rejected-type';
+            await this.finalizeStepEntity(
+                writeStep,
+                !failed,
+                failed ? result.reason : undefined,
+                {
+                    disposition: result.disposition,
+                    noteId: result.noteId,
+                    finalScope: result.finalScope,
+                    reason: result.reason,
+                    durationMs: result.durationMs,
+                },
+            );
+            results.push(result);
+        }
+        return results;
+    }
+
+    /**
+     * Turn-loop entry point for in-flight memory writes, gated on the agent's
+     * AllowMemoryWrite flag. When disabled but the LLM emitted writes anyway
+     * (prompt drift / injection attempt), records ONE summary skip step —
+     * observable without per-write noise — and tells the agent the memories
+     * were NOT saved so it stops re-emitting. When enabled, executes the
+     * writes as run steps and injects the results message.
+     *
+     * @protected
+     */
+    protected async processMemoryWritesForTurn(
+        memoryWrites: MemoryWriteRequest[],
+        params: ExecuteAgentParams,
+    ): Promise<void> {
+        if (params.agent.AllowMemoryWrite !== true) {
+            this.logStatus(`[MemoryWrites] LLM emitted ${memoryWrites.length} memory write(s) but AllowMemoryWrite=false — skipping`, true, params);
+            const skipStep = await this.createStepEntity({
+                stepType: 'Tool',
+                stepName: 'Memory Writes: skipped (AllowMemoryWrite=false)',
+                contextUser: params.contextUser,
+                inputData: { requestedWriteCount: memoryWrites.length },
+            });
+            await this.finalizeStepEntity(skipStep, true, undefined, { skipped: true, reason: 'AllowMemoryWrite=false' });
+            params.conversationMessages.push({
+                role: 'user',
+                content: 'Memory write result: this agent does not have durable memory writes enabled — the requested memories were NOT saved. Do not emit memoryWrites again.',
+                metadata: {
+                    turnAdded: this._promptTurnCount,
+                    messageType: 'tool-result',
+                    expirationTurns: 3,
+                    expirationMode: 'Compact',
+                    compactMode: 'First N Chars',
+                    compactLength: 200,
+                    compactPromptId: '',
+                },
+            });
+            return;
+        }
+
+        this.logStatus(`[MemoryWrites] LLM requested ${memoryWrites.length} memory write(s)`, true, params);
+        const writeResults = await this.executeMemoryWritesAsSteps(memoryWrites, params);
+        this.injectMemoryWriteResultsMessage(params, writeResults);
+    }
+
+    /**
+     * Pushes a single user-role message containing memory-write outcomes into
+     * the conversation, mirroring `injectArtifactToolResultsMessage`'s
+     * inject-once-then-expire pattern. Closing the loop here is what stops the
+     * LLM from re-emitting the same memory on subsequent turns.
+     *
+     * @protected
+     */
+    protected injectMemoryWriteResultsMessage(
+        params: ExecuteAgentParams,
+        results: MemoryWriteResult[],
+    ): void {
+        if (results.length === 0) return;
+        const header = results.length === 1
+            ? 'Memory write result:'
+            : `Memory write results (${results.length} writes):`;
+        const body = results.map((r, i) => {
+            const note = r.request.note.length > 120 ? `${r.request.note.slice(0, 120)}…` : r.request.note;
+            return `${i + 1}. "${note}" — **${r.disposition}**${r.reason ? `: ${r.reason}` : ''}`;
+        }).join('\n');
+
+        const message: AgentChatMessage = {
+            role: 'user',
+            content: `${header}\n${body}`,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'tool-result',
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 300,
+                compactPromptId: '',
+            },
+        };
+        params.conversationMessages.push(message);
+    }
+
+    /**
      * Builds a per-run {@link PipelineToolRegistry} that unifies the three pipeline-able
      * substrates behind one namespace: built-in transforms, the agent's effective Actions, and
      * the run's artifact tools. Transforms register first so their reserved names win; a source
@@ -5348,7 +5507,8 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
             { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' },
             { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' },
-            { docsFlag: 'includePipelineDocs', responseTypeKey: 'pipeline' }
+            { docsFlag: 'includePipelineDocs', responseTypeKey: 'pipeline' },
+            { docsFlag: 'includeMemoryWritesDocs', responseTypeKey: 'memoryWrites' }
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
@@ -7308,6 +7468,12 @@ The context is now within limits. Please retry your request with the recovered c
                 this.injectArtifactToolResultsMessage(params, toolResults);
             } else if (this._artifactToolManager.HasArtifacts()) {
                 this.logStatus(`[ArtifactTools] LLM did not use artifact tools this turn (artifacts available but not accessed)`, true, params);
+            }
+
+            // Execute in-flight memory writes if provided (zero turn cost — processed inline)
+            const memoryWrites = initialNextStep.memoryWrites as MemoryWriteRequest[] | undefined;
+            if (memoryWrites?.length) {
+                await this.processMemoryWritesForTurn(memoryWrites, params);
             }
 
             // Execute a tool pipeline if provided (zero turn cost — processed inline). Each step's

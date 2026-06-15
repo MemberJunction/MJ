@@ -4602,6 +4602,7 @@ export class MJAIAgentExample_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -5635,7 +5636,7 @@ export class MJAIAgentNote_ {
     @Field({nullable: true, description: `Internal comments about this note, not included in agent context injection.`}) 
     Comments?: string;
         
-    @Field({description: `Status of the note: Pending (awaiting review), Active (in use), or Revoked (disabled).`}) 
+    @Field({description: `Lifecycle status of the note. Pending = awaiting approval, Active = vetted and injectable, Provisional = written in-flight by an agent (immediately injectable, awaiting Memory Manager hardening to Active), Revoked = superseded/withdrawn, Archived = retired by consolidation or decay.`}) 
     @MaxLength(20)
     Status: string;
         
@@ -5699,6 +5700,10 @@ export class MJAIAgentNote_ {
     @Field(() => Float, {nullable: true, description: `Composite importance score (0-10) computed from 7 signals: recency, LLM-importance, relevance, uniqueness, correction boost, goal alignment, user mark. Replaces raw AccessCount for authority and retention decisions.`}) 
     ImportanceScore?: number;
         
+    @Field({description: `Type of author that created the note: Agent = written in-flight during an agent run, MemoryManager = extracted/consolidated by the scheduled Memory Manager, User = manually created by a person.`}) 
+    @MaxLength(20)
+    AuthorType: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -5716,6 +5721,7 @@ export class MJAIAgentNote_ {
     SourceConversation?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     SourceConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -5829,6 +5835,9 @@ export class CreateMJAIAgentNoteInput {
     @Field(() => Float, { nullable: true })
     ImportanceScore: number | null;
 
+    @Field({ nullable: true })
+    AuthorType?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -5916,6 +5925,9 @@ export class UpdateMJAIAgentNoteInput {
 
     @Field(() => Float, { nullable: true })
     ImportanceScore?: number | null;
+
+    @Field({ nullable: true })
+    AuthorType?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8055,6 +8067,7 @@ each time the agent processes a prompt step.`})
     User?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -10461,6 +10474,9 @@ if this limit is exceeded.`})
     @Field({nullable: true, description: `Agent-type-specific configuration JSON, validated against the agent type's ConfigSchema (when one is published) in the server-side entity subclass. For Realtime-type co-agents this holds the realtime profile: preferred model, per-provider voice settings, tone/speaking style (folded into the session system prompt at mint), user-override policy, and narration pacing. Null = type defaults apply.`}) 
     TypeConfiguration?: string;
         
+    @Field(() => Boolean, {description: `When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.`}) 
+    AllowMemoryWrite: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -10803,6 +10819,9 @@ export class CreateMJAIAgentInput {
     @Field({ nullable: true })
     TypeConfiguration: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    AllowMemoryWrite?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -11010,6 +11029,9 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     TypeConfiguration?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowMemoryWrite?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -34407,8 +34429,9 @@ export class MJConversationDetailArtifact_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    ConversationDetail: string;
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ConversationDetail?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -34611,8 +34634,9 @@ export class MJConversationDetailAttachment_ {
     @MaxLength(36)
     ArtifactVersionID?: string;
         
-    @Field() 
-    ConversationDetail: string;
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ConversationDetail?: string;
         
     @Field() 
     @MaxLength(50)
@@ -34855,8 +34879,9 @@ export class MJConversationDetailRating_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field() 
-    ConversationDetail: string;
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ConversationDetail?: string;
         
     @Field() 
     @MaxLength(100)
@@ -35120,6 +35145,7 @@ export class MJConversationDetail_ {
     ArtifactVersion?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     Parent?: string;
         
     @Field({nullable: true}) 
@@ -66139,6 +66165,7 @@ export class MJReport_ {
     Conversation?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
@@ -75278,6 +75305,7 @@ export class MJTask_ {
     Project?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
     ConversationDetail?: string;
         
     @Field({nullable: true}) 
