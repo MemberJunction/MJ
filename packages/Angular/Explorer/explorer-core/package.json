@@ -8,7 +8,7 @@
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"No tests configured yet\"",
+    "test": "vitest run",
     "prebuild": "mj codegen manifest --exclude-packages @memberjunction --appDir ../../../../packages/MJExplorer --output /dev/null --lazy-config ./src/generated/lazy-feature-config.ts || echo 'Warning: mj codegen manifest not available, using existing lazy-feature-config'",
     "build": "ngc",
     "watch": "ngc -w"
