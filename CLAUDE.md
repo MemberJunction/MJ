@@ -1336,6 +1336,44 @@ module.exports = {
 
 Monitor SQL Server wait types (RESOURCE_SEMAPHORE, THREADPOOL) to tune pool size. The pool is created once at server startup and reused throughout the application lifecycle.
 
+## CodeGen Database Connections (SQL Server + PostgreSQL)
+
+The `databaseSettings.connectionPool` block above governs the **runtime MJAPI** pool. CodeGen (`mj codegen`) is a separate process with its own short-lived pool, configured via `codegenPool` at the top level of `mj.config.cjs`:
+
+```javascript
+module.exports = {
+  // ... other top-level codegen-lib config (dbHost, codeGenLogin, etc.)
+  codegenPool: {
+    max: 10,                    // Max pool connections
+    min: 2,                     // Min idle connections kept open
+    idleTimeoutMillis: 30000,   // Close idle connections after this many ms
+    connectionTimeoutMillis: 30000, // New-connection acquisition timeout
+    pgStatementTimeoutMs: 120000,   // PostgreSQL-only: statement_timeout GUC per checked-out connection
+  },
+};
+```
+
+All five knobs are **optional** — when omitted the underlying driver defaults apply (`mssql`: max 10; `pg`'s `PGConnectionManager`: max 20, min 2). This matches the historical CodeGen behavior, so adding the block is opt-in tuning, not a required change.
+
+### Behavior
+- **Lazy + module-cached pool**: both `MSSQLConnection()` (SQL Server) and `PGConnection()` (PostgreSQL) build their config and open the pool on first call, then cache the pool at the module level so repeated CodeGen operations within a single process reuse the same pool. The config is built **after** `initializeConfig()` runs, so config values from `mj.config.cjs` / `.env` are picked up correctly (the previous module-load-time destructure produced empty values when callers did `await import('@memberjunction/codegen-lib')` before `initializeConfig()`).
+- **Platform dispatch via factory**: `RunCodeGenBase.setupDataSource()` resolves the concrete `CodeGenDatabaseProvider` via `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, configInfo.dbPlatform)` and calls its `SetupDataSource()` method. Adding a new platform is `@RegisterClass(CodeGenDatabaseProvider, 'newplatform')` on the new provider class — no orchestrator changes.
+- **`pgStatementTimeoutMs`** is the PostgreSQL equivalent of `dbRequestTimeout`. PG's `pg.Pool` has no pool-wide request-timeout knob, so we hook the pool's `connect` event and set `statement_timeout` GUC per checked-out client. `dbRequestTimeout` and `MJ_CODEGEN_REQUEST_TIMEOUT` continue to apply only to SQL Server's mssql pool.
+
+### CodeGen Environment Variables
+
+The CodeGen-time database connection params come from `configInfo.dbHost` / `dbPort` / `dbDatabase` / `codeGenLogin` / `codeGenPassword`, which are resolved (in order) from `mj.config.cjs`, then env vars, then defaults. When `dbPlatform === 'postgresql'`, the PG-prefixed env vars take precedence over their SQL-Server-named siblings — so an existing PG-targeted `.env` keeps working without renaming:
+
+| Field            | PostgreSQL env (preferred)  | SQL Server / generic env | Fallback |
+|------------------|-----------------------------|--------------------------|----------|
+| `dbHost`         | `PG_HOST`                   | `DB_HOST`                | `localhost` |
+| `dbPort`         | `PG_PORT`                   | `DB_PORT`                | `5432` (PG) / `1433` (SQL Server) |
+| `dbDatabase`     | `PG_DATABASE`               | `DB_DATABASE`            | `''` |
+| `codeGenLogin`   | `PG_USERNAME`               | `CODEGEN_DB_USERNAME`    | `''` |
+| `codeGenPassword`| `PG_PASSWORD`               | `CODEGEN_DB_PASSWORD`    | `''` |
+
+Env-var precedence is resolved **once**, in `DEFAULT_CODEGEN_CONFIG` inside `Config/config.ts`. CodeGen provider code reads `configInfo.*` directly — `process.env.PG_*` is not consulted at the connection layer. This keeps env resolution in one place and avoids the two-layer trap of "resolved at config time, then re-resolved at connection time."
+
 ## MJAPI Public URL Configuration
 
 When MJAPI needs to communicate with remote services (like Skip API), it sends a callback URL so the remote service can make requests back to MJAPI. By default, this URL is constructed from `baseUrl`, `graphqlPort`, and `graphqlRootPath` (e.g., `http://localhost:4000/`).

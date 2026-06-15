@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, SetProvider, UserInfo } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -7,15 +7,22 @@ import {
     CascadeDeleteContext,
     FullTextSearchResult,
     PhasedExecutionResult,
+    DataSourceResult,
 } from '../../codeGenDatabaseProvider';
-import { configInfo } from '../../../Config/config';
-import { logError, logWarning } from '../../../Misc/status_logging';
+import { configInfo, mj_core_schema } from '../../../Config/config';
+import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
 } from '@memberjunction/generic-database-provider';
-import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from '@memberjunction/postgresql-dataprovider';
+import {
+    POSTGRESQL_PROCEDURE_PARAM_LIMIT,
+    PostgreSQLDataProvider,
+    PostgreSQLProviderConfigData,
+} from '@memberjunction/postgresql-dataprovider';
+import { PGConnection, getPgConfig } from '../../../Config/pg-connection';
+import { PostgreSQLCodeGenConnection } from './PostgreSQLCodeGenConnection';
 import * as fs from 'fs';
 import path from 'path';
 import { executeWithFallback } from './viewFallback';
@@ -41,6 +48,71 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
     /** @inheritdoc */
     get PlatformKey(): DatabasePlatform {
         return 'postgresql';
+    }
+
+    /**
+     * PostgreSQL implementation of {@link CodeGenDatabaseProvider.SetupDataSource}.
+     *
+     * Acquires the module-cached `pg.Pool` via {@link PGConnection} (so repeated
+     * CodeGen operations reuse the same pool — matching SQL Server's behavior),
+     * wires up `PostgreSQLDataProvider`, registers it as the active provider,
+     * and loads the audit user.
+     *
+     * **User-loading asymmetry** — SQL Server uses `UserCache.Instance.Refresh(pool)`
+     * which is hard-typed to `mssql.ConnectionPool` in `@memberjunction/sqlserver-dataprovider`.
+     * Refactoring it to be cross-platform would touch that package's public
+     * API; until then PG hand-queries `vwUsers`/`vwUserRoles` here. Same
+     * audit-user semantics (find Owner, else first user), just a different
+     * load path. Tracked for follow-up: unify behind a platform-agnostic
+     * cache that takes a `CodeGenConnection`.
+     *
+     * **Env var resolution** — PG_HOST / PG_PORT / PG_DATABASE / PG_USERNAME /
+     * PG_PASSWORD now flow through `configInfo.{dbHost,dbPort,dbDatabase,codeGenLogin,codeGenPassword}`
+     * via `DEFAULT_CODEGEN_CONFIG` (see `Config/config.ts`). The provider just
+     * reads `configInfo`.
+     */
+    async SetupDataSource(): Promise<DataSourceResult> {
+        startSpinner('Initializing database connection...');
+        const pool = await PGConnection();
+        const pgConfig = getPgConfig()!;
+        const coreSchema = mj_core_schema();
+
+        const dpConfig = new PostgreSQLProviderConfigData(
+            {
+                Host: pgConfig.Host,
+                Port: pgConfig.Port ?? 5432,
+                Database: pgConfig.Database,
+                User: pgConfig.User,
+                Password: pgConfig.Password,
+            },
+            coreSchema,
+            1, // checkRefreshIntervalSeconds: must be > 0 to trigger initial metadata load
+        );
+        const provider = new PostgreSQLDataProvider();
+        await provider.Config(dpConfig);
+        SetProvider(provider);
+
+        const conn = new PostgreSQLCodeGenConnection(pool);
+
+        const usersResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUsers"');
+        const rolesResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUserRoles"');
+
+        const userInfos: UserInfo[] = usersResult.recordset.map((user: Record<string, unknown>) => {
+            (user as Record<string, unknown>).UserRoles = rolesResult.recordset.filter(
+                (role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string),
+            );
+            return new UserInfo(provider, user);
+        });
+
+        const userMatch = userInfos.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
+        const currentUser = userMatch ?? userInfos[0];
+        if (!currentUser) {
+            throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
+        }
+
+        const connectionInfo = `${pgConfig.Host}:${pgConfig.Port ?? 5432}/${pgConfig.Database}`;
+        succeedSpinner('PostgreSQL connection initialized: ' + connectionInfo);
+        return { provider, connection: conn, currentUser, connectionInfo };
     }
 
     /**

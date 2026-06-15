@@ -548,8 +548,38 @@ const configInfoSchema = z.object({
    * connection pool. Defaults to 120000 (2 minutes). Set in `mj.config.cjs` or
    * via the `MJ_CODEGEN_REQUEST_TIMEOUT` environment variable when long-running
    * CodeGen steps (e.g. spUpdateExistingEntityFieldsFromSchema) exceed the default.
+   *
+   * Applies only to SQL Server (`dbPlatform === 'sqlserver'`). For PostgreSQL,
+   * configure {@link codegenPool}.pgStatementTimeoutMs instead.
    */
   dbRequestTimeout: z.coerce.number().int().positive().optional(),
+  /**
+   * Optional CodeGen-time database connection pool configuration. Applies
+   * to both `MSSQLConnection()` (SQL Server) and `PGConnection()` (PostgreSQL).
+   * When omitted, the underlying driver defaults are used (mssql: 10 max;
+   * pg.Pool: 10 max via `PGConnectionManager`'s defaults), which is what
+   * CodeGen has historically used.
+   *
+   * For runtime (MJAPI) pool settings, see
+   * `@memberjunction/server`'s `databaseSettings.connectionPool` — that is
+   * a separate, long-lived service pool and is independent of CodeGen.
+   */
+  codegenPool: z.object({
+    /** Max pool connections. mssql / pg.Pool defaults to 10 when unset. */
+    max: z.coerce.number().int().positive().optional(),
+    /** Min idle connections kept open. pg.Pool default 0; mssql package has no min. */
+    min: z.coerce.number().int().nonnegative().optional(),
+    /** Idle timeout in ms before a pooled connection is closed. */
+    idleTimeoutMillis: z.coerce.number().int().positive().optional(),
+    /** New-connection acquisition timeout in ms. */
+    connectionTimeoutMillis: z.coerce.number().int().positive().optional(),
+    /**
+     * PostgreSQL-only: `statement_timeout` GUC applied per pooled connection,
+     * in milliseconds. Mirrors {@link dbRequestTimeout} for SQL Server.
+     * When unset, PostgreSQL applies no statement timeout (its default).
+     */
+    pgStatementTimeoutMs: z.coerce.number().int().positive().optional(),
+  }).optional(),
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
@@ -567,14 +597,29 @@ const configInfoSchema = z.object({
  *
  * Database connection settings come from environment variables.
  */
+const _DEFAULT_DB_PLATFORM = resolveDbPlatformFromEnv() ?? 'sqlserver';
+const _IS_PG_DEFAULT = _DEFAULT_DB_PLATFORM === 'postgresql';
+/**
+ * Resolve a connection field from PG_*-prefixed env vars when `dbPlatform`
+ * defaults to PostgreSQL, falling back to the SQL-Server-style env var name
+ * and then a baseline default. Keeps env-var precedence inside `configInfo`
+ * (one resolution layer) rather than scattered through provider code.
+ */
+function _resolveConnEnv(pgName: string, ssName: string, fallback: string): string {
+  return (_IS_PG_DEFAULT ? process.env[pgName] : undefined) ?? process.env[ssName] ?? fallback;
+}
+
 export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
-  // Database connection settings (from environment variables)
-  dbPlatform: resolveDbPlatformFromEnv() ?? 'sqlserver',
-  dbHost: process.env.DB_HOST ?? 'localhost',
-  dbPort: parseInt(process.env.DB_PORT ?? '1433', 10),
-  dbDatabase: process.env.DB_DATABASE ?? '',
-  codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
-  codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
+  // Database connection settings (from environment variables). For PostgreSQL,
+  // the PG_HOST / PG_PORT / PG_DATABASE / PG_USERNAME / PG_PASSWORD env vars
+  // take precedence over their DB_* / CODEGEN_DB_* counterparts so existing
+  // PG-targeted .env files keep working without changes.
+  dbPlatform: _DEFAULT_DB_PLATFORM,
+  dbHost: _resolveConnEnv('PG_HOST', 'DB_HOST', 'localhost'),
+  dbPort: parseInt(_resolveConnEnv('PG_PORT', 'DB_PORT', _IS_PG_DEFAULT ? '5432' : '1433'), 10),
+  dbDatabase: _resolveConnEnv('PG_DATABASE', 'DB_DATABASE', ''),
+  codeGenLogin: _resolveConnEnv('PG_USERNAME', 'CODEGEN_DB_USERNAME', ''),
+  codeGenPassword: _resolveConnEnv('PG_PASSWORD', 'CODEGEN_DB_PASSWORD', ''),
   dbInstanceName: process.env.DB_INSTANCE_NAME,
   dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE) ? 'Y' : 'N',
   dbRequestTimeout: process.env.MJ_CODEGEN_REQUEST_TIMEOUT
