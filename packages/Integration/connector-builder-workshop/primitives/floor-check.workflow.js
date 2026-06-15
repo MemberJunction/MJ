@@ -730,6 +730,42 @@ if (hybridE2E && hybridE2E.assertions) {
     }
 }
 
+// ── Deploy-dry-run gate (consensus B): the build must PROVE the metadata DEPLOYS, not just that it
+// parses. Every deploy-time defect (FK `@lookup` rollback, soft-PK on a non-column, enum/width
+// violation, the flat DAG) is structurally invisible to extract→verify→review — they operate on the
+// metadata FILE; nothing pushes it. journal.deployDryRun is produced by a scratch-DB `mj sync push`
+// + full-catalog ApplyAll. A connector is NOT "done" until it deploys clean with the DAG built. ──
+const deploy = journal.deployDryRun ?? null;
+if (!deploy) {
+    failures.push({ rule: 'deploy-dry-run-missing', detail: 'deploy-dry-run did not run — the build never pushed the metadata to a scratch DB + ApplyAll, so FK-rollback / soft-PK-non-column / enum / flat-DAG defects are unproven. Deployability is a build gate, not a human\'s job (consensus B).' });
+} else {
+    if (deploy.pushClean !== true) {
+        failures.push({ rule: 'deploy-push-failed', detail: `scratch-DB mj-sync-push did not complete clean: ${String(deploy.error ?? deploy.message ?? 'see deployDryRun').slice(0, 240)} — dense forward-ref FK @lookup rollback / unresolved lookup / enum-width violation must be caught here, at build time.` });
+    }
+    if (deploy.applyAllRan !== true) {
+        failures.push({ rule: 'deploy-applyall-failed', detail: 'full-catalog ApplyAll did not run/complete on the scratch DB — the taxonomy DAG + at-scale DDL (the two things that only appear over the FULL catalog) were never exercised. A single-object ApplyAll does NOT satisfy this.' });
+    }
+    if (deploy.fkEdgesResolved === false) {
+        failures.push({ rule: 'deploy-dag-flat', detail: 'the FK graph deployed FLAT (RelatedIntegrationObjectID null across declared FKs) — the soft-FK was stripped to dodge a rollback but never re-resolved, so the DAG has no dependency edges. Post-commit FK resolution must populate it.' });
+    }
+}
+
+// ── Spec-conformance gate (consensus A6): when a machine-readable spec exists, the connector's REQUESTS
+// must conform to it (path/method/param/body/content-type) — distinct from "fields were parsed from the
+// spec". This is the free, deterministic check that auto-catches the wrong-paths class. Gate only when a
+// spec was actually found (enumerate-catalog measured a real OpenAPI/SDL universe); otherwise record the
+// scraped-source ceiling for the per-capability confidence rollup. ──
+const conformance = journal.specConformance ?? null;
+const hasMachineSpec = !!(journal.sources && /openapi|swagger|graphql|sdl|introspection/i.test(JSON.stringify(journal.sources)));
+if (hasMachineSpec) {
+    if (!conformance) {
+        failures.push({ rule: 'spec-conformance-missing', detail: 'a machine-readable spec exists (OpenAPI/SDL) but the spec-conformance diff did not run — the single highest-value credential-free check (every declared path/method/param/body diffed against the vendor\'s own spec) was skipped. It auto-catches the wrong-paths class (consensus A6).' });
+    } else if (conformance.pass !== true) {
+        const nonconf = Array.isArray(conformance.nonConforming) ? conformance.nonConforming.length : (conformance.nonConformingCount ?? '?');
+        failures.push({ rule: 'spec-nonconforming', detail: `${nonconf} connector request(s) do NOT conform to the vendor's machine-readable spec (wrong path/method/param/body/content-type). Conformance is a gate when a spec exists; read/pull confidence cannot be claimed OpenAPI-validated otherwise.` });
+    }
+}
+
 // ── EXTRACTION_REPORT_MATRIX.csv coverage + PK-defer rate (JS over cat'd bytes). ──
 const emittedIOCount = Number.isInteger(extractStats.objectsExtracted)
     ? extractStats.objectsExtracted
