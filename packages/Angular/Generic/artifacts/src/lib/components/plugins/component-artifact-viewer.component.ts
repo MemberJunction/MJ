@@ -1,4 +1,4 @@
-import { Component, ViewChild, AfterViewInit, OnInit, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, OnInit, OnChanges, SimpleChanges, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
@@ -102,7 +102,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     return !!this.component?.namespace || !!this.component?.code
   }
 
-  constructor(private adapter: AngularAdapterService) {
+  constructor(private adapter: AngularAdapterService, private cdr: ChangeDetectorRef) {
     super();
   }
 
@@ -428,6 +428,11 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       this.formRecordIsReal = false;
       this.formRecordLabel = 'Mock data';
     }
+    // This runs after an await on a RunView that resolves outside Angular's zone,
+    // so nothing would refresh the view until the next user event — leaving the
+    // "Could not bind a record" message up until the user clicks. Force CD so the
+    // auto-loaded record binds and the form mounts immediately on first render.
+    this.cdr.detectChanges();
   }
 
   /**
