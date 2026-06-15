@@ -370,6 +370,21 @@ describe('DatabaseProvisionPhase', () => {
 
       expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('cfg', 5555);
     });
+
+    it('should prefer PG_HOST/PG_PORT from .env over DB_HOST/DB_PORT (PG install)', async () => {
+      // Mirrors PreflightPhase: codegen-lib's DEFAULT_CODEGEN_CONFIG resolves
+      // PG_* before DB_* on PostgreSQL installs, so the connectivity check
+      // here must follow the same precedence to avoid a false-negative
+      // unreachable error against the stale DB_HOST target.
+      mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 8 });
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.env'));
+      mockFs.ReadText.mockResolvedValue("PG_HOST='pg.docker'\nPG_PORT=5433\nDB_HOST='ignored'\nDB_PORT=1433\n");
+
+      const ctx = makeContext({ Yes: true });
+      await phase.Run(ctx);
+
+      expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('pg.docker', 5433);
+    });
   });
 
   // -----------------------------------------------------------------------

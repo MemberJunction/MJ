@@ -303,6 +303,64 @@ describe('ConfigurePhase', () => {
       expect(writtenContent).not.toContain("DB_USERNAME='MJ_Connect'");
     });
 
+    it('should sync PG_HOST/PG_PORT and PG creds root → MJAPI when present (PG install)', async () => {
+      // PostgreSQL install path — codegen-lib accepts PG_* env vars on PG
+      // installs, so root → MJAPI sync must propagate those keys too.
+      // Without this, a PG user editing root `.env` would leave MJAPI with
+      // the original PG credentials and the API would silently connect to
+      // the wrong target.
+      mockFs.FileExists.mockResolvedValue(true);
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const rootEnv = [
+        "PG_HOST='pg.docker'",
+        'PG_PORT=5433',
+        "PG_DATABASE='mj_pg'",
+        "PG_USERNAME='mj_codegen'",
+        "PG_PASSWORD='PgStrong!Pass'",
+        "MJ_BASE_ENCRYPTION_KEY='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='",
+        '',
+      ].join('\n');
+      const mjapiEnv = [
+        "PG_HOST='localhost'",
+        'PG_PORT=5432',
+        "PG_DATABASE='mj_old'",
+        "PG_USERNAME='old_user'",
+        "PG_PASSWORD='old_pwd'",
+        "ASK_SKIP_API_URL='http://localhost:8000'",  // MJAPI-only key — must survive
+        '',
+      ].join('\n');
+
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (p.includes('MJAPI') && p.endsWith('.env')) return mjapiEnv;
+        if (p.endsWith('.env')) return rootEnv;
+        return '';
+      });
+
+      const ctx = makeContext({ Yes: true });
+      const result = await phase.Run(ctx);
+
+      const mjapiEnvWritten = result.FilesWritten.find((f: string) => f.includes('MJAPI') && f.endsWith('.env'));
+      expect(mjapiEnvWritten).toBeDefined();
+
+      const writtenContent = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.includes('MJAPI') && p.endsWith('.env')
+      )?.[1] as string;
+
+      // PG fields should match root .env, not the original MJAPI values
+      expect(writtenContent).toContain("PG_HOST='pg.docker'");
+      expect(writtenContent).toContain("PG_PORT='5433'");
+      expect(writtenContent).toContain("PG_DATABASE='mj_pg'");
+      expect(writtenContent).toContain("PG_USERNAME='mj_codegen'");
+      expect(writtenContent).toContain("PG_PASSWORD='PgStrong!Pass'");
+      // MJAPI-only key should survive
+      expect(writtenContent).toContain("ASK_SKIP_API_URL='http://localhost:8000'");
+      // Original wrong PG values should be gone
+      expect(writtenContent).not.toContain("PG_HOST='localhost'");
+      expect(writtenContent).not.toContain("PG_USERNAME='old_user'");
+    });
+
     it('should not overwrite existing mj.config.cjs', async () => {
       mockFs.FileExists.mockImplementation(async (path: string) => {
         if (path.endsWith('mj.config.cjs')) return true;

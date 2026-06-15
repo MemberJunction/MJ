@@ -346,6 +346,33 @@ describe('PreflightPhase', () => {
       // Should fall back to config since .env has no DB fields
       expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('cfg', 5555);
     });
+
+    it('should prefer PG_HOST/PG_PORT from .env over DB_HOST/DB_PORT (PG install)', async () => {
+      // PostgreSQL installs write PG_* env vars; codegen-lib's
+      // DEFAULT_CODEGEN_CONFIG resolves PG_* before DB_* on PG installs.
+      // Preflight must read the same precedence so a PG `.env` doesn't yield
+      // a false-negative "missing credentials" / wrong-host preflight.
+      mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 5 });
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.env'));
+      mockFs.ReadText.mockResolvedValue(`PG_HOST='pg.docker'\nPG_PORT=5433\nDB_HOST='ignored'\nDB_PORT=1433\n`);
+
+      const ctx = makeContext();
+      await phase.Run(ctx);
+
+      // PG_HOST / PG_PORT win over DB_HOST / DB_PORT when both are present.
+      expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('pg.docker', 5433);
+    });
+
+    it('should fall back to DB_HOST/DB_PORT when PG_* keys are absent (SQL Server install)', async () => {
+      mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 5 });
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.env'));
+      mockFs.ReadText.mockResolvedValue(`DB_HOST='ss.docker'\nDB_PORT=1444\n`);
+
+      const ctx = makeContext();
+      await phase.Run(ctx);
+
+      expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('ss.docker', 1444);
+    });
   });
 
   // ─── OS detection ──────────────────────────────────────────────────

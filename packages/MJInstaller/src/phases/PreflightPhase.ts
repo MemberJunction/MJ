@@ -377,10 +377,17 @@ export class PreflightPhase {
   }
 
   /**
-   * Best-effort read of `<targetDir>/.env` to extract `DB_HOST` and `DB_PORT`.
-   * Returns null when no `.env` exists, isn't readable, or neither key is set;
-   * this lets the caller fall back to config defaults without special-casing
-   * failures. Any read or parse error is treated as "no override available."
+   * Best-effort read of `<targetDir>/.env` to extract the database host/port
+   * the app will actually use. Returns null when no `.env` exists, isn't
+   * readable, or neither key is set; this lets the caller fall back to config
+   * defaults without special-casing failures. Any read or parse error is
+   * treated as "no override available."
+   *
+   * Reads PG-style keys (`PG_HOST` / `PG_PORT`) first, then falls back to the
+   * SQL-Server / generic names (`DB_HOST` / `DB_PORT`). This matches
+   * codegen-lib's `DEFAULT_CODEGEN_CONFIG` env-var precedence (PG_* wins on
+   * PostgreSQL installs, SQL Server falls back to DB_*) so a PG `.env`
+   * doesn't yield a false-negative "missing credentials" preflight.
    */
   private async readEnvDbTarget(targetDir: string): Promise<{ host?: string; port?: number } | null> {
     const envPath = path.join(targetDir, '.env');
@@ -388,8 +395,8 @@ export class PreflightPhase {
       if (!(await this.fileSystem.FileExists(envPath))) return null;
       const raw = await this.fileSystem.ReadText(envPath);
       if (typeof raw !== 'string' || raw.length === 0) return null;
-      const host = this.parseDotenvValue(raw, 'DB_HOST');
-      const portStr = this.parseDotenvValue(raw, 'DB_PORT');
+      const host = this.parseDotenvValue(raw, 'PG_HOST') ?? this.parseDotenvValue(raw, 'DB_HOST');
+      const portStr = this.parseDotenvValue(raw, 'PG_PORT') ?? this.parseDotenvValue(raw, 'DB_PORT');
       const port = portStr ? parseInt(portStr, 10) : undefined;
 
       if (host || (port !== undefined && Number.isFinite(port))) {

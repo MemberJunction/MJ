@@ -725,11 +725,19 @@ ${versionSection}${newUserSection}  output: [],
    * should stay where it is.
    */
   private static readonly ROOT_TO_MJAPI_SYNC_KEYS: ReadonlyArray<string> = Object.freeze([
+    // SQL Server / generic env var names
     'DB_HOST', 'DB_PORT', 'DB_DATABASE',
     'DB_USERNAME', 'DB_PASSWORD',
     'CODEGEN_DB_USERNAME', 'CODEGEN_DB_PASSWORD',
     'DB_TRUST_SERVER_CERTIFICATE',
     'MJ_CORE_SCHEMA',
+    // PostgreSQL-preferred env var names — codegen-lib's `DEFAULT_CODEGEN_CONFIG`
+    // accepts these when `dbPlatform === 'postgresql'`, so a PG install whose
+    // `.env` uses the PG_* names must have those keys synced root → MJAPI too.
+    // Without this, a re-run of `mj install` would update the root `.env` but
+    // leave MJAPI pointing at the stale original PG credentials.
+    'PG_HOST', 'PG_PORT', 'PG_DATABASE',
+    'PG_USERNAME', 'PG_PASSWORD',
   ]);
 
   /**

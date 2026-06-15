@@ -372,14 +372,20 @@ PRINT '=== Validation complete ===';
   }
 
   /**
-   * Best-effort read of `<targetDir>/.env` to extract `DB_HOST` and `DB_PORT`.
+   * Best-effort read of `<targetDir>/.env` to extract the database host/port.
    * Returns null when no `.env` exists or neither key is set, letting the
    * caller fall back to config / defaults. Errors are swallowed silently —
    * this is a diagnostic enhancement, not a hard requirement.
    *
+   * Reads `PG_HOST` / `PG_PORT` first, then falls back to `DB_HOST` / `DB_PORT`
+   * so a PostgreSQL install with PG-named env vars doesn't yield a stale
+   * connectivity target. Matches codegen-lib's `DEFAULT_CODEGEN_CONFIG`
+   * env-var precedence and {@link PreflightPhase.readEnvDbTarget}.
+   *
    * Mirrors {@link PreflightPhase.readEnvDbTarget} — kept duplicated rather
    * than extracted because the two phases shouldn't be coupled through a
-   * shared helper for a small piece of optional logic.
+   * shared helper for a small piece of optional logic. Keep both copies in
+   * sync when changing key precedence.
    */
   private async readEnvDbTarget(targetDir: string): Promise<{ host?: string; port?: number } | null> {
     const envPath = path.join(targetDir, '.env');
@@ -387,8 +393,8 @@ PRINT '=== Validation complete ===';
       if (!(await this.fileSystem.FileExists(envPath))) return null;
       const raw = await this.fileSystem.ReadText(envPath);
       if (typeof raw !== 'string' || raw.length === 0) return null;
-      const host = this.parseDotenvValue(raw, 'DB_HOST');
-      const portStr = this.parseDotenvValue(raw, 'DB_PORT');
+      const host = this.parseDotenvValue(raw, 'PG_HOST') ?? this.parseDotenvValue(raw, 'DB_HOST');
+      const portStr = this.parseDotenvValue(raw, 'PG_PORT') ?? this.parseDotenvValue(raw, 'DB_PORT');
       const port = portStr ? parseInt(portStr, 10) : undefined;
 
       if (host || (port !== undefined && Number.isFinite(port))) {
