@@ -57,9 +57,9 @@ function parseResult(json: string): { success: boolean; currentUrl?: string; det
 }
 
 describe('Remote Browser — MapToolToAction (tool → server action)', () => {
-  it('maps browser_OpenUrl to an openUrl action carrying the url', () => {
+  it('maps browser_OpenUrl to a navigate action carrying the url', () => {
     expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.OpenUrl, { url: 'https://example.com' }))
-      .toEqual({ Kind: 'openUrl', Url: 'https://example.com' });
+      .toEqual({ Kind: 'navigate', Url: 'https://example.com' });
   });
 
   it('throws a model-readable error when browser_OpenUrl is missing its url', () => {
@@ -168,7 +168,7 @@ describe('RemoteBrowserChannel — plugin contract + ApplyAgentTool round-trip',
     expect(log.Calls).toHaveLength(1);
     expect(log.Calls[0].Query).toContain('ExecuteRemoteBrowserAction');
     expect(log.Calls[0].Variables).toMatchObject({
-      agentSessionID: 'session-1', kind: 'openUrl', url: 'https://example.com',
+      agentSessionID: 'session-1', kind: 'navigate', url: 'https://example.com',
       selector: null, x: null, y: null, text: null, key: null, deltaX: null, deltaY: null, ms: null
     });
     // PERCEPTION: the agent is told where the page went (no spoken reply requested).
@@ -224,5 +224,87 @@ describe('RemoteBrowserChannel — plugin contract + ApplyAgentTool round-trip',
     const result = parseResult(await channel.ApplyAgentTool('browser_Forward', 'not json'));
     expect(result.success).toBe(true);
     expect(log.Calls[0].Variables.kind).toBe('forward');
+  });
+});
+
+describe('RemoteBrowserChannel — live screencast (pushed frames)', () => {
+  let channel: RemoteBrowserChannel;
+  let log: CtxLog;
+
+  beforeEach(() => {
+    channel = new RemoteBrowserChannel();
+    log = { Notes: [], Calls: [] };
+  });
+
+  /** Minimal surface double recording the frames it was asked to render + its Streaming flag. */
+  function makeSurface(): RemoteBrowserSurfaceComponent & { RenderedFrames: string[] } {
+    const surface = {
+      Streaming: false,
+      RenderedFrames: [] as string[],
+      RenderFrame(dataBase64: string) {
+        this.RenderedFrames.push(dataBase64);
+      }
+    };
+    return surface as unknown as RemoteBrowserSurfaceComponent & { RenderedFrames: string[] };
+  }
+
+  /** Flushes microtasks so BindSurface's fire-and-forget startScreencast resolves. */
+  function flush(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  it('starts the screencast and flips the surface to Streaming when the backend supports it', async () => {
+    channel.Initialize(makeContext(log, { StartRemoteBrowserScreencast: { Streaming: true } }));
+    const surface = makeSurface();
+
+    channel.BindSurface(surface);
+    await flush();
+
+    // The start mutation ran with the session id…
+    const startCall = log.Calls.find(c => c.Query.includes('StartRemoteBrowserScreencast'));
+    expect(startCall).toBeTruthy();
+    expect(startCall?.Variables).toMatchObject({ agentSessionID: 'session-1' });
+    // …and the surface was switched to canvas mode.
+    expect(surface.Streaming).toBe(true);
+  });
+
+  it('forwards pushed frames to the surface canvas once streaming', async () => {
+    channel.Initialize(makeContext(log, { StartRemoteBrowserScreencast: { Streaming: true } }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+    await flush();
+
+    channel.OnScreencastFrame('AAAA');
+    channel.OnScreencastFrame('BBBB');
+
+    expect(surface.RenderedFrames).toEqual(['AAAA', 'BBBB']);
+  });
+
+  it('does NOT flip Streaming or forward frames when the backend lacks ScreenStreaming', async () => {
+    channel.Initialize(makeContext(log, { StartRemoteBrowserScreencast: { Streaming: false } }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+    await flush();
+
+    expect(surface.Streaming).toBe(false);
+    channel.OnScreencastFrame('AAAA');
+    expect(surface.RenderedFrames).toEqual([]); // ignored — channel is not streaming
+  });
+
+  it('stops the screencast on UnbindSurface when it had started', async () => {
+    channel.Initialize(makeContext(log, { StartRemoteBrowserScreencast: { Streaming: true } }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+    await flush();
+
+    channel.UnbindSurface();
+    await flush();
+
+    const stopCall = log.Calls.find(c => c.Query.includes('StopRemoteBrowserScreencast'));
+    expect(stopCall).toBeTruthy();
+    expect(stopCall?.Variables).toMatchObject({ agentSessionID: 'session-1' });
+    // After unbind, late frames are ignored (not streaming, no surface).
+    channel.OnScreencastFrame('CCCC');
+    expect(surface.RenderedFrames).toEqual([]);
   });
 });

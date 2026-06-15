@@ -161,6 +161,20 @@ interface RealtimeDelegationProgressPayload {
 }
 
 /**
+ * Raw shape of the JSON `message` the server publishes on the push-status topic for each live Remote
+ * Browser screencast frame (mirrors {@link RealtimeDelegationProgressPayload}, distinguished by
+ * `resolver` + `type`). Routed to the active Remote Browser channel plugin — never narrated.
+ */
+interface RemoteBrowserScreencastPayload {
+  type: 'RemoteBrowserScreencastFrame';
+  agentSessionID: string;
+  dataBase64: string;
+  width: number;
+  height: number;
+  seq: number;
+}
+
+/**
  * Result shape returned by the `StartRealtimeClientSession` server mutation.
  * The browser uses these values to open a client-direct realtime session.
  */
@@ -1590,12 +1604,63 @@ export class RealtimeSessionService {
       });
   }
 
-  /** Parses one push-status message and, if it's our delegation progress, dispatches it. */
+  /**
+   * Parses one push-status message and routes it: a Remote Browser screencast frame goes to the active
+   * Remote Browser channel's canvas; a delegation-progress event is dispatched + narrated. Other shapes
+   * (normal agent-run streams) are ignored. Screencast frames are checked FIRST and short-circuit, so the
+   * delegation path is untouched.
+   */
   private onDelegationStatusMessage(raw: string): void {
+    const frame = this.parseScreencastFrame(raw);
+    if (frame) {
+      this.routeScreencastFrame(frame);
+      return;
+    }
     const progress = this.parseProgress(raw);
     if (progress) {
       this.dispatchProgress(progress);
     }
+  }
+
+  /**
+   * Parses a push-status message and returns it only when it's a Remote Browser screencast frame for the
+   * active session — otherwise `null` (ignored, so delegation progress falls through). Matched by
+   * `resolver` + `type`, then scoped to THIS session by `agentSessionID`.
+   */
+  private parseScreencastFrame(raw: string): RemoteBrowserScreencastPayload | null {
+    let payload: { resolver?: string } & Partial<RemoteBrowserScreencastPayload>;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    const matches =
+      payload?.resolver === 'RemoteBrowserActionResolver' &&
+      payload?.type === 'RemoteBrowserScreencastFrame' &&
+      payload?.agentSessionID === this.agentSessionId &&
+      typeof payload?.dataBase64 === 'string';
+    return matches ? (payload as RemoteBrowserScreencastPayload) : null;
+  }
+
+  /**
+   * Forwards a screencast frame to the active Remote Browser channel plugin so it paints the frame on its
+   * surface canvas. The plugin is found among the session's active channels by its `ChannelName`; located
+   * via a structural guard so the service stays decoupled from the concrete channel class.
+   */
+  private routeScreencastFrame(frame: RemoteBrowserScreencastPayload): void {
+    for (const channel of this._activeChannels$.value) {
+      if (channel.ChannelName === 'Remote Browser' && this.hasOnScreencastFrame(channel)) {
+        channel.OnScreencastFrame(frame.dataBase64);
+        return;
+      }
+    }
+  }
+
+  /** Structural guard: true when the channel exposes an `OnScreencastFrame(dataBase64)` method. */
+  private hasOnScreencastFrame(
+    channel: BaseRealtimeChannelClient,
+  ): channel is BaseRealtimeChannelClient & { OnScreencastFrame(dataBase64: string): void } {
+    return typeof (channel as { OnScreencastFrame?: unknown }).OnScreencastFrame === 'function';
   }
 
   /**

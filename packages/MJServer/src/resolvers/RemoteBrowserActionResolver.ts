@@ -16,15 +16,20 @@
  *
  * @module @memberjunction/server
  */
-import { Resolver, Mutation, Query, Arg, Ctx, Float, ObjectType, Field } from 'type-graphql';
-import { AppContext } from '../types.js';
+import { Resolver, Mutation, Query, Arg, Ctx, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
+import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
-import { IRemoteBrowserSession, RemoteBrowserAction } from '@memberjunction/remote-browser-base';
+import {
+    IRemoteBrowserSession,
+    RemoteBrowserAction,
+    RemoteBrowserCapabilityNotSupportedError,
+} from '@memberjunction/remote-browser-base';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
+import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -77,12 +82,33 @@ export class RemoteBrowserSnapshot {
 }
 
 /**
+ * Result of {@link RemoteBrowserActionResolver.StartRemoteBrowserScreencast} — whether the live CDP
+ * screencast started. When `false` the backend lacks the `ScreenStreaming` capability (or the start
+ * failed); the client keeps its 700ms snapshot poll as the fallback live view. When `true` the server
+ * is now PUSHING encoded frames on the user's push-status topic and the client paints them on a canvas.
+ */
+@ObjectType()
+export class RemoteBrowserScreencastResult {
+    /** Whether the server-pushed screencast is now running for this session. */
+    @Field(() => Boolean)
+    Streaming: boolean;
+}
+
+/**
  * Resolver for the Remote Browser native realtime channel. A single {@link RemoteBrowserEngine} instance
  * (the process-wide singleton) backs every request; ownership is enforced per call against the session's
  * `UserID`.
  */
 @Resolver()
 export class RemoteBrowserActionResolver extends ResolverBase {
+    /**
+     * Agent-session ids whose live CDP screencast this resolver has already started. Keyed by
+     * `agentSessionID` so a re-issued {@link RemoteBrowserActionResolver.StartRemoteBrowserScreencast}
+     * (e.g. the surface re-binding after a tab collapse) is idempotent and never stacks two screencasts
+     * on the one session. Entries are removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserScreencast}.
+     */
+    private startedScreencasts = new Set<string>();
+
     /**
      * Execute ONE browser action relayed from the client-direct realtime session, returning the outcome +
      * resulting URL.
@@ -164,7 +190,117 @@ export class RemoteBrowserActionResolver extends ResolverBase {
         return { ScreenshotBase64: screenshot, CurrentUrl: liveSession.GetCurrentUrl() };
     }
 
+    /**
+     * Starts a live CDP screencast on the session's browser and PUSHES each encoded frame to the calling
+     * user's push-status topic — replacing the client's 700ms snapshot poll with low-latency pushed frames.
+     * Ownership-gated. Idempotent: a re-call for an already-streaming session is a no-op that reports
+     * `Streaming: true`.
+     *
+     * Capability gating: {@link IRemoteBrowserSession.StartScreencast} throws
+     * {@link RemoteBrowserCapabilityNotSupportedError} on a backend without `ScreenStreaming` — caught here
+     * and reported as `Streaming: false`, leaving the client on its polling fallback. Any other failure is
+     * logged and likewise reported as `Streaming: false` (the poll keeps the view alive).
+     *
+     * @param agentSessionID The `AIAgentSession` id the browser is bound to.
+     * @returns `{ Streaming: true }` when frames are now being pushed, else `{ Streaming: false }`.
+     */
+    @Mutation(() => RemoteBrowserScreencastResult)
+    async StartRemoteBrowserScreencast(
+        @Arg('agentSessionID', () => String) agentSessionID: string,
+        @Ctx() { userPayload, providers }: AppContext,
+        @PubSub() pubSub: PubSubEngine,
+    ): Promise<RemoteBrowserScreencastResult> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
+
+        // Idempotent: a re-bind must not stack a second screencast on the one live browser.
+        if (this.startedScreencasts.has(agentSessionID)) {
+            return { Streaming: true };
+        }
+
+        const providerName = await this.resolveProviderName(session, contextUser, provider);
+        try {
+            const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(
+                agentSessionID,
+                contextUser,
+                providerName,
+            );
+            await liveSession.StartScreencast((frame) => this.publishFrame(pubSub, userPayload, agentSessionID, frame));
+            this.startedScreencasts.add(agentSessionID);
+            return { Streaming: true };
+        } catch (err) {
+            if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
+                // Backend can't stream — the client keeps polling. Not an error condition.
+                return { Streaming: false };
+            }
+            const message = err instanceof Error ? err.message : String(err);
+            LogError(`StartRemoteBrowserScreencast failed (provider='${providerName}'): ${message}`);
+            return { Streaming: false };
+        }
+    }
+
+    /**
+     * Stops a screencast previously started by {@link RemoteBrowserActionResolver.StartRemoteBrowserScreencast}.
+     * Ownership-gated and best-effort: when no live browser exists, or `StopScreencast` rejects, the call
+     * still resolves `true` (the client's teardown should never depend on this succeeding).
+     *
+     * @param agentSessionID The `AIAgentSession` id.
+     * @returns `true` (always) once the stop has been attempted.
+     */
+    @Mutation(() => Boolean)
+    async StopRemoteBrowserScreencast(
+        @Arg('agentSessionID', () => String) agentSessionID: string,
+        @Ctx() { userPayload, providers }: AppContext,
+    ): Promise<boolean> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        await this.loadOwnedSession(agentSessionID, contextUser, provider);
+
+        this.startedScreencasts.delete(agentSessionID);
+        const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+        if (liveSession) {
+            try {
+                await liveSession.StopScreencast();
+            } catch (err) {
+                // Best-effort: a backend without ScreenStreaming throws here too; teardown ignores it.
+                const message = err instanceof Error ? err.message : String(err);
+                LogError(`StopRemoteBrowserScreencast (best-effort) for session ${agentSessionID}: ${message}`);
+            }
+        }
+        return true;
+    }
+
     // ----- internals -------------------------------------------------------------------------
+
+    /**
+     * Publishes one encoded screencast frame to the calling user's push-status topic, in the same envelope
+     * shape the conversations client already routes (mirrors `RealtimeClientSessionResolver`'s delegation
+     * progress publish). The client matches on `resolver` + `type`, then on `agentSessionID`, and paints
+     * `dataBase64` onto its canvas.
+     *
+     * @param pubSub The resolver-injected pub/sub engine.
+     * @param userPayload The calling user's payload (its `sessionId` scopes the topic to this browser).
+     * @param agentSessionID The `AIAgentSession` id the frame belongs to.
+     * @param frame The encoded viewport frame.
+     */
+    private publishFrame(
+        pubSub: PubSubEngine,
+        userPayload: UserPayload,
+        agentSessionID: string,
+        frame: { DataBase64: string; Width: number; Height: number; SequenceNumber: number },
+    ): void {
+        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+            message: JSON.stringify({
+                resolver: 'RemoteBrowserActionResolver',
+                type: 'RemoteBrowserScreencastFrame',
+                agentSessionID,
+                dataBase64: frame.DataBase64,
+                width: frame.Width,
+                height: frame.Height,
+                seq: frame.SequenceNumber,
+            }),
+            sessionId: userPayload.sessionId,
+        });
+    }
 
     /** Resolve the request user + read-write provider, throwing a clear error if unauthenticated. */
     private requireUserAndProvider(

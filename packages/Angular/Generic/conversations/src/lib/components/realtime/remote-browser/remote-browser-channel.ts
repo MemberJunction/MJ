@@ -39,6 +39,34 @@ interface ExecuteRemoteBrowserActionResult {
   } | null;
 }
 
+/**
+ * GraphQL mutation that asks the server to start PUSHING live CDP screencast frames for the session.
+ * Returns `Streaming: true` when the backend supports `ScreenStreaming` and the stream started; the
+ * channel then drives the surface's canvas. `Streaming: false` (capability absent / start failed) leaves
+ * the surface on its 700ms snapshot poll fallback.
+ */
+const START_SCREENCAST_MUTATION = `
+  mutation StartRemoteBrowserScreencast($agentSessionID: String!) {
+    StartRemoteBrowserScreencast(agentSessionID: $agentSessionID) {
+      Streaming
+    }
+  }
+`;
+
+/** GraphQL mutation that stops the server-pushed screencast (best-effort teardown). */
+const STOP_SCREENCAST_MUTATION = `
+  mutation StopRemoteBrowserScreencast($agentSessionID: String!) {
+    StopRemoteBrowserScreencast(agentSessionID: $agentSessionID)
+  }
+`;
+
+/** The narrow projection of the `StartRemoteBrowserScreencast` mutation payload the channel reads. */
+interface StartRemoteBrowserScreencastResult {
+  StartRemoteBrowserScreencast: {
+    Streaming: boolean;
+  } | null;
+}
+
 /** GraphQL query the surface fetcher runs — the live screenshot + URL of the server browser. */
 const REMOTE_BROWSER_SNAPSHOT_QUERY = `
   query RemoteBrowserSnapshot($agentSessionID: String!) {
@@ -94,6 +122,13 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   /** The live bound surface, when the channel tab's pane is instantiated. */
   private surface: RemoteBrowserSurfaceComponent | null = null;
 
+  /**
+   * Whether the server confirmed it is PUSHING screencast frames for this session (`ScreenStreaming`
+   * supported). When `true` the surface renders pushed frames on its canvas and skips its poll, and
+   * {@link OnScreencastFrame} forwards each pushed frame to it. When `false` the surface keeps polling.
+   */
+  private streaming = false;
+
   public get ChannelName(): string {
     return 'Remote Browser';
   }
@@ -140,14 +175,69 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * channel context (session id + provider live there), so the surface stays transport-
    * agnostic. Set BEFORE the surface's first change detection (the pane binds synchronously),
    * so its `ngOnInit` poll has the fetcher.
+   *
+   * Also asks the server to start a live screencast. When the backend supports `ScreenStreaming` the
+   * server starts PUSHING frames and reports `Streaming: true`; we flip the surface to canvas mode (its
+   * poll is then skipped) and {@link OnScreencastFrame} paints each pushed frame. When the backend lacks
+   * the capability (`Streaming: false`) the surface keeps the snapshot poll already running — graceful
+   * fallback, no further action.
    */
   public BindSurface(instance: RemoteBrowserSurfaceComponent): void {
     this.surface = instance;
     instance.Fetch = () => this.fetchSnapshot();
+    void this.startScreencast(instance);
   }
 
   public override UnbindSurface(): void {
+    void this.stopScreencast();
     this.surface = null;
+  }
+
+  public override Dispose(): void {
+    void this.stopScreencast();
+    super.Dispose();
+  }
+
+  /**
+   * Forwards one PUSHED screencast frame to the bound surface's canvas. Called by the session service
+   * when a `RemoteBrowserScreencastFrame` arrives on the push-status stream for THIS session. No-op when
+   * the channel isn't streaming or has no bound surface (e.g. the tab pane is collapsed).
+   *
+   * @param dataBase64 The frame image as raw base64 JPEG (no `data:` prefix).
+   */
+  public OnScreencastFrame(dataBase64: string): void {
+    if (this.streaming) {
+      this.surface?.RenderFrame(dataBase64);
+    }
+  }
+
+  /**
+   * Asks the server to start the live screencast and, on success, flips the surface to canvas mode so it
+   * stops polling and starts painting pushed frames. Best-effort: a `null`/`Streaming: false` result
+   * (capability absent or transport failure) leaves the surface on its poll fallback.
+   */
+  private async startScreencast(instance: RemoteBrowserSurfaceComponent): Promise<void> {
+    const sessionId = this.Context?.AgentSessionID;
+    if (!sessionId) {
+      return;
+    }
+    const data = await this.Context?.ExecuteServerAction<StartRemoteBrowserScreencastResult>(
+      START_SCREENCAST_MUTATION, { agentSessionID: sessionId });
+    if (data?.StartRemoteBrowserScreencast?.Streaming === true) {
+      this.streaming = true;
+      instance.Streaming = true;
+    }
+  }
+
+  /** Asks the server to stop the screencast (best-effort) and clears the streaming flag. */
+  private async stopScreencast(): Promise<void> {
+    const wasStreaming = this.streaming;
+    this.streaming = false;
+    const sessionId = this.Context?.AgentSessionID;
+    if (!wasStreaming || !sessionId) {
+      return;
+    }
+    await this.Context?.ExecuteServerAction(STOP_SCREENCAST_MUTATION, { agentSessionID: sessionId });
   }
 
   /**

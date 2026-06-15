@@ -1,5 +1,6 @@
 import {
-  ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, NgZone, OnDestroy, OnInit, inject
+  ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, Input, NgZone, OnDestroy, OnInit,
+  ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -37,6 +38,13 @@ export type RemoteBrowserSnapshotFetcher = () => Promise<RemoteBrowserSnapshotVi
  * before the surface's first change detection, so the `ngOnInit` poll has it. Polling stops
  * in `ngOnDestroy` (pane collapsed / overlay torn down) so no traffic continues after unbind.
  * View-only in v1 — there is no takeover input.
+ *
+ * ### Two render paths: pushed screencast (preferred) vs. snapshot poll (fallback)
+ * When the backend advertises the `ScreenStreaming` capability, the server PUSHES encoded CDP
+ * frames and the channel plugin sets {@link Streaming} = `true`. In that mode the surface paints
+ * each frame onto a `<canvas>` via {@link RenderFrame} and DOES NOT start the poll. When streaming
+ * is off (capability absent or start failed) the original behavior is unchanged: the surface polls
+ * {@link Fetch} every {@link SNAPSHOT_POLL_MS} ms and renders the screenshot `<img>`.
  */
 @Component({
   standalone: true,
@@ -51,7 +59,14 @@ export type RemoteBrowserSnapshotFetcher = () => Promise<RemoteBrowserSnapshotVi
         <span class="rb-url" [title]="CurrentUrl || ''">{{ CurrentUrl || 'No page loaded yet' }}</span>
       </div>
       <div class="rb-viewport">
-        @if (ScreenshotDataUrl) {
+        @if (Streaming) {
+          <canvas #frameCanvas class="rb-screenshot" [class.rb-hidden]="!HasFrame"></canvas>
+          @if (!HasFrame) {
+            <div class="rb-placeholder">
+              <mj-loading text="Waiting for the browser…" size="medium"></mj-loading>
+            </div>
+          }
+        } @else if (ScreenshotDataUrl) {
           <img class="rb-screenshot" [src]="ScreenshotDataUrl" alt="Live view of the shared browser" />
         } @else {
           <div class="rb-placeholder">
@@ -126,20 +141,54 @@ export type RemoteBrowserSnapshotFetcher = () => Promise<RemoteBrowserSnapshotVi
       align-items: center;
       justify-content: center;
     }
+    .rb-hidden {
+      display: none;
+    }
   `]
 })
 export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   /** Snapshot fetcher supplied by the channel plugin (closes over the session id + provider). */
   @Input() Fetch: RemoteBrowserSnapshotFetcher | null = null;
 
+  /**
+   * Whether the server is PUSHING live screencast frames for this session (the backend advertised the
+   * `ScreenStreaming` capability and the start succeeded). When `true` the surface paints pushed frames
+   * onto its `<canvas>` via {@link RenderFrame} and does NOT poll; when `false` it uses the snapshot
+   * `<img>` poll fallback. Set by the channel plugin in `BindSurface` from the start-screencast result.
+   *
+   * The start-screencast result is async, so this may flip to `true` AFTER `ngOnInit` has already begun
+   * polling — the setter tears the poll down in that case so the two render paths never run at once.
+   */
+  @Input()
+  set Streaming(value: boolean) {
+    if (value === this._streaming) {
+      return;
+    }
+    this._streaming = value;
+    if (value) {
+      // Late flip after the poll-fallback already started: stop polling, switch to canvas frames.
+      this.stopPolling();
+      this.zone.run(() => this.cdr.markForCheck());
+    }
+  }
+  get Streaming(): boolean {
+    return this._streaming;
+  }
+  private _streaming = false;
+
   /** The current screenshot as a `data:` URL, or `null` before the first snapshot arrives. */
   public ScreenshotDataUrl: string | null = null;
   /** The current page URL reported by the server, or `null` when none. */
   public CurrentUrl: string | null = null;
+  /** Whether at least one pushed screencast frame has been painted (drives the canvas placeholder). */
+  public HasFrame = false;
 
-  /** Whether at least one screenshot has been rendered (drives the "Live" indicator). */
+  /** The canvas the pushed screencast frames are painted onto (present only while {@link Streaming}). */
+  @ViewChild('frameCanvas') private frameCanvas?: ElementRef<HTMLCanvasElement>;
+
+  /** Whether at least one screenshot OR frame has been rendered (drives the "Live" indicator). */
   public get HasSnapshot(): boolean {
-    return this.ScreenshotDataUrl !== null;
+    return this.ScreenshotDataUrl !== null || this.HasFrame;
   }
 
   private readonly cdr = inject(ChangeDetectorRef);
@@ -150,8 +199,18 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   private polling = false;
   /** Set on destroy so an in-flight poll's late resolution doesn't touch a torn-down view. */
   private destroyed = false;
+  /** Reused decode target for pushed frames — avoids allocating an `Image` per frame. */
+  private readonly frameImage = new Image();
+  /** The most recent un-painted frame data URL, drained on the next animation frame (drop-old coalescing). */
+  private pendingFrameDataUrl: string | null = null;
+  /** True while a paint is scheduled, so rapid frames coalesce to one `requestAnimationFrame`. */
+  private framePaintScheduled = false;
 
   ngOnInit(): void {
+    // In streaming mode the server pushes frames — never start the poll (it would be redundant traffic).
+    if (this.Streaming) {
+      return;
+    }
     void this.pollOnce();
     this.startPolling();
   }
@@ -215,5 +274,62 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     this.CurrentUrl = nextUrl;
     // Re-enter the zone for the OnPush update (the poll runs outside Angular).
     this.zone.run(() => this.cdr.markForCheck());
+  }
+
+  /**
+   * Paints one PUSHED screencast frame (base64 JPEG) onto the canvas. Called by the channel plugin for
+   * each frame the server pushes while {@link Streaming}. Coalesces a burst of frames to one paint per
+   * animation frame (the newest wins) so a fast stream never floods the main thread, and reuses a single
+   * `Image` decode target to avoid per-frame allocation. No-op after destroy or when not in streaming mode.
+   *
+   * @param dataBase64 The frame image as raw base64 JPEG (no `data:` prefix).
+   */
+  public RenderFrame(dataBase64: string): void {
+    if (this.destroyed || !this.Streaming || !dataBase64) {
+      return;
+    }
+    this.pendingFrameDataUrl = `data:image/jpeg;base64,${dataBase64}`;
+    if (this.framePaintScheduled) {
+      return; // a paint is already queued — it will pick up this newest frame
+    }
+    this.framePaintScheduled = true;
+    this.zone.runOutsideAngular(() => requestAnimationFrame(() => this.paintPendingFrame()));
+  }
+
+  /** Drains the most recent pending frame onto the canvas (drop-old coalescing target). */
+  private paintPendingFrame(): void {
+    this.framePaintScheduled = false;
+    const dataUrl = this.pendingFrameDataUrl;
+    this.pendingFrameDataUrl = null;
+    if (this.destroyed || !dataUrl) {
+      return;
+    }
+    this.frameImage.onload = () => this.drawFrameImage();
+    this.frameImage.src = dataUrl;
+  }
+
+  /** Draws the decoded frame image onto the canvas, sizing the canvas to the frame on the first paint. */
+  private drawFrameImage(): void {
+    const canvas = this.frameCanvas?.nativeElement;
+    if (this.destroyed || !canvas) {
+      return;
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return;
+    }
+    const { naturalWidth: w, naturalHeight: h } = this.frameImage;
+    if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    ctx.drawImage(this.frameImage, 0, 0);
+    if (!this.HasFrame) {
+      // First frame arrived — re-enter the zone to clear the placeholder + flip the "Live" indicator.
+      this.zone.run(() => {
+        this.HasFrame = true;
+        this.cdr.markForCheck();
+      });
+    }
   }
 }
