@@ -36,9 +36,14 @@ const GEMINI_OUTPUT_SAMPLE_RATE = 24000;
  * `GeminiLiveSession` seam.)
  */
 export interface GeminiLiveClientSession {
-    /** Streams a realtime media frame (mic audio) to the model. */
-    sendRealtimeInput(params: { audio?: GeminiBlob }): void;
-    /** Appends client content (typed text, context notes, narration triggers). */
+    /**
+     * Streams realtime user input to the model — mic audio frames AND mid-session text.
+     * Text via realtime input is the Live API's "respond now" path for in-conversation
+     * messages: native-audio models treat {@link sendClientContent} as history seeding
+     * only and will NOT generate from it mid-call, but realtime text triggers immediately.
+     */
+    sendRealtimeInput(params: { audio?: GeminiBlob; text?: string }): void;
+    /** Appends client content WITHOUT triggering generation (context notes, history seeding). */
     sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void;
     /** Replies to a server tool call with one or more function responses. */
     sendToolResponse(params: { functionResponses: FunctionResponse[] }): void;
@@ -139,9 +144,17 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   commit. {@link SendToolResult} therefore follows `sendToolResponse` with an empty-turn
  *   commit whenever a note left the turn open, so the model speaks the result immediately
  *   (the behavioral equivalent of the OpenAI driver's explicit `response.create`).
+ - **Triggering turns ride realtime text**: typed text ({@link SendText}) and narration
+ *   triggers ({@link RequestSpokenUpdate}) are sent via `sendRealtimeInput({ text })` — the
+ *   Live API's documented in-conversation text path. Native-audio Live models treat
+ *   `sendClientContent` as initial-history seeding only: a mid-call `turnComplete: true`
+ *   client turn appends to history WITHOUT starting generation (the model stays silent until
+ *   the user's next spoken turn), while realtime text triggers an immediate response on every
+ *   model generation. Context notes stay on `sendClientContent` (`turnComplete: false`) — the
+ *   silent history-append is exactly the contract they want.
  * - **Narration tagging**: {@link RequestSpokenUpdate} has no per-response-instructions
- *   equivalent on Gemini, so it is emulated as a user turn carrying the instructions with
- *   `turnComplete: true`; the response kind is stamped `'narration'` at send time (sends ARE
+ *   equivalent on Gemini, so it is emulated as a realtime-text user turn carrying the
+ *   instructions; the response kind is stamped `'narration'` at send time (sends ARE
  *   the turn triggers on Gemini, unlike OpenAI where `response.created` confirms) and reset to
  *   `'normal'` when the turn completes.
  */
@@ -172,11 +185,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * True while client content sent with `turnComplete: false` (context notes) has not yet
      * been committed. Per the Live API, an open client turn tells the server MORE INPUT IS
-     * COMING — it will NOT start generation (even after a tool response) until a
-     * `turnComplete: true` arrives. Set by {@link SendContextNote}; cleared by any
-     * `turnComplete: true` client content ({@link sendTriggeringUserTurn}, the empty-turn
-     * commit in {@link sendToolResponseTurn}) and on a model `turnComplete` (the generation
-     * consumed the open content).
+     * COMING — clientContent-driven generation (notably the normally-automatic continuation
+     * after a tool response) holds until a `turnComplete: true` arrives. Set by
+     * {@link SendContextNote}; cleared by the empty-turn commit in
+     * {@link sendToolResponseTurn} and on a model `turnComplete` (the generation consumed the
+     * open content). Realtime-text triggers ({@link sendTriggeringUserTurn}) do NOT commit
+     * client content and leave this flag untouched.
      */
     private openClientTurn = false;
     /**
@@ -247,8 +261,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     // ── BaseRealtimeClient: outbound actions ──────────────────────────────────
 
     /**
-     * Injects typed text as a user turn with `turnComplete: true` (Gemini's "respond now"
-     * trigger). No-op when the session is not open.
+     * Injects typed text as a realtime-text user turn (`sendRealtimeInput({ text })` —
+     * Gemini's "respond now" trigger on every Live model generation, including native-audio
+     * models that ignore mid-call `sendClientContent`). No-op when the session is not open.
      *
      * **SendText implies barge-in** (base-contract rule): an active spoken response is
      * cancelled via {@link CancelActiveResponse} first — playback flushed, turn marked
@@ -319,10 +334,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Triggers ONE short spoken update. Gemini has no per-response instructions (OpenAI's
-     * `response.create.instructions`), so this is EMULATED: the instructions ride as a user
-     * turn with `turnComplete: true`, and the resulting turn is stamped `Kind: 'narration'` at
-     * send time (reset on `turnComplete`) — mirroring the OpenAI driver's narration semantics.
-     * Queued behind any in-flight turn so it can never interrupt a pending reply.
+     * `response.create.instructions`), so this is EMULATED: the instructions ride as a
+     * realtime-text user turn (`sendRealtimeInput({ text })` — the path that triggers
+     * generation on native-audio models, where mid-call `sendClientContent` is inert), and
+     * the resulting turn is stamped `Kind: 'narration'` at send time (reset on
+     * `turnComplete`) — mirroring the OpenAI driver's narration semantics. Queued behind any
+     * in-flight turn so it can never interrupt a pending reply.
      */
     public RequestSpokenUpdate(instructions: string): void {
         if (!this.session) {
@@ -685,8 +702,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (!session) {
             return;
         }
-        session.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true });
-        this.openClientTurn = false; // turnComplete: true commits any open client content turn
+        // REALTIME text, not clientContent: native-audio Live models only honor clientContent
+        // for history seeding — a mid-call `turnComplete: true` user turn lands in history but
+        // does NOT start generation (the model stays silent until the user's next spoken turn
+        // commits via VAD). `sendRealtimeInput({ text })` is the documented in-conversation
+        // text path and triggers an immediate response on every Live model generation.
+        // NOTE: realtime text does NOT commit an open clientContent turn (context notes), so
+        // `openClientTurn` is left as-is — the model `turnComplete` that follows clears it.
+        session.sendRealtimeInput({ text });
         this.responseActive = true;
         this.activeResponseKind = kind;
         if (emitSpeaking) {

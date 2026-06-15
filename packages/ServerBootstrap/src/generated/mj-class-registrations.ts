@@ -179,7 +179,7 @@ import {
     MagicLinkProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (367 classes)
+// @memberjunction/core-entities (368 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -194,6 +194,7 @@ import {
     MJAIAgentCategoryEntity,
     MJAIAgentChannelEntity,
     MJAIAgentClientToolEntity,
+    MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
@@ -771,8 +772,10 @@ import {
     YouTubeUploadVideoAction,
 } from '@memberjunction/actions-bizapps-social';
 
-// @memberjunction/core-entities-server (20 classes)
+// @memberjunction/core-entities-server (22 classes)
 import {
+    MJAIAgentCoAgentEntityServer,
+    MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIPromptEntityServer,
@@ -946,7 +949,7 @@ import {
     TemplateEmbedExtension,
 } from '@memberjunction/templates';
 
-// @memberjunction/ai-agents (15 classes)
+// @memberjunction/ai-agents (16 classes)
 import {
     CSVToolLibrary,
     DataSnapshotToolLibrary,
@@ -963,6 +966,7 @@ import {
     RealtimeAgentType,
     SearchResultSetToolLibrary,
     TextToolLibrary,
+    WhiteboardChannelServer,
 } from '@memberjunction/ai-agents';
 
 // @memberjunction/action-runtime-host (1 classes)
@@ -1256,6 +1260,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentCategoryEntity,
     MJAIAgentChannelEntity,
     MJAIAgentClientToolEntity,
+    MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
@@ -1763,6 +1768,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     YouTubeSearchVideosAction,
     YouTubeUpdateVideoMetadataAction,
     YouTubeUploadVideoAction,
+    MJAIAgentCoAgentEntityServer,
+    MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIPromptEntityServer,
@@ -1877,6 +1884,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     RealtimeAgentType,
     SearchResultSetToolLibrary,
     TextToolLibrary,
+    WhiteboardChannelServer,
     DefaultRuntimeActionBridgeBuilder,
     AgentArchitectAgent,
     AgentBuilderAgent,
@@ -2059,7 +2067,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 854;
+export const CLASS_REGISTRATIONS_COUNT = 858;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

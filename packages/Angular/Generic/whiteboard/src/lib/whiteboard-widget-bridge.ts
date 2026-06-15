@@ -74,9 +74,21 @@ export const WHITEBOARD_INTERACTION_TYPE_DEBOUNCE_MS = 800;
  *  - BATCHING: events queue and flush via postMessage every 1500 ms or at 12 queued.
  *  - RESILIENCE: every handler body is try/catch-wrapped — recorder errors never leak
  *    into widget code.
+ *
+ * AUTO-SUBMIT FALLBACK: agent-generated widgets don't always wire
+ * `MJWhiteboard.submit` — a plain `<form>` submit would NAVIGATE the sandboxed frame
+ * (blanking the widget) and an inert Submit button goes nowhere. The helper therefore:
+ *  - intercepts every `submit` event (preventDefault — the frame never navigates) and
+ *    forwards the form's serialized fields as `{ __auto: true, fields }`;
+ *  - watches clicks on submit-ish buttons (type=submit, or labeled submit/send/done/…)
+ *    and, shortly after, forwards the nearest form's (or document's) fields the same way;
+ *  - DEDUPES: an explicit `MJWhiteboard.submit` (or a prior auto-forward) within 600 ms
+ *    suppresses the fallback, so well-built widgets never double-submit.
+ *  - Serialization respects the recorder's privacy rules (password/hidden skipped,
+ *    values clipped) and only checked radios/checkboxes contribute.
  */
 export const WHITEBOARD_SUBMIT_HELPER =
-  `<script>window.MJWhiteboard={submit:function(data){parent.postMessage({__mjWhiteboardSubmit:true,data:data},'*');}};
+  `<script>window.MJWhiteboard={__lastSubmitAt:0,submit:function(data){window.MJWhiteboard.__lastSubmitAt=Date.now();parent.postMessage({__mjWhiteboardSubmit:true,data:data},'*');}};
 (function(){
 var VALUE_MAX=120,LABEL_MAX=40,FLUSH_MS=1500,FLUSH_AT=12,TYPE_MS=800;
 var queue=[],flushTimer=null,typeTimers={};
@@ -93,6 +105,11 @@ document.addEventListener('change',function(e){try{var el=e.target;if(!isField(e
 document.addEventListener('input',function(e){try{var el=e.target;if(!isField(el)||isPrivate(el)){return;}var t=(el.type||'').toLowerCase();if(t==='checkbox'||t==='radio'){return;}var name=fieldLabel(el);if(typeTimers[name]){clearTimeout(typeTimers[name]);}typeTimers[name]=setTimeout(function(){delete typeTimers[name];try{push({kind:'input',target:name,value:clip(el.value,VALUE_MAX)});}catch(e2){}},TYPE_MS);}catch(err){}},true);
 document.addEventListener('focusin',function(e){try{var el=e.target;if(!isField(el)||isPrivate(el)){return;}push({kind:'focus',target:fieldLabel(el)});}catch(err){}});
 document.addEventListener('focusout',function(e){try{var el=e.target;if(!isField(el)||isPrivate(el)){return;}push({kind:'blur',target:fieldLabel(el)});}catch(err){}});
+var AUTO_DEDUPE_MS=600;
+function collectFields(scope){var out={},els=(scope&&scope.querySelectorAll?scope:document).querySelectorAll('input,select,textarea');for(var i=0;i<els.length;i++){var el=els[i];if(isPrivate(el)){continue;}var t=(el.type||'').toLowerCase();if((t==='radio'||t==='checkbox')&&!el.checked){continue;}var name=fieldLabel(el);if(t==='checkbox'){out[name]='checked';}else{out[name]=clip(el.value,VALUE_MAX);}}return out;}
+function autoSubmit(scope,trigger){try{var last=window.MJWhiteboard.__lastSubmitAt||0;if(Date.now()-last<AUTO_DEDUPE_MS){return;}var fields=collectFields(scope);var payload={__auto:true,trigger:clip(trigger||'submit',LABEL_MAX),fields:fields};window.MJWhiteboard.submit(payload);}catch(err){}}
+document.addEventListener('submit',function(e){try{e.preventDefault();autoSubmit(e.target,'form');}catch(err){}},true);
+document.addEventListener('click',function(e){try{var b=e.target&&e.target.closest?e.target.closest('button,input[type="submit"],input[type="button"]'):null;if(!b){return;}var label=(labelOf(b)||'')+' '+(b.type||'');if(!/submit|send|done|go\\b|answer|check/i.test(label)){return;}setTimeout(function(){autoSubmit(b.form||document,labelOf(b)||'button');},150);}catch(err){}},true);
 })();</script>`;
 
 /** Max serialized payload size (chars) accepted from one `MJWhiteboard.submit` call. */

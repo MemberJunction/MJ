@@ -27,7 +27,7 @@
         [ReviewClosedAt]="ReviewClosedAt"
         [ReviewCloseReason]="ReviewCloseReason"
         [CaptionsOn]="ShowCaptions"
-        [ShowCaptionsControl]="!IsReviewing && Disclosure.ShowThread"
+        [ShowCaptionsControl]="!IsReviewing"
         [ShowGear]="!IsReviewing && Disclosure.ShowGear"
         [ShowEnd]="!IsReviewing && Disclosure.ShowComposer"
         [ShowMinimize]="!IsReviewing"
@@ -83,7 +83,8 @@
           <mj-realtime-session-thread
             [State]="State"
             [AgentName]="AgentName"
-            [ShowCaptions]="ShowCaptions"
+            [UserName]="CurrentUser?.Name || 'You'"
+            [ShowCaptions]="IsReviewing ? true : ShowCaptions"
             [DevMode]="DevMode"
             (OpenRunRequested)="OnOpenRunRequested($event)"
             (OpenArtifactRequested)="OnOpenArtifactRequested($event)"
@@ -98,9 +99,11 @@
           <mj-realtime-channel-strip></mj-realtime-channel-strip>
         }
 
-        <!-- The BOTTOM DOCK: phone-call strip (levels 0–1) ⇄ fused minis+composer (level 2+) -->
+        <!-- The BOTTOM DOCK: phone-call strip ⇄ fused minis+composer — the user's own
+             two-way toggle (Type opens, hide closes), never level-forced. -->
         <mj-realtime-composer
-          [Level]="Disclosure.SessionLevel"
+          [Open]="ComposerOpen"
+          (OpenChanged)="OnComposerOpenChanged($event)"
           [CaptionsOn]="ShowCaptions"
           [ShowDetails]="ShowDetailsControl"
           [DetailsOn]="DetailsPeek"

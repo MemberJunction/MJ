@@ -46,7 +46,7 @@ describe('InjectWhiteboardSubmitHelper', () => {
     // '*' is deliberate: the sandboxed frame has an OPAQUE origin (nothing to address);
     // the HOST validates marker + event.source instead.
     expect(WHITEBOARD_SUBMIT_HELPER).toContain(
-      `window.MJWhiteboard={submit:function(data){parent.postMessage({__mjWhiteboardSubmit:true,data:data},'*');}};`);
+      `window.MJWhiteboard={__lastSubmitAt:0,submit:function(data){window.MJWhiteboard.__lastSubmitAt=Date.now();parent.postMessage({__mjWhiteboardSubmit:true,data:data},'*');}};`);
     expect(WHITEBOARD_SUBMIT_HELPER).toContain(WHITEBOARD_SUBMIT_MARKER);
   });
 });
@@ -125,5 +125,28 @@ describe('starter widget + AddHtml tool description teach the bridge', () => {
     // the original security contract still rides in the description
     expect(def.Description.toLowerCase()).toContain('sandbox');
     expect(def.Description.toLowerCase()).toContain('network');
+  });
+});
+
+describe('auto-submit fallback (inert agent HTML still submits)', () => {
+  it('the helper intercepts form submits (preventDefault — the sandboxed frame never navigates)', () => {
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain("addEventListener('submit'");
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('e.preventDefault()');
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('__auto:true');
+  });
+
+  it('watches submit-ish button clicks and forwards the nearest form fields', () => {
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('submit|send|done|go');
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('collectFields');
+  });
+
+  it('dedupes against an explicit MJWhiteboard.submit (no double-submit from well-built widgets)', () => {
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('__lastSubmitAt');
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('AUTO_DEDUPE_MS=600');
+  });
+
+  it('field serialization respects the recorder privacy rules (private fields skipped, unchecked excluded)', () => {
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain("(t==='radio'||t==='checkbox')&&!el.checked");
+    expect(WHITEBOARD_SUBMIT_HELPER).toMatch(/collectFields[\s\S]*isPrivate/);
   });
 });
