@@ -460,7 +460,7 @@
     "fields": {
       "Name": "Nano Banana Pro",
       "PowerRank": 20,
-      "Description": "Google's most advanced image generation model (November 2025), officially Gemini 3 Pro Image. Exceptional quality with support for up to 4K resolution (3840x2160). Features advanced style control, negative prompts, and seed-based reproducibility. State-of-the-art prompt understanding and image editing capabilities.",
+      "Description": "Google's most advanced image generation model (November 2025), officially Gemini 3 Pro Image. Exceptional quality with support for up to 4K resolution (3840x2160). Features advanced style control, negative prompts, and seed-based reproducibility. State-of-the-art prompt understanding and image editing capabilities. RETIREMENT SCHEDULED 2026-06-25 — `gemini-3-pro-image-preview` endpoint shuts down; migrate to `gemini-2.5-flash-image` (Nano Banana, GA). Source: https://ai.google.dev/gemini-api/docs/deprecations",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
       "IsActive": true,
       "SpeedRank": 8,
@@ -5088,7 +5088,7 @@
   {
     "fields": {
       "Name": "Mistral Medium 3.1",
-      "Description": "Mistral AI's frontier-class multimodal model with improved tone and performance. 128K token context window. Supports vision, OCR, function calling, structured outputs, and agents. Released August 2025.",
+      "Description": "Mistral AI's frontier-class multimodal model with improved tone and performance. 128K token context window. Supports vision, OCR, function calling, structured outputs, and agents. Released August 2025. RETIREMENT SCHEDULED 2026-06-30 per Mistral's 2026-05-29 summer-retirement schedule; recommended migration to Mistral Medium 3.5 (`mistral-medium-2511`). Still callable through the retirement date. Source: https://blog.xentoo.info/2026/05/30/mistral-retiring-models-during-summer-2026/",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": true,
@@ -5179,7 +5179,7 @@
   {
     "fields": {
       "Name": "Devstral 2",
-      "Description": "Mistral AI's frontier code agents model for software engineering tasks. 123B parameters with 256K token context window. Excels at using tools to explore codebases, editing multiple files, and powering software engineering agents. Supports function calling, structured outputs, and built-in tools.",
+      "Description": "Mistral AI's frontier code agents model for software engineering tasks. 123B parameters with 256K token context window. Excels at using tools to explore codebases, editing multiple files, and powering software engineering agents. Supports function calling, structured outputs, and built-in tools. RETIREMENT SCHEDULED 2026-06-30 per Mistral's 2026-05-29 summer-retirement schedule; recommended migration to Mistral Medium 3.5 (`mistral-medium-2511`). Still callable through the retirement date. Source: https://blog.xentoo.info/2026/05/30/mistral-retiring-models-during-summer-2026/",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
       "IsActive": true,
@@ -5497,7 +5497,7 @@
   {
     "fields": {
       "Name": "Mistral Small 3.2",
-      "Description": "Mistral AI's efficient 24B parameter multimodal model with vision capabilities. 128K token context window. Supports function calling, structured outputs, and agents. Open-weight model suitable for personal and commercial use. Very cost-effective.",
+      "Description": "Mistral AI's efficient 24B parameter multimodal model with vision capabilities. 128K token context window. Supports function calling, structured outputs, and agents. Open-weight model suitable for personal and commercial use. Very cost-effective. RETIREMENT SCHEDULED 2026-06-30 per Mistral's 2026-05-29 summer-retirement schedule; recommended migration to Mistral Small 4. Still callable through the retirement date. Source: https://blog.xentoo.info/2026/05/30/mistral-retiring-models-during-summer-2026/",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 6,
       "IsActive": true,
@@ -7128,7 +7128,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-sonnet-4-20250514",
             "MaxInputTokens": 200000,
@@ -7266,7 +7266,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-opus-4-20250514",
             "MaxInputTokens": 200000,
@@ -16034,6 +16034,70 @@
     "sync": {
       "lastModified": "2026-06-12T23:03:30.306Z",
       "checksum": "0e7038d9968183d769f1a02ea7af7611201d18fa27c0c5400b2f0444d75b22a4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kimi K2.7-Code",
+      "PowerRank": 18,
+      "Description": "Moonshot AI's coding-specialist successor to Kimi K2.6, released June 12, 2026. Same 1T-parameter Mixture-of-Experts architecture (32B active per token) with native INT4 quantization, but post-trained specifically for long-horizon coding and multi-agent software-engineering workflows. Reports 21.8 percentage-point gain over K2.6 on Kimi Code Bench v2. 256K (262,144) token context window with output ceiling matching the context. OpenAI/Anthropic-compatible API at platform.moonshot.ai. Open-weight (Modified MIT License). Sources: https://www.marktechpost.com/2026/06/12/moonshot-ai-releases-kimi-k2-7-code-a-coding-model-reporting-21-8-on-kimi-code-bench-v2-over-k2-6/",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Kimi K2.6"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MoonshotLLM",
+            "APIName": "kimi-k2.7-code",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "StartedAt": "2026-06-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.95,
+            "OutputPricePerUnit": 4.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kimi K2.7-Code launch pricing on Moonshot direct API as of June 12, 2026: $0.95/$4.00 per 1M tokens, $0.19/1M cached input. Matches Moonshot's current K2.x family rate card. OpenRouter resells the same route at slightly different rates ($0.75/$3.50). Sources: https://www.marktechpost.com/2026/06/12/moonshot-ai-releases-kimi-k2-7-code-a-coding-model-reporting-21-8-on-kimi-code-bench-v2-over-k2-6/ ; https://codersera.com/blog/kimi-k2-7-complete-guide-2026/",
+            "CacheReadPricePerUnit": 0.19,
+            "CacheWritePricePerUnit": null
+          }
+        }
+      ]
     }
   }
 ]
