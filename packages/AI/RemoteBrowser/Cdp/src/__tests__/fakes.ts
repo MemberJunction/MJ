@@ -9,6 +9,7 @@
 
 import {
     ActionExecutionResult,
+    AudioCaptureChunk,
     BrowserAction,
     BrowserConfig,
     PlaywrightBrowserAdapter,
@@ -16,9 +17,10 @@ import {
 } from '@memberjunction/computer-use';
 import {
     RemoteBrowserActionResult,
+    RemoteBrowserAudioChunk,
     RemoteBrowserCapabilityNotSupportedError,
 } from '@memberjunction/remote-browser-base';
-import { ICdpSessionBackend } from '../cdp-session-backend';
+import { ICdpAudioCaptureHandle, ICdpSessionBackend } from '../cdp-session-backend';
 
 /**
  * A minimal stand-in for {@link PlaywrightBrowserAdapter} that implements only the surface the kit
@@ -53,6 +55,12 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
     public CloseError: Error | null = null;
     /** Captured `onFrame` callback from {@link StartScreencast}, so a test can drive frames. */
     public LastOnFrame: ((frame: ScreencastFrame) => void) | null = null;
+    /** Count of {@link StartAudioCapture} calls. */
+    public StartAudioCaptureCount = 0;
+    /** Count of {@link StopAudioCapture} calls. */
+    public StopAudioCaptureCount = 0;
+    /** Captured `onChunk` callback from {@link StartAudioCapture}, so a test can drive chunks. */
+    public LastOnAudioChunk: ((chunk: AudioCaptureChunk) => void) | null = null;
 
     public override async Launch(config: BrowserConfig): Promise<void> {
         this.LaunchedConfigs.push(config);
@@ -108,8 +116,72 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
         this.CaptureScreencastFrameCount++;
     }
 
+    public override async StartAudioCapture(onChunk: (chunk: AudioCaptureChunk) => void): Promise<void> {
+        this.StartAudioCaptureCount++;
+        this.LastOnAudioChunk = onChunk;
+    }
+
+    public override async StopAudioCapture(): Promise<void> {
+        this.StopAudioCaptureCount++;
+        this.LastOnAudioChunk = null;
+    }
+
     public override get CurrentUrl(): string {
         return this.CurrentUrlValue;
+    }
+}
+
+/**
+ * A LOOPBACK {@link ICdpSessionBackend} whose {@link StartAudioCapture} synthesizes audio chunks WITHOUT a
+ * real browser — proving the full `session → onChunk` path. It emits one fixed chunk immediately on start
+ * (so a test sees the wiring) and exposes the callback so a test can push more. Its capability-gated hooks
+ * mirror {@link FakeCdpSessionBackend} (throw when unsupported).
+ */
+export class LoopbackAudioCdpSessionBackend implements ICdpSessionBackend {
+    /** Count of {@link StartAudioCapture} calls. */
+    public StartAudioCaptureCount = 0;
+    /** Count of capture-handle {@link ICdpAudioCaptureHandle.Stop} calls. */
+    public StopCount = 0;
+    /** Count of {@link Release} calls. */
+    public ReleaseCount = 0;
+    /** The most recent capture callback, so a test can drive additional synthetic chunks. */
+    public LastOnChunk: ((chunk: RemoteBrowserAudioChunk) => void) | null = null;
+    /** The adapter handed to {@link StartAudioCapture}, recorded so a test can assert it was threaded through. */
+    public LastAdapter: PlaywrightBrowserAdapter | null = null;
+
+    public async StartAudioCapture(
+        adapter: PlaywrightBrowserAdapter,
+        onChunk: (chunk: RemoteBrowserAudioChunk) => void,
+    ): Promise<ICdpAudioCaptureHandle> {
+        this.StartAudioCaptureCount++;
+        this.LastAdapter = adapter;
+        this.LastOnChunk = onChunk;
+        // Emit one synthetic tone-ish chunk immediately so the path is provably end-to-end.
+        onChunk({
+            DataBase64: 'TE9PUEJBQ0s=', // "LOOPBACK" base64
+            Codec: 'webm-opus',
+            SampleRate: 48000,
+            Channels: 2,
+            SequenceNumber: 0,
+        });
+        return {
+            Stop: async (): Promise<void> => {
+                this.StopCount++;
+                this.LastOnChunk = null;
+            },
+        };
+    }
+
+    public async GetLiveViewUrl(): Promise<string> {
+        throw new RemoteBrowserCapabilityNotSupportedError('LiveView', 'LoopbackAudioBackend');
+    }
+
+    public async InvokeNativeAIControl(): Promise<RemoteBrowserActionResult> {
+        throw new RemoteBrowserCapabilityNotSupportedError('NativeAIControl', 'LoopbackAudioBackend');
+    }
+
+    public async Release(): Promise<void> {
+        this.ReleaseCount++;
     }
 }
 

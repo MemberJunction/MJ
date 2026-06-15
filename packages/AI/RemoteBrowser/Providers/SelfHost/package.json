@@ -17,6 +17,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/computer-use": "5.40.2",
     "@memberjunction/core": "5.40.2",
     "@memberjunction/global": "5.40.2",
     "@memberjunction/remote-browser-base": "5.40.2",

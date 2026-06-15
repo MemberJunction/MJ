@@ -148,6 +148,19 @@ export type RemoteBrowserSnapshotFetcher = () => Promise<RemoteBrowserSnapshotVi
             <i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> You're driving
           </span>
         }
+        @if (AudioAvailable) {
+          <button
+            type="button"
+            class="rb-speaker"
+            [class.rb-speaker--muted]="AudioMuted"
+            [attr.aria-pressed]="!AudioMuted"
+            [attr.aria-label]="AudioMuted ? 'Unmute browser audio' : 'Mute browser audio'"
+            [title]="AudioMuted ? 'Unmute browser audio' : 'Mute browser audio'"
+            (click)="ToggleAudioMuted()"
+          >
+            <i class="fa-solid" [class.fa-volume-high]="!AudioMuted" [class.fa-volume-xmark]="AudioMuted" aria-hidden="true"></i>
+          </button>
+        }
       </div>
       <div class="rb-viewport">
         @if (Streaming) {
@@ -286,6 +299,33 @@ export type RemoteBrowserSnapshotFetcher = () => Promise<RemoteBrowserSnapshotVi
     .rb-hidden {
       display: none;
     }
+    .rb-speaker {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md, 6px);
+      background: var(--mj-bg-surface);
+      color: var(--mj-brand-primary);
+      cursor: pointer;
+      font-size: 0.8125rem;
+      transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+    }
+    .rb-speaker:hover {
+      background: var(--mj-bg-surface-hover);
+    }
+    .rb-speaker:focus-visible {
+      outline: none;
+      border-color: var(--mj-border-focus);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+    }
+    .rb-speaker--muted {
+      color: var(--mj-text-muted);
+    }
   `]
 })
 export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
@@ -342,6 +382,28 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
 
   /** Emits each human-takeover input (pointer move/click, key) the user performs on the live canvas. */
   @Output() HumanInput = new EventEmitter<RemoteBrowserHumanInputEvent>();
+
+  /**
+   * Whether the live tab-audio stream is available — the channel sets this `true` when the server confirms
+   * it is pushing audio. Drives whether the speaker toggle renders in the live-view bar.
+   */
+  @Input() AudioAvailable = false;
+
+  /**
+   * Whether tab audio is currently muted. Two-way: the channel sets the initial value (un-muted when audio
+   * starts) and the toggle updates it; {@link AudioMutedChange} relays each user change to the channel,
+   * which mutes/unmutes the player.
+   */
+  @Input() AudioMuted = false;
+
+  /** Emits the new muted state each time the user toggles the speaker (two-way `AudioMuted`). */
+  @Output() AudioMutedChange = new EventEmitter<boolean>();
+
+  /** Toggles the speaker mute state and relays it to the channel (which mutes/unmutes the audio player). */
+  public ToggleAudioMuted(): void {
+    this.AudioMuted = !this.AudioMuted;
+    this.AudioMutedChange.emit(this.AudioMuted);
+  }
 
   /** True when takeover is both enabled AND on the canvas path — drives the cursor + "driving" pill. */
   public get CanTakeOver(): boolean {

@@ -6,8 +6,9 @@ import {
     RemoteBrowserScreencastFrame,
 } from '@memberjunction/remote-browser-base';
 import { ActionExecutionResult, ClickAction, ScreencastFrame } from '@memberjunction/computer-use';
+import { RemoteBrowserAudioChunk } from '@memberjunction/remote-browser-base';
 import { CdpRemoteBrowserSession } from '../cdp-remote-browser-session';
-import { FakeCdpSessionBackend, FakePlaywrightBrowserAdapter } from './fakes';
+import { FakeCdpSessionBackend, FakePlaywrightBrowserAdapter, LoopbackAudioCdpSessionBackend } from './fakes';
 
 /** Builds a session over fresh fakes with the given feature flags. */
 function buildSession(
@@ -214,6 +215,80 @@ describe('CdpRemoteBrowserSession — capability gating (flags ON → delegate)'
         await Promise.resolve();
         await Promise.resolve();
         expect(adapter.ExecutedActions.map((a) => a.Type)).toEqual(['MouseDown', 'MouseUp']);
+    });
+});
+
+describe('CdpRemoteBrowserSession — audio streaming', () => {
+    /** Builds a session whose backend supports audio capture (the loopback backend). */
+    function buildAudioSession(): {
+        session: CdpRemoteBrowserSession;
+        adapter: FakePlaywrightBrowserAdapter;
+        backend: LoopbackAudioCdpSessionBackend;
+    } {
+        const adapter = new FakePlaywrightBrowserAdapter();
+        const backend = new LoopbackAudioCdpSessionBackend();
+        const session = new CdpRemoteBrowserSession(adapter, 'ws://cdp.test/endpoint', {}, backend, 'LoopbackProvider');
+        return { session, adapter, backend };
+    }
+
+    it('StartAudioStream throws when the backend has no StartAudioCapture hook', async () => {
+        const adapter = new FakePlaywrightBrowserAdapter();
+        const backend = new FakeCdpSessionBackend(); // no StartAudioCapture
+        const session = new CdpRemoteBrowserSession(adapter, 'ws://cdp.test/endpoint', {}, backend, 'NoAudioProvider');
+        await expect(session.StartAudioStream(() => undefined)).rejects.toBeInstanceOf(
+            RemoteBrowserCapabilityNotSupportedError,
+        );
+    });
+
+    it('StopAudioStream throws when the backend has no StartAudioCapture hook', async () => {
+        const adapter = new FakePlaywrightBrowserAdapter();
+        const backend = new FakeCdpSessionBackend();
+        const session = new CdpRemoteBrowserSession(adapter, 'ws://cdp.test/endpoint', {}, backend, 'NoAudioProvider');
+        await expect(session.StopAudioStream()).rejects.toBeInstanceOf(RemoteBrowserCapabilityNotSupportedError);
+    });
+
+    it('StartAudioStream delegates to the backend (threading the adapter) and forwards chunks', async () => {
+        const { session, adapter, backend } = buildAudioSession();
+        const received: RemoteBrowserAudioChunk[] = [];
+
+        await session.StartAudioStream((chunk) => received.push(chunk));
+
+        expect(backend.StartAudioCaptureCount).toBe(1);
+        expect(backend.LastAdapter).toBe(adapter); // the connected adapter was threaded to the backend
+        // The loopback backend emits one synthetic chunk on start.
+        expect(received).toEqual<RemoteBrowserAudioChunk[]>([
+            { DataBase64: 'TE9PUEJBQ0s=', Codec: 'webm-opus', SampleRate: 48000, Channels: 2, SequenceNumber: 0 },
+        ]);
+
+        // A subsequent backend chunk flows through to the same callback.
+        backend.LastOnChunk?.({ DataBase64: 'TkVYVA==', Codec: 'webm-opus', SampleRate: 48000, Channels: 2, SequenceNumber: 1 });
+        expect(received).toHaveLength(2);
+        expect(received[1].SequenceNumber).toBe(1);
+    });
+
+    it('StartAudioStream is idempotent — a second call does not stack a second capture', async () => {
+        const { session, backend } = buildAudioSession();
+        await session.StartAudioStream(() => undefined);
+        await session.StartAudioStream(() => undefined);
+        expect(backend.StartAudioCaptureCount).toBe(1);
+    });
+
+    it('StopAudioStream stops the active capture handle', async () => {
+        const { session, backend } = buildAudioSession();
+        await session.StartAudioStream(() => undefined);
+        await session.StopAudioStream();
+        expect(backend.StopCount).toBe(1);
+        // After stopping, a re-start is allowed (no longer idempotent-blocked).
+        await session.StartAudioStream(() => undefined);
+        expect(backend.StartAudioCaptureCount).toBe(2);
+    });
+
+    it('Close tears down an active audio capture before releasing the backend', async () => {
+        const { session, backend } = buildAudioSession();
+        await session.StartAudioStream(() => undefined);
+        await session.Close();
+        expect(backend.StopCount).toBe(1);
+        expect(backend.ReleaseCount).toBe(1);
     });
 });
 

@@ -12,6 +12,7 @@ import {
   RemoteBrowserAction,
   RemoteBrowserToolArgError,
 } from './remote-browser-tools';
+import { MediaSourceAudioSink, RemoteBrowserAudioChunkInput, RemoteBrowserAudioPlayer } from './remote-browser-audio-player';
 
 /**
  * GraphQL mutation that drives the SERVER-hosted browser. The channel awaits it for every
@@ -64,6 +65,34 @@ const STOP_SCREENCAST_MUTATION = `
     StopRemoteBrowserScreencast(agentSessionID: $agentSessionID)
   }
 `;
+
+/**
+ * GraphQL mutation that asks the server to start PUSHING live tab-audio chunks for the session — so a
+ * co-agent demoing a video/audio site is HEARD. Returns `Streaming: true` when the backend can capture
+ * audio (v1 gates by backend implementation) and the stream started; `Streaming: false` means no audio
+ * (capability absent / start failed) and the client simply plays nothing.
+ */
+const START_AUDIO_STREAM_MUTATION = `
+  mutation StartRemoteBrowserAudioStream($agentSessionID: String!) {
+    StartRemoteBrowserAudioStream(agentSessionID: $agentSessionID) {
+      Streaming
+    }
+  }
+`;
+
+/** GraphQL mutation that stops the server-pushed tab-audio stream (best-effort teardown). */
+const STOP_AUDIO_STREAM_MUTATION = `
+  mutation StopRemoteBrowserAudioStream($agentSessionID: String!) {
+    StopRemoteBrowserAudioStream(agentSessionID: $agentSessionID)
+  }
+`;
+
+/** The narrow projection of the `StartRemoteBrowserAudioStream` mutation payload the channel reads. */
+interface StartRemoteBrowserAudioStreamResult {
+  StartRemoteBrowserAudioStream: {
+    Streaming: boolean;
+  } | null;
+}
 
 /**
  * HUMAN-TAKEOVER mutation — relays ONE pointer/keyboard input the user performed on the live canvas into the
@@ -194,6 +223,19 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    */
   private streaming = false;
 
+  /**
+   * Whether the server confirmed it is PUSHING tab-audio chunks for this session (the backend can capture
+   * audio). When `true` {@link OnAudioChunk} feeds each pushed chunk to {@link audioPlayer}; when `false`
+   * no audio plays.
+   */
+  private audioStreaming = false;
+
+  /** The client-side audio player fed pushed chunks while {@link audioStreaming}; `null` until started. */
+  private audioPlayer: RemoteBrowserAudioPlayer | null = null;
+
+  /** Subscription to the bound surface's `AudioMutedChange` output (the speaker toggle), torn down on unbind. */
+  private audioMutedSub: Subscription | null = null;
+
   public get ChannelName(): string {
     return 'Remote Browser';
   }
@@ -258,20 +300,28 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     instance.Fetch = () => this.fetchSnapshot();
     instance.Interactive = true;
     this.humanInputSub = instance.HumanInput.subscribe((input) => this.relayHumanInput(input));
+    this.audioMutedSub = instance.AudioMutedChange.subscribe((muted) => this.audioPlayer?.SetMuted(muted));
     void this.startScreencast(instance);
+    void this.startAudioStream(instance);
   }
 
   public override UnbindSurface(): void {
     this.humanInputSub?.unsubscribe();
     this.humanInputSub = null;
+    this.audioMutedSub?.unsubscribe();
+    this.audioMutedSub = null;
     void this.stopScreencast();
+    void this.stopAudioStream();
     this.surface = null;
   }
 
   public override Dispose(): void {
     this.humanInputSub?.unsubscribe();
     this.humanInputSub = null;
+    this.audioMutedSub?.unsubscribe();
+    this.audioMutedSub = null;
     void this.stopScreencast();
+    void this.stopAudioStream();
     super.Dispose();
   }
 
@@ -285,6 +335,19 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   public OnScreencastFrame(dataBase64: string): void {
     if (this.streaming) {
       this.surface?.RenderFrame(dataBase64);
+    }
+  }
+
+  /**
+   * Feeds one PUSHED tab-audio chunk to the client-side audio player. Called by the session service when a
+   * `RemoteBrowserAudioChunk` arrives on the push-status stream for THIS session. No-op when the channel
+   * isn't audio-streaming or the player has been torn down.
+   *
+   * @param chunk The pushed audio chunk (base64 webm-opus + codec/seq metadata).
+   */
+  public OnAudioChunk(chunk: RemoteBrowserAudioChunkInput): void {
+    if (this.audioStreaming) {
+      this.audioPlayer?.Enqueue(chunk);
     }
   }
 
@@ -303,6 +366,42 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       this.streaming = true;
       instance.Streaming = true;
     }
+  }
+
+  /**
+   * Asks the server to start the live tab-audio stream and, on success, spins up the client-side
+   * {@link RemoteBrowserAudioPlayer} (speaker ON by default — the call is the activating user gesture) so
+   * pushed chunks play. Best-effort: a `null`/`Streaming: false` result (no audio capability or transport
+   * failure) leaves the channel silent with no player.
+   *
+   * @param instance The bound surface, flipped to show the speaker toggle when audio starts.
+   */
+  private async startAudioStream(instance: RemoteBrowserSurfaceComponent): Promise<void> {
+    const sessionId = this.Context?.AgentSessionID;
+    if (!sessionId) {
+      return;
+    }
+    const data = await this.Context?.ExecuteServerAction<StartRemoteBrowserAudioStreamResult>(START_AUDIO_STREAM_MUTATION, { agentSessionID: sessionId });
+    if (data?.StartRemoteBrowserAudioStream?.Streaming === true) {
+      this.audioStreaming = true;
+      this.audioPlayer = new RemoteBrowserAudioPlayer(new MediaSourceAudioSink());
+      // Speaker defaults ON; reflect that on the surface so the toggle renders un-muted.
+      instance.AudioAvailable = true;
+      instance.AudioMuted = false;
+    }
+  }
+
+  /** Asks the server to stop the tab-audio stream (best-effort), disposes the player, and clears state. */
+  private async stopAudioStream(): Promise<void> {
+    const wasStreaming = this.audioStreaming;
+    this.audioStreaming = false;
+    this.audioPlayer?.Dispose();
+    this.audioPlayer = null;
+    const sessionId = this.Context?.AgentSessionID;
+    if (!wasStreaming || !sessionId) {
+      return;
+    }
+    await this.Context?.ExecuteServerAction(STOP_AUDIO_STREAM_MUTATION, { agentSessionID: sessionId });
   }
 
   /**

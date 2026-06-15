@@ -20,6 +20,7 @@ import {
     CookieEntry,
     ScreencastFrame,
     ScreencastOptions,
+    AudioCaptureChunk,
     AccessibilityNode,
     ElementInfo,
 } from '../types/browser.js';
@@ -197,6 +198,40 @@ export abstract class BaseBrowserAdapter {
      */
     public async CaptureScreencastFrame(): Promise<void> {
         // No-op default — adapters with an active screencast override this.
+    }
+
+    // ─── Audio capture (in-page tab-audio feed) ────────────
+
+    /**
+     * Start capturing the audio playing inside the browser tab, invoking
+     * `onChunk` for each encoded {@link AudioCaptureChunk} until
+     * {@link StopAudioCapture} is called.
+     *
+     * Default implementation is a no-op resolve: it starts no capture and emits
+     * no chunks. This is the safer additive default — a consumer that
+     * opportunistically requests tab audio on an adapter that can't provide one
+     * simply receives nothing rather than an exception. Adapters that can tap the
+     * page's media elements (e.g. PlaywrightBrowserAdapter) override this to emit
+     * real chunks.
+     *
+     * @param _onChunk - Callback invoked with each captured audio chunk.
+     */
+    public async StartAudioCapture(
+        _onChunk: (chunk: AudioCaptureChunk) => void
+    ): Promise<void> {
+        // No-op default — audio capture is not supported by this adapter.
+        // Resolves rather than throws so requesting tab audio is always safe.
+    }
+
+    /**
+     * Stop an audio capture previously started via {@link StartAudioCapture} and
+     * release any associated in-page resources (the `MediaRecorder`, observers).
+     *
+     * Default implementation is a no-op — safe to call even when no capture is
+     * active or the adapter never supported one.
+     */
+    public async StopAudioCapture(): Promise<void> {
+        // No-op default — nothing to stop on adapters without audio capture.
     }
 
     // ─── Action Execution ──────────────────────────────────

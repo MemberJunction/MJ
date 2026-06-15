@@ -174,6 +174,10 @@ to *every* computer-use consumer:
   adapter targets the matched element (robust DOM), else the existing coordinate/delta/duration path.
 - **Screencast** — `StartScreencast(onFrame)/StopScreencast()` via CDP `Page.startScreencast`
   (monotonic frames + ack) — the source for the channel's `ScreenOut` track.
+- **Tab audio capture** — `StartAudioCapture(onChunk)/StopAudioCapture()` taps the playing `<video>`/`<audio>`
+  element in-page (`captureStream()` + a webm-opus `MediaRecorder`) and emits monotonic `AudioCaptureChunk`s —
+  the source for the Remote Browser channel's tab-audio stream (see §8d). No-op default on adapters that
+  can't capture.
 - **`MouseMove` action** — completes the input vocabulary for hover / human-takeover.
 - **Perception** — `GetAccessibilitySnapshot()` (token-efficient ARIA tree), `QueryElement(selector)`
   (`{Exists,Visible,Text,BoundingBox}`), `GetVisibleText()`, `GetTitle()`, `WaitForLoadState()`.
@@ -243,13 +247,60 @@ view, maps display coordinates → viewport coordinates, and relays them as `Rem
 (`pointer-move` / `pointer-click` / `key`) → `IRemoteBrowserSession.RouteHumanInput` (capability-gated on
 `HumanTakeover`). See `RelayRemoteBrowserHumanInput`.
 
+### 8d. Tab audio — browser → user (so a co-agent's video/audio demo is HEARD)
+
+The screencast shows the page; **audio streaming** plays its sound — when the co-agent opens a YouTube clip
+or any audio/video site, the user hears it. It is the **audio sibling of the screencast**, built one-for-one
+the same way:
+
+| | Screencast (video) | Audio |
+|---|---|---|
+| Base type | `RemoteBrowserScreencastFrame` | `RemoteBrowserAudioChunk` (`DataBase64` + `Codec`/`SampleRate`/`Channels`/`SequenceNumber`) |
+| Session contract | `StartScreencast`/`StopScreencast` | `StartAudioStream`/`StopAudioStream` |
+| Server mutations | `Start`/`StopRemoteBrowserScreencast` | `Start`/`StopRemoteBrowserAudioStream` |
+| Push envelope | `type:'RemoteBrowserScreencastFrame'` | `type:'RemoteBrowserAudioChunk'` (same `PUSH_STATUS_UPDATES_TOPIC`, scoped by `sessionId`) |
+| Client render | `<canvas>` paint | `RemoteBrowserAudioPlayer` (MediaSource + `audio/webm;codecs=opus` → hidden `<audio>`) |
+
+**v1 is browser → user only.** The contract is shaped to allow user → browser (a virtual mic) later, but
+that is not built.
+
+**Capability gating is by BACKEND IMPLEMENTATION, not a metadata flag.** Unlike `ScreenStreaming` (a
+generated `IRemoteBrowserProviderFeatures` flag), audio gates on whether the driver's `ICdpSessionBackend`
+provides the **optional** `StartAudioCapture(adapter, onChunk)` hook. If it's absent, `CdpRemoteBrowserSession.StartAudioStream`
+throws `RemoteBrowserCapabilityNotSupportedError`; the server catches it and reports `Streaming: false`
+(exactly like a non-streaming backend), and the client simply plays nothing. *(Fast-follow, documented but
+not in v1: add an `AudioStreaming?` flag to the `IRemoteBrowserProviderFeatures` JSONType for UI
+discoverability — needs migration → CodeGen → `KNOWN_REMOTE_BROWSER_FEATURE_KEYS` → metadata seed.)*
+
+**Self-host capture mechanism (the concrete first backend) — in-page, headless-safe, no OS audio device, no
+extension.** Generic in `@memberjunction/computer-use` (`PlaywrightBrowserAdapter.StartAudioCapture`), so
+every CDP backend can reuse it: a capture agent is injected via Playwright `page.exposeBinding('__mjAudioChunk', …)`
++ `page.addInitScript(…)`. It watches the DOM for `<video>`/`<audio>` elements (initial scan + `MutationObserver`
++ play/pause listeners), taps the first one that is actively playing with `element.captureStream()`, and feeds
+its audio tracks to an in-page `MediaRecorder({ mimeType: 'audio/webm;codecs=opus' })` at a ~250ms `timeslice`.
+Each `dataavailable` blob is base64-encoded and posted back through the binding → mapped to an
+`AudioCaptureChunk` → `RemoteBrowserAudioChunk`. The agent restarts the recorder when the active element
+swaps / plays / pauses.
+
+**Documented limitations:** only audio routed through a media ELEMENT is captured (covers YouTube and most
+video/audio sites). **Pure Web-Audio-API sound** (some games/apps) and **DRM/EME media** (where
+`captureStream()` is blocked) are NOT captured. The documented future path for full-fidelity / DRM audio is a
+**server-side virtual audio sink** (PulseAudio null-sink / macOS BlackHole + ffmpeg) feeding `'opus'`/`'pcm16'`
+chunks through the same contract. As with the screencast, a **binary/WebRTC transport** is the future
+efficiency upgrade over base64-on-PUSH_STATUS (shared with the screencast path).
+
+**Speaker toggle.** The surface shows a speaker on/off button in the live-view bar whenever audio is
+streaming (default ON — the realtime call is the activating user gesture, so autoplay is allowed). Toggling
+it mutes/unmutes the `RemoteBrowserAudioPlayer`. Audio starts on `BindSurface` (alongside the screencast) and
+stops on `UnbindSurface`/`Dispose`.
+
 ---
 
 ## 9. Reference map
 
 | Package | Role |
 |---|---|
-| `@memberjunction/computer-use` | Generic browser I/O + perception (CDP, selectors, screencast, a11y) |
+| `@memberjunction/computer-use` | Generic browser I/O + perception (CDP, selectors, screencast, tab-audio capture, a11y) |
 | `@memberjunction/remote-browser-base` | Universal contracts + `RemoteBrowserEngineBase` registry cache |
 | `@memberjunction/remote-browser-cdp` | Shared CDP session kit (the DRY heart) + lossless mapper |
 | `@memberjunction/remote-browser-{selfhost,browserbase,steel,browserless,hyperbrowser}` | The 5 backends |

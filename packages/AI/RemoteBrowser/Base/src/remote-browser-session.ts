@@ -149,6 +149,35 @@ export interface RemoteBrowserScreencastFrame {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
+// Audio streaming (browser → user tab audio).
+// ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A single encoded chunk of audio streamed FROM the remote browser to the user — the soundtrack of
+ * whatever the browser is playing (e.g. a YouTube video the co-agent is demoing). The sibling of
+ * {@link RemoteBrowserScreencastFrame} for audio: chunks feed the channel's client-side audio player
+ * (a MediaSource fed `audio/webm;codecs=opus`).
+ *
+ * The default (Self-Hosted Chrome) capture path produces `'webm-opus'` chunks via an in-page
+ * `MediaRecorder`; `'opus'` / `'pcm16'` are reserved for future backend capture paths (e.g. a
+ * server-side virtual audio sink).
+ */
+export interface RemoteBrowserAudioChunk {
+    /** The encoded audio data, Base64-encoded (no `data:` prefix). */
+    DataBase64: string;
+    /** The codec / container of {@link DataBase64}. `'webm-opus'` for the default in-page recorder. */
+    Codec: 'webm-opus' | 'opus' | 'pcm16';
+    /** Sample rate in Hz (typically 48000 for the Opus path). */
+    SampleRate: number;
+    /** Channel count (1 = mono, 2 = stereo). */
+    Channels: number;
+    /** Monotonically increasing sequence number for ordering / drop detection / resync. */
+    SequenceNumber: number;
+    /** Approximate duration of this chunk in milliseconds, when known. */
+    DurationMs?: number;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────
 // Human takeover input — a discriminated union over `Kind`.
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -369,6 +398,30 @@ export interface IRemoteBrowserSession {
      * @returns A promise that resolves once streaming has stopped.
      */
     StopScreencast(): Promise<void>;
+
+    /**
+     * Begins streaming the remote browser's tab audio to `onChunk` (the source for the channel's
+     * client-side audio player) — so a co-agent demoing a video/audio site is HEARD, not just seen.
+     *
+     * **Capability-gated by BACKEND IMPLEMENTATION** (v1): a backend without an audio-capture mechanism
+     * rejects with {@link import('./capability-errors').RemoteBrowserCapabilityNotSupportedError}, exactly
+     * like a non-streaming backend rejects {@link IRemoteBrowserSession.StartScreencast}. (A future
+     * metadata `AudioStreaming` feature flag is a documented fast-follow; v1 gates by whether the backend
+     * provides capture.)
+     *
+     * @param onChunk Invoked with each encoded {@link RemoteBrowserAudioChunk}.
+     * @returns A promise that resolves once the audio stream has started.
+     */
+    StartAudioStream(onChunk: (chunk: RemoteBrowserAudioChunk) => void): Promise<void>;
+
+    /**
+     * Stops an audio stream previously started with {@link IRemoteBrowserSession.StartAudioStream}.
+     *
+     * **Capability-gated by BACKEND IMPLEMENTATION** (v1). Backends without audio capture reject.
+     *
+     * @returns A promise that resolves once streaming has stopped.
+     */
+    StopAudioStream(): Promise<void>;
 
     /**
      * Routes a human takeover input (pointer move/click, key, scroll) into the backend browser.

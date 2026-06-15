@@ -22,6 +22,8 @@ import {
 import { SELF_HOST_PROVIDER_NAME, SelfHostSessionBackend } from '../selfhost-session-backend';
 import { LocalChromeContainerRunner } from '../local-chrome-container-runner';
 import { AcquiredCdpSession } from '@memberjunction/remote-browser-cdp';
+import { AudioCaptureChunk, PlaywrightBrowserAdapter } from '@memberjunction/computer-use';
+import { RemoteBrowserAudioChunk } from '@memberjunction/remote-browser-base';
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
 // Fake runner — the injected seam that lets all tests run with no container/network/browser.
@@ -193,6 +195,48 @@ describe('SelfHostRemoteBrowser', () => {
             const local = new LocalChromeContainerRunner();
             expect(local).toBeInstanceOf(LocalChromeContainerRunner);
             expect(typeof local.Acquire).toBe('function');
+        });
+    });
+
+    describe('SelfHostSessionBackend.StartAudioCapture', () => {
+        /** A minimal adapter fake recording the audio-capture wiring without a real browser. */
+        class FakeAudioAdapter extends PlaywrightBrowserAdapter {
+            public StartCount = 0;
+            public StopCount = 0;
+            public LastOnChunk: ((chunk: AudioCaptureChunk) => void) | null = null;
+            public override async StartAudioCapture(onChunk: (chunk: AudioCaptureChunk) => void): Promise<void> {
+                this.StartCount++;
+                this.LastOnChunk = onChunk;
+            }
+            public override async StopAudioCapture(): Promise<void> {
+                this.StopCount++;
+            }
+        }
+
+        it('delegates capture to the adapter and maps chunks to the Base shape', async () => {
+            const driver = new TestableSelfHostRemoteBrowser();
+            const acquired = await driver.AcquireSessionForTest(buildContext());
+            const adapter = new FakeAudioAdapter();
+            const received: RemoteBrowserAudioChunk[] = [];
+
+            // StartAudioCapture is the optional hook — present on the Self-Hosted Chrome backend.
+            const handle = await acquired.Backend.StartAudioCapture!(adapter, (c) => received.push(c));
+            expect(adapter.StartCount).toBe(1);
+
+            // Drive a computer-use chunk through the adapter callback and confirm the Base mapping.
+            const cu = new AudioCaptureChunk();
+            cu.DataBase64 = 'QUJD';
+            cu.Codec = 'webm-opus';
+            cu.SampleRate = 48000;
+            cu.Channels = 2;
+            cu.SequenceNumber = 3;
+            adapter.LastOnChunk?.(cu);
+            expect(received).toEqual<RemoteBrowserAudioChunk[]>([
+                { DataBase64: 'QUJD', Codec: 'webm-opus', SampleRate: 48000, Channels: 2, SequenceNumber: 3, DurationMs: undefined },
+            ]);
+
+            await handle.Stop();
+            expect(adapter.StopCount).toBe(1);
         });
     });
 

@@ -16,8 +16,10 @@
 
 import {
     RemoteBrowserActionResult,
+    RemoteBrowserAudioChunk,
     RemoteBrowserCapabilityNotSupportedError,
 } from '@memberjunction/remote-browser-base';
+import { PlaywrightBrowserAdapter } from '@memberjunction/computer-use';
 
 /**
  * Driver-supplied hooks for the backend-specific portions of a CDP remote-browser session.
@@ -38,7 +40,47 @@ import {
  * on the feature flag before ever calling, so this throw is the defense-in-depth layer). `Release` is
  * always implemented — it is the teardown counterpart to `AcquireSession`.
  */
+/**
+ * A live handle to a running backend audio capture, returned by
+ * {@link ICdpSessionBackend.StartAudioCapture}. {@link Stop} tears the capture down (the backend's
+ * counterpart to having started it); the shared session calls it on
+ * {@link import('./cdp-remote-browser-session').CdpRemoteBrowserSession.StopAudioStream} and `Close()`.
+ */
+export interface ICdpAudioCaptureHandle {
+    /**
+     * Stops the audio capture and releases its resources. Should be idempotent and non-throwing for an
+     * already-stopped capture.
+     *
+     * @returns A promise that resolves once the capture has stopped.
+     */
+    Stop(): Promise<void>;
+}
+
 export interface ICdpSessionBackend {
+    /**
+     * OPTIONAL — begins capturing the browser's tab audio for streaming to the user, invoking `onChunk`
+     * for each encoded {@link RemoteBrowserAudioChunk}, and returns a handle whose {@link ICdpAudioCaptureHandle.Stop}
+     * tears the capture down.
+     *
+     * Implement this ONLY for backends that can capture tab audio (Self-Hosted Chrome delegates to the
+     * shared adapter's in-page `MediaRecorder` mechanism). Backends that OMIT this method advertise no
+     * audio capability, and {@link import('./cdp-remote-browser-session').CdpRemoteBrowserSession.StartAudioStream}
+     * throws {@link RemoteBrowserCapabilityNotSupportedError} for them — exactly the "gate by backend
+     * implementation" model the v1 plan specifies (no metadata flag yet).
+     *
+     * The capture mechanism is per-backend (the "each backend its own way" requirement): the shared
+     * session hands the backend the connected {@link PlaywrightBrowserAdapter} so a CDP-based backend can
+     * reuse the adapter's generic capture, while a different backend could tap a service-side stream.
+     *
+     * @param adapter The connected Playwright/CDP adapter driving this session.
+     * @param onChunk Callback invoked with each captured audio chunk.
+     * @returns A promise resolving to the capture handle.
+     */
+    StartAudioCapture?(
+        adapter: PlaywrightBrowserAdapter,
+        onChunk: (chunk: RemoteBrowserAudioChunk) => void,
+    ): Promise<ICdpAudioCaptureHandle>;
+
     /**
      * Returns the backend's hosted, embeddable live-view URL so humans can watch the browser without MJ
      * encoding frames.

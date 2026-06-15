@@ -22,7 +22,7 @@ import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
-import { IRemoteBrowserSession, RemoteBrowserAction, RemoteBrowserHumanInput, RemoteBrowserModifierKey, RemoteBrowserCapabilityNotSupportedError } from '@memberjunction/remote-browser-base';
+import { IRemoteBrowserSession, RemoteBrowserAction, RemoteBrowserAudioChunk, RemoteBrowserHumanInput, RemoteBrowserModifierKey, RemoteBrowserCapabilityNotSupportedError } from '@memberjunction/remote-browser-base';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -101,6 +101,19 @@ export class RemoteBrowserScreencastResult {
 }
 
 /**
+ * Result of {@link RemoteBrowserActionResolver.StartRemoteBrowserAudioStream} — whether the live tab-audio
+ * stream started. When `false` the backend lacks an audio-capture mechanism (v1 gates audio by backend
+ * implementation, not a metadata flag) or the start failed; the client simply plays no audio. When `true`
+ * the server is now PUSHING encoded audio chunks on the user's push-status topic and the client plays them.
+ */
+@ObjectType()
+export class RemoteBrowserAudioStreamResult {
+  /** Whether the server-pushed tab-audio stream is now running for this session. */
+  @Field(() => Boolean)
+  Streaming: boolean;
+}
+
+/**
  * One UI element the visual interpreter localized in the screenshot — a label plus the pixel centroid the
  * voice agent can feed straight into `browser_Click(x, y)`. Coordinates are in the SCREENSHOT's own pixel
  * space (top-left origin), which equals the live browser viewport.
@@ -166,6 +179,14 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * on the one session. Entries are removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserScreencast}.
    */
   private startedScreencasts = new Set<string>();
+
+  /**
+   * Agent-session ids whose live tab-audio stream this resolver has already started. Keyed by
+   * `agentSessionID` so a re-issued {@link RemoteBrowserActionResolver.StartRemoteBrowserAudioStream}
+   * (the surface re-binding) is idempotent and never stacks two captures on the one session. Entries are
+   * removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserAudioStream}.
+   */
+  private startedAudioStreams = new Set<string>();
 
   /**
    * Execute ONE browser action relayed from the client-direct realtime session, returning the outcome +
@@ -369,6 +390,80 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   }
 
   /**
+   * Starts streaming the session browser's TAB AUDIO and PUSHES each encoded chunk to the calling user's
+   * push-status topic — so a co-agent demoing a video/audio site is HEARD, not just seen. Ownership-gated.
+   * Idempotent: a re-call for an already-streaming session is a no-op that reports `Streaming: true`.
+   *
+   * Capability gating (v1 = by backend implementation): {@link IRemoteBrowserSession.StartAudioStream}
+   * throws {@link RemoteBrowserCapabilityNotSupportedError} on a backend with no audio-capture mechanism —
+   * caught here and reported as `Streaming: false` (the client simply plays no audio). Any other failure is
+   * logged and likewise reported as `Streaming: false`.
+   *
+   * @param agentSessionID The `AIAgentSession` id the browser is bound to.
+   * @returns `{ Streaming: true }` when audio chunks are now being pushed, else `{ Streaming: false }`.
+   */
+  @Mutation(() => RemoteBrowserAudioStreamResult)
+  async StartRemoteBrowserAudioStream(
+    @Arg('agentSessionID', () => String) agentSessionID: string,
+    @Ctx() { userPayload, providers }: AppContext,
+    @PubSub() pubSub: PubSubEngine,
+  ): Promise<RemoteBrowserAudioStreamResult> {
+    const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+    const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
+
+    // Idempotent: a re-bind must not stack a second audio capture on the one live browser.
+    if (this.startedAudioStreams.has(agentSessionID)) {
+      return { Streaming: true };
+    }
+
+    const providerName = await this.resolveProviderName(session, contextUser, provider);
+    try {
+      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName);
+      await liveSession.StartAudioStream((chunk) => this.publishAudioChunk(pubSub, userPayload, agentSessionID, chunk));
+      this.startedAudioStreams.add(agentSessionID);
+      return { Streaming: true };
+    } catch (err) {
+      if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
+        // Backend can't capture audio — the client plays no audio. Not an error condition.
+        return { Streaming: false };
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      LogError(`StartRemoteBrowserAudioStream failed (provider='${providerName}'): ${message}`);
+      return { Streaming: false };
+    }
+  }
+
+  /**
+   * Stops a tab-audio stream previously started by {@link RemoteBrowserActionResolver.StartRemoteBrowserAudioStream}.
+   * Ownership-gated and best-effort: when no live browser exists, or `StopAudioStream` rejects, the call
+   * still resolves `true` (the client's teardown should never depend on this succeeding).
+   *
+   * @param agentSessionID The `AIAgentSession` id.
+   * @returns `true` (always) once the stop has been attempted.
+   */
+  @Mutation(() => Boolean)
+  async StopRemoteBrowserAudioStream(
+    @Arg('agentSessionID', () => String) agentSessionID: string,
+    @Ctx() { userPayload, providers }: AppContext,
+  ): Promise<boolean> {
+    const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+
+    this.startedAudioStreams.delete(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    if (liveSession) {
+      try {
+        await liveSession.StopAudioStream();
+      } catch (err) {
+        // Best-effort: a backend without audio capture throws here too; teardown ignores it.
+        const message = err instanceof Error ? err.message : String(err);
+        LogError(`StopRemoteBrowserAudioStream (best-effort) for session ${agentSessionID}: ${message}`);
+      }
+    }
+    return true;
+  }
+
+  /**
    * Relays ONE human-takeover input (pointer move/click or key press) from the user watching the live
    * screencast into the session's server-hosted browser — the "grab the wheel" path. Ownership-gated.
    * The surface captures the event on the live-view canvas, maps display→viewport coordinates, and calls
@@ -459,6 +554,37 @@ export class RemoteBrowserActionResolver extends ResolverBase {
         width: frame.Width,
         height: frame.Height,
         seq: frame.SequenceNumber,
+      }),
+      sessionId: userPayload.sessionId,
+    });
+  }
+
+  /**
+   * Publishes one encoded tab-audio chunk to the calling user's push-status topic, in the same envelope
+   * shape the conversations client routes for screencast frames (distinguished by `type`). The client
+   * matches on `resolver` + `type`, then on `agentSessionID`, and feeds `dataBase64` to its audio player.
+   *
+   * @param pubSub The resolver-injected pub/sub engine.
+   * @param userPayload The calling user's payload (its `sessionId` scopes the topic to this browser).
+   * @param agentSessionID The `AIAgentSession` id the chunk belongs to.
+   * @param chunk The encoded audio chunk.
+   */
+  private publishAudioChunk(
+    pubSub: PubSubEngine,
+    userPayload: UserPayload,
+    agentSessionID: string,
+    chunk: RemoteBrowserAudioChunk,
+  ): void {
+    pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+      message: JSON.stringify({
+        resolver: 'RemoteBrowserActionResolver',
+        type: 'RemoteBrowserAudioChunk',
+        agentSessionID,
+        dataBase64: chunk.DataBase64,
+        codec: chunk.Codec,
+        sampleRate: chunk.SampleRate,
+        channels: chunk.Channels,
+        seq: chunk.SequenceNumber,
       }),
       sessionId: userPayload.sessionId,
     });
@@ -587,7 +713,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   }
 
   /** Resolve the request user + read-write provider, throwing a clear error if unauthenticated. */
-  private requireUserAndProvider(
+  protected requireUserAndProvider(
     userPayload: AppContext['userPayload'],
     providers: AppContext['providers'],
   ): { contextUser: UserInfo; provider: IMetadataProvider } {
@@ -605,7 +731,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * @param agentSessionID The `AIAgentSession` id.
    * @returns The loaded, owned session entity.
    */
-  private async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJAIAgentSessionEntity> {
+  protected async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJAIAgentSessionEntity> {
     const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
     if (!(await session.Load(agentSessionID))) {
       throw new Error(`Remote-browser session ${agentSessionID} not found.`);
@@ -625,7 +751,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * @param session The owned session entity (supplies the agent id).
    * @returns The configured backend name, or `undefined` to let the engine auto-select.
    */
-  private async resolveProviderName(session: MJAIAgentSessionEntity, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | undefined> {
+  protected async resolveProviderName(session: MJAIAgentSessionEntity, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | undefined> {
     // The session's agent IS the co-agent (the realtime voice agent), and the interactive channels
     // (Remote Browser, Whiteboard) are the CO-AGENT's abilities — so the remoteBrowser backend config
     // lives on the co-agent's TypeConfiguration, not on the target agent it voices.

@@ -20,6 +20,7 @@ import {
     IRemoteBrowserSession,
     RemoteBrowserAction,
     RemoteBrowserActionResult,
+    RemoteBrowserAudioChunk,
     RemoteBrowserCapabilityNotSupportedError,
     RemoteBrowserHumanInput,
     RemoteBrowserScreencastFrame,
@@ -31,7 +32,7 @@ import {
     ScreencastOptions,
 } from '@memberjunction/computer-use';
 import { mapHumanInput, mapRemoteBrowserAction } from './map-action';
-import { ICdpSessionBackend } from './cdp-session-backend';
+import { ICdpAudioCaptureHandle, ICdpSessionBackend } from './cdp-session-backend';
 
 /**
  * The shared, CDP-backed live remote-browser session. Constructed by
@@ -90,6 +91,12 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
 
     /** Epoch ms of the last frame emitted on the active stream (repaint OR forced). 0 when not streaming. */
     private lastFrameAt = 0;
+
+    /**
+     * The active backend audio-capture handle while an audio stream is running; `null` when not streaming
+     * audio. Held so {@link StopAudioStream} and {@link Close} can tear the capture down.
+     */
+    private audioCaptureHandle: ICdpAudioCaptureHandle | null = null;
 
     /**
      * Constructs a {@link CdpRemoteBrowserSession}.
@@ -186,6 +193,8 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     public async Close(): Promise<void> {
         // Stop the idle-keyframe timer first so no forced frame fires against a tearing-down adapter.
         this.stopKeyframeTimer();
+        // Tear down any active audio capture before closing the adapter it taps (best-effort).
+        await this.teardownAudioCapture();
         // Close the browser adapter first, then release the backend resources. Both are best-effort:
         // a failure in one must not prevent the other from running, so teardown is always complete.
         try {
@@ -229,6 +238,45 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
         this.requireFeature('ScreenStreaming');
         this.stopKeyframeTimer();
         await this.adapter.StopScreencast();
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Gated by BACKEND IMPLEMENTATION (v1): if the driver's {@link ICdpSessionBackend} provides no
+     * `StartAudioCapture` hook, this throws {@link RemoteBrowserCapabilityNotSupportedError} — the same
+     * shape as a non-streaming backend rejecting {@link StartScreencast}. Otherwise it delegates to the
+     * backend (handing it the connected adapter), retaining the returned handle for teardown. Idempotent:
+     * a re-call while already streaming audio is a no-op.
+     */
+    public async StartAudioStream(onChunk: (chunk: RemoteBrowserAudioChunk) => void): Promise<void> {
+        if (!this.backend.StartAudioCapture) {
+            throw new RemoteBrowserCapabilityNotSupportedError(
+                'AudioStreaming',
+                this.providerName || 'CdpRemoteBrowserSession',
+            );
+        }
+        if (this.audioCaptureHandle) {
+            return; // already capturing — don't stack a second capture on the one browser
+        }
+        this.audioCaptureHandle = await this.backend.StartAudioCapture(this.adapter, onChunk);
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Gated by BACKEND IMPLEMENTATION (v1): throws {@link RemoteBrowserCapabilityNotSupportedError} on a
+     * backend with no `StartAudioCapture` hook. Best-effort otherwise: stops the active capture (if any)
+     * and clears the handle.
+     */
+    public async StopAudioStream(): Promise<void> {
+        if (!this.backend.StartAudioCapture) {
+            throw new RemoteBrowserCapabilityNotSupportedError(
+                'AudioStreaming',
+                this.providerName || 'CdpRemoteBrowserSession',
+            );
+        }
+        await this.teardownAudioCapture();
     }
 
     /**
@@ -302,6 +350,24 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
         if (this.screencastKeyframeTimer) {
             clearInterval(this.screencastKeyframeTimer);
             this.screencastKeyframeTimer = null;
+        }
+    }
+
+    /**
+     * Stops the active backend audio capture (if any) and clears the handle. Best-effort: a backend
+     * `Stop` rejection is logged and swallowed so teardown (which runs from both {@link StopAudioStream}
+     * and {@link Close}) always completes. No-op when no capture is running.
+     */
+    private async teardownAudioCapture(): Promise<void> {
+        const handle = this.audioCaptureHandle;
+        if (!handle) {
+            return;
+        }
+        this.audioCaptureHandle = null;
+        try {
+            await handle.Stop();
+        } catch (err) {
+            LogError(`CdpRemoteBrowserSession.teardownAudioCapture: handle.Stop failed: ${this.errorDetail(err)}`);
         }
     }
 

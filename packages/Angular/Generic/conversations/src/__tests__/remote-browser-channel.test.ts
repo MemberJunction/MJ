@@ -322,7 +322,10 @@ describe('RemoteBrowserChannel — live screencast (pushed frames)', () => {
     const surface = {
       Streaming: false,
       Interactive: false,
+      AudioAvailable: false,
+      AudioMuted: false,
       HumanInput: new EventEmitter<RemoteBrowserHumanInputEvent>(),
+      AudioMutedChange: new EventEmitter<boolean>(),
       RenderedFrames: [] as string[],
       RenderFrame(dataBase64: string) {
         this.RenderedFrames.push(dataBase64);
@@ -407,7 +410,10 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     const surface = {
       Streaming: false,
       Interactive: false,
+      AudioAvailable: false,
+      AudioMuted: false,
       HumanInput: new EventEmitter<RemoteBrowserHumanInputEvent>(),
+      AudioMutedChange: new EventEmitter<boolean>(),
       RenderFrame() { /* unused here */ },
       SetCurrentUrl() { /* unused here */ }
     };

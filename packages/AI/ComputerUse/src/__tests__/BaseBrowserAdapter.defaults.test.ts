@@ -6,6 +6,7 @@ import {
     ActionExecutionResult,
     CookieEntry,
     ScreencastFrame,
+    AudioCaptureChunk,
 } from '../types/browser.js';
 
 // A minimal concrete adapter that only implements the abstract members, leaving
@@ -68,5 +69,24 @@ describe('BaseBrowserAdapter — additive perception/screencast defaults', () =>
 
     it('StopScreencast defaults to a no-op resolve', async () => {
         await expect(new MinimalAdapter().StopScreencast()).resolves.toBeUndefined();
+    });
+
+    it('StartAudioCapture defaults to a no-op resolve (emits no chunks, never throws)', async () => {
+        const chunks: AudioCaptureChunk[] = [];
+        await expect(new MinimalAdapter().StartAudioCapture(c => chunks.push(c))).resolves.toBeUndefined();
+        expect(chunks).toHaveLength(0);
+    });
+
+    it('StopAudioCapture defaults to a no-op resolve', async () => {
+        await expect(new MinimalAdapter().StopAudioCapture()).resolves.toBeUndefined();
+    });
+
+    it('AudioCaptureChunk has sensible webm-opus defaults', () => {
+        const chunk = new AudioCaptureChunk();
+        expect(chunk.Codec).toBe('webm-opus');
+        expect(chunk.SampleRate).toBe(48000);
+        expect(chunk.Channels).toBe(2);
+        expect(chunk.SequenceNumber).toBe(0);
+        expect(chunk.DataBase64).toBe('');
     });
 });

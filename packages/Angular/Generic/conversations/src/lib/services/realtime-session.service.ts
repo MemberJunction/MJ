@@ -175,6 +175,21 @@ interface RemoteBrowserScreencastPayload {
 }
 
 /**
+ * Raw shape of the JSON `message` the server publishes on the push-status topic for each live Remote
+ * Browser tab-audio chunk (mirrors {@link RemoteBrowserScreencastPayload}, distinguished by `type`).
+ * Routed to the active Remote Browser channel plugin's audio player — never narrated.
+ */
+interface RemoteBrowserAudioChunkPayload {
+  type: 'RemoteBrowserAudioChunk';
+  agentSessionID: string;
+  dataBase64: string;
+  codec: string;
+  sampleRate: number;
+  channels: number;
+  seq: number;
+}
+
+/**
  * Result shape returned by the `StartRealtimeClientSession` server mutation.
  * The browser uses these values to open a client-direct realtime session.
  */
@@ -1616,6 +1631,11 @@ export class RealtimeSessionService {
       this.routeScreencastFrame(frame);
       return;
     }
+    const audio = this.parseAudioChunk(raw);
+    if (audio) {
+      this.routeAudioChunk(audio);
+      return;
+    }
     const progress = this.parseProgress(raw);
     if (progress) {
       this.dispatchProgress(progress);
@@ -1661,6 +1681,53 @@ export class RealtimeSessionService {
     channel: BaseRealtimeChannelClient,
   ): channel is BaseRealtimeChannelClient & { OnScreencastFrame(dataBase64: string): void } {
     return typeof (channel as { OnScreencastFrame?: unknown }).OnScreencastFrame === 'function';
+  }
+
+  /**
+   * Parses a push-status message and returns it only when it's a Remote Browser audio chunk for the active
+   * session — otherwise `null` (ignored). Matched by `resolver` + `type`, then scoped to THIS session by
+   * `agentSessionID`.
+   */
+  private parseAudioChunk(raw: string): RemoteBrowserAudioChunkPayload | null {
+    let payload: { resolver?: string } & Partial<RemoteBrowserAudioChunkPayload>;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    const matches =
+      payload?.resolver === 'RemoteBrowserActionResolver' &&
+      payload?.type === 'RemoteBrowserAudioChunk' &&
+      payload?.agentSessionID === this.agentSessionId &&
+      typeof payload?.dataBase64 === 'string';
+    return matches ? (payload as RemoteBrowserAudioChunkPayload) : null;
+  }
+
+  /**
+   * Forwards an audio chunk to the active Remote Browser channel plugin so it plays the chunk through its
+   * client-side audio player. The plugin is found among the session's active channels by its `ChannelName`;
+   * located via a structural guard so the service stays decoupled from the concrete channel class.
+   */
+  private routeAudioChunk(chunk: RemoteBrowserAudioChunkPayload): void {
+    for (const channel of this._activeChannels$.value) {
+      if (channel.ChannelName === 'Remote Browser' && this.hasOnAudioChunk(channel)) {
+        channel.OnAudioChunk({
+          dataBase64: chunk.dataBase64,
+          codec: chunk.codec,
+          sampleRate: chunk.sampleRate,
+          channels: chunk.channels,
+          seq: chunk.seq,
+        });
+        return;
+      }
+    }
+  }
+
+  /** Structural guard: true when the channel exposes an `OnAudioChunk(chunk)` method. */
+  private hasOnAudioChunk(
+    channel: BaseRealtimeChannelClient,
+  ): channel is BaseRealtimeChannelClient & { OnAudioChunk(chunk: { dataBase64: string; codec: string; sampleRate: number; channels: number; seq: number }): void } {
+    return typeof (channel as { OnAudioChunk?: unknown }).OnAudioChunk === 'function';
   }
 
   /**

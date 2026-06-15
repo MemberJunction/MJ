@@ -118,3 +118,4 @@ export * from './lib/components/realtime/whiteboard/whiteboard-artifact-viewer.c
 export * from './lib/components/realtime/remote-browser/remote-browser-channel';
 export * from './lib/components/realtime/remote-browser/remote-browser-surface.component';
 export * from './lib/components/realtime/remote-browser/remote-browser-tools';
+export * from './lib/components/realtime/remote-browser/remote-browser-audio-player';

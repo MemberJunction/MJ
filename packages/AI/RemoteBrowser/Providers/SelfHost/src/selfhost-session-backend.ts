@@ -20,9 +20,11 @@
 
 import {
     RemoteBrowserActionResult,
+    RemoteBrowserAudioChunk,
     RemoteBrowserCapabilityNotSupportedError,
 } from '@memberjunction/remote-browser-base';
-import { ICdpSessionBackend } from '@memberjunction/remote-browser-cdp';
+import { ICdpAudioCaptureHandle, ICdpSessionBackend } from '@memberjunction/remote-browser-cdp';
+import { AudioCaptureChunk, PlaywrightBrowserAdapter } from '@memberjunction/computer-use';
 import { ChromeContainerHandle } from './chrome-container-runner';
 
 /**
@@ -59,6 +61,51 @@ export class SelfHostSessionBackend implements ICdpSessionBackend {
      */
     constructor(containerHandle: ChromeContainerHandle) {
         this.containerHandle = containerHandle;
+    }
+
+    /**
+     * Begins capturing the browser's tab audio (Self-Hosted Chrome supports it) by delegating to the
+     * shared adapter's in-page `MediaRecorder` capture mechanism, mapping each computer-use
+     * {@link AudioCaptureChunk} to the Base {@link RemoteBrowserAudioChunk}. The returned handle's
+     * `Stop` stops the adapter capture.
+     *
+     * Implementing this method is what advertises the audio capability for this backend (v1 gates audio
+     * by backend implementation, not a metadata flag) — so {@link CdpRemoteBrowserSession.StartAudioStream}
+     * starts rather than throws for Self-Hosted Chrome.
+     *
+     * @param adapter The connected Playwright/CDP adapter driving this session.
+     * @param onChunk Callback invoked with each captured audio chunk (Base shape).
+     * @returns A promise resolving to a handle whose `Stop` tears the capture down.
+     */
+    public async StartAudioCapture(
+        adapter: PlaywrightBrowserAdapter,
+        onChunk: (chunk: RemoteBrowserAudioChunk) => void,
+    ): Promise<ICdpAudioCaptureHandle> {
+        await adapter.StartAudioCapture((chunk: AudioCaptureChunk) => onChunk(this.mapAudioChunk(chunk)));
+        return {
+            Stop: async (): Promise<void> => {
+                await adapter.StopAudioCapture();
+            },
+        };
+    }
+
+    /**
+     * Maps a computer-use {@link AudioCaptureChunk} to the Base {@link RemoteBrowserAudioChunk}. The two
+     * shapes are field-identical; this keeps the Base/CDP layers free of any computer-use dependency on the
+     * audio path.
+     *
+     * @param chunk The computer-use audio chunk.
+     * @returns The equivalent Base audio chunk.
+     */
+    private mapAudioChunk(chunk: AudioCaptureChunk): RemoteBrowserAudioChunk {
+        return {
+            DataBase64: chunk.DataBase64,
+            Codec: chunk.Codec,
+            SampleRate: chunk.SampleRate,
+            Channels: chunk.Channels,
+            SequenceNumber: chunk.SequenceNumber,
+            DurationMs: chunk.DurationMs,
+        };
     }
 
     /**

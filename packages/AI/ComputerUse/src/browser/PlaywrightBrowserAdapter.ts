@@ -24,6 +24,7 @@ import {
     CookieEntry,
     ScreencastFrame,
     ScreencastOptions,
+    AudioCaptureChunk,
     AccessibilityNode,
     ElementInfo,
     BoundingBox,
@@ -70,6 +71,180 @@ interface CDPScreencastFramePayload {
     };
 }
 
+/**
+ * Shape of the payload the in-page audio-capture agent sends back through the
+ * `__mjAudioChunk` Playwright binding for each recorded slice. Only the fields we
+ * consume are declared; the agent script and this interface must stay in sync.
+ */
+interface InPageAudioChunkPayload {
+    /** Base64-encoded webm-Opus blob for this slice (no data URI prefix). */
+    dataBase64: string;
+    /** The codec/container — always `'webm-opus'` from the in-page recorder. */
+    codec: 'webm-opus';
+    /** Sample rate in Hz reported by the captured track (best-effort; 48000 default). */
+    sampleRate: number;
+    /** Channel count of the captured track (best-effort; 2 default). */
+    channels: number;
+}
+
+/**
+ * The in-page audio-capture agent, run BOTH via `page.addInitScript` (so it
+ * re-installs on every future navigation) and `page.evaluate` (so it starts on
+ * the current document). It runs in the BROWSER context — it must be fully
+ * self-contained (no closure over Node values) and reference only browser
+ * globals (`window`, `document`, `MediaRecorder`, `FileReader`, …).
+ *
+ * Responsibilities:
+ *  1. Idempotent install — bails if already installed on this document.
+ *  2. Find the FIRST media element (`<video>`/`<audio>`) that is actively playing,
+ *     via an initial scan + a `MutationObserver` for elements added later, plus
+ *     `play`/`pause` listeners so it (re)taps when playback starts/stops/swaps.
+ *  3. Tap it with `element.captureStream()`, take only the audio tracks, and feed
+ *     them to a `MediaRecorder({ mimeType: 'audio/webm;codecs=opus' })` at a
+ *     ~250ms timeslice. Each `dataavailable` blob is base64-encoded and posted
+ *     back through the `window.__mjAudioChunk` binding.
+ *  4. Expose `window.__mjStopAudioCapture()` for clean teardown.
+ *
+ * Declared as a plain function so Playwright serializes it to source; it is never
+ * invoked in the Node process.
+ */
+function inPageAudioCaptureAgent(): void {
+    const w = window as unknown as {
+        __mjAudioCaptureInstalled?: boolean;
+        __mjAudioChunk?: (payload: { dataBase64: string; codec: 'webm-opus'; sampleRate: number; channels: number }) => void;
+        __mjStopAudioCapture?: () => void;
+    };
+    if (w.__mjAudioCaptureInstalled) {
+        return; // already installed on this document
+    }
+    w.__mjAudioCaptureInstalled = true;
+
+    const MIME = 'audio/webm;codecs=opus';
+    const TIMESLICE_MS = 250;
+    let recorder: MediaRecorder | null = null;
+    let tappedEl: HTMLMediaElement | null = null;
+    let observer: MutationObserver | null = null;
+
+    const post = (blob: Blob, sampleRate: number, channels: number): void => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const result = typeof reader.result === 'string' ? reader.result : '';
+            const comma = result.indexOf(',');
+            const dataBase64 = comma >= 0 ? result.slice(comma + 1) : '';
+            if (dataBase64 && typeof w.__mjAudioChunk === 'function') {
+                w.__mjAudioChunk({ dataBase64, codec: 'webm-opus', sampleRate, channels });
+            }
+        };
+        reader.readAsDataURL(blob);
+    };
+
+    const stopRecorder = (): void => {
+        if (recorder && recorder.state !== 'inactive') {
+            try { recorder.stop(); } catch { /* already stopped */ }
+        }
+        recorder = null;
+        tappedEl = null;
+    };
+
+    const tap = (el: HTMLMediaElement): void => {
+        if (el === tappedEl && recorder && recorder.state === 'recording') {
+            return; // already tapping this element
+        }
+        stopRecorder();
+        const captureFn = (el as unknown as { captureStream?: () => MediaStream }).captureStream;
+        if (typeof captureFn !== 'function' || typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported(MIME)) {
+            return; // capture / opus recording not available (e.g. DRM/EME element)
+        }
+        let stream: MediaStream;
+        try {
+            stream = captureFn.call(el);
+        } catch {
+            return; // captureStream blocked (DRM) — leave this element untapped
+        }
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length === 0) {
+            return;
+        }
+        const settings: MediaTrackSettings = audioTracks[0].getSettings();
+        const sampleRate = typeof settings.sampleRate === 'number' ? settings.sampleRate : 48000;
+        const channels = typeof settings.channelCount === 'number' ? settings.channelCount : 2;
+        try {
+            recorder = new MediaRecorder(new MediaStream(audioTracks), { mimeType: MIME });
+        } catch {
+            recorder = null;
+            return;
+        }
+        tappedEl = el;
+        recorder.ondataavailable = (e: BlobEvent): void => {
+            if (e.data && e.data.size > 0) {
+                post(e.data, sampleRate, channels);
+            }
+        };
+        try { recorder.start(TIMESLICE_MS); } catch { stopRecorder(); }
+    };
+
+    const playingMedia = (): HTMLMediaElement | null => {
+        const all = Array.from(document.querySelectorAll('video, audio')) as HTMLMediaElement[];
+        for (const el of all) {
+            if (!el.paused && !el.muted && el.readyState >= 2) {
+                return el;
+            }
+        }
+        return null;
+    };
+
+    const reevaluate = (): void => {
+        const el = playingMedia();
+        if (el) {
+            tap(el);
+        } else if (recorder) {
+            // The tapped element stopped playing and nothing else is — stop until the next play.
+            stopRecorder();
+        }
+    };
+
+    const onPlay = (): void => reevaluate();
+    const onPause = (): void => reevaluate();
+
+    const wire = (el: HTMLMediaElement): void => {
+        el.addEventListener('play', onPlay);
+        el.addEventListener('playing', onPlay);
+        el.addEventListener('pause', onPause);
+        el.addEventListener('ended', onPause);
+    };
+
+    // Initial scan + wiring of existing media elements.
+    (Array.from(document.querySelectorAll('video, audio')) as HTMLMediaElement[]).forEach(wire);
+    reevaluate();
+
+    // Watch for media elements added later (SPA navigation, lazy players).
+    observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            m.addedNodes.forEach((node) => {
+                if (node instanceof HTMLMediaElement) {
+                    wire(node);
+                } else if (node instanceof HTMLElement) {
+                    (Array.from(node.querySelectorAll('video, audio')) as HTMLMediaElement[]).forEach(wire);
+                }
+            });
+        }
+        reevaluate();
+    });
+    observer.observe(document.documentElement || document, { childList: true, subtree: true });
+
+    w.__mjStopAudioCapture = (): void => {
+        stopRecorder();
+        if (observer) {
+            observer.disconnect();
+            observer = null;
+        }
+        w.__mjAudioCaptureInstalled = false;
+    };
+}
+
+/** Source string of {@link inPageAudioCaptureAgent}, the form Playwright `addInitScript`/`evaluate` accept. */
+const AUDIO_CAPTURE_AGENT_SOURCE = `(${inPageAudioCaptureAgent.toString()})()`;
+
 export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private browser: Browser | null = null;
     private context: BrowserContext | null = null;
@@ -97,6 +272,17 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
      * `Page.screencastFrame` only emits on a repaint). `null` when no screencast is running.
      */
     private screencastOnFrame: ((frame: ScreencastFrame) => void) | null = null;
+
+    /**
+     * The active audio capture's chunk callback, retained so the `__mjAudioChunk`
+     * Playwright binding can forward each in-page slice to it. `null` when no
+     * capture is running.
+     */
+    private audioOnChunk: ((chunk: AudioCaptureChunk) => void) | null = null;
+    /** Monotonic chunk counter for the current audio-capture session. */
+    private audioSequence: number = 0;
+    /** True once the `__mjAudioChunk` binding has been exposed on the page (exposed at most once). */
+    private audioBindingExposed: boolean = false;
 
     // ─── Lifecycle ─────────────────────────────────────────
 
@@ -195,6 +381,9 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         //   - Only close the context if WE created it (ownsContext).
         //   - Only close the browser if WE launched it (!connected).
         // Swallow errors — partial cleanup must not mask the original failure.
+        // Tear down any in-page audio capture first (clears local state + the recorder).
+        await this.StopAudioCapture().catch(() => {});
+        this.audioBindingExposed = false;
         if (this.page) {
             await this.page.close().catch(() => {});
             this.page = null;
@@ -449,6 +638,110 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         frame.Height = this.config.ViewportHeight;
         frame.SequenceNumber = this.screencastSequence++;
         onFrame(frame);
+    }
+
+    // ─── Audio capture (in-page tab-audio feed) ────────────
+
+    /**
+     * Start capturing the audio playing inside the browser tab and invoke
+     * `onChunk` for each encoded slice.
+     *
+     * Mechanism (in-page, headless-safe, no OS audio device, no extension): a
+     * capture agent is injected via Playwright `page.exposeBinding('__mjAudioChunk', …)`
+     * + `page.addInitScript(…)`. The agent watches the DOM for `<video>` / `<audio>`
+     * elements (a `MutationObserver` plus an initial scan), taps the FIRST one that
+     * is actively playing with `element.captureStream()`, and feeds its audio tracks
+     * to an in-page `MediaRecorder({ mimeType: 'audio/webm;codecs=opus' })` with a
+     * ~250ms `timeslice`. Each `dataavailable` blob is base64-encoded and sent back
+     * through the binding, which lands here and is mapped to an {@link AudioCaptureChunk}.
+     * The agent restarts the recorder when the active element swaps / plays / pauses.
+     *
+     * Calling start while a capture is already running is a no-op (the existing
+     * capture keeps feeding chunks).
+     *
+     * **Limitation:** only audio routed through a media ELEMENT is captured (covers
+     * YouTube and most video/audio sites). Pure Web-Audio-API sound and DRM/EME
+     * media (where `captureStream()` is blocked) are NOT captured — a server-side
+     * virtual audio sink is the documented future path for full-fidelity / DRM audio.
+     *
+     * @param onChunk - Callback invoked with each captured audio chunk.
+     */
+    public override async StartAudioCapture(
+        onChunk: (chunk: AudioCaptureChunk) => void
+    ): Promise<void> {
+        this.requirePage();
+        if (this.audioOnChunk) {
+            return; // Already capturing — don't double-tap the page.
+        }
+        this.audioOnChunk = onChunk;
+        this.audioSequence = 0;
+
+        await this.exposeAudioBinding();
+        // Inject the agent for FUTURE navigations (survives page changes)…
+        await this.page!.addInitScript(AUDIO_CAPTURE_AGENT_SOURCE);
+        // …and start it on the CURRENT document, which addInitScript does not cover.
+        await this.page!.evaluate(AUDIO_CAPTURE_AGENT_SOURCE).catch(() => {});
+    }
+
+    /**
+     * Stop the active audio capture (if any): ask the in-page agent to tear down
+     * its `MediaRecorder` + observers, and clear local capture state. Safe to call
+     * when no capture is running. Best-effort — teardown errors are swallowed.
+     */
+    public override async StopAudioCapture(): Promise<void> {
+        if (!this.audioOnChunk) {
+            return;
+        }
+        this.audioOnChunk = null;
+        this.audioSequence = 0;
+        // Best-effort in-page teardown — the page may already be gone.
+        if (this.page) {
+            await this.page
+                .evaluate(() => {
+                    const stop = (window as unknown as { __mjStopAudioCapture?: () => void }).__mjStopAudioCapture;
+                    if (typeof stop === 'function') {
+                        stop();
+                    }
+                })
+                .catch(() => {});
+        }
+    }
+
+    /**
+     * Exposes the `__mjAudioChunk` binding the in-page agent calls with each
+     * recorded slice, mapping the payload to a sequence-numbered
+     * {@link AudioCaptureChunk} and forwarding it to the active callback. Exposed
+     * at most once per adapter (a second `exposeBinding` of the same name throws).
+     */
+    private async exposeAudioBinding(): Promise<void> {
+        if (this.audioBindingExposed) {
+            return;
+        }
+        this.audioBindingExposed = true;
+        await this.page!.exposeBinding('__mjAudioChunk', (_source, payload: InPageAudioChunkPayload) => {
+            this.emitAudioChunk(payload);
+        });
+    }
+
+    /**
+     * Maps one in-page {@link InPageAudioChunkPayload} to an {@link AudioCaptureChunk}
+     * (stamping the monotonic sequence number) and forwards it to the active
+     * callback. No-op when capture has already been stopped (a late binding call).
+     *
+     * @param payload The raw slice payload sent from the in-page agent.
+     */
+    private emitAudioChunk(payload: InPageAudioChunkPayload): void {
+        const onChunk = this.audioOnChunk;
+        if (!onChunk || !payload || typeof payload.dataBase64 !== 'string') {
+            return;
+        }
+        const chunk = new AudioCaptureChunk();
+        chunk.DataBase64 = payload.dataBase64;
+        chunk.Codec = 'webm-opus';
+        chunk.SampleRate = typeof payload.sampleRate === 'number' && payload.sampleRate > 0 ? payload.sampleRate : 48000;
+        chunk.Channels = typeof payload.channels === 'number' && payload.channels > 0 ? payload.channels : 2;
+        chunk.SequenceNumber = this.audioSequence++;
+        onChunk(chunk);
     }
 
     // ─── Action Execution ──────────────────────────────────

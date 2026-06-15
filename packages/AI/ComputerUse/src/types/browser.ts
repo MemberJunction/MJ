@@ -268,6 +268,41 @@ export class ScreencastOptions {
     public Format?: 'jpeg' | 'png';
 }
 
+// ─── Audio capture (in-page tab-audio feed) ────────────────
+/**
+ * A single chunk of audio captured FROM the browser tab (the media playing inside
+ * the page — e.g. a YouTube video's soundtrack), emitted by
+ * {@link BaseBrowserAdapter.StartAudioCapture}'s callback.
+ *
+ * The default capture path (see PlaywrightBrowserAdapter) taps a playing
+ * `<video>` / `<audio>` element with `element.captureStream()` and encodes the
+ * tracks with an in-page `MediaRecorder`, so each chunk is a self-describing,
+ * webm-Opus-encoded slice of the audio. Adapters without in-page capture never
+ * emit chunks.
+ */
+export class AudioCaptureChunk {
+    /** Base64-encoded encoded audio data for this chunk (no data URI prefix). */
+    public DataBase64: string = '';
+    /**
+     * The codec / container of {@link DataBase64}. `'webm-opus'` is the default
+     * in-page `MediaRecorder` output; `'opus'` / `'pcm16'` are reserved for
+     * future backend capture paths (e.g. a server-side virtual audio sink).
+     */
+    public Codec: 'webm-opus' | 'opus' | 'pcm16' = 'webm-opus';
+    /** Sample rate in Hz (typically 48000 for the `MediaRecorder` Opus path). */
+    public SampleRate: number = 48000;
+    /** Channel count (1 = mono, 2 = stereo). */
+    public Channels: number = 2;
+    /**
+     * Monotonically increasing chunk index, starting at 0 for the first chunk of
+     * a capture session. Lets consumers detect ordering / dropped chunks and
+     * resync the decode pipeline after a gap.
+     */
+    public SequenceNumber: number = 0;
+    /** Approximate duration of this chunk in milliseconds, when known. */
+    public DurationMs?: number;
+}
+
 // ─── Accessibility Snapshot (structured perception) ────────
 /**
  * A node in the page's accessibility tree — a token-efficient, structured
