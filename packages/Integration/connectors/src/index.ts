@@ -26,3 +26,4 @@ export { NetForumConnector } from './NetForumConnector.js';
 export { NimbleAMSConnector } from './NimbleAMSConnector.js';
 export { PropFuelConnector, parseFileName, compareMicrotime } from './PropFuelConnector.js';
 export { PathLMSConnector, LoadPathLMSConnector } from './PathLMSConnector.js';
+export { HivebriteConnector, LoadHivebriteConnector, type HivebriteConnectionConfig } from './HivebriteConnector.js';
