@@ -25,7 +25,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Remote Browser Providers&Name=SupportedFeatures"
           },
           "sync": {
-            "lastModified": "2026-06-13T11:33:59.550Z",
+            "lastModified": "2026-06-15T23:20:01.720Z",
             "checksum": "bdb8edb1ccf61e890eb922e40686e5d82828257edbbb948d794bd60830ded546"
           }
         }

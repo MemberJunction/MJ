@@ -24,7 +24,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Bridge Providers&Name=SupportedFeatures"
           },
           "sync": {
-            "lastModified": "2026-06-13T04:14:28.714Z",
+            "lastModified": "2026-06-15T23:20:01.659Z",
             "checksum": "0c29fb15d357611eadaae3d05ce4af39d1ac05b56d4c4393a23f4a8c9f8b979c"
           }
         }
