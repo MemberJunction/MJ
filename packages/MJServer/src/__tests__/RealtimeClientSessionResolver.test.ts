@@ -1001,9 +1001,9 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — clientToo
         expect(extraTools).toBeUndefined();
     });
 
-    it('rejects a declaration flood beyond the 16-tool cap wholesale', async () => {
+    it('rejects a declaration flood beyond the 64-tool cap wholesale', async () => {
         setupHappyStart();
-        const flood = Array.from({ length: 17 }, (_, i) => ({ ...validTool, Name: `Tool.${i}` }));
+        const flood = Array.from({ length: 65 }, (_, i) => ({ ...validTool, Name: `Tool.${i}` }));
         const extraTools = await startWithClientTools(JSON.stringify(flood));
         expect(extraTools).toBeUndefined();
     });
@@ -1022,7 +1022,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — clientToo
 
     it('rejects an oversized declarations payload wholesale', async () => {
         setupHappyStart();
-        const huge = JSON.stringify([{ ...validTool, Description: 'x'.repeat(70_000) }]);
+        const huge = JSON.stringify([{ ...validTool, Description: 'x'.repeat(300_000) }]);
         const extraTools = await startWithClientTools(huge);
         expect(extraTools).toBeUndefined();
     });
