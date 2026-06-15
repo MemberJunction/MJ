@@ -20,7 +20,6 @@ export class MJConversationDetailFormComponent extends BaseFormComponent {
             { sectionKey: 'userFeedbackInsights', sectionName: 'User Feedback & Insights', isExpanded: true },
             { sectionKey: 'relatedEntities', sectionName: 'Related Entities', isExpanded: true },
             { sectionKey: 'interactiveElements', sectionName: 'Interactive Elements', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },
             { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'Conversation Detail Artifacts', isExpanded: false },

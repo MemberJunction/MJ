@@ -2756,3 +2756,107 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ── Execution History: Runs | Sessions segmented toggle ─────────────── */
+.history-view-toggle {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--mj-bg-surface-sunken);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    padding: 3px;
+    margin-bottom: 14px;
+}
+
+.history-toggle-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 16px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--mj-text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.history-toggle-option:hover {
+    color: var(--mj-text-secondary);
+}
+
+.history-toggle-option.active {
+    background: var(--mj-bg-surface);
+    color: var(--mj-brand-primary);
+    box-shadow: var(--mj-shadow-sm);
+}
+
+.history-toggle-count {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-subtle);
+    color: var(--mj-text-secondary);
+}
+
+.history-toggle-option.active .history-toggle-count {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+    color: var(--mj-brand-primary);
+}
+
+/* ── Voice session rows in Execution History ─────────────────────────── */
+.session-card {
+    cursor: pointer;
+}
+
+.session-role-chip {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 22%, transparent);
+    color: var(--mj-brand-primary);
+}
+
+.session-role-chip--target {
+    background: color-mix(in srgb, var(--mj-status-info) 10%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-status-info) 22%, transparent);
+    color: var(--mj-status-info);
+}
+
+.session-status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+    border: 1px solid var(--mj-border-default);
+}
+
+.session-status-pill[data-status="Active"] {
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
+    border-color: color-mix(in srgb, var(--mj-status-success) 25%, transparent);
+}
+
+.session-status-pill[data-status="Idle"] {
+    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-warning);
+    border-color: color-mix(in srgb, var(--mj-status-warning) 25%, transparent);
+}

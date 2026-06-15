@@ -151,6 +151,17 @@ interface NavItem {
                             [TimeRange]="CurrentTimeRange"
                         ></app-analytics-usage-patterns>
                     }
+                    @case ('realtime-overview') {
+                        <app-analytics-realtime-overview
+                            [TimeRange]="CurrentTimeRange"
+                            (SectionNavigate)="OnSectionChange($event)"
+                        ></app-analytics-realtime-overview>
+                    }
+                    @case ('realtime-sessions') {
+                        <app-analytics-realtime-sessions
+                            [TimeRange]="CurrentTimeRange"
+                        ></app-analytics-realtime-sessions>
+                    }
                 }
             </div>
             </mj-page-body-interior>
@@ -293,6 +304,13 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: true,  ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
             case 'usage-patterns':
                 return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            // Realtime Voice sections own their filters internally (search/status/
+            // target/user/host live with the grid); only the time-range chips come
+            // from the shared chrome. Session data is bucketed daily, so the
+            // sub-day ranges are dropped.
+            case 'realtime-overview':
+            case 'realtime-sessions':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['24h', '7d', '30d'] };
             default:
                 return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
         }
@@ -476,6 +494,11 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
           Description: 'Failure patterns and root causes' },
         { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns',
           Description: 'Volume, frequency, and concurrency over time' },
+        { Key: 'divider2' },
+        { Label: 'Realtime Voice', Icon: 'fa-solid fa-tower-broadcast', Key: 'realtime-overview',
+          Description: 'Operational analytics for voice-agent sessions — sessions, channels, and delegated runs' },
+        { Label: 'Voice Sessions', Icon: 'fa-solid fa-table-list', Key: 'realtime-sessions',
+          Description: 'Every long-lived agent session — live calls, idle holds, and closed history' },
     ];
 
     /**
@@ -497,7 +520,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     get navSections(): MJLeftNavSection[] {
         const sections: MJLeftNavSection[] = [{ items: [] }];
         for (const item of this.NavItems) {
-            if (item.Key === 'divider') {
+            if (item.Key.startsWith('divider')) {
                 sections.push({ items: [] });
             } else {
                 sections[sections.length - 1].items.push({
@@ -538,7 +561,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
 
     /** Navigate to a different analytics section */
     public OnSectionChange(key: string): void {
-        if (key === 'divider' || key === this.ActiveSection) {
+        if (key.startsWith('divider') || key === this.ActiveSection) {
             return;
         }
         this.ActiveSection = key;

@@ -1,0 +1,19 @@
+[
+  {
+    "fields": {
+      "Name": "Whiteboard",
+      "Description": "Live shared whiteboard surface for realtime voice sessions: the user and the agent co-draw on a shared board; the agent perceives coalesced scene deltas and acts through Whiteboard.* client-executed tools. Session state of record persists on the session channel row.",
+      "ServerPluginClass": "WhiteboardChannelServer",
+      "ClientPluginClass": "RealtimeWhiteboardChannel",
+      "TransportType": "PubSub",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "F4ECB024-2B81-4257-9E5D-1F9A1B8E50B8"
+    },
+    "sync": {
+      "lastModified": "2026-06-12T23:42:51.106Z",
+      "checksum": "660afaa0540d7f7702a6ae08b61b0c3da7a6dd94a63657cfe332fed0387e9441"
+    }
+  }
+]
