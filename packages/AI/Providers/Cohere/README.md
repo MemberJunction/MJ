@@ -1,6 +1,6 @@
 # @memberjunction/ai-cohere
 
-MemberJunction AI provider for Cohere's reranking capabilities. This package implements the `BaseReranker` interface to provide semantic document reranking using Cohere's Rerank API, useful for improving search result relevance in RAG (Retrieval-Augmented Generation) pipelines.
+MemberJunction AI provider for Cohere. It implements `BaseReranker` for semantic document reranking (Cohere Rerank API) and `BaseEmbeddings` for text and multimodal embeddings (Cohere Embed v4), useful for improving relevance and powering retrieval in RAG (Retrieval-Augmented Generation) pipelines.
 
 ## Architecture
 
@@ -27,6 +27,11 @@ graph TD
 - **Relevance Scoring**: Documents scored 0-1 with fine-grained relevance ranking
 - **RAG Pipeline Integration**: Designed for use in retrieval-augmented generation workflows
 - **Context-Aware**: Enhanced query processing for better relevance evaluation
+
+### Embeddings (CohereEmbedding)
+- **Multimodal Embeddings**: Embed text and images into a shared vector space (Cohere Embed v4)
+- **Text and Batch**: Single and batch text embedding (1536-dim default)
+- **Configurable Input Type**: Optimize embeddings for document storage or query retrieval
 
 ## Installation
 
@@ -57,6 +62,26 @@ for (const result of results) {
 }
 ```
 
+### Embeddings
+
+```typescript
+import { CohereEmbedding } from '@memberjunction/ai-cohere';
+
+const embedding = new CohereEmbedding('your-cohere-api-key');
+
+// Text (1536-dim vector)
+const text = await embedding.EmbedText({ text: 'a golden retriever in the snow' });
+
+// Multimodal: text + image fused into ONE vector
+const multimodal = await embedding.EmbedContent({
+    content: [
+        { type: 'text', content: 'product photo:' },
+        { type: 'image_url', content: '<base64-image>', mimeType: 'image/png' },
+    ],
+});
+console.log(multimodal.vector.length); // 1536
+```
+
 ## Supported Models
 
 | Model | Description |
@@ -66,7 +91,8 @@ for (const result of results) {
 
 ## Class Registration
 
-Registered as `CohereLLM` via `@RegisterClass(BaseReranker, 'CohereLLM')`.
+- `CohereReranker` -- Registered as `CohereLLM` via `@RegisterClass(BaseReranker, 'CohereLLM')`.
+- `CohereEmbedding` -- Registered via `@RegisterClass(BaseEmbeddings, 'CohereEmbedding')`.
 
 ## Dependencies
 

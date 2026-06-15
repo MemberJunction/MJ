@@ -91,6 +91,7 @@ vi.mock('@memberjunction/ai', () => {
     ImageModelInfo: class {},
     GeneratedImage: MockGeneratedImage,
     BaseRealtimeModel: MockBaseRealtimeModel,
+    BaseEmbeddings: class {},
   };
 });
 
