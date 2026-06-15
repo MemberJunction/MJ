@@ -73,11 +73,11 @@ const STOP_SCREENCAST_MUTATION = `
 const RELAY_HUMAN_INPUT_MUTATION = `
   mutation RelayRemoteBrowserHumanInput(
     $agentSessionID: String!, $kind: String!, $x: Float, $y: Float, $button: String, $key: String,
-    $deltaX: Float, $deltaY: Float
+    $deltaX: Float, $deltaY: Float, $modifiers: String
   ) {
     RelayRemoteBrowserHumanInput(
       agentSessionID: $agentSessionID, kind: $kind, x: $x, y: $y, button: $button, key: $key,
-      deltaX: $deltaX, deltaY: $deltaY
+      deltaX: $deltaX, deltaY: $deltaY, modifiers: $modifiers
     )
   }
 `;
@@ -326,6 +326,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       key: input.key ?? null,
       deltaX: input.deltaX ?? null,
       deltaY: input.deltaY ?? null,
+      // Server expects a comma-separated modifier list (e.g. "Shift,Control"); null when none held.
+      modifiers: input.modifiers && input.modifiers.length > 0 ? input.modifiers.join(',') : null,
     });
   }
 
@@ -410,6 +412,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     if (result.CurrentUrl) {
       // PERCEPTION: tell the agent where the page is now (background — no spoken reply).
       this.Context?.SendContextNote(`[browser] current page: ${result.CurrentUrl}`);
+      // In streaming mode the surface's snapshot poll (which carries the URL) is stopped, so push the new
+      // URL to the live-view bar directly — otherwise it stays stuck on "No page loaded yet".
+      this.surface?.SetCurrentUrl(result.CurrentUrl);
     }
     return this.ok(result.CurrentUrl, result.Detail);
   }

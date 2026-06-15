@@ -16,14 +16,18 @@
 import {
     RemoteBrowserAction,
     RemoteBrowserHumanInput,
+    RemoteBrowserModifierKey,
 } from '@memberjunction/remote-browser-base';
 import {
     BrowserAction,
     ClickAction,
     GoBackAction,
     GoForwardAction,
+    KeyModifier,
     KeypressAction,
+    MouseDownAction,
     MouseMoveAction,
+    MouseUpAction,
     NavigateAction,
     ScrollAction,
     TypeAction,
@@ -119,8 +123,11 @@ export function mapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
  * computer-use {@link BrowserAction} the adapter executes. Exhaustive over `input.Kind`.
  *
  * - `pointer-move` → {@link MouseMoveAction} at `X`/`Y` (cursor move, no click).
- * - `pointer-click` → {@link ClickAction} at `X`/`Y`, carrying the chosen mouse `Button`.
- * - `key` → {@link KeypressAction} carrying the key/combination string.
+ * - `pointer-click` → {@link ClickAction} at `X`/`Y`, carrying the chosen mouse `Button` and any held
+ *   `Modifiers` (e.g. Shift-click to extend a text selection).
+ * - `pointer-down` / `pointer-up` → {@link MouseDownAction} / {@link MouseUpAction} at `X`/`Y` — the two
+ *   halves of a click-drag (e.g. drag-selecting text). The surface emits down → moves → up over time.
+ * - `key` → {@link KeypressAction} carrying the key plus any held `Modifiers` (e.g. Ctrl/Cmd+A select-all).
  * - `scroll` → {@link ScrollAction} carrying `DeltaX`/`DeltaY`. The adapter dispatches a CDP mouse-wheel
  *   (`page.mouse.wheel`) at the CURRENT cursor position; the surface emits a `pointer-move` before/with
  *   each scroll, so the cursor already sits over the scroll target's `X`/`Y` and the wheel lands there.
@@ -144,11 +151,37 @@ export function mapHumanInput(input: RemoteBrowserHumanInput): BrowserAction {
             if (input.Button !== undefined) {
                 mapped.Button = input.Button;
             }
+            const modifiers = mapModifiers(input.Modifiers);
+            if (modifiers) {
+                mapped.Modifiers = modifiers;
+            }
+            return mapped;
+        }
+        case 'pointer-down': {
+            const mapped = new MouseDownAction();
+            mapped.X = input.X;
+            mapped.Y = input.Y;
+            if (input.Button !== undefined) {
+                mapped.Button = input.Button;
+            }
+            return mapped;
+        }
+        case 'pointer-up': {
+            const mapped = new MouseUpAction();
+            mapped.X = input.X;
+            mapped.Y = input.Y;
+            if (input.Button !== undefined) {
+                mapped.Button = input.Button;
+            }
             return mapped;
         }
         case 'key': {
             const mapped = new KeypressAction();
             mapped.Key = input.Key;
+            const modifiers = mapModifiers(input.Modifiers);
+            if (modifiers) {
+                mapped.Modifiers = modifiers;
+            }
             return mapped;
         }
         case 'scroll': {
@@ -161,6 +194,24 @@ export function mapHumanInput(input: RemoteBrowserHumanInput): BrowserAction {
             // Exhaustive: `input` is `never` here.
             return assertNeverHumanInput(input);
     }
+}
+
+/**
+ * Translates the Base modifier-key list to the computer-use {@link KeyModifier} list. The two
+ * vocabularies share names (`Shift` / `Control` / `Alt` / `Meta`), so this is a direct copy; it returns
+ * `undefined` for an empty/absent list so callers leave the action's `Modifiers` unset (preserving the
+ * no-modifier default).
+ *
+ * @param modifiers The Base modifier list, or undefined.
+ * @returns The computer-use modifier list, or `undefined` when there are none.
+ */
+function mapModifiers(modifiers: RemoteBrowserModifierKey[] | undefined): KeyModifier[] | undefined {
+    if (!modifiers || modifiers.length === 0) {
+        return undefined;
+    }
+    // Names align 1:1 between the two unions; the cast is a widening to the computer-use superset
+    // (which additionally includes 'ControlOrMeta', unused on the Base→computer-use path).
+    return modifiers.map((m): KeyModifier => m);
 }
 
 /**

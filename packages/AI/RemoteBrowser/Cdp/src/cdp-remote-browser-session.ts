@@ -105,6 +105,9 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
         // The adapter's Navigate returns void and throws on failure, so we build the Base result here.
         try {
             await this.adapter.Navigate(url);
+            // Force an immediate live-view frame: CDP only emits a screencast frame on a repaint, so the
+            // first navigation can otherwise leave the user staring at a blank surface (best-effort).
+            await this.pushImmediateFrame();
             return { Success: true, CurrentUrl: this.adapter.CurrentUrl };
         } catch (err) {
             return {
@@ -120,6 +123,12 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
      */
     public async ExecuteAction(action: RemoteBrowserAction): Promise<RemoteBrowserActionResult> {
         const result = await this.adapter.ExecuteAction(mapRemoteBrowserAction(action));
+        // After a navigation-class action settles, force a fresh frame so the live view reflects the new
+        // page immediately even if CDP hasn't fired a repaint frame yet (best-effort; the agent narrates
+        // "I opened the page" and the user should SEE it without waiting for the next incidental repaint).
+        if (result.Success && this.isNavigationAction(action)) {
+            await this.pushImmediateFrame();
+        }
         return this.toActionResult(result);
     }
 
@@ -165,6 +174,9 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     ): Promise<void> {
         this.requireFeature('ScreenStreaming');
         await this.adapter.StartScreencast((frame) => onFrame(this.mapScreencastFrame(frame)));
+        // Push an immediate first frame so the user sees the current page the moment the stream starts,
+        // rather than a blank surface until the page next repaints (CDP only emits frames on a repaint).
+        await this.pushImmediateFrame();
     }
 
     /**
@@ -207,6 +219,31 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     }
 
     // ── Internal helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Best-effort: ask the adapter to capture and push ONE on-demand screencast frame through the active
+     * stream. Used right after the stream starts and after a navigation settles so the live view refreshes
+     * immediately, working around CDP's "frames only on repaint" behavior. A no-op on the adapter when no
+     * screencast is running; any failure is logged and swallowed so a missed frame never breaks an action.
+     */
+    private async pushImmediateFrame(): Promise<void> {
+        try {
+            await this.adapter.CaptureScreencastFrame();
+        } catch (err) {
+            LogError(`CdpRemoteBrowserSession.pushImmediateFrame failed (non-fatal): ${this.errorDetail(err)}`);
+        }
+    }
+
+    /**
+     * True when an action changes the page such that the live view should be force-refreshed: navigation,
+     * history back/forward. Clicks/typing/scrolls repaint on their own and don't need the forced frame.
+     *
+     * @param action The Base action just executed.
+     * @returns Whether to push an immediate post-action frame.
+     */
+    private isNavigationAction(action: RemoteBrowserAction): boolean {
+        return action.Kind === 'navigate' || action.Kind === 'back' || action.Kind === 'forward';
+    }
 
     /**
      * Maps a computer-use {@link ActionExecutionResult} to the Base {@link RemoteBrowserActionResult}.

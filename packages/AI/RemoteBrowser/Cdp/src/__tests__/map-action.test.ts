@@ -8,7 +8,9 @@ import {
     GoBackAction,
     GoForwardAction,
     KeypressAction,
+    MouseDownAction,
     MouseMoveAction,
+    MouseUpAction,
     NavigateAction,
     ScrollAction,
     TypeAction,
@@ -145,10 +147,44 @@ describe('mapHumanInput', () => {
         expect(click.Button).toBe('left');
     });
 
+    it('carries modifiers on a pointer-click (shift-click text selection)', () => {
+        const click = mapHumanInput({ Kind: 'pointer-click', X: 3, Y: 4, Modifiers: ['Shift'] }) as ClickAction;
+        expect(click.Modifiers).toEqual(['Shift']);
+    });
+
+    it('leaves Modifiers unset on a pointer-click with no held modifiers', () => {
+        const click = mapHumanInput({ Kind: 'pointer-click', X: 3, Y: 4, Modifiers: [] }) as ClickAction;
+        expect(click.Modifiers).toBeUndefined();
+    });
+
+    it('maps pointer-down → MouseDownAction at X/Y with the button (drag start)', () => {
+        const result = mapHumanInput({ Kind: 'pointer-down', X: 10, Y: 20, Button: 'left' });
+        expect(result).toBeInstanceOf(MouseDownAction);
+        const down = result as MouseDownAction;
+        expect(down.X).toBe(10);
+        expect(down.Y).toBe(20);
+        expect(down.Button).toBe('left');
+    });
+
+    it('maps pointer-up → MouseUpAction at X/Y (drag end)', () => {
+        const result = mapHumanInput({ Kind: 'pointer-up', X: 30, Y: 40 });
+        expect(result).toBeInstanceOf(MouseUpAction);
+        const up = result as MouseUpAction;
+        expect(up.X).toBe(30);
+        expect(up.Y).toBe(40);
+        expect(up.Button).toBe('left'); // default
+    });
+
     it('maps key → KeypressAction with the key', () => {
         const result = mapHumanInput({ Kind: 'key', Key: 'Escape' });
         expect(result).toBeInstanceOf(KeypressAction);
         expect((result as KeypressAction).Key).toBe('Escape');
+    });
+
+    it('carries modifiers on a key press (Ctrl/Cmd+A select-all)', () => {
+        const press = mapHumanInput({ Kind: 'key', Key: 'a', Modifiers: ['Control'] }) as KeypressAction;
+        expect(press.Key).toBe('a');
+        expect(press.Modifiers).toEqual(['Control']);
     });
 
     it('maps scroll → ScrollAction carrying the wheel deltas (CDP mouse-wheel at the current cursor)', () => {
@@ -165,6 +201,8 @@ describe('mapHumanInput', () => {
         const samples: RemoteBrowserHumanInput[] = [
             { Kind: 'pointer-move', X: 0, Y: 0 },
             { Kind: 'pointer-click', X: 0, Y: 0 },
+            { Kind: 'pointer-down', X: 0, Y: 0 },
+            { Kind: 'pointer-up', X: 0, Y: 0 },
             { Kind: 'key', Key: 'A' },
             { Kind: 'scroll', X: 0, Y: 0, DeltaX: 0, DeltaY: 1 },
         ];

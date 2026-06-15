@@ -17,6 +17,8 @@ export type BrowserAction =
     | KeyDownAction
     | KeyUpAction
     | MouseMoveAction
+    | MouseDownAction
+    | MouseUpAction
     | ScrollAction
     | WaitAction
     | NavigateAction
@@ -24,6 +26,15 @@ export type BrowserAction =
     | GoForwardAction
     | RefreshAction
     | DragAction;
+
+/**
+ * A keyboard modifier key held during a mouse or keyboard action.
+ *
+ * `'ControlOrMeta'` resolves to Command on macOS and Control elsewhere — the right choice for
+ * platform-correct select-all / copy / paste chords. The concrete adapter maps these to its own
+ * modifier vocabulary (Playwright accepts these names directly on `mouse.click` / keyboard chords).
+ */
+export type KeyModifier = 'Shift' | 'Control' | 'Alt' | 'Meta' | 'ControlOrMeta';
 
 export class ClickAction {
     public readonly Type = 'Click' as const;
@@ -43,6 +54,12 @@ export class ClickAction {
      * are ignored; when omitted, the existing coordinate click is used.
      */
     public Selector?: string;
+    /**
+     * Optional keyboard modifiers held during the click (e.g. `['Shift']` for shift-click text
+     * selection, `['ControlOrMeta']` for open-in-new-tab). Empty / omitted means no modifiers — the
+     * existing plain-click behavior. Honored on BOTH the selector and coordinate click paths.
+     */
+    public Modifiers?: KeyModifier[];
 }
 
 export class TypeAction {
@@ -61,6 +78,13 @@ export class KeypressAction {
     public readonly Type = 'Keypress' as const;
     /** Key or key combination (e.g., "Enter", "Shift+A", "ControlOrMeta+C") */
     public Key: string = '';
+    /**
+     * Optional keyboard modifiers to hold while pressing {@link Key}. When set, the adapter composes
+     * a single chord (e.g. `Modifiers: ['ControlOrMeta']` + `Key: 'a'` → press `ControlOrMeta+a`).
+     * Empty / omitted presses `Key` on its own. Provided as a structured alternative to embedding the
+     * combination directly in `Key` — both are supported.
+     */
+    public Modifiers?: KeyModifier[];
 }
 
 export class KeyDownAction {
@@ -88,6 +112,39 @@ export class MouseMoveAction {
     public X: number = 0;
     /** Y coordinate in viewport pixels to move the cursor to */
     public Y: number = 0;
+}
+
+/**
+ * Press (and HOLD) a mouse button at an absolute viewport coordinate WITHOUT releasing it.
+ *
+ * The "down" half of a manual drag: pairs with {@link MouseUpAction} (and any intervening
+ * {@link MouseMoveAction}s) to compose a click-drag — e.g. click-drag text selection in an input —
+ * when the drag's endpoint isn't known up front (the streaming-human case). Use {@link DragAction}
+ * instead when start and end are both known atomically.
+ */
+export class MouseDownAction {
+    public readonly Type = 'MouseDown' as const;
+    /** X coordinate in viewport pixels to press at */
+    public X: number = 0;
+    /** Y coordinate in viewport pixels to press at */
+    public Y: number = 0;
+    /** Mouse button to press */
+    public Button: 'left' | 'right' | 'middle' = 'left';
+}
+
+/**
+ * Release a mouse button at an absolute viewport coordinate — the "up" half of a manual drag started
+ * by {@link MouseDownAction}. Moves the cursor to `X`/`Y` first so the release lands at the intended
+ * point, then releases the button.
+ */
+export class MouseUpAction {
+    public readonly Type = 'MouseUp' as const;
+    /** X coordinate in viewport pixels to release at */
+    public X: number = 0;
+    /** Y coordinate in viewport pixels to release at */
+    public Y: number = 0;
+    /** Mouse button to release */
+    public Button: 'left' | 'right' | 'middle' = 'left';
 }
 
 export class ScrollAction {

@@ -17,20 +17,23 @@ const SCROLL_THROTTLE_MS = 40;
 /** Radius (px) of the synthetic cursor ring drawn on the overlay so the user can see their pointer. */
 const SYNTHETIC_CURSOR_RADIUS = 6;
 
+/** A keyboard modifier held during a relayed human input (Shift-click selection, Ctrl/Cmd+key chords). */
+export type RemoteBrowserModifier = 'Shift' | 'Control' | 'Alt' | 'Meta';
+
 /**
  * One human-takeover input the surface emits to the channel while the user "drives" the live view.
- * Mirrors the server's `RemoteBrowserHumanInput` union (flattened for transport): pointer moves/clicks
- * and scrolls carry VIEWPORT coordinates, a scroll also carries wheel deltas, a key carries the pressed
- * key string.
+ * Mirrors the server's `RemoteBrowserHumanInput` union (flattened for transport): pointer
+ * moves/clicks/down/up and scrolls carry VIEWPORT coordinates, a scroll also carries wheel deltas, a key
+ * carries the pressed key string. Pointer clicks/down/up and keys also carry any held `modifiers`.
  */
 export interface RemoteBrowserHumanInputEvent {
   /** Which input occurred. */
-  kind: 'pointer-move' | 'pointer-click' | 'key' | 'scroll';
+  kind: 'pointer-move' | 'pointer-click' | 'pointer-down' | 'pointer-up' | 'key' | 'scroll';
   /** Viewport X (pointer + scroll kinds only). */
   x?: number;
   /** Viewport Y (pointer + scroll kinds only). */
   y?: number;
-  /** Mouse button (pointer-click only). */
+  /** Mouse button (pointer-click / -down / -up only). */
   button?: 'left' | 'middle' | 'right';
   /** The pressed key (key kind only). */
   key?: string;
@@ -38,6 +41,8 @@ export interface RemoteBrowserHumanInputEvent {
   deltaX?: number;
   /** Vertical wheel delta in pixels (scroll kind only; positive = down). */
   deltaY?: number;
+  /** Modifier keys held during the input (pointer-click / -down / -up and key kinds). */
+  modifiers?: RemoteBrowserModifier[];
 }
 
 /**
@@ -50,6 +55,12 @@ const FORWARDED_CONTROL_KEYS = new Set<string>([
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'Home', 'End', 'PageUp', 'PageDown',
 ]);
+
+/**
+ * The modifier keys themselves — pressing one alone is never forwarded as a key (it only rides as a
+ * modifier on the NEXT non-modifier key / click), so the page never receives a lone `'Shift'` keypress.
+ */
+const MODIFIER_KEYS = new Set<string>(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']);
 
 /**
  * Maps a display-space pointer position on the live canvas to the server browser's VIEWPORT pixel space.
@@ -337,6 +348,15 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     return this._interactive && this._streaming;
   }
 
+  /**
+   * True while the user is actively driving the remote browser with the keyboard — the takeover canvas
+   * holds focus. The host overlay reads this to stand down its own global keyboard shortcuts (e.g.
+   * T-to-type opening the local composer) so keystrokes go to the remote page, not the local input.
+   */
+  public get IsCapturingInput(): boolean {
+    return this.surfaceFocused && this.CanTakeOver;
+  }
+
   /** The current screenshot as a `data:` URL, or `null` before the first snapshot arrives. */
   public ScreenshotDataUrl: string | null = null;
   /** The current page URL reported by the server, or `null` when none. */
@@ -386,12 +406,40 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   /** True while a synthetic-cursor repaint is queued, so rapid moves coalesce to one `requestAnimationFrame`. */
   private cursorPaintScheduled = false;
 
+  /**
+   * True while the user is mid-drag on the canvas (a `mousedown` not yet released) — drives forwarding
+   * intermediate moves as a drag and emitting the closing `pointer-up`. Click-drag text selection relies on
+   * this so the drag relays as down → moves → up rather than a single discrete click.
+   */
+  private dragging = false;
+
+  /**
+   * True when the most recent `mousedown`→`mouseup` actually MOVED (a real drag), so the synthetic `click`
+   * the browser fires right after should be suppressed — the drag's down/move/up already conveyed the intent,
+   * and a trailing click would collapse a just-made text selection.
+   */
+  private suppressNextClick = false;
+
+  /** Viewport point of the active drag's mousedown, used to tell a real drag from a stationary click. */
+  private dragStartPoint: { x: number; y: number } | null = null;
+
+  /**
+   * True while the takeover canvas currently HOLDS keyboard focus. The host overlay reads this (via
+   * {@link IsCapturingInput}) to suppress its own global key shortcuts (e.g. T-to-type) so the user's
+   * keystrokes land in the remote browser, not the local composer — fixing the "greedy textbox" focus theft.
+   */
+  private surfaceFocused = false;
+
   /** Bound handlers — stored so the exact same references can be removed on detach. */
   private readonly onCanvasMouseMove = (e: MouseEvent): void => this.handlePointerMove(e);
+  private readonly onCanvasMouseDown = (e: MouseEvent): void => this.handlePointerDown(e);
+  private readonly onCanvasMouseUp = (e: MouseEvent): void => this.handlePointerUp(e);
   private readonly onCanvasClick = (e: MouseEvent): void => this.handlePointerClick(e);
   private readonly onCanvasKeyDown = (e: KeyboardEvent): void => this.handleKeyDown(e);
   private readonly onCanvasMouseLeave = (): void => this.handleMouseLeave();
   private readonly onCanvasWheel = (e: WheelEvent): void => this.handleWheel(e);
+  private readonly onCanvasFocus = (): void => { this.surfaceFocused = true; };
+  private readonly onCanvasBlur = (): void => { this.surfaceFocused = false; };
 
   ngOnInit(): void {
     // In streaming mode the server pushes frames — never start the poll (it would be redundant traffic).
@@ -484,6 +532,21 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     this.zone.runOutsideAngular(() => requestAnimationFrame(() => this.paintPendingFrame()));
   }
 
+  /**
+   * Updates the URL shown above the live view. In streaming (canvas) mode the snapshot poll is stopped, so
+   * the channel pushes the current URL here after a navigation/action reports one — otherwise the bar would
+   * stay stuck on "No page loaded yet" even though the page is live. No-op for an unchanged / empty value.
+   *
+   * @param url The current page URL, or null/empty to leave the bar unchanged.
+   */
+  public SetCurrentUrl(url: string | null | undefined): void {
+    if (this.destroyed || !url || url === this.CurrentUrl) {
+      return;
+    }
+    this.CurrentUrl = url;
+    this.zone.run(() => this.cdr.markForCheck());
+  }
+
   /** Drains the most recent pending frame onto the canvas (drop-old coalescing target). */
   private paintPendingFrame(): void {
     this.framePaintScheduled = false;
@@ -545,11 +608,18 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   /** Binds the pointer/keyboard/wheel listeners to the canvas OUTSIDE the zone (mousemove/wheel are high-frequency). */
   private attachTakeoverListeners(canvas: HTMLCanvasElement): void {
     canvas.tabIndex = 0; // focusable so it can receive keydown
+    // Marks this canvas as a keyboard-capturing surface so the host overlay's global shortcuts (e.g.
+    // T-to-type) stand down while it holds focus — see the overlay's isKeyboardCapturingSurfaceFocused().
+    canvas.setAttribute('data-mj-capture-keys', '');
     this.zone.runOutsideAngular(() => {
       canvas.addEventListener('mousemove', this.onCanvasMouseMove);
+      canvas.addEventListener('mousedown', this.onCanvasMouseDown);
+      canvas.addEventListener('mouseup', this.onCanvasMouseUp);
       canvas.addEventListener('click', this.onCanvasClick);
       canvas.addEventListener('keydown', this.onCanvasKeyDown);
       canvas.addEventListener('mouseleave', this.onCanvasMouseLeave);
+      canvas.addEventListener('focus', this.onCanvasFocus);
+      canvas.addEventListener('blur', this.onCanvasBlur);
       // `passive: false` so preventDefault stops the host page from scrolling while the user drives the page.
       canvas.addEventListener('wheel', this.onCanvasWheel, { passive: false });
     });
@@ -563,12 +633,21 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
       return;
     }
     canvas.removeEventListener('mousemove', this.onCanvasMouseMove);
+    canvas.removeEventListener('mousedown', this.onCanvasMouseDown);
+    canvas.removeEventListener('mouseup', this.onCanvasMouseUp);
     canvas.removeEventListener('click', this.onCanvasClick);
     canvas.removeEventListener('keydown', this.onCanvasKeyDown);
     canvas.removeEventListener('mouseleave', this.onCanvasMouseLeave);
+    canvas.removeEventListener('focus', this.onCanvasFocus);
+    canvas.removeEventListener('blur', this.onCanvasBlur);
     canvas.removeEventListener('wheel', this.onCanvasWheel);
+    canvas.removeAttribute('data-mj-capture-keys');
     this.takeoverCanvas = null;
     this.cursorViewportPoint = null;
+    this.dragging = false;
+    this.suppressNextClick = false;
+    this.dragStartPoint = null;
+    this.surfaceFocused = false;
     this.clearSyntheticCursor();
   }
 
@@ -627,28 +706,103 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Click → focuses the canvas (so subsequent keys are captured) and emits a viewport-mapped click. */
-  private handlePointerClick(event: MouseEvent): void {
+  /**
+   * Mouse-down on the canvas → focuses the canvas (so subsequent keys are captured) and BEGINS a drag:
+   * emits a `pointer-down` and arms drag mode so the following moves relay as drag motion and the matching
+   * `pointer-up` closes it. This is what makes click-drag text selection work (rather than a discrete click).
+   */
+  private handlePointerDown(event: MouseEvent): void {
     this.takeoverCanvas?.focus();
     const point = this.toViewportCoords(event);
+    if (!point) {
+      return;
+    }
+    this.dragging = true;
+    this.dragStartPoint = point;
+    this.suppressNextClick = false;
+    this.cursorViewportPoint = point;
+    this.scheduleCursorPaint();
+    this.emitInput({ kind: 'pointer-down', x: point.x, y: point.y, button: this.mapButton(event.button), modifiers: this.collectModifiers(event) });
+  }
+
+  /**
+   * Mouse-up on the canvas → closes a drag with a `pointer-up` at the release point, disarming drag mode.
+   * If the pointer actually moved between down and up, marks the following synthetic `click` to be suppressed
+   * (so the drag selection isn't immediately collapsed by a trailing click).
+   */
+  private handlePointerUp(event: MouseEvent): void {
+    if (!this.dragging) {
+      return;
+    }
+    this.dragging = false;
+    const point = this.toViewportCoords(event);
     if (point) {
-      this.emitInput({ kind: 'pointer-click', x: point.x, y: point.y, button: this.mapButton(event.button) });
+      const start = this.dragStartPoint;
+      this.suppressNextClick = !!start && (start.x !== point.x || start.y !== point.y);
+      this.emitInput({ kind: 'pointer-up', x: point.x, y: point.y, button: this.mapButton(event.button), modifiers: this.collectModifiers(event) });
+    }
+    this.dragStartPoint = null;
+  }
+
+  /**
+   * Click → emits a viewport-mapped click WITH any held modifiers (e.g. Shift-click text selection). The
+   * server browser receives the press/release of a drag via {@link handlePointerDown}/{@link handlePointerUp};
+   * a plain click (down+up with no motion) still fires this `click` event, so a simple click relays as one
+   * click action — but we skip emitting it when it terminates a real drag (where down/up already covered it).
+   */
+  private handlePointerClick(event: MouseEvent): void {
+    this.takeoverCanvas?.focus();
+    if (this.suppressNextClick) {
+      // This click terminates a real drag (selection) — the down/move/up already conveyed it.
+      this.suppressNextClick = false;
+      return;
+    }
+    const point = this.toViewportCoords(event);
+    if (point) {
+      this.emitInput({ kind: 'pointer-click', x: point.x, y: point.y, button: this.mapButton(event.button), modifiers: this.collectModifiers(event) });
     }
   }
 
   /**
-   * Keydown → forwards printable keys + a curated set of control keys ({@link FORWARDED_CONTROL_KEYS}) into
-   * the page, calling `preventDefault` ONLY on forwarded keys so the host app keeps its own shortcuts on
-   * everything else. Modifiers ride as the raw `event.key` string for this prototype.
+   * Keydown → forwards printable keys, a curated set of control keys ({@link FORWARDED_CONTROL_KEYS}), AND
+   * any key combined with a Ctrl/Cmd/Alt modifier (so combos like Ctrl/Cmd+A select-all, Cmd+C/Cmd+V relay).
+   * Calls `preventDefault` + `stopPropagation` ONLY on forwarded keys, so (a) the host app keeps its own
+   * shortcuts on un-forwarded keys and (b) forwarded keys never bubble to the host overlay's global shortcuts
+   * (the T-to-type focus-steal). Lone modifier keys are never forwarded — they ride as `modifiers` on the
+   * next key/click.
    */
   private handleKeyDown(event: KeyboardEvent): void {
     const key = event.key;
+    if (MODIFIER_KEYS.has(key)) {
+      return; // a modifier on its own is not a keypress — it rides on the next key/click
+    }
     const isPrintable = key.length === 1;
-    if (!isPrintable && !FORWARDED_CONTROL_KEYS.has(key)) {
+    const hasComboModifier = event.ctrlKey || event.metaKey || event.altKey;
+    const isForwardable = isPrintable || FORWARDED_CONTROL_KEYS.has(key) || hasComboModifier;
+    if (!isForwardable) {
       return; // leave non-forwarded keys to the host app
     }
     event.preventDefault();
-    this.emitInput({ kind: 'key', key });
+    // Stop the keystroke from reaching document-level handlers (e.g. the overlay's T-to-type) so the user's
+    // typing lands in the remote browser, not the local composer.
+    event.stopPropagation();
+    this.emitInput({ kind: 'key', key, modifiers: this.collectModifiers(event) });
+  }
+
+  /**
+   * Collects the modifier keys currently held during a DOM mouse/keyboard event into the relayed
+   * {@link RemoteBrowserModifier} list (empty when none are held).
+   *
+   * @param event The DOM event whose modifier flags to read.
+   * @returns The held modifiers, in a stable order.
+   */
+  private collectModifiers(event: MouseEvent | KeyboardEvent): RemoteBrowserModifier[] {
+    const modifiers: RemoteBrowserModifier[] = [];
+    if (event.shiftKey) { modifiers.push('Shift'); }
+    if (event.ctrlKey) { modifiers.push('Control'); }
+    if (event.altKey) { modifiers.push('Alt'); }
+    if (event.metaKey) { modifiers.push('Meta'); }
+    return modifiers;
   }
 
   /** Re-enters the zone to emit one human input (so subscribers see it inside Angular). */

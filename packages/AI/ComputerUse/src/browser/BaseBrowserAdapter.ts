@@ -185,6 +185,20 @@ export abstract class BaseBrowserAdapter {
         // No-op default — nothing to stop on adapters without screencast support.
     }
 
+    /**
+     * Capture one frame on demand and push it through the active screencast's callback.
+     *
+     * Lets callers force an immediate live-view refresh (e.g. the first paint, or right after a
+     * navigation settles) on adapters whose screencast only emits frames on a viewport repaint.
+     *
+     * Default implementation is a no-op resolve — safe to call when no screencast is running or the
+     * adapter has no screencast support. Adapters with a live screencast (e.g. PlaywrightBrowserAdapter)
+     * override this to emit a real frame.
+     */
+    public async CaptureScreencastFrame(): Promise<void> {
+        // No-op default — adapters with an active screencast override this.
+    }
+
     // ─── Action Execution ──────────────────────────────────
 
     /**

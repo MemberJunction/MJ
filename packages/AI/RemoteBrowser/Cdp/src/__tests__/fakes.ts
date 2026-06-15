@@ -38,6 +38,8 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
     public StartScreencastCount = 0;
     /** Count of {@link StopScreencast} calls. */
     public StopScreencastCount = 0;
+    /** Count of {@link CaptureScreencastFrame} calls (the on-demand first/post-nav frame push). */
+    public CaptureScreencastFrameCount = 0;
 
     /** The current URL reported by {@link CurrentUrl}. */
     public CurrentUrlValue = 'https://example.test/';
@@ -96,6 +98,14 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
 
     public override async StopScreencast(): Promise<void> {
         this.StopScreencastCount++;
+    }
+
+    /**
+     * Records the on-demand frame push. A no-op by default (drives no frame through `LastOnFrame`) so
+     * tests asserting an exact received-frame list aren't perturbed; tests that care assert the count.
+     */
+    public override async CaptureScreencastFrame(): Promise<void> {
+        this.CaptureScreencastFrameCount++;
     }
 
     public override get CurrentUrl(): string {

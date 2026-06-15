@@ -27,6 +27,7 @@ import {
     AccessibilityNode,
     ElementInfo,
     BoundingBox,
+    KeyModifier,
 } from '../types/browser.js';
 import { ClassifyConnectEndpoint } from './connect-endpoint.js';
 
@@ -90,6 +91,12 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private screencastSession: CDPSession | null = null;
     /** Monotonic frame counter for the current screencast session. */
     private screencastSequence: number = 0;
+    /**
+     * The active screencast's frame callback, retained so {@link CaptureScreencastFrame} can push an
+     * immediate, on-demand frame through the same sink (e.g. for the first paint, which CDP's
+     * `Page.screencastFrame` only emits on a repaint). `null` when no screencast is running.
+     */
+    private screencastOnFrame: ((frame: ScreencastFrame) => void) | null = null;
 
     // ─── Lifecycle ─────────────────────────────────────────
 
@@ -375,6 +382,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         const session = await this.context!.newCDPSession(this.page!);
         this.screencastSession = session;
         this.screencastSequence = 0;
+        this.screencastOnFrame = onFrame;
 
         session.on('Page.screencastFrame', (payload: CDPScreencastFramePayload) => {
             const frame = new ScreencastFrame();
@@ -410,9 +418,36 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         }
         this.screencastSession = null;
         this.screencastSequence = 0;
+        this.screencastOnFrame = null;
 
         await session.send('Page.stopScreencast').catch(() => {});
         await session.detach().catch(() => {});
+    }
+
+    /**
+     * Capture ONE frame on demand and push it through the active screencast's frame callback.
+     *
+     * CDP's `Page.screencastFrame` only fires on a viewport REPAINT, so the very first navigation (and
+     * navigations to pages that paint identically) can leave the live view blank until some later change.
+     * This grabs the current viewport via a screenshot (encoded to match the screencast format) and emits
+     * it as the next sequence-numbered frame, so callers can force an immediate refresh right after starting
+     * the stream and after a navigation settles.
+     *
+     * No-op (resolves) when no screencast is running or no page is open — safe to call opportunistically.
+     */
+    public override async CaptureScreencastFrame(): Promise<void> {
+        const onFrame = this.screencastOnFrame;
+        if (!onFrame || !this.page) {
+            return;
+        }
+        // The screencast defaults to JPEG; match it so the client's `data:image/jpeg` decode succeeds.
+        const buffer = await this.page.screenshot({ type: 'jpeg', quality: 80, fullPage: false });
+        const frame = new ScreencastFrame();
+        frame.DataBase64 = buffer.toString('base64');
+        frame.Width = this.config.ViewportWidth;
+        frame.Height = this.config.ViewportHeight;
+        frame.SequenceNumber = this.screencastSequence++;
+        onFrame(frame);
     }
 
     // ─── Action Execution ──────────────────────────────────
@@ -446,11 +481,12 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 if (action.Selector) {
                     // Selector path: click the matched element directly; the
                     // X/Y/BoundingBox coordinates are ignored when a selector
-                    // is supplied.
+                    // is supplied. Modifiers (e.g. Shift-click) ride along.
                     await page.click(action.Selector, {
                         button: action.Button,
                         clickCount: action.ClickCount,
                         timeout: this.config.ActionTimeoutMs,
+                        ...(action.Modifiers?.length ? { modifiers: action.Modifiers } : {}),
                     });
                 } else {
                     await this.executeClick(page, action);
@@ -469,7 +505,9 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 break;
 
             case 'Keypress':
-                await page.keyboard.press(action.Key);
+                // Compose any structured Modifiers with the key into a single Playwright chord
+                // (e.g. ControlOrMeta + a → "ControlOrMeta+a"); plain keys press as-is.
+                await page.keyboard.press(this.composeChord(action.Key, action.Modifiers));
                 break;
 
             case 'KeyDown':
@@ -482,6 +520,18 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
             case 'MouseMove':
                 await page.mouse.move(action.X, action.Y);
+                break;
+
+            case 'MouseDown':
+                // Move to the press point first so the down lands where intended, then hold the button.
+                await page.mouse.move(action.X, action.Y);
+                await page.mouse.down({ button: action.Button });
+                break;
+
+            case 'MouseUp':
+                // Move to the release point (drag endpoint) first, then release the button.
+                await page.mouse.move(action.X, action.Y);
+                await page.mouse.up({ button: action.Button });
                 break;
 
             case 'Scroll':
@@ -579,11 +629,13 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
     /**
      * Execute a click action. Uses bounding box center if available,
-     * otherwise uses direct X/Y coordinates.
+     * otherwise uses direct X/Y coordinates. Holds any requested keyboard
+     * modifiers (e.g. Shift) for the duration of the click so modifier-clicks
+     * (shift-click selection, modifier+click) relay faithfully.
      */
     private async executeClick(
         page: Page,
-        action: { X: number; Y: number; BoundingBox?: { XMin: number; YMin: number; XMax: number; YMax: number }; Button: 'left' | 'right' | 'middle'; ClickCount: number }
+        action: { X: number; Y: number; BoundingBox?: { XMin: number; YMin: number; XMax: number; YMax: number }; Button: 'left' | 'right' | 'middle'; ClickCount: number; Modifiers?: KeyModifier[] }
     ): Promise<void> {
         let x = action.X;
         let y = action.Y;
@@ -594,10 +646,53 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
             y = (action.BoundingBox.YMin + action.BoundingBox.YMax) / 2;
         }
 
-        await page.mouse.click(x, y, {
-            button: action.Button,
-            clickCount: action.ClickCount,
-        });
+        // page.mouse.click has no `modifiers` option (only page.click does), so hold the modifiers
+        // down around the coordinate click ourselves, releasing them in reverse on the way out.
+        const modifiers = action.Modifiers ?? [];
+        for (const modifier of modifiers) {
+            await page.keyboard.down(this.resolveModifier(modifier));
+        }
+        try {
+            await page.mouse.click(x, y, {
+                button: action.Button,
+                clickCount: action.ClickCount,
+            });
+        } finally {
+            for (const modifier of [...modifiers].reverse()) {
+                await page.keyboard.up(this.resolveModifier(modifier));
+            }
+        }
+    }
+
+    /**
+     * Compose a key + optional modifiers into a single Playwright press chord (e.g.
+     * `('a', ['ControlOrMeta']) → 'ControlOrMeta+a'`). Returns the bare key unchanged when no
+     * modifiers are supplied, preserving existing single-key behavior.
+     *
+     * @param key The base key name.
+     * @param modifiers Optional modifiers to prefix.
+     * @returns The Playwright press string.
+     */
+    private composeChord(key: string, modifiers?: KeyModifier[]): string {
+        if (!modifiers?.length) {
+            return key;
+        }
+        return [...modifiers, key].join('+');
+    }
+
+    /**
+     * Resolve a {@link KeyModifier} to the concrete key name `page.keyboard.down`/`up` accept.
+     * `'ControlOrMeta'` is platform-dependent for chords but the standalone hold needs a concrete
+     * key, so it maps to `'Meta'` on macOS and `'Control'` elsewhere.
+     *
+     * @param modifier The modifier to resolve.
+     * @returns The concrete keyboard key name.
+     */
+    private resolveModifier(modifier: KeyModifier): string {
+        if (modifier === 'ControlOrMeta') {
+            return process.platform === 'darwin' ? 'Meta' : 'Control';
+        }
+        return modifier;
     }
 
     // ─── Auth Support ──────────────────────────────────────

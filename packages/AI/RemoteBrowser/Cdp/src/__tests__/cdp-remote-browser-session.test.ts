@@ -147,6 +147,8 @@ describe('CdpRemoteBrowserSession — capability gating (flags ON → delegate)'
         await session.StartScreencast((frame) => received.push(frame));
         expect(adapter.StartScreencastCount).toBe(1);
         expect(adapter.LastOnFrame).not.toBeNull();
+        // An immediate first frame is force-pushed so the user sees the page right away (Bug 1).
+        expect(adapter.CaptureScreencastFrameCount).toBe(1);
 
         // Drive a computer-use frame through the captured callback and confirm the mapping.
         const cuFrame = new ScreencastFrame();
@@ -195,5 +197,58 @@ describe('CdpRemoteBrowserSession — capability gating (flags ON → delegate)'
         const result = await session.InvokeNativeAIControl('log in');
         expect(backend.InvokedIntents).toEqual(['log in']);
         expect(result.Success).toBe(true);
+    });
+
+    it('RouteHumanInput carries click modifiers (shift-click) through to the adapter action', async () => {
+        const { session, adapter } = buildSession({ HumanTakeover: true });
+        session.RouteHumanInput({ Kind: 'pointer-click', X: 5, Y: 6, Modifiers: ['Shift'] });
+        await Promise.resolve();
+        const click = adapter.ExecutedActions[0] as ClickAction;
+        expect(click.Modifiers).toEqual(['Shift']);
+    });
+
+    it('RouteHumanInput maps pointer-down/up to the adapter drag actions', async () => {
+        const { session, adapter } = buildSession({ HumanTakeover: true });
+        session.RouteHumanInput({ Kind: 'pointer-down', X: 1, Y: 2 });
+        session.RouteHumanInput({ Kind: 'pointer-up', X: 3, Y: 4 });
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(adapter.ExecutedActions.map((a) => a.Type)).toEqual(['MouseDown', 'MouseUp']);
+    });
+});
+
+describe('CdpRemoteBrowserSession — immediate frame on navigation (Bug 1)', () => {
+    it('Navigate force-pushes an immediate frame after the page loads', async () => {
+        const { session, adapter } = buildSession({});
+        await session.Navigate('https://go.test/');
+        expect(adapter.CaptureScreencastFrameCount).toBe(1);
+    });
+
+    it('ExecuteAction force-pushes a frame for a navigation action (navigate)', async () => {
+        const { session, adapter } = buildSession({});
+        await session.ExecuteAction({ Kind: 'navigate', Url: 'https://go.test/' });
+        expect(adapter.CaptureScreencastFrameCount).toBe(1);
+    });
+
+    it('ExecuteAction force-pushes a frame for back/forward', async () => {
+        const { session, adapter } = buildSession({});
+        await session.ExecuteAction({ Kind: 'back' });
+        await session.ExecuteAction({ Kind: 'forward' });
+        expect(adapter.CaptureScreencastFrameCount).toBe(2);
+    });
+
+    it('ExecuteAction does NOT force a frame for a non-navigation action (click)', async () => {
+        const { session, adapter } = buildSession({});
+        await session.ExecuteAction({ Kind: 'click', X: 1, Y: 1 });
+        expect(adapter.CaptureScreencastFrameCount).toBe(0);
+    });
+
+    it('ExecuteAction does NOT force a frame when the navigation action failed', async () => {
+        const { session, adapter } = buildSession({});
+        const failure = new ActionExecutionResult(new ClickAction());
+        failure.Success = false;
+        adapter.NextExecuteResult = failure;
+        await session.ExecuteAction({ Kind: 'navigate', Url: 'https://go.test/' });
+        expect(adapter.CaptureScreencastFrameCount).toBe(0);
     });
 });

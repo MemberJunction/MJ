@@ -326,7 +326,8 @@ describe('RemoteBrowserChannel — live screencast (pushed frames)', () => {
       RenderedFrames: [] as string[],
       RenderFrame(dataBase64: string) {
         this.RenderedFrames.push(dataBase64);
-      }
+      },
+      SetCurrentUrl() { /* unused here */ }
     };
     return surface as unknown as RemoteBrowserSurfaceComponent & { RenderedFrames: string[] };
   }
@@ -407,7 +408,8 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
       Streaming: false,
       Interactive: false,
       HumanInput: new EventEmitter<RemoteBrowserHumanInputEvent>(),
-      RenderFrame() { /* unused here */ }
+      RenderFrame() { /* unused here */ },
+      SetCurrentUrl() { /* unused here */ }
     };
     return surface as unknown as RemoteBrowserSurfaceComponent & { HumanInput: EventEmitter<RemoteBrowserHumanInputEvent> };
   }
@@ -458,8 +460,44 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
 
     const relayCall = log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'));
     expect(relayCall?.Variables).toMatchObject({
-      agentSessionID: 'session-1', kind: 'key', x: null, y: null, button: null, key: 'Enter'
+      agentSessionID: 'session-1', kind: 'key', x: null, y: null, button: null, key: 'Enter', modifiers: null
     });
+  });
+
+  it('relays held modifiers as a comma-separated list (Ctrl/Cmd+A select-all)', () => {
+    channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    surface.HumanInput.emit({ kind: 'key', key: 'a', modifiers: ['Control'] });
+
+    const relayCall = log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'));
+    expect(relayCall?.Variables).toMatchObject({ kind: 'key', key: 'a', modifiers: 'Control' });
+  });
+
+  it('relays a shift-click with the modifier carried on the pointer-click', () => {
+    channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    surface.HumanInput.emit({ kind: 'pointer-click', x: 5, y: 6, button: 'left', modifiers: ['Shift'] });
+
+    const relayCall = log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'));
+    expect(relayCall?.Variables).toMatchObject({ kind: 'pointer-click', x: 5, y: 6, modifiers: 'Shift' });
+  });
+
+  it('relays a click-drag as pointer-down then pointer-up (drag text selection)', () => {
+    channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    surface.HumanInput.emit({ kind: 'pointer-down', x: 10, y: 20 });
+    surface.HumanInput.emit({ kind: 'pointer-up', x: 80, y: 20 });
+
+    const relayed = log.Calls
+      .filter(c => c.Query.includes('RelayRemoteBrowserHumanInput'))
+      .map(c => c.Variables.kind);
+    expect(relayed).toEqual(['pointer-down', 'pointer-up']);
   });
 
   it('stops forwarding after UnbindSurface (subscription torn down)', () => {

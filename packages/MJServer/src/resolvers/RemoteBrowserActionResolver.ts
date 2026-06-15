@@ -22,7 +22,7 @@ import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
-import { IRemoteBrowserSession, RemoteBrowserAction, RemoteBrowserHumanInput, RemoteBrowserCapabilityNotSupportedError } from '@memberjunction/remote-browser-base';
+import { IRemoteBrowserSession, RemoteBrowserAction, RemoteBrowserHumanInput, RemoteBrowserModifierKey, RemoteBrowserCapabilityNotSupportedError } from '@memberjunction/remote-browser-base';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -386,7 +386,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * agent⇄human floor, so we just relay. Finer floor / `AgentOnly` gating is a follow-up.
    *
    * @param agentSessionID The `AIAgentSession` id the browser is bound to.
-   * @param kind The input kind (`'pointer-move' | 'pointer-click' | 'key' | 'scroll'`).
+   * @param kind The input kind (`'pointer-move' | 'pointer-click' | 'pointer-down' | 'pointer-up' | 'key' | 'scroll'`).
+   * @param modifiers Optional comma-separated modifier keys held during the input (`'Shift'`, `'Control'`,
+   *   `'Alt'`, `'Meta'`) — carries Shift-click selection and Ctrl/Cmd+key chords faithfully.
    * @returns `true` when the input was routed, else `false`.
    */
   @Mutation(() => Boolean)
@@ -400,6 +402,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('key', () => String, { nullable: true }) key?: string,
     @Arg('deltaX', () => Float, { nullable: true }) deltaX?: number,
     @Arg('deltaY', () => Float, { nullable: true }) deltaY?: number,
+    @Arg('modifiers', () => String, { nullable: true }) modifiers?: string,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
@@ -409,7 +412,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       return false;
     }
 
-    const input = this.buildHumanInput({ kind, x, y, button, key, deltaX, deltaY });
+    const input = this.buildHumanInput({ kind, x, y, button, key, deltaX, deltaY, modifiers });
     if (!input) {
       return false;
     }
@@ -715,25 +718,36 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   /**
    * Builds a strongly-typed {@link RemoteBrowserHumanInput} from the relayed `kind` + fields, validating
    * each kind's required field(s). Returns `null` for an unknown kind or a kind missing its required
-   * field(s): pointer-move/click need finite `x`,`y`; key needs a non-empty `key`; scroll needs finite
-   * `x`,`y`,`deltaX`,`deltaY`. The `button` is clamped to the allowed union
-   * (`'left' | 'middle' | 'right'`), defaulting unknown/absent values to `'left'`.
+   * field(s): pointer-move/click/down/up need finite `x`,`y`; key needs a non-empty `key`; scroll needs
+   * finite `x`,`y`,`deltaX`,`deltaY`. The `button` is clamped to the allowed union
+   * (`'left' | 'middle' | 'right'`), defaulting unknown/absent values to `'left'`. Held `modifiers`
+   * (e.g. Shift-click, Ctrl/Cmd+key) ride on pointer clicks/presses and key presses.
    *
    * @param input The relayed input kind + all optional fields.
    * @returns The built human input, or `null` when the kind is unknown / incomplete.
    */
-  private buildHumanInput(input: { kind: string; x?: number; y?: number; button?: string; key?: string; deltaX?: number; deltaY?: number }): RemoteBrowserHumanInput | null {
+  private buildHumanInput(input: { kind: string; x?: number; y?: number; button?: string; key?: string; deltaX?: number; deltaY?: number; modifiers?: string }): RemoteBrowserHumanInput | null {
+    const modifiers = this.parseModifiers(input.modifiers);
+    const hasXy = Number.isFinite(input.x) && Number.isFinite(input.y);
     switch (input.kind) {
       case 'pointer-move':
-        return Number.isFinite(input.x) && Number.isFinite(input.y) ? { Kind: 'pointer-move', X: input.x as number, Y: input.y as number } : null;
+        return hasXy ? { Kind: 'pointer-move', X: input.x as number, Y: input.y as number } : null;
       case 'pointer-click':
-        return Number.isFinite(input.x) && Number.isFinite(input.y)
-          ? { Kind: 'pointer-click', X: input.x as number, Y: input.y as number, Button: this.clampButton(input.button) }
+        return hasXy
+          ? { Kind: 'pointer-click', X: input.x as number, Y: input.y as number, Button: this.clampButton(input.button), ...(modifiers.length ? { Modifiers: modifiers } : {}) }
+          : null;
+      case 'pointer-down':
+        return hasXy
+          ? { Kind: 'pointer-down', X: input.x as number, Y: input.y as number, Button: this.clampButton(input.button), ...(modifiers.length ? { Modifiers: modifiers } : {}) }
+          : null;
+      case 'pointer-up':
+        return hasXy
+          ? { Kind: 'pointer-up', X: input.x as number, Y: input.y as number, Button: this.clampButton(input.button), ...(modifiers.length ? { Modifiers: modifiers } : {}) }
           : null;
       case 'key':
-        return input.key && input.key.length > 0 ? { Kind: 'key', Key: input.key } : null;
+        return input.key && input.key.length > 0 ? { Kind: 'key', Key: input.key, ...(modifiers.length ? { Modifiers: modifiers } : {}) } : null;
       case 'scroll':
-        return Number.isFinite(input.x) && Number.isFinite(input.y) && Number.isFinite(input.deltaX) && Number.isFinite(input.deltaY)
+        return hasXy && Number.isFinite(input.deltaX) && Number.isFinite(input.deltaY)
           ? { Kind: 'scroll', X: input.x as number, Y: input.y as number, DeltaX: input.deltaX as number, DeltaY: input.deltaY as number }
           : null;
       default:
@@ -744,5 +758,24 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   /** Clamps a relayed mouse-button string to the allowed union, defaulting to `'left'`. */
   private clampButton(button: string | undefined): 'left' | 'middle' | 'right' {
     return button === 'middle' || button === 'right' ? button : 'left';
+  }
+
+  /**
+   * Parses the relayed comma-separated `modifiers` string into the validated
+   * {@link RemoteBrowserModifierKey} list, dropping any unrecognized token. Returns an empty array for a
+   * null/blank input.
+   *
+   * @param modifiers The raw `'Shift,Control'`-style CSV, or undefined.
+   * @returns The validated modifier list (possibly empty).
+   */
+  private parseModifiers(modifiers: string | undefined): RemoteBrowserModifierKey[] {
+    if (!modifiers) {
+      return [];
+    }
+    const allowed: RemoteBrowserModifierKey[] = ['Shift', 'Control', 'Alt', 'Meta'];
+    return modifiers
+      .split(',')
+      .map((m) => m.trim())
+      .filter((m): m is RemoteBrowserModifierKey => (allowed as string[]).includes(m));
   }
 }

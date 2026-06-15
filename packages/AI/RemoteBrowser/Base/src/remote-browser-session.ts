@@ -153,6 +153,15 @@ export interface RemoteBrowserScreencastFrame {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
+ * A keyboard modifier key that can be held while a human input occurs. These ride on pointer clicks
+ * (so Shift-click text selection / Ctrl-click new-tab semantics relay faithfully) AND on key presses
+ * (so combos like Ctrl/Cmd+A select-all, Cmd+C / Cmd+V relay faithfully). `'Meta'` is the Command key
+ * on macOS / the Windows key elsewhere. Platform-agnostic at this layer — the CDP mapper translates to
+ * Playwright/CDP modifier syntax.
+ */
+export type RemoteBrowserModifierKey = 'Shift' | 'Control' | 'Alt' | 'Meta';
+
+/**
  * A human pointer move into the browser viewport.
  */
 export interface RemoteBrowserPointerMoveInput {
@@ -174,6 +183,44 @@ export interface RemoteBrowserPointerClickInput {
     Y: number;
     /** Which mouse button was used (defaults to `'left'` when omitted). */
     Button?: 'left' | 'middle' | 'right';
+    /**
+     * Modifier keys held during the click (e.g. `['Shift']` for shift-click text selection). Omitted /
+     * empty means no modifiers.
+     */
+    Modifiers?: RemoteBrowserModifierKey[];
+}
+
+/**
+ * A human pointer-button press (mouse-down) at a viewport point WITHOUT a release — the start of a
+ * click-drag. Pairs with {@link RemoteBrowserPointerUpInput} (and any intervening
+ * {@link RemoteBrowserPointerMoveInput}s) to relay a drag, e.g. click-drag text selection in a field.
+ */
+export interface RemoteBrowserPointerDownInput {
+    Kind: 'pointer-down';
+    /** Viewport X coordinate. */
+    X: number;
+    /** Viewport Y coordinate. */
+    Y: number;
+    /** Which mouse button was pressed (defaults to `'left'` when omitted). */
+    Button?: 'left' | 'middle' | 'right';
+    /** Modifier keys held during the press. Omitted / empty means no modifiers. */
+    Modifiers?: RemoteBrowserModifierKey[];
+}
+
+/**
+ * A human pointer-button release (mouse-up) at a viewport point — the end of a click-drag started by a
+ * {@link RemoteBrowserPointerDownInput}.
+ */
+export interface RemoteBrowserPointerUpInput {
+    Kind: 'pointer-up';
+    /** Viewport X coordinate. */
+    X: number;
+    /** Viewport Y coordinate. */
+    Y: number;
+    /** Which mouse button was released (defaults to `'left'` when omitted). */
+    Button?: 'left' | 'middle' | 'right';
+    /** Modifier keys held during the release. Omitted / empty means no modifiers. */
+    Modifiers?: RemoteBrowserModifierKey[];
 }
 
 /**
@@ -183,6 +230,12 @@ export interface RemoteBrowserKeyInput {
     Kind: 'key';
     /** The key (or combination) pressed, in Playwright/CDP key syntax. */
     Key: string;
+    /**
+     * Modifier keys held during the press (e.g. `['Control']` with `Key: 'a'` for select-all). The
+     * mapper composes these with `Key` into a single Playwright/CDP chord. Omitted / empty means the
+     * `Key` is pressed on its own.
+     */
+    Modifiers?: RemoteBrowserModifierKey[];
 }
 
 /**
@@ -212,6 +265,8 @@ export interface RemoteBrowserScrollInput {
 export type RemoteBrowserHumanInput =
     | RemoteBrowserPointerMoveInput
     | RemoteBrowserPointerClickInput
+    | RemoteBrowserPointerDownInput
+    | RemoteBrowserPointerUpInput
     | RemoteBrowserKeyInput
     | RemoteBrowserScrollInput;
 
