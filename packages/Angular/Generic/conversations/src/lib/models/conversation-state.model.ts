@@ -98,7 +98,7 @@ export type ConversationGroupBy = 'project' | 'date' | 'none';
 /**
  * Type of entity being mentioned
  */
-export type MentionType = 'agent' | 'user';
+export type MentionType = 'agent' | 'user' | 'entity';
 
 /**
  * Represents a mention in a message (@Agent or @User)
@@ -117,4 +117,5 @@ export interface MentionParseResult {
   mentions: Mention[];
   agentMention: Mention | null; // Single agent mention (first one found)
   userMentions: Mention[]; // All user mentions
+  entityMentions: Mention[]; // All entity mentions (#Entity)
 }

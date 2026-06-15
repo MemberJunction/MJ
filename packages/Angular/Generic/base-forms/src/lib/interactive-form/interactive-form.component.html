@@ -12,7 +12,8 @@
             #reactComponent
             [component]="componentSpec"
             [componentProps]="formHostProps"
-            (componentEvent)="OnReactComponentEvent($event)">
+            (componentEvent)="OnReactComponentEvent($event)"
+            (openEntityRecord)="OnOpenEntityRecord($event)">
         </mj-react-component>
     } @else {
         <div class="mj-loading-state">
@@ -40,7 +41,8 @@
             #reactComponent
             [component]="componentSpec"
             [componentProps]="formHostProps"
-            (componentEvent)="OnReactComponentEvent($event)">
+            (componentEvent)="OnReactComponentEvent($event)"
+            (openEntityRecord)="OnOpenEntityRecord($event)">
         </mj-react-component>
     } @else {
         <div class="mj-loading-state">

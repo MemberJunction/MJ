@@ -68762,6 +68762,9 @@ export class MJScheduledJob_ {
     @Field(() => Boolean, {description: `When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.`}) 
     RunImmediatelyIfNeverRun: boolean;
         
+    @Field(() => Int, {nullable: true, description: `Optional per-job override for the acquire-time lock lease length, in minutes. When set and positive, the engine uses max(default lease, MaxRuntimeMinutes) as the initial ExpectedCompletionAt — so it only ever EXTENDS the default lease, never shrinks it. Intended for jobs whose work is a single long-running call that cannot heartbeat mid-flight (e.g. one slow synchronous action). Jobs that heartbeat via the plugin opt-in pattern do not need this. NULL = use the engine default lease (LeaseTimeoutMinutes). See plans/scheduled-job-engine-heartbeat-lease.md (GH #2749).`}) 
+    MaxRuntimeMinutes?: number;
+        
     @Field() 
     @MaxLength(100)
     JobType: string;
@@ -68868,6 +68871,9 @@ export class CreateMJScheduledJobInput {
     @Field(() => Boolean, { nullable: true })
     RunImmediatelyIfNeverRun?: boolean;
 
+    @Field(() => Int, { nullable: true })
+    MaxRuntimeMinutes: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -68958,6 +68964,9 @@ export class UpdateMJScheduledJobInput {
 
     @Field(() => Boolean, { nullable: true })
     RunImmediatelyIfNeverRun?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxRuntimeMinutes?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
