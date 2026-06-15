@@ -259,7 +259,22 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     @ViewChild('executiveSummary') private executiveSummary?: AnalyticsExecutiveSummaryComponent;
     @ViewChild('promptRuns') private promptRuns?: AnalyticsPromptRunsComponent;
 
-    public ActiveSection = 'executive-summary';
+    /**
+     * Active analytics section. Implemented as a getter/setter so that changing
+     * it recomputes the (section-dependent) filter-field config exactly once,
+     * rather than rebuilding the whole FilterFieldConfig[] on every
+     * change-detection pass (the field config is template-bound twice).
+     */
+    private _activeSection = 'executive-summary';
+    public get ActiveSection(): string {
+        return this._activeSection;
+    }
+    public set ActiveSection(value: string) {
+        if (value !== this._activeSection) {
+            this._activeSection = value;
+            this.recomputeFilterFields();
+        }
+    }
     public CurrentTimeRange = '24h';
     public CurrentFilters: GlobalFilterState = {
         Models: [],
@@ -281,10 +296,21 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         { text: 'By Usage',       value: 'usage-volume' }
     ];
 
-    /** Vendor options, lazily built from AIEngineBase for Model Performance leaderboard. */
+    // ── Precomputed option lists ────────────────────────────────────────────
+    // Built ONCE from AIEngineBase's (process-cached, load-once) lists in
+    // ngOnInit — see recomputeOptionLists. Each used to be a getter doing
+    // .map().sort() (and .filter() for agents) over engine-wide lists; because
+    // analyticsFilterFields is template-bound twice they re-ran 2×/CD. The
+    // backing fields are read by both the public getters (kept for any external
+    // callers) and by recomputeFilterFields.
+    private _modelOptions: { text: string; value: string }[] = [];
+    private _agentOptions: { text: string; value: string }[] = [];
+    private _promptOptions: { text: string; value: string }[] = [];
+    private _vendorOptions: { text: string; value: string }[] = [];
+
+    /** Vendor options, built from AIEngineBase for the Model Performance leaderboard. */
     public get vendorOptions(): { text: string; value: string }[] {
-        return AIEngineBase.Instance?.Vendors?.map(v => ({ text: v.Name ?? '', value: v.ID ?? '' }))
-            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        return this._vendorOptions;
     }
 
     /** Per-section filter-bar config — switched on ActiveSection. */
@@ -333,21 +359,35 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         { text: 'Canceled', value: 'Canceled' },
     ];
 
-    /** Built lazily from AIEngineBase. */
+    /** Built from AIEngineBase (see recomputeOptionLists). */
     public get modelOptions(): { text: string; value: string }[] {
-        return AIEngineBase.Instance?.Models?.map(m => ({ text: m.Name ?? '', value: m.ID }))
-            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        return this._modelOptions;
     }
 
     public get agentOptions(): { text: string; value: string }[] {
-        return AIEngineBase.Instance?.Agents
-            ?.filter(a => a.Status === 'Active')
-            ?.map(a => ({ text: a.Name ?? '', value: a.ID }))
-            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        return this._agentOptions;
     }
 
     public get promptOptions(): { text: string; value: string }[] {
-        return AIEngineBase.Instance?.Prompts?.map(p => ({ text: p.Name ?? '', value: p.ID }))
+        return this._promptOptions;
+    }
+
+    /**
+     * Build the four option lists from AIEngineBase's cached metadata. Called once
+     * after the engine is loaded (ngOnInit). Mirrors the exact map/filter/sort the
+     * former getters performed, so the values are identical — just computed once.
+     */
+    private recomputeOptionLists(): void {
+        const engine = AIEngineBase.Instance;
+        this._modelOptions = engine?.Models?.map(m => ({ text: m.Name ?? '', value: m.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        this._agentOptions = engine?.Agents
+            ?.filter(a => a.Status === 'Active')
+            ?.map(a => ({ text: a.Name ?? '', value: a.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        this._promptOptions = engine?.Prompts?.map(p => ({ text: p.Name ?? '', value: p.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        this._vendorOptions = engine?.Vendors?.map(v => ({ text: v.Name ?? '', value: v.ID ?? '' }))
             ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
     }
 
@@ -359,8 +399,21 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     /** Compare-mode visual state (kept on the shell now that analytics-filter-bar is gone). */
     public compareActive = false;
 
-    /** Build the FilterFieldConfig[] for the popover based on the active section. */
+    /**
+     * Precomputed popover field config for the active section. Recomputed only when
+     * ActiveSection changes (via its setter) or after the option lists load — NOT
+     * on every CD pass, even though the template binds this twice (the `@if` guard
+     * and the `[Fields]` input).
+     */
+    private _analyticsFilterFields: FilterFieldConfig[] = [];
+
+    /** Field config for the popover, based on the active section (precomputed). */
     public get analyticsFilterFields(): FilterFieldConfig[] {
+        return this._analyticsFilterFields;
+    }
+
+    /** Rebuild {@link _analyticsFilterFields} for the current section from the option lists. */
+    private recomputeFilterFields(): void {
         const cfg = this.FilterBarConfig;
         const fields: FilterFieldConfig[] = [];
         if (cfg.ShowModelFilter) {
@@ -421,7 +474,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 options: [{ text: 'All Vendors', value: '' }, ...this.vendorOptions],
             });
         }
-        return fields;
+        this._analyticsFilterFields = fields;
     }
 
     /** Single-value flattened state for the centralized panel (the panel takes scalar values; we hold arrays in CurrentFilters). */
@@ -541,7 +594,20 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     async ngOnInit(): Promise<void> {
         super.ngOnInit();
         this.setupSettingsDebounce();
+        // AIEngineBase is deferred at startup — ensure it's loaded, then build the
+        // option lists ONCE so the precomputed filter-field config has real data.
+        try {
+            await AIEngineBase.Instance.EnsureLoaded();
+        } catch {
+            // Fall through with whatever (possibly empty) cache exists — the option
+            // lists tolerate an unloaded engine (same as the former lazy getters).
+        }
+        this.recomputeOptionLists();
         await this.loadUserSettings();
+        // Final rebuild: covers both the initial section and any section restored
+        // from user settings, now that the option lists are populated.
+        this.recomputeFilterFields();
+        this.cdr.detectChanges();
         this.NotifyLoadComplete();
     }
 

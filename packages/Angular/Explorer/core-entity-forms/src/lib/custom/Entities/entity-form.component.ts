@@ -307,6 +307,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                 this.buildISAFieldGroups();
                 this.buildRelationships();
                 this.buildOrganicKeys();
+                this.recomputeIsaEntityLists();
                 this.updateNavBadges();
 
                 // Load row count asynchronously (don't block UI)
@@ -997,9 +998,34 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         return this.GetISAFieldSource(field) !== null;
     }
 
-    /** All entities available as potential IS-A parents (excluding self and descendants) */
-    public get AvailableParentEntities(): EntityInfo[] {
-        if (!this.entity) return [];
+    /**
+     * All entities available as potential IS-A parents (excluding self and
+     * descendants), sorted by name. Precomputed by {@link recomputeIsaEntityLists}
+     * whenever {@link entity} changes — previously a getter that filtered/sorted
+     * `md.Entities` (hundreds of rows) with per-item `UUIDsEqual` on every CD
+     * cycle while bound inside a template `@for`.
+     */
+    public AvailableParentEntities: EntityInfo[] = [];
+
+    /**
+     * Sibling entities that share the same IS-A parent type. Precomputed by
+     * {@link recomputeIsaEntityLists} when {@link entity} changes — previously a
+     * per-CD getter filtering `ParentEntityInfo.ChildEntities` with `UUIDsEqual`.
+     */
+    public SiblingEntities: EntityInfo[] = [];
+
+    /**
+     * Recomputes {@link AvailableParentEntities} and {@link SiblingEntities} from
+     * the current {@link entity}. Called from `loadExplorerData()` once the entity
+     * metadata is resolved — never during change detection.
+     */
+    private recomputeIsaEntityLists(): void {
+        if (!this.entity) {
+            this.AvailableParentEntities = [];
+            this.SiblingEntities = [];
+            return;
+        }
+
         const md = this.ProviderToUse;
         const descendantIds = new Set<string>();
         const collectDescendants = (e: EntityInfo): void => {
@@ -1009,16 +1035,16 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             }
         };
         collectDescendants(this.entity);
-        return md.Entities
+        this.AvailableParentEntities = md.Entities
             .filter(e => !descendantIds.has(e.ID) && !UUIDsEqual(e.ID, this.entity!.ID) && !e.VirtualEntity)
             .sort((a, b) => a.Name.localeCompare(b.Name));
-    }
 
-    /** Sibling entities that share the same parent type */
-    public get SiblingEntities(): EntityInfo[] {
-        if (!this.IsChildType || !this.entity?.ParentEntityInfo) return [];
-        return this.entity.ParentEntityInfo.ChildEntities
-            .filter(e => !UUIDsEqual(e.ID, this.entity!.ID));
+        if (this.IsChildType && this.entity.ParentEntityInfo) {
+            this.SiblingEntities = this.entity.ParentEntityInfo.ChildEntities
+                .filter(e => !UUIDsEqual(e.ID, this.entity!.ID));
+        } else {
+            this.SiblingEntities = [];
+        }
     }
 
     public get statusClass(): string {
