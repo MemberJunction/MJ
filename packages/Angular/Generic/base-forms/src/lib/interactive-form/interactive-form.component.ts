@@ -193,6 +193,15 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
     }
 
     /**
+     * Called when the form-role component drills into a related record via
+     * `callbacks.OpenEntityRecord(...)`. Relays it upward as a `Navigate` event
+     * (the same path normal FK links use) so the host opens the target record.
+     */
+    public OnOpenEntityRecord(event: { entityName: string; key: CompositeKey }): void {
+        this.Navigate.emit({ Kind: 'record', EntityName: event.entityName, PrimaryKey: event.key });
+    }
+
+    /**
      * Apply the React component's dirty-field diff to the BaseEntity, save,
      * and refresh the snapshot. Errors surface via `LatestResult.CompleteMessage`
      * per the BaseEntity Save contract.

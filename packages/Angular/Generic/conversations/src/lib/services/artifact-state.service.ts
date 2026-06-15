@@ -248,14 +248,37 @@ export class ArtifactStateService {
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
 
-      // Load ALL versions in collection (no DISTINCT - each version is separate)
+      // Resolve membership from the join entity directly rather than via a subquery
+      // embedded in an Artifact Versions filter. The server RunView cache is invalidated
+      // per-entity: removing a Collection Artifacts link does NOT invalidate a cached
+      // 'MJ: Artifact Versions' query whose subquery happens to reference the link table,
+      // so the removed artifact would keep appearing. Querying the join entity directly
+      // means this read is invalidated whenever a link is added or removed.
+      const linkResult = await rv.RunView<{ ArtifactVersionID: string }>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID='${collectionId}'`,
+        Fields: ['ArtifactVersionID'],
+        ResultType: 'simple'
+      }, currentUser);
+
+      if (!linkResult.Success) {
+        return [];
+      }
+
+      const versionIds = [...new Set(
+        (linkResult.Results ?? [])
+          .map(r => r.ArtifactVersionID)
+          .filter((id): id is string => !!id)
+      )];
+
+      if (versionIds.length === 0) {
+        return [];
+      }
+
+      // Load the specific versions that are members of this collection.
       const versionResult = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ID IN (
-          SELECT ca.ArtifactVersionID
-          FROM [__mj].[vwCollectionArtifacts] ca
-          WHERE ca.CollectionID='${collectionId}'
-        )`,
+        ExtraFilter: `ID IN (${versionIds.map(id => `'${id}'`).join(',')})`,
         OrderBy: '__mj_UpdatedAt DESC',
         ResultType: 'entity_object'
       }, currentUser);

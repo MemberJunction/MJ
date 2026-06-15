@@ -18,7 +18,7 @@
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"No tests configured yet\"",
+    "test": "vitest run",
     "build": "ngc"
   },
   "keywords": [],
