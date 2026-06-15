@@ -1653,6 +1653,65 @@ export class GraphQLSystemUserClient {
         };
     }
 
+    /**
+     * Checks whether a given user has read permission on a list of entities.
+     * Used by Skip Brain's permission gate to verify entity-level access before
+     * building components that reference those entities.
+     */
+    public async CheckEntityPermissionsSystemUser(
+        entityNames: string[],
+        userEmail: string
+    ): Promise<CheckEntityPermissionsResult> {
+        try {
+            const query = gql`
+                query CheckEntityPermissionsSystemUser($EntityNames: [String!]!, $UserEmail: String!) {
+                    CheckEntityPermissionsSystemUser(EntityNames: $EntityNames, UserEmail: $UserEmail) {
+                        Success
+                        Results {
+                            EntityName
+                            CanRead
+                        }
+                        ErrorMessage
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {
+                EntityNames: entityNames,
+                UserEmail: userEmail
+            };
+
+            const result = await this.Client.request(query, variables) as {
+                CheckEntityPermissionsSystemUser: CheckEntityPermissionsGQLResponse;
+            };
+
+            if (result?.CheckEntityPermissionsSystemUser) {
+                const data = result.CheckEntityPermissionsSystemUser;
+                return {
+                    Success: data.Success,
+                    Results: (data.Results || []).map((r): EntityPermissionResultItem => ({
+                        EntityName: r.EntityName,
+                        CanRead: r.CanRead
+                    })),
+                    ErrorMessage: data.ErrorMessage
+                };
+            }
+
+            return {
+                Success: false,
+                Results: [],
+                ErrorMessage: 'Invalid response from server'
+            };
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::CheckEntityPermissionsSystemUser - Error checking entity permissions - ${e}`);
+            return {
+                Success: false,
+                Results: [],
+                ErrorMessage: e instanceof Error ? e.message : String(e)
+            };
+        }
+    }
+
 }
 
 /**
@@ -2688,5 +2747,32 @@ interface SearchKnowledgeGQLResponse {
     ElapsedMs: number;
     SourceCounts: SearchSourceCountsGQLResponse;
     Providers: SearchProviderInfoGQLResponse[];
+    ErrorMessage?: string;
+}
+
+/**
+ * A single entity permission check result.
+ */
+export interface EntityPermissionResultItem {
+    EntityName: string;
+    CanRead: boolean;
+}
+
+/**
+ * Result of checking entity permissions for a user.
+ */
+export interface CheckEntityPermissionsResult {
+    Success: boolean;
+    Results: EntityPermissionResultItem[];
+    ErrorMessage?: string;
+}
+
+/**
+ * Internal GraphQL response shape for entity permission results.
+ * @internal
+ */
+interface CheckEntityPermissionsGQLResponse {
+    Success: boolean;
+    Results: { EntityName: string; CanRead: boolean }[];
     ErrorMessage?: string;
 }
