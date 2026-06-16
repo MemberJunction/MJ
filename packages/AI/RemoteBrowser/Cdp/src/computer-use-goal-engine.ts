@@ -46,6 +46,27 @@ export interface ComputerUseGoalRun {
 /** Factory for a {@link ComputerUseGoalRun} — the injection point ({@link CdpRemoteBrowserSession.SetGoalEngineFactory}). */
 export type ComputerUseGoalEngineFactory = () => ComputerUseGoalRun;
 
+/** Max length of a forwarded progress message before it is truncated with an ellipsis. */
+export const PROGRESS_MESSAGE_MAX_LENGTH = 160;
+
+/**
+ * Builds a normalized, model-safe {@link ComputerUseGoalProgress} note from a completed step: the
+ * controller's reasoning summary, truncated to {@link PROGRESS_MESSAGE_MAX_LENGTH} with an ellipsis. Shared
+ * by every goal engine that forwards progress ({@link ProgressComputerUseEngine} and the server-tier MJ
+ * engine) so the narration shape stays identical across them.
+ *
+ * @param step The completed step record.
+ * @returns The progress note to forward to the caller's `OnProgress`.
+ */
+export function buildProgressNote(step: StepRecord): ComputerUseGoalProgress {
+  const reasoning = step.ControllerReasoning ?? '';
+  return {
+    Step: step.StepNumber,
+    Message: reasoning.length > PROGRESS_MESSAGE_MAX_LENGTH ? `${reasoning.slice(0, PROGRESS_MESSAGE_MAX_LENGTH)}…` : reasoning,
+    Url: step.Url,
+  };
+}
+
 /**
  * The default engine: a thin `ComputerUseEngine` subclass that forwards each completed step to
  * {@link ComputerUseGoalRun.OnProgress}. It runs the real loop, so it requires a controller model — bind
@@ -57,12 +78,7 @@ export class ProgressComputerUseEngine extends ComputerUseEngine implements Comp
   public OnProgress?: (progress: ComputerUseGoalProgress) => void;
 
   protected override onStepComplete(step: StepRecord, _params: RunComputerUseParams): void {
-    const reasoning = step.ControllerReasoning ?? '';
-    this.OnProgress?.({
-      Step: step.StepNumber,
-      Message: reasoning.length > 160 ? `${reasoning.slice(0, 160)}…` : reasoning,
-      Url: step.Url,
-    });
+    this.OnProgress?.(buildProgressNote(step));
   }
 }
 

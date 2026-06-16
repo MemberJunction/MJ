@@ -27,8 +27,9 @@ arbitration, the viewport→screen-track encode) lives in the Server package; th
 |---|---|
 | `BaseRemoteBrowserProvider` | The abstract driver. A concrete backend (`BrowserbaseRemoteBrowser`, `SelfHostedChromeRemoteBrowser`, …) implements only the irreducibly backend-specific primitives (`Connect` → returns a live `IRemoteBrowserSession`, `Disconnect`). Drivers self-register via `@RegisterClass(BaseRemoteBrowserProvider, '<X>RemoteBrowser')`. |
 | `RemoteBrowserEngineBase` | A `BaseEngine` singleton caching the backend registry (`MJ: AI Remote Browser Providers` + capability flags) with synchronous resolution helpers (`ProviderByName`, `ProviderByDriverClass`, `ActiveProviders`, `FeaturesFor`). No execution. |
-| `IRemoteBrowserSession` | The live-session contract — core CDP methods (`GetCdpEndpoint`, `Navigate`, `ExecuteAction`, `CaptureScreenshot`, `GetCurrentUrl`, `Close`) plus capability-gated ones (`GetLiveViewUrl`, `StartScreencast`/`StopScreencast`, `RouteHumanInput`, `InvokeNativeAIControl`). |
+| `IRemoteBrowserSession` | The live-session contract — core CDP methods (`GetCdpEndpoint`, `Navigate`, `ExecuteAction`, `CaptureScreenshot`, `GetCurrentUrl`, `Close`), capability-gated ones (`GetLiveViewUrl`, `StartScreencast`/`StopScreencast`, `RouteHumanInput`, `InvokeNativeAIControl`), and the **goal-driven** `RunComputerUseGoal(goal, options)` (set a high-level goal; computer-use plans + executes it — see [§ Goal-driven control](#goal-driven-control-set-a-goal-not-clicks)). |
 | Action / input / frame types | `RemoteBrowserAction` (discriminated union: navigate / click / type / key / scroll / back / forward / wait), `RemoteBrowserActionResult`, `RemoteBrowserScreencastFrame`, `RemoteBrowserHumanInput` (pointer-move / pointer-click / key) — all strongly typed, **self-contained** (no Playwright / computer-use dependency). |
+| Goal types | `RunComputerUseGoalOptions` (transport-neutral: `StartUrl`, `MaxSteps`, model overrides, model-blind `Context`, `OnProgress`, `Signal`, `ContextUser`) + `RemoteBrowserGoalResult` (`Success` / `Strategy` / `Status` / `StepCount` / `Detail`) — carry **no** computer-use SDK types, so model selection stays in the CDP/engine tier. |
 | `RemoteBrowserControlMode` + `RemoteBrowserControlStrategy` + helpers | `isControlModeSupported(mode, features)`, `resolveControlStrategy(features, preferred?)` — pure, capability-aware helpers. |
 | `RemoteBrowserCapabilityNotSupportedError` | The defense-in-depth error thrown when a capability-gated method is called on a backend that doesn't support it (carries `FeatureName` + `ProviderName`). |
 | `IRemoteBrowserProviderFeatures` + `featuresOf` + `KNOWN_REMOTE_BROWSER_FEATURE_KEYS` | Typed alias of the generated `MJ: AI Remote Browser Providers.SupportedFeatures` shape, a null-safe reader, and the full key list for validators/iteration. |
@@ -126,6 +127,17 @@ isControlModeSupported('Collaborative', features); // true only if LiveView && H
 resolveControlStrategy(features);                  // 'NativeAI' iff features.NativeAIControl, else 'ComputerUse'
 resolveControlStrategy(features, 'ComputerUse');   // always 'ComputerUse' — explicit ComputerUse pins the universal loop
 ```
+
+## Goal-driven control (set a goal, not clicks)
+
+Beyond driving the page one action at a time, a caller can hand the session a **high-level goal** —
+*"log into this site and download the latest invoice"* — and let MJ's **computer-use** loop plan and
+execute it. `IRemoteBrowserSession.RunComputerUseGoal(goal, options)` is that contract; the
+`resolveControlStrategy` above decides whether the goal runs through the universal `ComputerUse` loop or
+is delegated to a backend's `NativeAI` harness. This Base package declares only the **transport-neutral**
+types (`RunComputerUseGoalOptions`, `RemoteBrowserGoalResult`) — the actual loop, model selection, and the
+**model-blind credential injection** (`{{label}}` references resolved at the keystroke boundary, never seen
+by any model) live in the CDP + server tiers. See the [Remote Browser Channel Guide §9](../../../../guides/REMOTE_BROWSER_GUIDE.md).
 
 ## How it composes
 

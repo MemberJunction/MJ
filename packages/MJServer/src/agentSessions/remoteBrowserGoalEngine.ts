@@ -18,7 +18,22 @@
 import { UserInfo, LogError } from '@memberjunction/core';
 import type { ComputerUseResult, RunComputerUseParams, StepRecord } from '@memberjunction/computer-use';
 import { MJComputerUseEngine, MJRunComputerUseParams } from '@memberjunction/computer-use-engine';
-import { CdpRemoteBrowserSession, type ComputerUseGoalProgress, type ComputerUseGoalRun } from '@memberjunction/remote-browser-cdp';
+import { buildProgressNote, CdpRemoteBrowserSession, type ComputerUseGoalProgress, type ComputerUseGoalRun } from '@memberjunction/remote-browser-cdp';
+
+/**
+ * Adapts the transport-neutral base computer-use params into {@link MJRunComputerUseParams}, injecting the
+ * acting user so the MJ engine can run its controller/judge prompts as that user. Pure + exported for unit
+ * testing; {@link MJProgressComputerUseEngine.Run} is a one-liner over it.
+ *
+ * @param params The base computer-use params the CDP session built (goal + step cap + start url).
+ * @param contextUser The acting MJ user (may be undefined; the MJ engine handles the unset case).
+ * @returns The MJ-aware params to hand to `MJComputerUseEngine.Run`.
+ */
+export function buildMJGoalParams(params: RunComputerUseParams, contextUser?: UserInfo): MJRunComputerUseParams {
+  const mjParams = Object.assign(new MJRunComputerUseParams(), params);
+  mjParams.ContextUser = contextUser;
+  return mjParams;
+}
 
 /**
  * The MJ-aware goal engine bound in production. Extends {@link MJComputerUseEngine} (prompt-runner routing,
@@ -46,19 +61,12 @@ export class MJProgressComputerUseEngine extends MJComputerUseEngine implements 
    * @returns The computer-use run result.
    */
   public override async Run(params: RunComputerUseParams): Promise<ComputerUseResult> {
-    const mjParams = Object.assign(new MJRunComputerUseParams(), params);
-    mjParams.ContextUser = this.ContextUser;
-    return super.Run(mjParams);
+    return super.Run(buildMJGoalParams(params, this.ContextUser));
   }
 
   protected override onStepComplete(step: StepRecord, params: MJRunComputerUseParams): void {
     super.onStepComplete(step, params); // keep MJ media persistence
-    const reasoning = step.ControllerReasoning ?? '';
-    this.OnProgress?.({
-      Step: step.StepNumber,
-      Message: reasoning.length > 160 ? `${reasoning.slice(0, 160)}…` : reasoning,
-      Url: step.Url,
-    });
+    this.OnProgress?.(buildProgressNote(step)); // shared note shape with the base ProgressComputerUseEngine
   }
 }
 

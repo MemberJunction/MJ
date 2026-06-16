@@ -50,6 +50,32 @@ import type { JsonSchemaType, AuthMethod } from '@memberjunction/computer-use';
 
 import { MJRunComputerUseParams, MJDomainAuthBinding, ActionRef, PromptEntityRef } from '../types/mj-params.js';
 
+/**
+ * Picks the highest-power LLM that supports Image **input** (a vision-capable controller), or `undefined`
+ * when none qualify. Filters the candidate models to the `LLM` type, narrows to those for which
+ * `supportsImageInput` is true, then returns the one with the highest `PowerRank` (descending).
+ *
+ * Pure (no engine/singleton state) so it is unit-testable in isolation; {@link MJComputerUseEngine}'s
+ * `selectHighestPowerVisionLLM` supplies `AIEngine.Instance.Models` + an `AIEngine.ModelSupportsModality`
+ * predicate. The original input array is not mutated.
+ *
+ * @param models The candidate models (typically `AIEngine.Instance.Models`).
+ * @param supportsImageInput Predicate: does the model id accept Image input modality?
+ * @returns The best vision-capable LLM, or `undefined` when none qualify.
+ */
+export function pickHighestPowerVisionLLM(
+    models: MJAIModelEntityExtended[],
+    supportsImageInput: (modelId: string) => boolean,
+): MJAIModelEntityExtended | undefined {
+    const visionLLMs = models
+        .filter((m) => typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'llm')
+        .filter((m) => supportsImageInput(m.ID));
+    if (visionLLMs.length === 0) {
+        return undefined;
+    }
+    return [...visionLLMs].sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+}
+
 export class MJComputerUseEngine extends ComputerUseEngine {
     private promptRunner: AIPromptRunner;
     private contextUser: UserInfo | undefined;
@@ -349,14 +375,10 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * fall-back case in {@link autoSelectControllerModel}.
      */
     private selectHighestPowerVisionLLM(): MJAIModelEntityExtended | undefined {
-        const visionLLMs = AIEngine.Instance.Models
-            .filter(m => typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'llm')
-            .filter(m => AIEngine.Instance.ModelSupportsModality(m.ID, 'Image', 'Input'));
-        if (visionLLMs.length === 0) {
-            return undefined;
-        }
-        visionLLMs.sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
-        return visionLLMs[0];
+        return pickHighestPowerVisionLLM(
+            AIEngine.Instance.Models,
+            (modelId) => AIEngine.Instance.ModelSupportsModality(modelId, 'Image', 'Input'),
+        );
     }
 
     // ═══════════════════════════════════════════════════════════
