@@ -1,5 +1,12 @@
 # @memberjunction/esignature-pandadoc
 
+## 5.41.0
+
+### Patch Changes
+
+- @memberjunction/esignature@5.41.0
+- @memberjunction/global@5.41.0
+
 ## 5.40.2
 
 ### Patch Changes
