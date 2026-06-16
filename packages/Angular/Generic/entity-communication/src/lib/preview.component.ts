@@ -42,10 +42,13 @@ export class EntityCommunicationsPreviewComponent implements OnInit  {
   async loadTemplates() {
     // load up all template metadata
     const rv = new RunView();
+    // Dialect-neutral "active now" cutoff: GETDATE() does not exist on PostgreSQL,
+    // so inject a JS-computed ISO-8601 literal instead.
+    const nowIso = new Date().toISOString();
     const result = await rv.RunView<MJTemplateEntityExtended>(
       {
         EntityName: "MJ: Templates",
-        ExtraFilter: `(IsActive = 1 AND (ActiveAt IS NULL OR ActiveAt <= GETDATE())) ${this.templateFilter ? `AND ${this.templateFilter}` : ''}`,
+        ExtraFilter: `(IsActive = 1 AND (ActiveAt IS NULL OR ActiveAt <= '${nowIso}')) ${this.templateFilter ? `AND ${this.templateFilter}` : ''}`,
         ResultType: 'entity_object'
       }
     );
