@@ -135,6 +135,11 @@ const E2E_RESULT_SCHEMA = {
 // ── Shared env bring-up (runbook steps 0→5) — reused by both modes. ──────────
 const ENV_BRINGUP =
     `⚠ DO NOT GUESS ANY STEP. Read ${RUNBOOK} and execute its env bring-up (steps 0→5) VERBATIM, in order. It captures every gotcha. The ONLY assumption is the Docker daemon is up.\n` +
+    `🔁 WARM-BASE REUSE (P0-4 — surveys: NetSuite/Nimble/the 4th, the #1 env-rebuild leak: ~300–400k tokens + ~16 min repaid every iteration). The expensive, IDEMPOTENT part of the bring-up — fresh DB → migrate → FULL codegen → turbo build → MJAPI manifest — depends ONLY on (the migration set + the framework source at HEAD), NEVER on the connector. CACHE and REUSE it:\n` +
+    `  • base key = sha1 of (\`ls migrations/v*/ | sort\` + \`git rev-parse HEAD\`). Look for a warm base at /tmp/mj-warmbase-<key> (a snapshot of the migrated+codegen'd ${DB_NAME} as a .bak/dump PLUS the built dist + generated manifests).\n` +
+    `  • CACHE HIT (key matches): RESTORE the base DB snapshot into ${DB_NAME} and reuse the built dist — SKIP migrate+codegen+build (the ~16 min→~2 min win).\n` +
+    `  • CACHE MISS (no snapshot, or migrations/framework moved → key changed): run the migrate+codegen+build steps fresh THEN SAVE the base snapshot under /tmp/mj-warmbase-<key> for next time. A changed key MUST invalidate (never restore a stale base) — that is the correctness guard.\n` +
+    `  • 🚨 ALWAYS, hit or miss: the warm base is the BASE MJ SCHEMA ONLY — ZERO connector data. The connector \`mj sync push\` + ApplyAll + sync ALWAYS run FRESH on the restored base EVERY run. NEVER cache/reuse connector metadata / CompanyIntegrations / synced rows — that stale-connector reuse is the reference-mode bug this primitive guards against. Warm-base caches the framework floor; the connector is always fresh.\n` +
     ISOLATION_OVERRIDE +
     `Invariants:\n` +
     `  • TRULY FROM SCRATCH: \`DROP DATABASE\` ${DB_NAME} if it exists (or drop+recreate the Docker volume), then CREATE it empty and baseline fresh. Do NOT re-baseline OVER an existing DB — stale CompanyIntegrations/objects from a prior run cause reference-mode reuse (wrong objects synced) and in-process CodeGen corruption. A fresh DB means the connector's OWN DiscoverObjects runs (NO pre-existing connection to reuse). (Operate ONLY on ${DB_NAME} in container ${DB_CONTAINER} — never any other DB/container.)\n` +
@@ -153,6 +158,58 @@ const ENV_BRINGUP =
 // path (create instance → discover → PK-classify incl. last-resort LLM → ApplyAll → sync),
 // with ONLY the credential keys + the Company as manual inputs. The credential-free MOCK
 // floor (which needs authored fixtures) is the FALLBACK used only when no broker cred exists.
+// ── P1-6 / P1-5: cheap, env-free PRE-FLIGHT gate (surveys: all four — "expensive e2e used as
+// the discovery mechanism for cheap, local failures"). Before paying for the full bring-up
+// (DROP→migrate→codegen→build→push→ApplyAll→sync, ~400k tokens + ~16 min), run near-instant
+// FILE-level checks that catch the setup failures that otherwise only surface deep into a run. A
+// failure here is CLASSIFIED (setup vs connector) and short-circuits to a `setup-blocked` verdict —
+// a DISTINCT terminal state, NOT a connector FAIL and NOT a vacuous pass (P1-5). GUARD: only
+// HARD-blocks on conditions that would CERTAINLY fail or vacuous-pass the e2e anyway (connector
+// class absent; metadata has zero objects; mock-mode fixtures absent), so it can never wrongly
+// block a runnable build.
+phase('PreFlight');
+const PREFLIGHT_SCHEMA = {
+    type: 'object',
+    required: ['ok'],
+    properties: {
+        ok: { type: 'boolean' },
+        classification: { type: 'string', enum: ['ok', 'setup', 'connector'] },
+        connectorFileExists: { type: 'boolean' },
+        metadataObjectCount: { type: 'integer' },
+        fixturesPresent: { type: 'boolean' },
+        failures: { type: 'array', items: { type: 'object' } },
+    },
+    additionalProperties: true,
+};
+const preflight = await agent(
+    `PRE-FLIGHT (env-free, near-instant) for connector "${CONNECTOR}" / vendor "${VENDOR}" — run BEFORE the expensive bring-up. ONLY these cheap file checks (NO DB, NO build, NO codegen):\n` +
+    `  1. connectorFileExists: does packages/Integration/connectors/src/${CONNECTOR}.ts exist? (else the e2e cannot run — SETUP).\n` +
+    `  2. metadataObjectCount: in metadata/integrations/${VENDOR}/.${VENDOR}.integration.json (or metadata/integrations/.${VENDOR}.json), count IntegrationObjects under relatedEntities. 0 ⇒ a push lands nothing ⇒ vacuous e2e (SETUP).\n` +
+    (MODE === 'mock'
+        ? `  3. fixturesPresent: does packages/Integration/connectors/test/fixtures/${VENDOR}/fixtures/fixtures.json exist AND parse with ≥1 route/object? (mock mode skips with "no-fixtures" otherwise — the exact survey setup-failure — SETUP).\n`
+        : `  3. fixturesPresent: n/a in live mode → return true.\n`) +
+    `Return { ok, classification ('setup' if any check failed for an env/fixture/metadata reason, else 'ok'), connectorFileExists, metadataObjectCount, fixturesPresent, failures[{rule,detail}] }. ok = connectorFileExists AND metadataObjectCount>0 AND fixturesPresent.`,
+    { agentType: 'testing-agent', model: 'haiku', schema: PREFLIGHT_SCHEMA, phase: 'PreFlight', label: `preflight:${VENDOR}` }
+).catch(() => null);
+if (preflight && preflight.ok === false) {
+    const classification = preflight.classification === 'connector' ? 'connector' : 'setup';
+    const status = classification === 'connector' ? 'fail' : 'setup-blocked';
+    log(`hybrid-e2e PRE-FLIGHT ${status}: ${JSON.stringify(preflight.failures ?? [])} — short-circuited BEFORE the expensive bring-up (no DROP/migrate/codegen/build/e2e paid).`);
+    return {
+        pass: false,
+        mode: HAS_BROKER_CREDS ? 'live' : 'mock',
+        status,
+        steps: {},
+        assertions: {},
+        preflight,
+        failures: (preflight.failures ?? []).map((f) => ({ rule: f.rule ?? 'preflight', detail: f.detail ?? '', classification })),
+        livePhaseLog: [
+            { phaseId: 'E2E.Hybrid.PreFlight', order: 0, dialect: 'sqlserver', nl: `pre-flight ${status}: ${JSON.stringify(preflight.failures ?? [])}`, json: preflight, status: classification === 'connector' ? 'fail' : 'skip', skipReason: classification === 'setup' ? 'setup-blocked-preflight' : undefined },
+        ],
+    };
+}
+log('hybrid-e2e pre-flight passed — proceeding to bring-up.');
+
 // ── PROTECT the shared working tree's generated code (crash-safe snapshot → restore) ──
 // The e2e bring-up runs `mj codegen`, which regenerates the SHARED tree's generated dirs IN
 // PLACE; against a fresh/empty DB it can EMPTY them (entity_subclasses.ts, MJServer generated.ts,
