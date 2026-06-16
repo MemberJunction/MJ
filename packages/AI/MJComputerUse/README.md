@@ -592,21 +592,27 @@ Expected test outcomes JSON (stored in `TestEntity.ExpectedOutcomes`):
 
 ### Auto-Selecting Vision Models
 
-When `ControllerModel` is not specified, MJComputerUseEngine automatically selects the highest-power vision-capable model:
+When `ControllerModel` is not specified, MJComputerUseEngine automatically selects the highest-power **vision-capable** model:
 
 ```typescript
 const params = new MJRunComputerUseParams();
 params.Goal = "Analyze this dashboard and extract key metrics";
 // No ControllerModel specified
 
-// Engine will call AIEngine.GetHighestPowerLLM() to select best vision model
+// Engine auto-selects a vision-capable controller model (see selection criteria below)
 const result = await engine.Run(params);
 ```
 
-**Selection Criteria** (from `AIEngine.GetHighestPowerLLM()`):
-1. Vision-capable models only (supports image inputs)
-2. Highest power rating (from AI Model metadata)
-3. Available and active models only
+**Selection Criteria** (`autoSelectControllerModel` → `pickHighestPowerVisionLLM`):
+1. Among `LLM`-type models, **prefer** the highest-`PowerRank` model that advertises **Image input**
+   modality (`AIEngine.ModelSupportsModality(id, 'Image', 'Input')`) — the controller drives from
+   screenshots, so it must accept image input.
+2. **Fallback**: if no LLM advertises an explicit Image-input modality (e.g. a deployment relying on
+   `AIModelType`-inherited modalities not captured as explicit `AIModelModality` rows), fall back to
+   `AIEngine.GetHighestPowerLLM()` so selection never hard-fails.
+
+> `pickHighestPowerVisionLLM(models, supportsImageInput)` is exported as a **pure function** (no engine
+> state) and unit-tested in isolation.
 
 ### Custom Prompt Templates with MJ Variables
 
@@ -1030,11 +1036,14 @@ async function updateCredentialAndTest(credentialId: string, newValue: string, c
 **Symptoms**: Error "No vision-capable model found".
 
 **Solutions**:
-- Verify at least one vision model is configured in MJ
-- Check AI Model entities have `SupportsVision: true`
+- Verify at least one `LLM`-type AI Model is configured in MJ
+- Ensure a vision model has an **Image / Input** `AIModelModality` row (that's what
+  `ModelSupportsModality(id, 'Image', 'Input')` reads) — otherwise it's only picked up by the
+  highest-power fallback, not the vision-preferred path
 - Ensure models are active and available
-- Explicitly set `ControllerModel` as fallback
-- Review AIEngine model selection logs
+- Explicitly set `ControllerModel` as a fallback
+- Review AIEngine model-selection logs (`autoSelectControllerModel` logs the chosen model + whether it
+  came from the vision-preferred path or the fallback)
 
 ## API Reference
 
