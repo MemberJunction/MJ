@@ -71,6 +71,7 @@ export interface MJLiveKitSessionStartedEvent {
                 [EnableNoiseFilter]="EnableNoiseFilter"
                 [EnableBackgroundEffects]="EnableBackgroundEffects"
                 [ShowAgentState]="ShowAgentState"
+                [ShowWhiteboard]="ShowWhiteboard"
                 [ShowPreJoin]="ShowPreJoin"
                 [ShowRecordingControl]="EnableRecording"
                 [IsRecording]="isRecording"
@@ -182,6 +183,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     @Input() public EnableBackgroundEffects = false;
     /** @see LiveKitRoomComponent.ShowAgentState */
     @Input() public ShowAgentState = false;
+    /** @see LiveKitRoomComponent.ShowWhiteboard */
+    @Input() public ShowWhiteboard = false;
     /** @see LiveKitRoomComponent.ShowPreJoin */
     @Input() public ShowPreJoin = false;
     /** Enable the server-authorized recording control (composite egress). */

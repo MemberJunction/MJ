@@ -22,6 +22,7 @@ import { RegisterClass } from '@memberjunction/global';
             [Mode]="agentId ? 'agent' : 'agent'"
             [Provider]="ProviderToUse"
             [ShowAgentState]="true"
+            [ShowWhiteboard]="true"
             [EnableLayoutSwitcher]="true"
             [EnablePinning]="true"
             (Connected)="NotifyLoadComplete()"

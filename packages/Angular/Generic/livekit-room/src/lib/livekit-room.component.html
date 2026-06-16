@@ -34,6 +34,12 @@
 
         <div class="lk-room__body">
             <section class="lk-room__stage">
+                @if (ShowWhiteboard && WhiteboardActive) {
+                    <mj-livekit-whiteboard-surface
+                        [AgentName]="AgentParticipant?.DisplayName || 'Agent'"
+                        (BoardChanged)="onWhiteboardChanged($event)"
+                    ></mj-livekit-whiteboard-surface>
+                } @else {
                 @if (Layout === 'split') {
                     <div class="lk-room__split" #splitContainer (pointermove)="onSplitDragMove($event, splitContainer)" (pointerup)="onSplitDragEnd()" (pointerleave)="onSplitDragEnd()">
                         <div class="lk-room__split-pane" [style.flexBasis.%]="SplitRatio * 100">
@@ -126,6 +132,7 @@
                         }
                     </div>
                 }
+                }
 
                 @if (ShowOverlay) {
                     <mj-livekit-connection-overlay
@@ -167,6 +174,8 @@
                     [EnableRecordingControl]="ShowRecordingControl"
                     [IsRecording]="IsRecording"
                     [EnableLayoutSwitcher]="EnableLayoutSwitcher"
+                    [EnableWhiteboard]="ShowWhiteboard"
+                    [WhiteboardActive]="WhiteboardActive"
                     (ToggleMicrophone)="onToggleMicrophone()"
                     (ToggleCamera)="onToggleCamera()"
                     (ToggleScreenShare)="onToggleScreenShare()"
@@ -175,6 +184,7 @@
                     (ToggleParticipants)="onToggleParticipants()"
                     (ToggleLayoutMenu)="onToggleLayoutMenu()"
                     (ToggleRecording)="onToggleRecording()"
+                    (ToggleWhiteboard)="onToggleWhiteboard()"
                     (Leave)="Leave()"
                 ></mj-livekit-control-bar>
 

@@ -1,4 +1,5 @@
 import {
+    AfterViewChecked,
     ChangeDetectionStrategy,
     ChangeDetectorRef,
     Component,
@@ -9,6 +10,7 @@ import {
     OnDestroy,
     OnInit,
     Output,
+    ViewChild,
     SimpleChanges,
     inject,
 } from '@angular/core';
@@ -38,7 +40,15 @@ import { LiveKitParticipantsPanelComponent } from './components/livekit-particip
 import { LiveKitConnectionOverlayComponent } from './components/livekit-connection-overlay.component';
 import { LiveKitPreJoinComponent, type LiveKitPreJoinChoices } from './components/livekit-prejoin.component';
 import { LiveKitAgentStateComponent, type LiveKitAgentVisualState } from './components/livekit-agent-state.component';
-import { LIVEKIT_CHAT_TOPIC, LIVEKIT_AGENT_STATE_TOPIC, type LiveKitChatMessage, type LiveKitDeviceLists, type LiveKitDeviceSelection } from './models';
+import { LiveKitWhiteboardSurfaceComponent } from './components/livekit-whiteboard-surface.component';
+import {
+    LIVEKIT_CHAT_TOPIC,
+    LIVEKIT_AGENT_STATE_TOPIC,
+    LIVEKIT_WHITEBOARD_TOPIC,
+    type LiveKitChatMessage,
+    type LiveKitDeviceLists,
+    type LiveKitDeviceSelection,
+} from './models';
 
 /** Which side panel is open in the room, if any. */
 type LiveKitSidePanel = 'none' | 'chat' | 'participants';
@@ -85,11 +95,12 @@ export interface LiveKitLayoutOption {
         LiveKitConnectionOverlayComponent,
         LiveKitPreJoinComponent,
         LiveKitAgentStateComponent,
+        LiveKitWhiteboardSurfaceComponent,
     ],
     templateUrl: './livekit-room.component.html',
     styleUrls: ['./livekit-room.component.css'],
 })
-export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
+export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, AfterViewChecked {
     private readonly zone = inject(NgZone);
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly controller = new LiveKitRoomController();
@@ -177,6 +188,8 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
     @Input() public EnableBackgroundEffects = false;
     /** Show the agent-state visualizer (listening/thinking/speaking) for the agent participant. */
     @Input() public ShowAgentState = false;
+    /** Enable the collaborative whiteboard surface (data-channel-synced; agent co-authoring supported). */
+    @Input() public ShowWhiteboard = false;
     /** Show the recording toggle in the control bar (the host wires the actual egress call). */
     @Input() public ShowRecordingControl = false;
     /** Whether a recording is currently in progress (host-managed). */
@@ -249,6 +262,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
     public DeviceMenuOpen = false;
     /** Whether the layout switcher popover is open. */
     public LayoutMenuOpen = false;
+    /** Whether the whiteboard surface is currently shown (replaces the participant stage). */
+    public WhiteboardActive = false;
+    /** A whiteboard snapshot received before the surface was rendered, applied once it mounts. */
+    private pendingWhiteboardSnapshot: string | null = null;
+    @ViewChild(LiveKitWhiteboardSurfaceComponent) private whiteboardSurface?: LiveKitWhiteboardSurfaceComponent;
     /** The split-view ratio (left/screen pane fraction, 0.2–0.8). */
     public SplitRatio = 0.62;
     private splitDragging = false;
@@ -290,6 +308,15 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
 
     public ngOnChanges(_changes: SimpleChanges): void {
         // Inputs are read directly in the template / on demand; setters handle auto-connect triggers.
+    }
+
+    public ngAfterViewChecked(): void {
+        // Flush a whiteboard snapshot that arrived before the surface had mounted.
+        if (this.pendingWhiteboardSnapshot && this.whiteboardSurface) {
+            const snapshot = this.pendingWhiteboardSnapshot;
+            this.pendingWhiteboardSnapshot = null;
+            this.whiteboardSurface.ApplyRemote(snapshot);
+        }
     }
 
     public ngOnDestroy(): void {
@@ -415,6 +442,14 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
     /** Toggles recording intent (the host performs the actual server-side egress call). */
     public onToggleRecording(): void {
         this.ToggleRecording.emit();
+    }
+    /** Toggles the collaborative whiteboard surface. */
+    public onToggleWhiteboard(): void {
+        this.WhiteboardActive = !this.WhiteboardActive;
+    }
+    /** Broadcasts a local whiteboard snapshot to the room over the data channel. */
+    public onWhiteboardChanged(json: string): void {
+        void this.controller.SendData(json, LIVEKIT_WHITEBOARD_TOPIC);
     }
 
     /** Begins dragging the split-view divider. */
@@ -582,6 +617,10 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
                 this.applyAgentStateSignal(msg.Text);
                 return;
             }
+            if (msg.Topic === LIVEKIT_WHITEBOARD_TOPIC) {
+                this.applyWhiteboardSnapshot(msg.Text);
+                return;
+            }
             if (msg.Topic === LIVEKIT_CHAT_TOPIC) {
                 this.addChatMessage({
                     Sender: msg.FromDisplayName ?? msg.FromIdentity ?? 'Participant',
@@ -592,6 +631,19 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
                 });
             }
         });
+    }
+
+    /** Applies an inbound whiteboard snapshot — auto-opens the surface, applying once it has mounted. */
+    private applyWhiteboardSnapshot(json: string): void {
+        if (!this.ShowWhiteboard) {
+            return;
+        }
+        this.WhiteboardActive = true;
+        if (this.whiteboardSurface) {
+            this.whiteboardSurface.ApplyRemote(json);
+        } else {
+            this.pendingWhiteboardSnapshot = json; // surface not mounted yet — apply in ngAfterViewChecked
+        }
     }
 
     /** Applies an explicit agent-state signal from the data channel, auto-clearing after a short idle. */

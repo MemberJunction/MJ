@@ -51,6 +51,7 @@ co-agent panel — without forking the component. Public members are PascalCase 
 | Panels | `ShowChat`, `ShowParticipantsPanel`, `ChatOpenByDefault` |
 | PreJoin | `ShowPreJoin` |
 | Agent | `ShowAgentState` |
+| Whiteboard | `ShowWhiteboard` — collaborative board (reuses `@memberjunction/ng-whiteboard`), synced over the data channel; agents co-author via the same topic |
 | Cloud / security | `EnableNoiseFilter`, `EnableBackgroundEffects`, `E2EEPassphrase` + `E2EEWorker` |
 
 ## Deep, cancelable event model
@@ -85,7 +86,7 @@ A built-in layout switcher (gated by `EnableLayoutSwitcher`) lets users change l
 `LiveKitRoomComponent`, `LiveKitParticipantTileComponent`, `LiveKitControlBarComponent`,
 `LiveKitChatPanelComponent`, `LiveKitDeviceMenuComponent`, `LiveKitParticipantsPanelComponent`,
 `LiveKitConnectionOverlayComponent`, `LiveKitAudioMeterComponent`, `LiveKitPreJoinComponent`,
-`LiveKitAgentStateComponent`.
+`LiveKitAgentStateComponent`, `LiveKitWhiteboardSurfaceComponent`.
 
 ## License
 

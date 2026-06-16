@@ -41,3 +41,9 @@ export const LIVEKIT_CHAT_TOPIC = 'lk-chat';
  * bridge emits explicit state, falling back to speaking-activity heuristics otherwise.
  */
 export const LIVEKIT_AGENT_STATE_TOPIC = 'lk-agent-state';
+
+/**
+ * The data-channel topic collaborative whiteboard snapshots are broadcast on. Each client applies inbound
+ * snapshots to its `WhiteboardState`; an agent in a realtime session co-authors via the same topic.
+ */
+export const LIVEKIT_WHITEBOARD_TOPIC = 'lk-whiteboard';

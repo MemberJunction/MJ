@@ -71,6 +71,11 @@ import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
                     }
                 </button>
             }
+            @if (EnableWhiteboard) {
+                <button type="button" class="lk-bar__btn" [class.lk-bar__btn--active]="WhiteboardActive" title="Whiteboard" (click)="ToggleWhiteboard.emit()">
+                    <i class="fa-solid fa-chalkboard"></i>
+                </button>
+            }
             @if (EnableRecordingControl) {
                 <button
                     type="button"
@@ -193,6 +198,10 @@ export class LiveKitControlBarComponent {
     @Input() public IsRecording = false;
     /** Show the layout-switcher button. */
     @Input() public EnableLayoutSwitcher = false;
+    /** Show the whiteboard toggle. */
+    @Input() public EnableWhiteboard = false;
+    /** Whether the whiteboard surface is currently active. */
+    @Input() public WhiteboardActive = false;
 
     // ── Intent outputs ─────────────────────────────────────────────────────────────────
     /** The user clicked the microphone toggle. */
@@ -211,6 +220,8 @@ export class LiveKitControlBarComponent {
     @Output() public ToggleRecording = new EventEmitter<void>();
     /** The user clicked the layout-switcher button. */
     @Output() public ToggleLayoutMenu = new EventEmitter<void>();
+    /** The user clicked the whiteboard toggle. */
+    @Output() public ToggleWhiteboard = new EventEmitter<void>();
     /** The user clicked leave. */
     @Output() public Leave = new EventEmitter<void>();
 }
