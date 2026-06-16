@@ -42,7 +42,7 @@ import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
-import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
+import { CONTENT_HASH_COLUMN, computeContentHashWithOverflow, contentHashBasis } from './ContentHash.js';
 import { serializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, hasUnmappedFields } from './CustomOverflow.js';
 import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
@@ -2725,7 +2725,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const buckets = partitionRecords(mappedRecords, idOf, partitionOf);
         const newRollups = new Map<string, string>();
         for (const [partition, recs] of buckets) {
-            newRollups.set(partition, partitionRollupHash(recs, r => r.MappedFields));
+            newRollups.set(partition, partitionRollupHash(recs, r => contentHashBasis(r.MappedFields, r.UnmappedFields)));
         }
 
         // Diff against last sync's snapshot; only changed/added partitions need a deep apply. On a FORCED
@@ -3203,7 +3203,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (hasHashColumn) {
                 const storedHash = entity.Get(CONTENT_HASH_COLUMN);
                 if (typeof storedHash === 'string' && storedHash.length > 0
-                    && storedHash === computeContentHash(record.MappedFields ?? {})) {
+                    && storedHash === computeContentHashWithOverflow(record.MappedFields ?? {}, record.UnmappedFields)) {
                     await this.SaveRecordMap(
                         companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                         entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
@@ -3308,8 +3308,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // below is the fallback for entities without the hash column.
         if (precheckHashes) {
             const stored = precheckHashes.get(record.MatchedMJRecordID);
-            if (stored && stored === computeContentHash(record.MappedFields ?? {})) {
+            if (stored && stored === computeContentHashWithOverflow(record.MappedFields ?? {}, record.UnmappedFields)) {
                 result.RecordsSkipped++;
+                // Re-establish the external↔MJ record map even on the content-hash skip. A record can
+                // reach UpdateRecord matched by KEY FIELDS / PK (MatchEngine.FindByKeyFields queries the
+                // dest table directly, NOT the RecordMap) with NO map row pointing at it — e.g. after the
+                // entity maps (and their cascaded record maps) were deleted while the dest rows persisted
+                // (a maps delete+re-add, partial cleanup, or a fresh CompanyIntegration over pre-existing
+                // rows). Skipping the write here without writing the map leaves the RecordMap empty for
+                // every unchanged-but-matched record, so orphan/delete detection and the 1:1 completeness
+                // invariant silently degrade. SaveRecordMap is an upsert keyed on
+                // (CompanyIntegration, Entity, ExternalID) — idempotent for already-mapped records, and the
+                // CreateRecord skip branches already do exactly this. MatchedMJRecordID IS the dest PK
+                // (PrimaryKeys order, '|'-joined), which is the EntityRecordID the map stores.
+                await this.SaveRecordMap(
+                    companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
+                    record.MatchedMJRecordID, contextUser,
+                );
                 // The record IS still present and confirmed-unchanged on the source — but skipping
                 // the write here means SetStandardIntegrationFields never runs, so __mj_integration_
                 // LastReconciledAt would freeze at first-sync time. Record the PK so the batch can
@@ -3344,6 +3359,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // sync re-fetches all records. Without this, 50k+ records get re-written every run.
         if (!entity.Dirty) {
             result.RecordsSkipped++;
+            // Re-establish the record map even when the write is skipped — see the content-hash skip
+            // above for the full rationale (a key-field/PK match can land here with no map row, and
+            // dropping the map silently breaks the 1:1 completeness invariant + orphan detection).
+            // The entity is loaded here, so use its actual PK as the EntityRecordID. Idempotent upsert.
+            await this.SaveRecordMap(
+                companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
+                entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
+            );
             return;
         }
 
@@ -3719,7 +3742,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // hash equals the stored hash can be skipped without loading it (see
         // PrefetchContentHashes / UpdateRecord). No-op on tables predating the column.
         if (hasField(CONTENT_HASH_COLUMN)) {
-            entity.Set(CONTENT_HASH_COLUMN, computeContentHash(record.MappedFields ?? {}));
+            entity.Set(CONTENT_HASH_COLUMN, computeContentHashWithOverflow(record.MappedFields ?? {}, record.UnmappedFields));
         }
         // Custom-overflow capture (gaps.md §2): park any source keys with no field map as JSON,
         // in THIS same row write (no extra round-trip → a customs-free sync stays byte-identical).

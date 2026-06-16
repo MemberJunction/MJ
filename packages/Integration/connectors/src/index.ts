@@ -1,6 +1,7 @@
 export { RelationalDBConnector, type ConnectionConfig } from './RelationalDBConnector.js';
 export { HubSpotConnector } from './HubSpotConnector.js';
 export { SalesforceConnector, type SalesforceConnectionConfig } from './SalesforceConnector.js';
+export { FontevaConnector, LoadFontevaConnector } from './FontevaConnector.js';
 export { YourMembershipConnector, type YMConnectionConfig } from './YourMembershipConnector.js';
 export { FileFeedConnector, parseCsvLine } from './FileFeedConnector.js';
 export { RasaConnector, type RasaConnectionConfig } from './RasaConnector.js';
@@ -8,12 +9,11 @@ export { WicketConnector, type WicketCRUDResult, type WicketSearchOptions, type 
 export { SageIntacctConnector, type SageIntacctConnectionConfig } from './SageIntacctConnector.js';
 export { QuickBooksConnector, type QuickBooksConnectionConfig } from './QuickBooksConnector.js';
 export { AptifyConnector, type AptifyConnectionConfig } from './AptifyConnector.js';
-export { BettyConnector } from './BettyConnector.js';
 export { MJToMJConnector } from './MJToMJConnector.js';
 export { GrowthZoneConnector } from './GrowthZoneConnector.js';
 export { ORCIDConnector, LoadORCIDConnector, type ORCIDConnectionConfig } from './ORCIDConnector.js';
 export { OpenWaterConnector, type OpenWaterConnectionConfig } from './OpenWaterConnector.js';
-export { IMISConnector } from './IMISConnector.js';
+export { IMISConnector, LoadIMISConnector, type IMISConnectionConfig } from './IMISConnector.js';
 export { ConstantContactConnector } from './ConstantContactConnector.js';
 export { MailchimpConnector } from './MailchimpConnector.js';
 export { SharePointConnector } from './SharePointConnector.js';
