@@ -16,13 +16,19 @@
  *
  * @module @memberjunction/server
  */
-import { Resolver, Mutation, Query, Arg, Ctx, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
+import { Resolver, Mutation, Query, Arg, Ctx, Float, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
-import { IRemoteBrowserSession, RemoteBrowserAction, RemoteBrowserAudioChunk, RemoteBrowserHumanInput, RemoteBrowserModifierKey, RemoteBrowserCapabilityNotSupportedError } from '@memberjunction/remote-browser-base';
+import {
+  RemoteBrowserAction,
+  RemoteBrowserAudioChunk,
+  RemoteBrowserHumanInput,
+  RemoteBrowserModifierKey,
+  RemoteBrowserCapabilityNotSupportedError,
+} from '@memberjunction/remote-browser-base';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -68,6 +74,37 @@ export class RemoteBrowserActionResult {
   CurrentUrl?: string;
 
   /** Human-readable detail — an error message on failure, a note on success. Null when none. */
+  @Field(() => String, { nullable: true })
+  Detail?: string;
+}
+
+/**
+ * Result of {@link RemoteBrowserActionResolver.ExecuteRemoteBrowserGoal} — the outcome of an autonomous,
+ * goal-driven browser run (computer-use loop or backend native AI).
+ */
+@ObjectType()
+export class RemoteBrowserGoalResultType {
+  /** Whether the goal was achieved. */
+  @Field(() => Boolean)
+  Success: boolean;
+
+  /** Which control strategy executed the goal (`ComputerUse` / `NativeAI`). */
+  @Field(() => String, { nullable: true })
+  Strategy?: string;
+
+  /** The page URL when the run ended, when known. */
+  @Field(() => String, { nullable: true })
+  CurrentUrl?: string;
+
+  /** Terminal status label (`Completed` / `MaxStepsReached` / `Impossible` / `Error` / …). */
+  @Field(() => String, { nullable: true })
+  Status?: string;
+
+  /** Number of perceive-act steps executed (computer-use strategy). */
+  @Field(() => Int, { nullable: true })
+  StepCount?: number;
+
+  /** Human-readable detail (judge feedback / error message). */
   @Field(() => String, { nullable: true })
   Detail?: string;
 }
@@ -238,6 +275,45 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`ExecuteRemoteBrowserAction failed (provider='${providerName}', kind='${kind}'): ${message}`);
       return { Success: false, Detail: `Remote browser error (${providerName}): ${message}` };
+    }
+  }
+
+  /**
+   * Execute a high-level GOAL against the session's browser — the agent sets an intent ("log in and open
+   * the latest invoice") and the resolved control strategy (computer-use loop or backend native AI) plans
+   * + executes it autonomously, instead of relaying granular actions. Ownership-gated; lazily starts the
+   * browser. Returns the terminal outcome (this is a request/response mutation — for live progress
+   * narration in a server-bridged realtime session the broker calls {@link RemoteBrowserEngine.AchieveGoal}
+   * in-process with an `OnProgress` callback).
+   *
+   * @param agentSessionID The `AIAgentSession` id the browser is bound to.
+   * @param goal The natural-language goal.
+   * @returns The goal outcome (success, strategy, status, step count, url, detail).
+   */
+  @Mutation(() => RemoteBrowserGoalResultType)
+  async ExecuteRemoteBrowserGoal(
+    @Arg('agentSessionID', () => String) agentSessionID: string,
+    @Arg('goal', () => String) goal: string,
+    @Ctx() { userPayload, providers }: AppContext,
+    @Arg('startUrl', () => String, { nullable: true }) startUrl?: string,
+    @Arg('maxSteps', () => Int, { nullable: true }) maxSteps?: number,
+    @Arg('preferredStrategy', () => String, { nullable: true }) preferredStrategy?: string,
+  ): Promise<RemoteBrowserGoalResultType> {
+    const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+    const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    const providerName = await this.resolveProviderName(session, contextUser, provider);
+    try {
+      return await RemoteBrowserEngine.Instance.AchieveGoal(agentSessionID, goal, {
+        ContextUser: contextUser,
+        ProviderName: providerName,
+        StartUrl: startUrl,
+        MaxSteps: maxSteps,
+        PreferredStrategy: preferredStrategy === 'NativeAI' || preferredStrategy === 'ComputerUse' ? preferredStrategy : undefined,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      LogError(`ExecuteRemoteBrowserGoal failed (provider='${providerName}'): ${message}`);
+      return { Success: false, Status: 'Error', Detail: `Remote browser error (${providerName}): ${message}` };
     }
   }
 
@@ -569,12 +645,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * @param agentSessionID The `AIAgentSession` id the chunk belongs to.
    * @param chunk The encoded audio chunk.
    */
-  private publishAudioChunk(
-    pubSub: PubSubEngine,
-    userPayload: UserPayload,
-    agentSessionID: string,
-    chunk: RemoteBrowserAudioChunk,
-  ): void {
+  private publishAudioChunk(pubSub: PubSubEngine, userPayload: UserPayload, agentSessionID: string, chunk: RemoteBrowserAudioChunk): void {
     pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
       message: JSON.stringify({
         resolver: 'RemoteBrowserActionResolver',
@@ -852,7 +923,16 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * @param input The relayed input kind + all optional fields.
    * @returns The built human input, or `null` when the kind is unknown / incomplete.
    */
-  private buildHumanInput(input: { kind: string; x?: number; y?: number; button?: string; key?: string; deltaX?: number; deltaY?: number; modifiers?: string }): RemoteBrowserHumanInput | null {
+  private buildHumanInput(input: {
+    kind: string;
+    x?: number;
+    y?: number;
+    button?: string;
+    key?: string;
+    deltaX?: number;
+    deltaY?: number;
+    modifiers?: string;
+  }): RemoteBrowserHumanInput | null {
     const modifiers = this.parseModifiers(input.modifiers);
     const hasXy = Number.isFinite(input.x) && Number.isFinite(input.y);
     switch (input.kind) {
@@ -860,15 +940,33 @@ export class RemoteBrowserActionResolver extends ResolverBase {
         return hasXy ? { Kind: 'pointer-move', X: input.x as number, Y: input.y as number } : null;
       case 'pointer-click':
         return hasXy
-          ? { Kind: 'pointer-click', X: input.x as number, Y: input.y as number, Button: this.clampButton(input.button), ...(modifiers.length ? { Modifiers: modifiers } : {}) }
+          ? {
+              Kind: 'pointer-click',
+              X: input.x as number,
+              Y: input.y as number,
+              Button: this.clampButton(input.button),
+              ...(modifiers.length ? { Modifiers: modifiers } : {}),
+            }
           : null;
       case 'pointer-down':
         return hasXy
-          ? { Kind: 'pointer-down', X: input.x as number, Y: input.y as number, Button: this.clampButton(input.button), ...(modifiers.length ? { Modifiers: modifiers } : {}) }
+          ? {
+              Kind: 'pointer-down',
+              X: input.x as number,
+              Y: input.y as number,
+              Button: this.clampButton(input.button),
+              ...(modifiers.length ? { Modifiers: modifiers } : {}),
+            }
           : null;
       case 'pointer-up':
         return hasXy
-          ? { Kind: 'pointer-up', X: input.x as number, Y: input.y as number, Button: this.clampButton(input.button), ...(modifiers.length ? { Modifiers: modifiers } : {}) }
+          ? {
+              Kind: 'pointer-up',
+              X: input.x as number,
+              Y: input.y as number,
+              Button: this.clampButton(input.button),
+              ...(modifiers.length ? { Modifiers: modifiers } : {}),
+            }
           : null;
       case 'key':
         return input.key && input.key.length > 0 ? { Kind: 'key', Key: input.key, ...(modifiers.length ? { Modifiers: modifiers } : {}) } : null;

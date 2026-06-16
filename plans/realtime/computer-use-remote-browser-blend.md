@@ -1,6 +1,21 @@
 # Goal-Driven Browser Control — Blending Computer-Use with the Remote Browser
 
-**Status:** Plan / RFC. To be implemented by a follow-up effort.
+**Status:** Plan + **initial implementation landed in this PR** — the goal-driven path is wired end-to-end
+(CDP `RunComputerUseGoal` → server `AchieveGoal`/`dispatchRemoteBrowserGoal` strategy switch → resolver
+`ExecuteRemoteBrowserGoal` → realtime `browser_AchieveGoal` tool), with progress + barge-in seams and unit
+tests. Remaining phases (credential context-injection §4, Collaborative pause/resume §5, vision-model
+tightening §6, NativeAI backends, observability) are follow-ups.
+
+### Implemented in this PR (phases 1 + 3 spine)
+- **`@memberjunction/remote-browser-base`** — `IRemoteBrowserSession.RunComputerUseGoal()`, `RemoteBrowserGoalResult`, `RunComputerUseGoalOptions` (incl. `OnProgress` + `Signal`).
+- **`@memberjunction/remote-browser-cdp`** — `RunComputerUseGoal` drives computer-use on the session's **own** adapter (same instance the human watches) via an injectable `ComputerUseGoalRun` seam (`SetGoalEngineFactory`; default `ProgressComputerUseEngine`); progress + abort→`Stop()`. **4 tests.**
+- **`@memberjunction/remote-browser-server`** — `RemoteBrowserEngine.AchieveGoal()` + the pure `dispatchRemoteBrowserGoal()` strategy switch (ComputerUse vs NativeAI). **4 tests.**
+- **`@memberjunction/server`** — `ExecuteRemoteBrowserGoal` GraphQL mutation.
+- **`@memberjunction/ng-conversations`** — `browser_AchieveGoal` realtime tool + channel route to the goal mutation.
+
+Bind `MJComputerUseEngine` via `CdpRemoteBrowserSession.SetGoalEngineFactory(...)` at startup for vision-model auto-selection (the default engine requires a controller model). Original plan follows.
+
+
 **Motivation:** Let a realtime voice agent (or a human) set a *high-level goal* — "log into this site with these
 creds", "find the latest invoice and download it" — and have **computer-use** autonomously plan and execute it
 against the **remote browser** the human is watching, instead of the realtime agent issuing granular
@@ -18,7 +33,7 @@ defined but currently called nowhere.
 |---|---|---|
 | **Autonomous goal loop** — `ComputerUseEngine.Run({ Goal, StartUrl, ControllerModel, JudgeModel, MaxSteps, Tools })`: screenshot → controller-LLM picks actions → execute → judge (done/impossible/feedback) → loop. Own vision/action model + judge. | `@memberjunction/computer-use` (`ComputerUseEngine`), MJ layer `@memberjunction/mj-computer-use` (`MJComputerUseEngine` — routes prompts through `AIPromptRunner`, resolves MJ credentials/actions) | ✅ exists |
 | **Shared-browser injection** — `ComputerUseEngine.SetBrowserAdapter(adapter)` accepts a `PlaywrightBrowserAdapter`. | `@memberjunction/computer-use` | ✅ exists |
-| **The live browser** — `CdpRemoteBrowserSession` wraps **a `PlaywrightBrowserAdapter`** over the session's CDP endpoint (the same type computer-use drives). Screencast / live-view show that page. | `@memberjunction/remote-browser-cdp` | ✅ exists |
+| **The live browser** — `CdpRemoteBrowserSession` wraps **the same `PlaywrightBrowserAdapter` instance/class** computer-use drives (`PlaywrightBrowserAdapter extends BaseBrowserAdapter`), attached over the session's CDP endpoint. **The CDP-driving substrate is one shared implementation** — both call `adapter.ExecuteAction(...)` / `chromium.connectOverCDP(...)`; only the *edge action enum* differs (remote-browser's `RemoteBrowserAction`, mapped via `mapRemoteBrowserAction()`, vs computer-use's native `BrowserAction`). The engine emits `BrowserAction` directly, so handing it the session's adapter needs **no** mapper. Screencast / live-view show that page. | `@memberjunction/remote-browser-cdp` + `@memberjunction/computer-use` | ✅ exists |
 | **Session lifecycle + control arbiter** — `RemoteBrowserEngine` (lazy-start by agent-session id, screencast pipe, modes `AgentOnly`/`ViewOnly`/`Collaborative`, request/grant/yield floor). | `@memberjunction/remote-browser-server` | ✅ exists |
 | **Control-strategy resolver** — `resolveControlStrategy(features, preferred?) → 'ComputerUse' \| 'NativeAI'`. | `@memberjunction/remote-browser-base` `control.ts` | ⚠️ **defined, called nowhere** |
 | **Native-AI per-backend** — `IRemoteBrowserSession.InvokeNativeAIControl(intent)` (Stagehand `Act`, Hyperbrowser `RunAgentTask`). | base + Browserbase/Hyperbrowser providers | ✅ implemented per-backend, **never invoked** |

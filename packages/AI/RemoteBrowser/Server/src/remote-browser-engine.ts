@@ -14,26 +14,23 @@
  * @author MemberJunction.com
  */
 
-import {
-    IMetadataProvider,
-    IStartupSink,
-    LogError,
-    LogStatus,
-    RegisterForStartup,
-    UserInfo,
-} from '@memberjunction/core';
+import { IMetadataProvider, IStartupSink, LogError, LogStatus, RegisterForStartup, UserInfo } from '@memberjunction/core';
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import { MJAIRemoteBrowserProviderEntity } from '@memberjunction/core-entities';
 import {
-    BaseRemoteBrowserProvider,
-    IRemoteBrowserProviderFeatures,
-    IRemoteBrowserSession,
-    RemoteBrowserCapabilityNotSupportedError,
-    RemoteBrowserControlMode,
-    RemoteBrowserEngineBase,
-    RemoteBrowserHumanInput,
-    RemoteBrowserScreencastFrame,
-    isControlModeSupported,
+  BaseRemoteBrowserProvider,
+  IRemoteBrowserProviderFeatures,
+  IRemoteBrowserSession,
+  RemoteBrowserCapabilityNotSupportedError,
+  RemoteBrowserControlMode,
+  RemoteBrowserControlStrategy,
+  RemoteBrowserEngineBase,
+  RemoteBrowserGoalResult,
+  RemoteBrowserGoalProgress,
+  RemoteBrowserHumanInput,
+  RemoteBrowserScreencastFrame,
+  isControlModeSupported,
+  resolveControlStrategy,
 } from '@memberjunction/remote-browser-base';
 
 /**
@@ -53,36 +50,103 @@ export type RemoteBrowserFloorHolder = 'Agent' | 'Human';
  * cache, so the caller never touches metadata directly.
  */
 export interface StartRemoteBrowserSessionParams {
-    /**
-     * The backend's display name (e.g. `'Self-Hosted Chrome'`, `'Browserbase'`). Resolved via
-     * {@link RemoteBrowserEngineBase.ProviderByName}. Mutually exclusive with {@link DriverClass};
-     * supply exactly one.
-     */
-    ProviderName?: string;
+  /**
+   * The backend's display name (e.g. `'Self-Hosted Chrome'`, `'Browserbase'`). Resolved via
+   * {@link RemoteBrowserEngineBase.ProviderByName}. Mutually exclusive with {@link DriverClass};
+   * supply exactly one.
+   */
+  ProviderName?: string;
 
-    /**
-     * The backend's `DriverClass` (the ClassFactory key, e.g. `'BrowserbaseRemoteBrowser'`). Resolved
-     * via {@link RemoteBrowserEngineBase.ProviderByDriverClass}. Mutually exclusive with
-     * {@link ProviderName}; supply exactly one.
-     */
-    DriverClass?: string;
+  /**
+   * The backend's `DriverClass` (the ClassFactory key, e.g. `'BrowserbaseRemoteBrowser'`). Resolved
+   * via {@link RemoteBrowserEngineBase.ProviderByDriverClass}. Mutually exclusive with
+   * {@link ProviderName}; supply exactly one.
+   */
+  DriverClass?: string;
 
-    /**
-     * Optional per-session override of the provider's `DefaultControlMode`. Validated against the
-     * backend's capability flags via `isControlModeSupported`; an unsupported override is rejected
-     * (rather than silently downgraded) so a misconfiguration fails loudly at start.
-     */
-    ControlModeOverride?: RemoteBrowserControlMode;
+  /**
+   * Optional per-session override of the provider's `DefaultControlMode`. Validated against the
+   * backend's capability flags via `isControlModeSupported`; an unsupported override is rejected
+   * (rather than silently downgraded) so a misconfiguration fails loudly at start.
+   */
+  ControlModeOverride?: RemoteBrowserControlMode;
 
-    /**
-     * Opaque, backend-specific connection configuration (region, Chrome image, proxy, resolved
-     * credential references, …). When omitted the engine parses the provider row's `Configuration`
-     * JSON; when supplied it takes precedence (already-parsed, so no JSON round-trip).
-     */
-    Configuration?: Record<string, unknown>;
+  /**
+   * Opaque, backend-specific connection configuration (region, Chrome image, proxy, resolved
+   * credential references, …). When omitted the engine parses the provider row's `Configuration`
+   * JSON; when supplied it takes precedence (already-parsed, so no JSON round-trip).
+   */
+  Configuration?: Record<string, unknown>;
 
-    /** The MJ user the session runs as; every session is owned + audited by a user. */
-    ContextUser?: UserInfo;
+  /** The MJ user the session runs as; every session is owned + audited by a user. */
+  ContextUser?: UserInfo;
+}
+
+/**
+ * Parameters for {@link RemoteBrowserEngine.AchieveGoal} — a high-level, goal-driven browser run.
+ */
+export interface AchieveGoalParams {
+  /** The acting user (for lazy session start). */
+  ContextUser?: UserInfo;
+  /** Explicit backend provider name (when omitted, the single Active provider is used). */
+  ProviderName?: string;
+  /** Force a control strategy; otherwise {@link resolveControlStrategy} picks (NativeAI if supported). */
+  PreferredStrategy?: RemoteBrowserControlStrategy;
+  /** Optional URL to navigate to before the goal loop begins. */
+  StartUrl?: string;
+  /** Maximum perceive-act steps before the loop gives up. */
+  MaxSteps?: number;
+  /** Optional controller (vision/action) model id, overriding auto-selection. */
+  ControllerModelId?: string;
+  /** Optional judge model id, overriding auto-selection. */
+  JudgeModelId?: string;
+  /** Model-blind context object (`{{path}}` references injected at the action boundary; see the plan §4). */
+  Context?: Record<string, unknown>;
+  /** Per-step progress callback (a realtime session narrates these). */
+  OnProgress?: (progress: RemoteBrowserGoalProgress) => void;
+  /** Abort signal — barge-in stops the goal loop cooperatively. */
+  Signal?: AbortSignal;
+}
+
+/**
+ * Resolves the control strategy for a session and dispatches a goal to it — `'ComputerUse'` runs the
+ * computer-use loop ({@link IRemoteBrowserSession.RunComputerUseGoal}); `'NativeAI'` delegates to the
+ * backend's harness ({@link IRemoteBrowserSession.InvokeNativeAIControl}). Pure (no engine/DB state) so it
+ * is unit-testable with a fake session + features; {@link RemoteBrowserEngine.AchieveGoal} calls it after
+ * lazily starting the browser.
+ *
+ * @param session The live session to drive.
+ * @param features The backend capability flags (drives strategy resolution).
+ * @param goal The natural-language goal.
+ * @param opts The goal options (strategy preference, start url, step cap, progress, signal, …).
+ * @returns The goal outcome, normalized to {@link RemoteBrowserGoalResult}.
+ */
+export async function dispatchRemoteBrowserGoal(
+  session: IRemoteBrowserSession,
+  features: IRemoteBrowserProviderFeatures,
+  goal: string,
+  opts: AchieveGoalParams = {},
+): Promise<RemoteBrowserGoalResult> {
+  const strategy = resolveControlStrategy(features, opts.PreferredStrategy);
+  if (strategy === 'NativeAI') {
+    const r = await session.InvokeNativeAIControl(goal);
+    return {
+      Success: r.Success,
+      Strategy: 'NativeAI',
+      CurrentUrl: r.CurrentUrl,
+      Status: r.Success ? 'Completed' : 'Error',
+      Detail: r.Detail,
+    };
+  }
+  return session.RunComputerUseGoal(goal, {
+    StartUrl: opts.StartUrl,
+    MaxSteps: opts.MaxSteps,
+    ControllerModelId: opts.ControllerModelId,
+    JudgeModelId: opts.JudgeModelId,
+    Context: opts.Context,
+    OnProgress: opts.OnProgress,
+    Signal: opts.Signal,
+  });
 }
 
 /**
@@ -91,32 +155,32 @@ export interface StartRemoteBrowserSessionParams {
  * holder so teardown and the control arbiter can reach all of them.
  */
 export interface RemoteBrowserSessionHandle {
-    /** The engine-generated session id (the key in the live-session map). */
-    SessionID: string;
+  /** The engine-generated session id (the key in the live-session map). */
+  SessionID: string;
 
-    /** The concrete provider driver instance that opened the session. */
-    Driver: BaseRemoteBrowserProvider;
+  /** The concrete provider driver instance that opened the session. */
+  Driver: BaseRemoteBrowserProvider;
 
-    /** The live CDP-connected session the agent/human drives. */
-    Session: IRemoteBrowserSession;
+  /** The live CDP-connected session the agent/human drives. */
+  Session: IRemoteBrowserSession;
 
-    /** The provider registry row backing this session. */
-    Provider: MJAIRemoteBrowserProviderEntity;
+  /** The provider registry row backing this session. */
+  Provider: MJAIRemoteBrowserProviderEntity;
 
-    /** The resolved control mode (`AgentOnly` / `ViewOnly` / `Collaborative`) for this session. */
-    ControlMode: RemoteBrowserControlMode;
+  /** The resolved control mode (`AgentOnly` / `ViewOnly` / `Collaborative`) for this session. */
+  ControlMode: RemoteBrowserControlMode;
 
-    /** The backend's capability flags, captured at connect for arbiter + screencast gating. */
-    Features: IRemoteBrowserProviderFeatures;
+  /** The backend's capability flags, captured at connect for arbiter + screencast gating. */
+  Features: IRemoteBrowserProviderFeatures;
 
-    /** Who currently holds the input floor. Starts as `'Agent'`; the arbiter mutates it. */
-    FloorHolder: RemoteBrowserFloorHolder;
+  /** Who currently holds the input floor. Starts as `'Agent'`; the arbiter mutates it. */
+  FloorHolder: RemoteBrowserFloorHolder;
 
-    /** Whether a human has an outstanding, not-yet-granted control request (Collaborative only). */
-    HumanControlRequested: boolean;
+  /** Whether a human has an outstanding, not-yet-granted control request (Collaborative only). */
+  HumanControlRequested: boolean;
 
-    /** The context user the session runs as. */
-    ContextUser?: UserInfo;
+  /** The context user the session runs as. */
+  ContextUser?: UserInfo;
 }
 
 /**
@@ -155,697 +219,688 @@ export type RemoteBrowserScreencastSink = (frame: RemoteBrowserScreencastFrame) 
  * `RemoteBrowserEngineBase` / `RemoteBrowserEngine` pair.
  */
 @RegisterForStartup({
-    deferred: true,
-    deferredDelay: 15000,
-    description: 'Server-side Remote Browser Engine (live browser session coordination + control arbiter)',
+  deferred: true,
+  deferredDelay: 15000,
+  description: 'Server-side Remote Browser Engine (live browser session coordination + control arbiter)',
 })
 export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> implements IStartupSink {
-    /** In-memory registry of the remote-browser sessions this process currently hosts, keyed by session id (lowercased). */
-    private activeSessions = new Map<string, RemoteBrowserSessionHandle>();
+  /** In-memory registry of the remote-browser sessions this process currently hosts, keyed by session id (lowercased). */
+  private activeSessions = new Map<string, RemoteBrowserSessionHandle>();
 
-    /**
-     * Maps an `AIAgentSession` id (lowercased) → the engine-generated {@link RemoteBrowserSessionHandle.SessionID}
-     * of the live browser it lazily started. The realtime channel plane is keyed by agent session, while the
-     * engine's own lifecycle is keyed by its generated session id; this index bridges the two so the
-     * mutation/query resolvers (and the channel's teardown) can reach a browser by agent session id.
-     */
-    private agentSessionToEngineSession = new Map<string, string>();
+  /**
+   * Maps an `AIAgentSession` id (lowercased) → the engine-generated {@link RemoteBrowserSessionHandle.SessionID}
+   * of the live browser it lazily started. The realtime channel plane is keyed by agent session, while the
+   * engine's own lifecycle is keyed by its generated session id; this index bridges the two so the
+   * mutation/query resolvers (and the channel's teardown) can reach a browser by agent session id.
+   */
+  private agentSessionToEngineSession = new Map<string, string>();
 
-    /**
-     * In-flight lazy-start promises, keyed by `AIAgentSession` id (lowercased). At session start the
-     * screencast mutation, the agent's first `browser_*` action, and the audio-stream mutation all call
-     * {@link StartSessionForAgentSession} nearly simultaneously. Each is async, so without coalescing they
-     * all observe "no session yet" and each launches a SEPARATE Chrome — the duplicate-browser leak, and the
-     * cause of the live view / screenshots landing on different browser instances (intermittent blank canvas).
-     * Concurrent callers await the SAME promise here so exactly one browser is started per agent session.
-     */
-    private startingSessions = new Map<string, Promise<IRemoteBrowserSession>>();
+  /**
+   * In-flight lazy-start promises, keyed by `AIAgentSession` id (lowercased). At session start the
+   * screencast mutation, the agent's first `browser_*` action, and the audio-stream mutation all call
+   * {@link StartSessionForAgentSession} nearly simultaneously. Each is async, so without coalescing they
+   * all observe "no session yet" and each launches a SEPARATE Chrome — the duplicate-browser leak, and the
+   * cause of the live view / screenshots landing on different browser instances (intermittent blank canvas).
+   * Concurrent callers await the SAME promise here so exactly one browser is started per agent session.
+   */
+  private startingSessions = new Map<string, Promise<IRemoteBrowserSession>>();
 
-    /** Monotonic counter feeding the generated session-id suffix (unique within this process). */
-    private sessionCounter = 0;
+  /** Monotonic counter feeding the generated session-id suffix (unique within this process). */
+  private sessionCounter = 0;
 
-    /**
-     * The singleton accessor. Keyed by THIS class's name in the Global Object Store (via
-     * {@link BaseSingleton}), distinct from {@link RemoteBrowserEngineBase.Instance} — which this engine
-     * composes rather than inherits.
-     */
-    public static get Instance(): RemoteBrowserEngine {
-        return super.getInstance<RemoteBrowserEngine>();
+  /**
+   * The singleton accessor. Keyed by THIS class's name in the Global Object Store (via
+   * {@link BaseSingleton}), distinct from {@link RemoteBrowserEngineBase.Instance} — which this engine
+   * composes rather than inherits.
+   */
+  public static get Instance(): RemoteBrowserEngine {
+    return super.getInstance<RemoteBrowserEngine>();
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // Composed base — the ONE BaseEngine cache. All metadata is read through this.
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * The single underlying {@link RemoteBrowserEngineBase} instance whose `BaseEngine` cache holds the
+   * provider registry. Composed (not inherited) so the startup manager warms exactly one cache; all
+   * metadata reads on this engine delegate here.
+   */
+  protected get Base(): RemoteBrowserEngineBase {
+    return RemoteBrowserEngineBase.Instance;
+  }
+
+  /**
+   * Deferred-startup entry point (per {@link IStartupSink}). Warms the ONE composed base cache by
+   * delegating to {@link RemoteBrowserEngineBase.Config}; mirrors `AIBridgeEngine.HandleStartup`.
+   *
+   * @param contextUser The boot/system user context.
+   * @param provider Optional metadata provider override (multi-provider scenarios).
+   */
+  public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+    await this.Config(false, contextUser, provider);
+  }
+
+  /**
+   * Loads (or refreshes) the composed base's provider metadata cache. Delegates to
+   * {@link RemoteBrowserEngineBase.Config}. Idempotent — a no-op when already loaded unless
+   * `forceRefresh`.
+   *
+   * @param forceRefresh When `true`, reloads even if already loaded.
+   * @param contextUser Required server-side for proper data isolation.
+   * @param provider Optional explicit metadata provider (multi-provider scenarios).
+   */
+  public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+    await this.Base.Config(forceRefresh, contextUser, provider);
+  }
+
+  /** Returns `true` once the composed base cache is loaded. */
+  public get Loaded(): boolean {
+    return this.Base.Loaded;
+  }
+
+  /** All cached `MJ: AI Remote Browser Providers` rows. @see RemoteBrowserEngineBase.Providers */
+  public get Providers(): MJAIRemoteBrowserProviderEntity[] {
+    return this.Base.Providers;
+  }
+
+  /** The remote-browser sessions this process currently hosts (read-only snapshot). */
+  public get ActiveSessions(): ReadonlyArray<RemoteBrowserSessionHandle> {
+    return Array.from(this.activeSessions.values());
+  }
+
+  /**
+   * Returns the live session handle for an id, or `undefined` when this process holds no such session.
+   *
+   * @param sessionId The engine-generated session id.
+   * @returns The live handle, or `undefined`.
+   */
+  public GetSession(sessionId: string): RemoteBrowserSessionHandle | undefined {
+    return this.activeSessions.get(sessionId.toLowerCase());
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // Agent-session-keyed lifecycle — the realtime channel plane's view of the engine.
+  //
+  // Realtime sessions are CLIENT-DIRECT: the agent's browser tools execute in the browser, which
+  // relays each driving action to the server through the `ExecuteRemoteBrowserAction` mutation. That
+  // mutation lazily starts the browser on first use (so sessions that never touch the browser never
+  // launch Chrome) and looks it up by `AIAgentSession` id — these three methods are that surface.
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Lazily starts (or returns the already-running) remote-browser session for an `AIAgentSession`.
+   *
+   * Idempotent: a second call for an agent session that already has a live browser returns that same
+   * {@link IRemoteBrowserSession} rather than launching a second browser. The provider is resolved by
+   * the explicit `providerName` when supplied, else the engine's single {@link RemoteBrowserEngineBase.ActiveProviders}
+   * entry — assuming EXACTLY ONE Active provider for now (a clear error is thrown for none or ambiguous,
+   * rather than silently picking one).
+   *
+   * @param agentSessionID The `AIAgentSession` id the browser is bound to.
+   * @param contextUser The MJ user the browser session runs as (owned + audited by this user).
+   * @param providerName Optional explicit backend name; when omitted the single Active provider is used.
+   * @returns The live session the mutation drives.
+   * @throws When no/ambiguous Active provider can be resolved, or the underlying {@link StartSession} fails.
+   */
+  public async StartSessionForAgentSession(agentSessionID: string, contextUser?: UserInfo, providerName?: string): Promise<IRemoteBrowserSession> {
+    const existing = this.GetSessionForAgentSession(agentSessionID);
+    if (existing) {
+      return existing;
     }
-
-    // ──────────────────────────────────────────────────────────────────────────────
-    // Composed base — the ONE BaseEngine cache. All metadata is read through this.
-    // ──────────────────────────────────────────────────────────────────────────────
-
-    /**
-     * The single underlying {@link RemoteBrowserEngineBase} instance whose `BaseEngine` cache holds the
-     * provider registry. Composed (not inherited) so the startup manager warms exactly one cache; all
-     * metadata reads on this engine delegate here.
-     */
-    protected get Base(): RemoteBrowserEngineBase {
-        return RemoteBrowserEngineBase.Instance;
+    // Coalesce concurrent lazy-starts (screencast + first action + audio stream) onto one promise so we
+    // launch exactly ONE browser per agent session — see startingSessions.
+    const key = this.agentSessionKey(agentSessionID);
+    const inflight = this.startingSessions.get(key);
+    if (inflight) {
+      return inflight;
     }
-
-    /**
-     * Deferred-startup entry point (per {@link IStartupSink}). Warms the ONE composed base cache by
-     * delegating to {@link RemoteBrowserEngineBase.Config}; mirrors `AIBridgeEngine.HandleStartup`.
-     *
-     * @param contextUser The boot/system user context.
-     * @param provider Optional metadata provider override (multi-provider scenarios).
-     */
-    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        await this.Config(false, contextUser, provider);
+    const startPromise = this.lazyStartBrowserForAgentSession(agentSessionID, key, contextUser, providerName);
+    this.startingSessions.set(key, startPromise);
+    try {
+      return await startPromise;
+    } finally {
+      this.startingSessions.delete(key);
     }
+  }
 
-    /**
-     * Loads (or refreshes) the composed base's provider metadata cache. Delegates to
-     * {@link RemoteBrowserEngineBase.Config}. Idempotent — a no-op when already loaded unless
-     * `forceRefresh`.
-     *
-     * @param forceRefresh When `true`, reloads even if already loaded.
-     * @param contextUser Required server-side for proper data isolation.
-     * @param provider Optional explicit metadata provider (multi-provider scenarios).
-     */
-    public async Config(
-        forceRefresh?: boolean,
-        contextUser?: UserInfo,
-        provider?: IMetadataProvider,
-    ): Promise<void> {
-        await this.Base.Config(forceRefresh, contextUser, provider);
+  /**
+   * Actually launches the one browser for an agent session (serialized by {@link startingSessions}).
+   * Re-checks the live-session map first in case another path bound one between the coalescing guard and
+   * here, so a late winner reuses rather than double-launches.
+   */
+  private async lazyStartBrowserForAgentSession(
+    agentSessionID: string,
+    key: string,
+    contextUser?: UserInfo,
+    providerName?: string,
+  ): Promise<IRemoteBrowserSession> {
+    const existing = this.GetSessionForAgentSession(agentSessionID);
+    if (existing) {
+      return existing;
     }
+    await this.Config(false, contextUser);
+    const resolvedProviderName = this.resolveAgentSessionProviderName(providerName);
+    const handle = await this.StartSession({ ProviderName: resolvedProviderName, ContextUser: contextUser });
+    this.agentSessionToEngineSession.set(key, handle.SessionID);
+    LogStatus(
+      `[RemoteBrowserEngine] Lazily started browser for agent session ${agentSessionID} ` +
+        `(engine session ${handle.SessionID}, provider '${resolvedProviderName}').`,
+    );
+    return handle.Session;
+  }
 
-    /** Returns `true` once the composed base cache is loaded. */
-    public get Loaded(): boolean {
-        return this.Base.Loaded;
+  /**
+   * Returns the live remote-browser session bound to an `AIAgentSession`, or `undefined` when this
+   * process holds no browser for it (never started, or already torn down).
+   *
+   * @param agentSessionID The `AIAgentSession` id.
+   * @returns The live session, or `undefined`.
+   */
+  public GetSessionForAgentSession(agentSessionID: string): IRemoteBrowserSession | undefined {
+    const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID));
+    if (!engineSessionID) {
+      return undefined;
     }
+    return this.activeSessions.get(engineSessionID.toLowerCase())?.Session;
+  }
 
-    /** All cached `MJ: AI Remote Browser Providers` rows. @see RemoteBrowserEngineBase.Providers */
-    public get Providers(): MJAIRemoteBrowserProviderEntity[] {
-        return this.Base.Providers;
+  /**
+   * Drives an autonomous, **goal-driven** browser run for an agent session: the caller sets a high-level
+   * goal ("log into this site and download the latest invoice") and the resolved control strategy plans +
+   * executes it — instead of the caller issuing granular actions. Lazily starts the browser if needed,
+   * then dispatches by {@link resolveControlStrategy}: `'ComputerUse'` runs MJ's computer-use loop against
+   * the live session ({@link IRemoteBrowserSession.RunComputerUseGoal}); `'NativeAI'` delegates to the
+   * backend's own AI harness ({@link IRemoteBrowserSession.InvokeNativeAIControl}).
+   *
+   * Progress + barge-in flow through `opts.OnProgress` / `opts.Signal` (a realtime voice session narrates
+   * the former and aborts on the latter). See `plans/realtime/computer-use-remote-browser-blend.md`.
+   *
+   * @param agentSessionID The `AIAgentSession` id.
+   * @param goal The natural-language goal.
+   * @param opts Strategy preference, start url, step cap, model overrides, model-blind context, progress + signal.
+   * @returns The goal outcome.
+   */
+  public async AchieveGoal(agentSessionID: string, goal: string, opts: AchieveGoalParams = {}): Promise<RemoteBrowserGoalResult> {
+    await this.StartSessionForAgentSession(agentSessionID, opts.ContextUser, opts.ProviderName);
+    const handle = this.getHandleForAgentSession(agentSessionID);
+    if (!handle) {
+      return { Success: false, Status: 'Error', Detail: 'No active remote-browser session for this agent session.' };
     }
+    return dispatchRemoteBrowserGoal(handle.Session, handle.Features, goal, opts);
+  }
 
-    /** The remote-browser sessions this process currently hosts (read-only snapshot). */
-    public get ActiveSessions(): ReadonlyArray<RemoteBrowserSessionHandle> {
-        return Array.from(this.activeSessions.values());
+  /** Returns the full session handle (with capability features) for an agent session, or `undefined`. */
+  private getHandleForAgentSession(agentSessionID: string): RemoteBrowserSessionHandle | undefined {
+    const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID));
+    return engineSessionID ? this.activeSessions.get(engineSessionID.toLowerCase()) : undefined;
+  }
+
+  /**
+   * Tears down the remote-browser session lazily started for an `AIAgentSession` (if any) and forgets
+   * the mapping. Idempotent — ending an agent session that never started a browser is a benign no-op.
+   * Called from the Remote Browser channel plugin's close/dispose hooks so any browser a session opened
+   * is always released when the session ends.
+   *
+   * @param agentSessionID The `AIAgentSession` id whose browser to end.
+   * @returns `true` when a live browser was found and torn down, `false` when none was held.
+   */
+  public async EndSessionForAgentSession(agentSessionID: string): Promise<boolean> {
+    const key = this.agentSessionKey(agentSessionID);
+    const engineSessionID = this.agentSessionToEngineSession.get(key);
+    if (!engineSessionID) {
+      return false;
     }
+    this.agentSessionToEngineSession.delete(key);
+    return this.EndSession(engineSessionID);
+  }
 
-    /**
-     * Returns the live session handle for an id, or `undefined` when this process holds no such session.
-     *
-     * @param sessionId The engine-generated session id.
-     * @returns The live handle, or `undefined`.
-     */
-    public GetSession(sessionId: string): RemoteBrowserSessionHandle | undefined {
-        return this.activeSessions.get(sessionId.toLowerCase());
+  // ──────────────────────────────────────────────────────────────────────────────
+  // Lifecycle — start / end a remote-browser session.
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Starts a live remote-browser session: resolves the provider, validates it + the control mode,
+   * resolves and connects the driver, and registers the live handle.
+   *
+   * Flow:
+   * 1. Resolve the provider row by name or driver class (exactly one must be supplied + must match).
+   * 2. Assert the provider is `Active` (a disabled backend cannot start sessions).
+   * 3. Resolve the resolved {@link RemoteBrowserControlMode} (override ?? provider default) and
+   *    validate it against the backend's capability flags — reject an unsupported mode.
+   * 4. Resolve the driver via `ClassFactory.CreateInstance(BaseRemoteBrowserProvider, DriverClass)`.
+   * 5. Build the provider context and `Connect`, then register + return the live handle (floor = Agent).
+   *
+   * @param params The session parameters.
+   * @returns The live {@link RemoteBrowserSessionHandle}.
+   * @throws When the provider cannot be resolved, is disabled, the control mode is unsupported, the
+   *  driver cannot be resolved, or `Connect` fails.
+   */
+  public async StartSession(params: StartRemoteBrowserSessionParams): Promise<RemoteBrowserSessionHandle> {
+    const provider = this.resolveProvider(params);
+    this.assertActive(provider);
+
+    const features = this.Base.FeaturesFor(provider);
+    const controlMode = this.resolveControlMode(provider, features, params.ControlModeOverride);
+
+    const driver = this.resolveDriver(provider);
+    const configuration = this.resolveConfiguration(provider, params.Configuration);
+    const session = await driver.Connect({
+      Features: features,
+      ProviderName: provider.Name,
+      ProviderType: provider.ProviderType,
+      ControlMode: controlMode,
+      Configuration: configuration,
+      ContextUser: params.ContextUser,
+    });
+
+    const handle: RemoteBrowserSessionHandle = {
+      SessionID: this.generateSessionId(provider),
+      Driver: driver,
+      Session: session,
+      Provider: provider,
+      ControlMode: controlMode,
+      Features: features,
+      FloorHolder: 'Agent',
+      HumanControlRequested: false,
+      ContextUser: params.ContextUser,
+    };
+    this.activeSessions.set(handle.SessionID.toLowerCase(), handle);
+    LogStatus(`[RemoteBrowserEngine] Session ${handle.SessionID} started via ${provider.Name} ` + `(mode=${controlMode}, type=${provider.ProviderType}).`);
+    return handle;
+  }
+
+  /**
+   * Ends a live session: closes the session handle, disconnects the driver, and removes the live
+   * registry entry. Tolerant of teardown errors (logged, never rethrown) and idempotent — ending a
+   * session this process no longer holds is a benign no-op.
+   *
+   * @param sessionId The session id to end.
+   * @returns `true` when a live session was found and torn down, `false` when none was held.
+   */
+  public async EndSession(sessionId: string): Promise<boolean> {
+    const key = sessionId.toLowerCase();
+    const handle = this.activeSessions.get(key);
+    if (!handle) {
+      return false;
     }
+    this.activeSessions.delete(key);
+    await this.teardown(handle);
+    LogStatus(`[RemoteBrowserEngine] Session ${handle.SessionID} ended.`);
+    return true;
+  }
 
-    // ──────────────────────────────────────────────────────────────────────────────
-    // Agent-session-keyed lifecycle — the realtime channel plane's view of the engine.
-    //
-    // Realtime sessions are CLIENT-DIRECT: the agent's browser tools execute in the browser, which
-    // relays each driving action to the server through the `ExecuteRemoteBrowserAction` mutation. That
-    // mutation lazily starts the browser on first use (so sessions that never touch the browser never
-    // launch Chrome) and looks it up by `AIAgentSession` id — these three methods are that surface.
-    // ──────────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Lazily starts (or returns the already-running) remote-browser session for an `AIAgentSession`.
-     *
-     * Idempotent: a second call for an agent session that already has a live browser returns that same
-     * {@link IRemoteBrowserSession} rather than launching a second browser. The provider is resolved by
-     * the explicit `providerName` when supplied, else the engine's single {@link RemoteBrowserEngineBase.ActiveProviders}
-     * entry — assuming EXACTLY ONE Active provider for now (a clear error is thrown for none or ambiguous,
-     * rather than silently picking one).
-     *
-     * @param agentSessionID The `AIAgentSession` id the browser is bound to.
-     * @param contextUser The MJ user the browser session runs as (owned + audited by this user).
-     * @param providerName Optional explicit backend name; when omitted the single Active provider is used.
-     * @returns The live session the mutation drives.
-     * @throws When no/ambiguous Active provider can be resolved, or the underlying {@link StartSession} fails.
-     */
-    public async StartSessionForAgentSession(
-        agentSessionID: string,
-        contextUser?: UserInfo,
-        providerName?: string,
-    ): Promise<IRemoteBrowserSession> {
-        const existing = this.GetSessionForAgentSession(agentSessionID);
-        if (existing) {
-            return existing;
-        }
-        // Coalesce concurrent lazy-starts (screencast + first action + audio stream) onto one promise so we
-        // launch exactly ONE browser per agent session — see startingSessions.
-        const key = this.agentSessionKey(agentSessionID);
-        const inflight = this.startingSessions.get(key);
-        if (inflight) {
-            return inflight;
-        }
-        const startPromise = this.lazyStartBrowserForAgentSession(agentSessionID, key, contextUser, providerName);
-        this.startingSessions.set(key, startPromise);
-        try {
-            return await startPromise;
-        } finally {
-            this.startingSessions.delete(key);
-        }
+  /**
+   * Force-closes every live session this process holds whose backend matches a predicate — the
+   * janitor seam for orphan reconciliation (e.g. on host drain). Mirrors the bridge engine's
+   * {@link import('@memberjunction/ai-bridge-server').AIBridgeEngine.ReconcileOrphans} posture: the
+   * sweep logic lives here, but the *scheduling* (boot recovery + periodic timer) is intentionally
+   * left to the host so this package carries no timer/IO of its own.
+   *
+   * @param predicate Optional filter; when omitted every live session is reconciled. Returning `true`
+   *  marks the session for force-close.
+   * @returns The number of sessions closed.
+   */
+  public async ReconcileOrphans(predicate?: (handle: RemoteBrowserSessionHandle) => boolean): Promise<number> {
+    const targets = Array.from(this.activeSessions.values()).filter((h) => (predicate ? predicate(h) : true));
+    let closed = 0;
+    for (const handle of targets) {
+      const ended = await this.EndSession(handle.SessionID);
+      if (ended) {
+        closed++;
+      }
     }
-
-    /**
-     * Actually launches the one browser for an agent session (serialized by {@link startingSessions}).
-     * Re-checks the live-session map first in case another path bound one between the coalescing guard and
-     * here, so a late winner reuses rather than double-launches.
-     */
-    private async lazyStartBrowserForAgentSession(
-        agentSessionID: string,
-        key: string,
-        contextUser?: UserInfo,
-        providerName?: string,
-    ): Promise<IRemoteBrowserSession> {
-        const existing = this.GetSessionForAgentSession(agentSessionID);
-        if (existing) {
-            return existing;
-        }
-        await this.Config(false, contextUser);
-        const resolvedProviderName = this.resolveAgentSessionProviderName(providerName);
-        const handle = await this.StartSession({ ProviderName: resolvedProviderName, ContextUser: contextUser });
-        this.agentSessionToEngineSession.set(key, handle.SessionID);
-        LogStatus(
-            `[RemoteBrowserEngine] Lazily started browser for agent session ${agentSessionID} ` +
-                `(engine session ${handle.SessionID}, provider '${resolvedProviderName}').`,
-        );
-        return handle.Session;
+    if (closed > 0) {
+      LogStatus(`[RemoteBrowserEngine] Janitor reconciled ${closed} orphaned remote-browser session(s).`);
     }
+    return closed;
+  }
 
-    /**
-     * Returns the live remote-browser session bound to an `AIAgentSession`, or `undefined` when this
-     * process holds no browser for it (never started, or already torn down).
-     *
-     * @param agentSessionID The `AIAgentSession` id.
-     * @returns The live session, or `undefined`.
-     */
-    public GetSessionForAgentSession(agentSessionID: string): IRemoteBrowserSession | undefined {
-        const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID));
-        if (!engineSessionID) {
-            return undefined;
-        }
-        return this.activeSessions.get(engineSessionID.toLowerCase())?.Session;
+  // ──────────────────────────────────────────────────────────────────────────────
+  // The control arbiter — mediates the input floor per RemoteBrowserControlMode.
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Requests that a human be granted the input floor.
+   *
+   * Honored ONLY in `Collaborative` mode (the only mode that permits human driving): it records an
+   * outstanding request that {@link GrantControl} later satisfies. In `AgentOnly` and `ViewOnly` the
+   * request is denied — a human can never take the wheel there.
+   *
+   * @param sessionId The session to request control on.
+   * @returns `true` when the request was accepted (Collaborative), `false` when denied by the mode or
+   *  the session is unknown.
+   */
+  public RequestControl(sessionId: string): boolean {
+    const handle = this.requireSession(sessionId);
+    if (!handle || handle.ControlMode !== 'Collaborative') {
+      return false;
     }
+    handle.HumanControlRequested = true;
+    return true;
+  }
 
-    /**
-     * Tears down the remote-browser session lazily started for an `AIAgentSession` (if any) and forgets
-     * the mapping. Idempotent — ending an agent session that never started a browser is a benign no-op.
-     * Called from the Remote Browser channel plugin's close/dispose hooks so any browser a session opened
-     * is always released when the session ends.
-     *
-     * @param agentSessionID The `AIAgentSession` id whose browser to end.
-     * @returns `true` when a live browser was found and torn down, `false` when none was held.
-     */
-    public async EndSessionForAgentSession(agentSessionID: string): Promise<boolean> {
-        const key = this.agentSessionKey(agentSessionID);
-        const engineSessionID = this.agentSessionToEngineSession.get(key);
-        if (!engineSessionID) {
-            return false;
-        }
-        this.agentSessionToEngineSession.delete(key);
-        return this.EndSession(engineSessionID);
+  /**
+   * Grants the input floor to the requested party, transferring the wheel.
+   *
+   * - Granting to `'Human'` succeeds only in `Collaborative` AND only after a {@link RequestControl}
+   *   (the request→grant handshake). The outstanding request is cleared on grant.
+   * - Granting to `'Agent'` always succeeds (the agent reclaiming the wheel is unconditional).
+   *
+   * @param sessionId The session to grant control on.
+   * @param who The party to grant the floor to.
+   * @returns `true` when the grant took effect, `false` when rejected by the mode / missing request /
+   *  unknown session.
+   */
+  public GrantControl(sessionId: string, who: RemoteBrowserFloorHolder): boolean {
+    const handle = this.requireSession(sessionId);
+    if (!handle) {
+      return false;
     }
-
-    // ──────────────────────────────────────────────────────────────────────────────
-    // Lifecycle — start / end a remote-browser session.
-    // ──────────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Starts a live remote-browser session: resolves the provider, validates it + the control mode,
-     * resolves and connects the driver, and registers the live handle.
-     *
-     * Flow:
-     * 1. Resolve the provider row by name or driver class (exactly one must be supplied + must match).
-     * 2. Assert the provider is `Active` (a disabled backend cannot start sessions).
-     * 3. Resolve the resolved {@link RemoteBrowserControlMode} (override ?? provider default) and
-     *    validate it against the backend's capability flags — reject an unsupported mode.
-     * 4. Resolve the driver via `ClassFactory.CreateInstance(BaseRemoteBrowserProvider, DriverClass)`.
-     * 5. Build the provider context and `Connect`, then register + return the live handle (floor = Agent).
-     *
-     * @param params The session parameters.
-     * @returns The live {@link RemoteBrowserSessionHandle}.
-     * @throws When the provider cannot be resolved, is disabled, the control mode is unsupported, the
-     *  driver cannot be resolved, or `Connect` fails.
-     */
-    public async StartSession(params: StartRemoteBrowserSessionParams): Promise<RemoteBrowserSessionHandle> {
-        const provider = this.resolveProvider(params);
-        this.assertActive(provider);
-
-        const features = this.Base.FeaturesFor(provider);
-        const controlMode = this.resolveControlMode(provider, features, params.ControlModeOverride);
-
-        const driver = this.resolveDriver(provider);
-        const configuration = this.resolveConfiguration(provider, params.Configuration);
-        const session = await driver.Connect({
-            Features: features,
-            ProviderName: provider.Name,
-            ProviderType: provider.ProviderType,
-            ControlMode: controlMode,
-            Configuration: configuration,
-            ContextUser: params.ContextUser,
-        });
-
-        const handle: RemoteBrowserSessionHandle = {
-            SessionID: this.generateSessionId(provider),
-            Driver: driver,
-            Session: session,
-            Provider: provider,
-            ControlMode: controlMode,
-            Features: features,
-            FloorHolder: 'Agent',
-            HumanControlRequested: false,
-            ContextUser: params.ContextUser,
-        };
-        this.activeSessions.set(handle.SessionID.toLowerCase(), handle);
-        LogStatus(
-            `[RemoteBrowserEngine] Session ${handle.SessionID} started via ${provider.Name} ` +
-                `(mode=${controlMode}, type=${provider.ProviderType}).`,
-        );
-        return handle;
+    if (who === 'Agent') {
+      handle.FloorHolder = 'Agent';
+      handle.HumanControlRequested = false;
+      return true;
     }
-
-    /**
-     * Ends a live session: closes the session handle, disconnects the driver, and removes the live
-     * registry entry. Tolerant of teardown errors (logged, never rethrown) and idempotent — ending a
-     * session this process no longer holds is a benign no-op.
-     *
-     * @param sessionId The session id to end.
-     * @returns `true` when a live session was found and torn down, `false` when none was held.
-     */
-    public async EndSession(sessionId: string): Promise<boolean> {
-        const key = sessionId.toLowerCase();
-        const handle = this.activeSessions.get(key);
-        if (!handle) {
-            return false;
-        }
-        this.activeSessions.delete(key);
-        await this.teardown(handle);
-        LogStatus(`[RemoteBrowserEngine] Session ${handle.SessionID} ended.`);
-        return true;
+    // who === 'Human': only valid in Collaborative AND only after a request.
+    if (handle.ControlMode !== 'Collaborative' || !handle.HumanControlRequested) {
+      return false;
     }
+    handle.FloorHolder = 'Human';
+    handle.HumanControlRequested = false;
+    return true;
+  }
 
-    /**
-     * Force-closes every live session this process holds whose backend matches a predicate — the
-     * janitor seam for orphan reconciliation (e.g. on host drain). Mirrors the bridge engine's
-     * {@link import('@memberjunction/ai-bridge-server').AIBridgeEngine.ReconcileOrphans} posture: the
-     * sweep logic lives here, but the *scheduling* (boot recovery + periodic timer) is intentionally
-     * left to the host so this package carries no timer/IO of its own.
-     *
-     * @param predicate Optional filter; when omitted every live session is reconciled. Returning `true`
-     *  marks the session for force-close.
-     * @returns The number of sessions closed.
-     */
-    public async ReconcileOrphans(
-        predicate?: (handle: RemoteBrowserSessionHandle) => boolean,
-    ): Promise<number> {
-        const targets = Array.from(this.activeSessions.values()).filter(h => (predicate ? predicate(h) : true));
-        let closed = 0;
-        for (const handle of targets) {
-            const ended = await this.EndSession(handle.SessionID);
-            if (ended) {
-                closed++;
-            }
-        }
-        if (closed > 0) {
-            LogStatus(`[RemoteBrowserEngine] Janitor reconciled ${closed} orphaned remote-browser session(s).`);
-        }
-        return closed;
+  /**
+   * Yields the input floor BACK from the named party to the agent — the inverse of a human grant.
+   *
+   * A no-op (returning `true`) when the named party does not currently hold the floor, so a "human
+   * yields" call is safe even if the agent already reclaimed the wheel. Yielding always returns the
+   * floor to the agent (the resting state across every mode).
+   *
+   * @param sessionId The session to yield on.
+   * @param who The party giving up the floor.
+   * @returns `true` when the floor is (now or already) with the agent, `false` for an unknown session.
+   */
+  public YieldControl(sessionId: string, who: RemoteBrowserFloorHolder): boolean {
+    const handle = this.requireSession(sessionId);
+    if (!handle) {
+      return false;
     }
-
-    // ──────────────────────────────────────────────────────────────────────────────
-    // The control arbiter — mediates the input floor per RemoteBrowserControlMode.
-    // ──────────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Requests that a human be granted the input floor.
-     *
-     * Honored ONLY in `Collaborative` mode (the only mode that permits human driving): it records an
-     * outstanding request that {@link GrantControl} later satisfies. In `AgentOnly` and `ViewOnly` the
-     * request is denied — a human can never take the wheel there.
-     *
-     * @param sessionId The session to request control on.
-     * @returns `true` when the request was accepted (Collaborative), `false` when denied by the mode or
-     *  the session is unknown.
-     */
-    public RequestControl(sessionId: string): boolean {
-        const handle = this.requireSession(sessionId);
-        if (!handle || handle.ControlMode !== 'Collaborative') {
-            return false;
-        }
-        handle.HumanControlRequested = true;
-        return true;
+    handle.HumanControlRequested = false;
+    if (handle.FloorHolder === who) {
+      handle.FloorHolder = 'Agent';
     }
+    return true;
+  }
 
-    /**
-     * Grants the input floor to the requested party, transferring the wheel.
-     *
-     * - Granting to `'Human'` succeeds only in `Collaborative` AND only after a {@link RequestControl}
-     *   (the request→grant handshake). The outstanding request is cleared on grant.
-     * - Granting to `'Agent'` always succeeds (the agent reclaiming the wheel is unconditional).
-     *
-     * @param sessionId The session to grant control on.
-     * @param who The party to grant the floor to.
-     * @returns `true` when the grant took effect, `false` when rejected by the mode / missing request /
-     *  unknown session.
-     */
-    public GrantControl(sessionId: string, who: RemoteBrowserFloorHolder): boolean {
-        const handle = this.requireSession(sessionId);
-        if (!handle) {
-            return false;
-        }
-        if (who === 'Agent') {
-            handle.FloorHolder = 'Agent';
-            handle.HumanControlRequested = false;
-            return true;
-        }
-        // who === 'Human': only valid in Collaborative AND only after a request.
-        if (handle.ControlMode !== 'Collaborative' || !handle.HumanControlRequested) {
-            return false;
-        }
-        handle.FloorHolder = 'Human';
-        handle.HumanControlRequested = false;
-        return true;
+  /**
+   * Routes a human takeover input into the backend browser — but ONLY while the human holds the floor.
+   *
+   * The arbiter is the gate: in `AgentOnly` the human never holds the floor (input is dropped); in
+   * `ViewOnly` the human watches but never drives (input is dropped); in `Collaborative` input is
+   * routed to {@link IRemoteBrowserSession.RouteHumanInput} only while {@link RemoteBrowserSessionHandle.FloorHolder}
+   * is `'Human'`. This is the runtime enforcement of "observe only, no input routed" / "mediate
+   * agent⇄human" from the control model.
+   *
+   * @param sessionId The session to route input into.
+   * @param input The human input event; narrow on `input.Kind`.
+   * @returns `true` when the input was routed to the backend, `false` when the arbiter dropped it
+   *  (mode/floor) or the session is unknown.
+   */
+  public RouteHumanInput(sessionId: string, input: RemoteBrowserHumanInput): boolean {
+    const handle = this.requireSession(sessionId);
+    if (!handle || handle.FloorHolder !== 'Human') {
+      return false;
     }
+    handle.Session.RouteHumanInput(input);
+    return true;
+  }
 
-    /**
-     * Yields the input floor BACK from the named party to the agent — the inverse of a human grant.
-     *
-     * A no-op (returning `true`) when the named party does not currently hold the floor, so a "human
-     * yields" call is safe even if the agent already reclaimed the wheel. Yielding always returns the
-     * floor to the agent (the resting state across every mode).
-     *
-     * @param sessionId The session to yield on.
-     * @param who The party giving up the floor.
-     * @returns `true` when the floor is (now or already) with the agent, `false` for an unknown session.
-     */
-    public YieldControl(sessionId: string, who: RemoteBrowserFloorHolder): boolean {
-        const handle = this.requireSession(sessionId);
-        if (!handle) {
-            return false;
-        }
-        handle.HumanControlRequested = false;
-        if (handle.FloorHolder === who) {
-            handle.FloorHolder = 'Agent';
-        }
-        return true;
+  // ──────────────────────────────────────────────────────────────────────────────
+  // The viewport→screen-track seam — gated on the ScreenStreaming capability.
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Pipes the session's live viewport screencast to a frame sink — the documented seam the bridge
+   * ScreenOut track (screen-sharing the browser into a meeting) or a console panel consumes.
+   *
+   * **Capability-gated** by the backend's `ScreenStreaming` flag: the engine refuses to call
+   * {@link IRemoteBrowserSession.StartScreencast} on a backend that does not advertise it (the first
+   * of the two-layer gate; the driver's own `RequireFeature` is the second). Each encoded
+   * {@link RemoteBrowserScreencastFrame} is forwarded to the supplied sink in order.
+   *
+   * @param sessionId The session whose viewport to stream.
+   * @param sink The consumer of encoded frames (the ScreenOut track / a console panel).
+   * @returns A promise that resolves once the screencast has started.
+   * @throws {RemoteBrowserCapabilityNotSupportedError} when the backend does not support screen
+   *  streaming, or {@link Error} when the session is unknown.
+   */
+  public async PipeScreencastToTrack(sessionId: string, sink: RemoteBrowserScreencastSink): Promise<void> {
+    const handle = this.requireSession(sessionId);
+    if (!handle) {
+      throw new Error(`RemoteBrowserEngine.PipeScreencastToTrack: no live session '${sessionId}'.`);
     }
-
-    /**
-     * Routes a human takeover input into the backend browser — but ONLY while the human holds the floor.
-     *
-     * The arbiter is the gate: in `AgentOnly` the human never holds the floor (input is dropped); in
-     * `ViewOnly` the human watches but never drives (input is dropped); in `Collaborative` input is
-     * routed to {@link IRemoteBrowserSession.RouteHumanInput} only while {@link RemoteBrowserSessionHandle.FloorHolder}
-     * is `'Human'`. This is the runtime enforcement of "observe only, no input routed" / "mediate
-     * agent⇄human" from the control model.
-     *
-     * @param sessionId The session to route input into.
-     * @param input The human input event; narrow on `input.Kind`.
-     * @returns `true` when the input was routed to the backend, `false` when the arbiter dropped it
-     *  (mode/floor) or the session is unknown.
-     */
-    public RouteHumanInput(sessionId: string, input: RemoteBrowserHumanInput): boolean {
-        const handle = this.requireSession(sessionId);
-        if (!handle || handle.FloorHolder !== 'Human') {
-            return false;
-        }
-        handle.Session.RouteHumanInput(input);
-        return true;
+    if (handle.Features.ScreenStreaming !== true) {
+      // Layer 1 of the two-layer gate: never call a capability-gated method the metadata says is off.
+      throw this.notSupported('ScreenStreaming', handle.Provider.Name);
     }
+    await handle.Session.StartScreencast((frame) => sink(frame));
+    LogStatus(`[RemoteBrowserEngine] Screencast piped for session ${handle.SessionID}.`);
+  }
 
-    // ──────────────────────────────────────────────────────────────────────────────
-    // The viewport→screen-track seam — gated on the ScreenStreaming capability.
-    // ──────────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Pipes the session's live viewport screencast to a frame sink — the documented seam the bridge
-     * ScreenOut track (screen-sharing the browser into a meeting) or a console panel consumes.
-     *
-     * **Capability-gated** by the backend's `ScreenStreaming` flag: the engine refuses to call
-     * {@link IRemoteBrowserSession.StartScreencast} on a backend that does not advertise it (the first
-     * of the two-layer gate; the driver's own `RequireFeature` is the second). Each encoded
-     * {@link RemoteBrowserScreencastFrame} is forwarded to the supplied sink in order.
-     *
-     * @param sessionId The session whose viewport to stream.
-     * @param sink The consumer of encoded frames (the ScreenOut track / a console panel).
-     * @returns A promise that resolves once the screencast has started.
-     * @throws {RemoteBrowserCapabilityNotSupportedError} when the backend does not support screen
-     *  streaming, or {@link Error} when the session is unknown.
-     */
-    public async PipeScreencastToTrack(sessionId: string, sink: RemoteBrowserScreencastSink): Promise<void> {
-        const handle = this.requireSession(sessionId);
-        if (!handle) {
-            throw new Error(`RemoteBrowserEngine.PipeScreencastToTrack: no live session '${sessionId}'.`);
-        }
-        if (handle.Features.ScreenStreaming !== true) {
-            // Layer 1 of the two-layer gate: never call a capability-gated method the metadata says is off.
-            throw this.notSupported('ScreenStreaming', handle.Provider.Name);
-        }
-        await handle.Session.StartScreencast(frame => sink(frame));
-        LogStatus(`[RemoteBrowserEngine] Screencast piped for session ${handle.SessionID}.`);
+  /**
+   * Stops a screencast previously started with {@link PipeScreencastToTrack}.
+   *
+   * **Capability-gated** by `ScreenStreaming` (same as starting). A no-op when the session is unknown.
+   *
+   * @param sessionId The session whose screencast to stop.
+   * @returns A promise that resolves once streaming has stopped.
+   */
+  public async StopScreencast(sessionId: string): Promise<void> {
+    const handle = this.requireSession(sessionId);
+    if (!handle || handle.Features.ScreenStreaming !== true) {
+      return;
     }
+    await handle.Session.StopScreencast();
+  }
 
-    /**
-     * Stops a screencast previously started with {@link PipeScreencastToTrack}.
-     *
-     * **Capability-gated** by `ScreenStreaming` (same as starting). A no-op when the session is unknown.
-     *
-     * @param sessionId The session whose screencast to stop.
-     * @returns A promise that resolves once streaming has stopped.
-     */
-    public async StopScreencast(sessionId: string): Promise<void> {
-        const handle = this.requireSession(sessionId);
-        if (!handle || handle.Features.ScreenStreaming !== true) {
-            return;
-        }
-        await handle.Session.StopScreencast();
+  // ──────────────────────────────────────────────────────────────────────────────
+  // Provider / driver / config / mode resolution (private helpers).
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Resolves the provider row from the start params by name OR driver class. Exactly one selector
+   * must be supplied; both-or-neither is a configuration error.
+   *
+   * @param params The session parameters carrying the selector.
+   * @returns The resolved provider row.
+   * @throws When neither/both selectors are given, or no matching provider exists.
+   */
+  private resolveProvider(params: StartRemoteBrowserSessionParams): MJAIRemoteBrowserProviderEntity {
+    const hasName = !!params.ProviderName?.trim();
+    const hasClass = !!params.DriverClass?.trim();
+    if (hasName === hasClass) {
+      throw new Error('RemoteBrowserEngine.StartSession requires exactly one of ProviderName or DriverClass.');
     }
-
-    // ──────────────────────────────────────────────────────────────────────────────
-    // Provider / driver / config / mode resolution (private helpers).
-    // ──────────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Resolves the provider row from the start params by name OR driver class. Exactly one selector
-     * must be supplied; both-or-neither is a configuration error.
-     *
-     * @param params The session parameters carrying the selector.
-     * @returns The resolved provider row.
-     * @throws When neither/both selectors are given, or no matching provider exists.
-     */
-    private resolveProvider(params: StartRemoteBrowserSessionParams): MJAIRemoteBrowserProviderEntity {
-        const hasName = !!params.ProviderName?.trim();
-        const hasClass = !!params.DriverClass?.trim();
-        if (hasName === hasClass) {
-            throw new Error(
-                'RemoteBrowserEngine.StartSession requires exactly one of ProviderName or DriverClass.',
-            );
-        }
-        const provider = hasName
-            ? this.Base.ProviderByName(params.ProviderName as string)
-            : this.Base.ProviderByDriverClass(params.DriverClass as string);
-        if (!provider) {
-            const selector = hasName ? `name '${params.ProviderName}'` : `driver class '${params.DriverClass}'`;
-            throw new Error(`No remote-browser provider found for ${selector}.`);
-        }
-        return provider;
+    const provider = hasName ? this.Base.ProviderByName(params.ProviderName as string) : this.Base.ProviderByDriverClass(params.DriverClass as string);
+    if (!provider) {
+      const selector = hasName ? `name '${params.ProviderName}'` : `driver class '${params.DriverClass}'`;
+      throw new Error(`No remote-browser provider found for ${selector}.`);
     }
+    return provider;
+  }
 
-    /**
-     * Asserts a provider is `Active`; a disabled backend cannot start new sessions.
-     *
-     * @param provider The provider row to check.
-     * @throws When the provider's `Status` is not `'Active'`.
-     */
-    private assertActive(provider: MJAIRemoteBrowserProviderEntity): void {
-        if (provider.Status !== 'Active') {
-            throw new Error(
-                `Remote-browser provider '${provider.Name}' is not Active (Status='${provider.Status}') and cannot start a session.`,
-            );
-        }
+  /**
+   * Asserts a provider is `Active`; a disabled backend cannot start new sessions.
+   *
+   * @param provider The provider row to check.
+   * @throws When the provider's `Status` is not `'Active'`.
+   */
+  private assertActive(provider: MJAIRemoteBrowserProviderEntity): void {
+    if (provider.Status !== 'Active') {
+      throw new Error(`Remote-browser provider '${provider.Name}' is not Active (Status='${provider.Status}') and cannot start a session.`);
     }
+  }
 
-    /**
-     * Resolves the effective control mode (override ?? provider default) and validates it against the
-     * backend's capability flags.
-     *
-     * @param provider The provider row (supplies the default mode + name for errors).
-     * @param features The backend's capability flags.
-     * @param override The optional per-session override.
-     * @returns The validated, resolved control mode.
-     * @throws When the resolved mode is not supported by the backend's capabilities.
-     */
-    private resolveControlMode(
-        provider: MJAIRemoteBrowserProviderEntity,
-        features: IRemoteBrowserProviderFeatures,
-        override?: RemoteBrowserControlMode,
-    ): RemoteBrowserControlMode {
-        const mode = override ?? provider.DefaultControlMode;
-        if (!isControlModeSupported(mode, features)) {
-            throw new Error(
-                `Control mode '${mode}' is not supported by provider '${provider.Name}': it lacks the ` +
-                    `required capability (ViewOnly needs LiveView; Collaborative needs LiveView + HumanTakeover).`,
-            );
-        }
-        return mode;
+  /**
+   * Resolves the effective control mode (override ?? provider default) and validates it against the
+   * backend's capability flags.
+   *
+   * @param provider The provider row (supplies the default mode + name for errors).
+   * @param features The backend's capability flags.
+   * @param override The optional per-session override.
+   * @returns The validated, resolved control mode.
+   * @throws When the resolved mode is not supported by the backend's capabilities.
+   */
+  private resolveControlMode(
+    provider: MJAIRemoteBrowserProviderEntity,
+    features: IRemoteBrowserProviderFeatures,
+    override?: RemoteBrowserControlMode,
+  ): RemoteBrowserControlMode {
+    const mode = override ?? provider.DefaultControlMode;
+    if (!isControlModeSupported(mode, features)) {
+      throw new Error(
+        `Control mode '${mode}' is not supported by provider '${provider.Name}': it lacks the ` +
+          `required capability (ViewOnly needs LiveView; Collaborative needs LiveView + HumanTakeover).`,
+      );
     }
+    return mode;
+  }
 
-    /**
-     * Resolves the concrete driver for a provider via the MJ `ClassFactory`, keyed by `DriverClass`.
-     *
-     * Verifies a concrete registration exists first — `ClassFactory.CreateInstance` falls back to the
-     * (abstract) base when nothing is registered under the key, which would later fail opaquely on the
-     * first `Connect` call. Mirrors `AIBridgeEngine.resolveDriver`.
-     *
-     * @param provider The provider whose `DriverClass` selects the driver.
-     * @returns The instantiated driver.
-     * @throws When no driver is registered under the provider's `DriverClass`, or instantiation fails.
-     */
-    private resolveDriver(provider: MJAIRemoteBrowserProviderEntity): BaseRemoteBrowserProvider {
-        const driverClass = provider.DriverClass;
-        const registration = MJGlobal.Instance.ClassFactory.GetRegistration(
-            BaseRemoteBrowserProvider,
-            driverClass,
-        );
-        if (!registration) {
-            throw new Error(
-                `No remote-browser driver registered for DriverClass '${driverClass}' (provider '${provider.Name}').`,
-            );
-        }
-        const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRemoteBrowserProvider>(
-            BaseRemoteBrowserProvider,
-            driverClass,
-        );
-        if (!driver) {
-            throw new Error(
-                `Failed to instantiate remote-browser driver '${driverClass}' (provider '${provider.Name}').`,
-            );
-        }
-        return driver;
+  /**
+   * Resolves the concrete driver for a provider via the MJ `ClassFactory`, keyed by `DriverClass`.
+   *
+   * Verifies a concrete registration exists first — `ClassFactory.CreateInstance` falls back to the
+   * (abstract) base when nothing is registered under the key, which would later fail opaquely on the
+   * first `Connect` call. Mirrors `AIBridgeEngine.resolveDriver`.
+   *
+   * @param provider The provider whose `DriverClass` selects the driver.
+   * @returns The instantiated driver.
+   * @throws When no driver is registered under the provider's `DriverClass`, or instantiation fails.
+   */
+  private resolveDriver(provider: MJAIRemoteBrowserProviderEntity): BaseRemoteBrowserProvider {
+    const driverClass = provider.DriverClass;
+    const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseRemoteBrowserProvider, driverClass);
+    if (!registration) {
+      throw new Error(`No remote-browser driver registered for DriverClass '${driverClass}' (provider '${provider.Name}').`);
     }
+    const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRemoteBrowserProvider>(BaseRemoteBrowserProvider, driverClass);
+    if (!driver) {
+      throw new Error(`Failed to instantiate remote-browser driver '${driverClass}' (provider '${provider.Name}').`);
+    }
+    return driver;
+  }
 
-    /**
-     * Resolves the connection configuration: the explicit params override (already parsed) when given,
-     * otherwise the provider row's `Configuration` JSON parsed into a record. A NULL/blank column or a
-     * parse failure yields `undefined` (the driver then relies on its own defaults).
-     *
-     * @param provider The provider row carrying the stored configuration.
-     * @param override The optional already-parsed configuration override.
-     * @returns The resolved configuration object, or `undefined`.
-     */
-    private resolveConfiguration(
-        provider: MJAIRemoteBrowserProviderEntity,
-        override?: Record<string, unknown>,
-    ): Record<string, unknown> | undefined {
-        if (override) {
-            return override;
-        }
-        const raw = provider.Configuration;
-        if (!raw || raw.trim().length === 0) {
-            return undefined;
-        }
-        try {
-            const parsed: unknown = JSON.parse(raw);
-            return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-                ? (parsed as Record<string, unknown>)
-                : undefined;
-        } catch (err) {
-            LogError(
-                `[RemoteBrowserEngine] Failed to parse Configuration for provider '${provider.Name}': ` +
-                    `${err instanceof Error ? err.message : String(err)}`,
-            );
-            return undefined;
-        }
+  /**
+   * Resolves the connection configuration: the explicit params override (already parsed) when given,
+   * otherwise the provider row's `Configuration` JSON parsed into a record. A NULL/blank column or a
+   * parse failure yields `undefined` (the driver then relies on its own defaults).
+   *
+   * @param provider The provider row carrying the stored configuration.
+   * @param override The optional already-parsed configuration override.
+   * @returns The resolved configuration object, or `undefined`.
+   */
+  private resolveConfiguration(provider: MJAIRemoteBrowserProviderEntity, override?: Record<string, unknown>): Record<string, unknown> | undefined {
+    if (override) {
+      return override;
     }
+    const raw = provider.Configuration;
+    if (!raw || raw.trim().length === 0) {
+      return undefined;
+    }
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : undefined;
+    } catch (err) {
+      LogError(`[RemoteBrowserEngine] Failed to parse Configuration for provider '${provider.Name}': ` + `${err instanceof Error ? err.message : String(err)}`);
+      return undefined;
+    }
+  }
 
-    /**
-     * Generates a process-unique session id (provider name slug + monotonic counter + timestamp).
-     *
-     * @param provider The provider the session runs on (for a human-readable prefix).
-     * @returns The generated session id.
-     */
-    private generateSessionId(provider: MJAIRemoteBrowserProviderEntity): string {
-        const slug = (provider.Name ?? 'rb').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        return `${slug || 'rb'}-${++this.sessionCounter}-${Date.now().toString(36)}`;
-    }
+  /**
+   * Generates a process-unique session id (provider name slug + monotonic counter + timestamp).
+   *
+   * @param provider The provider the session runs on (for a human-readable prefix).
+   * @returns The generated session id.
+   */
+  private generateSessionId(provider: MJAIRemoteBrowserProviderEntity): string {
+    const slug = (provider.Name ?? 'rb')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    return `${slug || 'rb'}-${++this.sessionCounter}-${Date.now().toString(36)}`;
+  }
 
-    /**
-     * Tears down a live session handle: closes the session, then disconnects the driver. Each step is
-     * isolated so a failing close still lets the driver disconnect, and neither propagates.
-     *
-     * @param handle The live session handle to tear down.
-     */
-    private async teardown(handle: RemoteBrowserSessionHandle): Promise<void> {
-        try {
-            await handle.Session.Close();
-        } catch (err) {
-            LogError(
-                `[RemoteBrowserEngine] session Close failed for ${handle.SessionID}: ` +
-                    `${err instanceof Error ? err.message : String(err)}`,
-            );
-        }
-        try {
-            await handle.Driver.Disconnect();
-        } catch (err) {
-            LogError(
-                `[RemoteBrowserEngine] driver Disconnect failed for ${handle.SessionID}: ` +
-                    `${err instanceof Error ? err.message : String(err)}`,
-            );
-        }
+  /**
+   * Tears down a live session handle: closes the session, then disconnects the driver. Each step is
+   * isolated so a failing close still lets the driver disconnect, and neither propagates.
+   *
+   * @param handle The live session handle to tear down.
+   */
+  private async teardown(handle: RemoteBrowserSessionHandle): Promise<void> {
+    try {
+      await handle.Session.Close();
+    } catch (err) {
+      LogError(`[RemoteBrowserEngine] session Close failed for ${handle.SessionID}: ` + `${err instanceof Error ? err.message : String(err)}`);
     }
+    try {
+      await handle.Driver.Disconnect();
+    } catch (err) {
+      LogError(`[RemoteBrowserEngine] driver Disconnect failed for ${handle.SessionID}: ` + `${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
-    /** Looks up a live session handle by id (lowercased), or `undefined` when not held by this process. */
-    private requireSession(sessionId: string): RemoteBrowserSessionHandle | undefined {
-        return this.activeSessions.get(sessionId.toLowerCase());
-    }
+  /** Looks up a live session handle by id (lowercased), or `undefined` when not held by this process. */
+  private requireSession(sessionId: string): RemoteBrowserSessionHandle | undefined {
+    return this.activeSessions.get(sessionId.toLowerCase());
+  }
 
-    /**
-     * Resolves the backend provider name for a lazily-started agent-session browser: the explicit
-     * `providerName` when supplied (after verifying it resolves to a known provider), else the engine's
-     * SINGLE {@link RemoteBrowserEngineBase.ActiveProviders} entry.
-     *
-     * NOTE — for now this assumes EXACTLY ONE Active provider when none is named. None or more-than-one
-     * is a clear error rather than a silent pick, so a deployment that wants a specific backend among
-     * several must name it (the agent's `TypeConfiguration` carries `remoteBrowser.provider` for that).
-     *
-     * @param providerName The optional explicit backend name.
-     * @returns The resolved backend display name to start a session with.
-     * @throws When the named provider is unknown, or when no/ambiguous Active provider can be auto-selected.
-     */
-    private resolveAgentSessionProviderName(providerName?: string): string {
-        const named = providerName?.trim();
-        if (named) {
-            const provider = this.Base.ProviderByName(named);
-            if (!provider) {
-                throw new Error(`No remote-browser provider found for name '${named}'.`);
-            }
-            return provider.Name;
-        }
-        const active = this.Base.ActiveProviders();
-        if (active.length === 0) {
-            throw new Error(
-                'No Active remote-browser provider is configured — sync a provider seed (e.g. Self-Hosted Chrome) ' +
-                    'and set its Status to Active before starting a remote-browser session.',
-            );
-        }
-        if (active.length > 1) {
-            throw new Error(
-                `Multiple Active remote-browser providers are configured (${active.map(p => p.Name).join(', ')}). ` +
-                    "Name the desired backend explicitly (the agent's TypeConfiguration carries remoteBrowser.provider).",
-            );
-        }
-        return active[0].Name;
+  /**
+   * Resolves the backend provider name for a lazily-started agent-session browser: the explicit
+   * `providerName` when supplied (after verifying it resolves to a known provider), else the engine's
+   * SINGLE {@link RemoteBrowserEngineBase.ActiveProviders} entry.
+   *
+   * NOTE — for now this assumes EXACTLY ONE Active provider when none is named. None or more-than-one
+   * is a clear error rather than a silent pick, so a deployment that wants a specific backend among
+   * several must name it (the agent's `TypeConfiguration` carries `remoteBrowser.provider` for that).
+   *
+   * @param providerName The optional explicit backend name.
+   * @returns The resolved backend display name to start a session with.
+   * @throws When the named provider is unknown, or when no/ambiguous Active provider can be auto-selected.
+   */
+  private resolveAgentSessionProviderName(providerName?: string): string {
+    const named = providerName?.trim();
+    if (named) {
+      const provider = this.Base.ProviderByName(named);
+      if (!provider) {
+        throw new Error(`No remote-browser provider found for name '${named}'.`);
+      }
+      return provider.Name;
     }
+    const active = this.Base.ActiveProviders();
+    if (active.length === 0) {
+      throw new Error(
+        'No Active remote-browser provider is configured — sync a provider seed (e.g. Self-Hosted Chrome) ' +
+          'and set its Status to Active before starting a remote-browser session.',
+      );
+    }
+    if (active.length > 1) {
+      throw new Error(
+        `Multiple Active remote-browser providers are configured (${active.map((p) => p.Name).join(', ')}). ` +
+          "Name the desired backend explicitly (the agent's TypeConfiguration carries remoteBrowser.provider).",
+      );
+    }
+    return active[0].Name;
+  }
 
-    /** Canonical map key for an agent-session id (UUID case differs across DB platforms). */
-    private agentSessionKey(agentSessionID: string): string {
-        return agentSessionID.trim().toLowerCase();
-    }
+  /** Canonical map key for an agent-session id (UUID case differs across DB platforms). */
+  private agentSessionKey(agentSessionID: string): string {
+    return agentSessionID.trim().toLowerCase();
+  }
 
-    /** Builds the standard capability-not-supported error stamped with the backend name. */
-    private notSupported(featureName: string, providerName: string): RemoteBrowserCapabilityNotSupportedError {
-        return new RemoteBrowserCapabilityNotSupportedError(featureName, providerName);
-    }
+  /** Builds the standard capability-not-supported error stamped with the backend name. */
+  private notSupported(featureName: string, providerName: string): RemoteBrowserCapabilityNotSupportedError {
+    return new RemoteBrowserCapabilityNotSupportedError(featureName, providerName);
+  }
 }
