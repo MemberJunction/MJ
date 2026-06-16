@@ -27,11 +27,17 @@ describe('CustomColumnPromotion', () => {
             expect(inferColumnTypeFromSamples(['true', 'false']).SchemaFieldType).toBe('string');
         });
 
-        it('infers BIGINT for all-integer numbers', () => {
-            const t = inferColumnTypeFromSamples([1, 2, 300, -5]);
+        it('infers BIGINT for all-integer numbers ONCE the sample is adequate (≥12)', () => {
+            const t = inferColumnTypeFromSamples([1, 2, 300, -5, 6, 7, 8, 9, 10, 11, 12, 13]); // 12 integers
             expect(t.SchemaFieldType).toBe('number');
             expect(t.SqlServerType).toBe('BIGINT');
             expect(t.PostgresType).toBe('BIGINT');
+        });
+
+        it('#A9: a SMALL all-integer sample stays wide DECIMAL — the tail may carry a decimal a BIGINT would reject', () => {
+            const t = inferColumnTypeFromSamples([1, 2, 300, -5]); // 4 integers — below the narrow threshold
+            expect(t.SchemaFieldType).toBe('number');
+            expect(t.SqlServerType).toBe('DECIMAL(38,10)');   // safe: holds integers AND a later decimal
         });
 
         it('infers wide DECIMAL for non-integer numbers (no truncation)', () => {
@@ -108,7 +114,7 @@ describe('CustomColumnPromotion', () => {
         });
 
         it('carries the inferred type onto each candidate', () => {
-            const out = planPromotions([stat('Count', 10, 10, [1, 2, 3])]);
+            const out = planPromotions([stat('Count', 12, 12, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])]); // ≥12 → confident BIGINT
             expect(out[0].Inferred.SqlServerType).toBe('BIGINT');
         });
 

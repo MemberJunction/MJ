@@ -78,6 +78,14 @@ const DEFAULT_COVERAGE_THRESHOLD = 0; // §23 — presence-based: a key seen in 
 const MAX_BOUNDED_STRING = 4000;
 /** Floor for a generous string bound — never size a custom string column tighter than this. */
 const MIN_STRING_BOUND = 255;
+/**
+ * Minimum all-integer sample before we trust the field is INTEGRAL and narrow to BIGINT (#A9). Below this
+ * a handful of integer samples does NOT prove the unscanned tail is integer-only — a later decimal would be
+ * silently rejected by BIGINT (dead-lettered). Under the threshold we use wide fixed-point (which holds
+ * integers too), so a later decimal never fails; the column can still re-promote to BIGINT once enough
+ * integer evidence accrues.
+ */
+const MIN_SAMPLE_FOR_INTEGER_NARROW = 12;
 
 /** Matches an ISO-8601-ish date / datetime so we don't mistake "5" or "2020" for a date. */
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
@@ -133,10 +141,13 @@ export function inferColumnTypeFromSamples(samples: unknown[]): InferredColumnTy
     }
 
     if (nonNull.every(isFiniteNumber)) {
-        const allIntegers = nonNull.every(v => Number.isInteger(v as number));
-        return allIntegers
+        // Narrow to BIGINT only with an ADEQUATE all-integer sample (#A9). A small all-integer sample
+        // doesn't prove the field is always integral — a decimal in the unscanned tail would be silently
+        // rejected by BIGINT. Below the threshold, use wide fixed-point (which holds integers too).
+        const confidentInteger = nonNull.length >= MIN_SAMPLE_FOR_INTEGER_NARROW && nonNull.every(v => Number.isInteger(v as number));
+        return confidentInteger
             ? { SchemaFieldType: 'number', SqlServerType: 'BIGINT', PostgresType: 'BIGINT', MaxLength: null }
-            // Generous fixed-point — wide precision so we don't truncate decimals.
+            // Generous fixed-point — wide precision so we don't truncate or reject decimals.
             : { SchemaFieldType: 'number', SqlServerType: 'DECIMAL(38,10)', PostgresType: 'DECIMAL(38,10)', MaxLength: null };
     }
 

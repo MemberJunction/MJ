@@ -96,6 +96,20 @@ describe('pickPrimaryKeyFromStats', () => {
         expect(v.AmbiguousForLLM).toBe(false);
     });
 
+    it('#A4: a near-unique soft key accepted on a COMPLETE scan is REJECTED on a time-budget-truncated scan', () => {
+        // `id` is convention-named, non-null on every scanned row, 92% distinct (near-unique > 0.9 but < 1.0).
+        const nearUnique = [col({ Key: 'id', Occurrences: 100, TotalRows: 100, DistinctNonNull: 92 })];
+        // Complete scan (default): the soft near-unique key is accepted.
+        expect(pickPrimaryKeyFromStats(nearUnique, { MinRowsForSignificance: 50 }).Field).toBe('id');
+        // Truncated scan: a prefix-only 92% could be null/dup in the unscanned tail → demand 1.0 → no soft key.
+        expect(pickPrimaryKeyFromStats(nearUnique, { MinRowsForSignificance: 50, ScanComplete: false }).Field).toBeNull();
+        // A high-cardinality (distinct-capped) convention column still earns a SOFT key on a truncated scan,
+        // but the verdict is annotated as partial-scan so it gets re-verified on full data.
+        const capped = pickPrimaryKeyFromStats([col({ Key: 'id', Occurrences: 100, TotalRows: 100, DistinctCapped: true })], { ScanComplete: false });
+        expect(capped.Field).toBe('id');
+        expect(capped.Reason).toMatch(/partial scan/i);
+    });
+
     it('does NOT pick a distinct-capped column with no convention name (uniqueness unprovable, no signal)', () => {
         const v = pickPrimaryKeyFromStats([col({ Key: 'payload', DistinctCapped: true })]);
         expect(v.Field).toBeNull();

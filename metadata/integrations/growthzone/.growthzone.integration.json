@@ -2,7 +2,6 @@
   {
     "fields": {
       "Name": "GrowthZone",
-      "Icon": "fa-solid fa-people-group",
       "ClassName": "GrowthZoneConnector",
       "ImportPath": "@memberjunction/connector-growthzone",
       "NavigationBaseURL": "https://{subdomain}.growthzoneapp.com/API",
@@ -44,7 +43,7 @@
           "fields": {
             "Name": "Contact",
             "DisplayName": "Contact",
-            "Description": "GrowthZone Contact family object 'Contact'. Source: Curated OpenAPI components.schemas.Models.BackOffice.ContactBaseInfoModel.",
+            "Description": "GrowthZone Contact object 'Contact'. APIPath /api/contacts (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.ContactBaseInfoModel.",
             "APIPath": "/api/contacts",
             "SupportsWrite": false,
             "SupportsIncrementalSync": true,
@@ -55,7 +54,7 @@
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
             "IncrementalWatermarkField": "modifiedSince",
-            "Configuration": "{\"listPath\":\"/api/contacts\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"WatermarkIncremental\",\"contentHashApplicable\":false,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"watermark\":{\"param\":\"modifiedSince\",\"format\":\"utc-datetime\"}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"WatermarkIncremental\",\"contentHashApplicable\":false,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"watermark\":{\"param\":\"modifiedSince\",\"format\":\"utc-datetime\",\"deltaPath\":\"/api/contacts/delta\"}}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -63,7 +62,7 @@
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts' addresses a record by ContactId) + naming convention.",
+                  "Description": "Primary key — addressing-path proof (path '/api/contacts' addresses a record by ContactId).",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -549,17 +548,17 @@
           "fields": {
             "Name": "Person",
             "DisplayName": "Person",
-            "Description": "GrowthZone Contact family object 'Person'. Source: Curated OpenAPI components.schemas.Models.BackOffice.EditPersonViewModel.",
+            "Description": "GrowthZone Contact object 'Person'. APIPath /api/contacts/person/{contactId} (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.EditPersonViewModel.",
             "APIPath": "/api/contacts/person/{contactId}",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Contact",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/person/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"person\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts/person/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -577,17 +576,17 @@
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts/person/{contactId}' addresses a record by ContactId) + naming convention. Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Primary key — addressing-path proof (path '/api/contacts/person/{contactId}' addresses a record by ContactId). Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
                   "IsUniqueKey": true,
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "AllowsNull": false,
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -667,13 +666,10 @@
                 "fields": {
                   "Name": "PrimaryContactId",
                   "DisplayName": "PrimaryContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'PrimaryContactId' references Contact.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -854,17 +850,17 @@
           "fields": {
             "Name": "Organization",
             "DisplayName": "Organization",
-            "Description": "GrowthZone Contact family object 'Organization'. Source: Curated OpenAPI components.schemas.Models.BackOffice.ContactGeneralInfoSummaryModel.",
-            "APIPath": "/api/contacts/OrgGeneral/{ContactId}",
+            "Description": "GrowthZone Contact object 'Organization'. APIPath /api/contacts/OrgGeneral/{contactId} (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.ContactGeneralInfoSummaryModel.",
+            "APIPath": "/api/contacts/OrgGeneral/{contactId}",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Contact",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/OrgGeneral/{ContactId}\",\"pathParams\":[\"ContactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"OrgGeneral\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts/OrgGeneral/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -872,17 +868,17 @@
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts/OrgGeneral/{ContactId}' addresses a record by ContactId) + naming convention. Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Primary key — addressing-path proof (path '/api/contacts/OrgGeneral/{contactId}' addresses a record by ContactId). Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
                   "IsUniqueKey": true,
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "AllowsNull": false,
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -1270,17 +1266,17 @@
           "fields": {
             "Name": "ContactAddress",
             "DisplayName": "ContactAddress",
-            "Description": "GrowthZone Contact family object 'ContactAddress'. Source: Curated OpenAPI components.schemas.Models.BackOffice.ContactAddressModel.",
+            "Description": "GrowthZone Contact object 'ContactAddress'. APIPath /api/contacts/ContactAddresses/{contactId} (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.ContactAddressModel.",
             "APIPath": "/api/contacts/ContactAddresses/{contactId}",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Contact",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/ContactAddresses/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"ContactAddresses\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts/ContactAddresses/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1288,7 +1284,7 @@
                 "fields": {
                   "Name": "ContactAddressId",
                   "DisplayName": "ContactAddressId",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts/ContactAddresses/{contactId}' addresses a record by ContactAddressId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -1390,17 +1386,17 @@
           "fields": {
             "Name": "ContactWebsite",
             "DisplayName": "ContactWebsite",
-            "Description": "GrowthZone Contact family object 'ContactWebsite'. Source: Curated OpenAPI components.schemas.Business.CQRS.Queries.GetContactWebsitesLookupQuery_WebsiteDto.",
+            "Description": "GrowthZone Contact object 'ContactWebsite'. APIPath /api/contacts/lookup/{contactId}/contactwebsites (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Business.CQRS.Queries.GetContactWebsitesLookupQuery_WebsiteDto.",
             "APIPath": "/api/contacts/lookup/{contactId}/contactwebsites",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Contact",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/lookup/{contactId}/contactwebsites\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"lookup\",\"contactwebsites\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts/lookup/{contactId}/contactwebsites\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1418,7 +1414,7 @@
                 "fields": {
                   "Name": "Id",
                   "DisplayName": "Id",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts/lookup/{contactId}/contactwebsites' addresses a record by Id) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -1446,17 +1442,17 @@
           "fields": {
             "Name": "ContactEmail",
             "DisplayName": "ContactEmail",
-            "Description": "GrowthZone Contact family object 'ContactEmail'. Source: Curated OpenAPI components.schemas.Models.BackOffice.ContactEmailAddressModel.",
+            "Description": "GrowthZone Contact object 'ContactEmail'. APIPath /api/contacts/PrimaryContact/Emails/{primaryContactId} (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.ContactEmailAddressModel.",
             "APIPath": "/api/contacts/PrimaryContact/Emails/{primaryContactId}",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Contact",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/PrimaryContact/Emails/{primaryContactId}\",\"pathParams\":[\"primaryContactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"PrimaryContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"PrimaryContactId\",\"segments\":[\"PrimaryContact\",\"Emails\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts/PrimaryContact/Emails/{primaryContactId}\",\"pathParams\":[\"primaryContactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"primaryContactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1464,7 +1460,7 @@
                 "fields": {
                   "Name": "Id",
                   "DisplayName": "Id",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts/PrimaryContact/Emails/{primaryContactId}' addresses a record by Id) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -1504,17 +1500,17 @@
           "fields": {
             "Name": "ContactPhone",
             "DisplayName": "ContactPhone",
-            "Description": "GrowthZone Contact family object 'ContactPhone'. Source: dev-Contacts.html#EditPhoneViewModel.",
-            "APIPath": "/api/contacts/phones/{contactId}",
+            "Description": "GrowthZone Contact object 'ContactPhone'. APIPath /api/contacts/lookup/{contactId}/contactphone (documented endpoint catalog). Fields from dev-Contacts.html#EditPhoneViewModel.",
+            "APIPath": "/api/contacts/lookup/{contactId}/contactphone",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Contact",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/phones/{contactId}\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"phones\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts/lookup/{contactId}/contactphone\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1522,7 +1518,7 @@
                 "fields": {
                   "Name": "ContactPhoneId",
                   "DisplayName": "ContactPhoneId",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts/{contactid}/notesandfields' addresses a record by ContactPhoneId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -1547,13 +1543,13 @@
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -1643,17 +1639,17 @@
           "fields": {
             "Name": "ContactCategory",
             "DisplayName": "ContactCategory",
-            "Description": "GrowthZone Contact family object 'ContactCategory'. Source: dev-Contacts.html#ContactCategoryItemCollectionItemModel.",
+            "Description": "GrowthZone Contact object 'ContactCategory'. APIPath /api/contacts/person/{contactId}/categorySummary (documented endpoint catalog). Fields from dev-Contacts.html#ContactCategoryItemCollectionItemModel.",
             "APIPath": "/api/contacts/person/{contactId}/categorySummary",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Contact",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/person/{contactId}/categorySummary\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"person\",\"categorySummary\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts/person/{contactId}/categorySummary\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1691,7 +1687,7 @@
                 "fields": {
                   "Name": "CategoryItemId",
                   "DisplayName": "CategoryItemId",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts/person/{contactId}/categorySummary' addresses a record by CategoryItemId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -1749,17 +1745,17 @@
           "fields": {
             "Name": "ContactCustomField",
             "DisplayName": "ContactCustomField",
-            "Description": "GrowthZone Contact family object 'ContactCustomField'. Source: dev-Contacts.html#CustomFieldTabModel.",
+            "Description": "GrowthZone Contact object 'ContactCustomField'. APIPath /api/contacts/{contactId}/NotesAndFields (documented endpoint catalog). Fields from dev-Contacts.html#CustomFieldTabModel.",
             "APIPath": "/api/contacts/{contactId}/NotesAndFields",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Contact",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/{contactId}/NotesAndFields\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"NotesAndFields\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts/{contactId}/NotesAndFields\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -1797,13 +1793,13 @@
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "String",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -1830,7 +1826,7 @@
                 "fields": {
                   "Name": "CustomFieldId",
                   "DisplayName": "CustomFieldId",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts/{contactId}/NotesAndFields' addresses a record by CustomFieldId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -2158,17 +2154,17 @@
           "fields": {
             "Name": "ContactNotes",
             "DisplayName": "ContactNotes",
-            "Description": "GrowthZone Contact family object 'ContactNotes'. Source: dev-Contacts.html#AddEditContactNotes.",
-            "APIPath": "/api/contacts/{contactid}/editnotes",
+            "Description": "GrowthZone Contact object 'ContactNotes'. APIPath /api/contacts/{contactId}/editnotes (documented endpoint catalog). Fields from dev-Contacts.html#AddEditContactNotes.",
+            "APIPath": "/api/contacts/{contactId}/editnotes",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Contact",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/{contactid}/editnotes\",\"pathParams\":[\"contactid\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"editnotes\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts/{contactId}/editnotes\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -2176,17 +2172,17 @@
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts/{contactid}/editnotes' addresses a record by ContactId) + naming convention. Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Primary key — addressing-path proof (path '/api/contacts/{contactId}/editnotes' addresses a record by ContactId). Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
                   "IsUniqueKey": true,
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "AllowsNull": false,
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -2206,17 +2202,17 @@
           "fields": {
             "Name": "ContactEngagement",
             "DisplayName": "ContactEngagement",
-            "Description": "GrowthZone Contact family object 'ContactEngagement'. Source: dev-Contacts.html#ContactEngagementModel.",
-            "APIPath": "/api/contacts/{contactid}/engagement",
+            "Description": "GrowthZone Contact object 'ContactEngagement'. APIPath /api/contacts/{contactId}/engagement (documented endpoint catalog). Fields from dev-Contacts.html#ContactEngagementModel.",
+            "APIPath": "/api/contacts/{contactId}/engagement",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Contact",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/contacts/{contactid}/engagement\",\"pathParams\":[\"contactid\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"ContactId\",\"accessPath\":{\"door\":\"Contact\",\"doorIdField\":\"ContactId\",\"segments\":[\"engagement\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/contacts/{contactId}/engagement\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -2224,17 +2220,17 @@
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Primary key — addressing-path proof (path '/api/contacts/{contactid}/engagement' addresses a record by ContactId) + naming convention. Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Primary key — addressing-path proof (path '/api/contacts/{contactId}/engagement' addresses a record by ContactId). Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
                   "IsUniqueKey": true,
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "AllowsNull": false,
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -2724,7 +2720,7 @@
           "fields": {
             "Name": "Membership",
             "DisplayName": "Membership",
-            "Description": "GrowthZone Membership family object 'Membership'. Source: Curated OpenAPI components.schemas.Models.BackOffice.MembershipCollectionItemModel.",
+            "Description": "GrowthZone Membership object 'Membership'. APIPath /api/memberships/all (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.MembershipCollectionItemModel.",
             "APIPath": "/api/memberships/all",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
@@ -2734,7 +2730,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/memberships/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -2742,7 +2738,7 @@
                 "fields": {
                   "Name": "MembershipId",
                   "DisplayName": "MembershipId",
-                  "Description": "Primary key — addressing-path proof (path '/api/memberships/all' addresses a record by MembershipId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -2767,13 +2763,13 @@
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -2937,7 +2933,7 @@
           "fields": {
             "Name": "MembershipType",
             "DisplayName": "MembershipType",
-            "Description": "GrowthZone Membership family object 'MembershipType'. Source: Curated OpenAPI components.schemas.Models.BackOffice.MembershipTypeCollectionItemModel.",
+            "Description": "GrowthZone Membership object 'MembershipType'. APIPath /api/memberships/types (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.MembershipTypeCollectionItemModel.",
             "APIPath": "/api/memberships/types",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
@@ -2947,7 +2943,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/types\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/memberships/types\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -2955,7 +2951,7 @@
                 "fields": {
                   "Name": "MembershipTypeId",
                   "DisplayName": "MembershipTypeId",
-                  "Description": "Primary key — addressing-path proof (path '/api/memberships/types' addresses a record by MembershipTypeId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -3244,35 +3240,46 @@
           "fields": {
             "Name": "MembershipLevel",
             "DisplayName": "MembershipLevel",
-            "Description": "GrowthZone Membership family object 'MembershipLevel'. Source: dev-Membership.html#AddEditMembershipLevelsModel.",
-            "APIPath": "/api/memberships/types",
+            "Description": "GrowthZone Membership object 'MembershipLevel'. APIPath /api/memberships/levels/{membershiptypeid} (documented endpoint catalog). Fields from dev-Membership.html#AddEditMembershipLevelSaleableItemsModel.",
+            "APIPath": "/api/memberships/levels/{membershiptypeid}",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Membership",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/types\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"MembershipType\",\"parentObjectIDFieldName\":\"MembershipTypeId\",\"accessPath\":{\"door\":\"MembershipType\",\"doorIdField\":\"MembershipTypeId\",\"segments\":[\"types\",\"levels\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/memberships/levels/{membershiptypeid}\",\"pathParams\":[\"membershiptypeid\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"MembershipType\",\"parentObjectIDFieldName\":\"membershiptypeid\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
               {
                 "fields": {
+                  "Name": "MembershipLevelId",
+                  "DisplayName": "MembershipLevelId",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "MetadataSource": "Declared",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
                   "Name": "MembershipTypeId",
                   "DisplayName": "MembershipTypeId",
-                  "Description": "PK (soft, weak) + FK — MembershipTypeId is the only integer identity in the source AddEditMembershipLevelsModel; the IO is a 1:1 MembershipType->levels-config record (actual per-level records nest in the Levels[] field). Emitted as soft PK to avoid stalling CodeGen; refine at runtime D4. Also FK to MembershipType.",
+                  "Description": "Foreign key — path-param/structural proof: 'MembershipTypeId' references MembershipType.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=MembershipType&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"MembershipType\",\"ReferencedType\":\"MembershipType\"}",
-                  "IsPrimaryKey": true,
-                  "IsUniqueKey": true,
-                  "IsRequired": true,
-                  "AllowsNull": false
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"MembershipType\"}"
                 }
               },
               {
@@ -3297,8 +3304,8 @@
               },
               {
                 "fields": {
-                  "Name": "FixedAnnualRenewalMonth",
-                  "DisplayName": "FixedAnnualRenewalMonth",
+                  "Name": "Name",
+                  "DisplayName": "Name",
                   "Type": "String",
                   "Status": "Active",
                   "MetadataSource": "Declared",
@@ -3307,8 +3314,48 @@
               },
               {
                 "fields": {
-                  "Name": "PricingTypeId",
-                  "DisplayName": "PricingTypeId",
+                  "Name": "Description",
+                  "DisplayName": "Description",
+                  "Type": "String",
+                  "Status": "Active",
+                  "MetadataSource": "Declared",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "MinUnits",
+                  "DisplayName": "MinUnits",
+                  "Type": "String",
+                  "Status": "Active",
+                  "MetadataSource": "Declared",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "MaxUnits",
+                  "DisplayName": "MaxUnits",
+                  "Type": "String",
+                  "Status": "Active",
+                  "MetadataSource": "Declared",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "DurationMonths",
+                  "DisplayName": "DurationMonths",
+                  "Type": "Integer",
+                  "Status": "Active",
+                  "MetadataSource": "Declared",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "EffectiveDateText",
+                  "DisplayName": "EffectiveDateText",
                   "Type": "String",
                   "Status": "Active",
                   "MetadataSource": "Declared",
@@ -3337,8 +3384,8 @@
               },
               {
                 "fields": {
-                  "Name": "EffectiveDate",
-                  "DisplayName": "EffectiveDate",
+                  "Name": "PricingTypeId",
+                  "DisplayName": "PricingTypeId",
                   "Type": "String",
                   "Status": "Active",
                   "MetadataSource": "Declared",
@@ -3347,8 +3394,8 @@
               },
               {
                 "fields": {
-                  "Name": "EffectiveDateText",
-                  "DisplayName": "EffectiveDateText",
+                  "Name": "FeesList",
+                  "DisplayName": "FeesList",
                   "Type": "String",
                   "Status": "Active",
                   "MetadataSource": "Declared",
@@ -3357,48 +3404,8 @@
               },
               {
                 "fields": {
-                  "Name": "Name",
-                  "DisplayName": "Name",
-                  "Type": "String",
-                  "Status": "Active",
-                  "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "DurationMonths",
-                  "DisplayName": "DurationMonths",
-                  "Type": "Integer",
-                  "Status": "Active",
-                  "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "BillSchedulePricingJson",
-                  "DisplayName": "BillSchedulePricingJson",
-                  "Type": "String",
-                  "Status": "Active",
-                  "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "BaseFees",
-                  "DisplayName": "BaseFees",
-                  "Type": "String",
-                  "Status": "Active",
-                  "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "PriceOptionsJson",
-                  "DisplayName": "PriceOptionsJson",
+                  "Name": "SetupFeesList",
+                  "DisplayName": "SetupFeesList",
                   "Type": "String",
                   "Status": "Active",
                   "MetadataSource": "Declared",
@@ -3427,48 +3434,8 @@
               },
               {
                 "fields": {
-                  "Name": "LevelSelectionCustomFieldId",
-                  "DisplayName": "LevelSelectionCustomFieldId",
-                  "Type": "String",
-                  "Status": "Active",
-                  "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "BaseFeesDescription",
-                  "DisplayName": "BaseFeesDescription",
-                  "Type": "String",
-                  "Status": "Active",
-                  "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "IsUsedInSync",
-                  "DisplayName": "IsUsedInSync",
-                  "Type": "Boolean",
-                  "Status": "Active",
-                  "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "HasBenefitTrackingModule",
-                  "DisplayName": "HasBenefitTrackingModule",
-                  "Type": "Boolean",
-                  "Status": "Active",
-                  "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
-                }
-              },
-              {
-                "fields": {
-                  "Name": "Levels",
-                  "DisplayName": "Levels",
+                  "Name": "FixedAnnualRenewalMonth",
+                  "DisplayName": "FixedAnnualRenewalMonth",
                   "Type": "String",
                   "Status": "Active",
                   "MetadataSource": "Declared",
@@ -3482,17 +3449,17 @@
           "fields": {
             "Name": "MembershipStatusLookup",
             "DisplayName": "MembershipStatusLookup",
-            "Description": "GrowthZone Membership family object 'MembershipStatusLookup'. Source: Curated OpenAPI components.schemas.Models.BackOffice.ItemChoiceModel.",
-            "APIPath": "/api/memberships/lookup/status/Active",
+            "Description": "GrowthZone Membership object 'MembershipStatusLookup'. APIPath /api/memberships/lookup/status/{defaultMembershipStatus} (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.ItemChoiceModel.",
+            "APIPath": "/api/memberships/lookup/status/{defaultMembershipStatus}",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Membership",
             "SupportsPagination": false,
-            "PaginationType": "Offset",
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/lookup/status/Active\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/memberships/lookup/status/{defaultMembershipStatus}\",\"pathParams\":[\"defaultMembershipStatus\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -3530,7 +3497,7 @@
                 "fields": {
                   "Name": "Id",
                   "DisplayName": "Id",
-                  "Description": "Primary key — addressing-path proof (path '/api/memberships/lookup/status/{defaultMembershipStatus}' addresses a record by Id) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -3558,17 +3525,17 @@
           "fields": {
             "Name": "MembershipChange",
             "DisplayName": "MembershipChange",
-            "Description": "GrowthZone Membership family object 'MembershipChange'. Source: Curated OpenAPI components.schemas.Models.BackOffice.UpgradeDowngradeMembershipViewModel.",
-            "APIPath": "/api/memberships/change?membershipId={membershipId}",
+            "Description": "GrowthZone Membership object 'MembershipChange'. APIPath /api/memberships/change/{membershipId}/{changeType} (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.UpgradeDowngradeMembershipViewModel.",
+            "APIPath": "/api/memberships/change/{membershipId}/{changeType}",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Membership",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/change?membershipId={membershipId}\",\"pathParams\":[\"membershipId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Membership\",\"parentObjectIDFieldName\":\"MembershipId\",\"accessPath\":{\"door\":\"Membership\",\"doorIdField\":\"MembershipId\",\"segments\":[\"change\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/memberships/change/{membershipId}/{changeType}\",\"pathParams\":[\"membershipId\",\"changeType\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Membership\",\"parentObjectIDFieldName\":\"membershipId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -3576,30 +3543,30 @@
                 "fields": {
                   "Name": "MembershipId",
                   "DisplayName": "MembershipId",
-                  "Description": "Primary key — addressing-path proof (path '/api/memberships/change/{membershipId}/{changeType}' addresses a record by MembershipId) + naming convention. Foreign key — addressing-path/structural proof: 'MembershipId' references Membership.",
+                  "Description": "Primary key — addressing-path proof (path '/api/memberships/change/{membershipId}/{changeType}' addresses a record by MembershipId). Foreign key — path-param/structural proof: 'MembershipId' references Membership.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
                   "IsUniqueKey": true,
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Membership&IntegrationID=@parent:ID",
                   "AllowsNull": false,
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Membership\",\"ReferencedType\":\"Membership\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Membership\"}"
                 }
               },
               {
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -3684,14 +3651,14 @@
                 "fields": {
                   "Name": "MembershipTypeId",
                   "DisplayName": "MembershipTypeId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'MembershipTypeId' references MembershipType.",
+                  "Description": "Foreign key — path-param/structural proof: 'MembershipTypeId' references MembershipType.",
                   "Type": "Integer",
                   "IsRequired": true,
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=MembershipType&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"MembershipType\",\"ReferencedType\":\"MembershipType\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"MembershipType\"}"
                 }
               },
               {
@@ -3711,10 +3678,7 @@
                   "Type": "Integer",
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID",
-                  "RelatedIntegrationObjectID": null,
-                  "IsForeignKey": true,
-                  "Configuration": "{\"ReferencedType\":\"MembershipLevel\"}"
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -4230,7 +4194,7 @@
           "fields": {
             "Name": "Group",
             "DisplayName": "Group",
-            "Description": "GrowthZone Group family object 'Group'. Source: Curated OpenAPI components.schemas.UIModel.BackOffice.Models.Groups.GroupsByCategoryApiModel.",
+            "Description": "GrowthZone Group object 'Group'. APIPath /api/groups/all (documented endpoint catalog). Fields from curated OpenAPI components.schemas.UIModel.BackOffice.Models.Groups.GroupsByCategoryApiModel.",
             "APIPath": "/api/groups/all",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
@@ -4240,7 +4204,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/groups/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/groups/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4248,7 +4212,7 @@
                 "fields": {
                   "Name": "GroupId",
                   "DisplayName": "GroupId",
-                  "Description": "Primary key — addressing-path proof (path '/api/groups/ByCategory' addresses a record by GroupId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -4326,17 +4290,17 @@
           "fields": {
             "Name": "GroupMember",
             "DisplayName": "GroupMember",
-            "Description": "GrowthZone Group family object 'GroupMember'. Source: Curated OpenAPI components.schemas.Models.BackOffice.GroupMemberCollectionItemModel.",
+            "Description": "GrowthZone Group object 'GroupMember'. APIPath /api/groups/{groupId}/members (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.GroupMemberCollectionItemModel.",
             "APIPath": "/api/groups/{groupId}/members",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Group",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/groups/{groupId}/members\",\"pathParams\":[\"groupId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Group\",\"parentObjectIDFieldName\":\"GroupId\",\"accessPath\":{\"door\":\"Group\",\"doorIdField\":\"GroupId\",\"segments\":[\"members\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/groups/{groupId}/members\",\"pathParams\":[\"groupId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Group\",\"parentObjectIDFieldName\":\"groupId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4344,7 +4308,7 @@
                 "fields": {
                   "Name": "ContactGroupId",
                   "DisplayName": "ContactGroupId",
-                  "Description": "Primary key — addressing-path proof (path '/api/groups/{groupId}/members' addresses a record by ContactGroupId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -4369,26 +4333,26 @@
                 "fields": {
                   "Name": "GroupId",
                   "DisplayName": "GroupId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'GroupId' references Group.",
+                  "Description": "Foreign key — path-param/structural proof: 'GroupId' references Group.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Group&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Group\",\"ReferencedType\":\"Group\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Group\"}"
                 }
               },
               {
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -4540,17 +4504,17 @@
           "fields": {
             "Name": "GroupCategory",
             "DisplayName": "GroupCategory",
-            "Description": "GrowthZone Group family object 'GroupCategory'. Source: Curated OpenAPI components.schemas.Models.BackOffice.GroupCategoryCollectionItemModel.",
+            "Description": "GrowthZone Group object 'GroupCategory'. APIPath /api/groups/categories (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.GroupCategoryCollectionItemModel.",
             "APIPath": "/api/groups/categories",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Group",
-            "SupportsPagination": false,
+            "SupportsPagination": true,
             "PaginationType": "Offset",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/groups/categories\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/groups/categories\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4558,7 +4522,7 @@
                 "fields": {
                   "Name": "GroupCategoryId",
                   "DisplayName": "GroupCategoryId",
-                  "Description": "Primary key — addressing-path proof (path '/api/groups/ByCategory' addresses a record by GroupCategoryId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -4608,17 +4572,17 @@
           "fields": {
             "Name": "Certification",
             "DisplayName": "Certification",
-            "Description": "GrowthZone Certification family object 'Certification'. Source: Curated OpenAPI components.schemas.Models.BackOffice.CertificationSummaryModel.",
-            "APIPath": "/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed",
+            "Description": "GrowthZone Certification object 'Certification'. APIPath /api/contactoverview/{contactId}/certifications (documented endpoint catalog). Fields from curated OpenAPI components.schemas.Models.BackOffice.CertificationSummaryModel.",
+            "APIPath": "/api/contactoverview/{contactId}/certifications",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Certification",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed\",\"pathParams\":[\"certificationContactId\",\"certificationComponentId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/contactoverview/{contactId}/certifications\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4626,7 +4590,7 @@
                 "fields": {
                   "Name": "CertificationContactId",
                   "DisplayName": "CertificationContactId",
-                  "Description": "Primary key — addressing-path proof (path '/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed' addresses a record by CertificationContactId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -4780,17 +4744,17 @@
           "fields": {
             "Name": "CertificationComponent",
             "DisplayName": "CertificationComponent",
-            "Description": "GrowthZone Certification family object 'CertificationComponent'. Source: dev-Events.html#AddEditEventCertificationComponentViewModel.",
+            "Description": "GrowthZone Certification object 'CertificationComponent'. APIPath /api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed (curated OpenAPI spec). Fields from dev-Events.html#AddEditEventCertificationComponentViewModel. GAP: Only a POST mark-complete endpoint is documented (curated spec). No GET list of certification components exists in any doc — read path requires a live probe.",
             "APIPath": "/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Certification",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed\",\"pathParams\":[\"certificationContactId\",\"certificationComponentId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Certification\",\"parentObjectIDFieldName\":\"CertificationContactId\",\"accessPath\":{\"door\":\"Certification\",\"doorIdField\":\"CertificationContactId\",\"segments\":[\"Components\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed\",\"pathParams\":[\"certificationContactId\",\"certificationComponentId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":false,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Certification\",\"parentObjectIDFieldName\":\"certificationContactId\",\"gap\":\"Only a POST mark-complete endpoint is documented (curated spec). No GET list of certification components exists in any doc — read path requires a live probe.\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4808,30 +4772,33 @@
                 "fields": {
                   "Name": "EventDetailId",
                   "DisplayName": "EventDetailId",
+                  "Description": "Foreign key — path-param/structural proof: 'EventDetailId' references Event.",
                   "Type": "Integer",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
+                  "IntegrationObjectID": "@parent:ID",
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "String",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
                 "fields": {
                   "Name": "CertificationComponentId",
                   "DisplayName": "CertificationComponentId",
-                  "Description": "Primary key — addressing-path proof (path '/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed' addresses a record by CertificationComponentId) + naming convention.",
+                  "Description": "Primary key — addressing-path proof (path '/api/certifications/{certificationContactId}/Components/{certificationComponentId}/Completed' addresses a record by CertificationComponentId).",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -4899,7 +4866,7 @@
           "fields": {
             "Name": "Event",
             "DisplayName": "Event",
-            "Description": "GrowthZone Event family object 'Event'. Source: dev-Events.html#EventBaseInfoModel.",
+            "Description": "GrowthZone Event object 'Event'. APIPath /api/events/all (documented endpoint catalog). Fields from dev-Events.html#EventBaseInfoModel.",
             "APIPath": "/api/events/all",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
@@ -4909,7 +4876,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/events/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4917,7 +4884,7 @@
                 "fields": {
                   "Name": "EventId",
                   "DisplayName": "EventId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events' addresses a record by EventId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -5205,17 +5172,17 @@
           "fields": {
             "Name": "EventAttendee",
             "DisplayName": "EventAttendee",
-            "Description": "GrowthZone Event family object 'EventAttendee'. Source: dev-Events.html#AddEditEventAttendeeModel.",
-            "APIPath": "/api/events/attendees?eventId={eventId}",
+            "Description": "GrowthZone Event object 'EventAttendee'. APIPath /api/events/{eventId}/attendees/summary (documented endpoint catalog). Fields from dev-Events.html#AddEditEventAttendeeModel.",
+            "APIPath": "/api/events/{eventId}/attendees/summary",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Event",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/attendees?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"attendees\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/events/{eventId}/attendees/summary\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"eventId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -5223,26 +5190,26 @@
                 "fields": {
                   "Name": "EventId",
                   "DisplayName": "EventId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'EventId' references Event.",
+                  "Description": "Foreign key — path-param/structural proof: 'EventId' references Event.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\",\"ReferencedType\":\"Event\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "String",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -5269,7 +5236,7 @@
                 "fields": {
                   "Name": "EventAttendeeId",
                   "DisplayName": "EventAttendeeId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events/{eventId}/attendees' addresses a record by EventAttendeeId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -5497,17 +5464,17 @@
           "fields": {
             "Name": "EventRegistrationType",
             "DisplayName": "EventRegistrationType",
-            "Description": "GrowthZone Event family object 'EventRegistrationType'. Source: dev-Events.html#AddEditEventRegistrationTypeViewModel.",
-            "APIPath": "/api/events/registrationtypes?eventId={eventId}",
+            "Description": "GrowthZone Event object 'EventRegistrationType'. APIPath /api/events/{eventDetailId}/registrationtypes/lookup (documented endpoint catalog). Fields from dev-Events.html#AddEditEventRegistrationTypeViewModel.",
+            "APIPath": "/api/events/{eventDetailId}/registrationtypes/lookup",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Event",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/registrationtypes?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"registrationtypes\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/events/{eventDetailId}/registrationtypes/lookup\",\"pathParams\":[\"eventDetailId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"eventDetailId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -5515,7 +5482,7 @@
                 "fields": {
                   "Name": "EventRegistrationTypeId",
                   "DisplayName": "EventRegistrationTypeId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events/{eventId}/registrationtypes' addresses a record by EventRegistrationTypeId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -5530,10 +5497,13 @@
                 "fields": {
                   "Name": "EventDetailId",
                   "DisplayName": "EventDetailId",
+                  "Description": "Foreign key — path-param/structural proof: 'EventDetailId' references Event.",
                   "Type": "Integer",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
+                  "IntegrationObjectID": "@parent:ID",
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
@@ -5550,13 +5520,13 @@
                 "fields": {
                   "Name": "EventId",
                   "DisplayName": "EventId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'EventId' references Event.",
+                  "Description": "Foreign key — path-param/structural proof: 'EventId' references Event.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\",\"ReferencedType\":\"Event\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
@@ -5756,17 +5726,17 @@
           "fields": {
             "Name": "EventSponsor",
             "DisplayName": "EventSponsor",
-            "Description": "GrowthZone Event family object 'EventSponsor'. Source: dev-Events.html#EventSponsorListItemViewModel.",
-            "APIPath": "/api/events/sponsors?eventId={eventId}",
+            "Description": "GrowthZone Event object 'EventSponsor'. APIPath /api/events/{eventId}/sponsors (documented endpoint catalog). Fields from dev-Events.html#EventSponsorListItemViewModel.",
+            "APIPath": "/api/events/{eventId}/sponsors",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Event",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/sponsors?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"sponsors\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/events/{eventId}/sponsors\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"eventId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -5774,7 +5744,7 @@
                 "fields": {
                   "Name": "EventSponsorId",
                   "DisplayName": "EventSponsorId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events/{eventId}/sponsors' addresses a record by EventSponsorId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -5789,23 +5759,26 @@
                 "fields": {
                   "Name": "EventDetailId",
                   "DisplayName": "EventDetailId",
+                  "Description": "Foreign key — path-param/structural proof: 'EventDetailId' references Event.",
                   "Type": "Integer",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
+                  "IntegrationObjectID": "@parent:ID",
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
                 "fields": {
                   "Name": "EventId",
                   "DisplayName": "EventId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'EventId' references Event.",
+                  "Description": "Foreign key — path-param/structural proof: 'EventId' references Event.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\",\"ReferencedType\":\"Event\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
@@ -5842,13 +5815,13 @@
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -5978,8 +5951,8 @@
           "fields": {
             "Name": "EventSponsorshipBenefit",
             "DisplayName": "EventSponsorshipBenefit",
-            "Description": "GrowthZone Event family object 'EventSponsorshipBenefit'. Source: dev-Events.html#EventSponsorshipBenefitCollectionItemModel.",
-            "APIPath": "/api/events/sponsorshipbenefits?eventId={eventId}",
+            "Description": "GrowthZone Event object 'EventSponsorshipBenefit'. APIPath /api/events/sponsor/benefits (documented endpoint catalog). Fields from dev-Events.html#EventSponsorshipBenefitCollectionItemModel.",
+            "APIPath": "/api/events/sponsor/benefits",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Event",
@@ -5988,7 +5961,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/sponsorshipbenefits?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"sponsorshipbenefits\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/events/sponsor/benefits\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -5996,7 +5969,7 @@
                 "fields": {
                   "Name": "SponsorshipBenefitId",
                   "DisplayName": "SponsorshipBenefitId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events/{eventId}/sponsorshipbenefits' addresses a record by SponsorshipBenefitId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -6154,17 +6127,17 @@
           "fields": {
             "Name": "EventExhibitor",
             "DisplayName": "EventExhibitor",
-            "Description": "GrowthZone Event family object 'EventExhibitor'. Source: dev-Events.html#AddEditEventExhibitorViewModel.",
-            "APIPath": "/api/events/exhibitors?eventId={eventId}",
+            "Description": "GrowthZone Event object 'EventExhibitor'. APIPath /api/events/{eventId}/eventexhibitors (documented endpoint catalog). Fields from dev-Events.html#AddEditEventExhibitorViewModel. GAP: Only POST /api/events/{eventId}/eventexhibitors (load) is documented. No GET list endpoint — read path requires a live probe.",
+            "APIPath": "/api/events/{eventId}/eventexhibitors",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Event",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/exhibitors?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"exhibitors\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/events/{eventId}/eventexhibitors\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":false,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"eventId\",\"gap\":\"Only POST /api/events/{eventId}/eventexhibitors (load) is documented. No GET list endpoint — read path requires a live probe.\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -6172,7 +6145,7 @@
                 "fields": {
                   "Name": "EventExhibitorId",
                   "DisplayName": "EventExhibitorId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events/{eventId}/exhibitors' addresses a record by EventExhibitorId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -6187,36 +6160,39 @@
                 "fields": {
                   "Name": "EventId",
                   "DisplayName": "EventId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'EventId' references Event.",
+                  "Description": "Foreign key — path-param/structural proof: 'EventId' references Event.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\",\"ReferencedType\":\"Event\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
                 "fields": {
                   "Name": "EventDetailId",
                   "DisplayName": "EventDetailId",
+                  "Description": "Foreign key — path-param/structural proof: 'EventDetailId' references Event.",
                   "Type": "Integer",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
+                  "IntegrationObjectID": "@parent:ID",
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -6273,13 +6249,10 @@
                 "fields": {
                   "Name": "PrimaryContactId",
                   "DisplayName": "PrimaryContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'PrimaryContactId' references Contact.",
                   "Type": "String",
-                  "RelatedIntegrationObjectID": null,
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6299,10 +6272,7 @@
                   "Type": "String",
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID",
-                  "RelatedIntegrationObjectID": null,
-                  "IsForeignKey": true,
-                  "Configuration": "{\"ReferencedType\":\"EventExhibitorType\"}"
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6412,17 +6382,17 @@
           "fields": {
             "Name": "EventExhibitorType",
             "DisplayName": "EventExhibitorType",
-            "Description": "GrowthZone Event family object 'EventExhibitorType'. Source: dev-Events.html#AddEditEventExhibitorTypeViewModel.",
-            "APIPath": "/api/events/exhibitortypes?eventId={eventId}",
+            "Description": "GrowthZone Event object 'EventExhibitorType'. APIPath /api/events/{eventDetailId}/exhibitortypes (documented endpoint catalog). Fields from dev-Events.html#AddEditEventExhibitorTypeViewModel.",
+            "APIPath": "/api/events/{eventDetailId}/exhibitortypes",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Event",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/exhibitortypes?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"exhibitortypes\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/events/{eventDetailId}/exhibitortypes\",\"pathParams\":[\"eventDetailId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"eventDetailId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -6430,7 +6400,7 @@
                 "fields": {
                   "Name": "EventExhibitorTypeId",
                   "DisplayName": "EventExhibitorTypeId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events/{eventId}/exhibitortypes' addresses a record by EventExhibitorTypeId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -6445,10 +6415,13 @@
                 "fields": {
                   "Name": "EventDetailId",
                   "DisplayName": "EventDetailId",
+                  "Description": "Foreign key — path-param/structural proof: 'EventDetailId' references Event.",
                   "Type": "Integer",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
+                  "IntegrationObjectID": "@parent:ID",
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
@@ -6538,10 +6511,7 @@
                   "Type": "String",
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID",
-                  "RelatedIntegrationObjectID": null,
-                  "IsForeignKey": true,
-                  "Configuration": "{\"ReferencedType\":\"EventRegistrationType\"}"
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -6591,17 +6561,17 @@
           "fields": {
             "Name": "EventSession",
             "DisplayName": "EventSession",
-            "Description": "GrowthZone Event family object 'EventSession'. Source: dev-Events.html#EventSessionAddEditModel.",
-            "APIPath": "/api/events/sessions?eventId={eventId}",
+            "Description": "GrowthZone Event object 'EventSession'. APIPath /api/events/{eventId}/sessions/summary (documented endpoint catalog). Fields from dev-Events.html#EventSessionAddEditModel.",
+            "APIPath": "/api/events/{eventId}/sessions/summary",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Event",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/sessions?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"sessions\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/events/{eventId}/sessions/summary\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"eventId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -6619,7 +6589,7 @@
                 "fields": {
                   "Name": "EventSessionId",
                   "DisplayName": "EventSessionId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events/{eventId}/sessions' addresses a record by EventSessionId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -6644,23 +6614,26 @@
                 "fields": {
                   "Name": "EventId",
                   "DisplayName": "EventId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'EventId' references Event.",
+                  "Description": "Foreign key — path-param/structural proof: 'EventId' references Event.",
                   "Type": "Integer",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\",\"ReferencedType\":\"Event\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
                 "fields": {
                   "Name": "EventDetailId",
                   "DisplayName": "EventDetailId",
+                  "Description": "Foreign key — path-param/structural proof: 'EventDetailId' references Event.",
                   "Type": "Integer",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID"
+                  "IntegrationObjectID": "@parent:ID",
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               },
               {
@@ -6790,8 +6763,8 @@
           "fields": {
             "Name": "EventTask",
             "DisplayName": "EventTask",
-            "Description": "GrowthZone Event family object 'EventTask'. Source: dev-Events.html#EventTaskItemAddEditModel.",
-            "APIPath": "/api/events/tasks?eventId={eventId}",
+            "Description": "GrowthZone Event object 'EventTask'. APIPath /api/events/tasks/all (documented endpoint catalog). Fields from dev-Events.html#EventTaskItemAddEditModel.",
+            "APIPath": "/api/events/tasks/all",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Event",
@@ -6800,7 +6773,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/tasks?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"tasks\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/events/tasks/all\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -6808,7 +6781,7 @@
                 "fields": {
                   "Name": "TaskItemId",
                   "DisplayName": "TaskItemId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events/{eventId}/tasks' addresses a record by TaskItemId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -7023,13 +6996,13 @@
                 "fields": {
                   "Name": "ContactId",
                   "DisplayName": "ContactId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'ContactId' references Contact.",
+                  "Description": "Foreign key — path-param/structural proof: 'ContactId' references Contact.",
                   "Type": "String",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Contact&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\",\"ReferencedType\":\"Contact\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Contact\"}"
                 }
               },
               {
@@ -7056,13 +7029,13 @@
                 "fields": {
                   "Name": "EventId",
                   "DisplayName": "EventId",
-                  "Description": "Foreign key — addressing-path/structural proof: 'EventId' references Event.",
+                  "Description": "Foreign key — path-param/structural proof: 'EventId' references Event.",
                   "Type": "String",
-                  "RelatedIntegrationObjectID": null,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:ID",
                   "Status": "Active",
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
-                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\",\"ReferencedType\":\"Event\"}"
+                  "Configuration": "{\"isForeignKey\":true,\"referencedType\":\"Event\"}"
                 }
               }
             ]
@@ -7072,17 +7045,17 @@
           "fields": {
             "Name": "EventCalendar",
             "DisplayName": "EventCalendar",
-            "Description": "GrowthZone Event family object 'EventCalendar'. Source: dev-Events.html#EventCalendarDetailViewModel.",
-            "APIPath": "/api/events/calendars?eventId={eventId}",
+            "Description": "GrowthZone Event object 'EventCalendar'. APIPath /api/events/{eventDetailId}/calendars (documented endpoint catalog). Fields from dev-Events.html#EventCalendarDetailViewModel.",
+            "APIPath": "/api/events/{eventDetailId}/calendars",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Event",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/calendars?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"calendars\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/events/{eventDetailId}/calendars\",\"pathParams\":[\"eventDetailId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"eventDetailId\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -7090,7 +7063,7 @@
                 "fields": {
                   "Name": "CalendarId",
                   "DisplayName": "CalendarId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events/calendars' addresses a record by CalendarId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -7378,17 +7351,17 @@
           "fields": {
             "Name": "EventVenue",
             "DisplayName": "EventVenue",
-            "Description": "GrowthZone Event family object 'EventVenue'. Source: dev-Events.html#VenueAddEditModel.",
-            "APIPath": "/api/events/venues?eventId={eventId}",
+            "Description": "GrowthZone Event object 'EventVenue'. APIPath /api/events/venues/{venueId} (documented endpoint catalog). Fields from dev-Events.html#VenueAddEditModel. GAP: Only single-record GET /api/events/venues/{venueId} and /api/events/venues/lookup are documented. No list-all endpoint — full enumeration requires a live probe.",
+            "APIPath": "/api/events/venues/{venueId}",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Event",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/events/venues?eventId={eventId}\",\"pathParams\":[\"eventId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Event\",\"parentObjectIDFieldName\":\"EventId\",\"accessPath\":{\"door\":\"Event\",\"doorIdField\":\"EventId\",\"segments\":[\"venues\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/events/venues/{venueId}\",\"pathParams\":[\"venueId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":false,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"gap\":\"Only single-record GET /api/events/venues/{venueId} and /api/events/venues/lookup are documented. No list-all endpoint — full enumeration requires a live probe.\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -7396,7 +7369,7 @@
                 "fields": {
                   "Name": "VenueId",
                   "DisplayName": "VenueId",
-                  "Description": "Primary key — addressing-path proof (path '/api/events/venues' addresses a record by VenueId) + naming convention.",
+                  "Description": "Primary key — addressing-path proof (path '/api/events/venues/{venueId}' addresses a record by VenueId).",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -7554,17 +7527,17 @@
           "fields": {
             "Name": "StoreItem",
             "DisplayName": "StoreItem",
-            "Description": "GrowthZone Store family object 'StoreItem'. Source: dev-Store.html#StoreItemCollectionItemModel.",
-            "APIPath": "/api/store/items",
+            "Description": "GrowthZone Store object 'StoreItem'. APIPath /api/store/storeitems/{type}/{storeItemId} (documented endpoint catalog). Fields from dev-Store.html#StoreItemCollectionItemModel. GAP: Type-keyed addressing GET /api/store/storeitems/{0..3}/{storeItemId}; the integer type segment (0,1,2,3) is undocumented. No list-all — enumeration + type semantics require a live probe.",
+            "APIPath": "/api/store/storeitems/{type}/{storeItemId}",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Store",
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
+            "SupportsPagination": false,
+            "PaginationType": "None",
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/store/items\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/store/storeitems/{type}/{storeItemId}\",\"pathParams\":[\"type\",\"storeItemId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":false,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"gap\":\"Type-keyed addressing GET /api/store/storeitems/{0..3}/{storeItemId}; the integer type segment (0,1,2,3) is undocumented. No list-all — enumeration + type semantics require a live probe.\",\"typeKeySegments\":[0,1,2,3]}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -7572,7 +7545,7 @@
                 "fields": {
                   "Name": "StoreItemId",
                   "DisplayName": "StoreItemId",
-                  "Description": "Primary key — addressing-path proof (path '/api/store/items' addresses a record by StoreItemId) + naming convention.",
+                  "Description": "Primary key — addressing-path proof (path '/api/store/storeitems/{type}/{storeItemId}' addresses a record by StoreItemId).",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -7760,8 +7733,8 @@
           "fields": {
             "Name": "StoreOrder",
             "DisplayName": "StoreOrder",
-            "Description": "GrowthZone Store family object 'StoreOrder'. Source: dev-Store.html#StoreOrderDetailsViewModel.",
-            "APIPath": "/api/store/orders",
+            "Description": "GrowthZone Store object 'StoreOrder'. APIPath /api/store/storeorders (documented endpoint catalog). Fields from dev-Store.html#StoreOrderDetailsViewModel.",
+            "APIPath": "/api/store/storeorders",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Store",
@@ -7770,7 +7743,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/store/orders\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/store/storeorders\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -7778,7 +7751,7 @@
                 "fields": {
                   "Name": "StorePurchaseId",
                   "DisplayName": "StorePurchaseId",
-                  "Description": "Primary key — addressing-path proof (path '/api/store/orders' addresses a record by StorePurchaseId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -8006,7 +7979,7 @@
           "fields": {
             "Name": "StoreDigitalPurchase",
             "DisplayName": "StoreDigitalPurchase",
-            "Description": "GrowthZone Store family object 'StoreDigitalPurchase'. Source: dev-Store.html#operation--api-store-storedownloads (POST/DELETE; PK by addressing-path param).",
+            "Description": "GrowthZone Store object 'StoreDigitalPurchase'. APIPath /api/store/storedownloads (documented endpoint catalog). Fields from dev-Store.html#StoreItemPurchaseHistoryModel.",
             "APIPath": "/api/store/storedownloads",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
@@ -8016,21 +7989,32 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/store/storedownloads\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/store/storedownloads\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
               {
                 "fields": {
-                  "Name": "StoreItemDigitalDownloadPurchaseId",
-                  "DisplayName": "StoreItemDigitalDownloadPurchaseId",
-                  "Description": "Primary key — addressing-path proof (path '/api/store/storedownloads/{storeitemdigitaldownloadpurchaseid}' addresses a single record by StoreItemDigitalDownloadPurchaseId; path param typed integer, in path).",
+                  "Name": "StoreItemId",
+                  "DisplayName": "StoreItemId",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
                   "IsUniqueKey": true,
                   "AllowsNull": false,
                   "Status": "Active",
+                  "MetadataSource": "Declared",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "Items",
+                  "DisplayName": "Items",
+                  "Type": "String",
+                  "Status": "Active",
+                  "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID"
                 }
               }
@@ -8041,8 +8025,8 @@
           "fields": {
             "Name": "ScheduledBillingUpdate",
             "DisplayName": "ScheduledBillingUpdate",
-            "Description": "GrowthZone ScheduledBilling family object 'ScheduledBillingUpdate'. Source: dev-ScheduledBilling.html#ScheduledBillingUpdateMembershipTypeItemsModal.",
-            "APIPath": "/api/memberships/scheduledbilling?membershipId={membershipId}",
+            "Description": "GrowthZone ScheduledBilling object 'ScheduledBillingUpdate'. APIPath /api/scheduledbilling/membershiptype/items (documented endpoint catalog). Fields from dev-ScheduledBilling.html#ScheduledBillingUpdateMembershipTypeItemsModal.",
+            "APIPath": "/api/scheduledbilling/membershiptype/items",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "ScheduledBilling",
@@ -8051,7 +8035,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/memberships/scheduledbilling?membershipId={membershipId}\",\"pathParams\":[\"membershipId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Membership\",\"parentObjectIDFieldName\":\"MembershipId\",\"accessPath\":{\"door\":\"Membership\",\"doorIdField\":\"MembershipId\",\"segments\":[\"scheduledbilling\"]}}"
+            "Configuration": "{\"apiPath\":\"/api/scheduledbilling/membershiptype/items\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -8069,7 +8053,7 @@
                 "fields": {
                   "Name": "MembershipTypeId",
                   "DisplayName": "MembershipTypeId",
-                  "Description": "Primary key — addressing-path proof (path '/api/scheduledbilling/membershiptype' addresses a record by MembershipTypeId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -8087,10 +8071,7 @@
                   "Type": "String",
                   "Status": "Active",
                   "MetadataSource": "Declared",
-                  "IntegrationObjectID": "@parent:ID",
-                  "RelatedIntegrationObjectID": null,
-                  "IsForeignKey": true,
-                  "Configuration": "{\"ReferencedType\":\"MembershipLevel\"}"
+                  "IntegrationObjectID": "@parent:ID"
                 }
               },
               {
@@ -8150,8 +8131,8 @@
           "fields": {
             "Name": "Directory",
             "DisplayName": "Directory",
-            "Description": "GrowthZone Directory family object 'Directory'. Source: dev-Directory.html#DirectoryDetailViewModel.",
-            "APIPath": "/api/directories",
+            "Description": "GrowthZone Directory object 'Directory'. APIPath /api/directory/directories (documented endpoint catalog). Fields from dev-Directory.html#DirectoryDetailViewModel.",
+            "APIPath": "/api/directory/directories",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Directory",
@@ -8160,7 +8141,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/directories\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/directory/directories\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -8168,7 +8149,7 @@
                 "fields": {
                   "Name": "DirectoryId",
                   "DisplayName": "DirectoryId",
-                  "Description": "Primary key — addressing-path proof (path '/api/directories' addresses a record by DirectoryId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,
@@ -8276,8 +8257,8 @@
           "fields": {
             "Name": "DirectoryListingType",
             "DisplayName": "DirectoryListingType",
-            "Description": "GrowthZone Directory family object 'DirectoryListingType'. Source: dev-Directory.html#DirectoryListingTypeListItem.",
-            "APIPath": "/api/directories/listingtypes",
+            "Description": "GrowthZone Directory object 'DirectoryListingType'. APIPath /api/directory/directorylistingtypes (documented endpoint catalog). Fields from dev-Directory.html#DirectoryListingTypeListItem.",
+            "APIPath": "/api/directory/directorylistingtypes",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Category": "Directory",
@@ -8286,7 +8267,7 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"listPath\":\"/api/directories/listingtypes\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\"},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
+            "Configuration": "{\"apiPath\":\"/api/directory/directorylistingtypes\",\"pathParams\":[],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -8294,7 +8275,7 @@
                 "fields": {
                   "Name": "DirectoryListingTypeId",
                   "DisplayName": "DirectoryListingTypeId",
-                  "Description": "Primary key — addressing-path proof (path '/api/directories/listingtypes' addresses a record by DirectoryListingTypeId) + naming convention.",
+                  "Description": "Primary key — naming convention (<Object>Id), proven across the GrowthZone object set.",
                   "Type": "Integer",
                   "IsRequired": true,
                   "IsPrimaryKey": true,

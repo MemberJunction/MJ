@@ -25,7 +25,7 @@
  */
 
 /** Which OAuth2 grant a token request should use. */
-export type OAuth2GrantType = 'refresh_token' | 'password';
+export type OAuth2GrantType = 'refresh_token' | 'password' | 'client_credentials';
 
 /** Inputs needed to mint/refresh an OAuth2 access token. */
 export interface OAuth2TokenRequest {
@@ -45,6 +45,12 @@ export interface OAuth2TokenRequest {
     Scopes?: string;
     /** Parameter name carrying the scopes. Defaults to `scope`. */
     ScopeParam?: string;
+    /**
+     * Parameter name carrying the username in a `password` grant. Defaults to `username`
+     * (RFC 6749 §4.3). Some Doorkeeper/WineBouncer deployments (e.g. Hivebrite) name it
+     * `admin_email`; set this to that key when the vendor diverges from the spec name.
+     */
+    UsernameParam?: string;
     /** Send client_id/secret as HTTP Basic instead of in the form body. Default false. */
     UseBasicAuth?: boolean;
     /** Request timeout in ms. Default 30000. */
@@ -170,6 +176,12 @@ export class OAuth2TokenManager {
         const scopeParam = req.ScopeParam ?? 'scope';
         if (req.Scopes) body.set(scopeParam, req.Scopes);
 
+        if (grant === 'client_credentials') {
+            // grant_type=client_credentials carries no user/refresh params; client auth is
+            // either in the body (default) or as HTTP Basic (UseBasicAuth) — handled by the caller.
+            return body;
+        }
+
         if (grant === 'refresh_token') {
             if (!req.RefreshToken) {
                 throw new Error('OAuth2 refresh_token grant requires a RefreshToken.');
@@ -182,7 +194,7 @@ export class OAuth2TokenManager {
         if (!req.Username || !req.Password) {
             throw new Error('OAuth2 password grant requires Username and Password.');
         }
-        body.set('username', req.Username);
+        body.set(req.UsernameParam ?? 'username', req.Username);
         body.set('password', req.Password);
         return body;
     }

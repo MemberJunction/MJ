@@ -142,3 +142,5 @@ export type { SchemaLimitInput } from './IntegrationSchemaSync.js';
 // ── Auth helpers (shared OAuth2/token primitives for connectors) ──
 export { OAuth2TokenManager } from './auth-helpers/index.js';
 export type { OAuth2GrantType, OAuth2TokenRequest, OAuth2Token } from './auth-helpers/index.js';
+export { OAuth1aSigner, percentEncodeRFC3986 } from './auth-helpers/index.js';
+export type { OAuth1aSignRequest, OAuth1aSignatureMethod } from './auth-helpers/index.js';

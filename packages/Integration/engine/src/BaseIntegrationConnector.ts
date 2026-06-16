@@ -554,7 +554,9 @@ export abstract class BaseIntegrationConnector {
             // exits non-zero, and aborts ApplyAll. A soft key is dedup-only (can NEVER reject a row),
             // so "all keys are soft, best-available" keeps the table syncable. Genuinely-signal-less
             // objects still get no PK (content-hash identity handles dedup).
-            const soft = pickPrimaryKeyFromStats(scan.Columns, opts.Pk);
+            // #A4 — tell the PK picker whether the scan saw the WHOLE stream; a time-budget-truncated scan
+            // must not yield a confident soft key from a partial prefix.
+            const soft = pickPrimaryKeyFromStats(scan.Columns, { ...opts.Pk, ScanComplete: scan.StoppedReason !== 'time-budget' });
             if (soft.Field) { pkFieldNames = [soft.Field]; pkReason = `[soft-fallback] ${soft.Reason}`; }
         }
         const pkFields = new Set<string>(pkFieldNames);
@@ -587,7 +589,12 @@ export abstract class BaseIntegrationConnector {
             // PK-eligible (and never NVARCHAR(MAX), which can't be a key); unproven length uses that cap.
             field.MaxLength = (() => {
                 const m = c.Inferred.MaxLength;
-                if (m == null || m <= 0) return 450;
+                if (m == null || m <= 0) {
+                    // Unknown length (#A5): a KEY must stay within the index-key limit (≤450, never MAX) so it
+                    // remains PK-eligible. But a NON-key field of unknown length must size GENEROUSLY — defaulting
+                    // it to 450 too silently TRUNCATED long descriptions / URLs / blobs. Err large + bounded.
+                    return isKey ? 450 : 4000;
+                }
                 const padded = [32, 64, 128, 256, 512, 1024, 2048, 4000].find(b => b >= m * 2) ?? 4000;
                 return isKey ? Math.min(padded, 450) : padded;
             })();

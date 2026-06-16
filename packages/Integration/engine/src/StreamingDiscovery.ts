@@ -170,6 +170,14 @@ export interface PkPickOptions {
     MinRowsForSignificance?: number;
     /** A naming-rank tiebreaker, used ONLY to choose among multiple equally-unique columns. */
     NameRank?: (columnName: string) => number;
+    /**
+     * Whether the scan that produced these stats SAW THE WHOLE STREAM (#A4). Default true. When false
+     * (the scan was time-budget-truncated), "non-null on every row + near-unique" was observed over only a
+     * PARTIAL prefix — a column null/duplicated solely in the unscanned tail would look like a clean key.
+     * So on a truncated scan the SOFT best-available fallback demands FULL prefix-uniqueness (not merely
+     * near-unique) and annotates the verdict that it must be re-verified on full data.
+     */
+    ScanComplete?: boolean;
 }
 
 /** The data-informed PK verdict (statistics-first). */
@@ -224,17 +232,23 @@ export function pickPrimaryKeyFromStats(
         // non-null on every scanned row AND high-cardinality (near-unique, or distinct-capped = cardinality
         // beyond the tracking cap). Only convention-named columns qualify — an unnamed/low-signal column is
         // still left PK-less (no fabrication). This is the "all keys are soft, best-available" policy.
+        // #A4: a time-budget-truncated scan only saw a prefix, so demand FULL prefix-uniqueness (1.0) for a
+        // soft key rather than merely near-unique (0.9) — a column that's near-unique over a partial scan
+        // could be null/duplicated in the unscanned tail and isn't trustworthy even as a soft dedup key.
+        const scanComplete = opts.ScanComplete !== false;
+        const softRatio = scanComplete ? SOFT_NEAR_UNIQUE_RATIO : 1.0;
         const soft = columns.filter(c =>
             isConventionPkName(c.Key) &&
             c.TotalRows > 0 &&
             c.Occurrences === c.TotalRows &&                                          // non-null on every row
-            (c.DistinctCapped || c.DistinctNonNull / c.Occurrences >= SOFT_NEAR_UNIQUE_RATIO),
+            (c.DistinctCapped || c.DistinctNonNull / c.Occurrences >= softRatio),
         );
         if (soft.length > 0) {
             const rank = opts.NameRank ?? (() => 0);
             const card = (c: DiscoveredColumnStat) => (c.DistinctCapped ? Number.MAX_SAFE_INTEGER : c.DistinctNonNull);
             const best = [...soft].sort((a, b) => card(b) - card(a) || rank(b.Key) - rank(a.Key) || a.Key.localeCompare(b.Key))[0];
-            return { Field: best.Key, UniqueCandidates: [best.Key], AmbiguousForLLM: false, Reason: `Soft best-available key "${best.Key}" — convention-named with an identity signal (not provably unique; soft, dedup-only).` };
+            const caveat = scanComplete ? '' : ' [partial scan — time-budget-truncated; re-verify on full data]';
+            return { Field: best.Key, UniqueCandidates: [best.Key], AmbiguousForLLM: false, Reason: `Soft best-available key "${best.Key}" — convention-named with an identity signal (not provably unique; soft, dedup-only).${caveat}` };
         }
         return { Field: null, UniqueCandidates: [], AmbiguousForLLM: false, Reason: 'No column is provably unique + non-null over a significant sample, and none is a plausibly-identifying convention-named column.' };
     }
