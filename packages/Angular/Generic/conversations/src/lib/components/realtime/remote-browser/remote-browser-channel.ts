@@ -46,6 +46,37 @@ interface ExecuteRemoteBrowserActionResult {
 }
 
 /**
+ * GOAL mutation — hands a high-level goal to the server's autonomous browser agent (computer-use loop or
+ * backend native AI) instead of relaying a granular action. The server plans + executes; we await the
+ * terminal outcome. (Live per-step narration is a server-bridged concern; over this client-direct mutation
+ * we get the final result.)
+ */
+const EXECUTE_REMOTE_BROWSER_GOAL_MUTATION = `
+  mutation ExecuteRemoteBrowserGoal($agentSessionID: String!, $goal: String!, $startUrl: String) {
+    ExecuteRemoteBrowserGoal(agentSessionID: $agentSessionID, goal: $goal, startUrl: $startUrl) {
+      Success
+      Strategy
+      CurrentUrl
+      Status
+      StepCount
+      Detail
+    }
+  }
+`;
+
+/** The narrow projection of the `ExecuteRemoteBrowserGoal` mutation payload the channel reads. */
+interface ExecuteRemoteBrowserGoalResult {
+  ExecuteRemoteBrowserGoal: {
+    Success: boolean;
+    Strategy: string | null;
+    CurrentUrl: string | null;
+    Status: string | null;
+    StepCount: number | null;
+    Detail: string | null;
+  } | null;
+}
+
+/**
  * GraphQL mutation that asks the server to start PUSHING live CDP screencast frames for the session.
  * Returns `Streaming: true` when the backend supports `ScreenStreaming` and the stream started; the
  * channel then drives the surface's canvas. `Streaming: false` (capability absent / start failed) leaves
@@ -270,7 +301,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
         'up right where you left off.',
       Tips: [
         'Ask the agent to look something up, open a site or fill in a form — it controls the page.',
-        "Click on the live view to take over, then click and type to drive it yourself — the \"You're driving\" badge shows when takeover is active.",
+        'Click on the live view to take over, then click and type to drive it yourself — the "You\'re driving" badge shows when takeover is active.',
         'The current page URL is shown so you always know where the agent has navigated.',
       ],
       IconClass: 'fa-solid fa-globe',
@@ -468,6 +499,9 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     if (toolName === REMOTE_BROWSER_TOOL_NAMES.DescribePage) {
       return this.interpretPage(undefined);
     }
+    if (toolName === REMOTE_BROWSER_TOOL_NAMES.AchieveGoal) {
+      return this.achieveGoal(argsJson);
+    }
     if (toolName === REMOTE_BROWSER_TOOL_NAMES.LocateElement) {
       const description = this.asArgString(this.parseArgs(argsJson)['description']);
       if (!description) {
@@ -533,6 +567,45 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       deltaY: action.DeltaY ?? null,
       ms: action.Ms ?? null,
     };
+  }
+
+  /**
+   * GOAL path for the `browser_AchieveGoal` tool: hands a high-level goal to the server's autonomous
+   * browser agent (computer-use loop / native AI) via {@link EXECUTE_REMOTE_BROWSER_GOAL_MUTATION} and
+   * returns a concise result for the model. Never throws — failures map to a `{ success: false }` string.
+   *
+   * @param argsJson The raw tool-call arguments (`{ goal, startUrl? }`).
+   * @returns The model-readable result string.
+   */
+  private async achieveGoal(argsJson: string): Promise<string> {
+    const sessionId = this.Context?.AgentSessionID;
+    if (!sessionId) {
+      return this.fail('No live browser session is available yet — the realtime session may still be connecting; try again in a moment.');
+    }
+    const args = this.parseArgs(argsJson);
+    const goal = this.asArgString(args['goal']);
+    if (!goal) {
+      return this.fail('browser_AchieveGoal requires a "goal" describing what to accomplish.');
+    }
+    const startUrl = this.asArgString(args['startUrl']) ?? null;
+
+    const data = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserGoalResult>(EXECUTE_REMOTE_BROWSER_GOAL_MUTATION, {
+      agentSessionID: sessionId,
+      goal,
+      startUrl,
+    });
+    const result = data?.ExecuteRemoteBrowserGoal ?? null;
+    if (!result) {
+      return this.fail('The browser goal could not be executed (no response from the server).');
+    }
+    if (result.CurrentUrl) {
+      this.Context?.SendContextNote(`[browser] current page: ${result.CurrentUrl}`);
+      this.surface?.SetCurrentUrl(result.CurrentUrl);
+    }
+    if (!result.Success) {
+      return this.fail(result.Detail ?? `The goal could not be completed (${result.Status ?? 'unknown'}).`);
+    }
+    return this.ok(result.CurrentUrl, result.Detail ?? `Goal completed (${result.Status ?? 'Completed'}, ${result.StepCount ?? 0} steps).`);
   }
 
   /**

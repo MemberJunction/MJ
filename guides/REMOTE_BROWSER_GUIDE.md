@@ -104,6 +104,8 @@ These are orthogonal:
   - `NativeAI` (capability-gated by `NativeAIControl`) — delegate a high-level intent to the backend's
     own harness (Stagehand `Act`, Hyperbrowser agent). An accelerator for heavy/robust automation; it
     runs its own model loop, so it's *offered*, not the default for the talking agent.
+  - The strategy is resolved and **invoked** by the goal-driven path (`AchieveGoal` →
+    `dispatchRemoteBrowserGoal`) — see **§9**.
 
 ---
 
@@ -296,17 +298,131 @@ stops on `UnbindSurface`/`Dispose`.
 
 ---
 
-## 9. Reference map
+## 9. Goal-driven browser control — set a goal, not granular clicks
+
+§7's tool vocabulary (`browser_Click`/`browser_Type`/…) lets a realtime agent drive the page **one action
+at a time**. That is the right granularity when the talking agent already knows exactly what to click — but
+for a multi-step chore ("log into this site and download the latest invoice") it forces the realtime model
+to perceive, plan, and click step by step, which is slow and brittle on messy sites.
+
+**Goal-driven control** hands a *high-level goal* to MJ's **computer-use** loop, which plans and executes it
+autonomously against **the same live browser the human is watching** — using its own, independently-selected
+**vision/action model** (typically stronger at perception+planning than an audio realtime model). The realtime
+agent stays in its lane: conversation, intent, and narration.
+
+### 9a. The strategy switch (now actually wired)
+
+§3's **control strategy** (`ComputerUse` vs `NativeAI`) was, until this feature, resolved but never invoked.
+The new entry points fill that gap:
+
+```
+browser_AchieveGoal (realtime tool)
+  → ExecuteRemoteBrowserGoal (GraphQL mutation, @memberjunction/server)
+    → RemoteBrowserEngine.AchieveGoal(agentSessionID, goal, opts)   [lazy-starts the session]
+      → dispatchRemoteBrowserGoal(session, features, goal, opts)    [pure, testable strategy switch]
+        ├─ 'ComputerUse' → IRemoteBrowserSession.RunComputerUseGoal(goal, options)   [the default, universal path]
+        └─ 'NativeAI'    → IRemoteBrowserSession.InvokeNativeAIControl(intent)        [backend harness, capability-gated]
+```
+
+`resolveControlStrategy(features, preferredStrategy)` picks the lane: `NativeAI` only when the backend
+advertises `NativeAIControl` **and** the caller didn't pin `ComputerUse`; otherwise the universal
+`ComputerUse` loop. The whole switch is the pure function `dispatchRemoteBrowserGoal()`, unit-tested with a
+fake session — the engine just lazy-starts the browser and calls it.
+
+### 9b. ComputerUse runs on the session's OWN adapter (no second browser)
+
+`CdpRemoteBrowserSession.RunComputerUseGoal` drives computer-use against **the same
+`PlaywrightBrowserAdapter` instance** the human watches (the one already attached over the session's CDP
+endpoint) — so the goal loop and the live view/screencast are the *same* page. The engine is injected behind
+the `ComputerUseGoalRun` seam (`CdpRemoteBrowserSession.SetGoalEngineFactory`): tests bind a fake (no browser,
+no LLM), production binds the MJ engine (§9e). Per-step progress flows out via `OnProgress` (a voice session
+narrates it); barge-in flows in via `Signal` → the engine's cooperative `Stop()`.
+
+### 9c. Model-blind credentials — the model emits the LABEL, never the VALUE
+
+Secrets ride a separate channel from the prompt. The goal run carries a **`Context` object**; the goal and
+the controller's actions reference values **by label** — e.g. *"log in using `{{creds.username}}` /
+`{{creds.password}}`"*. The real value is substituted **at the CDP keystroke boundary** and nowhere else:
+
+- `wrapAdapterWithContext(adapter, context)` (in `@memberjunction/remote-browser-cdp`) returns a proxy
+  adapter. On `ExecuteAction`, it resolves `{{label}}` tokens to real values **in a CLONE** of the action
+  (`resolveActionTemplates`) and passes the clone to the real adapter.
+- The **original** action — the one the computer-use engine recorded in its step history (and that shows up
+  in logs/transcripts) — keeps the `{{label}}`. So **neither the realtime model nor the computer-use
+  controller model ever holds the secret value**; redaction falls out for free.
+
+This mirrors the MJ agents context-variable pattern (`resolveValueFromContext` / `getValueFromPath` in
+`@memberjunction/ai-agents`), re-implemented minimally in the CDP package so it needs no agents dependency.
+Use it for credentials and any other sensitive run-scoped data.
+
+### 9d. Collaborative pause — the human grabbing the wheel stops the goal
+
+In `Collaborative` mode (§3, §8c), a granted human takeover must not race the autonomous loop on the shared
+browser. `RemoteBrowserEngine.AchieveGoal` registers an `AbortController` per session (chained to the
+caller's `Signal`); a successful `GrantControl(sessionId, 'Human')` — and `EndSession` — abort it, so the
+computer-use loop pauses **cooperatively** via `Stop()`. An `Agent` grant is unconditional and never pauses
+the agent's own goal.
+
+### 9e. Vision-model selection + production binding
+
+The default `ProgressComputerUseEngine` (base computer-use) has no model auto-selection, so it can't run a
+goal unsupervised. At server startup `BindRemoteBrowserGoalEngine()` (in
+`@memberjunction/server`, `agentSessions/remoteBrowserGoalEngine.ts`) binds the seam to
+**`MJProgressComputerUseEngine extends MJComputerUseEngine`** — which routes controller/judge prompts through
+`AIPromptRunner`, persists step media, forwards progress, and **auto-selects a vision-capable controller
+model**: `MJComputerUseEngine.autoSelectControllerModel` now prefers the highest-`PowerRank` LLM that
+advertises **Image input** modality (`pickHighestPowerVisionLLM`), falling back to the plain highest-power
+LLM so selection never hard-fails. The acting `ContextUser` flows base → cdp → engine so those prompts run as
+the session's user.
+
+### 9f. Run-step observability — one "Browser goal" step, prompt sub-steps nested under it
+
+A single goal fans out into many prompt runs (a controller call per perceive-act step, plus judge calls).
+Rather than flatten those under the realtime co-agent run, the goal is modeled as **one parent step with
+child sub-steps** — exactly the `ParentID` shape `BaseAgent` uses for loop iterations:
+
+```
+co-agent run (realtime)
+ └─ ▸ Browser goal: "log into portal…"      MJ: AI Agent Run Steps · StepType 'Tool'   (parent)
+      ├─ Prompt: Controller   step 'Prompt', TargetID = prompt def, TargetLogID = its AIPromptRun
+      ├─ Prompt: Controller
+      └─ Prompt: Judge
+```
+
+- The **realtime layer** (`ExecuteRemoteBrowserGoal` resolver) reads the session's `coAgentRunID` from
+  `AIAgentSession.Config_`, creates the parent `Tool` step (`beginBrowserGoalStep`), threads
+  `AgentRunID` + the parent step id into `AchieveGoal`, and finalizes the step from the result.
+- **`MJComputerUseEngine`** (via `AgentRunStepTracker`) creates a child `Prompt` step per controller/judge
+  prompt under that parent, stamping `TargetLogID` with the produced `AIPromptRun` id.
+- The whole thing is **best-effort**: no co-agent run (or any failure) just means the goal runs unlinked —
+  it never aborts the goal.
+- **Fire-and-forget, off the hot loop:** the per-prompt INSERT/UPDATE step writes are queued (not awaited)
+  via `AgentRunStepSaveQueue` and flushed once when the goal completes — so an N-iteration goal never pays N
+  synchronous DB round-trips on its critical path (which matters on slower databases). This is the exact
+  pattern `BaseAgent` uses for its own steps.
+- **Single source of truth:** both the step field semantics (`initAgentRunStep` / `finalizeAgentRunStep`)
+  AND the fire-and-forget save orchestration (`AgentRunStepSaveQueue`) live once in
+  `@memberjunction/ai-core-plus`; `BaseAgent` and the Computer Use tracker both delegate to them rather than
+  duplicating the create/finalize/persist logic.
+
+---
+
+## 10. Reference map
 
 | Package | Role |
 |---|---|
 | `@memberjunction/computer-use` | Generic browser I/O + perception (CDP, selectors, screencast, tab-audio capture, a11y) |
-| `@memberjunction/remote-browser-base` | Universal contracts + `RemoteBrowserEngineBase` registry cache |
-| `@memberjunction/remote-browser-cdp` | Shared CDP session kit (the DRY heart) + lossless mapper |
+| `@memberjunction/remote-browser-base` | Universal contracts + `RemoteBrowserEngineBase` registry cache; goal types (`RunComputerUseGoalOptions`, `RemoteBrowserGoalResult`) |
+| `@memberjunction/remote-browser-cdp` | Shared CDP session kit (the DRY heart) + lossless mapper; `RunComputerUseGoal`, the `ComputerUseGoalRun` seam, model-blind `context-injection` |
 | `@memberjunction/remote-browser-{selfhost,browserbase,steel,browserless,hyperbrowser}` | The 5 backends |
-| `@memberjunction/remote-browser-server` | `RemoteBrowserEngine` + `RemoteBrowserChannel` |
+| `@memberjunction/remote-browser-server` | `RemoteBrowserEngine` (incl. `AchieveGoal` + pure `dispatchRemoteBrowserGoal`) + `RemoteBrowserChannel` |
+| `@memberjunction/computer-use-engine` | `MJComputerUseEngine` — vision-capable controller auto-selection (`pickHighestPowerVisionLLM`); `AgentRunStepTracker` (child prompt sub-steps) |
+| `@memberjunction/ai-core-plus` | Shared single-source-of-truth step helpers `initAgentRunStep` / `finalizeAgentRunStep` (used by `BaseAgent` AND the Computer Use tracker) |
+| `@memberjunction/server` | `ExecuteRemoteBrowserGoal` mutation + `BindRemoteBrowserGoalEngine` (binds `MJProgressComputerUseEngine`); `beginBrowserGoalStep`/`finalizeBrowserGoalStep` (parent goal step) |
 | migration `V202606161000` | `AIRemoteBrowserProvider` registry table |
 | `metadata/ai-remote-browser-providers/` | The 5 backend seed rows |
+
+Goal-driven design doc: [plans/realtime/computer-use-remote-browser-blend.md](../plans/realtime/computer-use-remote-browser-blend.md).
 
 See also: [REALTIME_BRIDGES_GUIDE.md](./REALTIME_BRIDGES_GUIDE.md) (the sibling bridge subsystem — the
 Remote Browser screen-shares into meetings through a bridge's `ScreenOut` track).

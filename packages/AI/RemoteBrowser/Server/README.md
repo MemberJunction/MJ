@@ -19,9 +19,10 @@ session the agent (and optionally a human) drives, and exposes it to the agent a
 
 | Export | Role |
 |---|---|
-| `RemoteBrowserEngine` | Server-only `BaseSingleton`. **Composes** `RemoteBrowserEngineBase` (one metadata cache) and adds session lifecycle, the control arbiter, and the viewport→screen-track seam. |
+| `RemoteBrowserEngine` | Server-only `BaseSingleton`. **Composes** `RemoteBrowserEngineBase` (one metadata cache) and adds session lifecycle, the control arbiter, the viewport→screen-track seam, and goal-driven control (`AchieveGoal`). |
 | `RemoteBrowserChannel` | `BaseRealtimeChannelServer` subclass. A **server-only** interactive channel contributing the `browser_*` tool vocabulary the agent drives the browser with. |
-| `StartRemoteBrowserSessionParams` / `RemoteBrowserSessionHandle` | The start params + the live in-memory session handle. |
+| `dispatchRemoteBrowserGoal(session, features, goal, opts)` | The **pure, testable** strategy switch behind `AchieveGoal` — `ComputerUse` → `RunComputerUseGoal`, `NativeAI` → `InvokeNativeAIControl`. |
+| `StartRemoteBrowserSessionParams` / `AchieveGoalParams` / `RemoteBrowserSessionHandle` | The start params, the goal params, + the live in-memory session handle. |
 | `RemoteBrowserChannelDeps` | Per-session injection for the channel (the live session + capability flags). |
 | `LoadRemoteBrowserChannel()` | Tree-shaking-prevention no-op for the channel's `@RegisterClass`. |
 
@@ -84,6 +85,37 @@ engine.YieldControl(sessionId, 'Human');     // floor returns to the agent
 ```
 
 `GrantControl(sessionId, 'Agent')` always succeeds (the agent reclaiming the wheel is unconditional).
+
+### Goal-driven control — `AchieveGoal`
+
+Beyond the per-action tool vocabulary, a caller can hand the session a **high-level goal** and let MJ's
+computer-use loop plan + execute it:
+
+```ts
+const result = await engine.AchieveGoal(agentSessionID, 'log into the portal and open the latest invoice', {
+    contextUser,
+    StartUrl: 'https://portal.example.com',
+    Context: { creds: { username: '{{...}}', password: '{{...}}' } }, // model-blind — referenced by label
+    OnProgress: (p) => narrate(p.Message),                            // a voice session narrates progress
+    Signal: abortController.signal,                                   // barge-in stops the loop cooperatively
+});
+// result: { Success, Strategy: 'ComputerUse' | 'NativeAI', Status, StepCount?, CurrentUrl?, Detail? }
+```
+
+`AchieveGoal` lazily starts the browser for the agent session, then calls the pure
+`dispatchRemoteBrowserGoal(session, features, goal, opts)` — which `resolveControlStrategy` routes to the
+universal `ComputerUse` loop (`RunComputerUseGoal`) or the backend's `NativeAI` harness
+(`InvokeNativeAIControl`). The strategy switch is a standalone exported function so it is unit-tested with
+a fake session, with no engine/DB state.
+
+**Collaborative pause-on-takeover.** While a goal runs, its `AbortController` is registered per session
+(chained to the caller's `Signal`). A granted human takeover — `GrantControl(sessionId, 'Human')` — and
+`EndSession` abort it, so the computer-use loop **pauses cooperatively** rather than racing the human on the
+shared browser. An `Agent` grant never pauses the agent's own goal.
+
+> The MJ-aware goal **engine** (vision-model auto-selection, prompt-run logging, progress narration) is
+> bound to the CDP seam at startup by `@memberjunction/server` (`BindRemoteBrowserGoalEngine` →
+> `MJProgressComputerUseEngine`); this package stays free of any computer-use SDK dependency.
 
 ### The viewport → screen-track seam
 
