@@ -12,6 +12,7 @@
  * (the one-primitive-CDP build decision).
  */
 
+import type { UserInfo } from '@memberjunction/core';
 import type { RemoteBrowserControlStrategy } from './control';
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -164,6 +165,13 @@ export interface RunComputerUseGoalOptions {
   OnProgress?: (progress: RemoteBrowserGoalProgress) => void;
   /** Abort signal — when aborted (barge-in), the goal loop stops cooperatively. */
   Signal?: AbortSignal;
+  /**
+   * The MJ user the goal run executes as. The CDP layer forwards it to the bound goal engine so an
+   * MJ-aware engine (e.g. `MJComputerUseEngine`) runs its controller/judge prompts under this user
+   * (prompt-run logging, model access, credential resolution). Transport-neutral here — typed only as
+   * {@link UserInfo}, carrying no computer-use SDK types.
+   */
+  ContextUser?: UserInfo;
 }
 
 /**

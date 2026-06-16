@@ -17,7 +17,7 @@
 import { LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, MJAIPromptEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { ChatMessageRole, createBase64DataUrl } from '@memberjunction/ai';
 import type { ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -316,16 +316,47 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * Returns undefined if no active LLM exists at all.
      */
     private async autoSelectControllerModel(): Promise<ModelConfig | undefined> {
-        const selected = await AIEngine.Instance.GetHighestPowerLLM(undefined, this.contextUser);
+        // Make sure model metadata is warm (cheap no-op when already loaded).
+        await AIEngine.Instance.Config(false, this.contextUser);
+
+        // The controller drives the browser from SCREENSHOTS, so it MUST accept image input. Prefer the
+        // highest-power LLM that explicitly advertises Image *input* modality; fall back to the plain
+        // highest-power LLM only when none do (e.g. a deployment relying on AIModelType-inherited
+        // modalities that aren't captured as explicit AIModelModality rows) so selection never hard-fails.
+        const vision = this.selectHighestPowerVisionLLM();
+        const selected = vision ?? (await AIEngine.Instance.GetHighestPowerLLM(undefined, this.contextUser));
         if (!selected) return undefined;
 
         const vendor = selected.Vendor ?? 'unknown';
         const model = selected.APIName ?? selected.Name;
         const driverClass = selected.DriverClass ?? undefined;
 
-        LogStatus(`Auto-selected controller model: ${vendor}:${model} (PowerRank=${selected.PowerRank ?? 0}, driver=${driverClass ?? 'auto'})`);
+        LogStatus(
+            `Auto-selected controller model: ${vendor}:${model} ` +
+            `(PowerRank=${selected.PowerRank ?? 0}, driver=${driverClass ?? 'auto'}, vision=${vision ? 'yes' : 'fallback'})`,
+        );
 
         return new ModelConfig(vendor, model, driverClass);
+    }
+
+    /**
+     * Returns the highest-power LLM that explicitly supports Image **input** (vision), or `undefined`
+     * when none do. Mirrors `GetHighestPowerModel`'s LLM-type filter, then narrows to vision-capable
+     * models via `AIEngine.ModelSupportsModality` before ranking by `PowerRank` (descending).
+     *
+     * Note: `ModelSupportsModality` reads explicit `AIModelModality` rows; a model that inherits Image
+     * input from its `AIModelType` without an explicit row won't match here — that's the documented
+     * fall-back case in {@link autoSelectControllerModel}.
+     */
+    private selectHighestPowerVisionLLM(): MJAIModelEntityExtended | undefined {
+        const visionLLMs = AIEngine.Instance.Models
+            .filter(m => typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'llm')
+            .filter(m => AIEngine.Instance.ModelSupportsModality(m.ID, 'Image', 'Input'));
+        if (visionLLMs.length === 0) {
+            return undefined;
+        }
+        visionLLMs.sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
+        return visionLLMs[0];
     }
 
     // ═══════════════════════════════════════════════════════════

@@ -14,3 +14,4 @@ export * from './cdp-session-backend';
 export * from './cdp-remote-browser-session';
 export * from './base-cdp-remote-browser-provider';
 export * from './computer-use-goal-engine';
+export * from './context-injection';

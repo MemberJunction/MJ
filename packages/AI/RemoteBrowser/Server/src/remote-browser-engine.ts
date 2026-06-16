@@ -146,6 +146,7 @@ export async function dispatchRemoteBrowserGoal(
     Context: opts.Context,
     OnProgress: opts.OnProgress,
     Signal: opts.Signal,
+    ContextUser: opts.ContextUser,
   });
 }
 
@@ -244,6 +245,15 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    * Concurrent callers await the SAME promise here so exactly one browser is started per agent session.
    */
   private startingSessions = new Map<string, Promise<IRemoteBrowserSession>>();
+
+  /**
+   * In-flight goal-run aborts, keyed by engine session id (lowercased). While a {@link AchieveGoal}
+   * computer-use loop runs, its {@link AbortController} is registered here so the control arbiter can
+   * **pause the agent the instant a human grabs the wheel**: a successful {@link GrantControl} to
+   * `'Human'` aborts the running goal, which the CDP session forwards to the computer-use engine's
+   * cooperative `Stop()`. Cleared in {@link AchieveGoal}'s `finally`, so at most one entry per session.
+   */
+  private activeGoalAborts = new Map<string, AbortController>();
 
   /** Monotonic counter feeding the generated session-id suffix (unique within this process). */
   private sessionCounter = 0;
@@ -427,7 +437,26 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     if (!handle) {
       return { Success: false, Status: 'Error', Detail: 'No active remote-browser session for this agent session.' };
     }
-    return dispatchRemoteBrowserGoal(handle.Session, handle.Features, goal, opts);
+    // Register an abort controller so a human grabbing the wheel (Collaborative GrantControl → 'Human')
+    // pauses this goal mid-flight. Chain the caller's own Signal (barge-in) into the same controller so
+    // either source aborts the run.
+    const key = handle.SessionID.toLowerCase();
+    const controller = new AbortController();
+    if (opts.Signal) {
+      if (opts.Signal.aborted) {
+        controller.abort();
+      } else {
+        opts.Signal.addEventListener('abort', () => controller.abort(), { once: true });
+      }
+    }
+    this.activeGoalAborts.set(key, controller);
+    try {
+      return await dispatchRemoteBrowserGoal(handle.Session, handle.Features, goal, { ...opts, Signal: controller.signal });
+    } finally {
+      if (this.activeGoalAborts.get(key) === controller) {
+        this.activeGoalAborts.delete(key);
+      }
+    }
   }
 
   /** Returns the full session handle (with capability features) for an agent session, or `undefined`. */
@@ -524,6 +553,8 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     if (!handle) {
       return false;
     }
+    // Stop any in-flight goal loop before tearing down the browser it drives.
+    this.abortActiveGoal(handle.SessionID);
     this.activeSessions.delete(key);
     await this.teardown(handle);
     LogStatus(`[RemoteBrowserEngine] Session ${handle.SessionID} ended.`);
@@ -608,6 +639,25 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     }
     handle.FloorHolder = 'Human';
     handle.HumanControlRequested = false;
+    // Pause any in-flight agent goal the instant the human takes the wheel — the computer-use loop stops
+    // cooperatively rather than racing the human's input on the shared browser.
+    this.abortActiveGoal(handle.SessionID);
+    return true;
+  }
+
+  /**
+   * Aborts the in-flight {@link AchieveGoal} run for a session (if any), pausing the computer-use loop
+   * cooperatively. Used by the arbiter when a human grabs the wheel; a no-op when no goal is running.
+   *
+   * @param sessionId The engine session id whose goal to abort.
+   * @returns `true` when a running goal was aborted, `false` when none was in flight.
+   */
+  private abortActiveGoal(sessionId: string): boolean {
+    const controller = this.activeGoalAborts.get(sessionId.toLowerCase());
+    if (!controller) {
+      return false;
+    }
+    controller.abort();
     return true;
   }
 

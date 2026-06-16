@@ -8,6 +8,7 @@
  * @module @memberjunction/remote-browser-cdp
  */
 
+import type { UserInfo } from '@memberjunction/core';
 import { BaseBrowserAdapter, ComputerUseEngine, type ComputerUseResult, type RunComputerUseParams, type StepRecord } from '@memberjunction/computer-use';
 
 /** A normalized per-step progress note surfaced from the goal loop. */
@@ -34,6 +35,12 @@ export interface ComputerUseGoalRun {
   Stop(): void;
   /** Optional per-step progress hook the session sets before {@link Run}. */
   OnProgress?: (progress: ComputerUseGoalProgress) => void;
+  /**
+   * Optional MJ user the session sets before {@link Run}. An MJ-aware engine
+   * (`MJComputerUseEngine`) runs its controller/judge prompts under this user; the default base engine
+   * ignores it.
+   */
+  ContextUser?: UserInfo;
 }
 
 /** Factory for a {@link ComputerUseGoalRun} — the injection point ({@link CdpRemoteBrowserSession.SetGoalEngineFactory}). */

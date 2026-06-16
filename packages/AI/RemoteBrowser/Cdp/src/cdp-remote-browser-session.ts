@@ -31,6 +31,7 @@ import { ActionExecutionResult, PlaywrightBrowserAdapter, RunComputerUseParams, 
 import { mapHumanInput, mapRemoteBrowserAction } from './map-action';
 import { ICdpAudioCaptureHandle, ICdpSessionBackend } from './cdp-session-backend';
 import { ComputerUseGoalEngineFactory, defaultComputerUseGoalEngineFactory } from './computer-use-goal-engine';
+import { wrapAdapterWithContext } from './context-injection';
 
 /**
  * The shared, CDP-backed live remote-browser session. Constructed by
@@ -326,9 +327,16 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
    */
   public async RunComputerUseGoal(goal: string, options?: RunComputerUseGoalOptions): Promise<RemoteBrowserGoalResult> {
     const engine = CdpRemoteBrowserSession.goalEngineFactory();
-    engine.SetBrowserAdapter(this.adapter);
+    // Model-blind credential/context injection: when a Context is supplied, drive a proxy adapter that
+    // resolves `{{label}}` tokens to real values at the CDP boundary — neither model ever sees the value.
+    const adapter = options?.Context ? wrapAdapterWithContext(this.adapter, options.Context) : this.adapter;
+    engine.SetBrowserAdapter(adapter);
     if (options?.OnProgress) {
       engine.OnProgress = (p) => options.OnProgress?.({ Step: p.Step, Message: p.Message, Url: p.Url });
+    }
+    // Forward the acting user so an MJ-aware engine runs its prompts under it (no-op for the base engine).
+    if (options?.ContextUser) {
+      engine.ContextUser = options.ContextUser;
     }
     const onAbort = (): void => engine.Stop();
     options?.Signal?.addEventListener('abort', onAbort, { once: true });

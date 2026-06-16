@@ -1,19 +1,22 @@
 # Goal-Driven Browser Control — Blending Computer-Use with the Remote Browser
 
-**Status:** Plan + **initial implementation landed in this PR** — the goal-driven path is wired end-to-end
+**Status:** Plan + **full implementation landed in this PR** — the goal-driven path is wired end-to-end
 (CDP `RunComputerUseGoal` → server `AchieveGoal`/`dispatchRemoteBrowserGoal` strategy switch → resolver
-`ExecuteRemoteBrowserGoal` → realtime `browser_AchieveGoal` tool), with progress + barge-in seams and unit
-tests. Remaining phases (credential context-injection §4, Collaborative pause/resume §5, vision-model
-tightening §6, NativeAI backends, observability) are follow-ups.
+`ExecuteRemoteBrowserGoal` → realtime `browser_AchieveGoal` tool), **plus** the model-blind credential
+context-injection (§4), Collaborative pause-on-takeover (§5), vision-model selection tightening (§6), and the
+production binding of MJ's computer-use engine — all with unit tests. Remaining follow-ups: invoking the
+NativeAI backends (already implemented per-backend, still not wired into the strategy default) and run-level
+observability (RunID/ParentRunID linking). Live (real browser + LLM) validation is the only step deferred.
 
-### Implemented in this PR (phases 1 + 3 spine)
-- **`@memberjunction/remote-browser-base`** — `IRemoteBrowserSession.RunComputerUseGoal()`, `RemoteBrowserGoalResult`, `RunComputerUseGoalOptions` (incl. `OnProgress` + `Signal`).
-- **`@memberjunction/remote-browser-cdp`** — `RunComputerUseGoal` drives computer-use on the session's **own** adapter (same instance the human watches) via an injectable `ComputerUseGoalRun` seam (`SetGoalEngineFactory`; default `ProgressComputerUseEngine`); progress + abort→`Stop()`. **4 tests.**
-- **`@memberjunction/remote-browser-server`** — `RemoteBrowserEngine.AchieveGoal()` + the pure `dispatchRemoteBrowserGoal()` strategy switch (ComputerUse vs NativeAI). **4 tests.**
-- **`@memberjunction/server`** — `ExecuteRemoteBrowserGoal` GraphQL mutation.
+### Implemented in this PR
+- **`@memberjunction/remote-browser-base`** — `IRemoteBrowserSession.RunComputerUseGoal()`, `RemoteBrowserGoalResult`, `RunComputerUseGoalOptions` (incl. `OnProgress`, `Signal`, `ContextUser`).
+- **`@memberjunction/remote-browser-cdp`** — `RunComputerUseGoal` drives computer-use on the session's **own** adapter (same instance the human watches) via an injectable `ComputerUseGoalRun` seam (`SetGoalEngineFactory`; default `ProgressComputerUseEngine`); progress + abort→`Stop()`. **§4 model-blind context injection** (`context-injection.ts`: `wrapAdapterWithContext` resolves `{{label}}` tokens to real values in a CLONED action at the CDP boundary — original/logged action stays templated, so no model ever sees the value). **16 tests** (4 goal + 12 context-injection).
+- **`@memberjunction/remote-browser-server`** — `RemoteBrowserEngine.AchieveGoal()` + the pure `dispatchRemoteBrowserGoal()` strategy switch (ComputerUse vs NativeAI). **§5 Collaborative pause:** `AchieveGoal` registers an `AbortController` per session (chained to the caller's `Signal`); a granted human takeover (`GrantControl(...,'Human')`) and `EndSession` abort the in-flight goal so the loop pauses cooperatively. **7 tests** (4 dispatch + 3 pause).
+- **`@memberjunction/computer-use-engine`** — **§6:** `autoSelectControllerModel` now prefers the highest-power LLM that explicitly advertises **Image input** modality (`selectHighestPowerVisionLLM`), falling back to the plain highest-power LLM so selection never hard-fails.
+- **`@memberjunction/server`** — `ExecuteRemoteBrowserGoal` GraphQL mutation **+ the production binding** (`agentSessions/remoteBrowserGoalEngine.ts`): `MJProgressComputerUseEngine` (MJ prompt-runner routing, vision-model auto-selection, media persistence, progress narration) is bound via `CdpRemoteBrowserSession.SetGoalEngineFactory` at startup. `ContextUser` flows base→cdp→engine so prompts run under the session's user.
 - **`@memberjunction/ng-conversations`** — `browser_AchieveGoal` realtime tool + channel route to the goal mutation.
 
-Bind `MJComputerUseEngine` via `CdpRemoteBrowserSession.SetGoalEngineFactory(...)` at startup for vision-model auto-selection (the default engine requires a controller model). Original plan follows.
+Original plan follows.
 
 
 **Motivation:** Let a realtime voice agent (or a human) set a *high-level goal* — "log into this site with these
