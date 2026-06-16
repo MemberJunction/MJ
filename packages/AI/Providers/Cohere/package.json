@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-cohere",
   "type": "module",
-  "version": "5.40.2",
+  "version": "5.41.0",
   "description": "MemberJunction: Cohere AI Provider - Semantic reranking using Cohere's Rerank API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,8 +16,8 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "5.40.2",
-    "@memberjunction/global": "5.40.2",
+    "@memberjunction/ai": "5.41.0",
+    "@memberjunction/global": "5.41.0",
     "cohere-ai": "^7.20.0"
   },
   "devDependencies": {

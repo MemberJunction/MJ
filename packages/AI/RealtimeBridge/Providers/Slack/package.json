@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-bridge-slack",
   "type": "module",
-  "version": "5.40.2",
+  "version": "5.41.0",
   "description": "MemberJunction: Slack huddle Realtime Bridge driver. Connects the realtime agent engine to a Slack huddle (audio + video + screen in/out, diarized roster, participant mute, huddle/thread chat) via an injectable Slack huddle SDK seam, and contributes a Meeting Controls facilitator channel. NOTE: the huddle MEDIA API is the gating unknown — Slack does not publicly document a bot-join-with-media path for huddles (a Chime-level integration may be required); production binding requires verifying/obtaining huddle media access.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,10 +17,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.40.2",
-    "@memberjunction/global": "5.40.2",
-    "@memberjunction/core-entities": "5.40.2",
-    "@memberjunction/ai-bridge-base": "5.40.2"
+    "@memberjunction/core": "5.41.0",
+    "@memberjunction/global": "5.41.0",
+    "@memberjunction/core-entities": "5.41.0",
+    "@memberjunction/ai-bridge-base": "5.41.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
