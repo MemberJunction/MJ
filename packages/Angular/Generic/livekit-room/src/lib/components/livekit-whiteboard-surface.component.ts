@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
-import { Subject, Subscription, debounceTime } from 'rxjs';
 import { RealtimeWhiteboardHostComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
+import { WhiteboardSyncCoordinator } from '../whiteboard-sync';
 
 /**
  * `mj-livekit-whiteboard-surface` — hosts the reusable `@memberjunction/ng-whiteboard` board inside the
@@ -41,9 +41,7 @@ import { RealtimeWhiteboardHostComponent, WhiteboardState } from '@memberjunctio
 export class LiveKitWhiteboardSurfaceComponent implements OnInit, OnDestroy {
   /** The shared board state engine. One per surface instance. */
   public readonly State = new WhiteboardState();
-  private readonly outgoing = new Subject<void>();
-  private sub: Subscription | null = null;
-  private applyingRemote = false;
+  private sync: WhiteboardSyncCoordinator | null = null;
 
   /** The agent's display name (legend / chips / agent toast on the board). */
   @Input() public AgentName = 'Agent';
@@ -58,22 +56,12 @@ export class LiveKitWhiteboardSurfaceComponent implements OnInit, OnDestroy {
   @Output() public SceneDelta = new EventEmitter<string>();
 
   public ngOnInit(): void {
-    // Coalesce local change bursts, then broadcast one snapshot (skipping changes we just applied remotely).
-    this.sub = this.State.Changed$.subscribe(() => {
-      if (!this.applyingRemote) {
-        this.outgoing.next();
-      }
-    });
-    this.sub.add(
-      this.outgoing.pipe(debounceTime(this.SyncDebounceMs)).subscribe(() => {
-        this.BoardChanged.emit(this.State.ToJSON());
-      }),
-    );
+    this.sync = new WhiteboardSyncCoordinator(this.State, this.SyncDebounceMs, (json) => this.BoardChanged.emit(json));
+    this.sync.Start();
   }
 
   public ngOnDestroy(): void {
-    this.sub?.unsubscribe();
-    this.outgoing.complete();
+    this.sync?.Dispose();
   }
 
   /**
@@ -83,17 +71,6 @@ export class LiveKitWhiteboardSurfaceComponent implements OnInit, OnDestroy {
    * @param json The JSON board snapshot from another participant.
    */
   public ApplyRemote(json: string): void {
-    if (!json) {
-      return;
-    }
-    this.applyingRemote = true;
-    try {
-      this.State.LoadFromJSON(json);
-    } finally {
-      // Release on the next microtask so the synchronous Changed$ emissions from the load are ignored.
-      queueMicrotask(() => {
-        this.applyingRemote = false;
-      });
-    }
+    this.sync?.ApplyRemote(json);
   }
 }

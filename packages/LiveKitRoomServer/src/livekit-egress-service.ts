@@ -23,6 +23,14 @@ export interface StartRecordingParams {
   Filepath?: string;
 }
 
+/** The subset of {@link EgressClient} the service drives — an injectable seam for unit testing. */
+export type EgressClientLike = Pick<EgressClient, 'startRoomCompositeEgress' | 'stopEgress' | 'listEgress'>;
+
+/** Converts a `ws(s)://` server URL to its `http(s)://` form for the egress client. */
+export function wsToHttpUrl(url: string): string {
+  return url.replace(/^ws/i, 'http');
+}
+
 /** A normalized recording (egress) status. */
 export interface RecordingInfo {
   /** The egress id (pass to {@link LiveKitEgressService.StopRecording}). */
@@ -35,16 +43,18 @@ export interface RecordingInfo {
 
 /** Starts/stops/lists LiveKit room recordings (composite egress). */
 export class LiveKitEgressService {
-  private readonly client: EgressClient;
+  private readonly client: EgressClientLike;
 
   /**
    * @param config Explicit credentials; omitted fields fall back to environment variables (via
    *   {@link LiveKitTokenService}). The egress client uses the HTTP(S) form of the server URL.
+   * @param client An injectable egress client (primarily for unit testing); defaults to a real
+   *   `EgressClient` built from the resolved credentials.
    */
-  constructor(config?: Partial<LiveKitServerConfig>) {
+  constructor(config?: Partial<LiveKitServerConfig>, client?: EgressClientLike) {
     const token = new LiveKitTokenService(config);
-    const httpUrl = this.toHttpUrl(token.ServerUrl);
-    this.client = new EgressClient(httpUrl, config?.ApiKey ?? process.env.LIVEKIT_API_KEY, config?.ApiSecret ?? process.env.LIVEKIT_API_SECRET);
+    const httpUrl = wsToHttpUrl(token.ServerUrl);
+    this.client = client ?? new EgressClient(httpUrl, config?.ApiKey ?? process.env.LIVEKIT_API_KEY, config?.ApiSecret ?? process.env.LIVEKIT_API_SECRET);
   }
 
   /**
@@ -85,10 +95,5 @@ export class LiveKitEgressService {
   /** Maps an SDK `EgressInfo` to the normalized {@link RecordingInfo}. */
   private toRecordingInfo(info: EgressInfo, roomName: string): RecordingInfo {
     return { EgressID: info.egressId, RoomName: info.roomName || roomName, Status: String(info.status ?? 'unknown') };
-  }
-
-  /** Converts a `ws(s)://` server URL to its `http(s)://` form for the egress client. */
-  private toHttpUrl(url: string): string {
-    return url.replace(/^ws/i, 'http');
   }
 }

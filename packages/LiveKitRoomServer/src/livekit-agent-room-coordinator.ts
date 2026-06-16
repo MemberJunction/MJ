@@ -20,6 +20,9 @@ import { RegexAddressedMatcher, type BridgeDisconnectReason, type BridgeTurnMode
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService } from './livekit-token-service';
 
+/** The subset of {@link AIBridgeEngine} the coordinator drives — an injectable seam for unit testing. */
+export type BridgeOps = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'StopBridgeSession'>;
+
 /** The `DriverClass` the LiveKit bridge registers under (must match the `MJ: AI Bridge Providers` row). */
 export const LIVEKIT_BRIDGE_DRIVER_CLASS = 'LiveKitBridge';
 
@@ -80,6 +83,7 @@ export interface AgentRoomSession {
  */
 export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomCoordinator> {
   private tokenService: LiveKitTokenService = new LiveKitTokenService();
+  private bridgeOps: BridgeOps = AIBridgeEngine.Instance;
   private sessionFactory: RealtimeSessionFactory = () => {
     throw new Error(
       'LiveKitAgentRoomCoordinator has no realtime-session factory bound. Call SetSessionFactory(...) ' +
@@ -117,6 +121,16 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
   }
 
   /**
+   * Overrides the bridge operations used to resolve the provider + start/stop the bridge session (the
+   * injectable {@link AIBridgeEngine} seam — primarily for unit testing).
+   *
+   * @param ops The bridge operations to use.
+   */
+  public SetBridgeOps(ops: BridgeOps): void {
+    this.bridgeOps = ops;
+  }
+
+  /**
    * Starts the agent's presence in a LiveKit room: mints the bot token, opens the realtime session, and
    * bridges it into the room.
    *
@@ -125,8 +139,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    * @throws {Error} when the LiveKit provider is not configured/registered or the session factory is unbound.
    */
   public async StartAgentRoomSession(params: StartAgentRoomSessionParams): Promise<AgentRoomSession> {
-    await AIBridgeEngine.Instance.Config(false, params.ContextUser, params.MetadataProvider);
-    const provider = AIBridgeEngine.Instance.ProviderByDriverClass(LIVEKIT_BRIDGE_DRIVER_CLASS);
+    await this.bridgeOps.Config(false, params.ContextUser, params.MetadataProvider);
+    const provider = this.bridgeOps.ProviderByDriverClass(LIVEKIT_BRIDGE_DRIVER_CLASS);
     if (!provider) {
       throw new Error(
         `No active 'MJ: AI Bridge Providers' row with DriverClass='${LIVEKIT_BRIDGE_DRIVER_CLASS}' was found. ` +
@@ -146,7 +160,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       MetadataProvider: params.MetadataProvider,
     });
 
-    const active = await AIBridgeEngine.Instance.StartBridgeSession({
+    const active = await this.bridgeOps.StartBridgeSession({
       AgentSessionID: params.AgentSessionID,
       Provider: provider,
       RealtimeSession: session,
@@ -178,7 +192,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     provider?: IMetadataProvider,
   ): Promise<boolean> {
     try {
-      return await AIBridgeEngine.Instance.StopBridgeSession(sessionBridgeID, reason, contextUser, provider);
+      return await this.bridgeOps.StopBridgeSession(sessionBridgeID, reason, contextUser, provider);
     } catch (err) {
       LogError(`[LiveKitAgentRoomCoordinator] StopAgentRoomSession failed: ${err instanceof Error ? err.message : String(err)}`);
       return false;

@@ -18,4 +18,5 @@ export * from './lib/components/livekit-prejoin.component';
 export * from './lib/components/livekit-agent-state.component';
 export * from './lib/components/livekit-whiteboard-surface.component';
 export * from './lib/livekit-room-logic';
+export * from './lib/whiteboard-sync';
 export * from './lib/models';

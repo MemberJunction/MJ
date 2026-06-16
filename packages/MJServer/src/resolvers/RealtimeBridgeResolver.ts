@@ -20,97 +20,97 @@ import { GetReadWriteProvider } from '../util.js';
 
 @InputType()
 export class MintLiveKitClientTokenInput {
-  @Field()
+  @Field(() => String)
   RoomName: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   DisplayName?: string;
 }
 
 @ObjectType()
 export class LiveKitClientTokenResult {
-  @Field()
+  @Field(() => Boolean)
   Success: boolean;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   ErrorMessage?: string;
 
-  @Field()
+  @Field(() => String)
   ServerUrl: string;
 
-  @Field()
+  @Field(() => String)
   Token: string;
 
-  @Field()
+  @Field(() => String)
   Identity: string;
 
-  @Field()
+  @Field(() => String)
   RoomName: string;
 }
 
 @InputType()
 export class StartLiveKitAgentRoomSessionInput {
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   AgentID?: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   AgentName?: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   RoomName?: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   AgentSessionID?: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   TurnMode?: string;
 }
 
 @ObjectType()
 export class LiveKitAgentRoomSessionResult {
-  @Field()
+  @Field(() => Boolean)
   Success: boolean;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   ErrorMessage?: string;
 
-  @Field()
+  @Field(() => String)
   SessionBridgeID: string;
 
-  @Field()
+  @Field(() => String)
   RoomName: string;
 
-  @Field()
+  @Field(() => String)
   ServerUrl: string;
 
-  @Field()
+  @Field(() => String)
   ClientToken: string;
 
-  @Field()
+  @Field(() => String)
   Identity: string;
 }
 
 @InputType()
 export class LiveKitRecordingInput {
-  @Field()
+  @Field(() => String)
   RoomName: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   Layout?: string;
 }
 
 @ObjectType()
 export class LiveKitRecordingResult {
-  @Field()
+  @Field(() => Boolean)
   Success: boolean;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   ErrorMessage?: string;
 
-  @Field()
+  @Field(() => String)
   EgressID: string;
 
-  @Field()
+  @Field(() => String)
   Status: string;
 }
 

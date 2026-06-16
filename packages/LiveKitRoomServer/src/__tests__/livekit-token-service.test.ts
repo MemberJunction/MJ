@@ -44,4 +44,29 @@ describe('LiveKitTokenService', () => {
     const svc = new LiveKitTokenService({ ServerUrl: '', ApiKey: '', ApiSecret: '' });
     await expect(svc.MintClientToken('r', 'i')).rejects.toThrow(/not configured/i);
   });
+
+  it('honors restricted grants (subscribe-only viewer)', async () => {
+    const svc = new LiveKitTokenService(CONFIG);
+    const minted = await svc.MintToken({ RoomName: 'r', Identity: 'viewer', CanPublish: false, CanPublishData: false });
+    const video = decodePayload(minted.Token).video as Record<string, unknown>;
+    expect(video.canPublish).toBe(false);
+    expect(video.canPublishData).toBe(false);
+    expect(video.canSubscribe).toBe(true); // default
+  });
+
+  it('merges extra metadata alongside the role', async () => {
+    const svc = new LiveKitTokenService(CONFIG);
+    const minted = await svc.MintToken({ RoomName: 'r', Identity: 'u', Role: 'host', Metadata: { team: 'support' } });
+    const metadata = JSON.parse(decodePayload(minted.Token).metadata as string);
+    expect(metadata.mjRole).toBe('host');
+    expect(metadata.team).toBe('support');
+  });
+
+  it('applies a custom TTL to the token expiry', async () => {
+    const svc = new LiveKitTokenService(CONFIG);
+    const minted = await svc.MintClientToken('r', 'u', 'U', 120);
+    const payload = decodePayload(minted.Token);
+    const ttl = (payload.exp as number) - (payload.nbf as number);
+    expect(ttl).toBe(120);
+  });
 });
