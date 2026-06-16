@@ -1,0 +1,124 @@
+<div class="lk-room lk-room--{{ Layout }}" [class.lk-room--panel-open]="SidePanel !== 'none'">
+    @if (ShowHeader) {
+        <header class="lk-room__header">
+            <span class="lk-room__title">
+                <i class="fa-solid fa-circle lk-room__status-dot lk-room__status-dot--{{ State.Status }}"></i>
+                {{ Title || State.RoomName || 'Live Room' }}
+            </span>
+            @if (ShowParticipantCount) {
+                <span class="lk-room__count"><i class="fa-solid fa-users"></i> {{ AllParticipants.length }}</span>
+            }
+        </header>
+    }
+
+    <div class="lk-room__body">
+        <section class="lk-room__stage">
+            @if (Layout === 'spotlight') {
+                @if (SpotlightParticipant) {
+                    <div class="lk-room__spotlight">
+                        <mj-livekit-participant-tile
+                            [Participant]="SpotlightParticipant"
+                            [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
+                            [ShowAudioMeter]="ShowAudioMeters"
+                            [ShowConnectionQuality]="ShowConnectionQuality"
+                            [ShowNameBadge]="ShowNameBadges"
+                            [AvatarUrl]="avatarFor(SpotlightParticipant)"
+                        ></mj-livekit-participant-tile>
+                    </div>
+                }
+                @if (FilmstripParticipants.length > 0) {
+                    <div class="lk-room__filmstrip">
+                        @for (p of FilmstripParticipants; track p.Identity) {
+                            <div class="lk-room__filmstrip-tile">
+                                <mj-livekit-participant-tile
+                                    [Participant]="p"
+                                    [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
+                                    [ShowAudioMeter]="ShowAudioMeters"
+                                    [ShowConnectionQuality]="ShowConnectionQuality"
+                                    [ShowNameBadge]="ShowNameBadges"
+                                    [AvatarUrl]="avatarFor(p)"
+                                ></mj-livekit-participant-tile>
+                            </div>
+                        }
+                    </div>
+                }
+            } @else {
+                <div class="lk-room__grid" [attr.data-count]="DisplayParticipants.length">
+                    @for (p of DisplayParticipants; track p.Identity) {
+                        <div class="lk-room__grid-tile">
+                            <mj-livekit-participant-tile
+                                [Participant]="p"
+                                [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
+                                [ShowAudioMeter]="ShowAudioMeters"
+                                [ShowConnectionQuality]="ShowConnectionQuality"
+                                [ShowNameBadge]="ShowNameBadges"
+                                [AvatarUrl]="avatarFor(p)"
+                            ></mj-livekit-participant-tile>
+                        </div>
+                    } @empty {
+                        <div class="lk-room__empty">
+                            <i class="fa-solid fa-user-group"></i>
+                            <p>Waiting for participants…</p>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (ShowOverlay) {
+                <mj-livekit-connection-overlay
+                    [Status]="State.Status"
+                    [DisconnectReason]="State.DisconnectReason ?? null"
+                    [ErrorMessage]="LastErrorMessage"
+                    (Retry)="Connect()"
+                ></mj-livekit-connection-overlay>
+            }
+        </section>
+
+        @if (SidePanel === 'chat' && ShowChat) {
+            <aside class="lk-room__panel">
+                <mj-livekit-chat-panel [Messages]="ChatMessages" (Send)="onSendChat($event)" (Close)="onToggleChat()"></mj-livekit-chat-panel>
+            </aside>
+        }
+        @if (SidePanel === 'participants' && ShowParticipantsPanel) {
+            <aside class="lk-room__panel">
+                <mj-livekit-participants-panel [Participants]="AllParticipants" (Close)="onToggleParticipants()"></mj-livekit-participants-panel>
+            </aside>
+        }
+    </div>
+
+    @if (ShowControlBar) {
+        <footer class="lk-room__footer">
+            <mj-livekit-control-bar
+                [LocalMedia]="State.LocalMedia"
+                [ChatOpen]="SidePanel === 'chat'"
+                [ParticipantsOpen]="SidePanel === 'participants'"
+                [UnreadChatCount]="UnreadChatCount"
+                [ParticipantCount]="AllParticipants.length"
+                [EnableMicrophoneControl]="EnableMicrophoneControl"
+                [EnableCameraControl]="EnableCameraControl"
+                [EnableScreenShareControl]="EnableScreenShareControl"
+                [EnableDeviceSettings]="EnableDeviceSettings"
+                [EnableChatToggle]="ShowChat"
+                [EnableParticipantsToggle]="ShowParticipantsPanel"
+                [EnableLeaveControl]="EnableLeaveControl"
+                (ToggleMicrophone)="onToggleMicrophone()"
+                (ToggleCamera)="onToggleCamera()"
+                (ToggleScreenShare)="onToggleScreenShare()"
+                (OpenDeviceSettings)="onOpenDeviceSettings()"
+                (ToggleChat)="onToggleChat()"
+                (ToggleParticipants)="onToggleParticipants()"
+                (Leave)="Leave()"
+            ></mj-livekit-control-bar>
+
+            @if (DeviceMenuOpen) {
+                <div class="lk-room__device-popover">
+                    <mj-livekit-device-menu
+                        [Devices]="Devices"
+                        (DeviceSelected)="onDeviceSelected($event)"
+                        (Close)="onCloseDeviceMenu()"
+                    ></mj-livekit-device-menu>
+                </div>
+            }
+        </footer>
+    }
+</div>
