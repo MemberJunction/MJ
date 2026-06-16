@@ -1,5 +1,52 @@
 # @memberjunction/ai-provider-bundle
 
+## 5.41.0
+
+### Minor Changes
+
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- Updated dependencies [6f227ab]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+  - @memberjunction/ai-xai@5.41.0
+  - @memberjunction/ai-gemini@5.41.0
+  - @memberjunction/ai-cohere@5.41.0
+  - @memberjunction/ai-vertex@5.41.0
+  - @memberjunction/ai-elevenlabs@5.41.0
+  - @memberjunction/ai-openai@5.41.0
+  - @memberjunction/ai-assemblyai@5.41.0
+  - @memberjunction/ai-inworld@5.41.0
+  - @memberjunction/ai-recommendations-rex@5.41.0
+  - @memberjunction/ai-vectors-pinecone@5.41.0
+  - @memberjunction/ai-anthropic@5.41.0
+  - @memberjunction/ai-azure@5.41.0
+  - @memberjunction/ai-bedrock@5.41.0
+  - @memberjunction/ai-betty-bot@5.41.0
+  - @memberjunction/ai-blackforestlabs@5.41.0
+  - @memberjunction/ai-cerebras@5.41.0
+  - @memberjunction/ai-fireworks@5.41.0
+  - @memberjunction/ai-groq@5.41.0
+  - @memberjunction/ai-heygen@5.41.0
+  - @memberjunction/ai-inception@5.41.0
+  - @memberjunction/ai-lmstudio@5.41.0
+  - @memberjunction/ai-llamacpp@5.41.0
+  - @memberjunction/ai-local-embeddings@5.41.0
+  - @memberjunction/ai-minimax@5.41.0
+  - @memberjunction/ai-mistral@5.41.0
+  - @memberjunction/ai-ollama@5.41.0
+  - @memberjunction/ai-openrouter@5.41.0
+  - @memberjunction/ai-zhipu@5.41.0
+
 ## 5.40.2
 
 ### Patch Changes
