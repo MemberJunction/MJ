@@ -26,6 +26,7 @@ import '@memberjunction/server-bootstrap/mj-class-registrations';
 import sql from 'mssql';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata, RunView, UserInfo, LogStatus } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MemoryWriteManager, MemoryWriteContext } from '@memberjunction/ai-agents';
@@ -133,7 +134,7 @@ async function main(): Promise<void> {
             check("Status = 'Provisional'", row.Status === 'Provisional', String(row.Status));
             check("AuthorType = 'Agent'", row.AuthorType === 'Agent', String(row.AuthorType));
             check('AgentID scoped', row.AgentID === agentId);
-            check('UserID scoped', row.UserID === contextUser.ID);
+            check('UserID scoped', UUIDsEqual(row.UserID, contextUser.ID));
             check('EmbeddingVector populated', !!row.EmbeddingVector && row.EmbeddingVector.length > 2);
             const ttlDays = row.ExpiresAt ? (row.ExpiresAt.getTime() - Date.now()) / 86_400_000 : -1;
             check('ExpiresAt ≈ +7 days', ttlDays > 6.5 && ttlDays < 7.5, `${ttlDays.toFixed(2)} days`);
@@ -185,7 +186,7 @@ async function main(): Promise<void> {
             contextUser,
         });
         const formatted = injector.FormatNotesForInjection(notesForContext);
-        check('provisional note retrieved for injection', notesForContext.some(n => n.ID === written.noteId));
+        check('provisional note retrieved for injection', notesForContext.some(n => written.noteId != null && UUIDsEqual(n.ID, written.noteId)));
         check('formatted with (provisional) label', formatted.includes('] (provisional)'));
         check('RECENT NOTES block present', formatted.includes('RECENT NOTES'));
         check('recency-wins policy present', formatted.includes('recency wins'));

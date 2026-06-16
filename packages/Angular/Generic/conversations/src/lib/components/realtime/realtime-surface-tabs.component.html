@@ -82,6 +82,15 @@
               <!-- Registry-resolved channel: the pane host creates the plugin's surface
                    component dynamically and hands the instance back for binding -->
               <mj-realtime-channel-pane [Plugin]="plugin"></mj-realtime-channel-pane>
+              <!-- First-run intro: overlaid over the active channel pane the first time this user
+                   opens it; the pane host renders display:none + a sibling surface, so the overlay
+                   sits here (inside the positioned .s-pane) rather than inside the pane host. -->
+              @if (tab.Key === Model.ActiveKey && OnboardingContent) {
+                <mj-channel-onboarding-panel
+                  [Content]="OnboardingContent"
+                  (Dismissed)="DismissOnboarding()">
+                </mj-channel-onboarding-panel>
+              }
             } @else if (tab.Data?.Content; as content) {
               <ng-container [ngTemplateOutlet]="content"></ng-container>
             } @else {

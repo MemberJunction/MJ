@@ -1,4 +1,4 @@
-import { LogError, LogStatus, RunView, UserInfo } from "@memberjunction/core";
+import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, InjectableNoteStatusSQLList } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata } from "@memberjunction/aiengine";
@@ -235,26 +235,42 @@ export class AgentContextInjector {
      * Implements 8-level scoping hierarchy from most specific to least specific.
      */
     private async queryNotesWithScoping(params: GetNotesParams): Promise<MJAIAgentNoteEntity[]> {
-        const filter = this.buildNotesScopingFilter(params);
-        const orderBy = '__mj_CreatedAt DESC';
-
-        const rv = new RunView();
-        const result = await rv.RunView<MJAIAgentNoteEntity>({
-            EntityName: 'MJ: AI Agent Notes',
-            ExtraFilter: filter,
-            OrderBy: orderBy,
-            IgnoreMaxRows: params.strategy !== 'Recent',
-            MaxRows: params.strategy === 'Recent' ? params.maxNotes : undefined,
-            ResultType: 'entity_object'
-        }, params.contextUser);
-
-        const notes = result.Success ? (result.Results || []) : [];
-        if (notes.length === 0) {
+        // Serve from the AIEngine cache (AgentNotes is loaded unfiltered as entity objects by AIEngineBase)
+        // and filter in-memory — mirrors queryExamplesWithScoping. The context injector runs on EVERY agent
+        // invocation, so a per-call RunView here is a redundant DB round-trip for an entity an engine already
+        // holds (flagged by the redundancy telemetry).
+        const filtered = this.filterNotesByScoping(AIEngine.Instance.AgentNotes, params);
+        if (filtered.length === 0) {
             return [];
         }
-
-        const sorted = this.sortNotes(notes, params.strategy, AIEngine.Instance.AgentNoteTypes);
+        const sorted = this.sortNotes(filtered, params.strategy, AIEngine.Instance.AgentNoteTypes);
         return sorted.slice(0, params.maxNotes);
+    }
+
+    /**
+     * In-memory equivalent of the (removed) SQL `buildNotesScopingFilter`: filters the cached AgentNotes to
+     * those matching this request's scope. Mirrors {@link filterExamplesByScoping}. Each MJ-internal
+     * dimension (Agent/User/Company) matches the param value OR null when the param is provided, and MUST be
+     * null when the param is absent — exactly the union of the 8 priority levels the old SQL filter built.
+     * Multi-tenant secondary scoping reuses {@link matchesSecondaryScope} (the same matcher the examples path
+     * already uses), so notes and examples share one in-memory scoping definition.
+     */
+    private filterNotesByScoping(notes: MJAIAgentNoteEntity[], params: GetNotesParams): MJAIAgentNoteEntity[] {
+        return notes.filter(note => {
+            if (note.Status !== 'Active') {
+                return false;
+            }
+            const agentOk = params.agentId ? (note.AgentID == null || UUIDsEqual(note.AgentID, params.agentId)) : note.AgentID == null;
+            const userOk = params.userId ? (note.UserID == null || UUIDsEqual(note.UserID, params.userId)) : note.UserID == null;
+            const companyOk = params.companyId ? (note.CompanyID == null || UUIDsEqual(note.CompanyID, params.companyId)) : note.CompanyID == null;
+            if (!(agentOk && userOk && companyOk)) {
+                return false;
+            }
+            if (params.primaryScopeRecordId || params.secondaryScopes) {
+                return this.matchesSecondaryScope(note, params.primaryScopeEntityId, params.primaryScopeRecordId, params.secondaryScopes, params.secondaryScopeConfig);
+            }
+            return true;
+        });
     }
 
     /**

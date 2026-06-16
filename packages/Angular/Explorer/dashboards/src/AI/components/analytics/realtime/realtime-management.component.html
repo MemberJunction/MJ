@@ -1,0 +1,427 @@
+@if (IsLoading) {
+    <div class="loading-container">
+        <mj-loading text="Loading realtime surface..."></mj-loading>
+    </div>
+} @else {
+    <!-- Sub-tab rail + refresh -->
+    <div class="subtab-bar">
+        <div class="subtabs">
+            @for (tab of SubTabs; track tab.Key) {
+                <button class="subtab" [class.subtab--active]="ActiveSubTab === tab.Key"
+                        (click)="SelectSubTab(tab.Key)">
+                    <i [class]="tab.Icon"></i>
+                    <span>{{ tab.Label }}</span>
+                </button>
+            }
+        </div>
+        <button mjButton variant="secondary" size="sm" title="Refresh" (click)="LoadData()">
+            <i class="fa-solid fa-rotate"></i>
+        </button>
+    </div>
+
+    @switch (ActiveSubTab) {
+
+        <!-- ═══════════════════════════ LIVE SESSIONS ═══════════════════════════ -->
+        @case ('live-sessions') {
+            <div class="panel">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Agent</th>
+                                <th>Provider</th>
+                                <th>Direction</th>
+                                <th>Turn mode</th>
+                                <th class="th-numeric">Participants</th>
+                                <th>Status</th>
+                                <th>Started</th>
+                                <th>Host instance</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (LiveBridges.length === 0) {
+                                <tr><td colspan="9" class="empty-row">No live bridged sessions right now</td></tr>
+                            }
+                            @for (b of LiveBridges; track b.Record.ID) {
+                                <tr class="data-row" (click)="OpenSession(b.Record.AgentSessionID)">
+                                    <td class="cell-strong">{{ b.AgentName }}</td>
+                                    <td>{{ b.Record.Provider }}</td>
+                                    <td>
+                                        <span class="dir-pill">
+                                            <i class="fa-solid"
+                                               [class.fa-arrow-right-from-bracket]="b.Record.Direction === 'Outbound'"
+                                               [class.fa-arrow-right-to-bracket]="b.Record.Direction === 'Inbound'"></i>
+                                            {{ b.Record.Direction }}
+                                        </span>
+                                    </td>
+                                    <td>{{ b.Record.TurnMode }}</td>
+                                    <td class="cell-numeric">{{ b.ParticipantCount }}</td>
+                                    <td>
+                                        <span [class]="BridgeStatusClass(b.Record.Status)">
+                                            @if (b.Record.Status === 'Connected') { <span class="dot dot--live"></span> }
+                                            {{ b.Record.Status }}
+                                        </span>
+                                    </td>
+                                    <td class="cell-time">{{ FormatBridgeStart(b.StartedAt) }}</td>
+                                    <td class="cell-host mono" [title]="b.Record.HostInstanceID || ''">{{ b.Record.HostInstanceID || '—' }}</td>
+                                    <td class="cell-action">
+                                        <!-- TODO(v1+): replace with the observer-console deep link (§1 read-only monitor). -->
+                                        <button mjButton variant="icon" size="sm" title="Open session record"
+                                                (click)="OpenSession(b.Record.AgentSessionID); $event.stopPropagation()">
+                                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="grid-footer">
+                <span class="grid-summary">{{ LiveCount }} live bridge{{ LiveCount === 1 ? '' : 's' }}</span>
+            </div>
+        }
+
+        <!-- ═══════════════════════════ BRIDGE PROVIDERS ═══════════════════════════ -->
+        @case ('providers') {
+            <div class="panel">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Provider</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Driver class</th>
+                                <th>Capabilities</th>
+                                <th class="th-numeric">Channels</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Providers.length === 0) {
+                                <tr><td colspan="6" class="empty-row">No bridge providers registered</td></tr>
+                            }
+                            @for (p of Providers; track p.Record.ID) {
+                                <tr class="data-row" (click)="OpenProvider(p.Record.ID)">
+                                    <td>
+                                        <div class="cell-strong">
+                                            <i [class]="BridgeTypeIcon(p.Record.BridgeType)" class="type-icon"></i>
+                                            {{ p.Record.Name }}
+                                        </div>
+                                        @if (p.Record.Description) {
+                                            <div class="cell-sub">{{ p.Record.Description }}</div>
+                                        }
+                                    </td>
+                                    <td>{{ p.Record.BridgeType }}</td>
+                                    <td>
+                                        <span class="status-pill" [class.status-connected]="p.Record.Status === 'Active'"
+                                              [class.status-closed]="p.Record.Status !== 'Active'">
+                                            {{ p.Record.Status }}
+                                        </span>
+                                    </td>
+                                    <td class="mono cell-host" [title]="p.Record.DriverClass">{{ p.Record.DriverClass }}</td>
+                                    <td>
+                                        <span class="cap-chips">
+                                            @for (chip of CapabilityChipsFor(p.Record.ID); track chip.Label) {
+                                                <span class="cap-chip" [title]="chip.Label"><i [class]="chip.Icon"></i></span>
+                                            }
+                                            @if (CapabilityOverflowFor(p.Record.ID) > 0) {
+                                                <span class="cap-more">+{{ CapabilityOverflowFor(p.Record.ID) }}</span>
+                                            }
+                                            @if (p.FeatureCount === 0) {
+                                                <span class="cell-muted">none declared</span>
+                                            }
+                                        </span>
+                                    </td>
+                                    <td class="cell-numeric">{{ p.Channels.length }}</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="grid-footer">
+                <span class="grid-summary">{{ Providers.length }} providers · {{ ActiveProviderCount }} active</span>
+            </div>
+        }
+
+        <!-- ═══════════════════════════ AGENT IDENTITIES ═══════════════════════════ -->
+        @case ('identities') {
+            <div class="panel">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Agent</th>
+                                <th>Provider</th>
+                                <th>Type</th>
+                                <th>Identity</th>
+                                <th>Display name</th>
+                                <th>Active</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Identities.length === 0) {
+                                <tr><td colspan="6" class="empty-row">No agent identities provisioned</td></tr>
+                            }
+                            @for (id of Identities; track id.ID) {
+                                <tr class="data-row">
+                                    <td class="cell-strong">{{ id.Agent || 'Unknown agent' }}</td>
+                                    <td>{{ id.Provider }}</td>
+                                    <td>
+                                        <span class="type-chip"><i [class]="IdentityTypeIcon(id.IdentityType)"></i> {{ id.IdentityType }}</span>
+                                    </td>
+                                    <td class="mono">{{ id.IdentityValue }}</td>
+                                    <td class="cell-muted">{{ id.DisplayName || '—' }}</td>
+                                    <td>
+                                        <span class="status-pill" [class.status-connected]="id.IsActive"
+                                              [class.status-closed]="!id.IsActive">
+                                            {{ id.IsActive ? 'Active' : 'Inactive' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="grid-footer">
+                <span class="grid-summary">{{ Identities.length }} identities · {{ ActiveIdentityCount }} active</span>
+            </div>
+        }
+
+        <!-- ═══════════════════════════ CHANNELS ═══════════════════════════ -->
+        @case ('channels') {
+            <div class="panel">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Channel</th>
+                                <th>Transport</th>
+                                <th>Active</th>
+                                <th>Contributed by</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Channels.length === 0) {
+                                <tr><td colspan="4" class="empty-row">No channels registered</td></tr>
+                            }
+                            @for (ch of Channels; track ch.ID) {
+                                <tr class="data-row">
+                                    <td>
+                                        <div class="cell-strong">{{ ch.Name }}</div>
+                                        @if (ch.Description) { <div class="cell-sub">{{ ch.Description }}</div> }
+                                    </td>
+                                    <td>
+                                        <span class="type-chip"><i [class]="TransportTypeIcon(ch.TransportType)"></i> {{ ch.TransportType }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="status-pill" [class.status-connected]="ch.IsActive"
+                                              [class.status-closed]="!ch.IsActive">
+                                            {{ ch.IsActive ? 'Active' : 'Inactive' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="provider-tags">
+                                            @for (pc of ProvidersForChannel(ch.ID); track pc.ID) {
+                                                <span class="provider-tag" [class.provider-tag--default]="pc.IsDefault"
+                                                      [title]="pc.IsDefault ? 'Auto-attached by default' : 'Available on demand'">
+                                                    {{ pc.Provider }}
+                                                    @if (pc.IsDefault) { <i class="fa-solid fa-star"></i> }
+                                                </span>
+                                            } @empty {
+                                                <span class="cell-muted">no provider contributions</span>
+                                            }
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="grid-footer">
+                <span class="grid-summary">{{ Channels.length }} channels · {{ ProviderChannels.length }} provider contributions</span>
+            </div>
+        }
+
+        <!-- ═══════════════════════════ CO-AGENTS ═══════════════════════════ -->
+        @case ('co-agents') {
+            <div class="panel">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Co-Agent</th>
+                                <th>Pairs with</th>
+                                <th>Relationship</th>
+                                <th>Default</th>
+                                <th class="th-numeric">Seq</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (CoAgents.length === 0) {
+                                <tr><td colspan="6" class="empty-row">No co-agent pairings configured</td></tr>
+                            }
+                            @for (c of CoAgents; track c.ID) {
+                                <tr class="data-row">
+                                    <td class="cell-strong">{{ c.CoAgent || 'Unknown' }}</td>
+                                    <td>{{ CoAgentTargetLabel(c) }}</td>
+                                    <td><span class="type-chip">{{ c.Type }}</span></td>
+                                    <td>
+                                        @if (c.IsDefault) {
+                                            <span class="default-pill"><i class="fa-solid fa-star"></i> default</span>
+                                        } @else { <span class="cell-muted">—</span> }
+                                    </td>
+                                    <td class="cell-numeric">{{ c.Sequence }}</td>
+                                    <td>
+                                        <span class="status-pill" [class.status-connected]="c.Status === 'Active'"
+                                              [class.status-closed]="c.Status !== 'Active'">
+                                            {{ c.Status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="grid-footer">
+                <span class="grid-summary">{{ CoAgents.length }} pairings · {{ ActiveCoAgentCount }} active</span>
+            </div>
+        }
+
+        <!-- ═══════════════════════════ SESSION HISTORY ═══════════════════════════ -->
+        @case ('history') {
+            <div class="panel">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Agent</th>
+                                <th>Provider</th>
+                                <th>Join method</th>
+                                <th class="th-numeric">Participants</th>
+                                <th class="th-numeric">Duration</th>
+                                <th>Close reason</th>
+                                <th>Started</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (HistoryBridges.length === 0) {
+                                <tr><td colspan="8" class="empty-row">No closed bridges in this window</td></tr>
+                            }
+                            @for (b of HistoryBridges; track b.Record.ID) {
+                                <tr class="data-row" (click)="OpenSession(b.Record.AgentSessionID)">
+                                    <td class="cell-strong">{{ b.AgentName }}</td>
+                                    <td>{{ b.Record.Provider }}</td>
+                                    <td>{{ b.Record.JoinMethod }}</td>
+                                    <td class="cell-numeric">{{ b.ParticipantCount }}</td>
+                                    <td class="cell-numeric mono">{{ FormatBridgeDuration(b.DurationMs) }}</td>
+                                    <td>
+                                        <span [class]="CloseReasonClass(b.Record.CloseReason)">
+                                            {{ b.Record.CloseReason || 'unknown' }}
+                                        </span>
+                                    </td>
+                                    <td class="cell-time">{{ FormatBridgeStart(b.StartedAt) }}</td>
+                                    <td class="cell-action">
+                                        <!-- TODO(v1+): transcript / recording review launch (§7 review reuse). -->
+                                        <button mjButton variant="icon" size="sm" title="Open session record"
+                                                (click)="OpenSession(b.Record.AgentSessionID); $event.stopPropagation()">
+                                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="grid-footer">
+                <span class="grid-summary">{{ HistoryCount }} closed bridge{{ HistoryCount === 1 ? '' : 's' }} ({{ TimeRange }})</span>
+            </div>
+        }
+
+        <!-- ═══════════════════════════ METRICS ═══════════════════════════ -->
+        @case ('metrics') {
+            <div class="metrics-grid">
+                <!-- Bridges over time (per-day bars) -->
+                <div class="metric-card metric-card--wide">
+                    <div class="metric-title">Bridges over time</div>
+                    @if (DayBuckets.length === 0) {
+                        <div class="metric-empty">No bridge activity in this window</div>
+                    } @else {
+                        <div class="bar-chart">
+                            @for (bucket of DayBuckets; track bucket.Label) {
+                                <div class="bar-col" [title]="bucket.Label + ': ' + bucket.Count">
+                                    <div class="bar-track">
+                                        <div class="bar-fill" [style.height.%]="DayBarHeight(bucket.Count)"></div>
+                                    </div>
+                                    <div class="bar-value">{{ bucket.Count }}</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- By provider -->
+                <div class="metric-card">
+                    <div class="metric-title">By provider</div>
+                    @if (ByProvider.length === 0) {
+                        <div class="metric-empty">No data</div>
+                    } @else {
+                        @for (slice of ByProvider; track slice.Label) {
+                            <div class="hbar-row">
+                                <span class="hbar-label" [title]="slice.Label">{{ slice.Label }}</span>
+                                <div class="hbar-track">
+                                    <div class="hbar-fill" [style.width.%]="SliceBarWidth(ByProvider, slice.Count)"></div>
+                                </div>
+                                <span class="hbar-count">{{ slice.Count }}</span>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <!-- By status -->
+                <div class="metric-card">
+                    <div class="metric-title">By status</div>
+                    @if (ByStatus.length === 0) {
+                        <div class="metric-empty">No data</div>
+                    } @else {
+                        @for (slice of ByStatus; track slice.Label) {
+                            <div class="hbar-row">
+                                <span class="hbar-label" [title]="slice.Label">{{ slice.Label }}</span>
+                                <div class="hbar-track">
+                                    <div class="hbar-fill" [style.width.%]="SliceBarWidth(ByStatus, slice.Count)"></div>
+                                </div>
+                                <span class="hbar-count">{{ slice.Count }}</span>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <!-- By agent -->
+                <div class="metric-card">
+                    <div class="metric-title">By agent</div>
+                    @if (ByAgent.length === 0) {
+                        <div class="metric-empty">No data</div>
+                    } @else {
+                        @for (slice of ByAgent; track slice.Label) {
+                            <div class="hbar-row">
+                                <span class="hbar-label" [title]="slice.Label">{{ slice.Label }}</span>
+                                <div class="hbar-track">
+                                    <div class="hbar-fill" [style.width.%]="SliceBarWidth(ByAgent, slice.Count)"></div>
+                                </div>
+                                <span class="hbar-count">{{ slice.Count }}</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    }
+}

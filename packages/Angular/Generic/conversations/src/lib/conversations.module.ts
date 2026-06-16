@@ -75,6 +75,8 @@ import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-
 import { RealtimeWhiteboardHostComponent } from '@memberjunction/ng-whiteboard';
 import { LoadRealtimeWhiteboardChannel } from './components/realtime/whiteboard/whiteboard-channel';
 import { LoadWhiteboardArtifactViewer } from './components/realtime/whiteboard/whiteboard-artifact-viewer.component';
+import { LoadRealtimeRemoteBrowserChannel } from './components/realtime/remote-browser/remote-browser-channel';
+import { RemoteBrowserSurfaceComponent } from './components/realtime/remote-browser/remote-browser-surface.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -94,6 +96,9 @@ import { MJChatMessageBubbleDefaultComponent } from './components/slots/mj-chat-
 // from being eliminated by the bundler. They live here (not in RealtimeSessionService) because
 // channel plugins carry Angular surface components — the service stays component-free.
 LoadRealtimeWhiteboardChannel();
+// Remote Browser channel plugin — same registry-driven resolution (ClientPluginClass
+// 'RealtimeRemoteBrowserChannel'); the static call defeats tree-shaking of its @RegisterClass.
+LoadRealtimeRemoteBrowserChannel();
 // Whiteboard ARTIFACT VIEWER plugin — resolved by the artifact plugin host via the
 // ClassFactory (keyed by the artifact type's DriverClass), same tree-shaking concern.
 LoadWhiteboardArtifactViewer();
@@ -186,7 +191,8 @@ const COMPONENTS = [
     // Realtime / voice (PR #2787)
     RealtimeAgentPickerComponent,
     RealtimeSessionOverlayComponent,
-    RealtimeWhiteboardHostComponent
+    RealtimeWhiteboardHostComponent,
+    RemoteBrowserSurfaceComponent
   ],
   exports: [
     ...COMPONENTS,
@@ -204,7 +210,8 @@ const COMPONENTS = [
     // Realtime / voice (PR #2787)
     RealtimeAgentPickerComponent,
     RealtimeSessionOverlayComponent,
-    RealtimeWhiteboardHostComponent
+    RealtimeWhiteboardHostComponent,
+    RemoteBrowserSurfaceComponent
   ]
 })
 export class ConversationsModule { }

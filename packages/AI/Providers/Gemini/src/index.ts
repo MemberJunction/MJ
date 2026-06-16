@@ -1,10 +1,10 @@
 
 
 // Google Gemini Import
-import { GoogleGenAI, Content, Part, Blob} from "@google/genai";
+import { GoogleGenAI, Content, Part, Blob, FileData } from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 
 /**
@@ -232,7 +232,7 @@ export class GeminiLLM extends BaseLLM {
             const noSystemMessages = params.messages.filter(m => m.role !== 'system');
             const sysPrompts = params.messages.filter(m => m.role === 'system');
             const systemInstructionText = sysPrompts.length > 0
-                ? sysPrompts.map(m => typeof m.content === 'string' ? m.content : m.content.map(v => v.content).join('\n')).join('\n\n')
+                ? sysPrompts.map(m => GeminiLLM.mjContentToSystemInstructionText(m.content)).join('\n\n')
                 : '';
 
             // Convert all non-system messages and apply role alternation
@@ -546,7 +546,7 @@ export class GeminiLLM extends BaseLLM {
         const noSystemMessages = params.messages.filter(m => m.role !== 'system');
         const sysPrompts = params.messages.filter(m => m.role === 'system');
         const systemInstructionText = sysPrompts.length > 0
-            ? sysPrompts.map(m => typeof m.content === 'string' ? m.content : m.content.map(v => v.content).join('\n')).join('\n\n')
+            ? sysPrompts.map(m => GeminiLLM.mjContentToSystemInstructionText(m.content)).join('\n\n')
             : '';
 
         // Convert all non-system messages and apply role alternation
@@ -958,52 +958,80 @@ export class GeminiLLM extends BaseLLM {
         throw new Error("Method not implemented.");   
     }
 
+    /**
+     * The default mimeType to assume for a media content block when neither an explicit
+     * `mimeType` nor a data-URL-embedded mime is available. Keyed by MJ content-block type.
+     */
+    private static geminiDefaultMimeForBlockType(type: string): string {
+        switch (type) {
+            case 'image_url': return 'image/png';
+            case 'audio_url': return 'audio/mpeg';
+            case 'video_url': return 'video/mp4';
+            default: return 'application/octet-stream';
+        }
+    }
+
+    /**
+     * Convert a single MJ content block into the matching Gemini {@link Part}. This is the one
+     * type-aware mapping site so that text-only behavior stays byte-identical and every media
+     * block (image/audio/video/file) becomes a real Gemini media part instead of a text blob of
+     * its data URL.
+     *
+     * - `text` → `{ text }` (unchanged).
+     * - any media block whose `content` is a `data:<mime>;base64,<b64>` data URL →
+     *   `{ inlineData: { mimeType, data } }` carrying the raw base64 (prefix stripped).
+     * - any media block whose `content` is an http(s) URL → `{ fileData: { mimeType, fileUri } }`,
+     *   Gemini's remote-file part (mirrors how geminiImage.ts reads fileData.fileUri).
+     * - a media block whose `content` is bare base64 (no data-URL prefix, but valid base64) →
+     *   `{ inlineData }`, preserving the prior behavior.
+     * - anything else (e.g. placeholder strings tagged onto a file_url block) → `{ text }` fallback.
+     */
+    private static mjContentBlockToGeminiPart(block: ChatMessageContentBlock): Part {
+        if (block.type === 'text') {
+            return { text: block.content };
+        }
+
+        // Remote http(s) URL → Gemini fileData part (no inlining of remote bytes).
+        if (/^https?:\/\//i.test(block.content)) {
+            const fileData: FileData = {
+                fileUri: block.content,
+                mimeType: block.mimeType || GeminiLLM.geminiDefaultMimeForBlockType(block.type),
+            };
+            return { fileData };
+        }
+
+        // Strip data-URL prefix if present — Gemini expects raw base64.
+        let rawBase64 = block.content;
+        let detectedMime: string | undefined;
+        const dataUrlMatch = rawBase64.match(/^data:([^;]+);base64,(.+)$/s);
+        if (dataUrlMatch) {
+            detectedMime = dataUrlMatch[1];
+            rawBase64 = dataUrlMatch[2];
+        }
+
+        // Guard: if content isn't a data URL and isn't valid base64, fall back to a text part.
+        // This handles placeholder strings (e.g. "[File: ... — accessible via artifact tools]")
+        // that were tagged as file_url content blocks.
+        if (!dataUrlMatch && !/^[A-Za-z0-9+/\r\n]+=*$/.test(rawBase64.substring(0, 100))) {
+            return { text: block.content };
+        }
+
+        // Use the inlineData property which expects a Blob with data and mimeType.
+        // Prefer the explicit mimeType from the content block; fall back to the data-URL
+        // detected mime, then type-based defaults.
+        const blob: Blob = {
+            data: rawBase64,
+            mimeType: block.mimeType || detectedMime || GeminiLLM.geminiDefaultMimeForBlockType(block.type),
+        };
+        return { inlineData: blob };
+    }
+
     public static MapMJContentToGeminiParts(content: ChatMessageContent): Array<Part> {
-        const parts: Array<Part> = [];
         if (Array.isArray(content)) {
-            for (const part of content) {
-                if (part.type === 'text') {
-                    parts.push({text: part.content});
-                }
-                else {
-                    // Strip data-URL prefix if present — Gemini expects raw base64
-                    let rawBase64 = part.content;
-                    let detectedMime: string | undefined;
-                    const dataUrlMatch = rawBase64.match(/^data:([^;]+);base64,(.+)$/s);
-                    if (dataUrlMatch) {
-                        detectedMime = dataUrlMatch[1];
-                        rawBase64 = dataUrlMatch[2];
-                    }
-
-                    // Guard: if content isn't valid base64, fall back to a text part.
-                    // This handles placeholder strings (e.g. "[File: ... — accessible via artifact tools]")
-                    // that were tagged as file_url content blocks.
-                    if (!dataUrlMatch && !/^[A-Za-z0-9+/\r\n]+=*$/.test(rawBase64.substring(0, 100))) {
-                        parts.push({text: part.content});
-                        continue;
-                    }
-
-                    // Use the inlineData property which expects a Blob with data and mimeType.
-                    // Prefer the explicit mimeType from the content block; fall back to
-                    // data-URL detected mime, then type-based defaults.
-                    const blob: Blob = {
-                        data: rawBase64,
-                        mimeType: part.mimeType || detectedMime || (
-                            part.type === 'image_url' ? 'image/jpeg' :
-                            part.type === 'audio_url' ? 'audio/mpeg' :
-                            part.type === 'video_url' ? 'video/mp4' :
-                            'application/octet-stream'
-                        ),
-                    }
-                    parts.push({inlineData: blob});
-                }
-            }
+            return content.map(block => GeminiLLM.mjContentBlockToGeminiPart(block));
         }
-        else {
-            // we know that message.content is a string
-            parts.push({text: content});
-        }
-        return parts;
+        // we know that message.content is a string
+        return [{ text: content }];
     }
 
     public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {
@@ -1011,6 +1039,22 @@ export class GeminiLLM extends BaseLLM {
             role: message.role === 'assistant' ? 'model' : 'user', // google calls all messages other than the replies from the model 'user' which would include the system prompt
             parts: GeminiLLM.MapMJContentToGeminiParts(message.content)
         }
+    }
+
+    /**
+     * Flatten an MJ message's content to a plain-text string for the Gemini systemInstruction.
+     * Images and other media MUST NOT ride in the system instruction — emitting a giant base64
+     * data URL there would both blow the cacheable prefix and fail to be interpreted as an image.
+     * So we keep only `text` blocks here; a pure-string content stays as-is.
+     */
+    private static mjContentToSystemInstructionText(content: ChatMessageContent): string {
+        if (typeof content === 'string') {
+            return content;
+        }
+        return content
+            .filter(block => block.type === 'text')
+            .map(block => block.content)
+            .join('\n');
     }
 }
  

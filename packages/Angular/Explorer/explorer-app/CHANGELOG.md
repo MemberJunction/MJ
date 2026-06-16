@@ -1,5 +1,44 @@
 # @memberjunction/ng-explorer-app
 
+## 5.41.0
+
+### Minor Changes
+
+- cd6c5f0: Realtime AI Agents wave 3: consolidated v5.41 migration (sessions, channels, co-agent schema) with the AIAgentCoAgent affinity registry replacing AIAgentPairedAgent — typed relationship vocabulary (CoAgent implemented; Peer/Delegate/Fallback/Reviewer/Observer reserved), type-level co-agent defaults as junction rows (removing the only FK cycle in core MJ), and the full code sweep (engine cache, resolver resolution chain, server-side invariants, client pairing reads, regenerated manifests). Realtime UX: progressive-disclosure voice console with persisted captions preference, user-owned composer and tabs toggles, audio-reactive visuals; whiteboard pages/multi-select and review-persistence fixes. Gemini Live triggering turns ride realtime text so widget clicks/typed input/narration speak immediately on native-audio models. CodeGen: single-winner IsNameField enforcement with eligibility guardrail fixes, SCC-based cycle diagnostics, and clean-database bootstrap robustness (conditional engine registry datasets).
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [6f227ab]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [4b30726]
+- Updated dependencies [ef5a5d7]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+- Updated dependencies [fb2a22f]
+- Updated dependencies [c5d93a0]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/ng-conversations@5.41.0
+  - @memberjunction/ng-bootstrap@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ng-notifications@5.41.0
+  - @memberjunction/ai-agent-client@5.41.0
+  - @memberjunction/ng-auth-services@5.41.0
+  - @memberjunction/ng-base-application@5.41.0
+  - @memberjunction/ng-explorer-core@5.41.0
+  - @memberjunction/ng-shared@5.41.0
+  - @memberjunction/ng-workspace-initializer@5.41.0
+  - @memberjunction/ng-base-types@5.41.0
+  - @memberjunction/ng-feedback@5.41.0
+  - @memberjunction/ng-agent-client@5.41.0
+  - @memberjunction/ng-explorer-service-worker@5.41.0
+
 ## 5.40.2
 
 ### Patch Changes

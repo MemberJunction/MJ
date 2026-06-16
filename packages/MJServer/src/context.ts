@@ -1,5 +1,4 @@
 import { IncomingMessage } from 'http';
-import * as url from 'url';
 import { default as jwt } from 'jsonwebtoken';
 import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
@@ -10,6 +9,7 @@ import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-pro
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
 import { buildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
+import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -30,6 +30,20 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 // long-lived sessions every hour.) Reviewers asked to audit all user access with
 // timestamp/IP/browser — that payload lives in the Details JSON; the table has no
 // dedicated columns. Best-effort throughout: an audit failure NEVER blocks auth.
+/**
+ * Memoized "is the server log level `debug`?" check for the per-request log
+ * gates below. Resolved once from `telemetry.level` (the single log-level knob)
+ * — config is immutable after boot, so caching is safe and keeps the hot request
+ * path free of repeated config reads.
+ */
+let isDebugLevelCache: boolean | undefined;
+function isDebugLogLevel(): boolean {
+  if (isDebugLevelCache === undefined) {
+    isDebugLevelCache = StartupLogger.resolveLevelFromConfig() === 'debug';
+  }
+  return isDebugLevelCache;
+}
+
 const SESSION_AUDIT_TYPE = 'Session Established';
 const LOGIN_FAILED_AUDIT_TYPE = 'Login Failed';
 const SESSION_AUDIT_CACHE_MAX = 50_000;
@@ -269,9 +283,12 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
 
-        // Use provider to extract user info for logging
-        const userInfo = extractUserInfoFromPayload(payload);
-        console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
+        // Per-request token confirmation — debug-only (one of the worst
+        // "constantly on" offenders on an authenticated server).
+        if (isDebugLogLevel()) {
+          const userInfo = extractUserInfoFromPayload(payload);
+          console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
+        }
         resolve(payload);
       } else {
         console.warn('Invalid token');
@@ -462,6 +479,22 @@ export const getUserPayload = async (
  * Extracts auth headers and builds a RequestContext from an Express request.
  * Shared by both the unified auth middleware and the WebSocket context.
  */
+/**
+ * Extracts the hostname from a request `Origin` header using the WHATWG `URL` API (replacing the
+ * deprecated, security-flagged `url.parse()` — Node DEP0169). Returns `undefined` for a missing,
+ * empty, or unparseable origin, matching the prior `url.parse().hostname ?? undefined` semantics.
+ */
+function parseRequestHostname(origin: string | undefined): string | undefined {
+  if (!origin) {
+    return undefined;
+  }
+  try {
+    return new URL(origin).hostname || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function extractAuthInputs(req: IncomingMessage): {
   bearerToken: string;
   sessionId: string;
@@ -471,7 +504,7 @@ function extractAuthInputs(req: IncomingMessage): {
   requestContext: RequestContext;
 } {
   const sessionIdRaw = req.headers['x-session-id'];
-  const requestDomain = url.parse(req.headers.origin || '');
+  const requestDomain = parseRequestHostname(req.headers.origin);
   const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
   const bearerToken = req.headers.authorization ?? '';
   const systemApiKey = String(req.headers['x-mj-api-key']);
@@ -489,7 +522,7 @@ function extractAuthInputs(req: IncomingMessage): {
   return {
     bearerToken,
     sessionId,
-    requestDomain: requestDomain?.hostname ?? undefined,
+    requestDomain,
     systemApiKey,
     userApiKey,
     requestContext,
@@ -573,7 +606,9 @@ export const contextFunction =
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reqAny = req as any;
     const operationName: string | undefined = reqAny.body?.operationName;
-    if (operationName !== 'IntrospectionQuery') {
+    // Per-request GraphQL boundary line — debug-only. Kept (not deleted) so the
+    // data is available when an operator opts into debug, but off by default.
+    if (operationName !== 'IntrospectionQuery' && isDebugLogLevel()) {
       console.dir(buildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
     }
 

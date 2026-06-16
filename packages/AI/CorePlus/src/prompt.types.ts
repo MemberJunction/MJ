@@ -574,6 +574,23 @@ export class AIPromptParams {
    */
   cleanValidationSyntax?: boolean;
 
+  /**
+   * Forces the model-selection step to evaluate credential availability for EVERY candidate
+   * model-vendor combination, even after a usable candidate has already been found.
+   *
+   * By default (false) the runner short-circuits: it stops probing candidates as soon as the
+   * highest-priority candidate with valid credentials is identified, and records the remaining
+   * candidates as "not-evaluated" in the `ModelSelection` telemetry. This avoids unnecessary
+   * credential/env-var lookups on every prompt run for fleets with many configured models.
+   *
+   * Set this to true when you need a complete availability report for ALL candidates (e.g. an
+   * admin "which of my models are actually configured?" diagnostic), at the cost of probing
+   * credentials for every candidate.
+   *
+   * Default: false
+   */
+  forceFullModelEvaluation?: boolean;
+
 
   /**
    * NOTE: Only applies when prompt.OutputType is 'object'

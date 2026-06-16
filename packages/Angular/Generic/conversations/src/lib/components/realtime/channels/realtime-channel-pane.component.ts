@@ -36,7 +36,13 @@ export class RealtimeChannelPaneComponent implements OnInit, OnDestroy {
   private surfaceRef: ComponentRef<object> | null = null;
 
   ngOnInit(): void {
-    this.surfaceRef = this.viewContainer.createComponent(this.Plugin.GetSurfaceComponent());
+    // Server-only channels have no surface (GetSurfaceComponent === null). The overlay should not
+    // register a pane for them, but guard here too so a stray registration never crashes the panel.
+    const surface = this.Plugin.GetSurfaceComponent();
+    if (!surface) {
+      return;
+    }
+    this.surfaceRef = this.viewContainer.createComponent(surface);
     // Bind BEFORE the created component's first change detection — inputs the plugin sets
     // here are in place when the surface's ngOnInit runs.
     this.Plugin.BindSurface(this.surfaceRef.instance);

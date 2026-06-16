@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 5.41.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.41.0
+
 ## 5.40.2
 
 ### Patch Changes

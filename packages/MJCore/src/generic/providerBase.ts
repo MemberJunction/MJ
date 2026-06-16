@@ -2010,6 +2010,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             {
                 BatchSize: params.length,
                 Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
+                // Per-view filter/orderBy parallel to Entities so the telemetry fingerprint can
+                // tell apart two batches over the same entity set but with different filters.
+                Filters: params.map(p => p.ExtraFilter as string | undefined),
+                OrderBys: params.map(p => p.OrderBy as string | undefined),
                 _fromEngine: fromEngine
             },
             contextUser?.ID
@@ -3040,6 +3044,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             {
                 BatchSize: params.length,
                 Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
+                // Per-view filter/orderBy parallel to Entities so the telemetry fingerprint can
+                // tell apart two batches over the same entity set but with different filters.
+                Filters: params.map(p => p.ExtraFilter as string | undefined),
+                OrderBys: params.map(p => p.OrderBy as string | undefined),
                 _fromEngine: fromEngine
             },
             contextUser?.ID

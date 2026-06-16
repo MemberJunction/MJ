@@ -54,6 +54,8 @@ export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-channel-server-host';
 export * from './realtime/whiteboard-channel-server';
+export * from './realtime/meeting-controls-state';
+export * from './realtime/meeting-controls-channel-server';
 
 // Re-export from ai-reranker for backward compatibility
 export {

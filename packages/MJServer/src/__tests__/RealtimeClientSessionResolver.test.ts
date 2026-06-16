@@ -89,12 +89,21 @@ const onChannelStateSaveMock = vi.fn(
 // ParseRealtimeTypeConfiguration) stays REAL — the resolver's pairing/override gate is under test.
 vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
+    // The prompt-run persistence methods only use the test-supplied provider + LogError, so forward them to a
+    // REAL service instance — the resolver's transcript/usage tests assert their actual load/modify/save effect.
+    const RealService = actual.RealtimeClientSessionService as new () => {
+        AppendPromptRunMessage: (...a: unknown[]) => Promise<boolean>;
+        AccumulatePromptRunUsage: (...a: unknown[]) => Promise<boolean>;
+    };
+    const realService = new RealService();
     return {
         ...actual,
         RealtimeClientSessionService: class {
             PrepareClientSession = prepareClientSessionMock;
             ExecuteRelayedTool = executeRelayedToolMock;
             CancelInFlightDelegations = cancelInFlightMock;
+            AppendPromptRunMessage = (...a: unknown[]) => realService.AppendPromptRunMessage(...a);
+            AccumulatePromptRunUsage = (...a: unknown[]) => realService.AccumulatePromptRunUsage(...a);
         },
         RealtimeChannelServerHost: {
             get Instance() {
@@ -1001,9 +1010,9 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — clientToo
         expect(extraTools).toBeUndefined();
     });
 
-    it('rejects a declaration flood beyond the 16-tool cap wholesale', async () => {
+    it('rejects a declaration flood beyond the 64-tool cap wholesale', async () => {
         setupHappyStart();
-        const flood = Array.from({ length: 17 }, (_, i) => ({ ...validTool, Name: `Tool.${i}` }));
+        const flood = Array.from({ length: 65 }, (_, i) => ({ ...validTool, Name: `Tool.${i}` }));
         const extraTools = await startWithClientTools(JSON.stringify(flood));
         expect(extraTools).toBeUndefined();
     });
@@ -1022,7 +1031,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — clientToo
 
     it('rejects an oversized declarations payload wholesale', async () => {
         setupHappyStart();
-        const huge = JSON.stringify([{ ...validTool, Description: 'x'.repeat(70_000) }]);
+        const huge = JSON.stringify([{ ...validTool, Description: 'x'.repeat(300_000) }]);
         const extraTools = await startWithClientTools(huge);
         expect(extraTools).toBeUndefined();
     });
