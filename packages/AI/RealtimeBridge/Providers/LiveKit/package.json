@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/ai-bridge-livekit",
+  "type": "module",
+  "version": "5.40.2",
+  "description": "MemberJunction: LiveKit Realtime Bridge driver — the MJ-native multi-party room. Unlike the other bridges (which connect OUT to a 3rd-party meeting platform), LiveKit is a SELF-HOSTED WebRTC SFU that MJ runs itself. Connects the realtime agent engine to a LiveKit room as a bot participant (audio/video/screen in+out, per-participant diarization, data-channel chat) via an injectable LiveKit room SDK seam, and contributes a Meeting Controls facilitator channel.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.40.2",
+    "@memberjunction/global": "5.40.2",
+    "@memberjunction/core-entities": "5.40.2",
+    "@memberjunction/ai-bridge-base": "5.40.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

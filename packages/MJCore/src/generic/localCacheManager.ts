@@ -621,9 +621,21 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const primaryKeys = baseEntity.EntityInfo.PrimaryKeys;
         if (!primaryKeys || primaryKeys.length === 0) return;
 
-        // Build a CompositeKey from the entity's primary key fields
+        // Build a CompositeKey from the entity's primary key fields.
+        //
+        // CRITICAL for deletes: BaseEntity.Delete() raises the 'delete' event and then
+        // immediately calls NewRecord(), wiping the entity's values — and THIS handler
+        // runs fire-and-forget async, so by the time it executes, baseEntity.GetAll()
+        // returns the wiped new-record state (null PKs) and the guard below would
+        // silently skip invalidation, leaving deleted rows visible in every cached
+        // filtered RunView (ghost rows). The delete event payload carries the
+        // pre-delete snapshot (OldValues) for exactly this reason — prefer it.
+        const payload = entityEvent.payload as { OldValues?: Record<string, unknown> } | undefined;
+        const record = (entityEvent.type === 'delete' && payload?.OldValues)
+            ? payload.OldValues
+            : baseEntity.GetAll();
         const key = new CompositeKey();
-        key.LoadFromEntityInfoAndRecord(baseEntity.EntityInfo, baseEntity.GetAll());
+        key.LoadFromEntityInfoAndRecord(baseEntity.EntityInfo, record);
         if (key.KeyValuePairs.length === 0 || key.KeyValuePairs.some(kv => kv.Value == null)) return;
 
         LogStatusVerbose(`LocalCacheManager: BaseEntity ${entityEvent.type} event for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);
@@ -631,18 +643,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const fingerprintSnapshot = [...fingerprints];
         const nowISO = new Date().toISOString();
 
-        for (const fingerprint of fingerprintSnapshot) {
-            try {
-                await this.processEntityEventForFingerprint(
-                    entityEvent.type,
-                    fingerprint,
-                    baseEntity,
-                    key,
-                    nowISO
-                );
-            } catch (err) {
-                LogError(`HandleBaseEntityEvent: failed to update fingerprint "${fingerprint}": ${(err as Error).message}`);
-            }
+        // Process fingerprints with bounded concurrency — entities with many cached
+        // filtered views previously serialized one await per fingerprint, stretching
+        // the invalidation window after saves/deletes. Per-fingerprint failures are
+        // isolated; the batch size keeps storage-provider pressure bounded.
+        const BATCH_SIZE = 8;
+        for (let i = 0; i < fingerprintSnapshot.length; i += BATCH_SIZE) {
+            const batch = fingerprintSnapshot.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(async (fingerprint) => {
+                try {
+                    await this.processEntityEventForFingerprint(
+                        entityEvent.type,
+                        fingerprint,
+                        baseEntity,
+                        key,
+                        nowISO
+                    );
+                } catch (err) {
+                    LogError(`HandleBaseEntityEvent: failed to update fingerprint "${fingerprint}": ${(err as Error).message}`);
+                }
+            }));
         }
     }
 
@@ -773,6 +793,47 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     private buildCompositeKeyFromRow(row: Record<string, unknown>, pkFieldNames: string[]): CompositeKey {
         const pairs = pkFieldNames.map(fn => new KeyValuePair(fn, row[fn]));
         return CompositeKey.FromKeyValuePairs(pairs);
+    }
+
+    /**
+     * Delimiter for cheap PK keying. The NUL character (U+0000) is used because it is effectively
+     * impossible inside a real PK value. This prevents composite-key collisions: with a space
+     * delimiter, composite PKs ("A","B C") and ("A B","C") would both serialize to "A B C" and
+     * target the WRONG row in UpsertSingleEntity/RemoveSingleEntity. With NUL they become distinct.
+     * This string is only ever compared cheap-key-to-cheap-key (cheapRowKey vs
+     * cheapKeyFromCompositeKey), never against CompositeKey.ToConcatenatedString(), so the exact
+     * delimiter is internal — only mutual consistency between the two builders matters. Both
+     * builders iterate the PK fields in the SAME order: cheapRowKey iterates pkFieldNames (which
+     * callers derive from key.KeyValuePairs.map(kv => kv.FieldName)) and cheapKeyFromCompositeKey
+     * iterates key.KeyValuePairs directly — so position i refers to the same PK field in both.
+     */
+    private static readonly ROW_KEY_DELIM = ' ';
+
+    /**
+     * Builds a cheap, allocation-free composite-key string for a result row from its PK field
+     * values. Used by UpsertSingleEntity/RemoveSingleEntity for their internal dedup Map instead
+     * of allocating a CompositeKey + KeyValuePair[] per row. Matching is consistent because both
+     * the row keys and the target key (see {@link cheapKeyFromCompositeKey}) use this same format —
+     * the string is never compared against CompositeKey.ToConcatenatedString().
+     */
+    private cheapRowKey(row: Record<string, unknown>, pkFieldNames: string[]): string {
+        let s = '';
+        for (let i = 0; i < pkFieldNames.length; i++) {
+            if (i > 0) s += LocalCacheManager.ROW_KEY_DELIM;
+            s += String(row[pkFieldNames[i]] ?? '');
+        }
+        return s;
+    }
+
+    /** Target-key counterpart of {@link cheapRowKey}, built from a CompositeKey's value pairs (same field order). */
+    private cheapKeyFromCompositeKey(key: CompositeKey): string {
+        const pairs = key.KeyValuePairs;
+        let s = '';
+        for (let i = 0; i < pairs.length; i++) {
+            if (i > 0) s += LocalCacheManager.ROW_KEY_DELIM;
+            s += String(pairs[i].Value ?? '');
+        }
+        return s;
     }
 
     /**
@@ -1315,10 +1376,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 data.schemaHash = schemaHash;
             }
         }
-        // Estimate size from a string serialization for eviction accounting only;
-        // the actual stored value is the native object (no JSON.stringify on the
-        // hot path).
-        const sizeBytes = this.estimateSize(JSON.stringify(data));
+        // Estimate size by sampling rows (eviction accounting only); the actual stored
+        // value is the native object — no full JSON.stringify on the hot path.
+        const sizeBytes = this.estimateResultsSize(data.results as unknown[]);
 
         // Per-entity memory limit: evict oldest entries for this entity if over budget
         const entityName = params.EntityName || 'Unknown';
@@ -1646,15 +1706,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: Found cached data with ${cached.results.length} rows, updating...`);
 
                 const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
-                const keyStr = key.ToConcatenatedString();
+                const keyStr = this.cheapKeyFromCompositeKey(key);
 
-                // Build a map of existing records by composite key string
+                // Build a map of existing records by composite key string. Uses a cheap
+                // delimiter-joined PK string (no per-row CompositeKey/KeyValuePair allocation);
+                // matching is consistent because keyStr above uses the same format.
                 const resultMap = new Map<string, unknown>();
                 for (const row of cached.results) {
                     const rowObj = row as Record<string, unknown>;
                     if (pkFieldNames.some(fn => rowObj[fn] == null)) continue; // Skip rows with missing PK fields
-                    const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
-                    resultMap.set(rowKey.ToConcatenatedString(), row);
+                    resultMap.set(this.cheapRowKey(rowObj, pkFieldNames), row);
                 }
 
                 // Upsert the entity (add or replace)
@@ -1694,15 +1755,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 }
 
                 const pkFieldNames = key.KeyValuePairs.map(kv => kv.FieldName);
-                const keyStr = key.ToConcatenatedString();
+                const keyStr = this.cheapKeyFromCompositeKey(key);
 
-                // Build a map of existing records by composite key string
+                // Build a map of existing records by composite key string (cheap PK keying;
+                // see UpsertSingleEntity for the rationale — no per-row CompositeKey allocation).
                 const resultMap = new Map<string, unknown>();
                 for (const row of cached.results) {
                     const rowObj = row as Record<string, unknown>;
                     if (pkFieldNames.some(fn => rowObj[fn] == null)) continue; // Skip rows with missing PK fields
-                    const rowKey = this.buildCompositeKeyFromRow(rowObj, pkFieldNames);
-                    resultMap.set(rowKey.ToConcatenatedString(), row);
+                    resultMap.set(this.cheapRowKey(rowObj, pkFieldNames), row);
                 }
 
                 if (!resultMap.has(keyStr)) {
@@ -1734,9 +1795,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             results: updatedResults,
             maxUpdatedAt: newMaxUpdatedAt
         };
-        // Estimate size from a string serialization for eviction accounting only;
-        // the actual stored value is the native object.
-        const sizeBytes = this.estimateSize(JSON.stringify(data));
+        // Estimate size by sampling rows (eviction accounting only); the actual stored
+        // value is the native object. This runs on every save/delete event per matching
+        // unfiltered fingerprint, so avoiding a full serialization here matters most.
+        const sizeBytes = this.estimateResultsSize(updatedResults);
 
         await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache);
 
@@ -1845,8 +1907,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         const actualRowCount = rowCount ?? results.length;
         const data = { results, maxUpdatedAt, rowCount: actualRowCount, queryId };
-        // Estimate size from a string serialization for eviction accounting only.
-        const sizeBytes = this.estimateSize(JSON.stringify(data));
+        // Estimate size by sampling rows (eviction accounting only).
+        const sizeBytes = this.estimateResultsSize(results);
 
         // Check if we need to evict entries
         await this.evictIfNeeded(sizeBytes);
@@ -2237,6 +2299,55 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     private estimateSize(value: string): number {
         // Approximate size: UTF-16 strings are ~2 bytes per character
         return value.length * 2;
+    }
+
+    /**
+     * Estimates the byte size of a cached result-set WITHOUT fully serializing it.
+     *
+     * Eviction accounting is explicitly approximate, so instead of `JSON.stringify(entireArray)`
+     * — which ran an O(rows × fields) serialization on every cache write, including the per-
+     * save/delete `storeCachedResults` hot path — we average a small RANDOM sample of rows and
+     * scale by row count. Random (not first-N) sampling avoids systematic skew when rows are
+     * heterogeneous (e.g. a nullable large JSON/text column whose head rows happen to be null
+     * or oversized).
+     *
+     * Sample size = clamp(ceil(rowCount × 10%), 3, 10); rows ≤ 3 are measured in full; 0 → 0.
+     */
+    private estimateResultsSize(results: unknown[] | null | undefined): number {
+        const rowCount = results?.length ?? 0;
+        if (rowCount === 0) return 0;
+
+        // Per-row stringify guarded against circular references. Eviction sizing is explicitly
+        // approximate and never affects correctness, so a circular (or otherwise non-serializable)
+        // row must NOT throw — it would do so non-deterministically here because rows are sampled
+        // at random. On failure we contribute 0 length for that row (a harmless under-estimate).
+        const sumLen = (idx: number): number => {
+            try {
+                return JSON.stringify(results![idx])?.length ?? 0;
+            } catch {
+                return 0;
+            }
+        };
+
+        const sampleCount = Math.min(rowCount, Math.max(3, Math.ceil(rowCount * 0.10)));
+        if (sampleCount >= rowCount) {
+            // Small result set — measure every row (no point sampling).
+            let total = 0;
+            for (let i = 0; i < rowCount; i++) total += sumLen(i);
+            return total * 2;
+        }
+
+        // Average a sample of distinct random row indexes, then scale by row count.
+        const seen = new Set<number>();
+        let total = 0;
+        while (seen.size < sampleCount) {
+            const idx = Math.floor(Math.random() * rowCount);
+            if (seen.has(idx)) continue;
+            seen.add(idx);
+            total += sumLen(idx);
+        }
+        const avgLen = total / sampleCount;
+        return Math.ceil(avgLen * rowCount) * 2;
     }
 
     /**

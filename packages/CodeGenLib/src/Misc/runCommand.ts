@@ -51,8 +51,15 @@ export class RunCommandsBase {
 
       logStatus(`STARTING COMMAND: "${command.command}" in location "${absPath}" with args "${command.args.join(' ')}"`);
 
+      // When shell:true, Node deprecates passing a separate args array (DEP0190) because
+      // the shell concatenates them anyway. Build the full command line ourselves and pass
+      // it as a single string so the spawn behavior is identical without the warning.
+      const fullCommand = command.args.length > 0
+        ? `${commandName} ${command.args.join(' ')}`
+        : commandName;
+
       const commandExecution = new Promise<CommandExecutionResult>((resolve, reject) => {
-        cp = spawn(commandName, command.args, {
+        cp = spawn(fullCommand, {
           cwd: absPath,
           stdio: 'pipe',
           shell: true,

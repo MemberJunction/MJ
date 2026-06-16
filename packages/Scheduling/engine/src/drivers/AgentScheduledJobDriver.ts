@@ -58,7 +58,12 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
             agent: agent,
             conversationMessages: conversationMessages,
             payload: config.StartingPayload,
-            contextUser: context.ContextUser
+            contextUser: context.ContextUser,
+            // Heartbeat the lease on every agent step (prompt / action / sub-agent /
+            // decision) so a healthy long-running agent keeps its concurrency slot
+            // (GH #2749). Fire-and-forget is safe — context.heartbeat never throws
+            // and self-throttles to an effective beat at most every ~5 min.
+            onProgress: () => { void context.heartbeat?.(); }
         });
 
         // Link agent run back to scheduled job run

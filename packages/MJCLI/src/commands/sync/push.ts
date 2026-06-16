@@ -3,6 +3,7 @@ import { confirm } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import path from 'path';
+import { writeFileSync } from 'fs';
 
 export default class Push extends Command {
   static description = 'Push local file changes to the database';
@@ -42,6 +43,10 @@ export default class Push extends Command {
       description: 'Skip unchanged files using stored checksums from last push',
       default: false
     }),
+    'change-detail': Flags.boolean({
+      description: 'Write a detailed per-record change report (primary keys + field diffs) to a file',
+      default: false
+    }),
   };
 
   async run(): Promise<void> {
@@ -54,6 +59,29 @@ export default class Push extends Command {
     const { flags } = await this.parse(Push);
     const spinner = ora();
     const startTime = Date.now();
+    let exitCode = 0;
+
+    // Live elapsed timers: the spinner shows time on the current entity plus a running
+    // total since the push began, ticked onto the spinner text ~10x/sec. unref'd so it
+    // never holds the event loop open on its own.
+    let stepStart = startTime;
+    let stepBaseMessage = '';
+    let ticker: NodeJS.Timeout | null = null;
+    const fmtMs = (ms: number) => (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`);
+    const stopTicker = () => {
+      if (ticker) { clearInterval(ticker); ticker = null; }
+    };
+    const startTicker = (message: string) => {
+      stopTicker();
+      stepBaseMessage = message;
+      stepStart = Date.now();
+      ticker = setInterval(() => {
+        const step = fmtMs(Date.now() - stepStart);
+        const total = fmtMs(Date.now() - startTime);
+        spinner.text = `${stepBaseMessage} ${chalk.gray(`· ${step} · ${total} total`)}`;
+      }, 100);
+      ticker.unref?.();
+    };
 
     try {
       // Load configurations
@@ -153,11 +181,21 @@ export default class Push extends Command {
         {
           onProgress: (message) => {
             spinner.start(message);
+            startTicker(message);
           },
-          onSuccess: (message) => {
-            spinner.succeed(message);
+          onSuccess: (message, changed) => {
+            stopTicker();
+            // Per-entity elapsed, dimmed so it reads as secondary.
+            const stepTime = chalk.gray(`(${fmtMs(Date.now() - stepStart)})`);
+            // A single, consistent success glyph (✓) — green for directories that changed,
+            // dimmed for pure no-ops so the changed lines stand out in a long stream.
+            spinner.stopAndPersist({
+              symbol: changed ? chalk.green('✓') : chalk.gray('✓'),
+              text: `${message} ${stepTime}`,
+            });
           },
           onError: (message) => {
+            stopTicker();
             // For rollback messages, just log them - don't throw
             if (message.includes('Rolling back database') || message.includes('rolled back successfully')) {
               spinner.fail(message);
@@ -206,19 +244,49 @@ export default class Push extends Command {
       );
 
       // Show summary
+      stopTicker();
       const endTime = Date.now();
       const formatter = new FormattingService();
-      const summary = formatter.formatSyncSummary('push', {
-        created: result.created,
-        updated: result.updated,
-        unchanged: result.unchanged,
-        deleted: result.deleted || 0,
-        skipped: result.skipped || 0,
-        deferred: result.deferred || 0,
-        errors: result.errors,
-        duration: endTime - startTime,
-      });
-      this.log('\n' + summary);
+
+      // Changes recap — a compact, grouped summary of what was created/updated/deleted, so
+      // real mutations are easy to find amid a long stream of unchanged records.
+      const recap = formatter.formatChangesRecap(result.changeLog);
+      if (recap) {
+        this.log('\n' + recap);
+      }
+
+      // --change-detail: dump the full per-record report (PKs + field diffs) to a file,
+      // next to the SQL log when available, otherwise the current directory.
+      if (flags['change-detail'] && result.changeLog.length > 0) {
+        const stamp = new Date(endTime).toISOString().replace(/[:.]/g, '-');
+        const reportDir = result.sqlLogPath ? path.dirname(result.sqlLogPath) : process.cwd();
+        const reportPath = path.join(reportDir, `MetadataSync_Changes_${stamp}.log`);
+        try {
+          writeFileSync(reportPath, formatter.formatChangesReport(result.changeLog, new Date(endTime).toISOString()));
+          this.log(`\n📄 Detailed change report: ${path.relative(process.cwd(), reportPath)}`);
+        } catch (writeErr) {
+          this.log(chalk.yellow(`\n⚠️  Could not write change report: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`));
+        }
+      }
+
+      // The full breakdown box is worth the vertical space only when something actually
+      // happened (or the user asked for detail). A clean, no-change run collapses to the
+      // per-directory line(s) plus a one-line final status (see below).
+      const changed = result.created > 0 || result.updated > 0 || (result.deleted || 0) > 0 || result.errors > 0;
+      const showSummaryBox = changed || flags.verbose;
+      if (showSummaryBox) {
+        const summary = formatter.formatSyncSummary('push', {
+          created: result.created,
+          updated: result.updated,
+          unchanged: result.unchanged,
+          deleted: result.deleted || 0,
+          skipped: result.skipped || 0,
+          deferred: result.deferred || 0,
+          errors: result.errors,
+          duration: endTime - startTime,
+        });
+        this.log('\n' + summary);
+      }
 
       // Handle result
       if (result.errors > 0) {
@@ -247,7 +315,10 @@ export default class Push extends Command {
       // Show final status
       if (!flags['dry-run']) {
         if (result.errors === 0) {
-          this.log(chalk.green('\n✅ Push completed successfully'));
+          // When the breakdown box was skipped (clean run), fold the headline facts —
+          // "no changes" + duration — into the final line so the run still reports them.
+          const extras = showSummaryBox ? '' : ` · no changes · ${formatter.formatDuration(endTime - startTime)}`;
+          this.log(chalk.green(`\n✓ Push completed successfully${extras}`));
         } else {
           this.log(chalk.yellow('\n⚠️  Push completed with errors'));
         }
@@ -257,14 +328,15 @@ export default class Push extends Command {
         }
       }
     } catch (error) {
+      stopTicker();
       spinner.fail('Push failed');
 
       // Show concise error message without duplicate stack traces
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.log(chalk.red(`\n❌ Error: ${errorMessage}\n`));
 
-      // Exit with error code but don't show stack trace again (already logged by handlers)
-      this.exit(1);
+      // Set error exit code — actual process.exit() happens in the finally block
+      exitCode = 1;
     } finally {
       // Reset singletons + close DB pool so the process can exit cleanly.
       // Without cleanupProvider, the pg.Pool / mssql.ConnectionPool keep the
@@ -281,9 +353,8 @@ export default class Push extends Command {
       // event loop open (e.g. @huggingface/transformers ONNX worker threads
       // spawned for embedding compute, or pg.Pool clients that didn't release
       // cleanly). Without this the CLI hangs indefinitely after a successful
-      // push when local embedding generation ran. Use exit code 0 here because
-      // any error path above has already called this.exit(1).
-      process.exit(0);
+      // push when local embedding generation ran.
+      process.exit(exitCode);
     }
   }
 }

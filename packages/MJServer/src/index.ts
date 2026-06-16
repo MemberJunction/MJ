@@ -17,6 +17,7 @@ import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
@@ -32,6 +33,8 @@ import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
+import { StartupLogger } from './logging/StartupLogger.js';
+import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
@@ -43,7 +46,7 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
-import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
+import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
@@ -52,6 +55,7 @@ import { PubSubManager } from './generic/PubSubManager.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
+import { SessionJanitor } from './agentSessions/index.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
@@ -167,6 +171,10 @@ export * from './resolvers/UserViewResolver.js';
 export * from './resolvers/VersionHistoryResolver.js';
 export * from './resolvers/CurrentUserContextResolver.js';
 export * from './resolvers/RSUResolver.js';
+export * from './resolvers/AgentSessionResolver.js';
+export * from './resolvers/RealtimeClientSessionResolver.js';
+export * from './resolvers/RemoteBrowserActionResolver.js';
+export * from './agentSessions/index.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
@@ -194,13 +202,35 @@ const localPath = (p: string) => {
 
 export const createApp = (): Application => express();
 
+/**
+ * Resolves the MJServer package version for the startup summary header.
+ *
+ * Reads `@memberjunction/server`'s own `package.json` relative to this module.
+ * Returns `undefined` (and the header omits the version) if it can't be read,
+ * so version display is best-effort and never blocks startup.
+ */
+function resolveServerVersion(): string | undefined {
+  try {
+    // package.json sits at the package root, two levels up from dist/ (or src/).
+    const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
+    return pkg.version;
+  } catch {
+    return undefined;
+  }
+}
+
 export const serve = async (resolverPaths: Array<string>, app: Application = createApp(), options?: MJServerOptions): Promise<void> => {
   const t0 = performance.now();
-  const lap = (label: string, since: number) => {
-    const ms = performance.now() - since;
-    console.log(`⏱️  [Startup] ${label}: ${ms.toFixed(0)}ms`);
-    return performance.now();
-  };
+  // Level-gated startup logger. Resolves verbosity from telemetry.level (single
+  // operator knob). At `standard` (default), per-phase timings are collapsed into
+  // the one-line summary; at `verbose`+ each phase prints inline as before.
+  const startupLog = new StartupLogger();
+  // Wire the GLOBAL verbose-logging gate to the resolved server level, so cross-package
+  // LogStatusEx({ verboseOnly: true }) lines (cache, scheduling, integration, MCP, …) honor the
+  // configured level instead of defaulting to hidden. Without this, "verbose-only" is "always hidden".
+  SetVerboseLogging(startupLog.IsAtLeast('verbose'));
+  const lap = (label: string, since: number) => startupLog.EndPhase(label, since);
 
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
@@ -220,7 +250,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   if (dbType === 'postgresql') {
     // ─── PostgreSQL Path ───────────────────────────────────────────
-    console.log('Database type: PostgreSQL');
+    startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
     const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
 
@@ -246,7 +276,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const testClient = await pgPool.connect();
     await testClient.query('SELECT 1');
     testClient.release();
-    console.log(`PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+    startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
     // This allows existing code (types, util, context) to work without changes
@@ -338,7 +368,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         const codegenPgProvider = new PostgreSQLDataProvider();
         await codegenPgProvider.Config(codegenPgConfigData); // separate pool (per-instance manager); does NOT touch the global API provider
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenPgProvider);
-        console.log('RSU DDL provider initialized with CodeGen credentials (PostgreSQL).');
+        startupLog.LogIf('verbose', 'RSU DDL provider initialized with CodeGen credentials (PostgreSQL).');
 
         // Set up in-process CodeGen runner for RSU
         try {
@@ -361,21 +391,21 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
           RuntimeSchemaManager.Instance.SetCodeGenRunner({
             RunInProcess: (skipDB) => runObject.RunInProcess(codegenDataSource, skipDB, rsuWorkDir),
           });
-          console.log('RSU in-process CodeGen runner initialized (PostgreSQL).');
+          startupLog.LogIf('verbose', 'RSU in-process CodeGen runner initialized (PostgreSQL).');
 
           // Inject CodeGen output paths for targeted git staging
           const { initializeConfig } = await import('@memberjunction/codegen-lib');
           const cgConfig = initializeConfig(rsuWorkDir);
           const outputPaths = (cgConfig.output ?? []).map((o: { directory: string }) => o.directory);
           RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
-          console.log(`RSU CodeGen output paths: ${outputPaths.length} directories configured.`);
+          startupLog.LogIf('verbose', `RSU CodeGen output paths: ${outputPaths.length} directories configured.`);
 
           // Point RSU's soft PK/FK writer at the SAME file CodeGen reads (mj.config.cjs
           // `additionalSchemaInfo`), or RSU writes soft PKs to its own default path while
           // CodeGen reads a different one and skips integration tables with "No primary key found".
           if (cgConfig.additionalSchemaInfo) {
             RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(cgConfig.additionalSchemaInfo);
-            console.log(`RSU additionalSchemaInfo path: ${cgConfig.additionalSchemaInfo}`);
+            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${cgConfig.additionalSchemaInfo}`);
           }
         } catch (codegenErr) {
           console.warn(`RSU in-process CodeGen runner setup failed (will fall back to child process): ${(codegenErr as Error).message}`);
@@ -386,10 +416,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
 
     const md = new Metadata(); // global-provider-ok: bootstrap
-    console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+    const pgEntityCount = md?.Entities ? md.Entities.length : 0;
+    startupLog.LogIf('verbose', `Data Source has been initialized. ${pgEntityCount} entities loaded.`);
+    startupLog.SetDatabaseInfo('PostgreSQL', `${pgHost}:${pgPort}/${pgDatabase}`, pgEntityCount);
   } else {
     // ─── SQL Server Path (existing behavior) ───────────────────────
-    console.log('Database type: SQL Server');
+    startupLog.LogIf('verbose', 'Database type: SQL Server');
     let tPhase = performance.now();
     const pool = new sql.ConnectionPool(createMSSQLConfig());
 
@@ -421,14 +453,16 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       await readOnlyPool.connect();
 
       dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
-      console.log('Read-only Connection Pool has been initialized.');
+      startupLog.LogIf('verbose', 'Read-only Connection Pool has been initialized.');
     }
 
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
     await setupSQLServerClient(config);
     tPhase = lap('Metadata + Provider Setup', tPhase);
     const md = new Metadata(); // global-provider-ok: bootstrap
-    console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+    const entityCount = md?.Entities ? md.Entities.length : 0;
+    startupLog.LogIf('verbose', `Data Source has been initialized. ${entityCount} entities loaded.`);
+    startupLog.SetDatabaseInfo('SQL Server', `${dbHost}:${dbPort}/${dbDatabase}`, entityCount);
 
     // Set up CodeGen-credentialed provider for RSU DDL operations (CREATE TABLE, CREATE SCHEMA, etc.)
     const codegenUser = process.env.CODEGEN_DB_USERNAME;
@@ -457,7 +491,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         const codegenProvider = new SQLServerDataProvider();
         await codegenProvider.Config(codegenConfig);
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
-        console.log('RSU DDL provider initialized with CodeGen credentials.');
+        startupLog.LogIf('verbose', 'RSU DDL provider initialized with CodeGen credentials.');
 
         // Set up in-process CodeGen runner for RSU
         try {
@@ -480,14 +514,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
           RuntimeSchemaManager.Instance.SetCodeGenRunner({
             RunInProcess: (skipDB) => runObject.RunInProcess(codegenDataSource, skipDB, rsuWorkDir),
           });
-          console.log('RSU in-process CodeGen runner initialized.');
+          startupLog.LogIf('verbose', 'RSU in-process CodeGen runner initialized.');
 
           // Inject CodeGen output paths for targeted git staging
           const { initializeConfig } = await import('@memberjunction/codegen-lib');
           const codegenConfig = initializeConfig(rsuWorkDir);
           const outputPaths = (codegenConfig.output ?? []).map((o: { directory: string }) => o.directory);
           RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
-          console.log(`RSU CodeGen output paths: ${outputPaths.length} directories configured.`);
+          startupLog.LogIf('verbose', `RSU CodeGen output paths: ${outputPaths.length} directories configured.`);
 
           // Point RSU's soft PK/FK writer at the SAME file CodeGen reads (mj.config.cjs
           // `additionalSchemaInfo`). Without this, RSU writes soft PKs to its own default
@@ -495,7 +529,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
           // with "No primary key found".
           if (codegenConfig.additionalSchemaInfo) {
             RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(codegenConfig.additionalSchemaInfo);
-            console.log(`RSU additionalSchemaInfo path: ${codegenConfig.additionalSchemaInfo}`);
+            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${codegenConfig.additionalSchemaInfo}`);
           }
         } catch (codegenErr) {
           console.warn(`RSU in-process CodeGen runner setup failed (will fall back to child process): ${(codegenErr as Error).message}`);
@@ -521,10 +555,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     if (configInfo.telemetry?.level) {
       tm.UpdateSettings({ level: configInfo.telemetry.level as TelemetryLevel });
     }
-    console.log(`Server telemetry enabled with level: ${configInfo.telemetry.level || 'standard'}`);
+    startupLog.LogIf('verbose', `Server telemetry enabled with level: ${configInfo.telemetry.level || 'standard'}`);
   } else {
     tm.SetEnabled(false);
-    console.log('Server telemetry disabled');
+    startupLog.LogIf('verbose', 'Server telemetry disabled');
   }
 
   // Optionally inject Redis as the shared storage provider for cross-server cache invalidation
@@ -559,7 +593,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         }
     });
 
-    console.log(`Redis cache provider connected: ${process.env.REDIS_URL}`);
+    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
   }
 
   // If Redis is available, swap LocalCacheManager's storage provider to Redis.
@@ -567,7 +601,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // during engine loading. SetStorageProvider migrates cached data to Redis.
   if (process.env.REDIS_URL) {
     await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider); // global-provider-ok: bootstrap
-    console.log('LocalCacheManager: storage provider swapped to Redis');
+    startupLog.LogIf('verbose', 'LocalCacheManager: storage provider swapped to Redis');
   }
   // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
   if (!LocalCacheManager.Instance.IsInitialized) {
@@ -581,11 +615,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       verboseLogging: cs.verboseLogging ?? false,
     };
     await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig); // global-provider-ok: bootstrap
-    console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
-      maxMemoryMB: cs.maxMemoryMB ?? 150,
-      maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
-      evictionSweepIntervalSeconds: cs.evictionSweepIntervalSeconds ?? 300,
-    }));
+    if (startupLog.IsAtLeast('verbose')) {
+      // eslint-disable-next-line no-console
+      console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
+        maxMemoryMB: cs.maxMemoryMB ?? 150,
+        maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
+        evictionSweepIntervalSeconds: cs.evictionSweepIntervalSeconds ?? 300,
+      }));
+    }
   }
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
@@ -657,7 +694,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Initialize all middleware
   for (const mw of middlewares) {
       await mw.Initialize();
-      console.log(`  [Middleware] ${mw.Label}`);
+      startupLog.LogIf('verbose', `  [Middleware] ${mw.Label}`);
   }
 
   // Collect middleware contributions for each pipeline stage
@@ -708,7 +745,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
               Object.values(module).filter((value) => typeof value === 'function')
           );
           allResolvers = [...resolvers, ...mwResolvers] as BuildSchemaOptions['resolvers'];
-          console.log(`  [Middleware Resolvers] Loaded ${mwResolverFiles.length} resolver file(s) from middleware`);
+          startupLog.LogIf('verbose', `  [Middleware Resolvers] Loaded ${mwResolverFiles.length} resolver file(s) from middleware`);
       }
   }
 
@@ -911,7 +948,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   // ─── OAuth callback routes (unauthenticated, registered BEFORE auth) ─────
   const oauthPublicUrl = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
-  console.log(`[OAuth] publicUrl: ${oauthPublicUrl}`);
+  startupLog.LogIf('verbose', `[OAuth] publicUrl: ${oauthPublicUrl}`);
 
   let oauthAuthenticatedRouter: ReturnType<typeof createOAuthCallbackHandler>['authenticatedRouter'] | undefined;
   if (oauthPublicUrl) {
@@ -926,14 +963,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
     // OAuth callback is unauthenticated (called by external auth server)
     app.use('/oauth', oauthCors, callbackRouter);
-    console.log('[OAuth] Callback route registered at /oauth/callback');
+    startupLog.LogIf('verbose', '[OAuth] Callback route registered at /oauth/callback');
   }
 
   // ─── eSignature webhook (unauthenticated, registered BEFORE auth) ─────
   // Called by external signature providers (DocuSign Connect, etc.) without an MJ bearer token.
   // The provider DRIVER verifies the payload signature/HMAC; MJ auth does not apply here.
   app.use('/esignature', cors<cors.CorsRequest>(), createSignatureWebhookHandler());
-  console.log('[eSignature] Webhook route registered at /esignature/webhook/:driverKey');
+  startupLog.LogIf('verbose', '[eSignature] Webhook route registered at /esignature/webhook/:driverKey');
 
   // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
   // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the
@@ -944,7 +981,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     magicLinkAuthenticatedRouter = authenticatedRouter;
     registerMagicLinkAuthProvider(oauthPublicUrl, configInfo.magicLink);
     app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), publicRouter);
-    console.log(`[MagicLink] Public routes registered at ${MAGIC_LINK_MOUNT_PATH}/redeem and ${MAGIC_LINK_MOUNT_PATH}/jwks.json`);
+    startupLog.LogIf('verbose', `[MagicLink] Public routes registered at ${MAGIC_LINK_MOUNT_PATH}/redeem and ${MAGIC_LINK_MOUNT_PATH}/jwks.json`);
   }
 
   // ─── Global CORS (before auth so 401 responses include CORS headers) ─────
@@ -998,13 +1035,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (oauthAuthenticatedRouter) {
     const oauthCors = cors<cors.CorsRequest>();
     app.use('/oauth', oauthCors, BodyParser.json(), oauthAuthenticatedRouter);
-    console.log('[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
+    startupLog.LogIf('verbose', '[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
   }
 
   // ─── Magic-link authenticated route (invite creation) ─────────────────────
   if (magicLinkAuthenticatedRouter) {
     app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), magicLinkAuthenticatedRouter);
-    console.log(`[MagicLink] Authenticated route registered at ${MAGIC_LINK_MOUNT_PATH}/create`);
+    startupLog.LogIf('verbose', `[MagicLink] Authenticated route registered at ${MAGIC_LINK_MOUNT_PATH}/create`);
   }
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────
@@ -1021,9 +1058,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (process.env.MJ_REST_API_ENABLED !== undefined) {
     restApiConfig.enabled = process.env.MJ_REST_API_ENABLED === 'true';
     if (restApiConfig.enabled) {
-      console.log('REST API is enabled via environment variable');
+      // Genuine config override — actionable, surfaced at all levels.
+      LogStatus('REST API is enabled via environment variable');
     }
   }
+  startupLog.SetRestEnabled(restApiConfig.enabled);
 
   if (process.env.MJ_REST_API_INCLUDE_ENTITIES) {
     restApiConfig.includeEntities = process.env.MJ_REST_API_INCLUDE_ENTITIES.split(',').map(e => e.trim());
@@ -1082,9 +1121,19 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   tServe = lap('Apollo + Express Setup', tServe);
 
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
-  lap('Total Startup', t0);
-  console.log(`📦 Connected to database: ${dbHost}:${dbPort}/${dbDatabase}`);
-  console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
+  // Total startup measured but not pushed as a phase row — the per-phase rows already
+  // sum to the total in the collapsed summary line. Keep the measurement for verbose.
+  startupLog.EndPhase('Total Startup', t0);
+  startupLog.SetReadyUrl(`http://localhost:${graphqlPort}/`);
+  // Populate summary fields that are known only now, then print the one summary block.
+  for (const provider of AuthProviderFactory.Instance.getAllProviders()) {
+    startupLog.AddAuthProvider(provider.name);
+  }
+  startupLog.SetVersion(resolveServerVersion());
+  if (scheduledJobsService) {
+    startupLog.SetScheduledJobCount(scheduledJobsService.GetStatus().activeJobs);
+  }
+  startupLog.PrintSummary();
 
   // Process pending RSU work from pre-restart (entity maps, field maps, sync)
   processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
@@ -1103,6 +1152,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
     AgentRunWatchdog.SweepOrphanedRuns(Metadata.Provider, resumeUser) // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
       .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
+  }
+
+  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then keep a
+  // periodic staleness sweep running. Self-registers with ShutdownRegistry, so its timer is cleared
+  // by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
+  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
+    SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+      .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
   }
 
   // Set up graceful shutdown handlers

@@ -47,6 +47,11 @@ graph TD
 - **Resolution Control**: Support for sizes up to 4K (3840x2160)
 - **Style and Quality**: Configurable style and quality parameters
 
+### Embeddings (GeminiEmbedding2)
+- **Multimodal Embeddings**: Map text, images, video, audio, and PDF into one shared 3072-dimensional vector space
+- **Cross-Modal Retrieval**: Embed text and media together so a text query can match an image, audio, or video
+- **Text and Batch**: Single and batch text embedding
+
 ## Installation
 
 ```bash
@@ -102,6 +107,26 @@ const result = await generator.GenerateImage({
 });
 ```
 
+### Embeddings
+
+```typescript
+import { GeminiEmbedding2 } from "@memberjunction/ai-gemini";
+
+const embedding = new GeminiEmbedding2("your-google-api-key");
+
+// Text (3072-dim vector)
+const text = await embedding.EmbedText({ text: "a golden retriever in the snow" });
+
+// Multimodal: text + image fused into ONE vector (cross-modal retrieval)
+const multimodal = await embedding.EmbedContent({
+    content: [
+        { type: "text", content: "product photo:" },
+        { type: "image_url", content: "<base64-image>", mimeType: "image/png" },
+    ],
+});
+console.log(multimodal.vector.length); // 3072
+```
+
 ## Thinking Budget / Effort Level
 
 The provider maps MJ effort levels to Gemini's thinking system:
@@ -133,6 +158,7 @@ The provider maps MJ effort levels to Gemini's thinking system:
 
 - `GeminiLLM` -- Registered via `@RegisterClass(BaseLLM, 'GeminiLLM')`
 - `GeminiImageGenerator` -- Registered via `@RegisterClass(BaseImageGenerator, 'GeminiImageGenerator')`
+- `GeminiEmbedding2` -- Registered via `@RegisterClass(BaseEmbeddings, 'GeminiEmbedding2')`
 
 ## Dependencies
 

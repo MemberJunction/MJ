@@ -40,8 +40,9 @@ export class EntityVectorSyncer extends VectorBase {
     return this.Provider;
   }
 
-  constructor() {
-    super();
+  /** @param provider - Optional request-scoped metadata provider; see {@link VectorBase} constructor. */
+  constructor(provider?: IMetadataProvider | null) {
+    super(provider);
   }
 
   /**
@@ -1058,7 +1059,7 @@ export class EntityVectorSyncer extends VectorBase {
    * Creates or updates an Entity Record Document record linking a source record to its vector embedding.
    */
   protected async UpsertEntityRecordDocumentRecords(embeddingData: EmbeddingData, contextUser: UserInfo): Promise<void> {
-    const md: Metadata = super.Metadata;
+    const md: IMetadataProvider = super.Metadata;
     const rv: RunView = super.RunView;
 
     const vectorIndexID: string = String(embeddingData.VectorIndexID);

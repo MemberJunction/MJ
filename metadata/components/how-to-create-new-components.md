@@ -176,8 +176,8 @@ Root components receive ONLY these props:
 - `styles`: Component styling utilities  
 - `components`: Registry of available child components
 - `callbacks`: Event handler registry (includes `OpenEntityRecord`)
-- `savedUserSettings`: Persisted user preferences
-- `onSaveUserSettings`: Callback to persist settings
+- `savedUserSettings`: Persisted user preferences (durable, per-user, cross-device — read prefs from here)
+- `onSaveUserSettings`: Callback to persist settings (call with the FULL settings object)
 
 ### State Management Rules
 - Components own ALL their state
@@ -185,6 +185,20 @@ Root components receive ONLY these props:
 - Save important preferences via `onSaveUserSettings`
 - Never sync props to state with useEffect
 - Use `useState`, never `useReducer`
+
+### User Preferences Persist Automatically (use them!)
+`savedUserSettings` / `onSaveUserSettings` are backed by a **durable, per-user,
+cross-device** store — the host persists them automatically via MemberJunction's
+`UserInfoEngine`, scoped to your component. The same user sees the same preferences
+on every device. Use them to remember view mode, sort order, active tab, collapsed
+panels, selected filters/date ranges, page size — anything the user expects to stick.
+Keep transient/derived state (hover, in-flight input, fetched data) in plain React
+state instead.
+
+- Own a single settings object; initialize state from it with fallbacks (`savedUserSettings?.sortBy ?? 'Name'`).
+- On change, call `onSaveUserSettings({ ...savedUserSettings, changedKey: value })` with the FULL object.
+- Don't namespace keys (the host scopes the whole object per component) and don't await the call (it's debounced, fire-and-forget).
+- The host MERGES your payload over the saved settings (never replaces), so a partial object can't wipe other keys. To remove a saved key, set it explicitly to `null` — omitting it does not remove it.
 
 ### Data Access Rules
 - Always check `result.Success` before using data

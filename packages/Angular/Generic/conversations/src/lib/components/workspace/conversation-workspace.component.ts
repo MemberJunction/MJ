@@ -30,6 +30,7 @@ import {
   ChangeDetectorRef,
   HostListener
 } from '@angular/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJConversationEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -283,6 +284,31 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    * Handler for new conversation creation from chat area
    * Now includes pending message and attachments to ensure atomic state update
    */
+  /**
+   * A realtime session created (and just finished with) a brand-new conversation. The
+   * row was created SERVER-side, so it isn't in the engine cache yet — reload the list
+   * to fold it in, then select it ONLY when the conversation list is visible (owner
+   * spec: the user may have the sidebar hidden; don't yank their context if so —
+   * the refreshed cache makes it appear whenever the list is reopened).
+   */
+  async onRealtimeConversationReady(event: { conversationId: string; select: boolean }): Promise<void> {
+    try {
+      await ConversationEngine.Instance.LoadConversations(this.environmentId, this.currentUser, true);
+      if (event.select && this.isSidebarVisible) {
+        const conversation = ConversationEngine.Instance.Conversations.find(
+          c => UUIDsEqual(c.ID, event.conversationId)
+        );
+        if (conversation) {
+          this.selectedConversationId = conversation.ID;
+          this.selectedConversation = conversation;
+          this.isNewUnsavedConversation = false;
+        }
+      }
+    } catch (error) {
+      console.error('onRealtimeConversationReady ERROR:', error);
+    }
+  }
+
   onConversationCreated(event: {
     conversation: MJConversationEntity;
     pendingMessage?: string;

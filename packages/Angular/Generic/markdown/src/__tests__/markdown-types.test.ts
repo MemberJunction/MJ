@@ -56,7 +56,7 @@ describe('DEFAULT_MARKDOWN_CONFIG', () => {
   });
 
   it('should use default mermaid theme', () => {
-    expect(DEFAULT_MARKDOWN_CONFIG.mermaidTheme).toBe('default');
+    expect(DEFAULT_MARKDOWN_CONFIG.mermaidTheme).toBe('auto');
   });
 });
 

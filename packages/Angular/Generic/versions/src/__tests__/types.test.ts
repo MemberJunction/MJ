@@ -11,7 +11,7 @@ describe('MicroViewData type', () => {
       FullRecordJSON: { Name: 'John', Email: 'john@test.com' },
       FieldDiffs: null
     };
-    expect(data.EntityName).toBe('Users');
+    expect(data.EntityName).toBe('MJ: Users');
     expect(data.RecordID).toBe('rec-1');
     expect(data.FullRecordJSON).toEqual({ Name: 'John', Email: 'john@test.com' });
   });
