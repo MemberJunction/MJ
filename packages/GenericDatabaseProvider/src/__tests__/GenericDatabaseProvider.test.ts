@@ -186,7 +186,7 @@ describe('GenericDatabaseProvider', () => {
 
     describe('PostProcessRows', () => {
         it('returns empty array for empty input', async () => {
-            const entityInfo = { Fields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
             const result = await provider.testPostProcessRows([], entityInfo, mockUser);
             expect(result).toEqual([]);
         });
@@ -197,6 +197,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'ID', Encrypt: false, EncryptionKeyID: null },
                     { Name: 'Name', Encrypt: false, EncryptionKeyID: null },
                 ],
+                DatetimeFields: [],
             } as unknown as EntityInfo;
             const rows = [{ ID: '1', Name: 'Test' }];
             const result = await provider.testPostProcessRows(rows, entityInfo, mockUser);
@@ -204,7 +205,7 @@ describe('GenericDatabaseProvider', () => {
         });
 
         it('returns null input unchanged', async () => {
-            const entityInfo = { Fields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
             const result = await provider.testPostProcessRows(null as unknown as Record<string, unknown>[], entityInfo, mockUser);
             expect(result).toBeNull();
         });
@@ -231,12 +232,12 @@ describe('GenericDatabaseProvider', () => {
         });
 
         it('TransformExternalSQLClause returns clause unchanged by default', () => {
-            const entityInfo = { Fields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
             expect(provider.testTransformExternalSQLClause('Status = 1', entityInfo)).toBe('Status = 1');
         });
 
         it('TransformExternalSQLClause passes empty string through', () => {
-            const entityInfo = { Fields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
             expect(provider.testTransformExternalSQLClause('', entityInfo)).toBe('');
         });
     });
@@ -428,6 +429,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'ID', CodeName: 'ID', NeedsQuotes: true },
                 ],
                 Fields: [],
+                DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetUserRowLevelSecurityWhereClause: () => '',
@@ -464,6 +466,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'ID', CodeName: 'ID', NeedsQuotes: true },
                 ],
                 Fields: [],
+                DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetUserRowLevelSecurityWhereClause: () => '',
@@ -496,6 +499,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'Code', TSType: EntityFieldTSType.String, Type: 'char' },
                     { Name: 'Name', TSType: EntityFieldTSType.String, Type: 'varchar' },
                 ],
+                DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetUserRowLevelSecurityWhereClause: () => '',
@@ -533,6 +537,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'ID', CodeName: 'ID', NeedsQuotes: true },
                 ],
                 Fields: [],
+                DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => opts.exempt,
                 GetUserRowLevelSecurityWhereClause: () => opts.exempt ? '' : opts.rlsClause,

@@ -19,6 +19,7 @@ export * from './AgentRunner';
 export * from './PayloadManager';
 export * from './ScratchpadManager';
 export * from './ArtifactToolManager';
+export * from './MemoryWriteManager';
 export * from './pipeline';
 export * from './file-input-resolver';
 export * from './artifact-tools/DataSnapshotToolLibrary';
@@ -53,6 +54,8 @@ export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-channel-server-host';
 export * from './realtime/whiteboard-channel-server';
+export * from './realtime/meeting-controls-state';
+export * from './realtime/meeting-controls-channel-server';
 
 // Re-export from ai-reranker for backward compatibility
 export {

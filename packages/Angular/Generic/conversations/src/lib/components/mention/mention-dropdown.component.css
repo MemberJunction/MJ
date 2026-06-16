@@ -92,6 +92,10 @@
   background: var(--mj-brand-primary);
 }
 
+.suggestion-type-badge.entity {
+  background: #11998e;
+}
+
 .suggestion-description {
   font-size: 12px;
   color: var(--mj-text-secondary);

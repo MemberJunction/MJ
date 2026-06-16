@@ -7,12 +7,20 @@
  *
  * @module @memberjunction/server
  */
-import { LoadWhiteboardChannelServer } from '@memberjunction/ai-agents';
+import { LoadWhiteboardChannelServer, LoadMeetingControlsChannelServer } from '@memberjunction/ai-agents';
+import { LoadRemoteBrowserChannel } from '@memberjunction/remote-browser-server';
+import { LoadSelfHostRemoteBrowser } from '@memberjunction/remote-browser-selfhost';
 
 // Tree-shaking prevention: force the server-side channel plugin registrations
 // (`@RegisterClass(BaseRealtimeChannelServer, ...)`) to execute on any static path that touches
 // the session lifecycle — `SessionManager.CreateSession` resolves them via the ClassFactory.
 LoadWhiteboardChannelServer();
+LoadMeetingControlsChannelServer();
+// Remote Browser native channel (client-direct): the lifecycle-only server channel plugin + the
+// Self-Hosted Chrome backend driver (whose default runner launches a local headless Chromium via
+// Playwright — pulled in transitively through the SelfHost package, documented and acceptable).
+LoadRemoteBrowserChannel();
+LoadSelfHostRemoteBrowser();
 
 export * from './HostInstance.js';
 export * from './SessionManager.js';

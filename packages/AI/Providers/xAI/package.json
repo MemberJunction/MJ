@@ -22,7 +22,8 @@
   "dependencies": {
     "@memberjunction/ai": "5.40.2",
     "@memberjunction/ai-openai": "5.40.2",
-    "@memberjunction/global": "5.40.2"
+    "@memberjunction/global": "5.40.2",
+    "openai": "6.18.0"
   },
   "repository": {
     "type": "git",

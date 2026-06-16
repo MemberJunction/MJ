@@ -32,7 +32,7 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
     },
 }));
 
-import { BaseRealtimeChannelServer, RealtimeChannelServerContext, RealtimeChannelCloseReason } from '@memberjunction/ai';
+import { BaseRealtimeChannelServer, RealtimeChannelServerContext, RealtimeChannelCloseReason, RealtimeToolDefinition, ServerChannelToolResult } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { RealtimeChannelServerHost } from '../realtime/realtime-channel-server-host';
@@ -126,9 +126,55 @@ class BetaChannelServer extends BaseRealtimeChannelServer {
     }
 }
 
+/** A server-tool-contributing channel: prefix `Tools_`, two tools, an echoing executor. */
+@RegisterClass(BaseRealtimeChannelServer, 'HostTestToolsServer')
+class ToolsChannelServer extends BaseRealtimeChannelServer {
+    public get ChannelName(): string { return 'Tools'; }
+    public override get ToolNamePrefix(): string { return 'Tools_'; }
+    public override GetServerToolDefinitions(): RealtimeToolDefinition[] {
+        return [
+            { Name: 'Tools_Alpha', Description: 'a', ParametersSchema: { type: 'object' } },
+            { Name: 'Tools_Beta', Description: 'b', ParametersSchema: { type: 'object' } },
+        ];
+    }
+    public override async ExecuteServerTool(toolName: string, argsJson: string): Promise<ServerChannelToolResult> {
+        return { Success: true, Output: `tools:${toolName}:${argsJson}` };
+    }
+}
+
+/** A second tool channel with a LONGER overlapping prefix to test longest-prefix routing. */
+@RegisterClass(BaseRealtimeChannelServer, 'HostTestToolsLongServer')
+class ToolsLongChannelServer extends BaseRealtimeChannelServer {
+    public get ChannelName(): string { return 'ToolsLong'; }
+    public override get ToolNamePrefix(): string { return 'Tools_Special_'; }
+    public override GetServerToolDefinitions(): RealtimeToolDefinition[] {
+        return [{ Name: 'Tools_Special_Do', Description: 's', ParametersSchema: { type: 'object' } }];
+    }
+    public override async ExecuteServerTool(toolName: string): Promise<ServerChannelToolResult> {
+        return { Success: true, Output: `long:${toolName}` };
+    }
+}
+
+/** A channel whose GetServerToolDefinitions throws, to prove the aggregator tolerates it. */
+@RegisterClass(BaseRealtimeChannelServer, 'HostTestThrowingToolsServer')
+class ThrowingToolsChannelServer extends BaseRealtimeChannelServer {
+    public get ChannelName(): string { return 'ThrowTools'; }
+    public override get ToolNamePrefix(): string { return 'Throw_'; }
+    public override GetServerToolDefinitions(): RealtimeToolDefinition[] {
+        throw new Error('tool-defs boom');
+    }
+}
+
 // Keep the classes referenced so the decorators can never be tree-shaken in the test bundle.
 void AlphaChannelServer;
 void BetaChannelServer;
+void ToolsChannelServer;
+void ToolsLongChannelServer;
+void ThrowingToolsChannelServer;
+
+const TOOLS_ROW: RegistryRow = { ID: 'ch-t', Name: 'Tools', ServerPluginClass: 'HostTestToolsServer' };
+const TOOLS_LONG_ROW: RegistryRow = { ID: 'ch-tl', Name: 'ToolsLong', ServerPluginClass: 'HostTestToolsLongServer' };
+const THROW_TOOLS_ROW: RegistryRow = { ID: 'ch-tt', Name: 'ThrowTools', ServerPluginClass: 'HostTestThrowingToolsServer' };
 
 // ---------------------------------------------------------------------------------------------
 // Fixtures
@@ -444,5 +490,61 @@ describe('RealtimeChannelServerHost — per-session instance isolation', () => {
         expect(host.GetSessionPlugin('session-1', 'Alpha')).toBeNull();
         expect(host.GetSessionPlugin('session-2', 'Alpha')).toBe(p2);
         expect(journalOf(p2).events).not.toContain('session-closed');
+    });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Server-executed channel tool contribution + routing (Phase 2)
+// ---------------------------------------------------------------------------------------------
+
+describe('RealtimeChannelServerHost — server-channel tool aggregation', () => {
+    it('aggregates GetServerToolDefinitions across all live plugins of a session', async () => {
+        setRegistryRows([TOOLS_ROW, ALPHA_ROW]); // Alpha contributes no server tools (default [])
+        await host.OnSessionStarted(ctx(), USER, PROVIDER);
+
+        const names = host.GetSessionServerTools('session-1').map((t) => t.Name).sort();
+        expect(names).toEqual(['Tools_Alpha', 'Tools_Beta']);
+    });
+
+    it('returns [] for an unknown session', () => {
+        expect(host.GetSessionServerTools('nope')).toEqual([]);
+    });
+
+    it('tolerates a plugin whose GetServerToolDefinitions throws, keeping siblings tools', async () => {
+        setRegistryRows([TOOLS_ROW, THROW_TOOLS_ROW]);
+        await host.OnSessionStarted(ctx(), USER, PROVIDER);
+
+        const names = host.GetSessionServerTools('session-1').map((t) => t.Name).sort();
+        expect(names).toEqual(['Tools_Alpha', 'Tools_Beta']); // throwing channel's tools skipped
+    });
+
+    it('routes a prefixed tool call to the owning plugin and returns its result', async () => {
+        setRegistryRows([TOOLS_ROW]);
+        await host.OnSessionStarted(ctx(), USER, PROVIDER);
+
+        const result = await host.ExecuteSessionServerTool('session-1', 'Tools_Alpha', '{"x":1}');
+        expect(result).toEqual({ Success: true, Output: 'tools:Tools_Alpha:{"x":1}' });
+        expect(host.OwnsServerTool('session-1', 'Tools_Alpha')).toBe(true);
+    });
+
+    it('routes by the LONGEST matching prefix when prefixes overlap', async () => {
+        setRegistryRows([TOOLS_ROW, TOOLS_LONG_ROW]);
+        await host.OnSessionStarted(ctx(), USER, PROVIDER);
+
+        // 'Tools_Special_Do' starts with both 'Tools_' and 'Tools_Special_' — the longer wins.
+        const result = await host.ExecuteSessionServerTool('session-1', 'Tools_Special_Do', '{}');
+        expect(result.Output).toBe('long:Tools_Special_Do');
+    });
+
+    it('returns a structured failure for an unowned tool / unknown session (never throws)', async () => {
+        setRegistryRows([TOOLS_ROW]);
+        await host.OnSessionStarted(ctx(), USER, PROVIDER);
+
+        const unowned = await host.ExecuteSessionServerTool('session-1', 'Nobody_Owns_This', '{}');
+        expect(unowned.Success).toBe(false);
+        expect(host.OwnsServerTool('session-1', 'Nobody_Owns_This')).toBe(false);
+
+        const unknownSession = await host.ExecuteSessionServerTool('no-session', 'Tools_Alpha', '{}');
+        expect(unknownSession.Success).toBe(false);
     });
 });

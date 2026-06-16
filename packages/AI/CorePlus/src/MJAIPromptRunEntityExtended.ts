@@ -63,14 +63,21 @@ export class MJAIPromptRunEntityExtended extends MJAIPromptRunEntity {
                 formattedMessages = JSON.stringify(recursivelyParsed, null, 2);
                 
                 // Extract messages array and data
-                if (recursivelyParsed && typeof recursivelyParsed === 'object') {
+                if (Array.isArray(recursivelyParsed)) {
+                    // A TOP-LEVEL ARRAY *is* the chat-message list — the realtime co-agent (and any caller
+                    // that records turns directly) stores Messages as a plain ChatMessage[] with no
+                    // { messages, data } wrapper. Without this branch those runs render "No chat messages
+                    // found" even though the turns are right there in the Raw view. No data context exists
+                    // in this shape, so inputData stays null.
+                    chatMessages = recursivelyParsed as ChatMessage[];
+                } else if (recursivelyParsed && typeof recursivelyParsed === 'object') {
                     // Extract chat messages if they exist
                     if (recursivelyParsed.messages && Array.isArray(recursivelyParsed.messages)) {
                         chatMessages = recursivelyParsed.messages as ChatMessage[];
                     } else {
                         chatMessages = [];
                     }
-                    
+
                     // Extract data object if it exists
                     if (recursivelyParsed.data) {
                         inputData = recursivelyParsed.data;

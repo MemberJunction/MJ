@@ -14152,7 +14152,7 @@
       "ID": "562BA6F2-9D4C-4CBF-8865-4A97EEA0F14C"
     },
     "sync": {
-      "lastModified": "2026-06-12T23:03:30.246Z",
+      "lastModified": "2026-06-15T23:19:39.967Z",
       "checksum": "d74ee7f556cc46337e20d8c226a1994e3058e51e6f0faf76b6bd7f5f0887b9b1"
     }
   },
@@ -14885,6 +14885,67 @@
     "sync": {
       "lastModified": "2026-05-20T23:53:34.007Z",
       "checksum": "8e60744d73c119524dbaa201db554ee5731c9d083746399908b2ca8492eafeb1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini Embedding 2",
+      "Description": "Google's natively multimodal embedding model — maps text, images, video, audio, and PDF into one shared 3072-dimensional vector space (Matryoshka: truncatable down to 128 dims). 8,192 token input context; retrieval task instructions are carried in the text. GA April 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
+      "IsActive": true,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "10F4A9A3-FEC1-427E-9B3F-FE1B54D6B145"
+          },
+          "sync": {
+            "lastModified": "2026-06-15T23:19:40.195Z",
+            "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiEmbedding2",
+            "APIName": "gemini-embedding-2",
+            "MaxInputTokens": 8192,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "55FFE4E4-2940-43A2-9ED4-5961D4EEB2C6"
+          },
+          "sync": {
+            "lastModified": "2026-06-15T23:19:40.206Z",
+            "checksum": "fc0f8c05dfba8dbb9bbd600d2bca3e9dd9a36685bd8dfa3548e526bf64fb4ed4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F3BF3965-9F80-407B-B559-142E76BF8F86"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T23:19:39.931Z",
+      "checksum": "693d2c3158c2c9ba1ba372e331e8e436f49d72d4b71fecf42ffffcb7709503fd"
     }
   },
   {
@@ -15934,7 +15995,7 @@
             "ID": "BAFB6CB9-C5E4-4BBB-9168-3CB8D38ACDC5"
           },
           "sync": {
-            "lastModified": "2026-06-12T23:03:30.681Z",
+            "lastModified": "2026-06-15T23:19:40.222Z",
             "checksum": "014978244a9f15bac0efaf67a18dc530e6c40efe3291be12622eb95fdcbadc35"
           }
         }
@@ -15944,7 +16005,7 @@
       "ID": "F1AEF71E-9E93-4C27-870E-620E75FA5552"
     },
     "sync": {
-      "lastModified": "2026-06-12T23:03:30.272Z",
+      "lastModified": "2026-06-15T23:19:39.985Z",
       "checksum": "f56ab8319539c962b6230c7b1f57f6db7f11f6e0d348c8e2ca39a06fa79d894f"
     }
   },
@@ -15978,7 +16039,7 @@
             "ID": "12ED40AE-7660-44FF-9158-CC162A8EC4CB"
           },
           "sync": {
-            "lastModified": "2026-06-12T23:03:30.698Z",
+            "lastModified": "2026-06-15T23:19:40.238Z",
             "checksum": "79458e967f6bad62f7a7c7b4fe025064fa48d9cb79365e6d9241d9e81d1a3d5a"
           }
         }
@@ -15988,7 +16049,7 @@
       "ID": "882996F4-BDD9-4C36-9291-D71A46FFE2D5"
     },
     "sync": {
-      "lastModified": "2026-06-12T23:03:30.293Z",
+      "lastModified": "2026-06-15T23:19:39.997Z",
       "checksum": "35c232c808787c16a182efbc6988af44ef342b97a01c9760db8c3ee5eb4165f5"
     }
   },
@@ -16022,7 +16083,7 @@
             "ID": "246C0C12-10CC-4E3B-9330-CFA07923DBB8"
           },
           "sync": {
-            "lastModified": "2026-06-12T23:03:30.714Z",
+            "lastModified": "2026-06-15T23:19:40.273Z",
             "checksum": "a609879693e2ad504fe071d52c9fde49a03982b5722281c05d63797ffbb59b80"
           }
         }
@@ -16032,8 +16093,98 @@
       "ID": "E934CE9A-93DB-4FE3-B806-4144F108E930"
     },
     "sync": {
-      "lastModified": "2026-06-12T23:03:30.306Z",
+      "lastModified": "2026-06-15T23:19:40.008Z",
       "checksum": "0e7038d9968183d769f1a02ea7af7611201d18fa27c0c5400b2f0444d75b22a4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grok Voice",
+      "PowerRank": 11,
+      "Description": "xAI's Grok Voice Agent API — a streaming, full-duplex, tool-calling speech-to-speech realtime model. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime, Base64-encoded PCM16 @ 24 kHz audio), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, and RAG. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "GrokRealtime",
+            "APIName": "grok-voice",
+            "MaxInputTokens": 128000,
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          },
+          "primaryKey": {
+            "ID": "75769149-BBA2-449F-86A4-0CA29186B87A"
+          },
+          "sync": {
+            "lastModified": "2026-06-15T23:19:40.253Z",
+            "checksum": "f0737232618861e99cb2cd7e3a9b5417bfbbd9baa96bc725de682d0310d20a82"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "19A9861F-1178-437D-941A-A4382B7D5FCA"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T23:19:40.019Z",
+      "checksum": "eae22eb04791813f6810953f043e681547227784bdd0d02cafb5babb6084f665"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inworld Realtime",
+      "PowerRank": 11,
+      "Description": "Inworld's Realtime API — a single-WebSocket, full-duplex, tool-calling speech-to-speech realtime stack. Input is streamed audio (server-side STT with voice profiling); output is synthesized speech via Realtime TTS-2 (supports inline steering tags like [laugh]). Inworld brokers many underlying LLMs selected per session via modelId (e.g. anthropic/claude-sonnet-4-6); STT engine and TTS voice are configured independently. Turn-taking is semantic VAD with adjustable eagerness, handling true barge-in. Session components are swappable mid-session without reconnect via session.update. Supports fluent tool calling. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass InworldRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inworld",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "InworldRealtime",
+            "APIName": "anthropic/claude-sonnet-4-6",
+            "MaxInputTokens": 128000,
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          },
+          "primaryKey": {
+            "ID": "AA0D147C-1D4B-4581-BD9A-8F55BAB8DC70"
+          },
+          "sync": {
+            "lastModified": "2026-06-15T23:19:40.284Z",
+            "checksum": "46e070718c4c1d6caecfe2a1796c4c88ebff9395cf4a980199fd145e23104de1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "805AC762-A102-4B64-91BC-0EF5D3049A8B"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T23:19:40.029Z",
+      "checksum": "bf45c2b59555ede503a7c621c83ba88e0e9fbf774fcc2329b641756e1e1cdeb7"
     }
   }
 ]
