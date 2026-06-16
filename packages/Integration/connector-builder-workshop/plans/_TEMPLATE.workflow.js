@@ -208,6 +208,26 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
     const isAmendment = amendmentRound > 0;
     const phaseLabel = isAmendment ? `AmendmentRound${amendmentRound}` : 'IOIOFExtract';
 
+    // ── P0-3 slot-routing (surveys: the 4th run's EscalatedMaxRounds class) ──
+    // A FixInstruction targeting an `integration.*` root-row slot (auth, base URL, pagination,
+    // batch limits, watermark) is owned by metadata-writer, NOT the IO/IOF extractor. Handing it
+    // to the extractor (which only edits IO/IOF rows) means the reviewer re-flags it every round →
+    // byte-identical fingerprint → false deadlock/escalation. Route each fix to its owning agent.
+    // GUARD: with no `integration.*` fixes (the common case) this is a no-op and the extractor
+    // receives the full set exactly as before — worst-case ≤ today, never worse.
+    const allFindings = isAmendment ? (review.FixInstructions ?? []) : [];
+    const isIntegrationRowSlot = (f) => String(f?.slot ?? '').toLowerCase().startsWith('integration.');
+    const integrationRowFindings = allFindings.filter(isIntegrationRowSlot);
+    const ioIofFindings = allFindings.filter((f) => !isIntegrationRowSlot(f));
+    if (integrationRowFindings.length > 0) {
+        phase(phaseLabel);
+        await agent(
+            `Apply these Integration-ROW FixInstructions surgically to the Integration row in ${METADATA_FILE} (root-level slots the IO/IOF extractor cannot touch — auth, base URL, pagination, batch limits, incremental watermark, error shape). Change ONLY the named slots; do NOT perturb IO/IOF rows. Fixes: ${JSON.stringify(integrationRowFindings)}. Return { applied } = number of slots changed.`,
+            { agentType: 'metadata-writer', schema: { type: 'object', required: ['applied'], properties: { applied: { type: 'integer' } }, additionalProperties: true }, phase: phaseLabel, label: `amend-integration-row:r${amendmentRound}` }
+        ).catch(() => null);
+        log(`Routed ${integrationRowFindings.length} Integration-row fix(es) to metadata-writer (round ${amendmentRound}); ${ioIofFindings.length} IO/IOF fix(es) go to the extractor.`);
+    }
+
     // ── Extract (round 0) or Re-extract with reviewer feedback (round >0) ──
     phase(phaseLabel);
     extractStats = await workflow(
@@ -234,9 +254,11 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
                 sdkPaths: sources.SDKPaths ?? [],
                 postmanPaths: sources.PostmanPaths ?? [],
             },
-            // Amendment feedback — null on first round, populated on subsequent
+            // Amendment feedback — null on first round; on amendment rounds the extractor
+            // receives ONLY the IO/IOF fixes it can apply (integration.* fixes were routed to
+            // metadata-writer above) so it never thrashes on a slot it structurally cannot touch.
             amendmentRound,
-            reviewerFindings: isAmendment ? review.FixInstructions : null,
+            reviewerFindings: isAmendment ? ioIofFindings : null,
             reviewFile: isAmendment ? review.ReviewFile : null,
         }
     );

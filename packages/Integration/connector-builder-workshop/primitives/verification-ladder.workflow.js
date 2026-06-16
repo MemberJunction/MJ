@@ -205,6 +205,27 @@ function isAllowedSkip(reason) {
     return ALLOWED_SKIP_REASONS.some((allowed) => r.includes(allowed));
 }
 
+// True-leak fix (surveys: NetSuite/Nimble/cvent — the #1 false-red). A credential-FREE
+// rung (T2/T3) runs the connector's discovery; a connector whose discovery legitimately
+// REQUIRES a credential (Salesforce/NetSuite OAuth) THROWS without one → the runner returns
+// Fail → the ladder reds and the code-build loop burns whole rounds "fixing" an
+// unfixable-without-creds rung (Nimble rebuilt an 803-LOC connector twice). When we are in
+// credential-free mode, an auth-required Fail on a cred-free rung is NOT a code defect — it is
+// the same not-applicable condition T8 already skips for. We reclassify it to the existing
+// `discovery-requires-credentials` allowed-skip: zero coverage lost (the rung was unreachable
+// without a credential regardless), the residual is reported honestly, and the loop stops
+// thrashing. GUARD: only fires (a) in credential-free mode and (b) when the failure text
+// actually signals auth — a real code bug still reds.
+const AUTH_REQUIRED_SIGNALS = ['401', '403', 'unauthorized', 'forbidden', 'authentication', 'credential', 'oauth', 'access token', 'invalid_grant', 'missing token', 'requires auth', 'no credential'];
+function looksLikeAuthRequired(result) {
+    const hay = [
+        ...(Array.isArray(result?.Errors) ? result.Errors : []),
+        result?.Output,
+        result?.Details && typeof result.Details.reason === 'string' ? result.Details.reason : '',
+    ].join(' ').toLowerCase();
+    return AUTH_REQUIRED_SIGNALS.some((s) => hay.includes(s));
+}
+
 const maxTier = String(args?.maxTier ?? 'T8');
 const maxTierNum = parseInt(maxTier.slice(1), 10);
 // Broker-mediated live testing: when the plan supplies brokerPlans (read-only mailbox
@@ -313,6 +334,19 @@ for (const t of tiers) {
         }
         // Allowed skips do not break the ascent — a not-applicable rung shouldn't
         // block a higher rung the runner CAN run — but they never advance achievedTier.
+        continue;
+    }
+
+    // Status === 'Fail' — but FIRST: in credential-free mode, an auth-required failure on a
+    // credential-free rung is a not-applicable condition (discovery needs a credential we don't
+    // have), NOT a code defect. Reclassify to the sanctioned allowed-skip so the ascent isn't
+    // broken and the code-build loop never thrashes on an unfixable-without-creds rung.
+    const credentialFree = !hasCreds && brokerPlans.length === 0;
+    if (credentialFree && !t.cred && looksLikeAuthRequired(result)) {
+        const reason = 'discovery-requires-credentials';
+        tierResults.push({ tier: t.tier, label: t.label, status: 'skipped', skipReason: reason, durationMs });
+        skippedRungs.push({ tier: t.tier, label: t.label, reason });
+        log(`${t.tier} failed with an auth-required signal in credential-free mode — reclassified as a not-applicable skip (${reason}); does NOT red the ladder or feed the code-build loop.`);
         continue;
     }
 
