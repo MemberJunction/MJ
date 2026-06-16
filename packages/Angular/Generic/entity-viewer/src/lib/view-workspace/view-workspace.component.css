@@ -1,6 +1,9 @@
 :host {
-  display: block;
+  display: flex;        /* keep block if you prefer; width:100% still works */
+  flex: 1 1 auto;       /* grow to fill the new flex row in .content-body */
+  width: 100%;
   height: 100%;
+  min-width: 0;         /* lets it shrink too, prevents overflow when narrow */
 }
 
 .view-workspace {
@@ -8,6 +11,9 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  flex: 1 1 auto;     /* add: grow to fill the host's flex row */
+  width: 100%;        /* add */
+  min-width: 0;       /* add: mirror min-height so it can shrink too */
   background: var(--mj-bg-page);
 }
 

@@ -251,9 +251,17 @@ export class AlterTableRule implements IConversionRule {
     sql = sql.replace(/\bSUSER_NAME\s*\(\s*\)/gi, 'current_user');
     sql = sql.replace(/\bUSER_NAME\s*\(\s*\)/gi, 'current_user');
     // After BIT → BOOLEAN type conversion, DEFAULT 0/1 must become DEFAULT FALSE/TRUE.
-    // PG's BOOLEAN type does not accept integer literals as defaults.
-    sql = sql.replace(/\bBOOLEAN\b(.*?)\bDEFAULT\s+0\b/gi, 'BOOLEAN$1DEFAULT FALSE');
-    sql = sql.replace(/\bBOOLEAN\b(.*?)\bDEFAULT\s+1\b/gi, 'BOOLEAN$1DEFAULT TRUE');
+    // PG's BOOLEAN type does not accept integer literals as defaults. The DEFAULT may
+    // be separated from BOOLEAN by a NULL / NOT NULL clause and/or a named
+    // `CONSTRAINT <name>` clause, possibly spanning newlines (CodeGen and hand-written
+    // migrations emit inline named defaults on their own line, e.g.
+    // `AllowMemoryWrite BIT NOT NULL\n  CONSTRAINT DF_... DEFAULT 1`). Bound the gap to
+    // exactly those clauses (and optional wrapping parens on the value) so the match
+    // can never cross a comma into a different (e.g. integer) column's DEFAULT.
+    sql = sql.replace(
+      /\bBOOLEAN\b(\s+(?:(?:NOT\s+)?NULL\s+)?(?:CONSTRAINT\s+"?\w+"?\s+)?DEFAULT\s+\(*\s*)([01])(\s*\)*)/gi,
+      (_m, pre: string, val: string, post: string) => `BOOLEAN${pre}${val === '1' ? 'TRUE' : 'FALSE'}${post}`,
+    );
     return sql;
   }
 

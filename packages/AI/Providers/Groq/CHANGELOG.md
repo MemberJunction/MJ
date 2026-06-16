@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ai-groq
 
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [15b743b]
+- Updated dependencies [1568bae]
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/global@5.41.0
+
 ## 5.40.2
 
 ### Patch Changes
