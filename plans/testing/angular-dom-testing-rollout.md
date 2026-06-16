@@ -170,3 +170,56 @@ Each phase is its own PR. Phases 0–1 land first and must be proven green befor
 - Phase 1: ~1–2 days (pilot specs + refactor + guide).
 - Phase 2: ongoing, ~per-package; parallelizable across agents once the pattern is fixed.
 - Phase 3: ongoing.
+
+---
+
+## 10. Implementation status
+
+### Phase 0 — Infra spike ✅ (done)
+
+- Added root devDeps: `@analogjs/vite-plugin-angular`, `@angular/build`, `jsdom` (the Analog
+  plugin requires `@angular/build/private` at runtime, so `@angular/build` is a real devDep, not
+  just an optional peer; it is pinned to the repo's Angular `21.1.3` via `overrides`).
+- Added [`vitest.dom.shared.ts`](../../vitest.dom.shared.ts) (preset: `angular({ jit: false })` +
+  `tsconfigPaths`, `environment: 'jsdom'`, auto-detect of per-package `tsconfig.spec.json`) and
+  [`vitest.dom.setup.ts`](../../vitest.dom.setup.ts) (zoneless `provideZonelessChangeDetection`,
+  `platformBrowserTesting`, `@angular/compiler` JIT fallback, jsdom stubs for `matchMedia` /
+  `ResizeObserver` / `IntersectionObserver`).
+- Pilot package `@memberjunction/ng-ui-components` converted to the DOM preset; its **existing
+  class-level specs keep passing** under jsdom (228 tests green).
+- **Decision (deferred from Phase 0):** packages with no `@angular/core`-mocking node specs use a
+  **single DOM preset**; packages that have one use **two vitest `projects`** (node + dom) so the
+  mocking spec stays on node. Both shapes are demonstrated and documented.
+
+### Phase 1 — Pilot + guide ✅ (done, with one substitution)
+
+- **5 leaf components across 2 packages**, all with green DOM specs:
+  - `@memberjunction/ng-ui-components` (single preset): `switch`, `progress-bar`, `stat-badge`,
+    `view-toggle` — covering CVA + click-toggle, `@if/@else` branch, gating + host-class variants,
+    and `@for` + `@Output`.
+  - `@memberjunction/ng-pagination` (dual preset): `pagination` — self-hiding gating, disabled
+    no-op, `PageChange` payload — alongside its unchanged `@angular/core`-mocking class-level spec.
+- [`guides/ANGULAR_TESTING_GUIDE.md`](../../guides/ANGULAR_TESTING_GUIDE.md) authored (class- vs
+  DOM- vs live-test decision tree, harness, configs, the zoneless `NG0100` gotcha, mocking recipes,
+  the WebRTC/live-media exclusion).
+- [`scripts/scaffold-tests.mjs`](../../scripts/scaffold-tests.mjs) extended with `--dom` (emits the
+  DOM preset `vitest.config.ts` + `tsconfig.spec.json` + a passing starter `ComponentFixture` spec).
+- **Substitution:** the plan named the LiveKit leaf components (from PR #2860) as the headline
+  pilot and a `LiveKitRoomComponent` injectable-controller refactor. PR #2860 is not merged into
+  `next`, so those components are not in this branch; the pilot uses the equivalent gating-heavy,
+  `@Output`-driven leaf components above instead. **Follow-up:** once #2860 lands, add DOM specs for
+  its leaf components and do the injectable-controller refactor (the harness + patterns proven here
+  apply directly; media paths stay live-tested per §3).
+
+### Phase 2/3 rollout checklist (tracked here)
+
+Per package: add a DOM `vitest.config` (single or dual preset), a `tsconfig.spec.json`, and DOM
+specs for the package's primary/leaf components. One PR per package (or small batches).
+
+- [ ] **Generic** (Phase 2): `ng-ui-components` ✅, `ng-pagination` ✅, then `base-forms`,
+      `conversations`, `data-context`, `entity-card`, `tab-strip`, `filter-builder`, … (remaining
+      Generic packages).
+- [ ] **Explorer** (Phase 3): `explorer-core`, `dashboards`, `core-entity-forms`, `shared`, …
+      (mock providers + `NavigationService` fakes for heavier components).
+- [ ] **Phase 4**: coverage gates in CI (start lenient, ratchet up); document the live-media e2e
+      suite location for the excluded WebRTC paths.
