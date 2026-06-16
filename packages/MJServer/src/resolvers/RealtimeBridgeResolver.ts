@@ -20,250 +20,243 @@ import { GetReadWriteProvider } from '../util.js';
 
 @InputType()
 export class MintLiveKitClientTokenInput {
-    @Field()
-    RoomName: string;
+  @Field()
+  RoomName: string;
 
-    @Field({ nullable: true })
-    DisplayName?: string;
+  @Field({ nullable: true })
+  DisplayName?: string;
 }
 
 @ObjectType()
 export class LiveKitClientTokenResult {
-    @Field()
-    Success: boolean;
+  @Field()
+  Success: boolean;
 
-    @Field({ nullable: true })
-    ErrorMessage?: string;
+  @Field({ nullable: true })
+  ErrorMessage?: string;
 
-    @Field()
-    ServerUrl: string;
+  @Field()
+  ServerUrl: string;
 
-    @Field()
-    Token: string;
+  @Field()
+  Token: string;
 
-    @Field()
-    Identity: string;
+  @Field()
+  Identity: string;
 
-    @Field()
-    RoomName: string;
+  @Field()
+  RoomName: string;
 }
 
 @InputType()
 export class StartLiveKitAgentRoomSessionInput {
-    @Field({ nullable: true })
-    AgentID?: string;
+  @Field({ nullable: true })
+  AgentID?: string;
 
-    @Field({ nullable: true })
-    AgentName?: string;
+  @Field({ nullable: true })
+  AgentName?: string;
 
-    @Field({ nullable: true })
-    RoomName?: string;
+  @Field({ nullable: true })
+  RoomName?: string;
 
-    @Field({ nullable: true })
-    AgentSessionID?: string;
+  @Field({ nullable: true })
+  AgentSessionID?: string;
 
-    @Field({ nullable: true })
-    TurnMode?: string;
+  @Field({ nullable: true })
+  TurnMode?: string;
 }
 
 @ObjectType()
 export class LiveKitAgentRoomSessionResult {
-    @Field()
-    Success: boolean;
+  @Field()
+  Success: boolean;
 
-    @Field({ nullable: true })
-    ErrorMessage?: string;
+  @Field({ nullable: true })
+  ErrorMessage?: string;
 
-    @Field()
-    SessionBridgeID: string;
+  @Field()
+  SessionBridgeID: string;
 
-    @Field()
-    RoomName: string;
+  @Field()
+  RoomName: string;
 
-    @Field()
-    ServerUrl: string;
+  @Field()
+  ServerUrl: string;
 
-    @Field()
-    ClientToken: string;
+  @Field()
+  ClientToken: string;
 
-    @Field()
-    Identity: string;
+  @Field()
+  Identity: string;
 }
 
 @InputType()
 export class LiveKitRecordingInput {
-    @Field()
-    RoomName: string;
+  @Field()
+  RoomName: string;
 
-    @Field({ nullable: true })
-    Layout?: string;
+  @Field({ nullable: true })
+  Layout?: string;
 }
 
 @ObjectType()
 export class LiveKitRecordingResult {
-    @Field()
-    Success: boolean;
+  @Field()
+  Success: boolean;
 
-    @Field({ nullable: true })
-    ErrorMessage?: string;
+  @Field({ nullable: true })
+  ErrorMessage?: string;
 
-    @Field()
-    EgressID: string;
+  @Field()
+  EgressID: string;
 
-    @Field()
-    Status: string;
+  @Field()
+  Status: string;
 }
 
 @Resolver()
 export class RealtimeBridgeResolver extends ResolverBase {
-    /**
-     * Mints a scoped LiveKit access token for the current user to join the given room. The participant
-     * identity is derived server-side from the authenticated user (never trusted from the client).
-     */
-    @Mutation(() => LiveKitClientTokenResult)
-    async MintLiveKitClientToken(
-        @Arg('input', () => MintLiveKitClientTokenInput) input: MintLiveKitClientTokenInput,
-        @Ctx() context: AppContext = {} as AppContext,
-    ): Promise<LiveKitClientTokenResult> {
-        const failure = (msg: string): LiveKitClientTokenResult => ({
-            Success: false,
-            ErrorMessage: msg,
-            ServerUrl: '',
-            Token: '',
-            Identity: '',
-            RoomName: input.RoomName,
-        });
-        try {
-            const user = this.GetUserFromPayload(context.userPayload);
-            if (!user) {
-                return failure('Unable to determine current user.');
-            }
-            const tokenService = new LiveKitTokenService();
-            const minted = await tokenService.MintClientToken(
-                input.RoomName,
-                this.participantIdentity(user),
-                input.DisplayName ?? user.Name ?? user.Email,
-            );
-            return { Success: true, ...minted };
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            LogError(`MintLiveKitClientToken failed: ${msg}`);
-            return failure(msg);
-        }
+  /**
+   * Mints a scoped LiveKit access token for the current user to join the given room. The participant
+   * identity is derived server-side from the authenticated user (never trusted from the client).
+   */
+  @Mutation(() => LiveKitClientTokenResult)
+  async MintLiveKitClientToken(
+    @Arg('input', () => MintLiveKitClientTokenInput) input: MintLiveKitClientTokenInput,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<LiveKitClientTokenResult> {
+    const failure = (msg: string): LiveKitClientTokenResult => ({
+      Success: false,
+      ErrorMessage: msg,
+      ServerUrl: '',
+      Token: '',
+      Identity: '',
+      RoomName: input.RoomName,
+    });
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return failure('Unable to determine current user.');
+      }
+      const tokenService = new LiveKitTokenService();
+      const minted = await tokenService.MintClientToken(input.RoomName, this.participantIdentity(user), input.DisplayName ?? user.Name ?? user.Email);
+      return { Success: true, ...minted };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      LogError(`MintLiveKitClientToken failed: ${msg}`);
+      return failure(msg);
     }
+  }
 
-    /**
-     * Starts (or reuses) an agent's presence in a LiveKit room and returns a client token so the calling
-     * user can immediately join the same room.
-     */
-    @Mutation(() => LiveKitAgentRoomSessionResult)
-    async StartLiveKitAgentRoomSession(
-        @Arg('input', () => StartLiveKitAgentRoomSessionInput) input: StartLiveKitAgentRoomSessionInput,
-        @Ctx() context: AppContext = {} as AppContext,
-    ): Promise<LiveKitAgentRoomSessionResult> {
-        const failure = (msg: string, roomName = ''): LiveKitAgentRoomSessionResult => ({
-            Success: false,
-            ErrorMessage: msg,
-            SessionBridgeID: '',
-            RoomName: roomName,
-            ServerUrl: '',
-            ClientToken: '',
-            Identity: '',
-        });
-        try {
-            const user = this.GetUserFromPayload(context.userPayload);
-            if (!user) {
-                return failure('Unable to determine current user.');
-            }
-            const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
-            const roomName = input.RoomName?.trim() || `mj-${randomUUID()}`;
-            const agentSessionID = input.AgentSessionID?.trim() || randomUUID();
+  /**
+   * Starts (or reuses) an agent's presence in a LiveKit room and returns a client token so the calling
+   * user can immediately join the same room.
+   */
+  @Mutation(() => LiveKitAgentRoomSessionResult)
+  async StartLiveKitAgentRoomSession(
+    @Arg('input', () => StartLiveKitAgentRoomSessionInput) input: StartLiveKitAgentRoomSessionInput,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<LiveKitAgentRoomSessionResult> {
+    const failure = (msg: string, roomName = ''): LiveKitAgentRoomSessionResult => ({
+      Success: false,
+      ErrorMessage: msg,
+      SessionBridgeID: '',
+      RoomName: roomName,
+      ServerUrl: '',
+      ClientToken: '',
+      Identity: '',
+    });
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return failure('Unable to determine current user.');
+      }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const roomName = input.RoomName?.trim() || `mj-${randomUUID()}`;
+      const agentSessionID = input.AgentSessionID?.trim() || randomUUID();
 
-            const session = await LiveKitAgentRoomCoordinator.Instance.StartAgentRoomSession({
-                AgentSessionID: agentSessionID,
-                RoomName: roomName,
-                AgentID: input.AgentID,
-                AgentName: input.AgentName,
-                TurnMode: this.normalizeTurnMode(input.TurnMode),
-                ContextUser: user,
-                MetadataProvider: provider,
-            });
+      const session = await LiveKitAgentRoomCoordinator.Instance.StartAgentRoomSession({
+        AgentSessionID: agentSessionID,
+        RoomName: roomName,
+        AgentID: input.AgentID,
+        AgentName: input.AgentName,
+        TurnMode: this.normalizeTurnMode(input.TurnMode),
+        ContextUser: user,
+        MetadataProvider: provider,
+      });
 
-            const tokenService = new LiveKitTokenService();
-            const clientToken = await tokenService.MintClientToken(roomName, this.participantIdentity(user), user.Name ?? user.Email);
+      const tokenService = new LiveKitTokenService();
+      const clientToken = await tokenService.MintClientToken(roomName, this.participantIdentity(user), user.Name ?? user.Email);
 
-            return {
-                Success: true,
-                SessionBridgeID: session.SessionBridgeID,
-                RoomName: session.RoomName,
-                ServerUrl: session.ServerUrl,
-                ClientToken: clientToken.Token,
-                Identity: clientToken.Identity,
-            };
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            LogError(`StartLiveKitAgentRoomSession failed: ${msg}`);
-            return failure(msg, input.RoomName ?? '');
-        }
+      return {
+        Success: true,
+        SessionBridgeID: session.SessionBridgeID,
+        RoomName: session.RoomName,
+        ServerUrl: session.ServerUrl,
+        ClientToken: clientToken.Token,
+        Identity: clientToken.Identity,
+      };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      LogError(`StartLiveKitAgentRoomSession failed: ${msg}`);
+      return failure(msg, input.RoomName ?? '');
     }
+  }
 
-    /**
-     * Starts recording (composite egress) of a room. Server-authorized — the browser never holds egress
-     * credentials.
-     */
-    @Mutation(() => LiveKitRecordingResult)
-    async StartLiveKitRecording(
-        @Arg('input', () => LiveKitRecordingInput) input: LiveKitRecordingInput,
-        @Ctx() context: AppContext = {} as AppContext,
-    ): Promise<LiveKitRecordingResult> {
-        try {
-            if (!this.GetUserFromPayload(context.userPayload)) {
-                return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: '', Status: '' };
-            }
-            const info = await new LiveKitEgressService().StartRoomRecording({ RoomName: input.RoomName, Layout: input.Layout });
-            return { Success: true, EgressID: info.EgressID, Status: info.Status };
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            LogError(`StartLiveKitRecording failed: ${msg}`);
-            return { Success: false, ErrorMessage: msg, EgressID: '', Status: '' };
-        }
+  /**
+   * Starts recording (composite egress) of a room. Server-authorized — the browser never holds egress
+   * credentials.
+   */
+  @Mutation(() => LiveKitRecordingResult)
+  async StartLiveKitRecording(
+    @Arg('input', () => LiveKitRecordingInput) input: LiveKitRecordingInput,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<LiveKitRecordingResult> {
+    try {
+      if (!this.GetUserFromPayload(context.userPayload)) {
+        return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: '', Status: '' };
+      }
+      const info = await new LiveKitEgressService().StartRoomRecording({ RoomName: input.RoomName, Layout: input.Layout });
+      return { Success: true, EgressID: info.EgressID, Status: info.Status };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      LogError(`StartLiveKitRecording failed: ${msg}`);
+      return { Success: false, ErrorMessage: msg, EgressID: '', Status: '' };
     }
+  }
 
-    /** Stops a recording by egress id. */
-    @Mutation(() => LiveKitRecordingResult)
-    async StopLiveKitRecording(
-        @Arg('egressID', () => String) egressID: string,
-        @Ctx() context: AppContext = {} as AppContext,
-    ): Promise<LiveKitRecordingResult> {
-        try {
-            if (!this.GetUserFromPayload(context.userPayload)) {
-                return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: egressID, Status: '' };
-            }
-            const info = await new LiveKitEgressService().StopRecording(egressID);
-            return { Success: true, EgressID: info.EgressID, Status: info.Status };
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            LogError(`StopLiveKitRecording failed: ${msg}`);
-            return { Success: false, ErrorMessage: msg, EgressID: egressID, Status: '' };
-        }
+  /** Stops a recording by egress id. */
+  @Mutation(() => LiveKitRecordingResult)
+  async StopLiveKitRecording(@Arg('egressID', () => String) egressID: string, @Ctx() context: AppContext = {} as AppContext): Promise<LiveKitRecordingResult> {
+    try {
+      if (!this.GetUserFromPayload(context.userPayload)) {
+        return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: egressID, Status: '' };
+      }
+      const info = await new LiveKitEgressService().StopRecording(egressID);
+      return { Success: true, EgressID: info.EgressID, Status: info.Status };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      LogError(`StopLiveKitRecording failed: ${msg}`);
+      return { Success: false, ErrorMessage: msg, EgressID: egressID, Status: '' };
     }
+  }
 
-    /** Builds a stable, lowercased participant identity from the authenticated user. */
-    private participantIdentity(user: UserInfo): string {
-        return `user-${user.ID}`.toLowerCase();
-    }
+  /** Builds a stable, lowercased participant identity from the authenticated user. */
+  private participantIdentity(user: UserInfo): string {
+    return `user-${user.ID}`.toLowerCase();
+  }
 
-    /** Normalizes a turn-mode string to the bridge's accepted values. */
-    private normalizeTurnMode(mode?: string): 'Passive' | 'Active' | 'Hybrid' | undefined {
-        switch ((mode ?? '').toLowerCase()) {
-            case 'active':
-                return 'Active';
-            case 'hybrid':
-                return 'Hybrid';
-            case 'passive':
-                return 'Passive';
-            default:
-                return undefined;
-        }
+  /** Normalizes a turn-mode string to the bridge's accepted values. */
+  private normalizeTurnMode(mode?: string): 'Passive' | 'Active' | 'Hybrid' | undefined {
+    switch ((mode ?? '').toLowerCase()) {
+      case 'active':
+        return 'Active';
+      case 'hybrid':
+        return 'Hybrid';
+      case 'passive':
+        return 'Passive';
+      default:
+        return undefined;
     }
+  }
 }

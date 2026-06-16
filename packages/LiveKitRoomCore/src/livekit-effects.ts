@@ -20,20 +20,20 @@ import type { LiveKitBackgroundEffect } from './types';
  * @returns `true` if applied/removed successfully; `false` if unsupported or the SDK is unavailable.
  */
 export async function applyNoiseFilter(track: LocalAudioTrack, enabled: boolean): Promise<boolean> {
-    try {
-        const mod = await import('@livekit/krisp-noise-filter');
-        if (!enabled) {
-            await track.stopProcessor();
-            return true;
-        }
-        if (!mod.isKrispNoiseFilterSupported()) {
-            return false;
-        }
-        await track.setProcessor(mod.KrispNoiseFilter());
-        return true;
-    } catch {
-        return false;
+  try {
+    const mod = await import('@livekit/krisp-noise-filter');
+    if (!enabled) {
+      await track.stopProcessor();
+      return true;
     }
+    if (!mod.isKrispNoiseFilterSupported()) {
+      return false;
+    }
+    await track.setProcessor(mod.KrispNoiseFilter());
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -44,19 +44,16 @@ export async function applyNoiseFilter(track: LocalAudioTrack, enabled: boolean)
  * @returns `true` if applied/cleared successfully; `false` if the SDK is unavailable.
  */
 export async function applyBackgroundEffect(track: LocalVideoTrack, effect: LiveKitBackgroundEffect): Promise<boolean> {
-    try {
-        const mod = await import('@livekit/track-processors');
-        if (effect.Kind === 'none') {
-            await track.stopProcessor();
-            return true;
-        }
-        const processor =
-            effect.Kind === 'blur'
-                ? mod.BackgroundBlur(effect.Radius ?? 10)
-                : mod.VirtualBackground(effect.ImageUrl);
-        await track.setProcessor(processor);
-        return true;
-    } catch {
-        return false;
+  try {
+    const mod = await import('@livekit/track-processors');
+    if (effect.Kind === 'none') {
+      await track.stopProcessor();
+      return true;
     }
+    const processor = effect.Kind === 'blur' ? mod.BackgroundBlur(effect.Radius ?? 10) : mod.VirtualBackground(effect.ImageUrl);
+    await track.setProcessor(processor);
+    return true;
+  } catch {
+    return false;
+  }
 }

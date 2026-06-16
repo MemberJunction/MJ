@@ -7,25 +7,15 @@
  * @module @memberjunction/livekit-room-server
  */
 
-export {
-    LiveKitTokenService,
-    type LiveKitServerConfig,
-    type LiveKitTokenRole,
-    type MintTokenParams,
-    type MintedToken,
-} from './livekit-token-service';
+export { LiveKitTokenService, type LiveKitServerConfig, type LiveKitTokenRole, type MintTokenParams, type MintedToken } from './livekit-token-service';
 
 export {
-    LiveKitAgentRoomCoordinator,
-    LIVEKIT_BRIDGE_DRIVER_CLASS,
-    type RealtimeSessionFactory,
-    type RealtimeSessionStartContext,
-    type StartAgentRoomSessionParams,
-    type AgentRoomSession,
+  LiveKitAgentRoomCoordinator,
+  LIVEKIT_BRIDGE_DRIVER_CLASS,
+  type RealtimeSessionFactory,
+  type RealtimeSessionStartContext,
+  type StartAgentRoomSessionParams,
+  type AgentRoomSession,
 } from './livekit-agent-room-coordinator';
 
-export {
-    LiveKitEgressService,
-    type StartRecordingParams,
-    type RecordingInfo,
-} from './livekit-egress-service';
+export { LiveKitEgressService, type StartRecordingParams, type RecordingInfo } from './livekit-egress-service';
