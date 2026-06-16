@@ -19,9 +19,17 @@ export default class Init extends Command {
     // Database configuration
     const dbAnswers = await inquirer.prompt([
       {
+        type: 'list',
+        name: 'provider',
+        message: 'Database platform:',
+        choices: ['sqlserver', 'postgresql', 'mysql', 'oracle'],
+        default: 'sqlserver',
+        loop: false
+      },
+      {
         type: 'input',
         name: 'server',
-        message: 'SQL Server host:',
+        message: 'Database host:',
         default: 'localhost'
       },
       {
@@ -46,21 +54,26 @@ export default class Init extends Command {
         type: 'confirm',
         name: 'encrypt',
         message: 'Use encryption?',
-        default: true
+        default: true,
+        when: (answers: any) => answers.provider === 'sqlserver'
       },
       {
         type: 'confirm',
         name: 'trustServerCertificate',
         message: 'Trust server certificate?',
-        default: false
+        default: false,
+        when: (answers: any) => answers.provider === 'sqlserver'
       }
     ]);
+    // Default connection port per platform.
+    const defaultPort: Record<string, number> = { sqlserver: 1433, postgresql: 5432, mysql: 3306, oracle: 1521 };
 
     // Test connection
     this.log(chalk.yellow('\nTesting database connection...'));
     const dbConfig = {
-      provider: 'sqlserver' as const,
+      provider: dbAnswers.provider as 'sqlserver' | 'mysql' | 'postgresql' | 'oracle',
       host: dbAnswers.server,
+      port: defaultPort[dbAnswers.provider] ?? 1433,
       database: dbAnswers.database,
       user: dbAnswers.user,
       password: dbAnswers.password,
@@ -190,8 +203,9 @@ export default class Init extends Command {
 
     // Update with user inputs
     config.database = {
+      provider: dbAnswers.provider,
       server: dbAnswers.server,
-      port: 1433,
+      port: defaultPort[dbAnswers.provider] ?? 1433,
       database: dbAnswers.database,
       user: dbAnswers.user,
       password: dbAnswers.password,
