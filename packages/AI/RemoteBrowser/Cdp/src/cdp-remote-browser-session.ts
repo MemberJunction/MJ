@@ -338,6 +338,13 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     if (options?.ContextUser) {
       engine.ContextUser = options.ContextUser;
     }
+    // Forward the parent agent run + step so an MJ-aware engine nests this goal's prompt runs under them.
+    if (options?.AgentRunID) {
+      engine.AgentRunID = options.AgentRunID;
+    }
+    if (options?.AgentRunStepID) {
+      engine.AgentRunStepID = options.AgentRunStepID;
+    }
     const onAbort = (): void => engine.Stop();
     options?.Signal?.addEventListener('abort', onAbort, { once: true });
     try {

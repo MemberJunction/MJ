@@ -172,6 +172,19 @@ export interface RunComputerUseGoalOptions {
    * {@link UserInfo}, carrying no computer-use SDK types.
    */
   ContextUser?: UserInfo;
+
+  /**
+   * Optional parent `MJ: AI Agent Runs` id for observability. When set (with {@link AgentRunStepID}), an
+   * MJ-aware goal engine links the run's prompt runs to this agent run and nests them under the step.
+   */
+  AgentRunID?: string;
+
+  /**
+   * Optional parent `MJ: AI Agent Run Steps` id (the goal's step). When set (with {@link AgentRunID}), an
+   * MJ-aware goal engine nests a child `Prompt` step per prompt under it — grouping the goal's many prompt
+   * runs beneath a single step in the realtime agent run.
+   */
+  AgentRunStepID?: string;
 }
 
 /**

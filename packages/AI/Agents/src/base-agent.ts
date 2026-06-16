@@ -74,7 +74,9 @@ import {
     ClientToolResultSummary,
     ClientToolMetadata,
     InputArtifact,
-    AgentPipelineRequest
+    AgentPipelineRequest,
+    initAgentRunStep,
+    finalizeAgentRunStep
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -6724,39 +6726,36 @@ The context is now within limits. Please retry your request with the recovered c
         // create INSERT is fire-and-forget (the agent flow must not block on it).
         stepEntity.NewRecord();
 
-        stepEntity.AgentRunID = this._agentRun!.ID;
         // Step number is based on current count of steps + 1
-        stepEntity.StepNumber = (this._agentRun!.Steps?.length || 0) + 1;
-        stepEntity.StepType = params.stepType;
-        // Include hierarchy breadcrumb in StepName for better logging
-        stepEntity.StepName = this.formatHierarchicalMessage(params.stepName);
-        // check to see if targetId is a valid UUID
+        const stepNumber = (this._agentRun!.Steps?.length || 0) + 1;
+        // Warn on a non-UUID targetId before delegating (initAgentRunStep silently ignores invalid ids).
         if (params.targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.targetId)) {
-            // If not valid, we can just ignore it, but console.warn
             console.warn(`Invalid target ID format: ${params.targetId}`);
         }
-        else {
-            stepEntity.TargetID = params.targetId || null;
-        }
-        stepEntity.TargetLogID = params.targetLogId || null;
-        stepEntity.ParentID = params.parentId || null;  // Link to parent step (e.g., loop step)
-        stepEntity.Status = 'Running';
-        stepEntity.StartedAt = new Date();
-        stepEntity.PayloadAtStart = this.serializePayloadAtStart(params.payloadAtStart);
-        stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(params.payloadAtEnd);
-        
-        // Populate InputData if provided
-        if (params.inputData) {
-            stepEntity.InputData = JSON.stringify({
-                ...params.inputData,
-                context: {
-                    agentHierarchy: this._agentHierarchy,
-                    depth: this._depth,
-                    stepNumber: stepEntity.StepNumber
-                }
-            });
-        }
-        
+        // Populate the started fields via the shared single-source-of-truth helper. Instance-specific
+        // concerns (hierarchy breadcrumb, InputData context, payload serialization) are computed here.
+        initAgentRunStep(stepEntity, {
+            AgentRunID: this._agentRun!.ID,
+            StepNumber: stepNumber,
+            StepType: params.stepType,
+            StepName: this.formatHierarchicalMessage(params.stepName),  // include hierarchy breadcrumb
+            TargetID: params.targetId,
+            TargetLogID: params.targetLogId,
+            ParentID: params.parentId,  // Link to parent step (e.g., loop step)
+            PayloadAtStart: this.serializePayloadAtStart(params.payloadAtStart),
+            PayloadAtEnd: this.serializePayloadAtEnd(params.payloadAtEnd),
+            InputData: params.inputData
+                ? JSON.stringify({
+                      ...params.inputData,
+                      context: {
+                          agentHierarchy: this._agentHierarchy,
+                          depth: this._depth,
+                          stepNumber
+                      }
+                  })
+                : undefined
+        });
+
         // Fire-and-forget the 'started' INSERT — the agent flow never blocks on a step save. Store the
         // promise per-step so every later UPDATE (queueStepSave) runs only AFTER this INSERT commits
         // (see _stepInsertPromises).
@@ -6837,24 +6836,14 @@ The context is now within limits. Please retry your request with the recovered c
     protected async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         try {
             // Apply the completion state to the in-memory entity NOW (so the run's Steps array / UI see
-            // Completed immediately), then fire-and-forget the UPDATE via queueStepSave — which chains after
-            // the INSERT and force-persists (IgnoreDirtyState). The agent flow never blocks on this UPDATE.
-            stepEntity.Status = success ? 'Completed' : 'Failed';
-            stepEntity.CompletedAt = new Date();
-            stepEntity.Success = success;
-            stepEntity.ErrorMessage = errorMessage || null;
-
-            // Populate OutputData if provided
-            if (outputData) {
-                stepEntity.OutputData = JSON.stringify({
-                    ...CopyScalarsAndArrays(outputData, true),
-                    context: {
-                        success,
-                        durationMs: stepEntity.CompletedAt.getTime() - stepEntity.StartedAt.getTime(),
-                        errorMessage
-                    }
-                });
-            }
+            // Completed immediately) via the shared single-source-of-truth helper, then fire-and-forget the
+            // UPDATE via queueStepSave — which chains after the INSERT and force-persists (IgnoreDirtyState).
+            // The agent flow never blocks on this UPDATE.
+            finalizeAgentRunStep(stepEntity, {
+                success,
+                errorMessage,
+                outputData: outputData ? CopyScalarsAndArrays(outputData, true) : undefined
+            });
 
             this.queueStepSave(stepEntity);
         }

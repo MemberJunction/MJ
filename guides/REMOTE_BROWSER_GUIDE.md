@@ -375,6 +375,31 @@ advertises **Image input** modality (`pickHighestPowerVisionLLM`), falling back 
 LLM so selection never hard-fails. The acting `ContextUser` flows base → cdp → engine so those prompts run as
 the session's user.
 
+### 9f. Run-step observability — one "Browser goal" step, prompt sub-steps nested under it
+
+A single goal fans out into many prompt runs (a controller call per perceive-act step, plus judge calls).
+Rather than flatten those under the realtime co-agent run, the goal is modeled as **one parent step with
+child sub-steps** — exactly the `ParentID` shape `BaseAgent` uses for loop iterations:
+
+```
+co-agent run (realtime)
+ └─ ▸ Browser goal: "log into portal…"      MJ: AI Agent Run Steps · StepType 'Tool'   (parent)
+      ├─ Prompt: Controller   step 'Prompt', TargetID = prompt def, TargetLogID = its AIPromptRun
+      ├─ Prompt: Controller
+      └─ Prompt: Judge
+```
+
+- The **realtime layer** (`ExecuteRemoteBrowserGoal` resolver) reads the session's `coAgentRunID` from
+  `AIAgentSession.Config_`, creates the parent `Tool` step (`beginBrowserGoalStep`), threads
+  `AgentRunID` + the parent step id into `AchieveGoal`, and finalizes the step from the result.
+- **`MJComputerUseEngine`** (via `AgentRunStepTracker`) creates a child `Prompt` step per controller/judge
+  prompt under that parent, stamping `TargetLogID` with the produced `AIPromptRun` id.
+- The whole thing is **best-effort**: no co-agent run (or any failure) just means the goal runs unlinked —
+  it never aborts the goal.
+- **Single source of truth:** the step field semantics live once in `@memberjunction/ai-core-plus`
+  (`initAgentRunStep` / `finalizeAgentRunStep`); `BaseAgent` and the Computer Use tracker both delegate to
+  them rather than duplicating the create/finalize logic.
+
 ---
 
 ## 10. Reference map
@@ -386,8 +411,9 @@ the session's user.
 | `@memberjunction/remote-browser-cdp` | Shared CDP session kit (the DRY heart) + lossless mapper; `RunComputerUseGoal`, the `ComputerUseGoalRun` seam, model-blind `context-injection` |
 | `@memberjunction/remote-browser-{selfhost,browserbase,steel,browserless,hyperbrowser}` | The 5 backends |
 | `@memberjunction/remote-browser-server` | `RemoteBrowserEngine` (incl. `AchieveGoal` + pure `dispatchRemoteBrowserGoal`) + `RemoteBrowserChannel` |
-| `@memberjunction/computer-use-engine` | `MJComputerUseEngine` — vision-capable controller auto-selection (`pickHighestPowerVisionLLM`) |
-| `@memberjunction/server` | `ExecuteRemoteBrowserGoal` mutation + `BindRemoteBrowserGoalEngine` (binds `MJProgressComputerUseEngine`) |
+| `@memberjunction/computer-use-engine` | `MJComputerUseEngine` — vision-capable controller auto-selection (`pickHighestPowerVisionLLM`); `AgentRunStepTracker` (child prompt sub-steps) |
+| `@memberjunction/ai-core-plus` | Shared single-source-of-truth step helpers `initAgentRunStep` / `finalizeAgentRunStep` (used by `BaseAgent` AND the Computer Use tracker) |
+| `@memberjunction/server` | `ExecuteRemoteBrowserGoal` mutation + `BindRemoteBrowserGoalEngine` (binds `MJProgressComputerUseEngine`); `beginBrowserGoalStep`/`finalizeBrowserGoalStep` (parent goal step) |
 | migration `V202606161000` | `AIRemoteBrowserProvider` registry table |
 | `metadata/ai-remote-browser-providers/` | The 5 backend seed rows |
 

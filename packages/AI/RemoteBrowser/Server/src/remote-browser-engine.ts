@@ -106,6 +106,10 @@ export interface AchieveGoalParams {
   OnProgress?: (progress: RemoteBrowserGoalProgress) => void;
   /** Abort signal — barge-in stops the goal loop cooperatively. */
   Signal?: AbortSignal;
+  /** Optional parent `MJ: AI Agent Runs` id — links the goal's prompt runs to the realtime agent run. */
+  AgentRunID?: string;
+  /** Optional parent `MJ: AI Agent Run Steps` id — nests the goal's prompt runs under a single step. */
+  AgentRunStepID?: string;
 }
 
 /**
@@ -147,6 +151,8 @@ export async function dispatchRemoteBrowserGoal(
     OnProgress: opts.OnProgress,
     Signal: opts.Signal,
     ContextUser: opts.ContextUser,
+    AgentRunID: opts.AgentRunID,
+    AgentRunStepID: opts.AgentRunStepID,
   });
 }
 

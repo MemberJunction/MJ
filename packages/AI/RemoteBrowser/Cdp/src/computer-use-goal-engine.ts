@@ -41,6 +41,12 @@ export interface ComputerUseGoalRun {
    * ignores it.
    */
   ContextUser?: UserInfo;
+
+  /** Optional parent agent-run id the session sets before {@link Run} (MJ-aware engines link prompt runs to it). */
+  AgentRunID?: string;
+
+  /** Optional parent agent-run-step id the session sets before {@link Run} (MJ-aware engines nest child prompt steps under it). */
+  AgentRunStepID?: string;
 }
 
 /** Factory for a {@link ComputerUseGoalRun} — the injection point ({@link CdpRemoteBrowserSession.SetGoalEngineFactory}). */

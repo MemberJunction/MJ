@@ -22,6 +22,7 @@ import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
+import { beginBrowserGoalStep, finalizeBrowserGoalStep, extractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
 import {
   RemoteBrowserAction,
   RemoteBrowserAudioChunk,
@@ -302,18 +303,28 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
     const providerName = await this.resolveProviderName(session, contextUser, provider);
+    // Observability: nest this goal's many prompt runs under ONE "Browser goal" step on the realtime
+    // co-agent run (when the session has one). Best-effort — a null step just means the goal runs unlinked.
+    const coAgentRunID = extractCoAgentRunID(session.Config_);
+    const goalStep = await beginBrowserGoalStep(provider, contextUser, coAgentRunID, goal);
     try {
-      return await RemoteBrowserEngine.Instance.AchieveGoal(agentSessionID, goal, {
+      const result = await RemoteBrowserEngine.Instance.AchieveGoal(agentSessionID, goal, {
         ContextUser: contextUser,
         ProviderName: providerName,
         StartUrl: startUrl,
         MaxSteps: maxSteps,
         PreferredStrategy: preferredStrategy === 'NativeAI' || preferredStrategy === 'ComputerUse' ? preferredStrategy : undefined,
+        AgentRunID: coAgentRunID,
+        AgentRunStepID: goalStep?.ID,
       });
+      await finalizeBrowserGoalStep(goalStep, result);
+      return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`ExecuteRemoteBrowserGoal failed (provider='${providerName}'): ${message}`);
-      return { Success: false, Status: 'Error', Detail: `Remote browser error (${providerName}): ${message}` };
+      const failure = { Success: false, Status: 'Error', Detail: `Remote browser error (${providerName}): ${message}` };
+      await finalizeBrowserGoalStep(goalStep, failure);
+      return failure;
     }
   }
 

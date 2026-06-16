@@ -49,6 +49,7 @@ import {
 import type { JsonSchemaType, AuthMethod } from '@memberjunction/computer-use';
 
 import { MJRunComputerUseParams, MJDomainAuthBinding, ActionRef, PromptEntityRef } from '../types/mj-params.js';
+import { AgentRunStepTracker } from './agent-run-step-tracker.js';
 
 /**
  * Picks the highest-power LLM that supports Image **input** (a vision-capable controller), or `undefined`
@@ -82,6 +83,12 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private agentRunId: string | undefined;
     private lastPromptRunId: string | undefined;
     private _provider: IMetadataProvider | null = null;
+
+    /**
+     * When the run is linked to a parent agent-run step (AgentRunId + AgentRunStepID), this tracker nests a
+     * child `Prompt` step per controller/judge prompt under it. Undefined when no step linkage was supplied.
+     */
+    private stepTracker: AgentRunStepTracker | undefined;
 
     /**
      * Optional metadata provider override. Callers should set
@@ -122,6 +129,14 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         this.contextUser = params.ContextUser;
         this.agentRunId = params.AgentRunId;
         this.lastPromptRunId = undefined;
+
+        // When linked to a parent agent-run step, nest a child Prompt step per prompt under it.
+        this.stepTracker = undefined;
+        if (params.AgentRunId && params.AgentRunStepID) {
+            const tracker = new AgentRunStepTracker(this.Provider, this.contextUser, params.AgentRunId, params.AgentRunStepID);
+            await tracker.Init();
+            this.stepTracker = tracker;
+        }
 
         // Resolve prompt entity refs → full MJAIPromptEntityExtended
         this.controllerPromptEntity = await this.resolvePromptRef(params.ControllerPromptRef);
@@ -421,7 +436,17 @@ export class MJComputerUseEngine extends ComputerUseEngine {
             params.conversationMessages = conversationMessages;
         }
 
-        return this.promptRunner.ExecutePrompt(params);
+        // Nest a child `Prompt` step under the goal's parent step (no-op when step-tracking is inactive),
+        // finalizing it with the produced prompt-run id whether the prompt succeeds, fails, or throws.
+        const step = this.stepTracker ? await this.stepTracker.BeginPromptStep(promptEntity) : null;
+        try {
+            const result = await this.promptRunner.ExecutePrompt(params);
+            await this.stepTracker?.EndPromptStep(step, result.promptRun?.ID, result.success, result.errorMessage);
+            return result;
+        } catch (err) {
+            await this.stepTracker?.EndPromptStep(step, undefined, false, err instanceof Error ? err.message : String(err));
+            throw err;
+        }
     }
 
     /**

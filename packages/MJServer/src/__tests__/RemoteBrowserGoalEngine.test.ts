@@ -3,7 +3,14 @@ import type { UserInfo } from '@memberjunction/core';
 import { RunComputerUseParams, type StepRecord } from '@memberjunction/computer-use';
 import { MJComputerUseEngine, MJRunComputerUseParams } from '@memberjunction/computer-use-engine';
 import { CdpRemoteBrowserSession, type ComputerUseGoalRun } from '@memberjunction/remote-browser-cdp';
-import { buildMJGoalParams, BindRemoteBrowserGoalEngine, MJProgressComputerUseEngine } from '../agentSessions/remoteBrowserGoalEngine.js';
+import type { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import {
+  buildMJGoalParams,
+  BindRemoteBrowserGoalEngine,
+  MJProgressComputerUseEngine,
+  extractCoAgentRunID,
+  finalizeBrowserGoalStep,
+} from '../agentSessions/remoteBrowserGoalEngine.js';
 
 const USER = { ID: 'u-1', Email: 'amith@bluecypress.io' } as unknown as UserInfo;
 
@@ -27,6 +34,66 @@ describe('buildMJGoalParams', () => {
 
   it('leaves ContextUser undefined when none is supplied', () => {
     expect(buildMJGoalParams(baseParams()).ContextUser).toBeUndefined();
+  });
+
+  it('threads the parent run + step ids for observability nesting', () => {
+    const mj = buildMJGoalParams(baseParams(), USER, 'coagent-run-1', 'goal-step-1');
+    expect(mj.AgentRunId).toBe('coagent-run-1');
+    expect(mj.AgentRunStepID).toBe('goal-step-1');
+  });
+
+  it('leaves the run/step ids undefined when not supplied', () => {
+    const mj = buildMJGoalParams(baseParams(), USER);
+    expect(mj.AgentRunId).toBeUndefined();
+    expect(mj.AgentRunStepID).toBeUndefined();
+  });
+});
+
+describe('extractCoAgentRunID', () => {
+  it('pulls coAgentRunID out of a session Config_ blob', () => {
+    expect(extractCoAgentRunID(JSON.stringify({ coAgentRunID: 'run-9', promptRunID: 'p' }))).toBe('run-9');
+  });
+  it('returns undefined for a missing key, null/empty config, or non-string value', () => {
+    expect(extractCoAgentRunID(JSON.stringify({ promptRunID: 'p' }))).toBeUndefined();
+    expect(extractCoAgentRunID(null)).toBeUndefined();
+    expect(extractCoAgentRunID(undefined)).toBeUndefined();
+    expect(extractCoAgentRunID('')).toBeUndefined();
+    expect(extractCoAgentRunID(JSON.stringify({ coAgentRunID: 123 }))).toBeUndefined();
+  });
+  it('returns undefined for malformed JSON (best-effort)', () => {
+    expect(extractCoAgentRunID('{not json')).toBeUndefined();
+  });
+});
+
+describe('finalizeBrowserGoalStep', () => {
+  function fakeStep() {
+    return {
+      StartedAt: new Date(),
+      Save: vi.fn(async () => true),
+      LatestResult: { CompleteMessage: '' },
+    } as unknown as MJAIAgentRunStepEntity & { Save: ReturnType<typeof vi.fn> };
+  }
+
+  it('finalizes the parent step Completed from a successful goal result + saves', async () => {
+    const step = fakeStep();
+    await finalizeBrowserGoalStep(step, { Success: true, Strategy: 'ComputerUse', Status: 'Completed', StepCount: 4, CurrentUrl: 'https://done/' });
+    expect(step.Status).toBe('Completed');
+    expect(step.Success).toBe(true);
+    expect((step as unknown as { Save: ReturnType<typeof vi.fn> }).Save).toHaveBeenCalledOnce();
+    const out = JSON.parse(step.OutputData as string);
+    expect(out.strategy).toBe('ComputerUse');
+    expect(out.stepCount).toBe(4);
+  });
+
+  it('finalizes Failed and carries the detail as the error message', async () => {
+    const step = fakeStep();
+    await finalizeBrowserGoalStep(step, { Success: false, Status: 'Error', Detail: 'login blocked' });
+    expect(step.Status).toBe('Failed');
+    expect(step.ErrorMessage).toBe('login blocked');
+  });
+
+  it('is a no-op when the step is null (no co-agent run to nest under)', async () => {
+    await expect(finalizeBrowserGoalStep(null, { Success: true })).resolves.toBeUndefined();
   });
 });
 

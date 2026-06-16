@@ -3,17 +3,21 @@
 **Status:** Plan + **full implementation landed in this PR** — the goal-driven path is wired end-to-end
 (CDP `RunComputerUseGoal` → server `AchieveGoal`/`dispatchRemoteBrowserGoal` strategy switch → resolver
 `ExecuteRemoteBrowserGoal` → realtime `browser_AchieveGoal` tool), **plus** the model-blind credential
-context-injection (§4), Collaborative pause-on-takeover (§5), vision-model selection tightening (§6), and the
-production binding of MJ's computer-use engine — all with unit tests. Remaining follow-ups: invoking the
-NativeAI backends (already implemented per-backend, still not wired into the strategy default) and run-level
-observability (RunID/ParentRunID linking). Live (real browser + LLM) validation is the only step deferred.
+context-injection (§4), Collaborative pause-on-takeover (§5), vision-model selection tightening (§6), the
+production binding of MJ's computer-use engine, and run-step observability (the goal becomes one parent
+"Browser goal" step on the realtime co-agent run with a child `Prompt` step per controller/judge prompt
+nested under it, via the shared `initAgentRunStep`/`finalizeAgentRunStep` helpers in `ai-core-plus` that
+`BaseAgent` also uses) — all with unit tests. Remaining follow-up: invoking the NativeAI backends (already
+implemented per-backend, still not wired into the strategy default). Live (real browser + LLM) validation is
+the only step deferred.
 
 ### Implemented in this PR
 - **`@memberjunction/remote-browser-base`** — `IRemoteBrowserSession.RunComputerUseGoal()`, `RemoteBrowserGoalResult`, `RunComputerUseGoalOptions` (incl. `OnProgress`, `Signal`, `ContextUser`).
 - **`@memberjunction/remote-browser-cdp`** — `RunComputerUseGoal` drives computer-use on the session's **own** adapter (same instance the human watches) via an injectable `ComputerUseGoalRun` seam (`SetGoalEngineFactory`; default `ProgressComputerUseEngine`); progress + abort→`Stop()`. **§4 model-blind context injection** (`context-injection.ts`: `wrapAdapterWithContext` resolves `{{label}}` tokens to real values in a CLONED action at the CDP boundary — original/logged action stays templated, so no model ever sees the value). **16 tests** (4 goal + 12 context-injection).
 - **`@memberjunction/remote-browser-server`** — `RemoteBrowserEngine.AchieveGoal()` + the pure `dispatchRemoteBrowserGoal()` strategy switch (ComputerUse vs NativeAI). **§5 Collaborative pause:** `AchieveGoal` registers an `AbortController` per session (chained to the caller's `Signal`); a granted human takeover (`GrantControl(...,'Human')`) and `EndSession` abort the in-flight goal so the loop pauses cooperatively. **7 tests** (4 dispatch + 3 pause).
-- **`@memberjunction/computer-use-engine`** — **§6:** `autoSelectControllerModel` now prefers the highest-power LLM that explicitly advertises **Image input** modality (`selectHighestPowerVisionLLM`), falling back to the plain highest-power LLM so selection never hard-fails.
-- **`@memberjunction/server`** — `ExecuteRemoteBrowserGoal` GraphQL mutation **+ the production binding** (`agentSessions/remoteBrowserGoalEngine.ts`): `MJProgressComputerUseEngine` (MJ prompt-runner routing, vision-model auto-selection, media persistence, progress narration) is bound via `CdpRemoteBrowserSession.SetGoalEngineFactory` at startup. `ContextUser` flows base→cdp→engine so prompts run under the session's user.
+- **`@memberjunction/computer-use-engine`** — **§6:** `autoSelectControllerModel` now prefers the highest-power LLM that explicitly advertises **Image input** modality (`pickHighestPowerVisionLLM`), falling back to the plain highest-power LLM so selection never hard-fails. **Run-step nesting:** `AgentRunStepTracker` creates a child `Prompt` step per controller/judge prompt under the goal's parent step.
+- **`@memberjunction/ai-core-plus`** — shared single-source-of-truth step helpers `initAgentRunStep`/`finalizeAgentRunStep`, reused by `BaseAgent` and the Computer Use tracker.
+- **`@memberjunction/server`** — `ExecuteRemoteBrowserGoal` GraphQL mutation **+ the production binding** (`agentSessions/remoteBrowserGoalEngine.ts`): `MJProgressComputerUseEngine` (MJ prompt-runner routing, vision-model auto-selection, media persistence, progress narration) is bound via `CdpRemoteBrowserSession.SetGoalEngineFactory` at startup. `ContextUser` + the parent run/step ids flow base→cdp→engine; the resolver creates the parent "Browser goal" step (`beginBrowserGoalStep`) read from `AIAgentSession.Config_.coAgentRunID`.
 - **`@memberjunction/ng-conversations`** — `browser_AchieveGoal` realtime tool + channel route to the goal mutation.
 
 Original plan follows.
