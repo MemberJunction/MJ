@@ -190,11 +190,13 @@ BEGIN
     v_col_list := quote_ident('${pkName}');
     v_val_list := quote_literal(v_id) || '::UUID';
 
-    -- Build column/value lists from the keys present in p_data; absent keys are
-    -- omitted so the column DEFAULT applies (matching typed-arg sproc semantics).
+    -- Build column/value lists from the keys present in p_data. A key that is
+    -- absent OR explicitly JSON null is omitted so the column DEFAULT applies,
+    -- matching the typed-arg sproc per-column coalescing (a defaulted NOT NULL
+    -- column such as OwnerUserID falls back to its DEFAULT instead of inserting NULL).
     FOREACH v_field_name IN ARRAY ARRAY[${fieldArray}]
     LOOP
-        IF p_data ? v_field_name THEN
+        IF p_data ? v_field_name AND jsonb_typeof(p_data->v_field_name) <> 'null' THEN
             v_cast_expr := CASE v_field_name
 ${caseEntries}
             END;
@@ -744,6 +746,18 @@ $$ LANGUAGE plpgsql;
       return 'RETURNS TABLE("_result_id" UUID) AS';
     }
 
+    // Scalar result set: `SELECT @var AS Alias` (or a literal / @@ROWCOUNT) — a
+    // single projected column aliased to something other than ID. T-SQL procs use
+    // this to hand a status / row-count back to the caller. The body converter turns
+    // it into `RETURN QUERY SELECT ...`, which PG rejects unless the function is
+    // SETOF/TABLE — so we MUST declare RETURNS TABLE(...) here (declaring VOID would
+    // produce "cannot use RETURN QUERY in a non-SETOF function" at apply time).
+    const scalarMatch = body.match(/SELECT\s+(@@?\w+|NULL|\d+)\s+AS\s+\[?"?(\w+)"?\]?\s*;/i);
+    if (scalarMatch) {
+      const colType = this.inferScalarColumnType(scalarMatch[1], body);
+      return `RETURNS TABLE("${scalarMatch[2]}" ${colType}) AS`;
+    }
+
     // If there's any SELECT that returns rows
     const upperBody = body.toUpperCase();
     if (/\bSELECT\b/.test(upperBody) && !/SELECT\s+@/.test(upperBody)) {
@@ -751,6 +765,24 @@ $$ LANGUAGE plpgsql;
     }
 
     return 'RETURNS VOID AS';
+  }
+
+  /**
+   * Infer the PG column type for a scalar `SELECT <expr> AS Alias` result set.
+   * `@@ROWCOUNT`, integer literals, and NULL default to INTEGER (the row-count case);
+   * a `@var` is resolved from its `DECLARE @var <type>` in the source body. Falls back
+   * to INTEGER when the declaration can't be found — these scalar returns are almost
+   * always counts/flags, and INTEGER is the safe, common case.
+   */
+  private inferScalarColumnType(expr: string, body: string): string {
+    if (/^@@/.test(expr) || /^\d+$/.test(expr) || /^NULL$/i.test(expr)) {
+      return 'INTEGER';
+    }
+    const varName = expr.replace(/^@/, '');
+    const declMatch = body.match(
+      new RegExp(`DECLARE\\s+@${varName}\\s+([A-Za-z0-9_]+(?:\\s*\\(\\s*\\d+\\s*(?:,\\s*\\d+\\s*)?\\))?)`, 'i'),
+    );
+    return declMatch ? resolveType(declMatch[1].trim()) : 'INTEGER';
   }
 }
 

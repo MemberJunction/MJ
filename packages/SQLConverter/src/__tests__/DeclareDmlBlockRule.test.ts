@@ -112,4 +112,52 @@ UPDATE [__mj].[Foo] SET [Bar] = @v WHERE [Baz] = 1;`;
       expect(result).toContain('v_v');
     });
   });
+
+  describe('dynamic CHECK constraint lookup → pg_constraint', () => {
+    it('Form A: COL_NAME filter → pg_constraint + pg_attribute', () => {
+      const sql = `DECLARE @ConstraintName NVARCHAR(200);
+SELECT @ConstraintName = name
+FROM sys.check_constraints
+WHERE parent_object_id = OBJECT_ID('[__mj].[AIAgentRunStep]')
+  AND COL_NAME(parent_object_id, parent_column_id) = 'StepType';
+
+IF @ConstraintName IS NOT NULL
+BEGIN
+    EXEC('ALTER TABLE [__mj].[AIAgentRunStep] DROP CONSTRAINT ' + @ConstraintName);
+END`;
+      const result = convert(sql);
+      expect(result).toContain('FROM pg_constraint con');
+      expect(result).toContain('any(con.conkey)'); // lowercase — must NOT be quoted to "ANY"(...)
+      expect(result).not.toMatch(/"ANY"\s*\(/);
+      expect(result).toContain('a.attname = \'StepType\'');
+      expect(result).toContain("con.conrelid = '__mj.\"AIAgentRunStep\"'::regclass");
+      expect(result).toContain("con.contype = 'c'");
+      expect(result).toContain('INTO v_ConstraintName');
+      // No untranslated SQL Server catalog references remain
+      expect(result).not.toMatch(/sys\.check_constraints/i);
+      expect(result).not.toMatch(/\bCOL_NAME\b/i);
+      expect(result).not.toMatch(/\bOBJECT_ID\b/i);
+    });
+
+    it('Form B: aliased JOIN sys.columns → pg_constraint + pg_attribute', () => {
+      const sql = `DECLARE @NoteStatusConstraint NVARCHAR(200);
+SELECT @NoteStatusConstraint = cc.name
+FROM sys.check_constraints cc
+JOIN sys.columns c ON cc.parent_object_id = c.object_id AND cc.parent_column_id = c.column_id
+WHERE c.name = 'Status'
+  AND cc.parent_object_id = OBJECT_ID('__mj.AIAgentNote');
+
+IF @NoteStatusConstraint IS NOT NULL
+    EXEC('ALTER TABLE __mj.AIAgentNote DROP CONSTRAINT [' + @NoteStatusConstraint + ']');`;
+      const result = convert(sql);
+      expect(result).toContain('FROM pg_constraint con');
+      expect(result).toContain('a.attname = \'Status\'');
+      expect(result).toContain("con.conrelid = '__mj.\"AIAgentNote\"'::regclass");
+      expect(result).toContain("con.contype = 'c'");
+      expect(result).toContain('INTO v_NoteStatusConstraint');
+      expect(result).not.toMatch(/sys\.check_constraints/i);
+      expect(result).not.toMatch(/sys\.columns/i);
+      expect(result).not.toMatch(/\bOBJECT_ID\b/i);
+    });
+  });
 });
