@@ -369,8 +369,9 @@ export class EntityField {
                     this.Value = null;
                 }
             }
-            else if (fieldInfo.Type.trim().toLowerCase() === "uniqueidentifier") {
-                // special handling for GUIDs, we don't want to populate anything here because the server always sets the value, leave blank
+            else if (fieldInfo.IsUniqueIdentifier) {
+                // special handling for GUIDs (SQL Server `uniqueidentifier` / PostgreSQL `uuid`),
+                // we don't want to populate anything here because the server always sets the value, leave blank
                 this.Value = null;
             }
             else if (fieldInfo.TSType === EntityFieldTSType.Date) {
@@ -2205,11 +2206,12 @@ export abstract class BaseEntity<T = unknown> {
         this._childEntity = null;
         this._childEntities = null;
         this._childEntityDiscoveryDone = false;
-        // Generate UUID for non-auto-increment uniqueidentifier primary keys
+        // Generate UUID for non-auto-increment GUID/UUID primary keys
+        // (SQL Server `uniqueidentifier` / PostgreSQL `uuid`)
         if (this.EntityInfo.PrimaryKeys.length === 1) {
             const pk = this.EntityInfo.PrimaryKeys[0];
             if (!pk.AutoIncrement &&
-                pk.Type.toLowerCase().trim() === 'uniqueidentifier' &&
+                pk.IsUniqueIdentifier &&
                 !this.Get(pk.Name)) {
                 // Generate and set UUID for this primary key
                 const uuid = uuidv4();

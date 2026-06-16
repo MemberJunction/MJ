@@ -297,7 +297,7 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     private _Filters: MJActionFilterEntity[];
     private _Params: MJActionParamEntity[];
     private _ActionResultCodes: MJActionResultCodeEntity[];
-    private _ActionLibraries: MJActionLibraryEntity[];
+    private _ActionLibraries: MJActionLibraryEntity[] = [];
 
    /**
     * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.
