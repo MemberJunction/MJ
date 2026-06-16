@@ -1144,11 +1144,13 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         newExpectedCompletionAt: Date
     ): Promise<boolean> {
         const provider = this.Base.ProviderToUse as DatabaseProviderBase;
-        const schema = provider.MJCoreSchemaName;
-        // MJ pattern: positional placeholders; see tryAcquireLock for rationale.
+        // MJ pattern: positional parameter array. buildLockSprocCall picks the
+        // dialect-correct call wrapper (EXEC on SQL Server, SELECT * FROM fn() on
+        // PostgreSQL) — the previous hardcoded `EXEC [schema].[…]` form crashed on
+        // PG. The SAME value array serves both. See tryAcquireLock for rationale.
         const rows = await provider.ExecuteSQL<{ Extended: number }>(
-            `EXEC [${schema}].[spExtendScheduledJobLease] ` +
-                `@JobID=@p0, @ExpectedToken=@p1, @NewExpectedCompletionAt=@p2`,
+            this.buildLockSprocCall(provider, 'spExtendScheduledJobLease',
+                ['JobID', 'ExpectedToken', 'NewExpectedCompletionAt']),
             [jobId, expectedToken, newExpectedCompletionAt],
             { isMutation: true, description: 'spExtendScheduledJobLease' },
             this.Base.ContextUser
