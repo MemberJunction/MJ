@@ -178,6 +178,42 @@ describe('BaseAgent.createStepEntity / finalizeStepEntity — lifecycle', () => 
     expect(b.StepNumber).toBe(2);
   });
 
+  it('nests under a parent step, links a valid target, and wraps InputData with the hierarchy/depth context', async () => {
+    const step = new MockStep('s', []);
+    const { agent, pending } = makeAgent([step]);
+    // agents-specific glue read by createStepEntity when building InputData
+    (agent as unknown as { _agentHierarchy: string[]; _depth: number })._agentHierarchy = ['Root', 'Child'];
+    (agent as unknown as { _agentHierarchy: string[]; _depth: number })._depth = 1;
+
+    const created = await internals(agent).createStepEntity({
+      stepType: 'Prompt',
+      stepName: 'Child Prompt',
+      contextUser: ctx,
+      parentId: 'parent-step-1',
+      targetId: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
+      inputData: { foo: 'bar' },
+    });
+
+    expect(created.ParentID).toBe('parent-step-1'); // child step nests under the parent
+    expect(created.TargetID).toBe('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d');
+    const input = JSON.parse(created.InputData as string);
+    expect(input.foo).toBe('bar');
+    expect(input.context).toEqual({ agentHierarchy: ['Root', 'Child'], depth: 1, stepNumber: 1 });
+    await pending();
+  });
+
+  it('ignores a non-UUID targetId (leaves TargetID null rather than stamping garbage)', async () => {
+    const step = new MockStep('s', []);
+    const { agent } = makeAgent([step]);
+    const created = await internals(agent).createStepEntity({
+      stepType: 'Prompt',
+      stepName: 'x',
+      contextUser: ctx,
+      targetId: 'not-a-uuid',
+    });
+    expect(created.TargetID).toBeNull();
+  });
+
   it('force-persists the finalize UPDATE (IgnoreDirtyState) so a fast create→finalize never stays Running', async () => {
     // Regression for the "step stuck at Running" bug: NewRecord() gives the entity a client PK, so the
     // INSERT and the finalize UPDATE mutate the SAME instance. Without IgnoreDirtyState the INSERT's
