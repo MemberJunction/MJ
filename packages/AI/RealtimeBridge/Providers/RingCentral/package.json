@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-bridge-ringcentral",
   "type": "module",
-  "version": "5.40.2",
+  "version": "5.41.0",
   "description": "MemberJunction: RingCentral Realtime Bridge driver (telephony). Connects the realtime agent engine to a phone call over the RingCentral Voice / Call Control API — outbound dial (RingOut / Call Control sessions), inbound webhook routing, single-party audio in/out, DTMF send/receive, and call transfer (supervise/transfer) — via an injectable telephony call SDK seam. Audio only: no video, no screen, no Meeting Controls.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,10 +17,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.40.2",
-    "@memberjunction/global": "5.40.2",
-    "@memberjunction/core-entities": "5.40.2",
-    "@memberjunction/ai-bridge-base": "5.40.2"
+    "@memberjunction/core": "5.41.0",
+    "@memberjunction/global": "5.41.0",
+    "@memberjunction/core-entities": "5.41.0",
+    "@memberjunction/ai-bridge-base": "5.41.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
