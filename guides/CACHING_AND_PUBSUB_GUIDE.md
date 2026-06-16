@@ -547,6 +547,22 @@ protected async syncLocalCacheForConfig(
 
 When the cache exceeds `maxSizeBytes` or `maxEntries`, entries are evicted to make room.
 
+### Size Estimation (sampled, not exact)
+
+Entry `sizeBytes` is an **approximate** figure used only for eviction accounting — it is never
+exact and never affects correctness. Rather than `JSON.stringify` the entire result array on every
+cache write (which previously ran an O(rows × fields) serialization on the per-save/delete hot
+path), `estimateResultsSize()` samples a few random rows and scales:
+
+- sample count = `clamp(ceil(rowCount × 0.10), 3, 10)` distinct **random** row indexes
+- average `JSON.stringify(row).length` across the sample, multiply by `rowCount`, ×2 for UTF-16
+- `rowCount === 0` → 0; `rowCount ≤ 3` → measure every row (no sampling)
+
+Random (not first-N) sampling avoids systematic skew when rows are heterogeneous (e.g. a nullable
+large JSON/text column whose head rows happen to be null or oversized). Single-row cache mutations
+(`UpsertSingleEntity`/`RemoveSingleEntity`) likewise avoid per-row `CompositeKey` allocation by
+keying their internal dedup Map with a cheap delimiter-joined PK string.
+
 ### Eviction Trigger
 
 ```typescript

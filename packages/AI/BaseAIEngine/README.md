@@ -139,6 +139,34 @@ const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agentId);
 const defaultPreset = AIEngineBase.Instance.GetDefaultAgentConfigurationPreset(agentId);
 ```
 
+#### Fast Lookups (O(1) indexes + memoized helpers)
+
+The cached collections are plain arrays, but the engine also exposes lazily-built lookup
+indexes and memoized helpers so hot paths (model selection, credential resolution) don't
+re-scan them on every call. All indexes are rebuilt automatically when the metadata reloads.
+
+```typescript
+const eng = AIEngineBase.Instance;
+
+// O(1) by-ID lookups (keys are NormalizeUUID'd — case/whitespace safe)
+const model  = eng.ModelsByID.get(NormalizeUUID(modelId));
+const vendor = eng.VendorsByID.get(NormalizeUUID(vendorId));
+const config = eng.ConfigurationsByID.get(NormalizeUUID(configId));
+const type   = eng.ModelTypesByID.get(NormalizeUUID(typeId));
+
+// Grouped indexes
+const vendorsForModel = eng.ModelVendorsByModelID.get(NormalizeUUID(modelId)) ?? [];
+const modelsForPrompt = eng.PromptModelsByPromptID.get(NormalizeUUID(promptId)) ?? [];
+
+// Inference-provider check (memoized vendor-type lookup; Model-Developer fallback)
+if (eng.IsInferenceProvider(modelVendor)) { /* runs the model, not just develops it */ }
+const inferenceTypeId = eng.InferenceProviderTypeID; // memoized
+```
+
+> When you already hold a model entity, prefer `model.ModelVendors` (the per-model vendor
+> array the engine attaches at load) over `ModelVendorsByModelID`. The index exists for callers
+> that only have a ModelID.
+
 #### Configuration Inheritance
 
 Configurations support parent-child inheritance chains:

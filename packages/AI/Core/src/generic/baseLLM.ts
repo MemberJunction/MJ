@@ -571,8 +571,13 @@ export function ResolveFileInputStrategy(
     const lower = mimeType.toLowerCase();
     const matches = capabilities.SupportedMimeTypes.some((pattern) => {
         const p = pattern.toLowerCase();
+        // Wildcard on EITHER side matches (a requested 'image/*' modality probe must
+        // match a driver declaring any concrete 'image/<x>' type, and vice-versa).
         if (p.endsWith('/*')) {
             return lower.startsWith(p.slice(0, -1));
+        }
+        if (lower.endsWith('/*')) {
+            return p.startsWith(lower.slice(0, -1));
         }
         return lower === p;
     });

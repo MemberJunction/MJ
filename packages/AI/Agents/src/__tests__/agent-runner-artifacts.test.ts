@@ -32,6 +32,7 @@ interface FakeEntity {
     ID: string;
     Save: () => Promise<boolean>;
     Load: (id: string) => Promise<boolean>;
+    NewRecord: () => void;
 }
 
 function makeEntity(id: string, overrides: Partial<FakeEntity> = {}): FakeEntity {
@@ -39,6 +40,7 @@ function makeEntity(id: string, overrides: Partial<FakeEntity> = {}): FakeEntity
         ID: id,
         Save: vi.fn(async () => true),
         Load: vi.fn(async () => true),
+        NewRecord: vi.fn(),
         ...overrides,
     };
 }

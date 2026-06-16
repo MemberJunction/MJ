@@ -47,10 +47,13 @@ export const AUDIO_DIRECTION_STEAL_FACTOR = 1.15;
  * NOISE GATES (per direction): raw analyser levels at/below the gate render as TRUE
  * silence — without this, an idle microphone's room-noise/auto-gain floor keeps the EQ
  * dancing and the direction stuck on "user" while nobody is speaking. The mic gate sits
- * well above the output gate because playback silence is actual zero; mic silence isn't.
+ * a touch above the output gate (playback silence is actual zero; mic silence isn't), but
+ * NOT so high it swallows normal speech: 0.08 over-gated — typical Mac-mic normalized speech
+ * peaks well under it, so the meter read silence the whole time the user was talking. 0.045
+ * (≈ the presence floor) suppresses idle room-noise while letting real speech drive the EQ.
  */
 export const AUDIO_OUTPUT_NOISE_GATE = 0.03;
-export const AUDIO_INPUT_NOISE_GATE = 0.08;
+export const AUDIO_INPUT_NOISE_GATE = 0.045;
 
 /**
  * Soft-knee noise gate: at/below `gate` → 0; above it the remaining range rescales to

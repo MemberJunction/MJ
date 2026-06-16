@@ -915,21 +915,36 @@ export class EntityFieldInfo extends BaseInfo {
         return GeneratedFormSectionType[this.GeneratedFormSection];
     }
 
+    /** Memoized {@link TSType} — `Type` is immutable after metadata load, so the classification never changes. */
+    private _tsType: EntityFieldTSType | undefined = undefined;
+
     /**
      * Provides the TypeScript type for a given Entity Field. This is useful to map
      * a wide array of database types to a narrower set of TypeScript types.
+     *
+     * Memoized: this getter is read per-field on extremely hot paths (the EntityField
+     * value getter/setter, BaseEntity.Set/SetMany, dirty-tracking, hydration, and the
+     * raw-mode Get() date check). Recomputing the SQL→TS classification (which runs
+     * several string-matching helpers + toLowerCase) on every access is wasteful since
+     * `Type` never changes after load.
      */
     get TSType(): EntityFieldTSType {
+        if (this._tsType !== undefined) return this._tsType;
         switch (TypeScriptTypeFromSQLType(this.Type).toLowerCase()) {
             case "number":
-                return EntityFieldTSType.Number
+                this._tsType = EntityFieldTSType.Number;
+                break;
             case "boolean":
-                return EntityFieldTSType.Boolean
+                this._tsType = EntityFieldTSType.Boolean;
+                break;
             case "date":
-                return EntityFieldTSType.Date
+                this._tsType = EntityFieldTSType.Date;
+                break;
             default:
-                return EntityFieldTSType.String
+                this._tsType = EntityFieldTSType.String;
+                break;
         }
+        return this._tsType;
     }
 
     /**
@@ -1730,19 +1745,61 @@ export class EntityInfo extends BaseInfo {
     _oneToManyCount: number = 0
     _floatCount: number = 0
 
+    // --- Lazy caches for immutable field-derived collections ---------------------------------
+    // `_Fields` is populated once in the constructor and never reassigned, so these caches never
+    // need invalidation. They replace per-access `.filter()`/`.find()` scans on hot paths
+    // (PrimaryKeys is read on every load + save-state check; FieldByName is read per field read).
+    private _fieldByNameMap: Map<string, EntityFieldInfo> | null = null;
+    private _firstPrimaryKeyCache: EntityFieldInfo | undefined = undefined;
+    private _primaryKeysCache: EntityFieldInfo[] | null = null;
+    private _uniqueKeysCache: EntityFieldInfo[] | null = null;
+    private _foreignKeysCache: EntityFieldInfo[] | null = null;
+    private _encryptedFieldsCache: EntityFieldInfo[] | null = null;
+    private _datetimeFieldsCache: EntityFieldInfo[] | null = null;
+    private _nameFieldCache: EntityFieldInfo | null | undefined = undefined;
+
+    /**
+     * O(1) case-insensitive field lookup by name. Use this instead of `Fields.find(f => f.Name === name)`
+     * on hot paths — it builds a lowercased+trimmed `Map` once (lazily) and reuses it.
+     *
+     * NOTE: this is a *field-within-entity* index, distinct from the *entity-level* "Map-backed
+     * entity lookups" that were evaluated and skipped (~500 entities, negligible). Here a single
+     * entity can be read field-by-field in tight loops, so the index is worthwhile.
+     *
+     * @param name field name (matched case-insensitively, whitespace-trimmed)
+     * @returns the matching EntityFieldInfo, or undefined if not found
+     */
+    public FieldByName(name: string): EntityFieldInfo | undefined {
+        if (name == null) return undefined;
+        if (this._fieldByNameMap === null) {
+            const map = new Map<string, EntityFieldInfo>();
+            for (const f of this._Fields) {
+                if (f.Name != null) map.set(f.Name.trim().toLowerCase(), f);
+            }
+            this._fieldByNameMap = map;
+        }
+        return this._fieldByNameMap.get(name.trim().toLowerCase());
+    }
+
     /**
      * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
      */
     get FirstPrimaryKey(): EntityFieldInfo {
-        return this.Fields.find((f) => f.IsPrimaryKey);
+        if (this._firstPrimaryKeyCache === undefined) {
+            this._firstPrimaryKeyCache = this.Fields.find((f) => f.IsPrimaryKey);
+        }
+        return this._firstPrimaryKeyCache;
     }
 
     /**
      * Returns an array of all fields that are part of the primary key for the entity. If the entity has a single primary key, the array will have a single element.
      */
     get PrimaryKeys(): EntityFieldInfo[] {
-        return this.Fields.filter((f) => f.IsPrimaryKey);
+        if (this._primaryKeysCache === null) {
+            this._primaryKeysCache = this.Fields.filter((f) => f.IsPrimaryKey);
+        }
+        return this._primaryKeysCache;
     }
 
     /**
@@ -1750,7 +1807,10 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityFieldInfo[]} Array of fields with unique constraints
      */
     get UniqueKeys(): EntityFieldInfo[] {
-        return this.Fields.filter((f) => f.IsUnique);
+        if (this._uniqueKeysCache === null) {
+            this._uniqueKeysCache = this.Fields.filter((f) => f.IsUnique);
+        }
+        return this._uniqueKeysCache;
     }
 
     /**
@@ -1758,7 +1818,10 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityFieldInfo[]} Array of foreign key fields
      */
     get ForeignKeys(): EntityFieldInfo[] {
-        return this.Fields.filter((f) => f.RelatedEntityID && f.RelatedEntityID.length > 0);
+        if (this._foreignKeysCache === null) {
+            this._foreignKeysCache = this.Fields.filter((f) => f.RelatedEntityID && f.RelatedEntityID.length > 0);
+        }
+        return this._foreignKeysCache;
     }
 
     /**
@@ -1767,7 +1830,23 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityFieldInfo[]} Array of encrypted fields
      */
     get EncryptedFields(): EntityFieldInfo[] {
-        return this.Fields.filter((f) => f.Encrypt);
+        if (this._encryptedFieldsCache === null) {
+            this._encryptedFieldsCache = this.Fields.filter((f) => f.Encrypt);
+        }
+        return this._encryptedFieldsCache;
+    }
+
+    /**
+     * Returns an array of all fields whose TypeScript type is Date. Cached — used per query by
+     * the data providers' row post-processing to convert datetime values; recomputing the scan
+     * (and the per-field TSType classification) on every query is wasteful.
+     * @returns {EntityFieldInfo[]} Array of date/datetime fields
+     */
+    get DatetimeFields(): EntityFieldInfo[] {
+        if (this._datetimeFieldsCache === null) {
+            this._datetimeFieldsCache = this.Fields.filter((f) => f.TSType === EntityFieldTSType.Date);
+        }
+        return this._datetimeFieldsCache;
     }
 
     /**
@@ -1901,13 +1980,17 @@ export class EntityInfo extends BaseInfo {
       // the one literally named `Name`. Falls back to the first IsNameField
       // match (preserves prior behavior when there's no `Name` field), then
       // to a field named `Name` even without IsNameField set (legacy default).
+      if (this._nameFieldCache !== undefined) return this._nameFieldCache;
       const candidates = this.Fields.filter((f) => f.IsNameField);
       if (candidates.length > 1) {
         const literalName = candidates.find((f) => f.Name?.trim().toLowerCase() === 'name');
-        if (literalName) return literalName;
+        if (literalName) {
+          this._nameFieldCache = literalName;
+          return literalName;
+        }
       }
-      if (candidates.length > 0) return candidates[0];
-      return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name') ?? null;
+      this._nameFieldCache = candidates.length > 0 ? candidates[0] : (this.FieldByName('name') ?? null);
+      return this._nameFieldCache;
     }
 
     /**************************************************************************
@@ -2489,6 +2572,25 @@ export class EntityInfo extends BaseInfo {
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
             this._Fields = [];
+
+            // Reset every lazy field-derived memo cache whenever _Fields is (re)assigned.
+            // These caches (FieldByName map, PrimaryKeys, UniqueKeys, ForeignKeys, EncryptedFields,
+            // DatetimeFields, NameField, FirstPrimaryKey) are populated lazily off this.Fields and
+            // were previously relying on an implicit "_Fields is write-once after construction"
+            // invariant. Today copyInitData/_Fields assignment only happens here in the constructor,
+            // so the caches are already null/undefined at this point — but resetting them explicitly
+            // is behavior-preserving (they simply rebuild lazily on next access) and removes the
+            // load-bearing write-once assumption, so any future re-init path can never serve a stale
+            // cache derived from the old field set.
+            this._fieldByNameMap = null;
+            this._firstPrimaryKeyCache = undefined;
+            this._primaryKeysCache = null;
+            this._uniqueKeysCache = null;
+            this._foreignKeysCache = null;
+            this._encryptedFieldsCache = null;
+            this._datetimeFieldsCache = null;
+            this._nameFieldCache = undefined;
+
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {

@@ -1,4 +1,4 @@
-import { CompositeKey, DatabaseProviderBase, IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
@@ -181,7 +181,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }, contextUser);
 
         if (!orphanedRuns.Success || orphanedRuns.Results.length === 0) {
-            console.log('[IntegrationEngine] No orphaned syncs to resume');
+            // Nothing to resume is the steady-state at every boot — verbose-only so it doesn't clutter the
+            // startup log. Only an ACTUAL resume (the "Found N…" path below) is worth showing by default.
+            LogStatusEx({ message: '[IntegrationEngine] No orphaned syncs to resume', verboseOnly: true });
             return;
         }
 

@@ -22,6 +22,11 @@ import {
     ToolCallRequest,
     ToolDefinition,
     RunComputerUseParams,
+    MouseMoveAction,
+    ScreencastFrame,
+    ScreencastOptions,
+    AccessibilityNode,
+    ElementInfo,
 } from '../index.js';
 
 describe('@memberjunction/computer-use — public API exports', () => {
@@ -101,6 +106,41 @@ describe('@memberjunction/computer-use — public API exports', () => {
 
         const toolDef = new ToolDefinition();
         expect(toolDef.Name).toBe('');
+    });
+
+    it('should export MouseMoveAction', () => {
+        const move = new MouseMoveAction();
+        expect(move.Type).toBe('MouseMove');
+        expect(move.X).toBe(0);
+        expect(move.Y).toBe(0);
+    });
+
+    it('should export ScreencastFrame and ScreencastOptions', () => {
+        const frame = new ScreencastFrame();
+        expect(frame.DataBase64).toBe('');
+        expect(frame.Width).toBe(0);
+        expect(frame.Height).toBe(0);
+        expect(frame.SequenceNumber).toBe(0);
+
+        const opts = new ScreencastOptions();
+        expect(opts.Format).toBeUndefined();
+        expect(opts.MaxWidth).toBeUndefined();
+    });
+
+    it('should export AccessibilityNode', () => {
+        const node = new AccessibilityNode();
+        expect(node.Role).toBe('');
+        expect(node.Name).toBe('');
+        expect(node.Value).toBeUndefined();
+        expect(node.Children).toBeUndefined();
+    });
+
+    it('should export ElementInfo with not-found defaults', () => {
+        const info = new ElementInfo();
+        expect(info.Exists).toBe(false);
+        expect(info.Visible).toBe(false);
+        expect(info.Text).toBe('');
+        expect(info.BoundingBox).toBeUndefined();
     });
 
     it('should export RunComputerUseParams with sensible defaults', () => {

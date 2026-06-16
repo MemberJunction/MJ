@@ -8,23 +8,32 @@ const hook: Hook<'prerun'> = async function (options) {
     return;
   }
 
-  // Skip banners when --json is requested — the contract for --json is that
-  // stdout is parseable JSON, and a banner above it breaks `mj … --json | jq`.
+  // Skip banners entirely when --json is requested — the contract for --json
+  // is that stdout is parseable JSON, and any banner above it breaks
+  // `mj … --json | jq`. This early-return also skips the userAgent line below.
   if (options.argv?.some((arg) => arg === '--json')) {
     return;
   }
 
-  options.context.log(
-    process.stdout.columns >= 81
-      ? figlet.textSync('MemberJunction', {
-          font: 'Standard',
-          horizontalLayout: 'default',
-          verticalLayout: 'default',
-          width: 100,
-          whitespaceBreak: true,
-        })
-      : '~ M e m b e r J u n c t i o n ~'
-  );
+  // Suppress the large figlet banner for hot-path, frequently-run commands
+  // (e.g. `mj sync *`) where it's pure scrollback cost. The compact userAgent
+  // line below still prints for these.
+  const commandIdForBanner = options.Command.id ?? '';
+  const showFiglet = !commandIdForBanner.startsWith('sync');
+
+  if (showFiglet) {
+    options.context.log(
+      process.stdout.columns >= 81
+        ? figlet.textSync('MemberJunction', {
+            font: 'Standard',
+            horizontalLayout: 'default',
+            verticalLayout: 'default',
+            width: 100,
+            whitespaceBreak: true,
+          })
+        : '~ M e m b e r J u n c t i o n ~'
+    );
+  }
 
   if (options.Command.id !== 'version') {
     options.context.log(options.config.userAgent + '\n');

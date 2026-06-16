@@ -63,7 +63,9 @@ function makeContext(log: CtxLog): RealtimeChannelContext {
     RequestSpokenResponse: (instructions: string) => log.Spoken.push(instructions),
     RequestSave: (stateJson: string) => log.Saves.push(stateJson),
     SetFocusMode: (on: boolean) => log.Focus.push(on),
-    SaveAsArtifact: async () => null
+    SaveAsArtifact: async () => null,
+    AgentSessionID: null,
+    ExecuteServerAction: async () => null
   };
 }
 
@@ -93,6 +95,15 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(channel.TabIcon).toBe('fa-solid fa-chalkboard');
     expect(channel.GetToolDefinitions()).toBe(WHITEBOARD_TOOL_DEFINITIONS);
     expect(channel.GetSurfaceComponent()).toBe(RealtimeWhiteboardHostComponent);
+  });
+
+  it('supplies first-run onboarding details (heading, description, tips, icon)', () => {
+    const details = channel.GetOnboardingDetails();
+    expect(details).not.toBeNull();
+    expect(details?.Heading).toBe('Whiteboard');
+    expect(details?.IconClass).toBe('fa-solid fa-chalkboard');
+    expect(details?.Description?.length).toBeGreaterThan(0);
+    expect((details?.Tips?.length ?? 0)).toBeGreaterThan(0);
   });
 
   it('ApplyAgentTool with NO surface bound falls back to the pure engine (collapsed panel)', () => {

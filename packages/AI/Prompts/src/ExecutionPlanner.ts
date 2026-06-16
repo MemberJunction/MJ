@@ -593,25 +593,13 @@ export class ExecutionPlanner {
    * Selects vendor information for a model, preferring inference providers
    */
   private selectVendorForModel(model: MJAIModelEntityExtended): { vendorId?: string; vendorDriverClass?: string; vendorApiName?: string } {
-    // Find the inference provider type from vendor type definitions
-    const inferenceProviderType = AIEngine.Instance.VendorTypeDefinitions.find(
-      vt => vt.Name === 'Inference Provider'
-    );
-    
-    if (!inferenceProviderType) {
-      // Fallback to model defaults if we can't find the inference provider type
-      return {
-        vendorDriverClass: model.DriverClass,
-        vendorApiName: model.APIName
-      };
-    }
-
-    // Get active model vendors for this model that are inference providers
-    const modelVendors = AIEngine.Instance.ModelVendors
+    // Get active model vendors for this model that are inference providers. Uses the model's
+    // precomputed ModelVendors (grouped at engine load) and the memoized IsInferenceProvider
+    // helper rather than re-scanning the global ModelVendors + VendorTypeDefinitions arrays.
+    const modelVendors = model.ModelVendors
       .filter(mv =>
-        UUIDsEqual(mv.ModelID, model.ID) &&
         mv.Status === 'Active' &&
-        UUIDsEqual(mv.TypeID, inferenceProviderType.ID)
+        AIEngine.Instance.IsInferenceProvider(mv)
       )
       .sort((a, b) => b.Priority - a.Priority);
 
