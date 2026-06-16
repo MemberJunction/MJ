@@ -322,13 +322,25 @@ describe('BindZoomRtms — factory for ZoomBridge.SetSdkFactory', () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// defaultRtmsLoader — fails loudly when @zoom/rtms is absent (it is, in this package).
+// Loader failure — when @zoom/rtms cannot be loaded, join() surfaces the failure.
+//
+// @zoom/rtms is declared as an optionalDependency, so in the workspace it IS installed
+// (hoisted into the root node_modules) and the real defaultRtmsLoader resolves it. We
+// therefore can't rely on real absence; instead we drive the realistic production
+// failure mode — the native addon failing to load (e.g. wrong Node version, or absent
+// in a deployment that didn't install it) — through the injectable loader seam and
+// assert join() propagates the actionable error rather than swallowing it.
 // ──────────────────────────────────────────────────────────────────────────────
 
-describe('ZoomRtmsMeetingSdk — optional dependency absence', () => {
-    it('throws an actionable error when @zoom/rtms cannot be loaded', async () => {
-        // No loader override → the real defaultRtmsLoader runs and @zoom/rtms is NOT installed here.
-        const sdk = new ZoomRtmsMeetingSdk(fullConfig());
+describe('ZoomRtmsMeetingSdk — optional dependency load failure', () => {
+    it('surfaces an actionable error when the @zoom/rtms loader fails', async () => {
+        const failingLoader = async (): Promise<RtmsModule> => {
+            throw new Error(
+                "ZoomRtmsMeetingSdk could not load the optional '@zoom/rtms' dependency. Install it " +
+                    '(npm i @zoom/rtms — a native addon requiring Node >= 22).',
+            );
+        };
+        const sdk = new ZoomRtmsMeetingSdk(fullConfig(), failingLoader);
         await expect(sdk.join(JOIN_ARGS)).rejects.toThrow(/optional '@zoom\/rtms' dependency/i);
     });
 });

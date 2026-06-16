@@ -253,7 +253,14 @@ describe('xAIRealtime', () => {
             await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
             const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
             if (update?.type === 'session.update' && update.session.type === 'realtime') {
-                expect(update.session.audio).toEqual({ input: { transcription: { model: 'whisper-1' } } });
+                // input transcription (both-role parity) AND explicit server-VAD turn detection with
+                // create_response, so Grok commits the user's turn and auto-replies (+ barge-in interrupt).
+                expect(update.session.audio).toEqual({
+                    input: {
+                        transcription: { model: 'whisper-1' },
+                        turn_detection: { type: 'server_vad', create_response: true, interrupt_response: true },
+                    },
+                });
             } else {
                 throw new Error('expected realtime session.update');
             }
