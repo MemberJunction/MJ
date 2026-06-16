@@ -7,6 +7,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { transformCodeOnly } from './ExpressionHelpers.js';
 
 /**
  * Final cleanup pass on the complete converted SQL output.
@@ -226,10 +227,22 @@ export function postProcess(sql: string): string {
   // Quote unquoted table names after any schema prefix (PascalCase identifiers)
   // e.g., __mj.OpenApp → __mj."OpenApp"   but NOT __mj."OpenApp" (already quoted)
   // Also skip all-lowercase names like __mj.information_schema
-  sql = sql.replace(/(\b\w+)\.(?!")([A-Z][a-zA-Z_]\w*)/g, '$1."$2"');
+  //
+  // transformCodeOnly is REQUIRED here: these regexes match `<word>.<PascalCase>`,
+  // which also occurs inside single-quoted string literals that carry TypeScript
+  // code (e.g. `GeneratedCode.Code` / `Action.Code` INSERT VALUES contain
+  // `this.GranteeType`, `result.Errors`, `params.Params`). Without skipping string
+  // literals, those TS member accesses get rewritten to `this."GranteeType"` etc.,
+  // producing invalid TypeScript that breaks the build when CodeGen re-emits it.
+  // A SQL->SQL converter must treat string-literal content as opaque data.
+  sql = transformCodeOnly(sql, (code) =>
+    code.replace(/(\b\w+)\.(?!")([A-Z][a-zA-Z_]\w*)/g, '$1."$2"')
+  );
 
   // Also handle quoted schema: "schema".PascalCase → "schema"."PascalCase"
-  sql = sql.replace(/"(\w+)"\.(?!")([A-Z][a-zA-Z_]\w*)/g, '"$1"."$2"');
+  sql = transformCodeOnly(sql, (code) =>
+    code.replace(/"(\w+)"\.(?!")([A-Z][a-zA-Z_]\w*)/g, '"$1"."$2"')
+  );
 
   // ISNULL → COALESCE (SQL Server function)
   sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
