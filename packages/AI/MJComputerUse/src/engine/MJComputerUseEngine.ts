@@ -174,7 +174,12 @@ export class MJComputerUseEngine extends ComputerUseEngine {
             params.Tools = [...(params.Tools ?? []), ...actionTools];
         }
 
-        return super.Run(params);
+        try {
+            return await super.Run(params);
+        } finally {
+            // Flush the fire-and-forget child step saves now that the goal is done (no-op when untracked).
+            await this.stepTracker?.Flush();
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -441,10 +446,10 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         const step = this.stepTracker ? await this.stepTracker.BeginPromptStep(promptEntity) : null;
         try {
             const result = await this.promptRunner.ExecutePrompt(params);
-            await this.stepTracker?.EndPromptStep(step, result.promptRun?.ID, result.success, result.errorMessage);
+            this.stepTracker?.EndPromptStep(step, result.promptRun?.ID, result.success, result.errorMessage); // fire-and-forget
             return result;
         } catch (err) {
-            await this.stepTracker?.EndPromptStep(step, undefined, false, err instanceof Error ? err.message : String(err));
+            this.stepTracker?.EndPromptStep(step, undefined, false, err instanceof Error ? err.message : String(err));
             throw err;
         }
     }

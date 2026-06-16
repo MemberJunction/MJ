@@ -17,6 +17,7 @@
  * @module @memberjunction/ai-core-plus
  */
 
+import { EntitySaveOptions, LogError } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 
 /** The `StepType` union of `MJ: AI Agent Run Steps` (mirrors the generated entity). */
@@ -120,5 +121,111 @@ export function finalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: Finaliz
                 errorMessage: opts.errorMessage,
             },
         });
+    }
+}
+
+/** Diagnostics returned by {@link AgentRunStepSaveQueue.Flush}. */
+export interface AgentRunStepFlushResult {
+    /** Saves that rejected (threw) OR resolved `false`. */
+    failures: number;
+    /** Saves that rejected (threw). */
+    rejections: number;
+}
+
+/**
+ * **Fire-and-forget save orchestration** for agent-run steps — the single source of truth for the
+ * non-blocking persistence pattern (the machinery `BaseAgent` previously inlined). Keeps step writes OFF
+ * the hot loop so a run that creates many steps (e.g. a goal-driven Computer Use loop with one prompt step
+ * per iteration) never pays N synchronous DB round-trips on its critical path — which matters on slower
+ * databases.
+ *
+ * - {@link Insert} fires a step's "started" INSERT **without awaiting**, tracking it so a later
+ *   {@link QueueUpdate} chains *after* it (an UPDATE must never race ahead of its own INSERT).
+ * - {@link QueueUpdate} chains a **force-persisted** UPDATE (`IgnoreDirtyState`) after the step's INSERT
+ *   (and any prior queued UPDATE). Forcing is required because a finalize mutation applied while the INSERT
+ *   is still in flight gets absorbed by the INSERT's post-save dirty-reset, leaving the new values only in
+ *   memory (the "step stuck at Running / null TargetLogID" bug).
+ * - {@link Flush} awaits every queued save (`allSettled`, so one failure doesn't shadow the rest), drains
+ *   the queue (so a reused instance doesn't leak settled promises), and reports failure counts. Call it at
+ *   run / goal finalize.
+ *
+ * Failures are logged, never thrown — persistence is observability and must not break the run.
+ */
+export class AgentRunStepSaveQueue {
+    /** INSERT promise per step instance (stable key); a queued UPDATE chains after it. */
+    private insertPromises = new WeakMap<MJAIAgentRunStepEntity, Promise<boolean>>();
+    /** Latest queued UPDATE promise per step instance, so successive updates to the SAME step serialize. */
+    private updatePromises = new Map<MJAIAgentRunStepEntity, Promise<boolean>>();
+    /** Every save (insert + updates) for {@link Flush} to await; updates to DIFFERENT steps run concurrently. */
+    private pending: Promise<boolean>[] = [];
+
+    /**
+     * Fires a step's "started" INSERT without awaiting (the caller continues immediately). The step's PK
+     * must already be client-generated (`NewRecord`) so its id is valid before the INSERT lands.
+     *
+     * @param step The newly-initialized step entity to persist.
+     */
+    public Insert(step: MJAIAgentRunStepEntity): void {
+        const insertPromise = this.save(step, 'insert');
+        this.insertPromises.set(step, insertPromise);
+        this.pending.push(insertPromise);
+    }
+
+    /**
+     * Queues a fire-and-forget force-persisted UPDATE of a step whose fields the caller has ALREADY mutated,
+     * chained after the step's INSERT (and any prior queued UPDATE) so it never races the INSERT.
+     *
+     * @param step The step entity (already mutated to its new state).
+     */
+    public QueueUpdate(step: MJAIAgentRunStepEntity): void {
+        const previous = this.updatePromises.get(step) ?? this.insertPromises.get(step) ?? Promise.resolve(true);
+        const current = previous.then(() => this.save(step, 'update'));
+        this.updatePromises.set(step, current);
+        this.pending.push(current);
+    }
+
+    /**
+     * Awaits every queued save (success OR failure), drains the queue, and returns failure diagnostics.
+     *
+     * @returns The count of failed/rejected saves.
+     */
+    public async Flush(): Promise<AgentRunStepFlushResult> {
+        const pending = this.pending;
+        this.pending = [];
+        this.updatePromises.clear();
+        if (pending.length === 0) {
+            return { failures: 0, rejections: 0 };
+        }
+        const settled = await Promise.allSettled(pending);
+        let rejections = 0;
+        let falses = 0;
+        for (const result of settled) {
+            if (result.status === 'rejected') {
+                rejections++;
+                LogError(`Pending step save rejected: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+            } else if (result.value === false) {
+                falses++;
+            }
+        }
+        return { failures: rejections + falses, rejections };
+    }
+
+    /** Saves one step: normal INSERT, or a force-persisted (`IgnoreDirtyState`) UPDATE. Logs, never throws. */
+    private async save(step: MJAIAgentRunStepEntity, phase: 'insert' | 'update'): Promise<boolean> {
+        try {
+            let options: EntitySaveOptions | undefined;
+            if (phase === 'update') {
+                options = new EntitySaveOptions();
+                options.IgnoreDirtyState = true;
+            }
+            const ok = await step.Save(options);
+            if (!ok) {
+                LogError(`Failed to ${phase} agent run step record ${step.ID || '(unsaved)'}: ${step.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+            return ok;
+        } catch (err) {
+            LogError(`Error on ${phase} of agent run step record ${step.ID || '(unsaved)'}: ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
     }
 }

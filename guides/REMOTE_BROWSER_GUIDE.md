@@ -396,9 +396,14 @@ co-agent run (realtime)
   prompt under that parent, stamping `TargetLogID` with the produced `AIPromptRun` id.
 - The whole thing is **best-effort**: no co-agent run (or any failure) just means the goal runs unlinked —
   it never aborts the goal.
-- **Single source of truth:** the step field semantics live once in `@memberjunction/ai-core-plus`
-  (`initAgentRunStep` / `finalizeAgentRunStep`); `BaseAgent` and the Computer Use tracker both delegate to
-  them rather than duplicating the create/finalize logic.
+- **Fire-and-forget, off the hot loop:** the per-prompt INSERT/UPDATE step writes are queued (not awaited)
+  via `AgentRunStepSaveQueue` and flushed once when the goal completes — so an N-iteration goal never pays N
+  synchronous DB round-trips on its critical path (which matters on slower databases). This is the exact
+  pattern `BaseAgent` uses for its own steps.
+- **Single source of truth:** both the step field semantics (`initAgentRunStep` / `finalizeAgentRunStep`)
+  AND the fire-and-forget save orchestration (`AgentRunStepSaveQueue`) live once in
+  `@memberjunction/ai-core-plus`; `BaseAgent` and the Computer Use tracker both delegate to them rather than
+  duplicating the create/finalize/persist logic.
 
 ---
 

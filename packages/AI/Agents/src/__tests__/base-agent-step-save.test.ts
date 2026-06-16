@@ -6,8 +6,11 @@
  * BaseAgent instance, with the metadata-provider boundary (GetEntityObject) and the agent-run
  * stubbed. This locks in the ordering + non-fatal-failure contract that had no coverage before.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { BaseAgent } from '../base-agent';
+
+/** The fire-and-forget save queue's Flush result shape. */
+type FlushResult = { failures: number; rejections: number };
 
 /** Minimal stand-in for MJAIAgentRunStepEntityExtended. Records Save() ordering into a shared log. */
 class MockStep {
@@ -33,7 +36,11 @@ class MockStep {
   public saveOptions: Array<{ IgnoreDirtyState?: boolean } | undefined> = []; // options seen per Save() call
 
   private callIndex = 0;
-  constructor(private name: string, private log: string[], private failOn: Set<number> = new Set()) {}
+  constructor(
+    private name: string,
+    private log: string[],
+    private failOn: Set<number> = new Set(),
+  ) {}
 
   NewRecord(): void {
     this.ID = `${this.name}-id`; // client-generated PK available immediately, before the INSERT lands
@@ -55,12 +62,12 @@ class MockStep {
 }
 
 /** Wires a real BaseAgent with a stubbed provider that hands out the given step entities in order. */
-function makeAgent(steps: MockStep[]): { agent: BaseAgent; pending: () => Promise<unknown[]> } {
+function makeAgent(steps: MockStep[]): { agent: BaseAgent; pending: () => Promise<FlushResult> } {
   const agent = new BaseAgent();
   const a = agent as unknown as {
     _activeProvider: { GetEntityObject: () => Promise<MockStep> };
     _agentRun: { ID: string; Steps: MockStep[] };
-    _pendingSaves: Promise<boolean>[];
+    _stepSaveQueue: { Flush(): Promise<FlushResult> };
     queueStepSave(s: MockStep): void;
     createStepEntity(p: Record<string, unknown>): Promise<MockStep>;
     finalizeStepEntity(s: MockStep, success: boolean, err?: string, out?: unknown): Promise<void>;
@@ -68,7 +75,8 @@ function makeAgent(steps: MockStep[]): { agent: BaseAgent; pending: () => Promis
   let i = 0;
   a._activeProvider = { GetEntityObject: async () => steps[i++] };
   a._agentRun = { ID: 'run-1', Steps: [] };
-  return { agent, pending: () => Promise.allSettled(a._pendingSaves) };
+  // Flushing the shared queue awaits every fire-and-forget INSERT/UPDATE (what the old _pendingSaves drain did).
+  return { agent, pending: () => a._stepSaveQueue.Flush() };
 }
 
 function internals(agent: BaseAgent) {
@@ -100,7 +108,7 @@ describe('BaseAgent.queueStepSave — fire-and-forget ordering', () => {
     internals(agent).queueStepSave(b);
     await pending();
     // Both INSERTs start before either finishes => concurrent, not serialized.
-    expect(log.slice(0, 2).every(e => e.endsWith(':start:1'))).toBe(true);
+    expect(log.slice(0, 2).every((e) => e.endsWith(':start:1'))).toBe(true);
   });
 
   it('a failed save is non-fatal: the flush still settles and the next chained save still runs', async () => {
@@ -109,8 +117,8 @@ describe('BaseAgent.queueStepSave — fire-and-forget ordering', () => {
     const { agent, pending } = makeAgent([]);
     internals(agent).queueStepSave(step); // fails
     internals(agent).queueStepSave(step); // still runs after
-    const results = await pending();
-    expect(results.every(r => r.status === 'fulfilled')).toBe(true); // never rejects the loop
+    const result = await pending();
+    expect(result.failures).toBe(1); // the failed save is reported, not thrown
     expect(log).toEqual(['s:start:1', 's:end:1', 's:start:2', 's:end:2']);
   });
 });
@@ -197,47 +205,58 @@ class FakeAgentRun {
   public Success: boolean | null = null;
   public saved = false;
   [k: string]: unknown;
-  async Save(): Promise<boolean> { this.saved = true; return true; }
+  async Save(): Promise<boolean> {
+    this.saved = true;
+    return true;
+  }
 }
 
-/** Wires a real BaseAgent for finalizeAgentRun with the given pending step-save promises. */
-function makeFinalizeAgent(pending: Promise<boolean>[]): { agent: BaseAgent; run: FakeAgentRun } {
+/**
+ * Wires a real BaseAgent for finalizeAgentRun with a STUB save queue whose Flush reports the given result.
+ * (The queue's own drain/allSettle mechanics are unit-tested in `@memberjunction/ai-core-plus`; here we only
+ * verify finalize delegates the flush and reacts to the failure count.)
+ */
+function makeFinalizeAgent(flushResult: FlushResult): { agent: BaseAgent; run: FakeAgentRun; flush: ReturnType<typeof vi.fn> } {
   const agent = new BaseAgent();
   const run = new FakeAgentRun();
+  const flush = vi.fn(async () => flushResult);
   const a = agent as unknown as Record<string, unknown>;
   a._agentRun = run;
-  a._pendingSaves = pending;
+  a._stepSaveQueue = { Flush: flush };
   a._depth = 0;
   a._injectedMemory = { notes: [], examples: [] };
   a._mediaOutputs = [];
   a._fileOutputs = [];
-  return { agent, run };
+  return { agent, run, flush };
 }
 
 function finalize(agent: BaseAgent, finalStep: Record<string, unknown>) {
-  return (agent as unknown as { finalizeAgentRun(s: unknown, p?: unknown, u?: unknown): Promise<{ success: boolean }> })
-    .finalizeAgentRun(finalStep, undefined, { ID: 'u1' });
+  return (agent as unknown as { finalizeAgentRun(s: unknown, p?: unknown, u?: unknown): Promise<{ success: boolean }> }).finalizeAgentRun(
+    finalStep,
+    undefined,
+    { ID: 'u1' },
+  );
 }
 
 describe('BaseAgent.finalizeAgentRun — pending-save drain + run status', () => {
-  it("drains all pending step saves and marks a successful run 'Completed'", async () => {
-    const { agent, run } = makeFinalizeAgent([Promise.resolve(true), Promise.resolve(true)]);
+  it("flushes the step-save queue and marks a successful run 'Completed'", async () => {
+    const { agent, run, flush } = makeFinalizeAgent({ failures: 0, rejections: 0 });
     const result = await finalize(agent, { step: 'Success', message: 'done' });
     expect(result.success).toBe(true);
     expect(run.Status).toBe('Completed');
     expect(run.saved).toBe(true);
-    expect((agent as unknown as { _pendingSaves: unknown[] })._pendingSaves).toHaveLength(0); // drained
+    expect(flush).toHaveBeenCalledOnce(); // delegates the drain to the queue
   });
 
-  it('records a diagnostic note when some pending step saves failed (resolved false or rejected)', async () => {
-    const { agent, run } = makeFinalizeAgent([Promise.resolve(true), Promise.resolve(false), Promise.reject(new Error('db down'))]);
+  it('records a diagnostic note when the queue reports failed step saves', async () => {
+    const { agent, run } = makeFinalizeAgent({ failures: 2, rejections: 1 });
     await finalize(agent, { step: 'Success', message: 'done' });
     expect(run.ErrorMessage).toMatch(/step record save\(s\) failed/);
     expect(run.Status).toBe('Completed'); // save failures are observability, not run failure
   });
 
   it("marks a failed final step 'Failed' and surfaces the error message", async () => {
-    const { agent, run } = makeFinalizeAgent([]);
+    const { agent, run } = makeFinalizeAgent({ failures: 0, rejections: 0 });
     const result = await finalize(agent, { step: 'Failed', errorMessage: 'agent blew up' });
     expect(result.success).toBe(false);
     expect(run.Status).toBe('Failed');
@@ -245,7 +264,7 @@ describe('BaseAgent.finalizeAgentRun — pending-save drain + run status', () =>
   });
 
   it("maps a Chat final step to 'AwaitingFeedback' (success, awaiting human input)", async () => {
-    const { agent, run } = makeFinalizeAgent([]);
+    const { agent, run } = makeFinalizeAgent({ failures: 0, rejections: 0 });
     const result = await finalize(agent, { step: 'Chat', message: 'need more info' });
     expect(result.success).toBe(true);
     expect(run.Status).toBe('AwaitingFeedback');

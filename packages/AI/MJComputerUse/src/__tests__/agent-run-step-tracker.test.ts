@@ -6,17 +6,17 @@ import { AgentRunStepTracker } from '../engine/agent-run-step-tracker.js';
 
 const PROMPT_UUID = 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d';
 
-/** A mutable fake step entity — captures field assignments + a stubbable Save(). */
-function fakeStep(saveResult = true) {
+/** A mutable fake step entity — captures field assignments + counts Save() calls (resolves true). */
+function fakeStep() {
     return {
-        _saved: 0,
+        saves: 0,
         NewRecord: vi.fn(),
-        Save: vi.fn(async function (this: { _saved: number }) {
-            this._saved++;
-            return saveResult;
+        Save: vi.fn(async function (this: { saves: number }) {
+            this.saves++;
+            return true;
         }),
         LatestResult: { CompleteMessage: 'boom' },
-    } as unknown as MJAIAgentRunStepEntity & { _saved: number };
+    } as unknown as MJAIAgentRunStepEntity & { saves: number };
 }
 
 /** A fake provider that hands back the given step from GetEntityObject. */
@@ -27,7 +27,7 @@ function fakeProvider(step: MJAIAgentRunStepEntity) {
 const prompt = { ID: PROMPT_UUID, Name: 'Controller' } as unknown as MJAIPromptEntityExtended;
 
 describe('AgentRunStepTracker', () => {
-    it('BeginPromptStep creates a Running child Prompt step nested under the parent', async () => {
+    it('BeginPromptStep synchronously sets the child Prompt step fields nested under the parent', async () => {
         const step = fakeStep();
         const tracker = new AgentRunStepTracker(fakeProvider(step), undefined, 'run-1', 'parent-step-1');
 
@@ -43,34 +43,46 @@ describe('AgentRunStepTracker', () => {
         expect(step.StepNumber).toBe(1); // counter starts at 0 (no Init) → first step is 1
     });
 
-    it('EndPromptStep stamps the prompt-run id (TargetLogID) + Completed status', async () => {
+    it('fires the INSERT fire-and-forget — not awaited by Begin, flushed by Flush', async () => {
+        const step = fakeStep();
+        const tracker = new AgentRunStepTracker(fakeProvider(step), undefined, 'run-1', 'parent-step-1');
+
+        await tracker.BeginPromptStep(prompt);
+        await tracker.Flush(); // the goal completing flushes pending saves
+
+        expect((step as unknown as { saves: number }).saves).toBeGreaterThanOrEqual(1); // INSERT landed via the queue
+    });
+
+    it('EndPromptStep synchronously stamps the prompt-run id (TargetLogID) + Completed status', async () => {
         const step = fakeStep();
         const tracker = new AgentRunStepTracker(fakeProvider(step), undefined, 'run-1', 'parent-step-1');
         await tracker.BeginPromptStep(prompt);
 
-        await tracker.EndPromptStep(step, 'promptrun-42', true);
-
-        expect(step.TargetLogID).toBe('promptrun-42'); // prompt run nests under this step
+        tracker.EndPromptStep(step, 'promptrun-42', true); // synchronous — fire-and-forget UPDATE
+        expect(step.TargetLogID).toBe('promptrun-42');
         expect(step.Status).toBe('Completed');
         expect(step.Success).toBe(true);
+
+        await tracker.Flush();
+        expect((step as unknown as { saves: number }).saves).toBe(2); // INSERT + UPDATE both persisted
     });
 
-    it('EndPromptStep records a failure', async () => {
+    it('EndPromptStep records a failure', () => {
         const step = fakeStep();
         const tracker = new AgentRunStepTracker(fakeProvider(step), undefined, 'run-1', 'parent-step-1');
-        await tracker.EndPromptStep(step, undefined, false, 'vision model offline');
+        tracker.EndPromptStep(step, undefined, false, 'vision model offline');
         expect(step.Status).toBe('Failed');
         expect(step.ErrorMessage).toBe('vision model offline');
     });
 
-    it('EndPromptStep is a no-op when the step is null (Begin had failed)', async () => {
+    it('EndPromptStep is a no-op when the step is null (Begin had failed)', () => {
         const tracker = new AgentRunStepTracker(fakeProvider(fakeStep()), undefined, 'run-1', 'parent-step-1');
-        await expect(tracker.EndPromptStep(null, 'x', true)).resolves.toBeUndefined();
+        expect(() => tracker.EndPromptStep(null, 'x', true)).not.toThrow();
     });
 
-    it('BeginPromptStep returns null (best-effort) when the step save fails', async () => {
-        const step = fakeStep(false); // Save() resolves false
-        const tracker = new AgentRunStepTracker(fakeProvider(step), undefined, 'run-1', 'parent-step-1');
+    it('returns null (best-effort) when entity creation throws — never aborts the goal', async () => {
+        const provider = { GetEntityObject: vi.fn(async () => { throw new Error('db down'); }) } as unknown as IMetadataProvider;
+        const tracker = new AgentRunStepTracker(provider, undefined, 'run-1', 'parent-step-1');
         expect(await tracker.BeginPromptStep(prompt)).toBeNull();
     });
 
