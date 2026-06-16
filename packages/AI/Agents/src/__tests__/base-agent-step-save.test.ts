@@ -11,7 +11,7 @@ import { BaseAgent } from '../base-agent';
 
 /** Minimal stand-in for MJAIAgentRunStepEntityExtended. Records Save() ordering into a shared log. */
 class MockStep {
-  public ID = ''; // empty until the INSERT Save() assigns it (mirrors server-generated PK)
+  public ID = ''; // assigned client-side by NewRecord() (mirrors NewSequentialID() client PK)
   public AgentRunID = '';
   public StepNumber = 0;
   public StepType = '';
@@ -30,11 +30,18 @@ class MockStep {
   public PayloadAtEnd: string | null = null;
   public LatestResult: { CompleteMessage: string } | null = null;
 
+  public saveOptions: Array<{ IgnoreDirtyState?: boolean } | undefined> = []; // options seen per Save() call
+
   private callIndex = 0;
   constructor(private name: string, private log: string[], private failOn: Set<number> = new Set()) {}
 
-  async Save(): Promise<boolean> {
+  NewRecord(): void {
+    this.ID = `${this.name}-id`; // client-generated PK available immediately, before the INSERT lands
+  }
+
+  async Save(options?: { IgnoreDirtyState?: boolean }): Promise<boolean> {
     const n = ++this.callIndex;
+    this.saveOptions.push(options);
     this.log.push(`${this.name}:start:${n}`);
     await new Promise((r) => setTimeout(r, 5)); // yield so a racing save would interleave if unchained
     this.log.push(`${this.name}:end:${n}`);
@@ -161,6 +168,23 @@ describe('BaseAgent.createStepEntity / finalizeStepEntity — lifecycle', () => 
     const b = await internals(agent).createStepEntity({ stepType: 'Prompt', stepName: 'Step 2', contextUser: ctx });
     expect(a.StepNumber).toBe(1);
     expect(b.StepNumber).toBe(2);
+  });
+
+  it('force-persists the finalize UPDATE (IgnoreDirtyState) so a fast create→finalize never stays Running', async () => {
+    // Regression for the "step stuck at Running" bug: NewRecord() gives the entity a client PK, so the
+    // INSERT and the finalize UPDATE mutate the SAME instance. Without IgnoreDirtyState the INSERT's
+    // post-save dirty-reset would absorb the finalize mutations and the UPDATE would silently no-op.
+    const log: string[] = [];
+    const step = new MockStep('s', log);
+    const { agent, pending } = makeAgent([step]);
+    const created = await internals(agent).createStepEntity({ stepType: 'Actions', stepName: 'Run Action', contextUser: ctx });
+    await internals(agent).finalizeStepEntity(created, true, undefined, { result: 'ok' });
+    await pending();
+    // Two Save() calls: INSERT plain (no options), UPDATE forced (IgnoreDirtyState=true).
+    expect(step.saveOptions).toHaveLength(2);
+    expect(step.saveOptions[0]?.IgnoreDirtyState).toBeUndefined();
+    expect(step.saveOptions[1]?.IgnoreDirtyState).toBe(true);
+    expect(step.Status).toBe('Completed');
   });
 });
 
