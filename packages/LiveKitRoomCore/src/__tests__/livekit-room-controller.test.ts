@@ -61,6 +61,11 @@ class FakeRoom {
     public state: ConnectionState = ConnectionState.Disconnected;
     public localParticipant = new FakeParticipant('local-me', 'Me');
     public remoteParticipants = new Map<string, FakeParticipant>();
+    public canPlaybackAudio = true;
+    public startAudio = vi.fn(async (): Promise<void> => {
+        this.canPlaybackAudio = true;
+    });
+    public setE2EEEnabled = vi.fn(async (): Promise<void> => undefined);
     private readonly handlers = new Map<RoomEvent, ((...args: unknown[]) => void)[]>();
 
     public on(event: RoomEvent, cb: (...args: unknown[]) => void): this {
@@ -221,6 +226,52 @@ describe('LiveKitRoomController', () => {
             room.emit(RoomEvent.ActiveSpeakersChanged, [room.localParticipant as any]);
             expect(speakers).toHaveBeenCalledOnce();
             expect(controller.State.ActiveSpeakerIdentities).toContain('local-me');
+        });
+    });
+
+    describe('audio playback', () => {
+        beforeEach(async () => {
+            await controller.Connect('wss://x', 'token');
+        });
+
+        it('reflects an autoplay block and clears it via StartAudio', async () => {
+            const changed = vi.fn();
+            controller.Events.On('audioPlaybackChanged', changed);
+
+            room.canPlaybackAudio = false;
+            room.emit(RoomEvent.AudioPlaybackStatusChanged);
+            expect(controller.State.AudioPlaybackBlocked).toBe(true);
+            expect(changed).toHaveBeenCalledWith({ CanPlayback: false });
+
+            await controller.StartAudio();
+            expect(room.startAudio).toHaveBeenCalledOnce();
+            expect(controller.State.AudioPlaybackBlocked).toBe(false);
+        });
+    });
+
+    describe('cloud effects (graceful when unavailable)', () => {
+        beforeEach(async () => {
+            await controller.Connect('wss://x', 'token');
+        });
+
+        it('SetNoiseFilterEnabled returns false when there is no processable local track', async () => {
+            const ok = await controller.SetNoiseFilterEnabled(true);
+            expect(ok).toBe(false);
+            expect(controller.State.NoiseFilterEnabled).toBe(false);
+        });
+
+        it('SetBackgroundEffect returns false when there is no camera track', async () => {
+            const ok = await controller.SetBackgroundEffect({ Kind: 'blur', Radius: 8 });
+            expect(ok).toBe(false);
+        });
+    });
+
+    describe('E2EE', () => {
+        it('enables end-to-end encryption when a passphrase + worker are supplied', async () => {
+            const worker = {} as unknown as Worker;
+            await controller.Connect('wss://x', 'token', { E2EE: { Passphrase: 'shared-secret', Worker: worker } });
+            expect(room.setE2EEEnabled).toHaveBeenCalledWith(true);
+            expect(controller.State.E2EEEnabled).toBe(true);
         });
     });
 

@@ -23,3 +23,9 @@ export {
     type StartAgentRoomSessionParams,
     type AgentRoomSession,
 } from './livekit-agent-room-coordinator';
+
+export {
+    LiveKitEgressService,
+    type StartRecordingParams,
+    type RecordingInfo,
+} from './livekit-egress-service';

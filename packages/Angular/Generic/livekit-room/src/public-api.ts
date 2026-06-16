@@ -14,4 +14,6 @@ export * from './lib/components/livekit-device-menu.component';
 export * from './lib/components/livekit-participants-panel.component';
 export * from './lib/components/livekit-connection-overlay.component';
 export * from './lib/components/livekit-audio-meter.component';
+export * from './lib/components/livekit-prejoin.component';
+export * from './lib/components/livekit-agent-state.component';
 export * from './lib/models';

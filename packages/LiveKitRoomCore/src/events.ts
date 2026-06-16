@@ -16,6 +16,7 @@
  */
 
 import type {
+    LiveKitBackgroundEffect,
     LiveKitDataMessage,
     LiveKitDevice,
     LiveKitDisconnectReason,
@@ -122,6 +123,12 @@ export interface LiveKitRoomEventMap {
     localMediaChanged: LiveKitLocalMediaState;
     stateChanged: LiveKitRoomState;
     error: LiveKitRoomError;
+    /** Browser autoplay policy changed whether remote audio can play (prompt the user to enable sound). */
+    audioPlaybackChanged: { CanPlayback: boolean };
+    /** The Krisp noise filter was toggled on the local microphone. */
+    noiseFilterChanged: { Enabled: boolean };
+    /** The camera background effect changed. */
+    backgroundEffectChanged: { Effect: LiveKitBackgroundEffect };
 }
 
 /** A handler for a given event type. */

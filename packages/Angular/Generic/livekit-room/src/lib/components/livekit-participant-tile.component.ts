@@ -4,8 +4,10 @@ import {
     ChangeDetectorRef,
     Component,
     ElementRef,
+    EventEmitter,
     Input,
     OnDestroy,
+    Output,
     ViewChild,
     inject,
 } from '@angular/core';
@@ -45,6 +47,12 @@ import { LiveKitAudioMeterComponent } from './livekit-audio-meter.component';
 
             @if (Participant?.IsScreenSharing) {
                 <span class="lk-tile__chip lk-tile__chip--screen"><i class="fa-solid fa-display"></i> Sharing</span>
+            }
+
+            @if (ShowPinButton) {
+                <button type="button" class="lk-tile__pin" [class.lk-tile__pin--active]="IsPinned" [title]="IsPinned ? 'Unpin' : 'Pin'" (click)="TogglePin.emit()">
+                    <i class="fa-solid fa-thumbtack"></i>
+                </button>
             }
 
             <div class="lk-tile__footer">
@@ -142,6 +150,27 @@ import { LiveKitAudioMeterComponent } from './livekit-audio-meter.component';
                 color: var(--mj-text-inverse, #fff);
                 background: rgba(0, 0, 0, 0.55);
             }
+            .lk-tile__pin {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                width: 28px;
+                height: 28px;
+                border: none;
+                border-radius: 50%;
+                cursor: pointer;
+                color: var(--mj-text-inverse, #fff);
+                background: rgba(0, 0, 0, 0.5);
+                opacity: 0;
+                transition: opacity 120ms ease;
+            }
+            .lk-tile:hover .lk-tile__pin,
+            .lk-tile__pin--active {
+                opacity: 1;
+            }
+            .lk-tile__pin--active {
+                background: var(--mj-brand-primary, #0076b6);
+            }
             .lk-tile__footer {
                 position: absolute;
                 left: 0;
@@ -228,6 +257,13 @@ export class LiveKitParticipantTileComponent implements AfterViewInit, OnDestroy
     @Input() public ShowConnectionQuality = true;
     /** Optional avatar image URL shown when the participant has no video. */
     @Input() public AvatarUrl: string | null = null;
+    /** Show the pin/unpin button (hover-revealed). */
+    @Input() public ShowPinButton = false;
+    /** Whether this tile is currently pinned. */
+    @Input() public IsPinned = false;
+
+    /** Emitted when the user clicks the pin button. */
+    @Output() public TogglePin = new EventEmitter<void>();
 
     /** The participant to render. Setting it re-syncs the attached media tracks. */
     @Input()

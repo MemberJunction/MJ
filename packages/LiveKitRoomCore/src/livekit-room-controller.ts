@@ -17,16 +17,21 @@ import {
     ConnectionQuality,
     ConnectionState,
     DisconnectReason,
+    ExternalE2EEKeyProvider,
     Participant,
     RemoteParticipant,
     Room,
     RoomEvent,
     Track,
+    type LocalAudioTrack,
+    type LocalVideoTrack,
     type RoomOptions,
 } from 'livekit-client';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { LiveKitRoomEventBus } from './events';
+import { applyBackgroundEffect, applyNoiseFilter } from './livekit-effects';
 import {
+    LiveKitBackgroundEffect,
     LiveKitConnectionStatus,
     LiveKitDevice,
     LiveKitDisconnectReason,
@@ -89,6 +94,10 @@ export class LiveKitRoomController {
     private room: Room | null = null;
     private readonly roomFactory: LiveKitRoomFactory;
     private readonly roleResolver: LiveKitRoleResolver;
+    private noiseFilterEnabled = false;
+    private backgroundEffect: LiveKitBackgroundEffect = { Kind: 'none' };
+    private e2eeEnabled = false;
+    private e2eeKeyProvider: ExternalE2EEKeyProvider | null = null;
 
     private readonly stateSubject: BehaviorSubject<LiveKitRoomState>;
     private readonly textDecoder = new TextDecoder();
@@ -141,17 +150,20 @@ export class LiveKitRoomController {
         if (this.room) {
             await this.Disconnect(false);
         }
-        const room = this.roomFactory(before.Options.RoomOptions);
+        const room = this.roomFactory(this.buildRoomOptions(before.Options));
         this.room = room;
+        this.e2eeEnabled = before.Options.E2EE != null;
         this.wireRoomEvents(room);
-        this.patchState({ Status: 'connecting', DisconnectReason: undefined });
+        this.patchState({ Status: 'connecting', DisconnectReason: undefined, E2EEEnabled: this.e2eeEnabled });
 
         try {
+            await this.enableE2EEIfRequested(room, before.Options);
             await room.connect(serverUrl, token, { autoSubscribe: true });
             if (before.Options.DisplayName) {
                 await room.localParticipant.setName(before.Options.DisplayName);
             }
             await this.applyInitialMedia(room, before.Options);
+            await this.applyInitialEffects(before.Options);
             this.rebuildState();
             this.Events.Emit('connected', { State: this.stateSubject.value });
         } catch (err) {
@@ -177,6 +189,7 @@ export class LiveKitRoomController {
         }
         const room = this.room;
         this.room = null;
+        this.resetEffectState();
         if (room) {
             try {
                 await room.disconnect();
@@ -186,6 +199,13 @@ export class LiveKitRoomController {
         }
         this.patchState({ ...this.initialState(), Status: 'disconnected' });
         return true;
+    }
+
+    /** Resets the cloud-effect / E2EE tracking fields to defaults (on disconnect). */
+    private resetEffectState(): void {
+        this.noiseFilterEnabled = false;
+        this.backgroundEffect = { Kind: 'none' };
+        this.e2eeEnabled = false;
     }
 
     /** Disposes the controller, tears down the connection, and clears all subscribers. */
@@ -257,6 +277,64 @@ export class LiveKitRoomController {
         }
     }
 
+    // ── Audio playback / cloud effects ────────────────────────────────────────────────
+
+    /**
+     * Resumes audio playback after a browser autoplay block (must be called from a user-gesture handler).
+     * Clears {@link LiveKitRoomState.AudioPlaybackBlocked} on success.
+     */
+    public async StartAudio(): Promise<void> {
+        if (!this.room) {
+            return;
+        }
+        try {
+            await this.room.startAudio();
+            this.patchState({ AudioPlaybackBlocked: !this.room.canPlaybackAudio });
+        } catch (err) {
+            this.emitError('device', 'Failed to start audio playback.', err);
+        }
+    }
+
+    /**
+     * Enables/disables the Krisp noise filter on the local microphone (LiveKit Cloud).
+     *
+     * @param enabled Whether the filter should be on.
+     * @returns `true` if applied; `false` if unsupported or the SDK is unavailable.
+     */
+    public async SetNoiseFilterEnabled(enabled: boolean): Promise<boolean> {
+        const track = this.getLocalAudioTrack();
+        if (!track) {
+            return false;
+        }
+        const ok = await applyNoiseFilter(track, enabled);
+        if (ok) {
+            this.noiseFilterEnabled = enabled;
+            this.patchState({ NoiseFilterEnabled: enabled });
+            this.Events.Emit('noiseFilterChanged', { Enabled: enabled });
+        }
+        return ok;
+    }
+
+    /**
+     * Applies a camera background effect (blur / virtual background), or clears it with `{ Kind: 'none' }`.
+     *
+     * @param effect The effect to apply.
+     * @returns `true` if applied; `false` if the SDK is unavailable or no camera track exists.
+     */
+    public async SetBackgroundEffect(effect: LiveKitBackgroundEffect): Promise<boolean> {
+        const track = this.getLocalVideoTrack();
+        if (!track) {
+            return false;
+        }
+        const ok = await applyBackgroundEffect(track, effect);
+        if (ok) {
+            this.backgroundEffect = effect;
+            this.patchState({ BackgroundEffect: effect });
+            this.Events.Emit('backgroundEffectChanged', { Effect: effect });
+        }
+        return ok;
+    }
+
     // ── Devices ─────────────────────────────────────────────────────────────────────
 
     /**
@@ -326,7 +404,27 @@ export class LiveKitRoomController {
                 this.handleData(payload, participant, topic),
             )
             .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => this.handleDisconnected(reason))
-            .on(RoomEvent.MediaDevicesError, (err: Error) => this.emitError('device', err.message, err));
+            .on(RoomEvent.MediaDevicesError, (err: Error) => this.emitError('device', err.message, err))
+            .on(RoomEvent.AudioPlaybackStatusChanged, () => this.handleAudioPlayback());
+    }
+
+    /** Reflects browser autoplay-policy changes into state + the `audioPlaybackChanged` event. */
+    private handleAudioPlayback(): void {
+        const canPlayback = this.room?.canPlaybackAudio ?? true;
+        this.patchState({ AudioPlaybackBlocked: !canPlayback });
+        this.Events.Emit('audioPlaybackChanged', { CanPlayback: canPlayback });
+    }
+
+    /** Returns the local microphone track (for processors), or null. */
+    private getLocalAudioTrack(): LocalAudioTrack | null {
+        const pub = this.room?.localParticipant.getTrackPublication(Track.Source.Microphone);
+        return (pub?.audioTrack as LocalAudioTrack | undefined) ?? null;
+    }
+
+    /** Returns the local camera track (for processors), or null. */
+    private getLocalVideoTrack(): LocalVideoTrack | null {
+        const pub = this.room?.localParticipant.getTrackPublication(Track.Source.Camera);
+        return (pub?.videoTrack as LocalVideoTrack | undefined) ?? null;
     }
 
     /** Handles a participant joining — emits `participantJoined` then rebuilds. */
@@ -401,6 +499,10 @@ export class LiveKitRoomController {
             Local: local,
             Remote: remote,
             LocalMedia: this.readLocalMedia(room),
+            AudioPlaybackBlocked: !room.canPlaybackAudio,
+            NoiseFilterEnabled: this.noiseFilterEnabled,
+            BackgroundEffect: this.backgroundEffect,
+            E2EEEnabled: this.e2eeEnabled,
         });
     }
 
@@ -462,16 +564,48 @@ export class LiveKitRoomController {
         }
     }
 
-    /** Applies the requested initial media (mic on by default, camera off — voice-first). */
+    /** Applies the requested initial media (mic on by default, camera off — voice-first), honoring device ids. */
     private async applyInitialMedia(room: Room, options: LiveKitRoomConnectOptions): Promise<void> {
         const wantMic = options.EnableMicrophone ?? true;
         const wantCam = options.EnableCamera ?? false;
         if (wantMic) {
-            await room.localParticipant.setMicrophoneEnabled(true);
+            await room.localParticipant.setMicrophoneEnabled(true, options.MicrophoneDeviceId ? { deviceId: options.MicrophoneDeviceId } : undefined);
         }
         if (wantCam) {
-            await room.localParticipant.setCameraEnabled(true);
+            await room.localParticipant.setCameraEnabled(true, options.CameraDeviceId ? { deviceId: options.CameraDeviceId } : undefined);
         }
+    }
+
+    /** Applies the requested initial cloud effects (noise filter, background) after media is published. */
+    private async applyInitialEffects(options: LiveKitRoomConnectOptions): Promise<void> {
+        if (options.NoiseFilterEnabled) {
+            await this.SetNoiseFilterEnabled(true);
+        }
+        if (options.BackgroundEffect && options.BackgroundEffect.Kind !== 'none') {
+            await this.SetBackgroundEffect(options.BackgroundEffect);
+        }
+    }
+
+    /** Merges E2EE into the livekit-client room options when requested. */
+    private buildRoomOptions(options: LiveKitRoomConnectOptions): RoomOptions | undefined {
+        this.e2eeKeyProvider = null;
+        if (!options.E2EE) {
+            return options.RoomOptions;
+        }
+        this.e2eeKeyProvider = new ExternalE2EEKeyProvider();
+        return {
+            ...options.RoomOptions,
+            e2ee: { keyProvider: this.e2eeKeyProvider, worker: options.E2EE.Worker },
+        };
+    }
+
+    /** Sets the E2EE key from the passphrase and enables encryption (no-op when not requested). */
+    private async enableE2EEIfRequested(room: Room, options: LiveKitRoomConnectOptions): Promise<void> {
+        if (!options.E2EE || !this.e2eeKeyProvider) {
+            return;
+        }
+        await this.e2eeKeyProvider.setKey(options.E2EE.Passphrase);
+        await room.setE2EEEnabled(true);
     }
 
     // ── internals: mapping + emit helpers ──────────────────────────────────────────────
@@ -548,6 +682,10 @@ export class LiveKitRoomController {
             Remote: [],
             ActiveSpeakerIdentities: [],
             LocalMedia: { MicrophoneEnabled: false, CameraEnabled: false, ScreenShareEnabled: false },
+            AudioPlaybackBlocked: false,
+            NoiseFilterEnabled: false,
+            BackgroundEffect: { Kind: 'none' },
+            E2EEEnabled: false,
         };
     }
 }

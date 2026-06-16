@@ -22,6 +22,7 @@ import {
     type LiveKitBeforeSendDataEvent,
     type LiveKitDataMessage,
     type LiveKitDisconnectedEvent,
+    type LiveKitE2EEOptions,
     type LiveKitLocalMediaState,
     type LiveKitParticipantJoinedEvent,
     type LiveKitParticipantLeftEvent,
@@ -35,13 +36,31 @@ import { LiveKitChatPanelComponent } from './components/livekit-chat-panel.compo
 import { LiveKitDeviceMenuComponent } from './components/livekit-device-menu.component';
 import { LiveKitParticipantsPanelComponent } from './components/livekit-participants-panel.component';
 import { LiveKitConnectionOverlayComponent } from './components/livekit-connection-overlay.component';
-import { LIVEKIT_CHAT_TOPIC, type LiveKitChatMessage, type LiveKitDeviceLists, type LiveKitDeviceSelection } from './models';
+import { LiveKitPreJoinComponent, type LiveKitPreJoinChoices } from './components/livekit-prejoin.component';
+import { LiveKitAgentStateComponent, type LiveKitAgentVisualState } from './components/livekit-agent-state.component';
+import { LIVEKIT_CHAT_TOPIC, LIVEKIT_AGENT_STATE_TOPIC, type LiveKitChatMessage, type LiveKitDeviceLists, type LiveKitDeviceSelection } from './models';
 
 /** Which side panel is open in the room, if any. */
 type LiveKitSidePanel = 'none' | 'chat' | 'participants';
 
-/** The room layout mode. */
-export type LiveKitRoomLayout = 'grid' | 'spotlight' | 'audio-only';
+/**
+ * The room layout mode:
+ * - `grid` — gallery view, all tiles equal.
+ * - `spotlight` — focus the active speaker (or pinned participant) large + a filmstrip.
+ * - `split` — a resizable splitter between the active screen-share and the speaker.
+ * - `audio-only` — compact avatar tiles, no video emphasis.
+ */
+export type LiveKitRoomLayout = 'grid' | 'spotlight' | 'split' | 'audio-only';
+
+/** A layout option for the layout switcher. */
+export interface LiveKitLayoutOption {
+    /** The layout value. */
+    Layout: LiveKitRoomLayout;
+    /** The display label. */
+    Label: string;
+    /** A Font Awesome icon class. */
+    Icon: string;
+}
 
 /**
  * `mj-livekit-room` — a full-featured, framework-portable LiveKit room UI. Owns a
@@ -64,6 +83,8 @@ export type LiveKitRoomLayout = 'grid' | 'spotlight' | 'audio-only';
         LiveKitDeviceMenuComponent,
         LiveKitParticipantsPanelComponent,
         LiveKitConnectionOverlayComponent,
+        LiveKitPreJoinComponent,
+        LiveKitAgentStateComponent,
     ],
     templateUrl: './livekit-room.component.html',
     styleUrls: ['./livekit-room.component.css'],
@@ -148,10 +169,30 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
     @Input() public ShowChat = true;
     /** Enable the participants roster panel (toggle + panel). */
     @Input() public ShowParticipantsPanel = true;
+    /** Allow pinning a participant to the spotlight (hover pin button on tiles). */
+    @Input() public EnablePinning = true;
+    /** Expose the Krisp noise-filter toggle in the settings menu (LiveKit Cloud). */
+    @Input() public EnableNoiseFilter = false;
+    /** Expose the background-blur toggle in the settings menu. */
+    @Input() public EnableBackgroundEffects = false;
+    /** Show the agent-state visualizer (listening/thinking/speaking) for the agent participant. */
+    @Input() public ShowAgentState = false;
+    /** Show the recording toggle in the control bar (the host wires the actual egress call). */
+    @Input() public ShowRecordingControl = false;
+    /** Whether a recording is currently in progress (host-managed). */
+    @Input() public IsRecording = false;
+    /** Show the layout switcher (gallery / active speaker / split / audio-only). */
+    @Input() public EnableLayoutSwitcher = true;
 
     // ── Behavior ──────────────────────────────────────────────────────────────────
     /** Open the chat panel by default on connect. */
     @Input() public ChatOpenByDefault = false;
+    /** Show a device-preview PreJoin lobby before connecting (suppresses auto-connect until the user joins). */
+    @Input() public ShowPreJoin = false;
+    /** End-to-end-encryption passphrase. When set with {@link E2EEWorker}, the room connects with E2EE. */
+    @Input() public E2EEPassphrase: string | null = null;
+    /** The E2EE web worker (host-provided, bundler-specific). Required for {@link E2EEPassphrase}. */
+    @Input() public E2EEWorker: Worker | null = null;
 
     // ── Cancelable Before-event outputs (set `$event.Cancel = true` to veto) ─────────
     /** Fired before connecting. Cancelable. */
@@ -190,6 +231,10 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
     @Output() public ErrorOccurred = new EventEmitter<LiveKitRoomError>();
     /** Fired when a chat message (chat-topic data) is received or sent locally. */
     @Output() public ChatMessage = new EventEmitter<LiveKitChatMessage>();
+    /** Fired when the user toggles recording (the host performs the server-side egress call). */
+    @Output() public ToggleRecording = new EventEmitter<void>();
+    /** Fired when the user changes the layout via the layout switcher. */
+    @Output() public LayoutChange = new EventEmitter<LiveKitRoomLayout>();
 
     // ── View state (template-bound) ─────────────────────────────────────────────────
     /** The current normalized room state snapshot. */
@@ -202,10 +247,31 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
     public SidePanel: LiveKitSidePanel = 'none';
     /** Whether the device menu popover is open. */
     public DeviceMenuOpen = false;
+    /** Whether the layout switcher popover is open. */
+    public LayoutMenuOpen = false;
+    /** The split-view ratio (left/screen pane fraction, 0.2–0.8). */
+    public SplitRatio = 0.62;
+    private splitDragging = false;
+    /** The available layout options for the switcher. */
+    public readonly LayoutOptions: LiveKitLayoutOption[] = [
+        { Layout: 'grid', Label: 'Gallery', Icon: 'fa-table-cells' },
+        { Layout: 'spotlight', Label: 'Active speaker', Icon: 'fa-user-large' },
+        { Layout: 'split', Label: 'Split view', Icon: 'fa-table-columns' },
+        { Layout: 'audio-only', Label: 'Audio only', Icon: 'fa-headphones' },
+    ];
     /** The device lists for the device menu. */
     public Devices: LiveKitDeviceLists = { Microphones: [], Cameras: [], Speakers: [] };
     /** The last room error message, surfaced in the overlay. */
     public LastErrorMessage: string | null = null;
+    /** The identity of the pinned participant (drives spotlight when {@link EnablePinning}). */
+    public PinnedIdentity: string | null = null;
+    /** Whether the user has passed the PreJoin lobby (or PreJoin is disabled). */
+    public PreJoinComplete = false;
+    /** The PreJoin choices, once confirmed. */
+    public PreJoinChoices: LiveKitPreJoinChoices | null = null;
+    /** The agent state explicitly signaled over the data channel, if any. */
+    private agentStateSignal: LiveKitAgentVisualState | null = null;
+    private agentStateTimer: ReturnType<typeof setTimeout> | null = null;
 
     /** The underlying controller — exposed for advanced/imperative host scenarios. */
     public get Controller(): LiveKitRoomController {
@@ -214,6 +280,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
 
     public ngOnInit(): void {
         this.initialized = true;
+        this.PreJoinComplete = !this.ShowPreJoin;
         this.wireControllerEvents();
         this.maybeAutoConnect();
         if (this.ChatOpenByDefault && this.ShowChat) {
@@ -228,6 +295,9 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
     public ngOnDestroy(): void {
         this.unsubscribers.forEach((u) => u());
         this.unsubscribers = [];
+        if (this.agentStateTimer) {
+            clearTimeout(this.agentStateTimer);
+        }
         this.controller.Dispose();
     }
 
@@ -241,11 +311,38 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
         if (this.State.Status === 'connected' || this.State.Status === 'connecting') {
             return;
         }
+        const choices = this.PreJoinChoices;
         await this.controller.Connect(this.serverUrl, this.token, {
-            DisplayName: this.DisplayName ?? undefined,
-            EnableMicrophone: this.StartWithMicrophone,
-            EnableCamera: this.StartWithCamera,
+            DisplayName: choices?.DisplayName ?? this.DisplayName ?? undefined,
+            EnableMicrophone: choices?.MicrophoneEnabled ?? this.StartWithMicrophone,
+            EnableCamera: choices?.CameraEnabled ?? this.StartWithCamera,
+            MicrophoneDeviceId: choices?.MicrophoneDeviceId,
+            CameraDeviceId: choices?.CameraDeviceId,
+            E2EE: this.buildE2EEOptions(),
         });
+    }
+
+    /** Handles PreJoin completion: stores the choices, marks PreJoin complete, and connects. */
+    public onPreJoinJoin(choices: LiveKitPreJoinChoices): void {
+        this.PreJoinChoices = choices;
+        this.PreJoinComplete = true;
+        if (choices.DisplayName) {
+            this.DisplayName = choices.DisplayName;
+        }
+        void this.Connect();
+    }
+
+    /** Resumes audio playback after a browser autoplay block (must run from a user gesture). */
+    public onEnableSound(): void {
+        void this.controller.StartAudio();
+    }
+
+    /** Builds the E2EE connect options when a passphrase + worker are both supplied. */
+    private buildE2EEOptions(): LiveKitE2EEOptions | undefined {
+        if (this.E2EEPassphrase && this.E2EEWorker) {
+            return { Passphrase: this.E2EEPassphrase, Worker: this.E2EEWorker };
+        }
+        return undefined;
     }
 
     /** Leaves the room. */
@@ -293,6 +390,52 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
     public onDeviceSelected(selection: LiveKitDeviceSelection): void {
         void this.controller.SwitchDevice(selection.Kind, selection.DeviceId);
     }
+    /** Toggles the Krisp noise filter. */
+    public onNoiseFilterToggled(enabled: boolean): void {
+        void this.controller.SetNoiseFilterEnabled(enabled);
+    }
+    /** Toggles camera background blur. */
+    public onBackgroundBlurToggled(enabled: boolean): void {
+        void this.controller.SetBackgroundEffect(enabled ? { Kind: 'blur', Radius: 12 } : { Kind: 'none' });
+    }
+    /** Pins/unpins a participant to the spotlight (toggles off if already pinned). */
+    public onTogglePin(identity: string): void {
+        this.PinnedIdentity = this.PinnedIdentity === identity ? null : identity;
+    }
+    /** Toggles the layout switcher popover. */
+    public onToggleLayoutMenu(): void {
+        this.LayoutMenuOpen = !this.LayoutMenuOpen;
+    }
+    /** Selects a layout and emits {@link LayoutChange}. */
+    public onSelectLayout(layout: LiveKitRoomLayout): void {
+        this.Layout = layout;
+        this.LayoutMenuOpen = false;
+        this.LayoutChange.emit(layout);
+    }
+    /** Toggles recording intent (the host performs the actual server-side egress call). */
+    public onToggleRecording(): void {
+        this.ToggleRecording.emit();
+    }
+
+    /** Begins dragging the split-view divider. */
+    public onSplitDragStart(event: PointerEvent): void {
+        this.splitDragging = true;
+        (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+    }
+    /** Updates the split ratio while dragging the divider, clamped to 20–80%. */
+    public onSplitDragMove(event: PointerEvent, container: HTMLElement): void {
+        if (!this.splitDragging) {
+            return;
+        }
+        const rect = container.getBoundingClientRect();
+        const ratio = (event.clientX - rect.left) / rect.width;
+        this.SplitRatio = Math.max(0.2, Math.min(0.8, ratio));
+    }
+    /** Ends the split-view drag. */
+    public onSplitDragEnd(): void {
+        this.splitDragging = false;
+    }
     /** Sends a chat message on the chat topic and optimistically renders it locally. */
     public onSendChat(text: string): void {
         void this.controller.SendData(text, LIVEKIT_CHAT_TOPIC);
@@ -322,12 +465,52 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
         return this.State.Local ? [this.State.Local, ...this.State.Remote] : [...this.State.Remote];
     }
 
-    /** The participant featured in spotlight layout (active speaker → agent → first remote → local). */
+    /** The participant featured in spotlight layout (pinned → active speaker → agent → first remote → local). */
     public get SpotlightParticipant(): LiveKitParticipantView | null {
+        if (this.EnablePinning && this.PinnedIdentity) {
+            const pinned = this.AllParticipants.find((p) => p.Identity === this.PinnedIdentity);
+            if (pinned) {
+                return pinned;
+            }
+        }
         const speakingId = this.State.ActiveSpeakerIdentities.find((id) => id !== this.State.Local?.Identity);
         const bySpeaking = speakingId ? this.State.Remote.find((p) => p.Identity === speakingId) : undefined;
         const byAgent = this.State.Remote.find((p) => p.Role === 'agent');
         return bySpeaking ?? byAgent ?? this.State.Remote[0] ?? this.State.Local ?? null;
+    }
+
+    /** The agent participant in the room, if present. */
+    public get AgentParticipant(): LiveKitParticipantView | null {
+        return this.State.Remote.find((p) => p.Role === 'agent') ?? null;
+    }
+
+    /** The participant currently sharing their screen (for split view), if any. */
+    public get ScreenShareParticipant(): LiveKitParticipantView | null {
+        return this.AllParticipants.find((p) => p.IsScreenSharing) ?? null;
+    }
+
+    /** The "speaker" pane participant for split view (active speaker → agent → first remote → local). */
+    public get SplitSpeakerParticipant(): LiveKitParticipantView | null {
+        const screenId = this.ScreenShareParticipant?.Identity;
+        const speakingId = this.State.ActiveSpeakerIdentities.find((id) => id !== screenId);
+        const bySpeaking = speakingId ? this.AllParticipants.find((p) => p.Identity === speakingId) : undefined;
+        const byAgent = this.State.Remote.find((p) => p.Role === 'agent');
+        return bySpeaking ?? byAgent ?? this.State.Remote.find((p) => p.Identity !== screenId) ?? this.State.Local ?? null;
+    }
+
+    /** The agent's visual state: an explicit data-channel signal wins, else derived from speaking activity. */
+    public get AgentState(): LiveKitAgentVisualState {
+        if (this.agentStateSignal) {
+            return this.agentStateSignal;
+        }
+        const agent = this.AgentParticipant;
+        if (agent?.IsSpeaking) {
+            return 'speaking';
+        }
+        if (this.State.Local?.IsSpeaking) {
+            return 'listening';
+        }
+        return 'idle';
     }
 
     /** The non-spotlight participants for the spotlight-layout filmstrip. */
@@ -355,7 +538,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
 
     /** Connects automatically once initialized and both connection inputs are present. */
     private maybeAutoConnect(): void {
-        if (this.initialized && this.AutoConnect && this.serverUrl && this.token && this.State.Status === 'idle') {
+        if (this.initialized && this.AutoConnect && this.PreJoinComplete && this.serverUrl && this.token && this.State.Status === 'idle') {
             void this.Connect();
         }
     }
@@ -395,6 +578,10 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
     private handleData(msg: LiveKitDataMessage): void {
         this.runInZone(() => {
             this.DataReceived.emit(msg);
+            if (msg.Topic === LIVEKIT_AGENT_STATE_TOPIC) {
+                this.applyAgentStateSignal(msg.Text);
+                return;
+            }
             if (msg.Topic === LIVEKIT_CHAT_TOPIC) {
                 this.addChatMessage({
                     Sender: msg.FromDisplayName ?? msg.FromIdentity ?? 'Participant',
@@ -405,6 +592,23 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy {
                 });
             }
         });
+    }
+
+    /** Applies an explicit agent-state signal from the data channel, auto-clearing after a short idle. */
+    private applyAgentStateSignal(raw: string): void {
+        const state = raw as LiveKitAgentVisualState;
+        if (state !== 'idle' && state !== 'listening' && state !== 'thinking' && state !== 'speaking') {
+            return;
+        }
+        this.agentStateSignal = state;
+        if (this.agentStateTimer) {
+            clearTimeout(this.agentStateTimer);
+        }
+        // Fall back to heuristic state if no further signal arrives (avoids a stuck "thinking…").
+        this.agentStateTimer = setTimeout(() => {
+            this.agentStateSignal = null;
+            this.cdr.markForCheck();
+        }, 8000);
     }
 
     /** Records a room error and surfaces it on the overlay. */

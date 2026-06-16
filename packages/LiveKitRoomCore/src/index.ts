@@ -23,6 +23,9 @@ export {
     type LiveKitAudioMeterFrame,
 } from './audio-meter';
 
+export { LiveKitMediaPreview } from './livekit-preview';
+export { applyNoiseFilter, applyBackgroundEffect } from './livekit-effects';
+
 export {
     LiveKitRoomEventBus,
     type LiveKitEventHandler,
@@ -52,4 +55,6 @@ export type {
     LiveKitRoomConnectOptions,
     LiveKitRoomState,
     LiveKitTrackSourceMapper,
+    LiveKitBackgroundEffect,
+    LiveKitE2EEOptions,
 } from './types';

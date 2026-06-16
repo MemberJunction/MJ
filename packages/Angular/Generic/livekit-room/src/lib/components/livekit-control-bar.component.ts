@@ -45,6 +45,11 @@ import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
                     <i class="fa-solid fa-display"></i>
                 </button>
             }
+            @if (EnableLayoutSwitcher) {
+                <button type="button" class="lk-bar__btn" title="Change layout" (click)="ToggleLayoutMenu.emit()">
+                    <i class="fa-solid fa-table-columns"></i>
+                </button>
+            }
             @if (EnableDeviceSettings) {
                 <button type="button" class="lk-bar__btn" title="Device settings" (click)="OpenDeviceSettings.emit()">
                     <i class="fa-solid fa-gear"></i>
@@ -64,6 +69,17 @@ import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
                     @if (ParticipantCount > 0) {
                         <span class="lk-bar__badge">{{ ParticipantCount }}</span>
                     }
+                </button>
+            }
+            @if (EnableRecordingControl) {
+                <button
+                    type="button"
+                    class="lk-bar__btn"
+                    [class.lk-bar__btn--recording]="IsRecording"
+                    [title]="IsRecording ? 'Stop recording' : 'Start recording'"
+                    (click)="ToggleRecording.emit()"
+                >
+                    <i class="fa-solid" [class.fa-circle]="!IsRecording" [class.fa-stop]="IsRecording"></i>
                 </button>
             }
             @if (EnableLeaveControl) {
@@ -110,6 +126,16 @@ import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
             .lk-bar__btn--active {
                 color: var(--mj-text-inverse, #fff);
                 background: var(--mj-brand-primary, #0076b6);
+            }
+            .lk-bar__btn--recording {
+                color: var(--mj-text-inverse, #fff);
+                background: var(--mj-status-error, #ef4444);
+                animation: lk-bar-rec 1.4s ease-in-out infinite;
+            }
+            @keyframes lk-bar-rec {
+                50% {
+                    opacity: 0.6;
+                }
             }
             .lk-bar__btn--leave {
                 color: var(--mj-text-inverse, #fff);
@@ -161,6 +187,12 @@ export class LiveKitControlBarComponent {
     @Input() public EnableParticipantsToggle = true;
     /** Show the leave button. */
     @Input() public EnableLeaveControl = true;
+    /** Show the recording toggle (server-authorized; the host wires the actual egress call). */
+    @Input() public EnableRecordingControl = false;
+    /** Whether a recording is currently in progress. */
+    @Input() public IsRecording = false;
+    /** Show the layout-switcher button. */
+    @Input() public EnableLayoutSwitcher = false;
 
     // ── Intent outputs ─────────────────────────────────────────────────────────────────
     /** The user clicked the microphone toggle. */
@@ -175,6 +207,10 @@ export class LiveKitControlBarComponent {
     @Output() public ToggleChat = new EventEmitter<void>();
     /** The user clicked the participants toggle. */
     @Output() public ToggleParticipants = new EventEmitter<void>();
+    /** The user clicked the recording toggle. */
+    @Output() public ToggleRecording = new EventEmitter<void>();
+    /** The user clicked the layout-switcher button. */
+    @Output() public ToggleLayoutMenu = new EventEmitter<void>();
     /** The user clicked leave. */
     @Output() public Leave = new EventEmitter<void>();
 }

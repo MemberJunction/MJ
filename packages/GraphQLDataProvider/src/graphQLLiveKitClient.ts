@@ -72,6 +72,18 @@ export interface LiveKitAgentRoomSessionResult {
     Identity: string;
 }
 
+/** Result of a recording (egress) operation. */
+export interface LiveKitRecordingResult {
+    /** Whether the operation succeeded. */
+    Success: boolean;
+    /** Error detail when {@link Success} is false. */
+    ErrorMessage?: string;
+    /** The egress id (pass to {@link GraphQLLiveKitClient.StopRecording}). */
+    EgressID: string;
+    /** The raw egress status. */
+    Status: string;
+}
+
 /** Typed wrapper over the LiveKit room GraphQL mutations. */
 export class GraphQLLiveKitClient {
     private _dataProvider: GraphQLDataProvider;
@@ -144,6 +156,76 @@ export class GraphQLLiveKitClient {
             const e = error as Error;
             LogError('GraphQLLiveKitClient.StartAgentRoomSession failed', undefined, e);
             return { Success: false, ErrorMessage: e.message || 'Unknown error', SessionBridgeID: '', RoomName: '', ServerUrl: '', ClientToken: '', Identity: '' };
+        }
+    }
+
+    /**
+     * Starts recording a room (server-authorized composite egress).
+     *
+     * @param roomName The room to record.
+     * @param layout Optional composite layout.
+     * @returns The recording info (incl. the egress id to stop it later).
+     */
+    public async StartRecording(roomName: string, layout?: string): Promise<LiveKitRecordingResult> {
+        return this.runRecordingMutation(
+            gql`
+                mutation StartLiveKitRecording($input: LiveKitRecordingInput!) {
+                    StartLiveKitRecording(input: $input) {
+                        Success
+                        ErrorMessage
+                        EgressID
+                        Status
+                    }
+                }
+            `,
+            { input: { RoomName: roomName, Layout: layout } },
+            'StartLiveKitRecording',
+            '',
+        );
+    }
+
+    /**
+     * Stops a recording by egress id.
+     *
+     * @param egressID The egress id from {@link StartRecording}.
+     * @returns The final recording info.
+     */
+    public async StopRecording(egressID: string): Promise<LiveKitRecordingResult> {
+        return this.runRecordingMutation(
+            gql`
+                mutation StopLiveKitRecording($egressID: String!) {
+                    StopLiveKitRecording(egressID: $egressID) {
+                        Success
+                        ErrorMessage
+                        EgressID
+                        Status
+                    }
+                }
+            `,
+            { egressID },
+            'StopLiveKitRecording',
+            egressID,
+        );
+    }
+
+    /** Runs a recording mutation and normalizes the result/error shape. */
+    private async runRecordingMutation(
+        mutation: string,
+        variables: Record<string, unknown>,
+        field: string,
+        egressID: string,
+    ): Promise<LiveKitRecordingResult> {
+        try {
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+            const raw: LiveKitRecordingResult | undefined = result?.[field];
+            if (!raw) {
+                throw new Error('Invalid response from server');
+            }
+            return raw;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError(`GraphQLLiveKitClient.${field} failed`, undefined, e);
+            return { Success: false, ErrorMessage: e.message || 'Unknown error', EgressID: egressID, Status: '' };
         }
     }
 }

@@ -65,6 +65,8 @@ import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { ConversationFeedbackResource } from './lib/conversation-feedback';
+import { LiveKitRoomResource } from './lib/resource-wrappers/livekit-room-resource.component';
+import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
 
 @NgModule({
   declarations: [
@@ -93,6 +95,7 @@ import { ConversationFeedbackResource } from './lib/conversation-feedback';
     NotificationsResource,
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
+    LiveKitRoomResource,
   ],
   imports: [
     AppRoutingModule,
@@ -132,7 +135,8 @@ import { ConversationFeedbackResource } from './lib/conversation-feedback';
     MJDropdownComponent,
     MJWindowComponent,
     MJWindowTitlebarComponent,
-    PaginationComponent
+    PaginationComponent,
+    MJLiveKitRoomComponent
   ],
   exports: [
     ResourceContainerComponent,

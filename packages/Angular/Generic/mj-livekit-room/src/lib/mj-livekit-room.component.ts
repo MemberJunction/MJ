@@ -66,12 +66,23 @@ export interface MJLiveKitSessionStartedEvent {
                 [EnableScreenShareControl]="EnableScreenShareControl"
                 [EnableDeviceSettings]="EnableDeviceSettings"
                 [EnableLeaveControl]="EnableLeaveControl"
+                [EnablePinning]="EnablePinning"
+                [EnableLayoutSwitcher]="EnableLayoutSwitcher"
+                [EnableNoiseFilter]="EnableNoiseFilter"
+                [EnableBackgroundEffects]="EnableBackgroundEffects"
+                [ShowAgentState]="ShowAgentState"
+                [ShowPreJoin]="ShowPreJoin"
+                [ShowRecordingControl]="EnableRecording"
+                [IsRecording]="isRecording"
+                [E2EEPassphrase]="E2EEPassphrase"
+                [E2EEWorker]="E2EEWorker"
                 [AgentAvatarUrl]="AgentAvatarUrl"
                 (Connected)="Connected.emit($event)"
                 (Disconnected)="Disconnected.emit($event)"
                 (ParticipantJoined)="ParticipantJoined.emit($event)"
                 (ParticipantLeft)="ParticipantLeft.emit($event)"
                 (DataReceived)="DataReceived.emit($event)"
+                (ToggleRecording)="onToggleRecording()"
                 (ErrorOccurred)="ErrorOccurred.emit($event)"
             ></mj-livekit-room>
         }
@@ -161,6 +172,24 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     @Input() public StartWithCamera = false;
     /** @see LiveKitRoomComponent.AgentAvatarUrl */
     @Input() public AgentAvatarUrl: string | null = null;
+    /** @see LiveKitRoomComponent.EnablePinning */
+    @Input() public EnablePinning = true;
+    /** @see LiveKitRoomComponent.EnableLayoutSwitcher */
+    @Input() public EnableLayoutSwitcher = true;
+    /** @see LiveKitRoomComponent.EnableNoiseFilter */
+    @Input() public EnableNoiseFilter = false;
+    /** @see LiveKitRoomComponent.EnableBackgroundEffects */
+    @Input() public EnableBackgroundEffects = false;
+    /** @see LiveKitRoomComponent.ShowAgentState */
+    @Input() public ShowAgentState = false;
+    /** @see LiveKitRoomComponent.ShowPreJoin */
+    @Input() public ShowPreJoin = false;
+    /** Enable the server-authorized recording control (composite egress). */
+    @Input() public EnableRecording = false;
+    /** @see LiveKitRoomComponent.E2EEPassphrase */
+    @Input() public E2EEPassphrase: string | null = null;
+    /** @see LiveKitRoomComponent.E2EEWorker */
+    @Input() public E2EEWorker: Worker | null = null;
 
     // ── Outputs ────────────────────────────────────────────────────────────────────
     /** Emitted once the agent room session is started (agent mode). */
@@ -189,6 +218,12 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     public token: string | null = null;
     /** The display name passed to the room. */
     public resolvedDisplayName: string | null = null;
+    /** The resolved room name (for recording calls). */
+    public resolvedRoomName: string | null = null;
+    /** Whether a recording is currently in progress. */
+    public isRecording = false;
+    /** The active egress id, when recording. */
+    private currentEgressId: string | null = null;
 
     public ngOnInit(): void {
         if (this.AutoStart) {
@@ -231,6 +266,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
         }
         this.serverUrl = result.ServerUrl;
         this.token = result.ClientToken;
+        this.resolvedRoomName = result.RoomName;
         this.SessionStarted.emit({ SessionBridgeID: result.SessionBridgeID, RoomName: result.RoomName });
     }
 
@@ -247,6 +283,29 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
         }
         this.serverUrl = result.ServerUrl;
         this.token = result.Token;
+        this.resolvedRoomName = this.RoomName;
+    }
+
+    /** Toggles room recording via the RealtimeBridge GraphQL surface (server-authorized egress). */
+    public async onToggleRecording(): Promise<void> {
+        if (!this.resolvedRoomName) {
+            return;
+        }
+        const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+        if (!this.isRecording) {
+            const result = await client.StartRecording(this.resolvedRoomName);
+            if (result.Success) {
+                this.isRecording = true;
+                this.currentEgressId = result.EgressID;
+            } else {
+                this.fail(result.ErrorMessage ?? 'Failed to start recording.');
+            }
+        } else if (this.currentEgressId) {
+            await client.StopRecording(this.currentEgressId);
+            this.isRecording = false;
+            this.currentEgressId = null;
+        }
+        this.cdr.markForCheck();
     }
 
     /** Records a failure and emits an error event. */

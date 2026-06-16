@@ -41,6 +41,22 @@ import type { LiveKitDeviceLists, LiveKitDeviceSelection } from '../models';
                     }
                 </select>
             </label>
+
+            @if (ShowNoiseFilter || ShowBackgroundEffects) {
+                <hr class="lk-devices__sep" />
+            }
+            @if (ShowNoiseFilter) {
+                <label class="lk-devices__switch">
+                    <span><i class="fa-solid fa-wave-square"></i> Noise filter</span>
+                    <input type="checkbox" [ngModel]="NoiseFilterEnabled" (ngModelChange)="NoiseFilterToggled.emit($event)" />
+                </label>
+            }
+            @if (ShowBackgroundEffects) {
+                <label class="lk-devices__switch">
+                    <span><i class="fa-solid fa-image"></i> Background blur</span>
+                    <input type="checkbox" [ngModel]="BackgroundBlurEnabled" (ngModelChange)="BackgroundBlurToggled.emit($event)" />
+                </label>
+            }
         </div>
     `,
     styles: [
@@ -83,6 +99,18 @@ import type { LiveKitDeviceLists, LiveKitDeviceSelection } from '../models';
                 background: var(--mj-bg-surface, #fff);
                 color: var(--mj-text-primary, #334155);
             }
+            .lk-devices__sep {
+                border: none;
+                border-top: 1px solid var(--mj-border-subtle, #eef2f7);
+                margin: 2px 0;
+            }
+            .lk-devices__switch {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-size: 0.82rem;
+                color: var(--mj-text-secondary, #475569);
+            }
         `,
     ],
 })
@@ -95,9 +123,21 @@ export class LiveKitDeviceMenuComponent {
     @Input() public SelectedCameraId: string | null = null;
     /** The currently selected speaker device id. */
     @Input() public SelectedSpeakerId: string | null = null;
+    /** Show the noise-filter toggle. */
+    @Input() public ShowNoiseFilter = false;
+    /** Whether the noise filter is currently enabled. */
+    @Input() public NoiseFilterEnabled = false;
+    /** Show the background-blur toggle. */
+    @Input() public ShowBackgroundEffects = false;
+    /** Whether background blur is currently enabled. */
+    @Input() public BackgroundBlurEnabled = false;
 
     /** Emits when the user selects a device. */
     @Output() public DeviceSelected = new EventEmitter<LiveKitDeviceSelection>();
+    /** Emits when the user toggles the noise filter. */
+    @Output() public NoiseFilterToggled = new EventEmitter<boolean>();
+    /** Emits when the user toggles background blur. */
+    @Output() public BackgroundBlurToggled = new EventEmitter<boolean>();
     /** Emits when the user closes the menu. */
     @Output() public Close = new EventEmitter<void>();
 

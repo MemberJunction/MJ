@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
 import { randomUUID } from 'crypto';
 import { LogError, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { LiveKitTokenService, LiveKitAgentRoomCoordinator } from '@memberjunction/livekit-room-server';
+import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService } from '@memberjunction/livekit-room-server';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -88,6 +88,30 @@ export class LiveKitAgentRoomSessionResult {
 
     @Field()
     Identity: string;
+}
+
+@InputType()
+export class LiveKitRecordingInput {
+    @Field()
+    RoomName: string;
+
+    @Field({ nullable: true })
+    Layout?: string;
+}
+
+@ObjectType()
+export class LiveKitRecordingResult {
+    @Field()
+    Success: boolean;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field()
+    EgressID: string;
+
+    @Field()
+    Status: string;
 }
 
 @Resolver()
@@ -180,6 +204,47 @@ export class RealtimeBridgeResolver extends ResolverBase {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`StartLiveKitAgentRoomSession failed: ${msg}`);
             return failure(msg, input.RoomName ?? '');
+        }
+    }
+
+    /**
+     * Starts recording (composite egress) of a room. Server-authorized — the browser never holds egress
+     * credentials.
+     */
+    @Mutation(() => LiveKitRecordingResult)
+    async StartLiveKitRecording(
+        @Arg('input', () => LiveKitRecordingInput) input: LiveKitRecordingInput,
+        @Ctx() context: AppContext = {} as AppContext,
+    ): Promise<LiveKitRecordingResult> {
+        try {
+            if (!this.GetUserFromPayload(context.userPayload)) {
+                return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: '', Status: '' };
+            }
+            const info = await new LiveKitEgressService().StartRoomRecording({ RoomName: input.RoomName, Layout: input.Layout });
+            return { Success: true, EgressID: info.EgressID, Status: info.Status };
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`StartLiveKitRecording failed: ${msg}`);
+            return { Success: false, ErrorMessage: msg, EgressID: '', Status: '' };
+        }
+    }
+
+    /** Stops a recording by egress id. */
+    @Mutation(() => LiveKitRecordingResult)
+    async StopLiveKitRecording(
+        @Arg('egressID', () => String) egressID: string,
+        @Ctx() context: AppContext = {} as AppContext,
+    ): Promise<LiveKitRecordingResult> {
+        try {
+            if (!this.GetUserFromPayload(context.userPayload)) {
+                return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: egressID, Status: '' };
+            }
+            const info = await new LiveKitEgressService().StopRecording(egressID);
+            return { Success: true, EgressID: info.EgressID, Status: info.Status };
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`StopLiveKitRecording failed: ${msg}`);
+            return { Success: false, ErrorMessage: msg, EgressID: egressID, Status: '' };
         }
     }
 

@@ -40,6 +40,20 @@ export type LiveKitParticipantRole = 'host' | 'agent' | 'participant';
 /** The kind of a media track, normalized from `Track.Kind`. */
 export type LiveKitTrackKind = 'audio' | 'video' | 'screen' | 'screen-audio' | 'unknown';
 
+/** A camera background effect (requires `@livekit/track-processors`). */
+export type LiveKitBackgroundEffect =
+    | { Kind: 'none' }
+    | { Kind: 'blur'; Radius?: number }
+    | { Kind: 'image'; ImageUrl: string };
+
+/** End-to-end-encryption options. The host supplies the worker (bundler-specific) + a shared passphrase. */
+export interface LiveKitE2EEOptions {
+    /** The shared passphrase all participants derive the room key from. */
+    Passphrase: string;
+    /** The E2EE web worker (e.g. `new Worker(new URL('livekit-client/e2ee-worker', import.meta.url))`). */
+    Worker: Worker;
+}
+
 /**
  * A normalized view of one room participant. This is what a UI grid renders — one tile per view.
  * {@link Raw} is included so the UI can attach the participant's video/audio tracks to DOM elements.
@@ -127,6 +141,16 @@ export interface LiveKitRoomConnectOptions {
     EnableCamera?: boolean;
     /** The display name to publish as the local participant's `name`. */
     DisplayName?: string;
+    /** Start with the Krisp noise filter enabled (LiveKit Cloud; requires `@livekit/krisp-noise-filter`). */
+    NoiseFilterEnabled?: boolean;
+    /** Start with a camera background effect (requires `@livekit/track-processors`). */
+    BackgroundEffect?: LiveKitBackgroundEffect;
+    /** Enable end-to-end encryption for this connection. */
+    E2EE?: LiveKitE2EEOptions;
+    /** Preferred microphone device id. */
+    MicrophoneDeviceId?: string;
+    /** Preferred camera device id. */
+    CameraDeviceId?: string;
     /** Advanced livekit-client room options merged into the constructed `Room`. */
     RoomOptions?: RoomOptions;
 }
@@ -145,6 +169,14 @@ export interface LiveKitRoomState {
     ActiveSpeakerIdentities: string[];
     /** The local-media toggle state. */
     LocalMedia: LiveKitLocalMediaState;
+    /** Whether browser autoplay policy is blocking remote audio (the UI should prompt to enable sound). */
+    AudioPlaybackBlocked: boolean;
+    /** Whether the Krisp noise filter is currently applied to the local microphone. */
+    NoiseFilterEnabled: boolean;
+    /** The active camera background effect. */
+    BackgroundEffect: LiveKitBackgroundEffect;
+    /** Whether end-to-end encryption is enabled for this connection. */
+    E2EEEnabled: boolean;
     /** The reason for disconnect, once disconnected. */
     DisconnectReason?: LiveKitDisconnectReason;
 }

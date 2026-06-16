@@ -37,7 +37,8 @@ export type {
     MintLiveKitClientTokenInput,
     LiveKitClientTokenResult,
     StartLiveKitAgentRoomSessionInput,
-    LiveKitAgentRoomSessionResult
+    LiveKitAgentRoomSessionResult,
+    LiveKitRecordingResult
 } from './graphQLLiveKitClient';
 export { GraphQLClassifyClient } from './graphQLClassifyClient';
 export type {
