@@ -30,6 +30,8 @@ import {
     BaseRealtimeChannelServer,
     RealtimeChannelServerContext,
     RealtimeChannelCloseReason,
+    RealtimeToolDefinition,
+    ServerChannelToolResult,
 } from '@memberjunction/ai';
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
@@ -112,6 +114,107 @@ export class RealtimeChannelServerHost extends BaseSingleton<RealtimeChannelServ
     public GetSessionPlugin(agentSessionID: string, channelName: string): BaseRealtimeChannelServer | null {
         const entry = this.sessions.get(this.sessionKey(agentSessionID));
         return entry?.plugins.get(this.channelKey(channelName)) ?? null;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────────
+    // Server-executed channel tools — the deferred "channel tool contribution feeding
+    // RealtimeSessionRunner.ExtraTools" the realtime guide flagged. The host aggregates every
+    // live plugin's GetServerToolDefinitions and routes each prefixed tool call back to the owner.
+    // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Aggregates the **server-executed** tool definitions every live plugin of a session contributes
+     * (each plugin's {@link BaseRealtimeChannelServer.GetServerToolDefinitions}, possibly
+     * runtime-computed) into one flat set — the per-session server-channel tool vocabulary fed into
+     * `RealtimeSessionRunner.ServerChannelTools`.
+     *
+     * Tolerant by contract: a plugin whose `GetServerToolDefinitions` throws is logged and skipped,
+     * never breaking the assembly. An unknown session returns `[]`.
+     *
+     * @param agentSessionID The session whose channels' server tools to collect.
+     * @returns The aggregated tool definitions across all of the session's live channel plugins.
+     */
+    public GetSessionServerTools(agentSessionID: string): RealtimeToolDefinition[] {
+        const entry = this.sessions.get(this.sessionKey(agentSessionID));
+        if (!entry) {
+            return [];
+        }
+        const tools: RealtimeToolDefinition[] = [];
+        for (const [name, plugin] of entry.plugins) {
+            try {
+                const channelTools = plugin.GetServerToolDefinitions();
+                if (Array.isArray(channelTools)) {
+                    tools.push(...channelTools);
+                }
+            } catch (error) {
+                LogError(
+                    `[RealtimeChannelServerHost] GetServerToolDefinitions failed for session ${agentSessionID} / ` +
+                        `channel '${name}' — skipping its tools: ${this.message(error)}`,
+                );
+            }
+        }
+        return tools;
+    }
+
+    /**
+     * Routes ONE server-executed tool call to the session's plugin that owns it, matched by the
+     * plugin's {@link BaseRealtimeChannelServer.ToolNamePrefix}, and returns its result. Resolution
+     * picks the plugin whose (non-empty) prefix the tool name starts with — the longest matching
+     * prefix wins, so overlapping prefixes resolve deterministically.
+     *
+     * Never throws: an unowned tool (no channel prefix matches), an unknown session, or a plugin that
+     * throws all resolve to a structured `{ Success: false }` result so the model always receives a
+     * consistent `tool_response`.
+     *
+     * @param agentSessionID The session the tool call belongs to.
+     * @param toolName The full tool name the model invoked.
+     * @param argsJson The raw arguments JSON the model emitted.
+     * @returns The execution result (or a structured error).
+     */
+    public async ExecuteSessionServerTool(
+        agentSessionID: string,
+        toolName: string,
+        argsJson: string,
+    ): Promise<ServerChannelToolResult> {
+        const plugin = this.resolveToolOwner(agentSessionID, toolName);
+        if (!plugin) {
+            return { Success: false, Output: `No active channel owns the server tool '${toolName}' for session ${agentSessionID}.` };
+        }
+        try {
+            return await plugin.ExecuteServerTool(toolName, argsJson);
+        } catch (error) {
+            LogError(
+                `[RealtimeChannelServerHost] ExecuteServerTool failed for session ${agentSessionID} / tool '${toolName}': ${this.message(error)}`,
+            );
+            return { Success: false, Output: `Server tool '${toolName}' failed: ${this.message(error)}` };
+        }
+    }
+
+    /** Returns `true` when the given tool name is owned by a live channel of the session. */
+    public OwnsServerTool(agentSessionID: string, toolName: string): boolean {
+        return this.resolveToolOwner(agentSessionID, toolName) !== null;
+    }
+
+    /**
+     * Finds the live plugin of a session whose {@link BaseRealtimeChannelServer.ToolNamePrefix} the
+     * tool name starts with. The longest matching prefix wins so overlapping prefixes
+     * (`'Meeting_'` vs `'MeetingControls_'`) resolve to the most specific channel.
+     */
+    private resolveToolOwner(agentSessionID: string, toolName: string): BaseRealtimeChannelServer | null {
+        const entry = this.sessions.get(this.sessionKey(agentSessionID));
+        if (!entry) {
+            return null;
+        }
+        let best: BaseRealtimeChannelServer | null = null;
+        let bestPrefixLength = -1;
+        for (const plugin of entry.plugins.values()) {
+            const prefix = plugin.ToolNamePrefix;
+            if (prefix && toolName.startsWith(prefix) && prefix.length > bestPrefixLength) {
+                best = plugin;
+                bestPrefixLength = prefix.length;
+            }
+        }
+        return best;
     }
 
     /**

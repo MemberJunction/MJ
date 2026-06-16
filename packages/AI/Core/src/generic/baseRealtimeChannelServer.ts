@@ -13,6 +13,8 @@
  * @author MemberJunction.com
  */
 
+import { RealtimeToolDefinition } from './baseRealtime';
+
 /**
  * Why an agent session was closed — the server-side channel plugin's view of the session-close
  * provenance. Mirrors the `MJ: AI Agent Sessions.CloseReason` value list (`SessionCloseReason` in
@@ -40,6 +42,41 @@ export interface RealtimeChannelServerContext {
 
     /** The conversation the session is attached to, or `null` when the session carries none. */
     ConversationID: string | null;
+
+    /**
+     * **Optional perception sink** — feeds a background context note into the live realtime model
+     * (the server-side counterpart of the client channel's `RealtimeChannelContext.SendContextNote`).
+     * The host wires this to `IRealtimeSession.SendContextNote` when the provider supports mid-session
+     * context injection; a server-side channel calls it to keep the agent aware of what is happening
+     * on its surface (a hand went up, who is speaking, time remaining) WITHOUT forcing a spoken reply.
+     *
+     * Optional because not every provider supports injecting conversation items into an open session
+     * (some only accept media frames + tool results), and because the host may construct the context
+     * before a live session exists. Channels MUST call it null-safely (`this.Context?.SendContextNote?.(…)`).
+     *
+     * @param text The perception note to surface to the model (plain text; the channel owns any framing).
+     */
+    SendContextNote?(text: string): void;
+}
+
+/**
+ * The result of a server-side channel tool execution ({@link BaseRealtimeChannelServer.ExecuteServerTool}),
+ * fed back to the realtime model as the `tool_response`.
+ *
+ * Deliberately small and serializable — the host (`RealtimeChannelServerHost`) wraps a thrown error
+ * into a `{ Success: false }` result so the model always receives a consistent response, and the
+ * transport layer (`RealtimeSessionRunner`) serializes `{ success, output }` to the exact JSON shape
+ * the model expects (identical to {@link import('../..').RealtimeToolBrokerDeps} non-target tooling).
+ */
+export interface ServerChannelToolResult {
+    /** Whether the tool executed successfully. */
+    Success: boolean;
+
+    /**
+     * The textual outcome to feed back to the model: a description of what changed on success, or
+     * the error to surface on failure (so the model can narrate it — spoken-error-handling).
+     */
+    Output: string;
 }
 
 /**
@@ -82,15 +119,30 @@ export interface RealtimeChannelServerContext {
  * proceeds untouched — a channel plugin can never break a live call or block persistence.
  * Implementations should still prefer returning benign results over throwing.
  *
+ * ### Server-executed tool contribution (Phase 2 — now wired)
+ * A server-side channel may contribute a **dynamic, runtime-computed** tool vocabulary the agent can
+ * invoke server-side (a bot has no browser, so these execute on the server rather than client-side
+ * like the {@link import('../..').BaseRealtimeChannelClient} half). The two hooks:
+ *
+ * - {@link GetServerToolDefinitions} — returns the channel's server-executed tool declarations. May
+ *   be **runtime-computed** (per session / per platform state), not only constants — this is what
+ *   lets a bridge-contributed channel (e.g. Meeting Controls, a Zoom native whiteboard) declare a
+ *   tool set that only exists because of the live connection. Default: `[]` (a state-only channel
+ *   like the whiteboard contributes no server tools).
+ * - {@link ExecuteServerTool} — executes ONE of this channel's tools and returns the result. Default:
+ *   a structured "not implemented" error (never throws), so a channel that declares tools but forgets
+ *   to implement execution fails loudly-but-safely rather than crashing the session.
+ *
+ * The per-session host ({@link RealtimeChannelServerHost}) aggregates every live plugin's
+ * {@link GetServerToolDefinitions} into the session's tool set (feeding
+ * `RealtimeSessionRunner.ServerChannelTools`) and routes each `{@link ToolNamePrefix}*` tool call back
+ * to the owning plugin's {@link ExecuteServerTool}. Tool-name collisions across channels are avoided
+ * by each channel's {@link ToolNamePrefix} (mirroring the client half's `ToolNamePrefix`).
+ *
  * @remarks
- * **TODO (documented seam, not yet wired): server-executed tool contribution.** The server-bridged
- * topology's `RealtimeSessionRunner` accepts extra tools via `RealtimeSessionRunnerDeps.ExtraTools`,
- * which is the natural place for a channel server to contribute server-executed tools. It is NOT
- * wired here because today no code path gives that runner per-session channel plugin instances:
- * server-bridged runs do not mint `AIAgentSession` rows through `SessionManager`, and client-direct
- * sessions (which do) never construct a server-side runner. When the server-bridged path adopts
- * SessionManager-minted sessions, add `GetServerToolDefinitions()` / `ExecuteServerTool()` hooks
- * here and feed them into the runner's tool set.
+ * Socket/media members (`OnClientMessage`, `SendToClient`) remain deferred with the unified-transport
+ * track — when `ISessionTransport` lands, this class grows an injected-transport overload rather than
+ * the plan's raw-socket form.
  */
 export abstract class BaseRealtimeChannelServer {
     /**
@@ -105,6 +157,54 @@ export abstract class BaseRealtimeChannelServer {
      * name and warns when a resolved plugin's `ChannelName` disagrees with its row.
      */
     public abstract get ChannelName(): string;
+
+    /**
+     * The shared name prefix of every server-executed tool this channel contributes (e.g.
+     * `'MeetingControls_'`). The host routes any tool call whose name starts with this prefix to
+     * THIS plugin's {@link ExecuteServerTool}, which is what prevents tool-name collisions when
+     * multiple channels are active in one session. A channel that contributes no server tools may
+     * leave the default empty string (the host then never routes any call to it).
+     *
+     * Mirrors the client half's `ToolNamePrefix`. Default: `''` (no server tools).
+     */
+    public get ToolNamePrefix(): string {
+        return '';
+    }
+
+    /**
+     * Returns this channel's **server-executed** tool declarations — the tools the agent can invoke
+     * on this channel that run server-side (a bot has no browser). May be **runtime-computed**: the
+     * returned set can depend on the live session, the connected platform, or current channel state,
+     * so a bridge-contributed channel can declare a vocabulary that only exists because of the live
+     * connection. Every tool's `Name` SHOULD start with {@link ToolNamePrefix} so the host can route
+     * its execution back here unambiguously.
+     *
+     * Invoked by {@link RealtimeChannelServerHost} when assembling the session's tool set (after the
+     * plugin's {@link OnSessionStarted}). Default: `[]` (a state-only channel contributes none).
+     *
+     * @returns The channel's server-executed tool definitions (possibly empty).
+     */
+    public GetServerToolDefinitions(): RealtimeToolDefinition[] {
+        return [];
+    }
+
+    /**
+     * Executes ONE of this channel's server-side tools (a tool whose name starts with
+     * {@link ToolNamePrefix}) and returns the result fed back to the model as the `tool_response`.
+     *
+     * Implementations should NOT throw — return a `{ Success: false, Output }` result so the model can
+     * narrate the failure. The host additionally wraps anything thrown into a structured error, so a
+     * throwing implementation can never break the live session. The default implementation returns a
+     * structured "not implemented" error, so a channel that declares tools via
+     * {@link GetServerToolDefinitions} but forgets to implement execution fails safely and visibly.
+     *
+     * @param toolName The full tool name the model invoked (begins with {@link ToolNamePrefix}).
+     * @param argsJson The raw arguments JSON string the model emitted for the call.
+     * @returns The execution result (or a structured error), synchronously or as a promise.
+     */
+    public ExecuteServerTool(toolName: string, argsJson: string): ServerChannelToolResult | Promise<ServerChannelToolResult> {
+        return { Success: false, Output: `Server tool '${toolName}' is declared by channel '${this.ChannelName}' but has no execution implementation.` };
+    }
 
     /**
      * Binds the session context and invokes the {@link OnInitialize} hook. Called exactly once per

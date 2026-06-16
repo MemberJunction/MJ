@@ -527,6 +527,16 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     artifactToolCalls?: { artifactId: string; tool: string; input: Record<string, unknown> }[];
     /**
+     * Durable memory writes from the agent's response. Each entry records a
+     * fact/preference that persists across runs as a provisional agent note.
+     * Processed inline (zero turn cost) alongside artifact tool calls; only
+     * honored when the agent has AllowMemoryWrite enabled.
+     * NOTE: structural duplicate of MemoryWriteRequest in @memberjunction/ai-agents
+     * (CorePlus sits below Agents and cannot import from it), mirroring how
+     * artifactToolCalls duplicates ArtifactToolCall above.
+     */
+    memoryWrites?: { note: string; type: 'Preference' | 'Context'; scopeHint?: 'user' | 'agent' }[];
+    /**
      * A tool pipeline from the agent's response. Chains tool invocations server-side so
      * intermediate outputs never enter the context window — only the final step's output is
      * returned to the agent. Processed inline (zero turn cost) alongside artifact tool calls.
@@ -1271,6 +1281,29 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     actionChanges?: ActionChange[];
 
     /**
+     * Optional runtime modifications to the agent's available **sub-agents**.
+     *
+     * The sub-agent counterpart of {@link actionChanges}. Lets callers dynamically add or remove
+     * which sub-agents are available to agents at runtime, without modifying database configuration.
+     * Changes are applied per agent in the hierarchy and propagated to sub-agents by the same scope
+     * rules as action changes ('global'/'root'/'all-subagents'/'specific').
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   subAgentChanges: [
+     *     { scope: 'global', mode: 'add', subAgentIds: ['fraud-specialist-agent-id'] }
+     *   ]
+     * };
+     * ```
+     *
+     * @since 2.132.0
+     */
+    subAgentChanges?: SubAgentChange[];
+
+    /**
      * Optional agent-type-specific execution parameters.
      *
      * Different agent types can define their own parameter interfaces for
@@ -1636,5 +1669,59 @@ export interface ActionChange {
      * ```
      */
     actionLimits?: Record<string, number>;
+}
+
+/**
+ * Represents a runtime modification to an agent's available **sub-agents**.
+ *
+ * The direct counterpart of {@link ActionChange}, for sub-agents instead of actions. Lets callers
+ * dynamically add or remove which sub-agents an agent can delegate to at runtime, without modifying
+ * the agent's database configuration (`AIAgent.ParentID` / `MJ: AI Agent Relationships`). Useful for
+ * multi-tenant scenarios, security restrictions, and testing — mirroring action overrides.
+ *
+ * Scope/propagation semantics are identical to {@link ActionChange}:
+ * - 'global': applies to all agents in the hierarchy (propagated as-is to sub-agents)
+ * - 'root': applies only to the root agent (not propagated)
+ * - 'all-subagents': applies to all sub-agents but not the root (propagated as 'global')
+ * - 'specific': applies only to agents listed in `agentIds`
+ *
+ * @example
+ * ```typescript
+ * // Make an extra specialist sub-agent available to the whole hierarchy for this run
+ * const change: SubAgentChange = {
+ *   scope: 'global',
+ *   mode: 'add',
+ *   subAgentIds: ['fraud-specialist-agent-id']
+ * };
+ *
+ * // Remove a sub-agent from a specific agent only
+ * const restrict: SubAgentChange = {
+ *   scope: 'specific',
+ *   mode: 'remove',
+ *   subAgentIds: ['risky-sub-agent-id'],
+ *   agentIds: ['triage-agent-id']
+ * };
+ * ```
+ *
+ * @since 2.132.0
+ */
+export interface SubAgentChange {
+    /** Scope — which agents this change applies to (see {@link ActionChangeScope}). */
+    scope: ActionChangeScope;
+
+    /** Mode — 'add' to make sub-agents available, 'remove' to take them away. */
+    mode: ActionChangeMode;
+
+    /**
+     * Array of sub-agent (AIAgent) entity IDs to add or remove from the agent's available set.
+     * These must be valid Agent IDs from the AI Agents table.
+     */
+    subAgentIds: string[];
+
+    /**
+     * Array of Agent IDs that this change applies to.
+     * Required when scope is 'specific', ignored otherwise.
+     */
+    agentIds?: string[];
 }
 

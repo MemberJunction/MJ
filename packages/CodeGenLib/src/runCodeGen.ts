@@ -442,6 +442,10 @@ export class RunCodeGenBase {
 
       const endTime = new Date();
       const totalSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
+      // Visible final summary (succeedSpinner persists a ✔ line in both verbose and
+      // non-verbose modes). The detailed/timestamped form stays on logStatus for the
+      // verbose log + report.
+      succeedSpinner(`MJ CodeGen complete — ${md.Entities.length} entities in ${totalSeconds.toFixed(2)}s`);
       logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
       return true;
      } catch (err) {

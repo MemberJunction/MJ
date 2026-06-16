@@ -1374,41 +1374,45 @@ export class SQLServerDataProvider
   ): Promise<Record<string, unknown>[]> {
     const needsAdjustment = await this.NeedsDatetimeOffsetAdjustment();
 
-    return rows.map((row) => {
-      const processedRow = { ...row };
+    // Precompute each field's name + lowercased SQL type ONCE rather than calling
+    // field.Type.toLowerCase() up to 3x per field per row. The rows are freshly produced
+    // by the driver query and owned by this pipeline, so we adjust them in place instead
+    // of allocating a `{ ...row }` shallow copy for every row.
+    const specs = datetimeFields.map((f) => ({ name: f.Name, kind: f.Type.toLowerCase() }));
 
-      for (const field of datetimeFields) {
-        const fieldValue = processedRow[field.Name];
+    for (const row of rows) {
+      for (const spec of specs) {
+        const fieldValue = row[spec.name];
         if (fieldValue === null || fieldValue === undefined) continue;
 
-        if (field.Type.toLowerCase() === 'datetime2') {
+        if (spec.kind === 'datetime2') {
           if (typeof fieldValue === 'string') {
             if (!fieldValue.includes('Z') && !fieldValue.includes('+') && !fieldValue.includes('-')) {
-              processedRow[field.Name] = new Date(fieldValue.replace(' ', 'T') + 'Z');
+              row[spec.name] = new Date(fieldValue.replace(' ', 'T') + 'Z');
             } else {
-              processedRow[field.Name] = new Date(fieldValue);
+              row[spec.name] = new Date(fieldValue);
             }
           } else if (fieldValue instanceof Date) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
-        } else if (field.Type.toLowerCase() === 'datetimeoffset') {
+        } else if (spec.kind === 'datetimeoffset') {
           if (typeof fieldValue === 'string') {
-            processedRow[field.Name] = new Date(fieldValue);
+            row[spec.name] = new Date(fieldValue);
           } else if (fieldValue instanceof Date && needsAdjustment) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
-        } else if (field.Type.toLowerCase() === 'datetime') {
+        } else if (spec.kind === 'datetime') {
           if (fieldValue instanceof Date) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
         }
       }
+    }
 
-      return processedRow;
-    });
+    return rows;
   }
 
 

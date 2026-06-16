@@ -1,0 +1,93 @@
+[
+  {
+    "_comments": "Remote-browser backend registry for the Remote Browser channel (/plans/realtime/realtime-bridges-architecture.md §4d). Each row is a backend that hosts a real, live browser the channel drives over CDP while an agent talks. ProviderType is SelfHost (MJ orchestrates a lightweight headless-Chrome container) or Service (a browser-as-a-service exposes a CDP connect endpoint). SupportedFeatures is an IRemoteBrowserProviderFeatures JSON string (omitted flag = not supported). DefaultControlMode (AgentOnly/ViewOnly/Collaborative) is the channel default, overridable per-channel and at runtime. DriverClass resolves the concrete BaseRemoteBrowserProvider subclass via ClassFactory. STATUS: all 'Active' — drivers ship in @memberjunction/remote-browser-* in this same program; like the bridge drivers, each binds its real provider SDK/credentials via a SetSdkFactory seam before production use. IDs are assigned by mj-sync on first push — primaryKey/sync intentionally omitted.",
+    "fields": {
+      "Name": "Self-Hosted Chrome",
+      "Description": "MJ-orchestrated lightweight headless-Chrome container (just Chrome + a CDP port — no heavy image). computer-use connects over CDP; the viewport is encoded from CDP screencast into the channel's ScreenOut track; human input is routed directly. No vendor cost, full control, no provider-native AI harness (we use our own computer-use control).",
+      "ProviderType": "SelfHost",
+      "DriverClass": "SelfHostRemoteBrowser",
+      "Status": "Active",
+      "DefaultControlMode": "Collaborative",
+      "SupportedFeatures": "{\"RawCdpControl\":true,\"LiveView\":true,\"HumanTakeover\":true,\"ScreenStreaming\":true,\"PersistentContext\":true,\"MultiTab\":true,\"FileDownloads\":true}"
+    },
+    "primaryKey": {
+      "ID": "76E285A1-C010-4490-B79C-6C5C0B08005D"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T23:20:01.972Z",
+      "checksum": "11b56e662a26fd8296fcf9fda99f919c6bf5c8303429c9a0fa91d6f80e2eafd6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Browserbase",
+      "Description": "Browser-as-a-service. Exposes a CDP connect endpoint plus a first-party AI-control harness (Stagehand act/extract/observe), a live-view stream with human takeover, stealth, proxy egress, session recording, persistent contexts, and CAPTCHA solving. The richest backend — offload orchestration and streaming entirely.",
+      "ProviderType": "Service",
+      "DriverClass": "BrowserbaseRemoteBrowser",
+      "Status": "Disabled",
+      "DefaultControlMode": "Collaborative",
+      "SupportedFeatures": "{\"RawCdpControl\":true,\"NativeAIControl\":true,\"LiveView\":true,\"HumanTakeover\":true,\"ScreenStreaming\":true,\"Stealth\":true,\"ProxyEgress\":true,\"SessionRecording\":true,\"PersistentContext\":true,\"MultiTab\":true,\"FileDownloads\":true,\"CaptchaSolving\":true}"
+    },
+    "primaryKey": {
+      "ID": "6C29BB4A-85CA-40BD-8AD0-545BAEB26792"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T23:20:01.982Z",
+      "checksum": "ece467d8f3d09ad8e8734eacae1b9716fe10c129316712ec52dba769fade00a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Steel",
+      "Description": "Browser-as-a-service (steel.dev). CDP connect endpoint, a session viewer with human takeover, stealth, proxy egress, session recording, persistent contexts, and CAPTCHA solving. No first-party AI harness — driven by MJ computer-use (or OSS Stagehand-over-CDP) control strategies.",
+      "ProviderType": "Service",
+      "DriverClass": "SteelRemoteBrowser",
+      "Status": "Disabled",
+      "DefaultControlMode": "Collaborative",
+      "SupportedFeatures": "{\"RawCdpControl\":true,\"LiveView\":true,\"HumanTakeover\":true,\"ScreenStreaming\":true,\"Stealth\":true,\"ProxyEgress\":true,\"SessionRecording\":true,\"PersistentContext\":true,\"MultiTab\":true,\"FileDownloads\":true,\"CaptchaSolving\":true}"
+    },
+    "primaryKey": {
+      "ID": "3FBFE9C9-2F86-4028-A4F7-42B28D215B16"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T23:20:01.992Z",
+      "checksum": "a8fb8f4a0a9bcebc08e0a5c53ca3de33913ba5ef044f7c4435a78b3d3c70e694"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Browserless",
+      "Description": "Browser-as-a-service (browserless.io) — CDP-as-a-service with a live debug viewer, session recording, proxy egress, multi-tab, and downloads. Lean and inexpensive; defaults to ViewOnly (its viewer is debug-oriented rather than first-class human handoff).",
+      "ProviderType": "Service",
+      "DriverClass": "BrowserlessRemoteBrowser",
+      "Status": "Disabled",
+      "DefaultControlMode": "ViewOnly",
+      "SupportedFeatures": "{\"RawCdpControl\":true,\"LiveView\":true,\"ScreenStreaming\":true,\"SessionRecording\":true,\"ProxyEgress\":true,\"MultiTab\":true,\"FileDownloads\":true}"
+    },
+    "primaryKey": {
+      "ID": "797A8F96-7758-4449-98F5-21F623F9ECAE"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T23:20:02.002Z",
+      "checksum": "91fb8e59b13110b2b464ae5489f55dc0d40f546966737f91b692a526f7ceb306"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hyperbrowser",
+      "Description": "Browser-as-a-service (hyperbrowser.ai). CDP connect endpoint plus a first-party agentic browse API, live-view with human takeover, stealth, proxy egress, session recording, persistent contexts, multi-tab, downloads, and CAPTCHA solving.",
+      "ProviderType": "Service",
+      "DriverClass": "HyperbrowserRemoteBrowser",
+      "Status": "Disabled",
+      "DefaultControlMode": "Collaborative",
+      "SupportedFeatures": "{\"RawCdpControl\":true,\"NativeAIControl\":true,\"LiveView\":true,\"HumanTakeover\":true,\"ScreenStreaming\":true,\"Stealth\":true,\"ProxyEgress\":true,\"SessionRecording\":true,\"PersistentContext\":true,\"MultiTab\":true,\"FileDownloads\":true,\"CaptchaSolving\":true}"
+    },
+    "primaryKey": {
+      "ID": "A23E1DB9-E60B-4C6B-86B9-1F0544E58FC8"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T23:20:02.011Z",
+      "checksum": "9b886742b31a2ac86c40edcbb17880b640022a3fb96725300758a64b4d4378b9"
+    }
+  }
+]
