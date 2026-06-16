@@ -167,6 +167,29 @@
             "lastModified": "2026-03-17T01:57:33.393Z",
             "checksum": "2e4bfae36ae0498e1196cdf72adf70862996272f055ebd371f7ccae0b7ef49b7"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-opus-4.5",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 64000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6EE935B8-93DA-4D20-8C3A-FA49C7E27586"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.561Z",
+            "checksum": "ec8ae89fd5f24eda55fdc734cfa9912bfc73639b2fdfcbb0812ea604ac8993b3"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -304,6 +327,29 @@
           "sync": {
             "lastModified": "2026-03-17T01:57:33.398Z",
             "checksum": "d5e5d3781f77b43b7fd2af89c8d0e6a462ab6ad7bff39d68166dcd425d2c021b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-sonnet-4.5",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 8192,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C20C599E-055D-479C-9BBC-83A9EDC981B8"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.582Z",
+            "checksum": "3241b95d225d98ae2a290cf186abdd82942f401b5073f6c9eeb843f5921e052d"
           }
         }
       ],
@@ -460,9 +506,9 @@
     "fields": {
       "Name": "Nano Banana Pro",
       "PowerRank": 20,
-      "Description": "Google's most advanced image generation model (November 2025), officially Gemini 3 Pro Image. Exceptional quality with support for up to 4K resolution (3840x2160). Features advanced style control, negative prompts, and seed-based reproducibility. State-of-the-art prompt understanding and image editing capabilities.",
+      "Description": "Google's most advanced image generation model (November 2025), officially Gemini 3 Pro Image. Exceptional quality with support for up to 4K resolution (3840x2160). Features advanced style control, negative prompts, and seed-based reproducibility. State-of-the-art prompt understanding and image editing capabilities. DEPRECATION: the gemini-3-pro-image-preview endpoint shuts down 2026-06-25; migrate to gemini-2.5-flash-image (Nano Banana).",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 8,
       "CostRank": 6,
       "InheritTypeModalities": true
@@ -542,8 +588,8 @@
       "ID": "A1E5C9D3-7B2F-48E6-9A4C-5D8F1E3B7C2A"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:24.196Z",
-      "checksum": "c1b198db70367561246c03a0861389583e2f63ff0979c3b058480902bde847b1"
+      "lastModified": "2026-06-16T01:17:09.280Z",
+      "checksum": "10c52b389829edb9007dfb328de3ffc5033cf5e52a868e49ac6fbcb51aaf6f7d"
     }
   },
   {
@@ -950,6 +996,28 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:54.094Z",
             "checksum": "95dd12f6384eeee5a2f3c84ed1f7a880e51ecfddd303e8fee45f3d2f47464bea"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3-235b-a22b-thinking-2507",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "EB840CCE-81F9-4F7A-85D2-667F138101B4"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.611Z",
+            "checksum": "a4f4a8be5872d4d144090e62ff03d38fa725146d4a1df6112189bedf232d2f0c"
           }
         }
       ],
@@ -2157,6 +2225,29 @@
             "lastModified": "2026-03-17T01:57:33.363Z",
             "checksum": "a4e6682f1ebae5225f75579ac3e6d38129a2dde87bce038b818aff6dd52c1dd7"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/o4-mini",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 100000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "22F51A2E-A191-403B-8B85-21226E273CA5"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.642Z",
+            "checksum": "927e1bafbf343f18dcf078763c39d1ae8138b1a4d81ba0bc8621b0fe9c6f4cb0"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -2267,6 +2358,29 @@
           "sync": {
             "lastModified": "2026-03-17T01:57:33.357Z",
             "checksum": "63d8bc2e0c8ed721719edb116782f111a07e52b2fb7fbe5c5d421b160fff5869"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/o3",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 100000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D6649796-45F9-43D0-9BA8-9CAA2503DDDD"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.656Z",
+            "checksum": "b00ea5acbca1bb15fe1002d0e03fc1a39d6e216757e3741628cba783b097e917"
           }
         }
       ],
@@ -2787,6 +2901,28 @@
             "lastModified": "2026-03-02T23:01:05.040Z",
             "checksum": "9e8874016ccfe915fc908b6fde4e62cbd8c7e733e5f0e65432ea407fde9d0924"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta-llama/llama-3-70b-instruct",
+            "MaxInputTokens": 8192,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "0FCE8BCF-7125-494C-9F52-14A44B395E7B"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.681Z",
+            "checksum": "5b8833ab4e906c5869f85a7e0cede9e597a7439103bf06236901b028d4c22978"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -2856,6 +2992,28 @@
             "lastModified": "2026-03-02T23:01:05.055Z",
             "checksum": "e97f5db7f0c76b32a46c76d9f615d221ca534d4eec8df8ef01309f0137f48363"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta-llama/llama-3.1-405b-instruct",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C6384669-4FE6-4D30-AE7D-631CA09B1890"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.694Z",
+            "checksum": "c0964adab45af2b40cc1323c969303b722c983ee154e1354d962a5f45fb73aa9"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -2924,6 +3082,28 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.445Z",
             "checksum": "7d625acfd8be3ca48fa2938b01d9d3272e1c1d61355b6bc1ad987339993ded45"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta-llama/llama-3.1-8b-instruct",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3BAD04E0-29A0-4F3E-8686-28D3F364FB5B"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.714Z",
+            "checksum": "9d79d083545bbbaa4219dbe6e28eea38677581a9255feb883e4443ffee343be4"
           }
         }
       ],
@@ -3126,6 +3306,29 @@
             "lastModified": "2026-03-17T01:57:33.394Z",
             "checksum": "b9b2f08352d7cf939e9c6f0fbf91bb1a8ed351636f3605935244f4defc326db8"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-4.1-nano",
+            "MaxInputTokens": 1047576,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E68CFFD1-3F8B-43C5-A946-AF09F8D743AF"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.728Z",
+            "checksum": "6728518dabea8bf9cbe1df9aa33c9ef362dfc1804a044d8b8d1ad28849f24595"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3260,6 +3463,29 @@
           "sync": {
             "lastModified": "2026-03-17T01:57:33.388Z",
             "checksum": "6ae1ea789e860f04a9a726054aa282ddf5d7c1d2aac8245ebd4a0fc878ad5c59"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-4.1",
+            "MaxInputTokens": 1047576,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "35DF0C52-28CC-4AC7-A9D9-BDD8C6B2DA6E"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.747Z",
+            "checksum": "b6640860054b94e23428a68d507d6e3d84011819674ca162d0d9949cd5362de2"
           }
         }
       ],
@@ -3399,6 +3625,29 @@
             "lastModified": "2026-03-17T01:57:33.388Z",
             "checksum": "d330d40e87f71592a09271e81fbb9290a9d684e47cd14c5dd1e8b021cf24d2c8"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5.1-codex-max",
+            "MaxInputTokens": 272000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "60A358D1-E00F-4870-922E-34E2FBC3C897"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.766Z",
+            "checksum": "2f2a364eeef4140fe80da768eb77034fbd76bafb4d9c153f82afbca6bfbab57b"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3533,6 +3782,28 @@
           "sync": {
             "lastModified": "2026-03-17T01:57:33.378Z",
             "checksum": "6741383e018792a9074f25146be58fbb74ddd566b046705138116d70ebdb90e5"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-4o-mini",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "CEDE5272-E564-46DE-959B-93B5D4338D05"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.781Z",
+            "checksum": "abecdc5742ae0f370df26534f9e20e0ecbc4b3954ea8bf3a3f4c055854c5f9b6"
           }
         }
       ],
@@ -3762,6 +4033,29 @@
             "lastModified": "2026-03-17T01:57:33.390Z",
             "checksum": "6da3a828fe3cb88bbacbbb4a937ab4630745d51fd97648b8b94e444287a289d9"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5.2",
+            "MaxInputTokens": 400000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "456C46B0-5239-4E0F-88D0-8D7E56B8DD55"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.799Z",
+            "checksum": "4a28d954ec8c824e3d4f0550ea421a9a647caa8899412f29cd2afd61481b2b2f"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3899,6 +4193,29 @@
           "sync": {
             "lastModified": "2026-03-17T01:57:33.395Z",
             "checksum": "db0b51bcd57e5ffdb64ac288db9066d96adefbfb3b05ec2adb2af3c462f8443e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5.1-codex-mini",
+            "MaxInputTokens": 400000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "17E9E59A-6337-4619-BB18-0694FEB5C899"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.820Z",
+            "checksum": "4ac7e1821c26f7302b04df03016d26f194d1f9ec2cf93601149535aaa1717894"
           }
         }
       ],
@@ -4038,6 +4355,29 @@
             "lastModified": "2026-03-17T01:57:33.376Z",
             "checksum": "8aeada73ed2dc0d56495247d9ea186f34e5a3a6a7d50f80570dc4e1d78529689"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5.2-codex",
+            "MaxInputTokens": 272000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "67B47305-E8F7-474A-AA56-128D1A683D8C"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.833Z",
+            "checksum": "15f0d454f67bc42b59996b2a76267c984b47348a75b8524a92cb43a7cbc489fb"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -4175,6 +4515,28 @@
             "lastModified": "2026-03-17T01:57:33.373Z",
             "checksum": "fec13be53067458636aabbae8ad5ed0d1ec352e2e39748b7265ce31d8c0db1c1"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-4.1-mini",
+            "MaxInputTokens": 1000000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F493F63D-B40D-4EE4-870A-9E18788CD321"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.851Z",
+            "checksum": "877a6f12cda0b620ffe7f931b67f4cce88655755f3cf26daa9fab7ba9dde8f0e"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -4310,6 +4672,29 @@
             "lastModified": "2026-03-17T01:57:33.357Z",
             "checksum": "2fe6c4c302754f30bf0fa16fb8b1632579c8f9c121511b98231b904a25d7a415"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-4o",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A44B78EB-9A4E-48C0-8D10-B406B5CB2CE8"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.870Z",
+            "checksum": "5182096128fe9c16df2f80d4977f4d227d1df4b325174f126a01c7f160b9b8d7"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -4444,6 +4829,29 @@
           "sync": {
             "lastModified": "2026-03-17T01:57:33.366Z",
             "checksum": "2936934d8237276d16822b92901d9f7bc3b7cf160fa3746ab6baf5426929126b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/o3-mini",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 100000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "03B934DA-A71D-4641-B33A-8E06C2EA74BE"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.885Z",
+            "checksum": "8b910493b04b39d449a546fb2e8de91b309d85567b781775d8dd936f8e74c772"
           }
         }
       ],
@@ -4669,6 +5077,29 @@
             "lastModified": "2026-03-17T01:57:33.342Z",
             "checksum": "16b094d350dbb9456d2a20563a7671d51afeb2204807da0163a74bc628a2661e"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/o1",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 100000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "278A509B-9C1C-4424-B99F-9809F246BCB0"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.904Z",
+            "checksum": "480c1bb3dc46c744cf93e8d45bb57d1607b0db6e463de5a27e73e431f01a052d"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -4780,6 +5211,28 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.580Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/o1-mini",
+            "MaxInputTokens": 200000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "CD935D81-0A87-46E5-BA96-C24FC43F990E"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.923Z",
+            "checksum": "1dd463717c4891da07ecbd2f0ee5bd1e9720f846d3410e0581251fb73f34b2a6"
           }
         }
       ],
@@ -4957,6 +5410,28 @@
             "lastModified": "2026-01-28T22:07:14.584Z",
             "checksum": "3e41e7b84fc0e09d56d2341a6f75070218b44a0117ef018daf6e988e0128bbc5"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-3.5-sonnet",
+            "MaxInputTokens": 200000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "18BEF2F3-0C68-4A55-8E41-59F46F747E7B"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.935Z",
+            "checksum": "54dd3c66783b4b677a5bce549065716feaff19753f0fc05235bdde6e58e9367f"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -5088,10 +5563,10 @@
   {
     "fields": {
       "Name": "Mistral Medium 3.1",
-      "Description": "Mistral AI's frontier-class multimodal model with improved tone and performance. 128K token context window. Supports vision, OCR, function calling, structured outputs, and agents. Released August 2025.",
+      "Description": "Mistral AI's frontier-class multimodal model with improved tone and performance. 128K token context window. Supports vision, OCR, function calling, structured outputs, and agents. Released August 2025. DEPRECATION: scheduled for retirement on 2026-06-30 as part of Mistral's summer 2026 retirement tranche; migrate to Mistral Medium 3.5.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 4,
       "InheritTypeModalities": true
@@ -5172,17 +5647,17 @@
       "ID": "A4704E68-B852-461D-9EBF-889164EB899C"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:24.899Z",
-      "checksum": "13f838269e67f98573832be15af38b51821e3cf1262d4a83e52a494846b117c0"
+      "lastModified": "2026-06-16T01:17:09.312Z",
+      "checksum": "21e6a7e89778ca0cd80da38cf6ef7bb0a5901b2a9ae4c78b79ae289750bdf21b"
     }
   },
   {
     "fields": {
       "Name": "Devstral 2",
-      "Description": "Mistral AI's frontier code agents model for software engineering tasks. 123B parameters with 256K token context window. Excels at using tools to explore codebases, editing multiple files, and powering software engineering agents. Supports function calling, structured outputs, and built-in tools.",
+      "Description": "Mistral AI's frontier code agents model for software engineering tasks. 123B parameters with 256K token context window. Excels at using tools to explore codebases, editing multiple files, and powering software engineering agents. Supports function calling, structured outputs, and built-in tools. DEPRECATION: scheduled for retirement on 2026-06-30 as part of Mistral's summer 2026 retirement tranche; migrate to Mistral Medium 3.5.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 4,
       "InheritTypeModalities": true
@@ -5263,8 +5738,8 @@
       "ID": "E4280B9A-76F3-4363-804A-8A3293BC5A85"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:25.020Z",
-      "checksum": "080c7bf580be977a3e7850efd50a2120f3656552a285a2f60261c48bf4fc3a6c"
+      "lastModified": "2026-06-16T01:17:09.337Z",
+      "checksum": "472fd230ea6ed114167a36982a5eaea577942e28fde889aa809dfbfc5c5d743f"
     }
   },
   {
@@ -5318,6 +5793,27 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.588Z",
             "checksum": "9ed516d989df157a1ed4354af44dc8fc0709a0811e6c13953441b19d0ab3ed85"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "mistralai/mistral-large",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F0D110C3-7C54-446A-8D84-67FA7133E343"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.958Z",
+            "checksum": "5fadb4ab942dfb664e24230df8307d2d92d36ff6c21a3f23225fe5f8177ca82b"
           }
         }
       ],
@@ -5433,6 +5929,29 @@
             "lastModified": "2026-03-17T01:57:33.390Z",
             "checksum": "91fbdf0b02a9de0eb7e5808ce8083f9a664e294fa44f7ddf5bdd745c1be21ba6"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-haiku-4.5",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 64000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "0FB8707E-F64F-4741-831B-D52DF4F07960"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.972Z",
+            "checksum": "816a8e2eecefc3a2083cb25e837d5bc9af9e821d6cc7ffa3f510ed2e9859176a"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -5497,10 +6016,10 @@
   {
     "fields": {
       "Name": "Mistral Small 3.2",
-      "Description": "Mistral AI's efficient 24B parameter multimodal model with vision capabilities. 128K token context window. Supports function calling, structured outputs, and agents. Open-weight model suitable for personal and commercial use. Very cost-effective.",
+      "Description": "Mistral AI's efficient 24B parameter multimodal model with vision capabilities. 128K token context window. Supports function calling, structured outputs, and agents. Open-weight model suitable for personal and commercial use. Very cost-effective. DEPRECATION: scheduled for retirement on 2026-06-30 as part of Mistral's summer 2026 retirement tranche; migrate to Mistral Small 4.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 6,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 8,
       "CostRank": 1,
       "InheritTypeModalities": true
@@ -5581,8 +6100,8 @@
       "ID": "2FDA1FD0-7E2B-42D6-AD6B-440F57B4EE1F"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:25.024Z",
-      "checksum": "9afda61d3d004c3ceccfe0b16f20762bba29131d1675bcb59236745dfb7867b9"
+      "lastModified": "2026-06-16T01:17:09.350Z",
+      "checksum": "e8dc6000522bbb90e8e080f9c5941e8d0cfd67d3167f4d72d0811ff60f1614c6"
     }
   },
   {
@@ -5636,6 +6155,27 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.589Z",
             "checksum": "9ed516d989df157a1ed4354af44dc8fc0709a0811e6c13953441b19d0ab3ed85"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "mistralai/mistral-medium",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C85A0A4D-018C-48DE-A37C-F9A83A0D136B"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:09.994Z",
+            "checksum": "45f2a7023a0df74cfda9a5ec394f2f5f70e8c3d962faf72c10b9895f31016f5e"
           }
         }
       ],
@@ -5724,6 +6264,28 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.590Z",
             "checksum": "9ed516d989df157a1ed4354af44dc8fc0709a0811e6c13953441b19d0ab3ed85"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "mistralai/mixtral-8x7b-instruct",
+            "MaxInputTokens": 32000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7409B96E-565B-406D-8519-8DDFB81BA852"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.006Z",
+            "checksum": "9da1a6e747ec9cb725523145661c12c0465da9c5b57309ea93f4968b65ad90b6"
           }
         }
       ],
@@ -5838,6 +6400,29 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:56.468Z",
             "checksum": "3d96c67e41e3883ec9e16565255f41ba7e753abbc0219f538a627e7bdbdd7d22"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "moonshotai/kimi-k2",
+            "MaxInputTokens": 131072,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "ED7C2C8D-45D9-45D2-BE15-BDE3A3A01408"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.027Z",
+            "checksum": "f41e89b1170995dbf93c8f4636c400cfacf5a99384109a2ded4b7759d46c7c24"
           }
         }
       ],
@@ -5955,6 +6540,28 @@
             "lastModified": "2026-03-02T23:01:06.322Z",
             "checksum": "01332eaac74b4a0f3c0333fddc099211dc77f43924b72497a2bfe4d398a47296"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "deepseek/deepseek-r1-distill-llama-70b",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "163B9ADF-1F39-4297-81AA-1EB81DE3E9E1"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.041Z",
+            "checksum": "9682386f1d10bcb927f7b153369ca89df805b08975e286c1131287400e03f2c2"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -6045,6 +6652,28 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.593Z",
             "checksum": "a42a243e48097b75f4b5d662416a849cbf442c9aaf4c4c133a7dec907f323aa8"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta-llama/llama-3.3-70b-instruct",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1903F3DF-4BD6-4CF3-BED4-89BE08100168"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.065Z",
+            "checksum": "a6e4fe490386957d6c60dff964e15bdba95281d61e90709efb229fe0c5e1d462"
           }
         }
       ],
@@ -6751,6 +7380,27 @@
             "lastModified": "2026-03-02T23:01:06.791Z",
             "checksum": "93dac7c1809b6e7df9c3bf09f664c27a0702f3272eec3b3d211e2f428b7ff26e"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta-llama/llama-4-maverick",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "48937EF7-A045-43E1-BF04-1049688183ED"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.087Z",
+            "checksum": "9b04180e293407f0fcd9a54db4178baec1b8a718e7cbbabc9849c5ad07050122"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -6911,6 +7561,28 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.757Z",
             "checksum": "3d64b74c4b9ae3b65b940e46723ec57aaaf8e6b0a61d5a822129952a518c230d"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3-32b",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7A30058A-87FF-49A0-B375-5A225DF0954A"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.107Z",
+            "checksum": "13ba3d8d014bd238ff7ea5088d11efcf596473b7cf5980857e1e161bf8b52106"
           }
         }
       ],
@@ -7128,7 +7800,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-sonnet-4-20250514",
             "MaxInputTokens": 200000,
@@ -7141,8 +7813,8 @@
             "ID": "8BC5433E-F36B-1410-8DAB-00021F8B792E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.427Z",
-            "checksum": "22ce9481c4bbc2688d6d25a1a17b97286bd71a3fe2e68ec538cc7d82e04a8d37"
+            "lastModified": "2026-06-16T01:17:10.136Z",
+            "checksum": "95ada8c518c9d2798d6db3c8f4116500eeb47298250000894f16015394018254"
           }
         },
         {
@@ -7266,7 +7938,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-opus-4-20250514",
             "MaxInputTokens": 200000,
@@ -7279,8 +7951,8 @@
             "ID": "87C5433E-F36B-1410-8DAB-00021F8B792E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.425Z",
-            "checksum": "10cea08d6ca26e34a7ab38754512cf9e4b949eb9a39ae385d153bf7f8ca0504d"
+            "lastModified": "2026-06-16T01:17:10.151Z",
+            "checksum": "1fd72a8e7cbc705620b4405952f74c851f8554b91ddf450417a32f083e45ed6e"
           }
         },
         {
@@ -7440,6 +8112,28 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.590Z",
             "checksum": "ce92fddbd893240d94ad76f91fa1d7020a09c9e35fa0de009e60e211e74b7e79"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta-llama/llama-4-scout",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6EEF9388-E5BF-484B-AABA-AC8FE7E07085"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.170Z",
+            "checksum": "e76e5b838d4bed5b15cb6dfd92fb565449582f12243a9d33822f195a5936dcfc"
           }
         }
       ],
@@ -7694,6 +8388,29 @@
           "sync": {
             "lastModified": "2026-03-17T01:57:33.733Z",
             "checksum": "d3861467e112aa8149146016430260a72f77fed60e21ca1825596fc4724169b1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-oss-20b",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 32000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3B666454-367D-4714-8D23-566ACC3B52B8"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.189Z",
+            "checksum": "4d8be01247dbb89d7c37b8b58f16b2e7c33b14d969100618b90ac863f349a7c0"
           }
         }
       ],
@@ -8963,6 +9680,29 @@
             "lastModified": "2026-03-17T01:57:33.372Z",
             "checksum": "63d8d2055870c4d030540cc2be2811b91cec89c3d445834b2a6db58aeeb176f1"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5-mini",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 32000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "86A1E41C-2450-4320-9D8D-C83E9BA21930"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.224Z",
+            "checksum": "f3bd0c2f01002ecd47496cda81b498eae4d98c3ce856971ff7dab4bd49d34fdb"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -9100,6 +9840,29 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.744Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5",
+            "MaxInputTokens": 272000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "37D21FD4-A0EE-4997-A645-1E8F163B7F52"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.238Z",
+            "checksum": "eb87967ff475f2844cc9ff30058be2ed2be8d1c98512998db66e5efc564ec10b"
           }
         }
       ],
@@ -9377,6 +10140,29 @@
             "lastModified": "2026-03-17T01:57:33.366Z",
             "checksum": "4913ad389b7f54bb554b75e1eb59935d66065eb240a8c9b46af57566ccc7fd51"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5-nano",
+            "MaxInputTokens": 272000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "CBA65AE8-2FC3-4CB7-96F0-FEE5995658AB"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.262Z",
+            "checksum": "2fe463bd430e411632f0309f891072583d96db495b3cad35313b64ee3180e9ae"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -9514,6 +10300,29 @@
           "sync": {
             "lastModified": "2026-03-17T01:57:33.364Z",
             "checksum": "da88391a0591b4189b1b6016a530ca24b29270def9eb40a4a85288155b6d2655"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-opus-4.1",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 4096,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "21D04339-92AC-4EBA-950A-6F0B636CB98A"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.274Z",
+            "checksum": "439c5a8fcece92b735dfc00dce0931a2f4c3b84ed42b825b473fac1b857e58d5"
           }
         }
       ],
@@ -9856,6 +10665,29 @@
             "lastModified": "2026-01-28T22:07:14.844Z",
             "checksum": "a2ab108a9ed63e806351d254d49f00a0ce1be87950b6a8d57109d4790664a650"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemini-2.5-flash-lite",
+            "MaxInputTokens": 10000,
+            "MaxOutputTokens": 400,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "08912D1F-AEDF-48CE-BAC0-B8C113FB115D"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.293Z",
+            "checksum": "b8e28fb2c4eee81358cb885dd370e14b1bd85c8b6e813a1d828ecf53751d2ed3"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -10011,6 +10843,29 @@
             "lastModified": "2026-01-28T22:07:14.846Z",
             "checksum": "ef6573650f6bbc7b67224126914adce8e59cf1cf4558135484e6c3db8f9e3d64"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemini-2.5-flash",
+            "MaxInputTokens": 30000,
+            "MaxOutputTokens": 2500,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "563E8BDD-5A29-41FC-837E-0340154E3CAF"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.315Z",
+            "checksum": "fcaff203829ddee04834da1d12ed5fda631d9bd50a6795c3d980f1096a86b715"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -10165,6 +11020,29 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.846Z",
             "checksum": "b232db5615d7543792bc5567bf37e04962672bcfcc2c140608f6c53f7f8ea46b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemini-2.5-pro",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 10000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "573ED379-3CBA-40BA-99D3-DF4B9D656E0E"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.327Z",
+            "checksum": "1ec7cf6b8a36944c01a45bf3df282834d897cec1e893a063fed86e183af0e51a"
           }
         }
       ],
@@ -10419,6 +11297,29 @@
             "lastModified": "2026-03-17T01:57:33.751Z",
             "checksum": "2c8cb5d1690c671ef6c25da7fedc547491713f3f8e31bf4669ab91f422b7c5b3"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-oss-120b",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 32000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6C924745-A77B-4841-8DFF-FF03CF62BDC3"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.345Z",
+            "checksum": "2acc5ab921dbcbba6ce24729d45ea131037c926bc3900df308d7aa2beec6f698"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -10629,6 +11530,29 @@
             "lastModified": "2026-02-01T00:26:59.050Z",
             "checksum": "4a431916f19c49be637527e0096fb63ad26d784c17f519ca7477a16d95a740ac"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "moonshotai/kimi-k2.5",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6499071F-685A-486C-A5B9-BF616867CDA4"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.363Z",
+            "checksum": "9a5b9725011153036863ce48e8cd8d5fc0ca07f79bbec66fed0e2a268721d13f"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -10744,6 +11668,29 @@
           "sync": {
             "lastModified": "2026-02-12T19:54:35.232Z",
             "checksum": "81b5c688ba73cba90b91c60ea81d4d1e9b880e480c15111a1471ca28e9e280bc"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "z-ai/glm-5",
+            "MaxInputTokens": 202752,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3434E199-000F-4E2B-A4BB-A6A803606E08"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.907Z",
+            "checksum": "68d3a0b43d240435a328e9151422a81fdb1c4269c25de63a85633ddfe3a04338"
           }
         }
       ],
@@ -11155,6 +12102,29 @@
             "lastModified": "2026-02-27T20:01:06.343Z",
             "checksum": "176d2c5b7bca4e73f29f6bd19b1d3016a44fde22b0d20a04562ca2cddd967e45"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemini-3.1-pro-preview",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "451DF563-1C54-4DF0-BB68-75C288E46231"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.663Z",
+            "checksum": "84d7b0e1c54c2cfa5f1c730cad7994ed1576630bcb4570cfb5187436123c8877"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -11404,6 +12374,29 @@
             "lastModified": "2026-05-20T23:53:44.509Z",
             "checksum": "e5764bfa666c78c8982dccbebe90931e2c38f2323a9c124522289e6be0564530"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemini-3.1-flash-lite",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 64000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "753F9873-E317-43E6-A145-DE96B25A55CA"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.676Z",
+            "checksum": "cb11c166c4192aa5207165548bc737c31aae2409357e301d9fa93ea11d3eb26c"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -11542,6 +12535,29 @@
           "sync": {
             "lastModified": "2026-03-17T01:57:33.389Z",
             "checksum": "6dfd1c8c6c0bc01d8ec04e5a2eef728cea8fe5b386000652f666b0b6fd4f775d"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5.4",
+            "MaxInputTokens": 272000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FAE21E53-D086-414A-B34E-B5CA0D03A5FA"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.712Z",
+            "checksum": "2f94ce35017d690255149e595a52a808301b024d8e0b5fd07f27f492ee940fd4"
           }
         }
       ],
@@ -11682,6 +12698,29 @@
             "lastModified": "2026-03-17T01:57:33.364Z",
             "checksum": "bf2d7d1bdb5ba5f714686a98165daa2c6631791f4efc708e5bba62e5129c7933"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-opus-4.6",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "0BFAF53A-9595-45C7-93C9-216F31404019"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.737Z",
+            "checksum": "f9974a6b6f853d95b3599ac12b321838e4003eb81ce4dd4a915c7bb66686724d"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -11820,6 +12859,29 @@
           "sync": {
             "lastModified": "2026-03-17T01:57:33.374Z",
             "checksum": "6ced3ccbedfa96aff24fe7d7a1365ce5dea0d908f5ce61c051e142e19a12d3f9"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-sonnet-4.6",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 64000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "710F0B11-2F62-4980-8E35-649889A6E995"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.751Z",
+            "checksum": "43d157087554bd2a5deba8beae62364cd24f6ec2c56f9b884cb0a66bf7689eec"
           }
         }
       ],
@@ -11960,6 +13022,29 @@
             "lastModified": "2026-04-20T23:52:33.945Z",
             "checksum": "62ebfb82717b632fe6f0b563c5754cc431f63d74b02d3c2a68630afa87b3d404"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-opus-4.7",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "ACD870F5-0B8B-4ABF-A4EA-5B9958972B15"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.919Z",
+            "checksum": "9581a65da6aca136403a40ef147a35ebe80d192d2854b2889449d14525c610b3"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -12098,6 +13183,29 @@
           "sync": {
             "lastModified": "2026-04-20T23:52:33.357Z",
             "checksum": "e8b1ba846835f647bef2da479257a47931882dbc61b0b1ff052a5672c7fce9b4"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5.4-mini",
+            "MaxInputTokens": 400000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7CD87213-BB3E-48A4-A6CB-45FD167097AC"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.772Z",
+            "checksum": "21a7c3cec22d28ba36ae938e6d812bde9d909e22ff3754741c1a85f10307419c"
           }
         }
       ],
@@ -12238,6 +13346,29 @@
             "lastModified": "2026-04-20T23:52:33.520Z",
             "checksum": "48bb245664922488c433f2d70686ed387c3292478d10cfdfc4ee9782d2988c3b"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5.4-nano",
+            "MaxInputTokens": 400000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8A438938-A3F2-46FE-8896-DA0E68381531"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.797Z",
+            "checksum": "eea8afddf739974102fc5418b11948dec9edef7d7e020a1e1a2c495049e2e094"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -12354,6 +13485,29 @@
             "lastModified": "2026-04-20T23:52:33.591Z",
             "checksum": "e11fd8d6618fde73ee7ae8eb66f431de0c83e334f616635891240708bef3db91"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "x-ai/grok-4.20",
+            "MaxInputTokens": 2000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8174FC1B-A403-4A9C-B341-8FA78C7F6322"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.814Z",
+            "checksum": "81d9db90becab9830fee548e164ab65b1010ba0c4d2d3f0d142eb1aa9d1517ad"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -12445,6 +13599,29 @@
           "sync": {
             "lastModified": "2026-04-20T23:52:33.695Z",
             "checksum": "6087a837f59488e7b1a1ea6e77cd8a1c0bdd13f1c9f59d5665e250a4fc774e27"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "mistralai/mistral-small-2603",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F904DCD4-3DA2-4BC6-9B7F-11E98B217F04"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.828Z",
+            "checksum": "847003220b33f5232a4dfeb93bc44c1f350355467533a06630692745b3e3a33c"
           }
         }
       ],
@@ -12675,6 +13852,29 @@
           "sync": {
             "lastModified": "2026-04-20T23:52:32.714Z",
             "checksum": "34747fd96d6208514f181ab77e2dce8def9b7d0468e95eac0e5b152374e83f1b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.6-35b-a3b",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "2A7F590A-B1CF-4CB8-8BCF-03C2762D175D"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.395Z",
+            "checksum": "21176e2e43afe31fb2c8e69526f342d853c6749d63a813c19056dbacec888a00"
           }
         }
       ],
@@ -12954,6 +14154,29 @@
             "lastModified": "2026-04-27T18:50:01.909Z",
             "checksum": "8dccacb2b28638fc10dd015d3ebff53264dd38727240780c5c38d9c1ad0159b5"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "z-ai/glm-5.1",
+            "MaxInputTokens": 203776,
+            "MaxOutputTokens": 67584,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "00F8E343-6190-43C9-A9D1-CFBE7ED86523"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:11.059Z",
+            "checksum": "3a0d95110ee3451302726a1802219a2855e75cb91f2ce0072fbf1e7f8529ebfb"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -13044,6 +14267,29 @@
           "sync": {
             "lastModified": "2026-04-27T18:50:00.843Z",
             "checksum": "37b2b59a598edf9dfdfc3e8d5699aded7e97964957da489ec4162d71af98735d"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemma-4-31b-it",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 8192,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "97ED2946-1385-44E8-9DAF-C30AFAE9CD5B"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.410Z",
+            "checksum": "ad3275f54b333c79a7fbf243c8fc5dcba106e8c851457c5eb42dbcddc16a61cd"
           }
         }
       ],
@@ -13136,6 +14382,29 @@
             "lastModified": "2026-04-27T18:50:00.895Z",
             "checksum": "731d6de4f7c2e52e41fdad55bae093ce8e8cc4fa0329aa60b604478e9fdbd477"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemma-4-26b-a4b-it",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 8192,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A1129ADC-80A3-4457-AE48-EE7FA242E8B4"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.422Z",
+            "checksum": "46ad4f4894bc21a6c7c9748d301edb70db3eb491e5135beacdfb061cf4f3e316"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -13226,6 +14495,29 @@
           "sync": {
             "lastModified": "2026-04-27T18:50:00.965Z",
             "checksum": "7badc87656cc011a7d6d4ffb9c819cad5b390eccd4ce063ead8b7f0c6b223286"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "inception/mercury-2",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 50000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "794E29FF-4FFC-46DE-8C0A-AD66650D5062"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.442Z",
+            "checksum": "e2951e51712324e15a5326268eff186ff54ae126071b0164964e8f716f52ef54"
           }
         }
       ],
@@ -13341,6 +14633,29 @@
           "sync": {
             "lastModified": "2026-05-08T00:53:59.730Z",
             "checksum": "8da71d284ecdc7f1488e86f27f80fe63730ef112f2c2b26cb2b1137be3db40a7"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5.5",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4B1BEAF6-28A3-4545-9068-EE6DB06F922C"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.938Z",
+            "checksum": "a8287f4734db8372981aeef381b6815245c406ea0dafcce68cb19dffda986610"
           }
         }
       ],
@@ -13458,6 +14773,29 @@
             "lastModified": "2026-05-08T00:53:59.890Z",
             "checksum": "78efdb747abc9b08a66d887876d7ac361a5c16cee23c87a3b1751ebe08019435"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "openai/gpt-5.5-pro",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "2547A271-C35B-4DAC-ADEA-F0D11A948897"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:11.072Z",
+            "checksum": "d1015a9e873d5fb4e16f6245ce50c20850c7572828a70202d6658c351d81a429"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -13549,6 +14887,29 @@
           "sync": {
             "lastModified": "2026-05-08T00:53:59.811Z",
             "checksum": "2e775e4295f9ffe47f4a698a4d932b8a97eefda427fd0f7732bcaf725cc7107a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "x-ai/grok-4.3",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "06F19F59-F761-4951-B5D7-A4A3BA219B96"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.960Z",
+            "checksum": "3e9a09a32c2bd96b9516224888c31a4f5a39c3f16cd24a080616f3571644f7ef"
           }
         }
       ],
@@ -13642,6 +15003,29 @@
             "lastModified": "2026-05-08T00:53:59.487Z",
             "checksum": "007d11e0639993894011ce33e2996e3937f90314067f6a3f92a6426f6844e824"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "moonshotai/kimi-k2.6",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "06FAB2D3-A6B8-4EA3-AA25-5F8E21AAAD11"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.850Z",
+            "checksum": "56743b013612409d17f9134ccfa1db24f70e8cb1d02fcece7aeb46f247e7ceba"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -13732,6 +15116,29 @@
           "sync": {
             "lastModified": "2026-05-08T00:53:58.396Z",
             "checksum": "b80893cc92f15ccce8434632fc04ce2703d6625a5aa88e364c8c90c7c1e27e2a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "deepseek/deepseek-v4-pro",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 384000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C5A3DE4D-C339-4349-B32E-B6C730D67A49"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.456Z",
+            "checksum": "bc86fdb7539787f9bf870e77df94cbbbd269909fbee844661ca1dd8ca677511a"
           }
         }
       ],
@@ -13845,6 +15252,29 @@
           "sync": {
             "lastModified": "2026-05-08T00:53:58.411Z",
             "checksum": "1ce544dd7134def09ed51420424bd85b5fb5064fa2424d351c725b4848c6be2e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "deepseek/deepseek-v4-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 384000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1DEA2BD9-84D7-4C8C-9AD2-D5A32D9CCE88"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.476Z",
+            "checksum": "388ee7aaa778f7bd6f7c8b7f6016e05af775ba60e31d2f2f8c4a393960c1f4a2"
           }
         }
       ],
@@ -14152,7 +15582,7 @@
       "ID": "562BA6F2-9D4C-4CBF-8865-4A97EEA0F14C"
     },
     "sync": {
-      "lastModified": "2026-06-15T23:19:39.967Z",
+      "lastModified": "2026-06-16T01:17:09.433Z",
       "checksum": "d74ee7f556cc46337e20d8c226a1994e3058e51e6f0faf76b6bd7f5f0887b9b1"
     }
   },
@@ -14210,6 +15640,29 @@
           "sync": {
             "lastModified": "2026-05-14T02:07:54.527Z",
             "checksum": "f927c72f1c71f98d0acc16c3cde9c82ee510182d9aa828b2fc9e854fae10c443"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "z-ai/glm-5v-turbo",
+            "MaxInputTokens": 202752,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "07392792-721E-4D34-A900-07DF1BA8A309"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:11.108Z",
+            "checksum": "d3179e11c30eb8a18f56f0c923a7a26da2d0840975f30a1417ab7cb9e88e90a1"
           }
         }
       ],
@@ -14301,6 +15754,28 @@
           "sync": {
             "lastModified": "2026-05-14T02:07:54.075Z",
             "checksum": "cd6fff95f3609953ce31dc290ea11c5b121b035ff4e53ae469e8df2060dc0add"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "mistralai/mistral-medium-3.5",
+            "MaxInputTokens": 256000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8E4EFDA9-F013-4795-821B-1E3D2A73F08C"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.863Z",
+            "checksum": "a8adce9c8b64c3cdf1b565070764f78901c7ff15c3dd8169374a83c619d9fd1b"
           }
         }
       ],
@@ -14669,6 +16144,29 @@
             "lastModified": "2026-05-20T23:53:43.695Z",
             "checksum": "d9d78dbf1d5aab0b86fe71fe2777c5b4c32f0aa4095aec7a41c5a2189bbde0e6"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.6-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E75F24D5-DAAA-4118-9F04-B2758ED16C24"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.498Z",
+            "checksum": "c40314ca150481444c69256e1b34a26a03f763725576c7d92819598baa61add1"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -14912,7 +16410,7 @@
             "ID": "10F4A9A3-FEC1-427E-9B3F-FE1B54D6B145"
           },
           "sync": {
-            "lastModified": "2026-06-15T23:19:40.195Z",
+            "lastModified": "2026-06-16T01:17:10.535Z",
             "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
           }
         },
@@ -14934,7 +16432,7 @@
             "ID": "55FFE4E4-2940-43A2-9ED4-5961D4EEB2C6"
           },
           "sync": {
-            "lastModified": "2026-06-15T23:19:40.206Z",
+            "lastModified": "2026-06-16T01:17:10.547Z",
             "checksum": "fc0f8c05dfba8dbb9bbd600d2bca3e9dd9a36685bd8dfa3548e526bf64fb4ed4"
           }
         }
@@ -14944,7 +16442,7 @@
       "ID": "F3BF3965-9F80-407B-B559-142E76BF8F86"
     },
     "sync": {
-      "lastModified": "2026-06-15T23:19:39.931Z",
+      "lastModified": "2026-06-16T01:17:09.415Z",
       "checksum": "693d2c3158c2c9ba1ba372e331e8e436f49d72d4b71fecf42ffffcb7709503fd"
     }
   },
@@ -15135,6 +16633,29 @@
           "sync": {
             "lastModified": "2026-05-20T23:53:43.968Z",
             "checksum": "71ee748dd9bbb6ef73d96ca812b685245f99b491c129072fe13d3be82adcc9fd"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemini-3.5-flash",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8303EFDB-8626-495C-AB4C-DB63AD974712"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.520Z",
+            "checksum": "c02163cb31b2f1f2777e974c7d9cb1aaa15a36e0425138e73857c1743f0b0a08"
           }
         }
       ],
@@ -15412,6 +16933,29 @@
           "sync": {
             "lastModified": "2026-06-05T02:25:08.300Z",
             "checksum": "404a1cf434fcd6a19e5165b201662e905dcd54ec234ddadf85acf0628d9b20b7"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-opus-4.8",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "19DFFB42-F99E-498B-9329-0F3BBE9DEAB0"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:11.091Z",
+            "checksum": "646596f32af35ac92058885dfe7288220f53a53ed21fb7950a2c9b9d43545130"
           }
         }
       ],
@@ -15995,7 +17539,7 @@
             "ID": "BAFB6CB9-C5E4-4BBB-9168-3CB8D38ACDC5"
           },
           "sync": {
-            "lastModified": "2026-06-15T23:19:40.222Z",
+            "lastModified": "2026-06-16T01:17:10.570Z",
             "checksum": "014978244a9f15bac0efaf67a18dc530e6c40efe3291be12622eb95fdcbadc35"
           }
         }
@@ -16005,7 +17549,7 @@
       "ID": "F1AEF71E-9E93-4C27-870E-620E75FA5552"
     },
     "sync": {
-      "lastModified": "2026-06-15T23:19:39.985Z",
+      "lastModified": "2026-06-16T01:17:09.456Z",
       "checksum": "f56ab8319539c962b6230c7b1f57f6db7f11f6e0d348c8e2ca39a06fa79d894f"
     }
   },
@@ -16039,7 +17583,7 @@
             "ID": "12ED40AE-7660-44FF-9158-CC162A8EC4CB"
           },
           "sync": {
-            "lastModified": "2026-06-15T23:19:40.238Z",
+            "lastModified": "2026-06-16T01:17:10.583Z",
             "checksum": "79458e967f6bad62f7a7c7b4fe025064fa48d9cb79365e6d9241d9e81d1a3d5a"
           }
         }
@@ -16049,7 +17593,7 @@
       "ID": "882996F4-BDD9-4C36-9291-D71A46FFE2D5"
     },
     "sync": {
-      "lastModified": "2026-06-15T23:19:39.997Z",
+      "lastModified": "2026-06-16T01:17:09.469Z",
       "checksum": "35c232c808787c16a182efbc6988af44ef342b97a01c9760db8c3ee5eb4165f5"
     }
   },
@@ -16083,7 +17627,7 @@
             "ID": "246C0C12-10CC-4E3B-9330-CFA07923DBB8"
           },
           "sync": {
-            "lastModified": "2026-06-15T23:19:40.273Z",
+            "lastModified": "2026-06-16T01:17:10.625Z",
             "checksum": "a609879693e2ad504fe071d52c9fde49a03982b5722281c05d63797ffbb59b80"
           }
         }
@@ -16093,7 +17637,7 @@
       "ID": "E934CE9A-93DB-4FE3-B806-4144F108E930"
     },
     "sync": {
-      "lastModified": "2026-06-15T23:19:40.008Z",
+      "lastModified": "2026-06-16T01:17:09.484Z",
       "checksum": "0e7038d9968183d769f1a02ea7af7611201d18fa27c0c5400b2f0444d75b22a4"
     }
   },
@@ -16128,7 +17672,7 @@
             "ID": "75769149-BBA2-449F-86A4-0CA29186B87A"
           },
           "sync": {
-            "lastModified": "2026-06-15T23:19:40.253Z",
+            "lastModified": "2026-06-16T01:17:10.602Z",
             "checksum": "f0737232618861e99cb2cd7e3a9b5417bfbbd9baa96bc725de682d0310d20a82"
           }
         }
@@ -16138,7 +17682,7 @@
       "ID": "19A9861F-1178-437D-941A-A4382B7D5FCA"
     },
     "sync": {
-      "lastModified": "2026-06-15T23:19:40.019Z",
+      "lastModified": "2026-06-16T01:17:09.499Z",
       "checksum": "eae22eb04791813f6810953f043e681547227784bdd0d02cafb5babb6084f665"
     }
   },
@@ -16173,7 +17717,7 @@
             "ID": "AA0D147C-1D4B-4581-BD9A-8F55BAB8DC70"
           },
           "sync": {
-            "lastModified": "2026-06-15T23:19:40.284Z",
+            "lastModified": "2026-06-16T01:17:10.640Z",
             "checksum": "46e070718c4c1d6caecfe2a1796c4c88ebff9395cf4a980199fd145e23104de1"
           }
         }
@@ -16183,8 +17727,123 @@
       "ID": "805AC762-A102-4B64-91BC-0EF5D3049A8B"
     },
     "sync": {
-      "lastModified": "2026-06-15T23:19:40.029Z",
+      "lastModified": "2026-06-16T01:17:09.512Z",
       "checksum": "bf45c2b59555ede503a7c621c83ba88e0e9fbf774fcc2329b641756e1e1cdeb7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kimi K2.7-Code",
+      "PowerRank": 18,
+      "Description": "Moonshot AI's coding-specialist successor to Kimi K2.6, released June 12, 2026. 1-trillion-parameter Mixture-of-Experts with 32B active parameters per token, Modified MIT License (open weights on Hugging Face). 256K (262,144) token context window. Purpose-built for software engineering: reports a +21.8 pp gain on Kimi Code Bench v2 over K2.6. Provides OpenAI/Anthropic-compatible API at platform.moonshot.ai.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Kimi K2.6"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "BF71BD0C-809F-42A3-B11C-44405385498F"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.974Z",
+            "checksum": "a5027c3113a898e0e6076d614cfffe2a125525d91d12553389522228640eac4e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MoonshotLLM",
+            "APIName": "kimi-k2.7-code",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E01B1112-8617-4EF8-8279-F23500033E19"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:10.993Z",
+            "checksum": "1b09564c68d7168e5bc5010fb509744b5cb080a59782e37acf26b9b07eae5686"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "moonshotai/kimi-k2.7-code",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D0624C66-AB73-422C-84F5-73C57327A2B6"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:11.006Z",
+            "checksum": "2dabb9c5b38bd74f4c6b98296b2ed246242e2b48766bc2dcfe6e753581cce8b6"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "StartedAt": "2026-06-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.95,
+            "OutputPricePerUnit": 4,
+            "CacheReadPricePerUnit": 0.19,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kimi K2.7-Code pricing on Moonshot direct API as of June 2026: $0.95/$4.00 per 1M tokens. Cache read $0.19/1M is a published per-model absolute (Family B); Moonshot does not charge for cache writes. OpenRouter passes through the same route at $0.75/$3.50. Sources: https://www.marktechpost.com/2026/06/12/moonshot-ai-releases-kimi-k2-7-code-a-coding-model-reporting-21-8-on-kimi-code-bench-v2-over-k2-6/ ; https://codersera.com/blog/kimi-k2-7-complete-guide-2026/"
+          },
+          "primaryKey": {
+            "ID": "5AE4420B-0ACE-4013-94A1-556D13C83FBC"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:11.033Z",
+            "checksum": "25c1ef5af0be9b111afe881376d498c7f94bab3ccdd4e7dfbb8ce66a79b5649e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D1D5D286-9D7F-4FCC-94A3-FCA086970E22"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:10.887Z",
+      "checksum": "e59100304928f6e1ba56997f557c913a900607e00df1088f9522321c8371affd"
     }
   }
 ]

@@ -29,6 +29,19 @@ describe('postProcess', () => {
       expect(result).toContain('p_Parts[1]');
       expect(result).toContain('"TableName"');
     });
+
+    it('should not let an apostrophe inside a -- comment corrupt a following ARRAY[...]', () => {
+      // The bracket-replacement segmenter must skip `--` comments. An apostrophe in
+      // a comment ("sproc's") would otherwise be read as a string opener, desyncing
+      // quote tracking so the ARRAY['x','y'] literal gets mangled into ARRAY"'x','y'".
+      const input = [
+        "  -- defer to the sproc's column DEFAULT here",
+        "  FOREACH v IN ARRAY ARRAY['AgentID', 'ParentRunID', 'Status']",
+      ].join('\n');
+      const result = postProcess(input);
+      expect(result).toContain("ARRAY['AgentID', 'ParentRunID', 'Status']");
+      expect(result).not.toContain('ARRAY"');
+    });
   });
 
   // ============================================================
