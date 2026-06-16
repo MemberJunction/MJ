@@ -282,6 +282,70 @@ describe('GeminiLLM', () => {
       expect(parts).toHaveLength(1);
       expect(parts[0]).toHaveProperty('inlineData');
     });
+
+    it('should map a data-URL image alongside text into an inlineData part and a text part', () => {
+      // Regression: the bug was that an image_url block was sent as a TEXT string of its data URL,
+      // so vision models never received an actual image. The data URL must become inlineData with
+      // the base64 stripped of its "data:...;base64," prefix.
+      const content = [
+        { type: 'text', content: 'what is this?' },
+        { type: 'image_url', content: 'data:image/jpeg;base64,QUJD' },
+      ];
+      const parts = GeminiLLM.MapMJContentToGeminiParts(content as never);
+      expect(parts).toHaveLength(2);
+      expect(parts[0]).toEqual({ text: 'what is this?' });
+      expect(parts[1]).toEqual({ inlineData: { mimeType: 'image/jpeg', data: 'QUJD' } });
+    });
+
+    it('should map an http(s) image_url to a fileData part', () => {
+      const content = [
+        { type: 'image_url', content: 'https://example.com/cat.png' },
+      ];
+      const parts = GeminiLLM.MapMJContentToGeminiParts(content as never);
+      expect(parts).toHaveLength(1);
+      expect(parts[0]).toEqual({
+        fileData: { fileUri: 'https://example.com/cat.png', mimeType: 'image/png' },
+      });
+    });
+
+    it('should honor an explicit mimeType on an http(s) image_url fileData part', () => {
+      const content = [
+        { type: 'image_url', content: 'https://example.com/photo', mimeType: 'image/webp' },
+      ];
+      const parts = GeminiLLM.MapMJContentToGeminiParts(content as never);
+      expect(parts[0]).toEqual({
+        fileData: { fileUri: 'https://example.com/photo', mimeType: 'image/webp' },
+      });
+    });
+
+    it('should keep a plain-string content as a single text part (no behavior change)', () => {
+      const parts = GeminiLLM.MapMJContentToGeminiParts('just text');
+      expect(parts).toHaveLength(1);
+      expect(parts[0]).toEqual({ text: 'just text' });
+    });
+  });
+
+  /* ---- mjContentToSystemInstructionText (private, static) ---- */
+  describe('mjContentToSystemInstructionText', () => {
+    const callSysText = (content: unknown): string => {
+      const fn = (GeminiLLM as unknown as Record<string, (c: unknown) => string>)['mjContentToSystemInstructionText'];
+      return fn(content);
+    };
+
+    it('returns a plain string unchanged', () => {
+      expect(callSysText('Be a helpful assistant')).toBe('Be a helpful assistant');
+    });
+
+    it('joins only text blocks and skips media blocks (no base64 blob in the system instruction)', () => {
+      const content = [
+        { type: 'text', content: 'You are a vision agent.' },
+        { type: 'image_url', content: 'data:image/png;base64,QUJD' },
+        { type: 'text', content: 'Describe images carefully.' },
+      ];
+      const text = callSysText(content);
+      expect(text).toBe('You are a vision agent.\nDescribe images carefully.');
+      expect(text).not.toContain('QUJD');
+    });
   });
 
   /* ---- MapMJMessageToGeminiHistoryEntry (static) ---- */

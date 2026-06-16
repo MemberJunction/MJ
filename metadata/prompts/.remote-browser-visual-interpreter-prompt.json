@@ -1,0 +1,48 @@
+[
+  {
+    "fields": {
+      "Name": "Remote Browser Visual Interpreter",
+      "Description": "Fast vision prompt that lets a non-omnimodal realtime voice agent effectively SEE a live remote browser page. Given a viewport screenshot and a request, it returns a concise page description and/or localizes UI elements with pixel centroids (so the agent can browser_Click them). Backs the browser_DescribePage and browser_LocateElement tools.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/remote-browser-visual-interpreter.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "RetryDelayMS": 500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "EffortLevel": 1
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "1851114B-5953-4DDC-A17D-8E800E36487B"
+          },
+          "sync": {
+            "lastModified": "2026-06-15T23:19:58.059Z",
+            "checksum": "71ee991d8e0ab07b2e4ea296274c871739fbb9068ae94df729251a82c42f9641"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "386C6CC3-E26C-4D72-9617-E0CEA23EB19D"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T23:19:58.035Z",
+      "checksum": "a2ccde2f3ac05a64ddac0e00ca1218c115fc73e9cf97d4c5c096658a92b50a5d"
+    }
+  }
+]

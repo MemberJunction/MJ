@@ -11,12 +11,13 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (4 classes)
+// @memberjunction/ai-realtime-client (5 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     OpenAIRealtimeClient,
+    xAIRealtimeClient,
 } from '@memberjunction/ai-realtime-client';
 
 // @memberjunction/ai-vectors-memory (2 classes)
@@ -25,7 +26,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (368 classes)
+// @memberjunction/core-entities (374 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -59,12 +60,17 @@ import {
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
     MJAIAgentSearchScopeEntity,
+    MJAIAgentSessionBridgeEntity,
+    MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
     MJAIArchitectureEntity,
+    MJAIBridgeAgentIdentityEntity,
+    MJAIBridgeProviderChannelEntity,
+    MJAIBridgeProviderEntity,
     MJAIClientToolDefinitionEntity,
     MJAIConfigurationEntity,
     MJAIConfigurationParamEntity,
@@ -85,6 +91,7 @@ import {
     MJAIPromptRunEntity,
     MJAIPromptRunMediaEntity,
     MJAIPromptTypeEntity,
+    MJAIRemoteBrowserProviderEntity,
     MJAIResultCacheEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
@@ -459,9 +466,10 @@ import {
     MJOktaProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (2 classes)
+// @memberjunction/ng-conversations (3 classes)
 import {
     RealtimeWhiteboardChannel,
+    RemoteBrowserChannel,
     WhiteboardArtifactViewerComponent,
 } from '@memberjunction/ng-conversations';
 
@@ -537,6 +545,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     OpenAIRealtimeClient,
+    xAIRealtimeClient,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     AIAgentPermissionProvider,
@@ -571,12 +580,17 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
     MJAIAgentSearchScopeEntity,
+    MJAIAgentSessionBridgeEntity,
+    MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
     MJAIArchitectureEntity,
+    MJAIBridgeAgentIdentityEntity,
+    MJAIBridgeProviderChannelEntity,
+    MJAIBridgeProviderEntity,
     MJAIClientToolDefinitionEntity,
     MJAIConfigurationEntity,
     MJAIConfigurationParamEntity,
@@ -597,6 +611,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptRunEntity,
     MJAIPromptRunMediaEntity,
     MJAIPromptTypeEntity,
+    MJAIRemoteBrowserProviderEntity,
     MJAIResultCacheEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
@@ -942,6 +957,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkProvider,
     MJOktaProvider,
     RealtimeWhiteboardChannel,
+    RemoteBrowserChannel,
     WhiteboardArtifactViewerComponent,
     CardsViewType,
     GridViewType,
@@ -991,7 +1007,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 452;
+export const CLASS_REGISTRATIONS_COUNT = 460;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

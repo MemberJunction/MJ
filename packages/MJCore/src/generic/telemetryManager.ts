@@ -118,6 +118,19 @@ export interface TelemetryRunViewsBatchParams {
     BatchSize: number;
     /** Entity names being queried in the batch */
     Entities: string[];
+    /**
+     * Per-view SQL WHERE clause filters, parallel to {@link Entities} (one entry per view,
+     * same order). Populated where the batch event is recorded so the fingerprint can
+     * distinguish two batches over the SAME entity set but with DIFFERENT filters
+     * (e.g. an expiry sweep vs. a decay sweep both over {AI Agent Notes, AI Agent Examples}).
+     * An entry may be undefined when a view supplied no filter.
+     */
+    Filters?: (string | undefined)[];
+    /**
+     * Per-view SQL ORDER BY clauses, parallel to {@link Entities} (one entry per view,
+     * same order). See {@link Filters} for why per-view detail is needed at batch granularity.
+     */
+    OrderBys?: (string | undefined)[];
     /** Internal marker for engine-initiated calls */
     _fromEngine?: boolean;
 }
@@ -662,7 +675,7 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
                 analyzerName: this.name,
                 category: this.category,
                 title: 'Sequential Queries Could Be Parallelized',
-                message: `${allEvents.length} RunView calls executed sequentially`,
+                message: `${allEvents.length} RunView calls executed sequentially: ${entities.join(', ')}`,
                 suggestion: `Use RunViews (batch) to execute these queries in parallel for better performance`,
                 relatedEventIds: allEvents.map(e => e.id),
                 metadata: { entities },
@@ -1413,19 +1426,32 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
      */
     private generateRunViewFingerprint(params: TelemetryRunViewParams | TelemetryRunViewsBatchParams): Record<string, unknown> {
         if (isBatchRunViewParams(params)) {
-            // Batch operation - create fingerprint from sorted entity list
-            const sortedEntities = [...params.Entities]
-                .map(e => e?.toLowerCase().trim())
-                .filter(Boolean)
+            // Batch operation - fingerprint from per-view (entity, filter, orderBy) tuples.
+            // Including the per-view filter/orderBy (when recorded) means two batches over the
+            // SAME entity set but DIFFERENT filters get DISTINCT fingerprints — previously they
+            // collided on entity-set alone and were falsely flagged as duplicate RunViews.
+            // Tuples are sorted so batch ordering doesn't affect the fingerprint (parity with
+            // the prior entity-only behavior, which sorted the entity list).
+            const viewTuples = params.Entities
+                .map((entity, index) => {
+                    const e = entity?.toLowerCase().trim();
+                    if (!e) {
+                        return undefined;
+                    }
+                    const filter = params.Filters?.[index]?.toLowerCase().trim() ?? '';
+                    const orderBy = params.OrderBys?.[index]?.toLowerCase().trim() ?? '';
+                    return `${e}\x1f${filter}\x1f${orderBy}`;
+                })
+                .filter((t): t is string => Boolean(t))
                 .sort();
-            // Use a hash for long entity lists to keep fingerprint manageable
-            const entityKey = sortedEntities.length > 5
-                ? this.simpleHash(sortedEntities.join('|'))
-                : sortedEntities.join('|');
+            // Use a hash for long batches to keep the fingerprint manageable
+            const viewKey = viewTuples.length > 5
+                ? this.simpleHash(viewTuples.join('|'))
+                : viewTuples.join('|');
             return {
                 batch: true,
                 batchSize: params.BatchSize,
-                entities: entityKey
+                views: viewKey
             };
         } else {
             // Single operation

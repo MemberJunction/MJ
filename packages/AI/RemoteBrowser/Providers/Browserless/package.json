@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/remote-browser-browserless",
+  "type": "module",
+  "version": "5.40.2",
+  "description": "MemberJunction: Browserless backend driver for the Remote Browser channel. Connects the shared CDP control kit to a browserless.io CDP-as-a-service session (raw CDP control, hosted live view, screen streaming, session recording, proxy egress, multi-tab, file downloads) via an injectable Browserless service-client seam, so the driver builds and unit-tests with no network and no real Browserless account.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.40.2",
+    "@memberjunction/global": "5.40.2",
+    "@memberjunction/remote-browser-base": "5.40.2",
+    "@memberjunction/remote-browser-cdp": "5.40.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

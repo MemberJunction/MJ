@@ -83,6 +83,30 @@ export interface RealtimeSessionRunnerDeps {
     ExtraTools?: RealtimeToolDefinition[];
 
     /**
+     * Server-executed tool definitions contributed by the session's **server-side interactive
+     * channels** (`BaseRealtimeChannelServer.GetServerToolDefinitions`, aggregated by
+     * `RealtimeChannelServerHost.GetSessionServerTools`). Registered alongside
+     * {@link RealtimeSessionRunnerDeps.ExtraTools} and the stable target tool; when the model invokes
+     * one, the runner routes it to {@link RealtimeSessionRunnerDeps.ExecuteServerChannelTool} BEFORE
+     * the generic {@link RealtimeSessionRunnerDeps.ExecuteTool}, so channel tools execute server-side
+     * (a bridged bot has no browser). Optional and additive — absent on the client-direct path and
+     * on server-bridged runs without channels, leaving the existing tool set behavior untouched.
+     *
+     * This is the deferred "channel tool contribution feeding the runner's tool set" the realtime
+     * guide flagged — now driven.
+     */
+    ServerChannelTools?: RealtimeToolDefinition[];
+
+    /**
+     * Executes ONE server-channel tool call (a tool whose name was contributed via
+     * {@link RealtimeSessionRunnerDeps.ServerChannelTools}). In production this is bound to
+     * `RealtimeChannelServerHost.ExecuteSessionServerTool(sessionID, …)`. Must resolve with a result
+     * (never throw — the broker wraps any throw into a structured error). When omitted, a contributed
+     * server-channel tool falls through to the generic {@link RealtimeSessionRunnerDeps.ExecuteTool}.
+     */
+    ExecuteServerChannelTool?: (call: RealtimeToolCall) => Promise<ToolExecutionResult>;
+
+    /**
      * Runs the target agent for an `invoke-target-agent` tool call. The runner creates and owns a
      * fresh `AbortController` per delegated call and passes its signal in via
      * {@link DelegateToTargetRequest.AbortSignal}; barge-in aborts it. In production this is
@@ -206,6 +230,12 @@ export class RealtimeSessionRunner {
      */
     private toolBroker: RealtimeToolBroker;
 
+    /**
+     * Names of the contributed server-channel tools ({@link RealtimeSessionRunnerDeps.ServerChannelTools}),
+     * used to route a non-target tool call to the channel handler. Empty when no channels contributed.
+     */
+    private readonly serverChannelToolNames: Set<string>;
+
     /** Count of transcript turns persisted, surfaced in the result. */
     private transcriptTurnCount = 0;
 
@@ -222,10 +252,31 @@ export class RealtimeSessionRunner {
             // delegated run and (b) thread its own OnProgress into the delegate — the production
             // delegate (BaseAgent.delegateRealtimeToTarget) passes it into the child RunAgent.
             DelegateToTarget: (request) => this.runDelegateWithNarration(request),
-            ExecuteTool: deps.ExecuteTool,
+            // Route non-target tool calls through the runner so server-channel tools execute via
+            // their dedicated handler before falling back to the generic executor.
+            ExecuteTool: (call) => this.executeNonTargetTool(call),
             LogStatus: deps.LogStatus,
             LogError: deps.LogError
         });
+        // The set of server-channel tool names (by Name) routed to ExecuteServerChannelTool. Built
+        // once from the contributed definitions so per-call routing is an O(1) membership test.
+        this.serverChannelToolNames = new Set((deps.ServerChannelTools ?? []).map((t) => t.Name));
+    }
+
+    /**
+     * Routes a non-target tool call: a contributed server-channel tool goes to the channel handler
+     * ({@link RealtimeSessionRunnerDeps.ExecuteServerChannelTool}); everything else goes to the
+     * generic {@link RealtimeSessionRunnerDeps.ExecuteTool}. When a tool is a server-channel tool but
+     * no channel handler is wired, it falls through to the generic executor (defensive).
+     *
+     * @param call The non-target tool call emitted by the model.
+     * @returns The tool execution result.
+     */
+    private async executeNonTargetTool(call: RealtimeToolCall): Promise<ToolExecutionResult> {
+        if (this.serverChannelToolNames.has(call.ToolName) && this.deps.ExecuteServerChannelTool) {
+            return this.deps.ExecuteServerChannelTool(call);
+        }
+        return this.deps.ExecuteTool(call);
     }
 
     /**
@@ -239,9 +290,10 @@ export class RealtimeSessionRunner {
      * Builds the realtime tool set registered with the provider.
      *
      * Always includes the stable, target-independent {@link INVOKE_TARGET_AGENT_TOOL_NAME} tool,
-     * followed by any {@link RealtimeSessionRunnerDeps.ExtraTools}. This is the full set the
-     * provider sees — everything target-specific runs *inside* the delegated agent's own run and
-     * is never registered on the realtime socket.
+     * followed by any {@link RealtimeSessionRunnerDeps.ExtraTools} and then any contributed
+     * {@link RealtimeSessionRunnerDeps.ServerChannelTools} (the server-side interactive channels'
+     * dynamic vocabulary). This is the full set the provider sees — everything target-specific runs
+     * *inside* the delegated agent's own run and is never registered on the realtime socket.
      *
      * @returns The ordered tool definitions to register.
      */
@@ -265,7 +317,11 @@ export class RealtimeSessionRunner {
             ParametersSchema: invokeTargetSchema
         };
 
-        return [invokeTargetTool, ...(this.deps.ExtraTools ?? [])];
+        return [
+            invokeTargetTool,
+            ...(this.deps.ExtraTools ?? []),
+            ...(this.deps.ServerChannelTools ?? [])
+        ];
     }
 
     /**

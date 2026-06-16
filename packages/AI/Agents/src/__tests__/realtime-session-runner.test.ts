@@ -236,6 +236,66 @@ describe('RealtimeSessionRunner', () => {
         });
     });
 
+    // ── Server-channel tool contribution (Phase 2) ────────────────────
+
+    describe('server-channel tools', () => {
+        const channelTool: RealtimeToolDefinition = {
+            Name: 'MeetingControls_RaiseHand',
+            Description: 'Raise a hand',
+            ParametersSchema: { type: 'object', properties: {} }
+        };
+
+        it('appends ServerChannelTools after ExtraTools and the target tool', async () => {
+            const extra: RealtimeToolDefinition = { Name: 'ShowChart', Description: 'chart', ParametersSchema: { type: 'object' } };
+            const h = buildHarness({ ExtraTools: [extra], ServerChannelTools: [channelTool] });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            const names = (h.model.LastParams?.Tools ?? []).map((t) => t.Name);
+            expect(names).toEqual([INVOKE_TARGET_AGENT_TOOL_NAME, 'ShowChart', 'MeetingControls_RaiseHand']);
+            await runner.Stop();
+        });
+
+        it('routes a contributed server-channel tool call to ExecuteServerChannelTool, not ExecuteTool', async () => {
+            const channelSpy = vi.fn(async (call: RealtimeToolCall): Promise<ToolExecutionResult> => ({
+                CallID: call.CallID, Success: true, Output: 'channel-ok'
+            }));
+            const h = buildHarness({ ServerChannelTools: [channelTool], ExecuteServerChannelTool: channelSpy });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireToolCall({ CallID: 'c-mc', ToolName: 'MeetingControls_RaiseHand', Arguments: '{}' });
+            await new Promise<void>((r) => setTimeout(r, 0));
+
+            expect(channelSpy).toHaveBeenCalledTimes(1);
+            expect(h.executeToolSpy).not.toHaveBeenCalled();
+            expect(h.session.SentToolResults[0].CallID).toBe('c-mc');
+            expect(JSON.parse(h.session.SentToolResults[0].Output)).toEqual({ success: true, output: 'channel-ok' });
+            await runner.Stop();
+        });
+
+        it('falls back to ExecuteTool for a server-channel tool when no channel handler is wired', async () => {
+            const h = buildHarness({ ServerChannelTools: [channelTool] }); // no ExecuteServerChannelTool
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireToolCall({ CallID: 'c-fb', ToolName: 'MeetingControls_RaiseHand', Arguments: '{}' });
+            await new Promise<void>((r) => setTimeout(r, 0));
+
+            expect(h.executeToolSpy).toHaveBeenCalledTimes(1);
+            await runner.Stop();
+        });
+
+        it('does not affect the existing tool set when no channels contribute (client-direct parity)', async () => {
+            const h = buildHarness();
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+            const names = (h.model.LastParams?.Tools ?? []).map((t) => t.Name);
+            expect(names).toEqual([INVOKE_TARGET_AGENT_TOOL_NAME]);
+            await runner.Stop();
+        });
+    });
+
     // ── Tool-result round-trip (SendToolResult) ───────────────────────
 
     // Drains all pending microtasks (real timers are active in this block) so the
