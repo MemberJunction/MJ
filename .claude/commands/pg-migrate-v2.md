@@ -3,34 +3,33 @@
 Converts new SQL Server migrations to PostgreSQL via the **split-and-regenerate**
 pipeline (`mj migrate convert --split`), finishes the small hand-authored
 residue, proves the result by applying it to a fresh PG database, then runs the
-SAME parity / verification / full-stack smoke / CRUD validation as `/pg-migrate`.
-
-This is the successor to `/pg-migrate`. The conversion engine is completely
-different — read "What changed from v1" before running. The **validation**
-(Phases 3, 4, 4b, 5) is intentionally the same, so a v1 user will recognize it.
+full parity / verification / full-stack smoke / CRUD validation.
 
 **All work runs inside the `claude-dev` Docker container** (on a dedicated
-branch), exactly like v1 — the host repo is untouched until Phase 5 copies the
-converted files back. Conversion + deploy + verification are deterministic CLI
-commands the orchestrator runs via `docker exec`; gap hand-authoring and the
-browser phases are delegated to Claude Code running inside the container.
-
-> Authoritative design doc: `plans/pg-migration-architecture/SPLIT_AND_REGENERATE_PROPOSAL.md`.
-> Read §1–§3 + §6.5–§6.7 if anything below is ambiguous.
+branch) — the host repo is untouched until Phase 5 copies the converted files
+back. Conversion + deploy + verification are deterministic CLI commands the
+orchestrator runs via `docker exec`; gap hand-authoring and the browser phases
+are delegated to Claude Code running inside the container.
 
 ---
 
-## What changed from v1 (`/pg-migrate`)
+## How the pipeline works
 
-| v1 (`/pg-migrate`) | v2 (this skill) |
-|---|---|
-| Per-file `mj sql-convert` (regex, 28 rules) on every file | `mj migrate convert --split` — classify each migration, transpile only the ~2% hand-written DDL via the sqlglot AST dialect, **regenerate** the ~98% (CodeGen objects + mj-sync metadata) natively |
-| Discover "missing" files (Phase 1) → convert each (Phase 2) → convert baseline (Phase 2.5) | One `--split` run converts everything lacking a `.pg.sql`/`.pg-only.sql`. Baselines already have committed `.pg.sql` counterparts and are **not** reconverted |
-| Gate: **zero `-- TODO:` / zero non-intentional `-- SKIPPED`** | Gate: **`mj migrate` applies cleanly to a fresh PG DB**, then CodeGen + sync push complete. The converter's "0 gaps" summary is structural only — it does NOT prove the SQL applies |
-| "NEVER hand-edit converted SQL — always fix the toolchain and re-convert" | Hand-authoring the procedural residue (`.needs-hand` files) is the **expected, supported** last mile. Fix the AST dialect only when a gap is a genuine transpiler limitation affecting many files |
+`mj migrate convert --split` classifies each migration and transpiles only the
+~2% hand-written DDL via the sqlglot AST dialect; the ~98% (CodeGen objects +
+mj-sync metadata) is **regenerated** natively by `mj codegen` + `mj sync push`.
+One `--split` run converts everything lacking a `.pg.sql`/`.pg-only.sql`
+counterpart; baselines already have committed `.pg.sql` counterparts and are
+**not** reconverted.
 
-**Unchanged invariant (still load-bearing):** committed `migrations-pg/v5/*.pg.sql`
-and `*.pg-only.sql` are a deployed historical ledger — **byte-for-byte immutable**.
+The real gate is **`mj migrate` applying cleanly to a fresh PG DB**, then CodeGen
++ sync push completing — the converter's "0 gaps" summary is structural only and
+does NOT prove the SQL applies. Hand-authoring the procedural residue
+(`.needs-hand` files) is the **expected, supported** last mile; only fix the AST
+dialect when a gap is a genuine transpiler limitation affecting many files.
+
+**Load-bearing invariant:** committed `migrations-pg/v5/*.pg.sql` and
+`*.pg-only.sql` are a deployed historical ledger — **byte-for-byte immutable**.
 This flow only ever produces PG counterparts for **new** SS migrations. Never
 reconvert an existing `.pg.sql`.
 
@@ -57,7 +56,7 @@ The run exits **non-zero on any gap** unless `--allow-gaps` is passed.
 
 ---
 
-## Database naming convention (same as v1)
+## Database naming convention
 
 - **`MJ_PG_X_Y_Z`** — primary versioned PG database for a run (e.g. `MJ_PG_5_41_0`). Version from the latest migration's tag.
 - **`MJ_PG_Migrate_Test`** — scratch DB for fresh-apply gating (dropped/recreated each run).
@@ -376,8 +375,8 @@ Zero-diff regression + file parity. Exits non-zero on real divergence.
 ### Step 3e: Verification layer 2 — SS↔PG schema parity
 
 Build a fresh SQL Server comparison DB from the SS v5 migrations, then compare
-schema counts + object lists against `{{PG_DB_NAME}}` (same comparison as v1
-Phase 3 — confirms end-state schemas match).
+schema counts + object lists against `{{PG_DB_NAME}}` (confirms end-state
+schemas match).
 
 ```bash
 docker exec claude-dev bash -lc '
@@ -399,9 +398,9 @@ Then run the comparison queries against `MJ_SQL_Compare` (SS) vs `{{PG_DB_NAME}}
 | Routines | `SELECT COUNT(*) FROM …INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_SCHEMA='__mj'` | `SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema='__mj'` |
 | Foreign keys | `…TABLE_CONSTRAINTS WHERE CONSTRAINT_TYPE='FOREIGN KEY'` | `…table_constraints WHERE constraint_type='FOREIGN KEY'` |
 
-Every difference must be explained by a documented known-benign bucket (design
-doc §6.7) — e.g. CodeGen `fn_*_get_root_id` self-FK helpers add routines on PG;
-`MJ: List Invitations.ExpiresAt` type drift. Any UNEXPLAINED difference is a bug.
+Every difference must be explained by a documented known-benign bucket — e.g.
+CodeGen `fn_*_get_root_id` self-FK helpers add routines on PG; `MJ: List
+Invitations.ExpiresAt` type drift. Any UNEXPLAINED difference is a bug.
 
 ### Step 3f: Verification layer 3 — view semantic equivalence
 
@@ -428,7 +427,7 @@ known-benign buckets).**
 
 ## Phase 4: Full-Stack Browser Smoke Testing (delegated to Docker Claude)
 
-Identical in intent to `/pg-migrate` Phase 4 — validate the full app stack
+Validate the full app stack
 (MJAPI + MJExplorer + Playwright) against `{{PG_DB_NAME}}`. Two tiers: API smoke
 (curl) and browser smoke (Playwright). Both MUST run; SKIP is not an allowed
 status.
@@ -513,9 +512,9 @@ print(\"REJECTED skipped:\",sk) if sk else print(\"VALIDATED: no skips\")"'
 
 ## Phase 4b: Deep CRUD Workflow Testing (delegated to Docker Claude)
 
-Identical to `/pg-migrate` Phase 4b — validate data mutation, navigation, and
-Record Changes audit tracking against PG. Reuses the MJAPI/MJExplorer from
-Phase 4 (restart with the same PG config if stopped).
+Validate data mutation, navigation, and Record Changes audit tracking against
+PG. Reuses the MJAPI/MJExplorer from Phase 4 (restart with the same PG config if
+stopped).
 
 ### Phase 4b Task Prompt
 
