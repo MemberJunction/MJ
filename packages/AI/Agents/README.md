@@ -417,6 +417,14 @@ Loop agents can request multiple sub-agents to run in parallel by returning a `s
 }
 ```
 
+### 5. Cache-Served Memory-Manager Maintenance Reads
+The Memory Manager runs on a schedule (every ~15 minutes). `AIEngineBase` already holds the entire `MJ: AI Agent Notes` and `MJ: AI Agent Examples` pools in memory — loaded unfiltered as entity objects and kept current via `BaseEntity` save/delete events — so the maintenance phases serve their candidate scans from that cache (`AIEngine.Instance.AgentNotes` / `AgentExamples`) instead of issuing per-cycle `RunView`/`RunViews` round-trips.
+
+* **Eliminated round-trips**: the consolidation event-trigger count, the orphan-prune candidate scan (`loadPruneCandidateNotes`), the TTL-expiry scan (`loadExpiredItems`), and the decay-candidate scan (`loadDecayCandidates`) all filter/sort/cap the in-memory arrays — removing the *“Entity Already in Engine”* redundancy-telemetry warnings these calls used to emit.
+* **Read-only projection, never aliasing**: cache scans project to plain candidate rows (`{ ID, ... }`); they never hand a cached `BaseEntity` instance into a mutate-and-save path. The actual archive/decay/harden writes still re-`Load()` a fresh, owned entity via `GetEntityObject`, so the shared cache instances are never mutated in place.
+* **Single source of truth for status**: note status filtering reuses `IsInjectableNoteStatus()` from `@memberjunction/core-entities` (Active + Provisional), the same predicate the read-path injection/scoping queries use, so the maintenance set can never drift from the injectable set.
+* **Intentional exceptions** (still hit the DB): the **hardening pass** loads `entity_object` provisional notes *specifically to mutate them*, so it reads fresh, owned entities; the resolved-source-chain loader keeps a targeted `RunView` **only** for note IDs the cache misses; and `MJ: AI Agent Runs` reads stay as queries because runs are transactional and not cached by `AIEngineBase`.
+
 ## Documentation
 
 Detailed guides are available in the [`docs/`](./docs/) directory:
