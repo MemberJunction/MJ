@@ -40,12 +40,18 @@ describe('prerun banner suppression', () => {
     expect(logs).toEqual([]);
   });
 
-  it('suppresses figlet for usage commands but still prints userAgent (text mode)', async () => {
+  it('suppresses figlet AND userAgent for usage commands (text mode)', async () => {
     const { promise, logs } = runHook([], 'usage');
     await promise;
-    // No figlet line; just the compact userAgent.
-    expect(logs.some((l) => l.includes('MemberJunction') && l.includes(' M e m b e r'))).toBe(false);
-    expect(logs.some((l) => l.includes('mj/test'))).toBe(true);
+    // The agent-facing usage surface stays a terse domain map — no figlet, no
+    // userAgent line, even in text mode.
+    expect(logs).toEqual([]);
+  });
+
+  it('suppresses figlet AND userAgent for a tier-2 <domain> usage command (text mode)', async () => {
+    const { promise, logs } = runHook([], 'sync usage');
+    await promise;
+    expect(logs).toEqual([]);
   });
 
   it('prints userAgent for a normal light command in text mode', async () => {

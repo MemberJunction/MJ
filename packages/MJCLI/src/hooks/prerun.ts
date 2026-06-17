@@ -39,10 +39,8 @@ const hook: Hook<'prerun'> = async function (options) {
   // and the agent-facing usage commands, where it's pure scrollback cost. The
   // compact userAgent line below still prints.
   const commandIdForBanner = options.Command.id ?? '';
-  const showFiglet =
-    !commandIdForBanner.startsWith('sync') &&
-    commandIdForBanner !== 'usage' &&
-    !commandIdForBanner.endsWith('usage');
+  const isUsageCommand = commandIdForBanner === 'usage' || commandIdForBanner.endsWith('usage');
+  const showFiglet = !commandIdForBanner.startsWith('sync') && !isUsageCommand;
 
   if (showFiglet) {
     options.context.log(
@@ -58,7 +56,9 @@ const hook: Hook<'prerun'> = async function (options) {
     );
   }
 
-  if (options.Command.id !== 'version') {
+  // The agent-facing usage commands (`mj usage`, `mj <domain> usage`) are meant to
+  // be a terse domain map — skip the userAgent line so text-mode stdout stays clean.
+  if (options.Command.id !== 'version' && !isUsageCommand) {
     options.context.log(options.config.userAgent + '\n');
   }
 

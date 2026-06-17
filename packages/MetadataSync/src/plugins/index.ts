@@ -35,6 +35,20 @@ async function loadEngine() {
   return import('../index.js');
 }
 
+/**
+ * Flush stdout, then terminate. A buffered JSON result (e.g. piped to `jq`)
+ * would be truncated by a bare `process.exit()`, so we exit from the flush
+ * callback. An unref'd hard-exit timer guarantees termination even if the flush
+ * callback never fires or a lingering handle (mssql socket, embedding ONNX
+ * worker) keeps the event loop alive. Used by both push and pull cleanup so
+ * neither command can hang after emitting its result.
+ */
+function flushAndExit(code: number): void {
+  const hardExit = setTimeout(() => process.exit(code), 2000);
+  hardExit.unref();
+  process.stdout.write('', () => process.exit(code));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // mj sync push
 // ─────────────────────────────────────────────────────────────────────────────
@@ -338,11 +352,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     } catch {
       // best-effort
     }
-    // Force-exit to kill lingering handles (pg.Pool, embedding ONNX workers).
-    // Flush stdout FIRST so a buffered JSON result isn't truncated when piped
-    // (e.g. `| jq`) — process.exit() would otherwise drop the unflushed write.
-    const code = result.success ? 0 : 1;
-    process.stdout.write('', () => process.exit(code));
+    flushAndExit(result.success ? 0 : 1);
   }
 }
 
@@ -584,19 +594,13 @@ export class SyncPullPlugin extends BaseCLIPlugin {
 
   protected async Cleanup(result: MJCLIResult): Promise<void> {
     try {
-      const { resetSyncEngine } = await loadEngine();
+      const { resetSyncEngine, cleanupProvider } = await loadEngine();
       resetSyncEngine();
-    } catch {
-      // best-effort
-    }
-    // Pull doesn't spawn embedding workers, but close the pool to avoid a hang.
-    try {
-      const { cleanupProvider } = await loadEngine();
       await cleanupProvider();
     } catch {
       // best-effort
     }
-    if (!result.success) process.exitCode = 1;
+    flushAndExit(result.success ? 0 : 1);
   }
 }
 

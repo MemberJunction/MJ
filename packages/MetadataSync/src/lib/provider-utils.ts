@@ -185,7 +185,19 @@ async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: str
  */
 export async function cleanupProvider(): Promise<void> {
   if (globalPool && globalPool.connected) {
-    await globalPool.close();
+    // mssql pool.close() can hang indefinitely when a query is still in flight
+    // against the closing pool (e.g. a late async metadata load racing teardown).
+    // Race it against a short timeout so callers never block on teardown — the
+    // CLI force-exits afterward, which reaps any lingering socket.
+    await Promise.race([
+      globalPool.close(),
+      new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, 4000);
+        t.unref();
+      }),
+    ]).catch(() => {
+      /* swallow — best-effort cleanup */
+    });
     globalPool = null;
   }
   if (globalPgPool) {

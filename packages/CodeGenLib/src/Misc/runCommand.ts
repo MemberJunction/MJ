@@ -3,7 +3,6 @@ import { spawn, ChildProcess } from 'child_process';
 import { logError, logStatus } from './status_logging';
 import path from 'path';
 import treeKill from 'tree-kill';
-import { RegisterClass } from '@memberjunction/global';
 
 export type CommandExecutionResult = {
   output: string;
@@ -109,7 +108,7 @@ export class RunCommandsBase {
 
       if (command.timeout && command.timeout > 0) {
         const { timeout } = command;
-        const timeoutPromise = new Promise<CommandExecutionResult>((resolve, reject) => {
+        const timeoutPromise = new Promise<CommandExecutionResult>((resolve) => {
           setTimeout(() => {
             const elapsedTime = new Date().getTime() - startTime.getTime();
             if (!cp.killed) {
