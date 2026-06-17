@@ -17,7 +17,7 @@ import { UserInfo } from '@memberjunction/core';
 
 /** A single parsed mention. */
 export interface Mention {
-    type: 'agent' | 'user';
+    type: 'agent' | 'user' | 'entity';
     id: string;
     name: string;
     /** Configuration preset ID — agent mentions only. */
@@ -32,6 +32,8 @@ export interface MentionParseResult {
     agentMention: Mention | null;
     /** All user mentions. */
     userMentions: Mention[];
+    /** All entity mentions (`#Entity` / `@{"type":"entity",…}`). */
+    entityMentions: Mention[];
 }
 
 /**
@@ -142,11 +144,14 @@ export class MentionParser {
             }
         }
 
-        // Extract first agent mention and all user mentions
+        // Extract first agent mention, all user mentions, and all entity mentions.
+        // Entity mentions arrive as JSON (`@{"type":"entity",…}`) from the editor and are
+        // resolved against the target entity downstream (e.g. Skip's EntityMentionResolver).
         const agentMention = mentions.find((m) => m.type === 'agent') || null;
         const userMentions = mentions.filter((m) => m.type === 'user');
+        const entityMentions = mentions.filter((m) => m.type === 'entity');
 
-        return { mentions, agentMention, userMentions };
+        return { mentions, agentMention, userMentions, entityMentions };
     }
 
     /**
