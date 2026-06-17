@@ -405,8 +405,11 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     log = { Notes: [], Calls: [] };
   });
 
-  /** Minimal surface double exposing the takeover wiring: Interactive flag + HumanInput emitter. */
-  function makeSurface(): RemoteBrowserSurfaceComponent & { HumanInput: EventEmitter<RemoteBrowserHumanInputEvent> } {
+  /** Minimal surface double exposing the takeover wiring: Interactive flag + HumanInput emitter + FetchSelection. */
+  function makeSurface(): RemoteBrowserSurfaceComponent & {
+    HumanInput: EventEmitter<RemoteBrowserHumanInputEvent>;
+    FetchSelection: (() => Promise<string>) | null;
+  } {
     const surface = {
       Streaming: false,
       Interactive: false,
@@ -414,10 +417,15 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
       AudioMuted: false,
       HumanInput: new EventEmitter<RemoteBrowserHumanInputEvent>(),
       AudioMutedChange: new EventEmitter<boolean>(),
+      // BindSurface sets this to the channel's copy-out fetcher; captured so a test can call it.
+      FetchSelection: null as (() => Promise<string>) | null,
       RenderFrame() { /* unused here */ },
       SetCurrentUrl() { /* unused here */ }
     };
-    return surface as unknown as RemoteBrowserSurfaceComponent & { HumanInput: EventEmitter<RemoteBrowserHumanInputEvent> };
+    return surface as unknown as RemoteBrowserSurfaceComponent & {
+      HumanInput: EventEmitter<RemoteBrowserHumanInputEvent>;
+      FetchSelection: (() => Promise<string>) | null;
+    };
   }
 
   it('enables takeover by default on bind (Interactive = true)', () => {
@@ -504,6 +512,39 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
       .filter(c => c.Query.includes('RelayRemoteBrowserHumanInput'))
       .map(c => c.Variables.kind);
     expect(relayed).toEqual(['pointer-down', 'pointer-up']);
+  });
+
+  it('forwards a text (paste) HumanInput carrying the pasted text (paste-in)', () => {
+    channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    surface.HumanInput.emit({ kind: 'text', text: 'clipboard contents' });
+
+    const relayCall = log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'));
+    expect(relayCall?.Variables).toMatchObject({
+      agentSessionID: 'session-1', kind: 'text', text: 'clipboard contents', x: null, y: null, key: null
+    });
+  });
+
+  it('wires FetchSelection (copy-out) to the GetRemoteBrowserSelection query and returns its text', async () => {
+    channel.Initialize(makeContext(log, { GetRemoteBrowserSelection: { Text: 'remote selected text' } }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    // BindSurface installs the copy-out fetcher; calling it should hit the selection query.
+    const text = await surface.FetchSelection?.();
+    expect(text).toBe('remote selected text');
+    const selCall = log.Calls.find(c => c.Query.includes('GetRemoteBrowserSelection'));
+    expect(selCall?.Variables).toMatchObject({ agentSessionID: 'session-1' });
+  });
+
+  it('FetchSelection returns "" on a null server response (best-effort copy-out)', async () => {
+    channel.Initialize(makeContext(log, null));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    expect(await surface.FetchSelection?.()).toBe('');
   });
 
   it('stops forwarding after UnbindSurface (subscription torn down)', () => {

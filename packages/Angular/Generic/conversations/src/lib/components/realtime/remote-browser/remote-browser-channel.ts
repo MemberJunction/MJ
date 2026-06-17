@@ -133,14 +133,34 @@ interface StartRemoteBrowserAudioStreamResult {
 const RELAY_HUMAN_INPUT_MUTATION = `
   mutation RelayRemoteBrowserHumanInput(
     $agentSessionID: String!, $kind: String!, $x: Float, $y: Float, $button: String, $key: String,
-    $deltaX: Float, $deltaY: Float, $modifiers: String
+    $text: String, $deltaX: Float, $deltaY: Float, $modifiers: String
   ) {
     RelayRemoteBrowserHumanInput(
       agentSessionID: $agentSessionID, kind: $kind, x: $x, y: $y, button: $button, key: $key,
-      deltaX: $deltaX, deltaY: $deltaY, modifiers: $modifiers
+      text: $text, deltaX: $deltaX, deltaY: $deltaY, modifiers: $modifiers
     )
   }
 `;
+
+/**
+ * COPY-OUT query — reads the remote page's current text selection so the surface can write it to the LOCAL
+ * clipboard on a `copy` / Cmd+C (the mirror of the `'text'` paste-in path). Returns `''` when nothing is
+ * selected, no live browser exists, or the backend lacks `HumanTakeover`.
+ */
+const GET_SELECTION_QUERY = `
+  query GetRemoteBrowserSelection($agentSessionID: String!) {
+    GetRemoteBrowserSelection(agentSessionID: $agentSessionID) {
+      Text
+    }
+  }
+`;
+
+/** The narrow projection of the `GetRemoteBrowserSelection` query payload the channel reads. */
+interface GetRemoteBrowserSelectionResult {
+  GetRemoteBrowserSelection: {
+    Text: string;
+  } | null;
+}
 
 /** The narrow projection of the `StartRemoteBrowserScreencast` mutation payload the channel reads. */
 interface StartRemoteBrowserScreencastResult {
@@ -329,6 +349,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   public BindSurface(instance: RemoteBrowserSurfaceComponent): void {
     this.surface = instance;
     instance.Fetch = () => this.fetchSnapshot();
+    // Copy-out: the surface reads the remote selection through this on a local `copy` and writes it locally.
+    instance.FetchSelection = () => this.fetchSelection();
     instance.Interactive = true;
     this.humanInputSub = instance.HumanInput.subscribe((input) => this.relayHumanInput(input));
     this.audioMutedSub = instance.AudioMutedChange.subscribe((muted) => this.audioPlayer?.SetMuted(muted));
@@ -454,11 +476,28 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       y: input.y ?? null,
       button: input.button ?? null,
       key: input.key ?? null,
+      // Paste-in: the `'text'` kind carries the local clipboard text the server inserts into the page.
+      text: input.text ?? null,
       deltaX: input.deltaX ?? null,
       deltaY: input.deltaY ?? null,
       // Server expects a comma-separated modifier list (e.g. "Shift,Control"); null when none held.
       modifiers: input.modifiers && input.modifiers.length > 0 ? input.modifiers.join(',') : null,
     });
+  }
+
+  /**
+   * Reads the remote page's current selection for COPY-OUT — backs the surface's `FetchSelection`. Awaits
+   * the `GetRemoteBrowserSelection` query and returns its text. Best-effort by contract
+   * ({@link RemoteBrowserSelectionFetcher}): returns `''` when no session is live or the query fails, so a
+   * best-effort copy never throws.
+   */
+  private async fetchSelection(): Promise<string> {
+    const sessionId = this.Context?.AgentSessionID;
+    if (!sessionId) {
+      return '';
+    }
+    const data = await this.Context?.ExecuteServerAction<GetRemoteBrowserSelectionResult>(GET_SELECTION_QUERY, { agentSessionID: sessionId });
+    return data?.GetRemoteBrowserSelection?.Text ?? '';
   }
 
   /** Asks the server to stop the screencast (best-effort) and clears the streaming flag. */
