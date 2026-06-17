@@ -5,3 +5,4 @@ export * from './base-realtime-bridge';
 export * from './base-telephony-bridge';
 export * from './turn-taking-policy';
 export * from './ai-bridge-engine-base';
+export * from './bridge-native-sdk-registry';
