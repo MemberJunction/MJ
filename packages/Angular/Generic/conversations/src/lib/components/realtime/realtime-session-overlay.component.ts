@@ -803,14 +803,39 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     if ((event.key !== 't' && event.key !== 'T') || event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
-    const target = event.target as HTMLElement | null;
-    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    if (this.isEditableTarget(event.target) || this.isKeyboardCapturingSurfaceFocused()) {
       return;
     }
     event.preventDefault();
     this.OnComposerOpenChanged(true);
     // The dock may have just been created — focus after this CD pass.
     setTimeout(() => this.composer?.FocusInput());
+  }
+
+  /**
+   * True when the event target is a native text-editing element (an input, textarea, or contentEditable),
+   * where a bare letter should type — not trigger the T-to-type shortcut.
+   *
+   * @param eventTarget The keydown event's target.
+   * @returns Whether the target is an editable element.
+   */
+  private isEditableTarget(eventTarget: EventTarget | null): boolean {
+    const target = eventTarget as HTMLElement | null;
+    return !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+  }
+
+  /**
+   * True when a surface that opts into capturing keyboard input currently holds focus — notably the Remote
+   * Browser live canvas, which marks itself with `data-mj-capture-keys` while the user is driving it. When it
+   * has focus, the overlay's global shortcuts (T-to-type) must stand down so the user's keystrokes land in the
+   * remote browser, not the local composer. Decoupled by an attribute contract so the overlay needs no direct
+   * reference to the surface component.
+   *
+   * @returns Whether a keyboard-capturing surface is focused.
+   */
+  private isKeyboardCapturingSurfaceFocused(): boolean {
+    const active = (typeof document !== 'undefined' ? document.activeElement : null) as HTMLElement | null;
+    return !!active && active.hasAttribute('data-mj-capture-keys');
   }
 
   /**
@@ -870,10 +895,18 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     setTimeout(() => this.surfaceTabs?.FocusArtifact(artifact));
   }
 
-  /** Registers one surface tab per active channel plugin (key/title/icon from the plugin). */
+  /**
+   * Registers one surface tab per active channel plugin THAT HAS A SURFACE (key/title/icon from the
+   * plugin). Server-only channels ({@link BaseRealtimeChannelClient.HasSurface} === `false`) render no
+   * tab — their tools + perception are already wired by the session service; there is simply nothing
+   * to show in the surface panel.
+   */
   private registerChannelTabs(channels: BaseRealtimeChannelClient[]): void {
     this.cleanupStaleReviewBoardTab(channels);
     for (const plugin of channels) {
+      if (!plugin.HasSurface()) {
+        continue; // server-only channel — no surface to tab.
+      }
       this.RegisterChannelTab({
         Key: plugin.ChannelName,
         Title: plugin.TabTitle,

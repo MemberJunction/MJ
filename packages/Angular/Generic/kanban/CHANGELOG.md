@@ -1,5 +1,11 @@
 # @memberjunction/ng-kanban
 
+## 5.41.0
+
+### Patch Changes
+
+- @memberjunction/global@5.41.0
+
 ## 5.40.2
 
 ### Patch Changes

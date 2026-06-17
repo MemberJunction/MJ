@@ -154,7 +154,46 @@ params.override = {
     modelId: 'specific-model-id',
     vendorId: 'specific-vendor-id'
 };
+
+// Force the runner to credential-check EVERY candidate model-vendor combination
+// instead of short-circuiting at the first usable one. Default false — only enable
+// for diagnostics that need a complete per-candidate availability report, since it
+// runs a credential lookup for every configured model on the run.
+params.forceFullModelEvaluation = true;
 ```
+
+#### `AIPromptParams` field reference
+
+| Field | Type | Purpose |
+|---|---|---|
+| `prompt` | `MJAIPromptEntityExtended` | **Required.** The prompt to execute. |
+| `data` | `Record<string, unknown>` | Data context merged into the template (user data overrides system placeholders). |
+| `templateData` | `Record<string, unknown>` | Highest-priority template data (overrides `data`). |
+| `contextUser` | `UserInfo` | **Required server-side.** The user the run executes as (security/audit). |
+| `configurationId` | `string` | AI Configuration scoping model selection (supports inheritance chains). |
+| `conversationMessages` | `ChatMessage[]` | Prior conversation turns appended after the rendered prompt. |
+| `templateMessageRole` | `'system' \| 'user' \| 'none'` | Where the rendered prompt lands in the message array. |
+| `override` | `{ modelId?, vendorId? }` | Runtime model/vendor override (highest selection precedence). |
+| `modelSelectionPrompt` | `MJAIPromptEntityExtended` | Use a different prompt's model config for selection. |
+| `forceFullModelEvaluation` | `boolean` | Probe credentials for every candidate instead of short-circuiting (default `false`). |
+| `childPrompts` | `ChildPromptParam[]` | Hierarchical template composition (children render first). |
+| `parentPromptRunId` / `agentRunId` | `string` | Link this run to a parent prompt run / agent run. |
+| `rerunFromPromptRunID` | `string` | Mark this run as a re-run of a prior one. |
+| `effortLevel` | `number` | Reasoning effort override (highest precedence — see Effort Level Control). |
+| `additionalParameters` | `Record<string, any>` | Override inference params (temperature/topP/seed/stopSequences/…) per request. |
+| `systemPromptOverride` | `string` | Bypass template rendering and use this system prompt verbatim. |
+| `skipValidation` | `boolean` | Skip output validation/parsing. |
+| `cleanValidationSyntax` | `boolean` | Strip `?`/`*`/`:type` markers from result keys (auto-on when `OutputExample` set). |
+| `attemptJSONRepair` | `boolean` | Repair malformed JSON object output via JSON5 then LLM repair. |
+| `credentialId` | `string` | Per-request credential override (highest credential precedence). |
+| `apiKeys` | `AIAPIKey[]` | Legacy per-request API keys (used only if no credential bindings resolve). |
+| `nativeFileInputs` | `NativeFileInput[]` | Files attached natively when the driver supports the modality (else text fallback). |
+| `cancellationToken` | `AbortSignal` | Cooperative cancellation, checked at each phase. |
+| `onProgress` / `onStreaming` | callbacks | Progress updates / streamed output chunks. |
+| `onPromptRunCreated` | `(promptRunId) => void` | Fired with the `AIPromptRun.ID` as soon as the record is created (ID available immediately; the save is fire-and-forget). |
+| `verbose` | `boolean` | Verbose status logging for this run. |
+| `maxErrorLength` | `number` | Truncate long error messages (e.g. provider failed-generation dumps). |
+| `provider` | `IMetadataProvider` | Metadata provider for multi-provider scenarios. |
 
 ### Agent Execution Parameters
 

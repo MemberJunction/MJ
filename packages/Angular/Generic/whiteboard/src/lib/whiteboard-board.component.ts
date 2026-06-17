@@ -273,6 +273,19 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   private changedSub?: Subscription;
   private cdr = inject(ChangeDetectorRef);
 
+  // ── Precomputed render buckets ──────────────────────────────────────────────
+  // `State.Items` allocates (Array.from + sort) on every access, and the four
+  // template-bound getters below each used to call it and re-filter the whole
+  // array — so a single change-detection pass on this high-interaction drag
+  // surface re-sorted + re-scanned the item list 4×. We partition State.Items
+  // into these four buckets ONCE whenever the items/state actually change
+  // (initial load + every Changed$ emission, which covers adds/updates/removes
+  // AND page switches), and the template binds to the plain array fields.
+  private _boxItems: (WhiteboardStickyItem | WhiteboardShapeItem | WhiteboardTextItem | WhiteboardImageItem | WhiteboardMarkdownItem | WhiteboardHtmlItem)[] = [];
+  private _inkItems: WhiteboardInkItem[] = [];
+  private _connectorItems: WhiteboardConnectorItem[] = [];
+  private _highlightItems: WhiteboardHighlightItem[] = [];
+
   /** Whether the single window 'message' listener (the widget input bridge) is attached. */
   private widgetMessageListenerAttached = false;
 
@@ -300,10 +313,50 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       if (this.ContextMenu?.PageID && !this.State.FindPage(this.ContextMenu.PageID)) {
         this.ContextMenu = null;
       }
+      this.recomputeRenderBuckets();
       this.syncWidgetMessageListener();
       this.cdr.markForCheck();
     });
+    this.recomputeRenderBuckets();
     this.syncWidgetMessageListener();
+  }
+
+  /**
+   * Partition `State.Items` (one Array.from + sort) into the four render buckets
+   * the template binds to. Called on init and on every {@link WhiteboardState.Changed$}
+   * emission — the engine emits there for adds/updates/removes and page switches, so
+   * the buckets always reflect the active page's current items.
+   */
+  private recomputeRenderBuckets(): void {
+    const box: (WhiteboardStickyItem | WhiteboardShapeItem | WhiteboardTextItem | WhiteboardImageItem | WhiteboardMarkdownItem | WhiteboardHtmlItem)[] = [];
+    const ink: WhiteboardInkItem[] = [];
+    const connectors: WhiteboardConnectorItem[] = [];
+    const highlights: WhiteboardHighlightItem[] = [];
+    for (const i of this.State.Items) {
+      switch (i.Kind) {
+        case 'sticky':
+        case 'shape':
+        case 'text':
+        case 'image':
+        case 'markdown':
+        case 'html':
+          box.push(i);
+          break;
+        case 'ink':
+          ink.push(i);
+          break;
+        case 'connector':
+          connectors.push(i);
+          break;
+        case 'highlight':
+          highlights.push(i);
+          break;
+      }
+    }
+    this._boxItems = box;
+    this._inkItems = ink;
+    this._connectorItems = connectors;
+    this._highlightItems = highlights;
   }
 
   ngOnDestroy(): void {
@@ -369,23 +422,22 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   // ────────────────────────────────────────────── render-model getters
 
+  // These four return precomputed buckets (see recomputeRenderBuckets); they are
+  // refreshed only when the items/state change, not re-filtered every CD pass.
   public get BoxItems(): (WhiteboardStickyItem | WhiteboardShapeItem | WhiteboardTextItem | WhiteboardImageItem | WhiteboardMarkdownItem | WhiteboardHtmlItem)[] {
-    return this.State.Items.filter(
-      (i): i is WhiteboardStickyItem | WhiteboardShapeItem | WhiteboardTextItem | WhiteboardImageItem | WhiteboardMarkdownItem | WhiteboardHtmlItem =>
-        i.Kind === 'sticky' || i.Kind === 'shape' || i.Kind === 'text' || i.Kind === 'image'
-        || i.Kind === 'markdown' || i.Kind === 'html');
+    return this._boxItems;
   }
 
   public get InkItems(): WhiteboardInkItem[] {
-    return this.State.Items.filter((i): i is WhiteboardInkItem => i.Kind === 'ink');
+    return this._inkItems;
   }
 
   public get ConnectorItems(): WhiteboardConnectorItem[] {
-    return this.State.Items.filter((i): i is WhiteboardConnectorItem => i.Kind === 'connector');
+    return this._connectorItems;
   }
 
   public get HighlightItems(): WhiteboardHighlightItem[] {
-    return this.State.Items.filter((i): i is WhiteboardHighlightItem => i.Kind === 'highlight');
+    return this._highlightItems;
   }
 
   public get ViewportTransform(): string {

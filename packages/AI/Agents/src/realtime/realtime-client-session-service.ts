@@ -321,6 +321,29 @@ export class RealtimeClientSessionService {
     private readonly inFlightDelegations = new Map<string, Map<string, AbortController>>();
 
     /**
+     * Per-`AIPromptRun` write serialization. Both the high-frequency usage checkpoint
+     * ({@link AccumulatePromptRunUsage}) and the per-turn message append ({@link AppendPromptRunMessage})
+     * do load-modify-save on the SAME run row. Run concurrently, the frequent usage save would rewrite the
+     * whole row — including the STALE `Messages` it loaded — and perpetually clobber freshly-appended turns
+     * back to an empty snapshot (the "transcript never persists" bug). Funnelling every write for a given
+     * run through a single promise chain makes each load happen AFTER the prior save committed, so no writer
+     * overwrites another's field. Keyed by promptRunID; the entry is dropped on {@link finalizePromptRun}.
+     */
+    private readonly promptRunWriteChains = new Map<string, Promise<unknown>>();
+
+    /**
+     * Serializes `task` against all other writes to the same `AIPromptRun` (see {@link promptRunWriteChains}).
+     * Tasks run in call order; a failing task never breaks the chain for the next one. Returns the task's result.
+     */
+    private serializePromptRunWrite<T>(promptRunID: string, task: () => Promise<T>): Promise<T> {
+        const prior = this.promptRunWriteChains.get(promptRunID) ?? Promise.resolve();
+        const run = prior.then(task, task);
+        // Store an error-swallowing tail so one failed write doesn't reject every queued write behind it.
+        this.promptRunWriteChains.set(promptRunID, run.then(() => undefined, () => undefined));
+        return run;
+    }
+
+    /**
      * Prepares a client-direct realtime session: resolves the model, assembles the companion
      * system prompt + stable tool set, and mints the {@link ClientRealtimeSessionConfig}.
      *
@@ -379,7 +402,7 @@ export class RealtimeClientSessionService {
         // failure here never fails the prepare — we just omit the ids.
         const promptID = this.resolveCoAgentSystemPrompt(coAgent).PromptID;
         const obs = await this.createCoAgentObservabilityRun(
-            coAgent, promptID, resolution.ModelID,
+            coAgent, promptID, resolution.ModelID, resolution.VendorID,
             input.UserID || contextUser?.ID, input.AgentSessionID,
             contextUser, provider, input.ConversationID,
         );
@@ -457,6 +480,7 @@ export class RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         promptID: string | null,
         modelID: string,
+        vendorID: string,
         userID: string | undefined,
         agentSessionID: string,
         contextUser: UserInfo,
@@ -469,7 +493,7 @@ export class RealtimeClientSessionService {
         if (!coAgentRunID) {
             return null;
         }
-        const promptRunID = await this.createCoAgentPromptRun(coAgent, promptID, modelID, coAgentRunID, contextUser, provider);
+        const promptRunID = await this.createCoAgentPromptRun(coAgent, promptID, modelID, vendorID, coAgentRunID, contextUser, provider);
         const runStepID = await this.createCoAgentRunStep(coAgentRunID, promptID, promptRunID, contextUser, provider);
         return { CoAgentRunID: coAgentRunID, PromptRunID: promptRunID ?? undefined, CoAgentRunStepID: runStepID ?? undefined };
     }
@@ -515,6 +539,7 @@ export class RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         promptID: string | null,
         modelID: string,
+        vendorID: string,
         coAgentRunID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
@@ -526,6 +551,11 @@ export class RealtimeClientSessionService {
         promptRun.NewRecord();
         promptRun.PromptID = promptID;
         promptRun.ModelID = modelID;
+        // VendorID is required on AIPromptRun ("Vendor cannot be null") — without it the prompt run
+        // save fails and the whole co-agent observability chain (transcript/tool-turn/usage) is dropped.
+        if (vendorID) {
+            promptRun.VendorID = vendorID;
+        }
         promptRun.AgentID = coAgent.ID;
         promptRun.RunAt = new Date();
         promptRun.RunType = 'Single';
@@ -670,15 +700,130 @@ export class RealtimeClientSessionService {
         if (!promptRunID) {
             return;
         }
-        const run = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
-        if (!(await run.Load(promptRunID)) || run.Status !== 'Running') {
-            return;
+        // Serialize the finalize against any in-flight message/usage writes so it can't race them — and so a
+        // late usage flush queued behind it sees the run already Completed.
+        await this.serializePromptRunWrite(promptRunID, async () => {
+            const run = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+            if (!(await run.Load(promptRunID)) || run.Status !== 'Running') {
+                return false;
+            }
+            run.Status = success ? 'Completed' : 'Failed';
+            run.CompletedAt = new Date();
+            run.Success = success;
+            if (!(await run.Save())) {
+                LogError(`RealtimeClientSessionService.finalizePromptRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+            return true;
+        });
+        // Drop the per-run lock chain — no further writes are expected after finalize.
+        this.promptRunWriteChains.delete(promptRunID);
+    }
+
+    /**
+     * Appends (or replaces) one transcript turn onto the co-agent's long-lived `AIPromptRun.Messages`,
+     * so the realtime co-agent's conversation is captured on its run exactly like every other MJ agent
+     * run — closing the observability gap where the run held only token totals, never the turns. The
+     * run viewer can then show what the co-agent heard and said. Mirrors {@link accumulatePromptRunUsage}'s
+     * load/append/save pattern; best-effort and tolerant (logs, never throws).
+     *
+     * `replacePrevious` swaps the last same-role message instead of appending — the streaming-correction
+     * case (an interim assistant turn finalized into its full text). The stored shape is the standard
+     * chat-message array (`[{ role, content }, …]`) the rest of MJ already reads from `Messages`.
+     *
+     * NOTE: load-append-save carries the same benign race as usage accumulation; realtime turns are
+     * sequential per session so collisions are rare. A dedicated child turn-row entity would remove the
+     * race (and the blob rewrite) entirely — a future increment. Tool-call turns (the browser_ and
+     * Whiteboard_ channel tools) are a separate increment that requires the client to relay them.
+     *
+     * @returns `true` when the turn was persisted onto the prompt run.
+     */
+    public async AppendPromptRunMessage(
+        promptRunID: string,
+        role: 'user' | 'assistant' | 'system',
+        content: string,
+        replacePrevious: boolean,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        // Serialized against usage checkpoints on the same run so a concurrent usage save can't clobber
+        // the Messages we write here (and vice-versa). See promptRunWriteChains.
+        return this.serializePromptRunWrite(promptRunID, async () => {
+            try {
+                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+                if (!(await promptRun.Load(promptRunID))) {
+                    LogError(`AppendPromptRunMessage: co-agent prompt run ${promptRunID} not found — transcript turn dropped.`);
+                    return false;
+                }
+                const messages = this.parsePromptRunMessages(promptRun.Messages);
+                const last = messages[messages.length - 1];
+                if (replacePrevious && last && last.role === role) {
+                    last.content = content;
+                } else {
+                    messages.push({ role, content });
+                }
+                promptRun.Messages = JSON.stringify(messages);
+                if (!(await promptRun.Save())) {
+                    LogError(`AppendPromptRunMessage: prompt run ${promptRunID} save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                LogError(`AppendPromptRunMessage: append failed for prompt run ${promptRunID}: ${(error as Error).message}`);
+                return false;
+            }
+        });
+    }
+
+    /**
+     * Accumulates relayed usage DELTAS onto the co-agent `AIPromptRun`'s `TokensPrompt` / `TokensCompletion`
+     * (recomputing `TokensUsed`). Serialized against {@link AppendPromptRunMessage} on the same run so the
+     * high-frequency usage checkpoint never overwrites freshly-appended transcript turns (and vice-versa).
+     * Best-effort: load/save failures log and return `false`, never throw.
+     *
+     * @param promptRunID The co-agent observability prompt run.
+     * @param inputDelta Input-token delta to add (caller clamps to >= 0).
+     * @param outputDelta Output-token delta to add (caller clamps to >= 0).
+     * @returns `true` when the accumulated usage was persisted.
+     */
+    public async AccumulatePromptRunUsage(
+        promptRunID: string,
+        inputDelta: number,
+        outputDelta: number,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        return this.serializePromptRunWrite(promptRunID, async () => {
+            try {
+                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+                if (!(await promptRun.Load(promptRunID))) {
+                    LogError(`AccumulatePromptRunUsage: co-agent prompt run ${promptRunID} not found — usage delta dropped.`);
+                    return false;
+                }
+                promptRun.TokensPrompt = (promptRun.TokensPrompt ?? 0) + inputDelta;
+                promptRun.TokensCompletion = (promptRun.TokensCompletion ?? 0) + outputDelta;
+                promptRun.TokensUsed = (promptRun.TokensPrompt ?? 0) + (promptRun.TokensCompletion ?? 0);
+                if (!(await promptRun.Save())) {
+                    LogError(`AccumulatePromptRunUsage: prompt run ${promptRunID} save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                LogError(`AccumulatePromptRunUsage: usage accumulation failed for prompt run ${promptRunID}: ${(error as Error).message}`);
+                return false;
+            }
+        });
+    }
+
+    /** Parses the prompt run's `Messages` JSON into a mutable chat-message array (tolerant: `[]` on empty/malformed). */
+    private parsePromptRunMessages(raw: string | null | undefined): Array<{ role: string; content: string }> {
+        if (!raw || !raw.trim()) {
+            return [];
         }
-        run.Status = success ? 'Completed' : 'Failed';
-        run.CompletedAt = new Date();
-        run.Success = success;
-        if (!(await run.Save())) {
-            LogError(`RealtimeClientSessionService.finalizePromptRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            return Array.isArray(parsed) ? (parsed as Array<{ role: string; content: string }>) : [];
+        } catch {
+            return [];
         }
     }
 
@@ -983,11 +1128,19 @@ export class RealtimeClientSessionService {
      * @returns The resolved model + identifiers, or `null`.
      */
     protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended): Promise<RealtimeModelResolution | null> {
-        const model = this.selectRealtimeModelEntity(coAgent);
-        if (!model) {
-            return null;
+        // Walk candidates in descending PowerRank, returning the FIRST that fully resolves to a usable
+        // client-direct driver (active vendor + API key + ClassFactory driver + SupportsClientDirect).
+        // Single-pick dead-ended whenever the highest-power model lacked a key or client-direct support
+        // — e.g. a newly-seeded provider (Grok/Inworld) with no env key outranking GPT Realtime — and
+        // surfaced "No usable Realtime model" instead of falling through to a model that works.
+        const candidates = this.selectRealtimeModelCandidates(coAgent);
+        for (const model of candidates) {
+            const resolution = this.resolveVendorAndInstantiate(model);
+            if (resolution && resolution.Model.SupportsClientDirect) {
+                return resolution;
+            }
         }
-        return this.resolveVendorAndInstantiate(model);
+        return null;
     }
 
     /**
@@ -1047,19 +1200,18 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Selects the highest-power active model of AIModelType `Realtime`. Mirrors
-     * `BaseAgent.selectRealtimeModelEntity`.
+     * The active models of AIModelType `Realtime`, sorted highest-PowerRank first — the candidate
+     * list {@link resolveRealtimeModel} walks until one yields a usable client-direct driver.
+     * Returns ALL candidates (not just the top pick) so a keyless or non-client-direct top model
+     * falls through to the next usable one instead of dead-ending the whole resolution.
      *
      * @param coAgent The co-agent (reserved for future per-agent model preference).
-     * @returns The chosen model entity, or `null`.
+     * @returns The candidate models in resolution order (empty array when none are active).
      */
-    private selectRealtimeModelEntity(coAgent: MJAIAgentEntityExtended): MJAIModelEntityExtended | null {
-        const realtimeModels = AIEngine.Instance.Models.filter(m => m.IsActive && this.isRealtimeModel(m));
-        if (realtimeModels.length === 0) {
-            return null;
-        }
-
-        return realtimeModels.sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+    private selectRealtimeModelCandidates(coAgent: MJAIAgentEntityExtended): MJAIModelEntityExtended[] {
+        return AIEngine.Instance.Models
+            .filter(m => m.IsActive && this.isRealtimeModel(m))
+            .sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
     }
 
     /**
@@ -1121,11 +1273,22 @@ export class RealtimeClientSessionService {
     ): Promise<RealtimeSessionParams> {
         const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
+        const tools = this.buildStableToolSet(input.ExtraTools);
+
+        // One line per mint: confirms which tools + whether the channel-direct framing actually reach
+        // the model — settles "why does the co-agent delegate instead of calling browser_*" without
+        // runtime guesswork (channelExceptionInPrompt=false ⇒ stale build; browser_* missing from
+        // tools ⇒ the channel's tools never reached the mint).
+        console.log(
+            `[RealtimeCoAgent] mint model=${modelApiName} ` +
+            `tools=[${tools.map(t => t.Name).join(', ')}] ` +
+            `channelExceptionInPrompt=${systemPrompt.includes('interactive-surface')}`,
+        );
 
         return {
             Model: modelApiName,
             SystemPrompt: systemPrompt,
-            Tools: this.buildStableToolSet(input.ExtraTools),
+            Tools: tools,
             InitialContext: memoryContext || undefined,
             Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass)
         };
@@ -1190,7 +1353,8 @@ export class RealtimeClientSessionService {
             `conversation with the user, always speaking in the FIRST PERSON as ${targetName} — own the work ` +
             `("I'm pulling that up", "I found three matches"); never refer to ${targetName} or the work in the ` +
             `third person. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
-            `tool and narrate progress while it runs — do not attempt to do the work yourself.`;
+            `tool and narrate progress while it runs — do not attempt to do the work yourself.` +
+            this.buildInteractiveSurfaceFraming(input.ExtraTools);
 
         const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);
         const voiceManner = BuildVoiceMannerSection(effectiveConfig);
@@ -1202,6 +1366,33 @@ export class RealtimeClientSessionService {
         return [framing, coAgentPrompt, voiceManner, targetIdentity, priorTranscript, history, memoryContext]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
+    }
+
+    /**
+     * Builds the "interactive-surface tools" exception clause appended to the co-agent framing when
+     * the client supplied channel tools (browser_*, Whiteboard_*, …) as ExtraTools. Without it the
+     * co-agent — told to route ALL work through invoke-target-agent — delegates browser/whiteboard
+     * requests to the target agent (which has no live channel of its own) instead of driving the
+     * surface itself, then hallucinates a "missing session id". The tools ARE already in its set
+     * ({@link buildStableToolSet} merges `[invokeTarget, ...extraTools]`); this clause tells the model
+     * to USE them directly. Returns empty for pure-voice sessions (no ExtraTools), keeping that
+     * framing untouched. Generic by design — it names browser_ and Whiteboard_ tools only as
+     * examples, so any future client channel is covered automatically.
+     *
+     * @param extraTools The client-supplied channel tools, when any.
+     * @returns The exception clause (leading space included), or '' when there are no extra tools.
+     */
+    protected buildInteractiveSurfaceFraming(extraTools?: RealtimeToolDefinition[]): string {
+        if (!extraTools || extraTools.length === 0) {
+            return '';
+        }
+        return ` ONE EXCEPTION: besides '${INVOKE_TARGET_AGENT_TOOL_NAME}' you have been given ` +
+            `interactive-surface tools (for example 'browser_*' to drive a LIVE web browser the user can ` +
+            `watch, or 'Whiteboard_*' to draw on a shared board). Those surfaces are operated by YOU, ` +
+            `directly — when the user asks to use one (e.g. "open/show a browser", "go to a site", "add ` +
+            `to the whiteboard"), call the matching tool yourself immediately and narrate what you're ` +
+            `doing. NEVER route an interactive-surface request through '${INVOKE_TARGET_AGENT_TOOL_NAME}', ` +
+            `and never claim you lack a session — calling the tool is all that's needed.`;
     }
 
     /**

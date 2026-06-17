@@ -2787,6 +2787,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Agent Session Bridge Participants Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSessionBridgeParticipants"
+        SectionName="AI Agent Session Bridge Participants"
+        Icon="fa fa-users"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSessionBridgeParticipants')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Bridge Participants','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridge Participants')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSessionBridgeParticipants')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionBridgeParticipants', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

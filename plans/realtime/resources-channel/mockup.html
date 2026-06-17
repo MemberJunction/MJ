@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  STATIC VISION MOCKUP — Realtime "Resources" Channel + Multi-Channel Layout
+  ----------------------------------------------------------------------------
+  This is a NON-FUNCTIONAL, hand-authored HTML mockup for design review only.
+  Nothing here is wired to live data, golden-layout, or the realtime session.
+  Colors use the ACTUAL MemberJunction --mj-* design tokens pulled from
+  packages/Angular/Generic/shared/src/lib/_tokens.scss (light theme).
+  It illustrates the proposed arrangeable multi-pane layout with, simultaneously:
+  a Resources pane (presenting a slide), a Whiteboard pane, a Browser pane,
+  and the live transcript — plus a resource library browser and agent persona.
+  See proposal.md in this folder for the full design.
+  ============================================================================
+-->
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Realtime Resources Channel — Vision Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+:root{
+  /* ---- MJ semantic tokens (light) — copied from _tokens.scss ---- */
+  --mj-text-primary:#1e293b; --mj-text-secondary:#475569; --mj-text-muted:#64748b;
+  --mj-text-disabled:#94a3b8; --mj-text-inverse:#ffffff; --mj-text-link:#0076b6;
+  --mj-bg-page:#f8fafc; --mj-bg-surface:#ffffff; --mj-bg-surface-card:#f8fafc;
+  --mj-bg-surface-sunken:#f1f5f9; --mj-bg-surface-elevated:#ffffff;
+  --mj-bg-surface-hover:#f1f5f9; --mj-bg-surface-active:#e2e8f0;
+  --mj-bg-overlay:rgba(15,23,42,0.5);
+  --mj-border-default:#e2e8f0; --mj-border-subtle:#f1f5f9; --mj-border-strong:#cbd5e1;
+  --mj-border-focus:#0076b6;
+  --mj-brand-primary:#0076b6; --mj-brand-primary-hover:#006aa3; --mj-brand-primary-active:#005a8a;
+  --mj-brand-secondary:#092340; --mj-brand-accent:#5cc0ed; --mj-brand-tertiary:#06b6d4;
+  --mj-status-success:#22c55e; --mj-status-success-bg:#f0fdf4; --mj-status-success-text:#15803d;
+  --mj-status-warning:#f59e0b; --mj-status-warning-bg:#fffbeb; --mj-status-warning-text:#b45309;
+  --mj-status-error:#ef4444; --mj-status-error-bg:#fef2f2; --mj-status-error-text:#b91c1c;
+  --mj-status-info:#3b82f6; --mj-status-info-bg:#eff6ff; --mj-status-info-text:#1d4ed8;
+  --violet-500:#8b5cf6; --violet-100:#ede9fe; --violet-600:#7c3aed;
+  --mj-radius-sm:4px; --mj-radius-md:8px; --mj-radius-lg:12px; --mj-radius-xl:16px; --mj-radius-2xl:24px; --mj-radius-full:9999px;
+  --mj-shadow-sm:0 1px 2px 0 rgba(0,0,0,0.05);
+  --mj-shadow-md:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -2px rgba(0,0,0,0.1);
+  --mj-shadow-lg:0 10px 15px -3px rgba(0,0,0,0.1),0 4px 6px -4px rgba(0,0,0,0.1);
+  --mj-shadow-xl:0 20px 25px -5px rgba(0,0,0,0.1),0 8px 10px -6px rgba(0,0,0,0.1);
+  --mj-shadow-2xl:0 25px 50px -12px rgba(0,0,0,0.25);
+  --mj-shadow-brand-md:0 4px 12px rgba(0,118,182,0.4);
+  --mj-font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --mj-mono:'JetBrains Mono','SF Mono',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--mj-font); color:var(--mj-text-primary);
+  background:
+    radial-gradient(1200px 700px at 12% -8%, rgba(0,118,182,.10), transparent 60%),
+    radial-gradient(1000px 700px at 100% 110%, rgba(92,192,237,.16), transparent 55%),
+    var(--mj-bg-page);
+  -webkit-font-smoothing:antialiased; padding:22px; min-height:100vh;
+}
+.stage{max-width:1500px;margin:0 auto;}
+.stage-note{
+  display:flex;align-items:center;gap:10px;margin-bottom:14px;color:var(--mj-text-muted);
+  font-size:12.5px;
+}
+.stage-note .chip{
+  background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);
+  padding:3px 10px;border-radius:var(--mj-radius-full);font-weight:600;color:var(--mj-text-secondary);
+  box-shadow:var(--mj-shadow-sm);
+}
+
+/* ============ the realtime overlay shell ============ */
+.overlay{
+  background:var(--mj-bg-surface);
+  border:1px solid var(--mj-border-default);
+  border-radius:var(--mj-radius-2xl);
+  box-shadow:var(--mj-shadow-2xl);
+  overflow:hidden; display:flex; flex-direction:column;
+  height:880px;
+}
+
+/* ---- top bar: agent persona + presence + call controls ---- */
+.topbar{
+  display:flex;align-items:center;gap:14px;padding:14px 18px;
+  background:linear-gradient(120deg, var(--mj-brand-secondary), #0c3358 55%, var(--mj-brand-primary));
+  color:var(--mj-text-inverse);
+}
+.persona{display:flex;align-items:center;gap:12px;min-width:0;}
+.avatar{
+  width:46px;height:46px;border-radius:var(--mj-radius-full);position:relative;flex:none;
+  background:conic-gradient(from 200deg, var(--mj-brand-accent), #a78bfa, var(--mj-brand-accent));
+  display:grid;place-items:center;font-weight:700;font-size:17px;color:#0b2238;
+  box-shadow:0 0 0 3px rgba(255,255,255,.18), var(--mj-shadow-md);
+}
+.avatar .ring{position:absolute;inset:-6px;border-radius:var(--mj-radius-full);
+  border:2px solid rgba(92,192,237,.55);animation:pulse 2.4s ease-out infinite;}
+@keyframes pulse{0%{transform:scale(.92);opacity:.9}70%{transform:scale(1.18);opacity:0}100%{opacity:0}}
+.persona .who{line-height:1.25;min-width:0;}
+.persona .who .name{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:8px;}
+.persona .who .sub{font-size:12px;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--mj-status-success);
+  box-shadow:0 0 0 0 rgba(34,197,94,.7);animation:beat 1.6s infinite;}
+@keyframes beat{0%{box-shadow:0 0 0 0 rgba(34,197,94,.6)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+
+/* speaking waveform */
+.wave{display:flex;align-items:center;gap:3px;height:26px;padding:0 6px;}
+.wave i{width:3px;border-radius:3px;background:var(--mj-brand-accent);animation:eq 1s ease-in-out infinite;}
+.wave i:nth-child(1){animation-delay:0s}.wave i:nth-child(2){animation-delay:.12s}
+.wave i:nth-child(3){animation-delay:.24s}.wave i:nth-child(4){animation-delay:.36s}
+.wave i:nth-child(5){animation-delay:.48s}.wave i:nth-child(6){animation-delay:.30s}.wave i:nth-child(7){animation-delay:.18s}
+@keyframes eq{0%,100%{height:7px}50%{height:22px}}
+
+.topbar .spacer{flex:1;}
+.presence{display:flex;align-items:center;gap:-6px;margin-right:6px;}
+.presence .pp{width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.85);
+  display:grid;place-items:center;font-size:11px;font-weight:700;margin-left:-8px;color:#fff;}
+.presence .pp:first-child{margin-left:0;}
+.timer{font-variant-numeric:tabular-nums;font-weight:600;font-size:13.5px;background:rgba(255,255,255,.14);
+  padding:5px 11px;border-radius:var(--mj-radius-full);letter-spacing:.3px;}
+.ctrl{width:38px;height:38px;border-radius:var(--mj-radius-full);border:1px solid rgba(255,255,255,.22);
+  background:rgba(255,255,255,.10);color:#fff;display:grid;place-items:center;cursor:pointer;font-size:14px;
+  transition:.15s;}
+.ctrl:hover{background:rgba(255,255,255,.22);}
+.ctrl.end{background:var(--mj-status-error);border-color:transparent;width:auto;padding:0 16px;gap:7px;
+  display:flex;align-items:center;font-weight:600;font-size:13px;}
+
+/* ---- surface-panel header (the mode toggle lives here) ---- */
+.surf-header{
+  display:flex;align-items:center;gap:10px;padding:9px 16px;
+  background:var(--mj-bg-surface-card);border-bottom:1px solid var(--mj-border-default);
+}
+.surf-header .label{font-weight:600;font-size:12.5px;color:var(--mj-text-secondary);
+  display:flex;align-items:center;gap:8px;}
+.surf-header .label i{color:var(--mj-brand-primary);}
+.seg{display:flex;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);
+  border-radius:var(--mj-radius-md);padding:2px;gap:2px;}
+.seg button{border:none;background:transparent;font:inherit;font-size:12px;font-weight:600;
+  color:var(--mj-text-muted);padding:5px 12px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.seg button.on{background:var(--mj-bg-surface);color:var(--mj-brand-primary);box-shadow:var(--mj-shadow-sm);}
+.surf-header .spacer{flex:1;}
+.ghost-btn{border:1px solid var(--mj-border-default);background:var(--mj-bg-surface);
+  color:var(--mj-text-secondary);font:inherit;font-size:12px;font-weight:600;padding:6px 11px;
+  border-radius:var(--mj-radius-md);cursor:pointer;display:flex;align-items:center;gap:7px;}
+.ghost-btn:hover{background:var(--mj-bg-surface-hover);}
+
+/* ============ the body: library rail + golden-layout grid ============ */
+.body{flex:1;display:flex;min-height:0;background:var(--mj-bg-surface-sunken);}
+
+/* ----- resource library browser (left) ----- */
+.library{
+  width:260px;flex:none;background:var(--mj-bg-surface);border-right:1px solid var(--mj-border-default);
+  display:flex;flex-direction:column;
+}
+.library .lib-head{padding:13px 14px 10px;border-bottom:1px solid var(--mj-border-subtle);}
+.library .lib-head .t{font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;}
+.library .lib-head .t i{color:var(--mj-brand-primary);}
+.library .lib-head .badge{font-size:10.5px;font-weight:600;color:var(--mj-status-info-text);
+  background:var(--mj-status-info-bg);border:1px solid #cfe0ff;padding:2px 7px;border-radius:var(--mj-radius-full);}
+.search{margin:10px 12px 6px;position:relative;}
+.search input{width:100%;border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-md);
+  padding:7px 10px 7px 30px;font:inherit;font-size:12.5px;background:var(--mj-bg-surface-card);color:var(--mj-text-primary);}
+.search i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--mj-text-disabled);font-size:12px;}
+.lib-scroll{overflow:auto;flex:1;padding:4px 8px 10px;}
+.coll{margin:6px 0;}
+.coll-head{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:var(--mj-radius-md);cursor:pointer;
+  font-weight:600;font-size:12.5px;color:var(--mj-text-secondary);}
+.coll-head:hover{background:var(--mj-bg-surface-hover);}
+.coll-head .dot{width:9px;height:9px;border-radius:3px;flex:none;}
+.coll-head .ct{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.coll-head .cnt{font-size:10.5px;color:var(--mj-text-disabled);font-weight:600;}
+.res{display:flex;align-items:center;gap:9px;padding:7px 8px 7px 22px;border-radius:var(--mj-radius-md);cursor:pointer;
+  font-size:12px;color:var(--mj-text-secondary);position:relative;}
+.res:hover{background:var(--mj-bg-surface-hover);}
+.res.active{background:color-mix(in srgb,var(--mj-brand-primary) 8%,var(--mj-bg-surface));color:var(--mj-brand-primary);
+  font-weight:600;}
+.res.active::before{content:"";position:absolute;left:8px;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--mj-brand-primary);}
+.res .ico{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-size:12px;flex:none;color:#fff;}
+.res .rn{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.res .live{font-size:9px;color:var(--mj-status-success-text);background:var(--mj-status-success-bg);
+  border:1px solid #bbf7d0;padding:1px 6px;border-radius:var(--mj-radius-full);font-weight:700;}
+.ico.doc{background:var(--mj-brand-primary);} .ico.slide{background:var(--violet-500);}
+.ico.img{background:var(--mj-brand-tertiary);} .ico.vid{background:var(--mj-status-error);}
+.ico.pdf{background:#dc2626;}
+
+.lib-foot{border-top:1px solid var(--mj-border-subtle);padding:9px 12px;font-size:11px;color:var(--mj-text-muted);
+  display:flex;align-items:center;gap:8px;}
+.lib-foot i{color:var(--mj-status-success);}
+
+/* ----- golden-layout style grid (panes) ----- */
+.grid{flex:1;display:grid;grid-template-columns:1.55fr 1fr;grid-template-rows:1.35fr 1fr;
+  gap:10px;padding:10px;min-width:0;}
+.pane{
+  background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-lg);
+  box-shadow:var(--mj-shadow-sm);overflow:hidden;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;
+}
+.pane.feature{grid-row:1 / span 2;} /* resources pane spans both rows on the left */
+.pane-head{display:flex;align-items:center;gap:8px;padding:8px 11px;background:var(--mj-bg-surface-card);
+  border-bottom:1px solid var(--mj-border-default);cursor:grab;}
+.pane-head .grip{color:var(--mj-text-disabled);font-size:11px;letter-spacing:-1px;}
+.pane-head .pico{width:20px;height:20px;border-radius:5px;display:grid;place-items:center;color:#fff;font-size:10px;flex:none;}
+.pane-head .pt{font-weight:600;font-size:12.5px;flex:1;display:flex;align-items:center;gap:7px;}
+.pane-head .pt small{font-weight:500;color:var(--mj-text-muted);font-size:11px;}
+.pane-head .pbtn{width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--mj-text-muted);
+  cursor:pointer;display:grid;place-items:center;font-size:11px;}
+.pane-head .pbtn:hover{background:var(--mj-bg-surface-active);color:var(--mj-text-secondary);}
+.driving{font-size:9.5px;font-weight:700;letter-spacing:.3px;padding:2px 7px;border-radius:var(--mj-radius-full);
+  display:inline-flex;align-items:center;gap:5px;}
+.driving.agent{background:var(--violet-100);color:var(--violet-600);}
+.driving.user{background:var(--mj-status-info-bg);color:var(--mj-status-info-text);}
+
+/* resources pico/whiteboard/browser/transcript head colors */
+.pico.res{background:var(--violet-500);} .pico.wb{background:var(--mj-brand-tertiary);}
+.pico.br{background:var(--mj-brand-primary);} .pico.tx{background:var(--mj-text-secondary);}
+
+/* ---- Resources viewer (the presented slide) ---- */
+.viewer{flex:1;display:flex;flex-direction:column;background:var(--mj-bg-surface-sunken);min-height:0;}
+.slide-wrap{flex:1;display:grid;place-items:center;padding:18px;min-height:0;}
+.slide{
+  width:100%;max-width:560px;aspect-ratio:16/9;border-radius:var(--mj-radius-lg);
+  background:linear-gradient(160deg,#ffffff,#f3f8fc);border:1px solid var(--mj-border-default);
+  box-shadow:var(--mj-shadow-lg);padding:26px 30px;display:flex;flex-direction:column;position:relative;overflow:hidden;
+}
+.slide::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,118,182,.10),transparent 70%);}
+.slide .kicker{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--mj-brand-primary);}
+.slide h2{font-size:25px;font-weight:700;margin:8px 0 4px;color:var(--mj-brand-secondary);}
+.slide .lede{font-size:13px;color:var(--mj-text-secondary);max-width:80%;}
+.tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:auto;}
+.tier{border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-md);padding:12px;background:var(--mj-bg-surface);
+  position:relative;}
+.tier.hi{border-color:var(--mj-brand-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--mj-brand-primary) 14%,transparent);}
+.tier .tn{font-size:11px;font-weight:700;color:var(--mj-text-muted);text-transform:uppercase;letter-spacing:.5px;}
+.tier .tp{font-size:21px;font-weight:700;color:var(--mj-brand-secondary);margin-top:3px;}
+.tier .tp small{font-size:11px;font-weight:500;color:var(--mj-text-muted);}
+.tier .tag{position:absolute;top:-9px;right:10px;font-size:9px;font-weight:700;background:var(--mj-brand-primary);
+  color:#fff;padding:2px 8px;border-radius:var(--mj-radius-full);}
+/* agent highlight callout */
+.spotlight{position:absolute;inset:auto 24px 78px 24px;height:0;}
+.spotlight .ring2{position:absolute;left:0;bottom:0;width:33%;height:108px;border:2px dashed var(--violet-500);
+  border-radius:var(--mj-radius-md);box-shadow:0 0 0 9999px rgba(139,92,246,.04);animation:bob 2.6s ease-in-out infinite;}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.callout{position:absolute;left:0;bottom:118px;background:var(--violet-600);color:#fff;font-size:11px;font-weight:600;
+  padding:5px 10px;border-radius:var(--mj-radius-md);box-shadow:var(--mj-shadow-md);white-space:nowrap;}
+.callout::after{content:"";position:absolute;left:18px;bottom:-5px;width:10px;height:10px;background:var(--violet-600);transform:rotate(45deg);}
+
+.deck-strip{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--mj-bg-surface);
+  border-top:1px solid var(--mj-border-default);}
+.deck-strip .nav{width:28px;height:28px;border-radius:var(--mj-radius-md);border:1px solid var(--mj-border-default);
+  background:var(--mj-bg-surface-card);cursor:pointer;display:grid;place-items:center;color:var(--mj-text-secondary);}
+.thumbs{display:flex;gap:6px;flex:1;overflow:auto;}
+.thumb{width:46px;height:28px;border-radius:5px;border:1.5px solid var(--mj-border-default);background:var(--mj-bg-surface-sunken);flex:none;cursor:pointer;}
+.thumb.on{border-color:var(--mj-brand-primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--mj-brand-primary) 18%,transparent);}
+.deck-strip .pos{font-size:11px;color:var(--mj-text-muted);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+/* ---- Whiteboard pane ---- */
+.wb{flex:1;background:
+   linear-gradient(var(--mj-border-subtle) 1px,transparent 1px) 0 0/100% 26px,
+   linear-gradient(90deg,var(--mj-border-subtle) 1px,transparent 1px) 0 0/26px 100%,
+   var(--mj-bg-surface);position:relative;overflow:hidden;}
+.wb svg{position:absolute;inset:0;width:100%;height:100%;}
+.wb .sticky{position:absolute;background:#fff7d6;border:1px solid #f3e3a0;border-radius:6px;padding:7px 9px;font-size:11px;
+  font-weight:600;color:#7a5b14;box-shadow:var(--mj-shadow-sm);transform:rotate(-2deg);}
+
+/* ---- Browser pane ---- */
+.br-bar{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--mj-bg-surface-card);border-bottom:1px solid var(--mj-border-default);}
+.br-bar .dots{display:flex;gap:5px;} .br-bar .dots i{width:9px;height:9px;border-radius:50%;}
+.br-url{flex:1;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-full);
+  padding:4px 12px;font-size:11px;color:var(--mj-text-secondary);font-family:var(--mj-mono);display:flex;align-items:center;gap:7px;}
+.br-url i{color:var(--mj-status-success);font-size:10px;}
+.br-view{flex:1;background:var(--mj-bg-surface);overflow:hidden;display:flex;flex-direction:column;}
+.br-hero{padding:18px 20px;background:linear-gradient(120deg,#e9f4fb,#f4fbff);border-bottom:1px solid var(--mj-border-subtle);}
+.br-hero .bh{font-size:17px;font-weight:700;color:var(--mj-brand-secondary);}
+.br-hero .bs{font-size:12px;color:var(--mj-text-secondary);margin-top:3px;}
+.br-rows{padding:12px 16px;display:flex;flex-direction:column;gap:9px;}
+.br-row{height:11px;border-radius:6px;background:var(--mj-bg-surface-sunken);}
+.br-row.s{width:62%;} .br-row.m{width:84%;}
+.cursor-ghost{position:absolute;color:var(--violet-600);font-size:13px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25));
+  animation:drift 4s ease-in-out infinite;}
+@keyframes drift{0%,100%{transform:translate(0,0)}50%{transform:translate(14px,-10px)}}
+
+/* ---- Transcript pane ---- */
+.tx{flex:1;display:flex;flex-direction:column;background:var(--mj-bg-surface);min-height:0;}
+.tx-scroll{flex:1;overflow:auto;padding:12px 13px;display:flex;flex-direction:column;gap:11px;}
+.msg{display:flex;gap:9px;max-width:96%;}
+.msg .mav{width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;}
+.msg.agent .mav{background:linear-gradient(135deg,var(--mj-brand-accent),var(--violet-500));color:#0b2238;}
+.msg.user{flex-direction:row-reverse;align-self:flex-end;}
+.msg.user .mav{background:var(--mj-brand-primary);}
+.bub{padding:8px 11px;border-radius:var(--mj-radius-lg);font-size:12.5px;line-height:1.45;}
+.msg.agent .bub{background:var(--mj-bg-surface-sunken);color:var(--mj-text-primary);border-top-left-radius:4px;}
+.msg.user .bub{background:var(--mj-brand-primary);color:#fff;border-top-right-radius:4px;}
+.tool-line{align-self:center;font-size:11px;color:var(--mj-text-muted);background:var(--mj-bg-surface-card);
+  border:1px solid var(--mj-border-default);padding:4px 11px;border-radius:var(--mj-radius-full);display:flex;align-items:center;gap:7px;}
+.tool-line i{color:var(--violet-600);}
+.tool-line b{color:var(--mj-text-secondary);font-weight:600;}
+.tx-composer{border-top:1px solid var(--mj-border-default);padding:9px 11px;display:flex;align-items:center;gap:9px;background:var(--mj-bg-surface-card);}
+.tx-composer .mic{width:34px;height:34px;border-radius:50%;background:var(--mj-brand-primary);color:#fff;display:grid;place-items:center;flex:none;box-shadow:var(--mj-shadow-brand-md);}
+.tx-composer input{flex:1;border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-full);padding:8px 14px;font:inherit;font-size:12.5px;background:var(--mj-bg-surface);color:var(--mj-text-primary);}
+
+/* legend strip */
+.legend{margin-top:14px;display:flex;flex-wrap:wrap;gap:10px 18px;font-size:11.5px;color:var(--mj-text-muted);}
+.legend span{display:flex;align-items:center;gap:7px;}
+.legend .sw{width:12px;height:12px;border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="stage-note">
+    <span class="chip"><i class="fa-solid fa-flask"></i> Static vision mockup</span>
+    Realtime co-agent widget — Resources channel + arrangeable multi-pane layout. Colors are real MJ <code>--mj-*</code> tokens (light theme). Not wired to live data.
+  </div>
+
+  <div class="overlay">
+
+    <!-- ===== TOP BAR ===== -->
+    <div class="topbar">
+      <div class="persona">
+        <div class="avatar">SK<span class="ring"></span></div>
+        <div class="who">
+          <div class="name">Acme Sales Co-Agent <span class="live-dot" title="speaking"></span></div>
+          <div class="sub">Voice co-agent · fronting <b>Skip</b> · presenting from “Acme Sales Kit”</div>
+        </div>
+      </div>
+      <div class="wave" title="agent speaking"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="spacer"></div>
+      <div class="presence" title="participants">
+        <div class="pp" style="background:var(--mj-brand-primary)">JM</div>
+        <div class="pp" style="background:var(--violet-500)">SK</div>
+        <div class="pp" style="background:var(--mj-status-success)">+2</div>
+      </div>
+      <div class="timer"><i class="fa-solid fa-circle" style="color:var(--mj-status-error);font-size:8px;margin-right:5px"></i>12:48</div>
+      <button class="ctrl" title="Mute"><i class="fa-solid fa-microphone"></i></button>
+      <button class="ctrl" title="Captions"><i class="fa-solid fa-closed-captioning"></i></button>
+      <button class="ctrl" title="Minimize"><i class="fa-solid fa-compress"></i></button>
+      <button class="ctrl end"><i class="fa-solid fa-phone-slash"></i> End</button>
+    </div>
+
+    <!-- ===== SURFACE PANEL HEADER (mode toggle) ===== -->
+    <div class="surf-header">
+      <div class="label"><i class="fa-solid fa-table-cells-large"></i> Surfaces</div>
+      <div class="seg" title="Layout mode — basic users stay on Tabs; power users opt into Arrange">
+        <button><i class="fa-solid fa-window-maximize"></i> Tabs</button>
+        <button class="on"><i class="fa-solid fa-table-columns"></i> Arrange</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="ghost-btn" title="Auto-arrange the live surfaces"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto layout</button>
+      <button class="ghost-btn" title="Restore the default layout"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+    </div>
+
+    <!-- ===== BODY: library + golden-layout grid ===== -->
+    <div class="body">
+
+      <!-- resource library browser -->
+      <aside class="library">
+        <div class="lib-head">
+          <div class="t"><i class="fa-solid fa-photo-film"></i> Resource Library <span class="badge">2 allowed</span></div>
+        </div>
+        <div class="search"><i class="fa-solid fa-magnifying-glass"></i><input placeholder="Search resources…" value=""></div>
+        <div class="lib-scroll">
+
+          <div class="coll">
+            <div class="coll-head"><i class="fa-solid fa-chevron-down" style="font-size:9px"></i><span class="dot" style="background:var(--mj-brand-primary)"></span><span class="ct">Acme Sales Kit</span><span class="cnt">5</span></div>
+            <div class="res active"><span class="ico slide"><i class="fa-solid fa-display"></i></span><span class="rn">Q3 Pitch Deck</span><span class="live">LIVE</span></div>
+            <div class="res"><span class="ico pdf"><i class="fa-solid fa-file-pdf"></i></span><span class="rn">Pricing One-Pager</span></div>
+            <div class="res"><span class="ico vid"><i class="fa-solid fa-play"></i></span><span class="rn">2-min Demo Video</span></div>
+            <div class="res"><span class="ico img"><i class="fa-solid fa-image"></i></span><span class="rn">Architecture Diagram</span></div>
+            <div class="res"><span class="ico doc"><i class="fa-solid fa-file-lines"></i></span><span class="rn">Case Study — Globex</span></div>
+          </div>
+
+          <div class="coll">
+            <div class="coll-head"><i class="fa-solid fa-chevron-right" style="font-size:9px"></i><span class="dot" style="background:var(--mj-brand-tertiary)"></span><span class="ct">Onboarding Assets</span><span class="cnt">8</span></div>
+          </div>
+
+        </div>
+        <div class="lib-foot"><i class="fa-solid fa-shield-halved"></i> Agent may present only granted collections</div>
+      </aside>
+
+      <!-- golden-layout style multi-pane grid -->
+      <div class="grid">
+
+        <!-- ===== RESOURCES (feature pane, presenting a slide) ===== -->
+        <section class="pane feature">
+          <div class="pane-head">
+            <span class="grip"><i class="fa-solid fa-grip-vertical"></i></span>
+            <span class="pico res"><i class="fa-solid fa-photo-film"></i></span>
+            <span class="pt">Resources <small>· Q3 Pitch Deck</small></span>
+            <span class="driving agent"><i class="fa-solid fa-robot"></i> Agent presenting</span>
+            <button class="pbtn" title="Focus this pane"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+            <button class="pbtn" title="Pane menu"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="viewer">
+            <div class="slide-wrap">
+              <div class="slide">
+                <div class="kicker">Acme Platform · Pricing</div>
+                <h2>Simple, scalable pricing</h2>
+                <div class="lede">Three tiers that grow with your team. No setup fees, cancel anytime.</div>
+                <div class="tiers">
+                  <div class="tier"><div class="tn">Starter</div><div class="tp">$0<small>/mo</small></div></div>
+                  <div class="tier hi"><span class="tag">POPULAR</span><div class="tn">Growth</div><div class="tp">$49<small>/seat</small></div></div>
+                  <div class="tier"><div class="tn">Enterprise</div><div class="tp">Custom</div></div>
+                </div>
+                <!-- agent spotlight on the Growth tier -->
+                <div class="spotlight">
+                  <div class="callout"><i class="fa-solid fa-wand-magic-sparkles"></i> “Most teams start here →”</div>
+                  <div class="ring2" style="left:33%"></div>
+                </div>
+              </div>
+            </div>
+            <div class="deck-strip">
+              <button class="nav"><i class="fa-solid fa-chevron-left"></i></button>
+              <div class="thumbs">
+                <div class="thumb"></div><div class="thumb"></div><div class="thumb on"></div>
+                <div class="thumb"></div><div class="thumb"></div><div class="thumb"></div>
+              </div>
+              <button class="nav"><i class="fa-solid fa-chevron-right"></i></button>
+              <span class="pos">3 / 6</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== WHITEBOARD ===== -->
+        <section class="pane">
+          <div class="pane-head">
+            <span class="grip"><i class="fa-solid fa-grip-vertical"></i></span>
+            <span class="pico wb"><i class="fa-solid fa-chalkboard"></i></span>
+            <span class="pt">Whiteboard</span>
+            <span class="driving agent"><i class="fa-solid fa-robot"></i> Agent</span>
+            <button class="pbtn"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="wb">
+            <svg viewBox="0 0 400 200" preserveAspectRatio="none">
+              <path d="M40,150 C90,40 150,40 180,120 S280,180 350,60" fill="none" stroke="#0076b6" stroke-width="3" stroke-linecap="round"/>
+              <circle cx="180" cy="120" r="6" fill="#8b5cf6"/>
+              <line x1="40" y1="170" x2="360" y2="170" stroke="#cbd5e1" stroke-width="2"/>
+              <line x1="40" y1="170" x2="40" y2="30" stroke="#cbd5e1" stroke-width="2"/>
+              <text x="200" y="192" font-size="11" fill="#64748b" font-family="Inter" text-anchor="middle">months</text>
+            </svg>
+            <div class="sticky" style="top:14px;right:16px;">ROI ≈ 4 mo<br>payback</div>
+          </div>
+        </section>
+
+        <!-- ===== BROWSER ===== -->
+        <section class="pane">
+          <div class="pane-head">
+            <span class="grip"><i class="fa-solid fa-grip-vertical"></i></span>
+            <span class="pico br"><i class="fa-solid fa-globe"></i></span>
+            <span class="pt">Browser</span>
+            <span class="driving user"><i class="fa-solid fa-user"></i> You</span>
+            <button class="pbtn"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="br-view">
+            <div class="br-bar">
+              <div class="dots"><i style="background:#ef4444"></i><i style="background:#f59e0b"></i><i style="background:#22c55e"></i></div>
+              <div class="br-url"><i class="fa-solid fa-lock"></i> acme.com/customers/globex</div>
+            </div>
+            <div class="br-hero">
+              <div class="bh">How Globex cut onboarding 60%</div>
+              <div class="bs">A live customer story the agent pulled up to back the pitch.</div>
+            </div>
+            <div class="br-rows">
+              <div class="br-row m"></div><div class="br-row"></div><div class="br-row s"></div>
+            </div>
+            <i class="fa-solid fa-arrow-pointer cursor-ghost" style="top:62px;left:64%"></i>
+          </div>
+        </section>
+
+      </div><!-- /grid -->
+
+      <!-- ===== TRANSCRIPT (docked right) — proves "all at once" ===== -->
+      <section class="pane" style="width:288px;flex:none;margin:10px 10px 10px 0;border-radius:var(--mj-radius-lg);">
+        <div class="pane-head">
+          <span class="grip"><i class="fa-solid fa-grip-vertical"></i></span>
+          <span class="pico tx"><i class="fa-solid fa-waveform"></i></span>
+          <span class="pt">Transcript</span>
+          <button class="pbtn"><i class="fa-solid fa-ellipsis"></i></button>
+        </div>
+        <div class="tx">
+          <div class="tx-scroll">
+            <div class="msg user"><div class="mav">JM</div><div class="bub">Can you walk me through pricing?</div></div>
+            <div class="tool-line"><i class="fa-solid fa-magnifying-glass"></i> <b>resources_search</b>(“pricing”)</div>
+            <div class="tool-line"><i class="fa-solid fa-display"></i> <b>resources_present</b> → Q3 Pitch Deck</div>
+            <div class="msg agent"><div class="mav">SK</div><div class="bub">Happy to. We keep it simple — three tiers. Most teams start on <b>Growth</b> at $49 a seat.</div></div>
+            <div class="tool-line"><i class="fa-solid fa-crosshairs"></i> <b>resources_focus_region</b>(Growth tier)</div>
+            <div class="msg user"><div class="mav">JM</div><div class="bub">What's the payback like?</div></div>
+            <div class="tool-line"><i class="fa-solid fa-chalkboard"></i> <b>Whiteboard_draw</b> → ROI curve</div>
+            <div class="msg agent"><div class="mav">SK</div><div class="bub">Roughly four months — let me sketch it… and here's how Globex did it.</div></div>
+            <div class="tool-line"><i class="fa-solid fa-globe"></i> opened <b>acme.com/customers/globex</b></div>
+          </div>
+          <div class="tx-composer">
+            <div class="mic"><i class="fa-solid fa-microphone"></i></div>
+            <input placeholder="Speak or type…">
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /body -->
+  </div><!-- /overlay -->
+
+  <div class="legend">
+    <span><span class="sw" style="background:var(--violet-500)"></span> Resources channel (new)</span>
+    <span><span class="sw" style="background:var(--mj-brand-tertiary)"></span> Whiteboard channel</span>
+    <span><span class="sw" style="background:var(--mj-brand-primary)"></span> Remote Browser channel</span>
+    <span><i class="fa-solid fa-robot" style="color:var(--violet-600)"></i> Agent driving a surface</span>
+    <span><i class="fa-solid fa-user" style="color:var(--mj-status-info-text)"></i> User driving a surface</span>
+    <span><i class="fa-solid fa-grip-vertical" style="color:var(--mj-text-disabled)"></i> Drag handle — split / stack / tab (Arrange mode)</span>
+  </div>
+
+</div>
+</body>
+</html>

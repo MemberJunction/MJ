@@ -75,6 +75,13 @@ import { MJSearchScopeProviderFormComponentExtended } from "./SearchScopes/searc
 import { SearchModule } from "@memberjunction/ng-search";
 import { MJAIAgentSessionFormComponentExtended } from "./AIAgentSessions/ai-agent-session-form.component";
 import { MJAIAgentChannelFormComponentExtended } from "./AIAgentChannels/ai-agent-channel-form.component";
+// Realtime Bridges — custom Extended forms (Pattern 2) for the three major bridge entities.
+import { MJAIBridgeProviderFormComponentExtended, LoadMJAIBridgeProviderFormComponentExtended } from "./BridgeProviders/bridge-provider-form.component";
+import { MJAIAgentSessionBridgeFormComponentExtended, LoadMJAIAgentSessionBridgeFormComponentExtended } from "./SessionBridges/session-bridge-form.component";
+import { MJAIBridgeAgentIdentityFormComponentExtended, LoadMJAIBridgeAgentIdentityFormComponentExtended } from "./BridgeAgentIdentities/bridge-agent-identity-form.component";
+// AI Agent "Realtime" panel (Pattern 1 — BaseFormPanel slot). Imported so the
+// @RegisterClassEx decorator runs at module load (Angular tree-shaking guard).
+import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/agent-realtime.panel";
 
 @NgModule({
     declarations: [
@@ -123,6 +130,10 @@ import { MJAIAgentChannelFormComponentExtended } from "./AIAgentChannels/ai-agen
         MJSearchScopeProviderFormComponentExtended,
         MJAIAgentSessionFormComponentExtended,
         MJAIAgentChannelFormComponentExtended,
+        MJAIBridgeProviderFormComponentExtended,
+        MJAIAgentSessionBridgeFormComponentExtended,
+        MJAIBridgeAgentIdentityFormComponentExtended,
+        AgentRealtimePanel,
     ],
     imports: [
         CommonModule,
@@ -197,6 +208,10 @@ import { MJAIAgentChannelFormComponentExtended } from "./AIAgentChannels/ai-agen
         MJSearchScopeProviderFormComponentExtended,
         MJAIAgentSessionFormComponentExtended,
         MJAIAgentChannelFormComponentExtended,
+        MJAIBridgeProviderFormComponentExtended,
+        MJAIAgentSessionBridgeFormComponentExtended,
+        MJAIBridgeAgentIdentityFormComponentExtended,
+        AgentRealtimePanel,
         ActionsModule
     ],
     providers: [

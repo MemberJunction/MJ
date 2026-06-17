@@ -106,10 +106,11 @@ class TestableService extends RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         promptID: string | null,
         modelID: string,
+        vendorID: string,
         userID: string | undefined,
         agentSessionID: string
     ): Promise<{ CoAgentRunID: string; PromptRunID?: string; CoAgentRunStepID?: string } | null> {
-        this.ObservabilitySpy({ coAgentID: coAgent.ID, promptID, modelID, userID, agentSessionID });
+        this.ObservabilitySpy({ coAgentID: coAgent.ID, promptID, modelID, vendorID, userID, agentSessionID });
         return this.ObservabilityResult;
     }
     protected override resolveTargetAgent(targetAgentID: string): MJAIAgentEntityExtended | null {
@@ -661,6 +662,124 @@ function makeRunProvider(byName: (entityName: string) => FakeRun): IMetadataProv
     return { GetEntityObject: vi.fn(async (name: string) => byName(name)) } as unknown as IMetadataProvider;
 }
 
+describe('RealtimeClientSessionService.AppendPromptRunMessage', () => {
+    it('appends a turn to an empty Messages array', async () => {
+        const promptRun = makeRun({ ID: 'pr-1', Messages: null });
+        const svc = new RealtimeClientSessionService();
+
+        const ok = await svc.AppendPromptRunMessage('pr-1', 'user', 'hello', false, contextUser, makeRunProvider(() => promptRun));
+
+        expect(ok).toBe(true);
+        expect(JSON.parse(promptRun.Messages as string)).toEqual([{ role: 'user', content: 'hello' }]);
+    });
+
+    it('appends to existing Messages, preserving prior turns', async () => {
+        const promptRun = makeRun({ ID: 'pr-1', Messages: JSON.stringify([{ role: 'user', content: 'hi' }]) });
+        const svc = new RealtimeClientSessionService();
+
+        await svc.AppendPromptRunMessage('pr-1', 'assistant', 'hello back', false, contextUser, makeRunProvider(() => promptRun));
+
+        expect(JSON.parse(promptRun.Messages as string)).toEqual([
+            { role: 'user', content: 'hi' },
+            { role: 'assistant', content: 'hello back' },
+        ]);
+    });
+
+    it('replacePrevious swaps the last same-role message (streaming correction)', async () => {
+        const promptRun = makeRun({ ID: 'pr-1', Messages: JSON.stringify([
+            { role: 'user', content: 'hi' },
+            { role: 'assistant', content: 'partial' },
+        ]) });
+        const svc = new RealtimeClientSessionService();
+
+        await svc.AppendPromptRunMessage('pr-1', 'assistant', 'final full text', true, contextUser, makeRunProvider(() => promptRun));
+
+        expect(JSON.parse(promptRun.Messages as string)).toEqual([
+            { role: 'user', content: 'hi' },
+            { role: 'assistant', content: 'final full text' },
+        ]);
+    });
+
+    it('replacePrevious appends when the last message is a different role', async () => {
+        const promptRun = makeRun({ ID: 'pr-1', Messages: JSON.stringify([{ role: 'user', content: 'hi' }]) });
+        const svc = new RealtimeClientSessionService();
+
+        await svc.AppendPromptRunMessage('pr-1', 'assistant', 'reply', true, contextUser, makeRunProvider(() => promptRun));
+
+        expect(JSON.parse(promptRun.Messages as string)).toEqual([
+            { role: 'user', content: 'hi' },
+            { role: 'assistant', content: 'reply' },
+        ]);
+    });
+
+    it('returns false (never throws) when the prompt run cannot be loaded', async () => {
+        const promptRun = makeRun({ ID: 'missing', Load: vi.fn(async () => false) });
+        const svc = new RealtimeClientSessionService();
+
+        expect(await svc.AppendPromptRunMessage('missing', 'user', 'x', false, contextUser, makeRunProvider(() => promptRun))).toBe(false);
+    });
+
+    it('returns false when the save fails', async () => {
+        const promptRun = makeRun({ ID: 'pr-1', Messages: null, Save: vi.fn(async () => false), LatestResult: { CompleteMessage: 'db down' } });
+        const svc = new RealtimeClientSessionService();
+
+        expect(await svc.AppendPromptRunMessage('pr-1', 'user', 'x', false, contextUser, makeRunProvider(() => promptRun))).toBe(false);
+    });
+});
+
+describe('RealtimeClientSessionService — prompt-run write serialization (no clobber)', () => {
+    /**
+     * Models the production race: each GetEntityObject yields a FRESH entity whose Load copies from a shared
+     * backing store and Save writes the whole row back. Without serialization, a concurrent usage save would
+     * persist the stale Messages it loaded and wipe a freshly-appended turn (and vice-versa).
+     */
+    function makeStatefulRunProvider(store: { Messages: string | null; TokensPrompt: number; TokensCompletion: number; TokensUsed: number }): IMetadataProvider {
+        return {
+            GetEntityObject: vi.fn(async () => {
+                const entity: Record<string, unknown> = {
+                    Load: async () => {
+                        entity.Messages = store.Messages;
+                        entity.TokensPrompt = store.TokensPrompt;
+                        entity.TokensCompletion = store.TokensCompletion;
+                        entity.TokensUsed = store.TokensUsed;
+                        return true;
+                    },
+                    Save: async () => {
+                        store.Messages = entity.Messages as string | null;
+                        store.TokensPrompt = entity.TokensPrompt as number;
+                        store.TokensCompletion = entity.TokensCompletion as number;
+                        store.TokensUsed = entity.TokensUsed as number;
+                        return true;
+                    },
+                    LatestResult: { CompleteMessage: '' },
+                };
+                return entity;
+            }),
+        } as unknown as IMetadataProvider;
+    }
+
+    it('interleaved usage checkpoints and message appends preserve BOTH (neither clobbers the other)', async () => {
+        const store = { Messages: null as string | null, TokensPrompt: 0, TokensCompletion: 0, TokensUsed: 0 };
+        const provider = makeStatefulRunProvider(store);
+        const svc = new RealtimeClientSessionService();
+
+        // Fire many appends and usage checkpoints concurrently against the same run.
+        const ops: Promise<boolean>[] = [];
+        for (let i = 0; i < 8; i++) {
+            ops.push(svc.AppendPromptRunMessage('pr-1', i % 2 === 0 ? 'user' : 'assistant', `turn ${i}`, false, contextUser, provider));
+            ops.push(svc.AccumulatePromptRunUsage('pr-1', 100, 25, contextUser, provider));
+        }
+        await Promise.all(ops);
+
+        // All 8 turns survived (usage saves didn't revert Messages) ...
+        expect(JSON.parse(store.Messages as string)).toHaveLength(8);
+        // ... and all 8 usage deltas accumulated (appends didn't revert tokens).
+        expect(store.TokensPrompt).toBe(800);
+        expect(store.TokensCompletion).toBe(200);
+        expect(store.TokensUsed).toBe(1000);
+    });
+});
+
 describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {
     it('completes both runs (Status, CompletedAt, Success) when they are still Running', async () => {
         const agentRun = makeRun({ ID: 'co-run-1' });
@@ -804,13 +923,14 @@ class ObservabilityTestService extends RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         promptID: string | null,
         modelID: string,
+        vendorID: string,
         userID: string | undefined,
         agentSessionID: string,
         prov: IMetadataProvider,
         conversationID?: string,
     ): Promise<{ CoAgentRunID: string; PromptRunID?: string; CoAgentRunStepID?: string } | null> {
         return this.createCoAgentObservabilityRun(
-            coAgent, promptID, modelID, userID, agentSessionID, contextUser, prov, conversationID
+            coAgent, promptID, modelID, vendorID, userID, agentSessionID, contextUser, prov, conversationID
         );
     }
 }
@@ -845,7 +965,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const svc = new ObservabilityTestService();
 
         const result = await svc.CallCreateObservabilityRun(
-            makeCoAgent(), 'prompt-77', 'model-77', 'voice-user', 'session-77', prov, 'conv-77'
+            makeCoAgent(), 'prompt-77', 'model-77', 'vendor-77', 'voice-user', 'session-77', prov, 'conv-77'
         );
 
         expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real', CoAgentRunStepID: 'run-step-real' });
@@ -864,6 +984,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         expect(promptRun.NewRecord).toHaveBeenCalled();
         expect(promptRun.PromptID).toBe('prompt-77');
         expect(promptRun.ModelID).toBe('model-77');
+        expect(promptRun.VendorID).toBe('vendor-77');   // required — without it the save fails ("Vendor cannot be null")
         expect(promptRun.AgentID).toBe('co-1');
         expect(promptRun.Status).toBe('Running');
         expect(promptRun.RunType).toBe('Single');
@@ -888,7 +1009,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = makeRunProvider(() => agentRun);
         const svc = new ObservabilityTestService();
 
-        await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', undefined, 'session-1', prov);
+        await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', 'vendor-1', undefined, 'session-1', prov);
 
         expect(agentRun.ConversationID).toBeUndefined();
         expect(agentRun.UserID).toBeUndefined();
@@ -900,7 +1021,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
         const svc = new ObservabilityTestService();
 
-        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 's1', prov);
 
         expect(result).toBeNull();
         expect(getEntity).toHaveBeenCalledTimes(1); // only the agent run was ever requested
@@ -912,7 +1033,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
         const svc = new ObservabilityTestService();
 
-        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', 'u1', 's1', prov);
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), null, 'model-1', 'vendor-1', 'u1', 's1', prov);
 
         expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: undefined, CoAgentRunStepID: undefined });
         expect(getEntity).toHaveBeenCalledTimes(1); // neither the prompt run nor the step was requested
@@ -925,7 +1046,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = makeObsProvider(agentRun, promptRun, runStep);
         const svc = new ObservabilityTestService();
 
-        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 's1', prov);
 
         expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: undefined, CoAgentRunStepID: 'run-step-real' });
         expect(runStep.TargetID).toBe('prompt-1');
@@ -939,7 +1060,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = makeObsProvider(agentRun, promptRun, runStep);
         const svc = new ObservabilityTestService();
 
-        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 's1', prov);
 
         expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real', CoAgentRunStepID: undefined });
     });
@@ -956,7 +1077,7 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         const prov = { GetEntityObject: getEntity } as unknown as IMetadataProvider;
         const svc = new ObservabilityTestService();
 
-        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'u1', 's1', prov);
+        const result = await svc.CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 's1', prov);
 
         expect(result).toEqual({ CoAgentRunID: 'co-run-real', PromptRunID: 'prompt-run-real', CoAgentRunStepID: undefined });
     });

@@ -31,7 +31,6 @@ import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
-    MJAIPromptRunEntity,
     MJArtifactEntity,
     MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
@@ -93,7 +92,6 @@ const REALTIME_AGENT_TYPE_NAME = 'Realtime';
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const CO_AGENT_ENTITY = 'MJ: AI Agent Co Agents';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
-const PROMPT_RUN_ENTITY = 'MJ: AI Prompt Runs';
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
 const SESSION_CHANNEL_ENTITY = 'MJ: AI Agent Session Channels';
 const ARTIFACT_ENTITY = 'MJ: Artifacts';
@@ -108,10 +106,17 @@ const CONVERSATION_DETAIL_ARTIFACT_ENTITY = 'MJ: Conversation Detail Artifacts';
  */
 const WHITEBOARD_ARTIFACT_TYPE_NAME = 'Whiteboard';
 
-/** Maximum number of client-declared UI tools accepted at session mint. */
-const MAX_CLIENT_TOOLS = 16;
-/** Maximum accepted size (chars) of the serialized client tool declarations. */
-const MAX_CLIENT_TOOLS_JSON_CHARS = 64_000;
+/**
+ * Maximum number of client-declared UI tools accepted at session mint. Sized to comfortably fit
+ * MULTIPLE interactive channels at once plus headroom: the Whiteboard channel alone declares 17 tools
+ * and the Remote Browser channel 10, so a session with both is ~27 — the old cap of 16 silently rejected
+ * the ENTIRE set (parseClientTools is all-or-nothing), leaving the co-agent with only invoke-target-agent
+ * and forcing it to delegate every channel request. This is an abuse ceiling, not a working limit.
+ */
+const MAX_CLIENT_TOOLS = 64;
+/** Maximum accepted size (chars) of the serialized client tool declarations. Raised in step with
+ *  {@link MAX_CLIENT_TOOLS} — multi-channel tool sets with verbose descriptions + JSON schemas run large. */
+const MAX_CLIENT_TOOLS_JSON_CHARS = 256_000;
 /** Maximum accepted size (chars) of a persisted channel state blob. */
 const MAX_CHANNEL_STATE_CHARS = 2_000_000;
 
@@ -503,8 +508,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * The co-agent observability `AIAgentRun`/`AIPromptRun` are created at session start (see
      * {@link RealtimeClientSessionResolver.StartRealtimeClientSession}) and finalized on close;
      * incremental usage telemetry lands on the `AIPromptRun` via
-     * {@link RealtimeClientSessionResolver.RelayRealtimeUsage}. Still deferred: linking persisted
-     * transcript turns to those runs.
+     * {@link RealtimeClientSessionResolver.RelayRealtimeUsage}. Each persisted turn is ALSO appended
+     * to the co-agent `AIPromptRun.Messages` (best-effort), so the run captures the full conversation
+     * — observability parity with every other MJ agent run, not just token totals.
      *
      * @returns `true` when the transcript turn was persisted.
      */
@@ -525,8 +531,76 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!saved) {
             return false;
         }
+        // Mirror the turn onto the co-agent's long-lived prompt run so its Messages capture the full
+        // conversation (run-viewer observability parity). Best-effort — never fails the transcript relay.
+        const promptRunID = this.readPromptRunID(session);
+        if (promptRunID) {
+            await this.clientSessionService.AppendPromptRunMessage(
+                promptRunID,
+                this.mapTranscriptRoleToChatRole(role),
+                text,
+                replacesPrevious ?? false,
+                contextUser,
+                provider,
+            );
+        }
         await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
         return true;
+    }
+
+    /**
+     * Maps the relayed transcript role (`'User'`/`'AI'`/`'Assistant'`, case-insensitive) to the
+     * standard chat-message role stored in `AIPromptRun.Messages`. Anything that isn't an explicit
+     * user turn is treated as the assistant (the co-agent's own speech).
+     */
+    private mapTranscriptRoleToChatRole(role: string): 'user' | 'assistant' {
+        return role.trim().toLowerCase() === 'user' ? 'user' : 'assistant';
+    }
+
+    /**
+     * Relays a co-agent CHANNEL tool-call (browser_ / Whiteboard_ etc.) onto the session's co-agent
+     * AIPromptRun.Messages — run-only observability so the run captures what the co-agent DID, not just
+     * what it said. Deliberately NOT a ConversationDetail turn (the chat thread stays speech-only).
+     * Ownership-gated; best-effort (a missing prompt run / save failure simply returns false).
+     *
+     * @returns `true` when the tool turn was recorded on the run.
+     */
+    @Mutation(() => Boolean)
+    async RelayRealtimeToolTurn(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Arg('toolName', () => String) toolName: string,
+        @Ctx() { userPayload, providers }: AppContext,
+        @Arg('argsJson', () => String, { nullable: true }) argsJson?: string,
+        @Arg('resultJson', () => String, { nullable: true }) resultJson?: string,
+    ): Promise<boolean> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
+        const promptRunID = this.readPromptRunID(session);
+        if (!promptRunID) {
+            return false;
+        }
+        return this.clientSessionService.AppendPromptRunMessage(
+            promptRunID,
+            'assistant',
+            this.formatToolTurn(toolName, argsJson, resultJson),
+            false,
+            contextUser,
+            provider,
+        );
+    }
+
+    /**
+     * Formats a co-agent tool call into a compact, human-readable run line: `🔧 <tool> <args> → <result>`,
+     * clipping args/result so a verbose payload never bloats the Messages blob.
+     */
+    private formatToolTurn(toolName: string, argsJson?: string, resultJson?: string): string {
+        const clip = (raw: string | undefined, max: number): string => {
+            const t = (raw ?? '').trim();
+            return t.length > max ? `${t.slice(0, max)}…` : t;
+        };
+        const args = clip(argsJson, 200);
+        const result = clip(resultJson, 300);
+        return `🔧 ${toolName}${args ? ` ${args}` : ''}${result ? ` → ${result}` : ''}`;
     }
 
     /**
@@ -606,7 +680,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!promptRunID) {
             return false; // no observability prompt run for this session — logged in the helper
         }
-        return this.accumulatePromptRunUsage(promptRunID, inputDelta, outputDelta, contextUser, provider);
+        // Delegate to the service so usage writes share the per-run serialization with transcript-message
+        // appends — otherwise the frequent usage save clobbers freshly-appended Messages (and vice-versa).
+        return this.clientSessionService.AccumulatePromptRunUsage(promptRunID, inputDelta, outputDelta, contextUser, provider);
     }
 
     /** Clamps a relayed token delta: negative / non-finite values become 0. */
@@ -633,40 +709,6 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         } catch {
             LogError(`RelayRealtimeUsage: session ${session.ID} has no parseable config — usage delta dropped.`);
             return null;
-        }
-    }
-
-    /**
-     * Loads the co-agent `AIPromptRun` and ACCUMULATES the relayed deltas onto
-     * `TokensPrompt` / `TokensCompletion`, recomputing `TokensUsed` as their sum. Best-effort:
-     * load/save failures log and return `false`, never throw.
-     */
-    private async accumulatePromptRunUsage(
-        promptRunID: string,
-        inputDelta: number,
-        outputDelta: number,
-        contextUser: UserInfo,
-        provider: IMetadataProvider,
-    ): Promise<boolean> {
-        try {
-            const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>(PROMPT_RUN_ENTITY, contextUser);
-            if (!(await promptRun.Load(promptRunID))) {
-                LogError(`RelayRealtimeUsage: co-agent prompt run ${promptRunID} not found — usage delta dropped.`);
-                return false;
-            }
-            promptRun.TokensPrompt = (promptRun.TokensPrompt ?? 0) + inputDelta;
-            promptRun.TokensCompletion = (promptRun.TokensCompletion ?? 0) + outputDelta;
-            promptRun.TokensUsed = (promptRun.TokensPrompt ?? 0) + (promptRun.TokensCompletion ?? 0);
-            const saved = await promptRun.Save();
-            if (!saved) {
-                LogError(
-                    `RelayRealtimeUsage: prompt run ${promptRunID} save failed: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`,
-                );
-            }
-            return saved;
-        } catch (error) {
-            LogError(`RelayRealtimeUsage: usage accumulation failed for prompt run ${promptRunID}: ${(error as Error).message}`);
-            return false;
         }
     }
 

@@ -24,6 +24,7 @@ If you're about to start work in one of the areas below, **read the guide first*
 
 ## AI and agents
 
+- **[Agent Memory Guide](AGENT_MEMORY_GUIDE.md)** — The complete agent-memory architecture: three-tier mental model (scratchpad → provisional → hardened), note injection (strategies, recency-wins policy, dated rendering, 8-level scoping), in-flight `memoryWrites` (the guard pipeline, `AllowMemoryWrite` gating, `AuthorType` provenance), and the Memory Manager's hardening/consolidation/contradiction/decay pipeline. Includes a configuration reference and troubleshooting queries.
 - **[Real-Time Co-Agents Guide](REALTIME_CO_AGENTS_GUIDE.md)** — Live, low-latency voice agents: the `Realtime` agent type and Realtime Co-Agent (one co-agent voices any target agent), the triple-registry plugin architecture (server/client model drivers + channel plugins), client-direct vs server-bridged topologies, session lifecycle/janitor, interactive channels (the live Whiteboard), narration, observability, and security. Companion to [`plans/ai-agent-sessions.md`](../plans/ai-agent-sessions.md).
 - **[Conversations UX Stack Guide](CONVERSATIONS_UX_STACK_GUIDE.md)** — The 3-layer architecture for every chat surface: pure-TS `@memberjunction/conversations-runtime` (orchestration) ↔ adapters (`INotificationAdapter` / `IActiveTaskTracker` / `ISessionsAdapter`) ↔ `@memberjunction/ng-conversations` (Angular widget). Slot system, Before/After cancelable events, `--mj-chat-*` design tokens, default-agent resolution, sessions adapter bridging to realtime, recipes.
 

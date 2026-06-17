@@ -124,10 +124,10 @@ describe('noise gating (idle mic must not animate the visuals)', () => {
     let frame = s.Next(activity({ InputLevel: 0.6, InputBins: new Array(9).fill(0.8) }), 0)!;
     expect(frame.Direction).toBe('user');
 
-    // Mic falls back to its idle room-noise floor (non-zero, but under the gate) —
+    // Mic falls back to its idle room-noise floor (non-zero, but under the 0.045 gate) —
     // the analyser keeps reporting it forever; the visuals must come to rest anyway.
     for (let t = 1; t <= 60; t++) {
-      frame = s.Next(activity({ InputLevel: 0.05, InputBins: new Array(9).fill(0.3) }), t * 100)!;
+      frame = s.Next(activity({ InputLevel: 0.03, InputBins: new Array(9).fill(0.3) }), t * 100)!;
     }
     expect(frame.InputLevel).toBeLessThan(0.01);
     expect(Math.max(...frame.Bins)).toBeLessThan(0.01);

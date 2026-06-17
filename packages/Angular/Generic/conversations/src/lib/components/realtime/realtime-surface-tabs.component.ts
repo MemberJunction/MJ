@@ -4,14 +4,25 @@ import {
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeActivityRailComponent } from './realtime-activity-rail.component';
 import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
+import { ChannelOnboardingPanelComponent } from './channels/channel-onboarding-panel.component';
+import { ChannelOnboardingDetails } from './channels/base-realtime-channel-client';
 import {
   RealtimeSurfaceTabsModel, RealtimeSurfaceTab, RealtimeChannelTabRegistration
 } from './realtime-surface-tabs.model';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+
+/**
+ * User-settings key (NOT localStorage — see `UserInfoEngine`) under which the per-user "which
+ * channel intros have been seen" map is persisted: a JSON object of `{ [channelName]: true }`,
+ * so the first-run onboarding for each interactive channel shows exactly once per user and
+ * follows them across devices.
+ */
+const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.v1';
 
 /**
  * The call overlay's TABBED SURFACE PANEL (the right panel) — per the approved
@@ -45,7 +56,10 @@ import { ParsedDelegationArtifact } from '../../services/delegation-result-parse
 @Component({
   standalone: true,
   selector: 'mj-realtime-surface-tabs',
-  imports: [CommonModule, ArtifactsModule, RealtimeActivityRailComponent, RealtimeChannelPaneComponent],
+  imports: [
+    CommonModule, ArtifactsModule, RealtimeActivityRailComponent, RealtimeChannelPaneComponent,
+    ChannelOnboardingPanelComponent
+  ],
   templateUrl: './realtime-surface-tabs.component.html',
   styleUrl: './realtime-surface-tabs.component.css'
 })
@@ -100,6 +114,15 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   private subs: Subscription[] = [];
   private lastWide = false;
   private cdr = inject(ChangeDetectorRef);
+
+  /**
+   * The channel whose first-run intro is currently being shown (its `ChannelName`), or `null`
+   * when no intro is up. Set when the user opens a channel tab they've never seen the intro
+   * for; cleared on dismiss. Only one intro shows at a time (the active channel's).
+   */
+  private onboardingChannelName: string | null = null;
+  /** The intro content for {@link onboardingChannelName}, mirrored for the template binding. */
+  public OnboardingContent: ChannelOnboardingDetails | null = null;
 
   /** The currently focused tab. */
   public get ActiveTab(): RealtimeSurfaceTab {
@@ -174,8 +197,14 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    * plugin, forwarded from `RealtimeSessionOverlayComponent.RegisterChannelTab`.
    */
   public RegisterChannelTab(registration: RealtimeChannelTabRegistration): void {
-    this.Model.RegisterChannelTab(registration);
-    this.cdr.markForCheck();
+    // Microtask defer: the overlay forwards this while handling agent/channel activity, which can
+    // land mid change-detection. Adding a tab to Model.Tabs synchronously then trips NG0100 on the
+    // tab-strip bindings (s-tab--active). A microtask lands the mutation in a fresh CD turn —
+    // imperceptible for an async reveal, and ordered with any follow-on RevealChannel.
+    Promise.resolve().then(() => {
+      this.Model.RegisterChannelTab(registration);
+      this.cdr.markForCheck();
+    });
   }
 
   /**
@@ -185,10 +214,16 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    * instead of having to find the tab themselves. No-op for unknown keys.
    */
   public RevealChannel(key: string): void {
-    this.setCollapsed(false);
-    this.Model.Focus(key);
-    this.Model.FlashTab(key);
-    this.cdr.markForCheck();
+    // Microtask defer (same NG0100 reason as RegisterChannelTab): the agent-activity reveal mutates
+    // ActiveKey/FlashKey, which feed the tab-strip class bindings; doing it mid-CD trips the
+    // ExpressionChanged check. Deferring lands it in a fresh CD turn and stays ordered after any
+    // RegisterChannelTab queued just before it.
+    Promise.resolve().then(() => {
+      this.setCollapsed(false);
+      this.Model.Focus(key);
+      this.Model.FlashTab(key);
+      this.cdr.markForCheck();
+    });
   }
 
   /**
@@ -231,7 +266,72 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   private onModelChanged(): void {
     this.scheduleFlashClear();
     this.syncWide();
+    this.evaluateOnboarding();
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Decides whether the first-run channel intro should be visible for the ACTIVE tab: shows it
+   * the first time the user opens (focuses) a channel tab whose plugin supplies onboarding and
+   * which this user hasn't dismissed before. Re-runs on every model change so switching away
+   * from a channel tab tears the intro down (only the active channel's intro is ever up).
+   */
+  private evaluateOnboarding(): void {
+    const tab = this.ActiveTab;
+    const plugin = tab.Kind === 'channel' ? tab.Data?.Plugin ?? null : null;
+    const details = plugin?.GetOnboardingDetails() ?? null;
+    if (!plugin || !details || this.HasSeenOnboarding(plugin.ChannelName)) {
+      this.onboardingChannelName = null;
+      this.OnboardingContent = null;
+      return;
+    }
+    this.onboardingChannelName = plugin.ChannelName;
+    this.OnboardingContent = details;
+  }
+
+  /**
+   * Dismisses the current channel intro: marks that channel seen for this user (persisted via
+   * `UserInfoEngine`, debounced — NOT localStorage) and hides the panel so it never re-appears.
+   */
+  public DismissOnboarding(): void {
+    const channelName = this.onboardingChannelName;
+    this.onboardingChannelName = null;
+    this.OnboardingContent = null;
+    if (channelName) {
+      this.markOnboardingSeen(channelName);
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Reads the per-user seen-map and reports whether this channel's intro has been dismissed. */
+  private HasSeenOnboarding(channelName: string): boolean {
+    return this.readOnboardingSeen()[channelName] === true;
+  }
+
+  /** Persists `channelName` into the per-user seen-map (merge + debounced save). */
+  private markOnboardingSeen(channelName: string): void {
+    const map = this.readOnboardingSeen();
+    if (map[channelName] === true) {
+      return;
+    }
+    map[channelName] = true;
+    UserInfoEngine.Instance.SetSettingDebounced(CHANNEL_ONBOARDING_SEEN_SETTING_KEY, JSON.stringify(map));
+  }
+
+  /** Reads + parses the per-user seen-map setting (tolerant: malformed / unset → empty map). */
+  private readOnboardingSeen(): Record<string, boolean> {
+    const raw = UserInfoEngine.Instance.GetSetting(CHANNEL_ONBOARDING_SEEN_SETTING_KEY);
+    if (!raw) {
+      return {};
+    }
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, boolean>)
+        : {};
+    } catch {
+      return {};
+    }
   }
 
   /**

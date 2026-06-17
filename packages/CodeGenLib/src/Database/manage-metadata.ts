@@ -4033,7 +4033,7 @@ export class ManageMetadataBase {
 
             if (ManageMetadataBase.newEntityList.length > 0) {
                // only do this if we actually created new entities
-               LogStatus(`   Done creating entities, refreshing metadata to reflect new entities...`)
+               logStatus(`   Done creating entities, refreshing metadata to reflect new entities...`)
                await md.Refresh();// refresh now since we've added some new entities
             }
          }
@@ -4366,10 +4366,10 @@ export class ManageMetadataBase {
                }
             }
 
-            LogStatus(`   Created new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`)
+            logStatus(`   Created new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`)
          }
          else {
-            LogStatus(`   Skipping new entity ${newEntity.TableName} because it doesn't qualify to be created. Reason: ${validationMessage}`)
+            logStatus(`   Skipping new entity ${newEntity.TableName} because it doesn't qualify to be created. Reason: ${validationMessage}`)
             return;
          }
       }

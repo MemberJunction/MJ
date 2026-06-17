@@ -7,3 +7,4 @@ export * from './drivers/openAIRealtimeClient';
 export * from './drivers/geminiRealtimeClient';
 export * from './drivers/elevenLabsRealtimeClient';
 export * from './drivers/assemblyAIRealtimeClient';
+export * from './drivers/xaiRealtimeClient';
