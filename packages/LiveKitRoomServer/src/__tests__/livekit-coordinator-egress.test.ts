@@ -53,10 +53,24 @@ describe('LiveKitAgentRoomCoordinator', () => {
     expect(params.Address).toBe(CONFIG.ServerUrl);
     expect(params.TurnMode).toBe('Passive'); // default
     expect(params.TurnMatcher).toBeDefined();
-    const config = params.Configuration as { AccessToken: string; BotDisplayName: string; RoomName: string };
+    const config = params.Configuration as { AccessToken: string; BotDisplayName: string; RoomName: string; NativeModuleSpecifier: string };
     expect(config.BotDisplayName).toBe('Sage');
     expect(config.RoomName).toBe('room-1');
     expect(config.AccessToken.split('.')).toHaveLength(3); // a signed JWT
+    // The native room-client module the bridge will load — defaults to the @livekit/rtc-node wrapper.
+    expect(config.NativeModuleSpecifier).toBe('@memberjunction/ai-bridge-livekit-native');
+  });
+
+  it('honors a SetNativeModuleSpecifier override for the native room-client module', async () => {
+    const { ops, startCalls } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+    coordinator.SetNativeModuleSpecifier('@acme/livekit-gemini-16k');
+
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 's3', RoomName: 'room-3', AgentName: 'Sage' });
+
+    const config = startCalls[0].Configuration as { NativeModuleSpecifier: string };
+    expect(config.NativeModuleSpecifier).toBe('@acme/livekit-gemini-16k');
+    coordinator.SetNativeModuleSpecifier(undefined); // restore default for other tests
   });
 
   it('throws a clear error when no LiveKit provider row is active', async () => {

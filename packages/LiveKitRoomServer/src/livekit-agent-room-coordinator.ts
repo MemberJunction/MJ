@@ -168,7 +168,16 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       JoinMethod: 'OnDemand',
       TurnMode: params.TurnMode ?? 'Passive',
       TurnMatcher: new RegexAddressedMatcher([botName, ...(params.AgentAliases ?? [])]),
-      Configuration: { AccessToken: botToken.Token, BotDisplayName: botName, RoomName: params.RoomName },
+      // NativeModuleSpecifier tells LiveKitNativeMeetingSdk which native room-client wrapper to load — the
+      // @livekit/rtc-node-backed @memberjunction/ai-bridge-livekit-native by default, overridable via env
+      // (e.g. a one-line module setting Gemini's 16 kHz inbound rate). AccessToken is the pre-signed bot
+      // join token; the room ws URL arrives as `Address`.
+      Configuration: {
+        AccessToken: botToken.Token,
+        BotDisplayName: botName,
+        RoomName: params.RoomName,
+        NativeModuleSpecifier: this.resolveNativeModuleSpecifier(),
+      },
       ContextUser: params.ContextUser,
       MetadataProvider: params.MetadataProvider,
     });
@@ -176,6 +185,35 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     LogStatus(`[LiveKitAgentRoomCoordinator] Agent ${botName} bridged into LiveKit room ${params.RoomName} (bridge ${active.SessionBridgeID})`);
     return { SessionBridgeID: active.SessionBridgeID, RoomName: params.RoomName, ServerUrl: botToken.ServerUrl };
   }
+
+  /** The default native room-client wrapper specifier — the @livekit/rtc-node package this repo ships. */
+  private static readonly DEFAULT_NATIVE_MODULE = '@memberjunction/ai-bridge-livekit-native';
+
+  /**
+   * Resolves the native LiveKit room-client module specifier for the bridge session. Prefers the
+   * `LIVEKIT_NATIVE_MODULE` env override (e.g. a deployment's custom-sample-rate wrapper), else the default
+   * {@link DEFAULT_NATIVE_MODULE}. Overridable in tests via {@link SetNativeModuleSpecifier}.
+   */
+  private resolveNativeModuleSpecifier(): string {
+    return (
+      this.nativeModuleSpecifierOverride ??
+      process.env.LIVEKIT_NATIVE_MODULE ??
+      LiveKitAgentRoomCoordinator.DEFAULT_NATIVE_MODULE
+    );
+  }
+
+  /**
+   * Overrides the native room-client module specifier (primarily for unit testing — production resolves it
+   * from env / the default).
+   *
+   * @param specifier The module specifier to use, or `undefined` to clear the override.
+   */
+  public SetNativeModuleSpecifier(specifier: string | undefined): void {
+    this.nativeModuleSpecifierOverride = specifier;
+  }
+
+  /** Test/deployment override for the native module specifier (see {@link resolveNativeModuleSpecifier}). */
+  private nativeModuleSpecifierOverride?: string;
 
   /**
    * Stops an agent room session (the bot leaves the room).

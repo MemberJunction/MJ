@@ -16,7 +16,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -1615,6 +1615,52 @@ export class BaseAgent {
             });
             return await this.createFailureResult(msg, params.contextUser) as ExecuteAgentResult<R>;
         }
+    }
+
+    /**
+     * Opens a **raw** {@link IRealtimeSession} for this agent — the duplex model connection a Realtime
+     * Bridge hands to `AIBridgeEngine.StartBridgeSession` so the agent can talk + hear over a media
+     * transport (a LiveKit room, a Zoom/Teams meeting, a phone call). The bridge engine owns turn-taking
+     * and the transport seam, so this deliberately returns the **session itself**, NOT a
+     * {@link RealtimeSessionRunner} (which is the client-direct topology's own orchestration loop).
+     *
+     * It reuses the EXACT same resolution + assembly as {@link executeRealtimeSession} — model selection
+     * ({@link resolveRealtimeModel}), agent configuration ({@link loadAgentConfiguration}), effective-config
+     * persona/voice ({@link resolveRealtimeEffectiveConfig}), and the system-prompt + memory context
+     * ({@link buildRealtimeSessionParams}) — then opens the session via
+     * {@link BaseRealtimeModel.StartSession}. Tools are intentionally NOT pre-populated: the
+     * `invoke-target-agent` + interactive-surface tools are a runner concern; a bridge that needs them
+     * registers them on the returned session itself.
+     *
+     * @param params The execution parameters (agent + context user + the request-scoped provider). A fresh
+     *   bridge session typically passes an empty `conversationMessages` array.
+     * @returns The live realtime session.
+     * @throws When the agent configuration fails to load or no usable Realtime model can be resolved.
+     */
+    public async StartBridgeRealtimeSession(params: ExecuteAgentParams): Promise<IRealtimeSession> {
+        // Mirror Execute()'s provider wiring so the realtime helpers operate on the request-scoped provider.
+        this._activeProvider = params.provider ?? Metadata.Provider;
+        await AIEngine.Instance.Config(false, params.contextUser, params.provider);
+
+        const config = await this.loadAgentConfiguration(params.agent);
+        if (!config.success) {
+            throw new Error(config.errorMessage ?? `Failed to load configuration for agent '${params.agent.Name}'.`);
+        }
+
+        const modelResolution = await this.resolveRealtimeModel(params);
+        if (!modelResolution) {
+            throw new Error(
+                `No usable Realtime model resolved for agent '${params.agent.Name}'. Configure an Active ` +
+                    `AIModelType 'Realtime' model with an active vendor whose DriverClass has a resolvable API key.`,
+            );
+        }
+
+        const effectiveConfig = this.resolveRealtimeEffectiveConfig(params.agent);
+        const sessionParams = await this.buildRealtimeSessionParams(
+            params, config, modelResolution.apiName, effectiveConfig, modelResolution.driverClass,
+        );
+
+        return await modelResolution.model.StartSession(sessionParams);
     }
 
     /**

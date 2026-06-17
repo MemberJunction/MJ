@@ -5,6 +5,17 @@ import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService 
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
+import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
+
+/**
+ * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
+ * Module-load side effect — it runs when MJServer builds its GraphQL schema (which imports this resolver),
+ * so `StartLiveKitAgentRoomSession` can open a real model session. `@memberjunction/server` is the natural
+ * home for the binding: it is the one package that depends on BOTH `@memberjunction/ai-agents` (the factory)
+ * and `@memberjunction/livekit-room-server` (the coordinator), keeping each of those decoupled from the
+ * other. Idempotent (latest-wins).
+ */
+LiveKitAgentRoomCoordinator.Instance.SetSessionFactory(CreateBridgeRealtimeSession);
 
 /**
  * GraphQL surface for the MJ-native LiveKit room: mints scoped client access tokens and starts an
@@ -13,9 +24,10 @@ import { GetReadWriteProvider } from '../util.js';
  * lives here.
  *
  * `MintLiveKitClientToken` is fully functional given LiveKit credentials. `StartLiveKitAgentRoomSession`
- * additionally requires the deployment to have bound a realtime-session factory on
- * `LiveKitAgentRoomCoordinator.Instance` (the model-session creation seam); until then it returns a clear
- * error while still allowing the human to join via a minted client token.
+ * opens a real agent model session via the realtime-session factory bound above (the agent must have an
+ * Active `Realtime` model + a vendor with a resolvable API key), then bridges it into the room through the
+ * coordinator. The native room media client (`@memberjunction/ai-bridge-livekit-native` /
+ * `@livekit/rtc-node`) must be installed on the agent host for the bot's audio to flow.
  */
 
 @InputType()
