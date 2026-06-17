@@ -13,3 +13,5 @@ export type {
     OAuth1aSignRequest,
     OAuth1aSignatureMethod,
 } from './OAuth1aSigner.js';
+export { buildBasicAuthHeaderValue, buildBasicAuthHeader } from './BasicAuthHeaderBuilder.js';
+export type { BasicAuthRequest } from './BasicAuthHeaderBuilder.js';

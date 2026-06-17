@@ -28,3 +28,4 @@ export { PropFuelConnector, parseFileName, compareMicrotime } from './PropFuelCo
 export { PathLMSConnector, LoadPathLMSConnector } from './PathLMSConnector.js';
 export { HivebriteConnector, LoadHivebriteConnector, type HivebriteConnectionConfig } from './HivebriteConnector.js';
 export { CventConnector, LoadCventConnector, type CventConnectionConfig } from './CventConnector.js';
+export { NeonCRMConnector, LoadNeonCRMConnector, type NeonCRMConnectionConfig } from './NeonCRMConnector.js';
