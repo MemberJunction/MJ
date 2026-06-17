@@ -1,0 +1,2 @@
+-- V202606171339__v5.42.x__Metadata_Sync.sql — no DDL to translate.
+-- Metadata is re-seeded via `mj sync push` against PG.
