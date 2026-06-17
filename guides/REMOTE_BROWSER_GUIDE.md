@@ -376,7 +376,7 @@ engine).
 `MJComputerUseEngine.Run` now **defaults the controller + judge to the stored
 `Computer Use - Controller` / `Computer Use - Judge` metadata prompts** (constants
 `DEFAULT_CONTROLLER_PROMPT_NAME` / `DEFAULT_JUDGE_PROMPT_NAME`). Those prompts carry both the prompt **text**
-*and* the **model selection** — by default **Gemini 3.1 Flash-Lite → Claude Haiku 4.5 → GPT 5.5** (the
+*and* the **model selection** — by default **Gemini 3.1 Flash-Lite → Gemini 3.5 Flash → Claude Haiku 4.5 → GPT 5.5** (the
 prompt's `MJ: AI Prompt Models` rows, highest `Priority` first, each on two vendors for failover). So the
 goal loop runs through the full MJ prompt stack with metadata-configured models, not a code prompt. Swap the
 model by editing the prompt's bindings in metadata — **no code change**.

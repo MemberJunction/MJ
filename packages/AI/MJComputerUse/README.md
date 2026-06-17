@@ -595,7 +595,7 @@ Expected test outcomes JSON (stored in `TestEntity.ExpectedOutcomes`):
 
 ### Controller & Judge Defaults
 
-`MJComputerUseEngine.Run` **defaults the controller and judge to the stored `Computer Use - Controller` / `Computer Use - Judge` metadata prompts** (exported as `DEFAULT_CONTROLLER_PROMPT_NAME` / `DEFAULT_JUDGE_PROMPT_NAME`) whenever the caller pins **neither** a prompt **nor** a model. These stored prompts are the golden source of **both** the prompt text **and** the model selection — by default **Gemini 3.1 Flash-Lite → Claude Haiku 4.5 → GPT 5.5** (each configured on two vendors, highest `Priority` first, for failover). The goal loop therefore routes through `AIPromptRunner`, getting prompt-run logging and model failover for free.
+`MJComputerUseEngine.Run` **defaults the controller and judge to the stored `Computer Use - Controller` / `Computer Use - Judge` metadata prompts** (exported as `DEFAULT_CONTROLLER_PROMPT_NAME` / `DEFAULT_JUDGE_PROMPT_NAME`) whenever the caller pins **neither** a prompt **nor** a model. These stored prompts are the golden source of **both** the prompt text **and** the model selection — by default **Gemini 3.1 Flash-Lite → Gemini 3.5 Flash → Claude Haiku 4.5 → GPT 5.5** (each configured on two vendors, highest `Priority` first, for failover). The goal loop therefore routes through `AIPromptRunner`, getting prompt-run logging and model failover for free.
 
 **Resolution order** (per role, controller and judge resolved independently):
 
