@@ -539,7 +539,18 @@ ${trigger}
         // outer function's local variables (including p_data) are NOT in scope.
         const fieldCastEntries = writableFields
             .map((f) => {
-                const cast = this.renderJsonExtractAndCast(f).replace(/p_data/g, '$1');
+                let cast = this.renderJsonExtractAndCast(f).replace(/p_data/g, '$1');
+                // Non-nullable columns with a DB default: a present-but-NULL payload
+                // value inserts NULL and violates the NOT NULL constraint (an ABSENT
+                // key is fine — the FOREACH omits it so the column DEFAULT applies).
+                // Mirror the typed-arg sproc (generateInsertFieldString): coalesce
+                // NULL — and, for UUIDs, the empty-UUID sentinel — to the column default.
+                if (f.HasDefaultValue && !f.AllowsNull) {
+                    const def = this.formatInsertDefaultValue(f);
+                    cast = f.IsUniqueIdentifier
+                        ? `CASE WHEN ${cast} = '00000000-0000-0000-0000-000000000000'::uuid THEN ${def} ELSE COALESCE(${cast}, ${def}) END`
+                        : `COALESCE(${cast}, ${def})`;
+                }
                 return `        WHEN '${f.Name}' THEN '${cast.replace(/'/g, "''")}'`;
             })
             .join('\n');
