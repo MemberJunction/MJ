@@ -710,4 +710,150 @@ describe('ConversationEngine', () => {
             expect(result.Failed).toHaveLength(0);
         });
     });
+
+    // ========================================================================
+    // PROJECTS / FOLDERS
+    // ========================================================================
+    describe('Projects (folders)', () => {
+        function createMockProject(overrides: Record<string, unknown> = {}) {
+            return {
+                ID: overrides['ID'] ?? 'p1',
+                Name: overrides['Name'] ?? 'Folder',
+                EnvironmentID: overrides['EnvironmentID'] ?? 'env-1',
+                ParentID: overrides['ParentID'] ?? null,
+                IsArchived: overrides['IsArchived'] ?? false,
+                Save: vi.fn().mockResolvedValue(true),
+                Delete: vi.fn().mockResolvedValue(true),
+                GetAll: vi.fn().mockReturnValue({}),
+                LatestResult: { Success: true, CompleteMessage: '' },
+                ...overrides,
+            };
+        }
+
+        describe('LoadProjects', () => {
+            it('should load projects and emit them via Projects$', async () => {
+                runViewResultQueue.push({ Success: true, Results: [
+                    createMockProject({ ID: 'p1', Name: 'Work' }),
+                    createMockProject({ ID: 'p2', Name: 'Personal' }),
+                ] });
+
+                const emitted: unknown[][] = [];
+                const sub = engine.Projects$.subscribe(v => emitted.push(v));
+
+                await engine.LoadProjects('env-1', contextUser);
+
+                expect(engine.Projects).toHaveLength(2);
+                expect(emitted[emitted.length - 1]).toHaveLength(2);
+                sub.unsubscribe();
+            });
+
+            it('should skip reload when already loaded for the same environment', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+
+                // No new result queued — a second non-forced load must NOT consume the default queue
+                await engine.LoadProjects('env-1', contextUser);
+                expect(engine.Projects).toHaveLength(1);
+            });
+
+            it('should emit empty array on failed RunView', async () => {
+                runViewResultQueue.push({ Success: false, Results: [], ErrorMessage: 'boom' });
+                await engine.LoadProjects('env-1', contextUser);
+                expect(engine.Projects).toHaveLength(0);
+            });
+        });
+
+        describe('MoveConversationToProject', () => {
+            it('should set ProjectID on the cached conversation', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'c1', ProjectID: null })] });
+                await engine.LoadConversations('env-1', contextUser);
+
+                const ok = await engine.MoveConversationToProject('c1', 'p1', contextUser);
+                expect(ok).toBe(true);
+                expect((engine.GetConversation('c1') as { ProjectID?: string | null })?.ProjectID).toBe('p1');
+            });
+
+            it('should clear ProjectID when moving to null (ungroup)', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'c1', ProjectID: 'p1' })] });
+                await engine.LoadConversations('env-1', contextUser);
+
+                await engine.MoveConversationToProject('c1', null, contextUser);
+                expect((engine.GetConversation('c1') as { ProjectID?: string | null })?.ProjectID).toBeNull();
+            });
+        });
+
+        describe('DeleteProject', () => {
+            it('should delete a folder with no references and remove it from the cache', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+
+                const ok = await engine.DeleteProject('p1', contextUser);
+                expect(ok).toBe(true);
+                expect(engine.Projects).toHaveLength(0);
+            });
+
+            it('should reparent child folders to the deleted folder\'s parent', async () => {
+                const child = createMockProject({ ID: 'p2', ParentID: 'p1' });
+                runViewResultQueue.push({ Success: true, Results: [
+                    createMockProject({ ID: 'p1', ParentID: null }),
+                    child,
+                ] });
+                await engine.LoadProjects('env-1', contextUser);
+
+                await engine.DeleteProject('p1', contextUser);
+
+                // Child survives, reparented to root (p1's parent was null)
+                expect(engine.Projects).toHaveLength(1);
+                expect((engine.Projects[0] as { ID: string }).ID).toBe('p2');
+                expect((engine.Projects[0] as { ParentID: string | null }).ParentID).toBeNull();
+            });
+
+            it('should unassign conversations directly in the deleted folder', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'c1', ProjectID: 'p1' })] });
+                await engine.LoadConversations('env-1', contextUser);
+                // LoadConversations already triggered a (guarded) projects load, so force this one
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser, true);
+
+                await engine.DeleteProject('p1', contextUser);
+
+                expect((engine.GetConversation('c1') as { ProjectID?: string | null })?.ProjectID).toBeNull();
+            });
+        });
+
+        describe('MoveProjectToParent', () => {
+            it('should set ParentID on the cached folder', async () => {
+                runViewResultQueue.push({ Success: true, Results: [
+                    createMockProject({ ID: 'p1' }),
+                    createMockProject({ ID: 'p2' }),
+                ] });
+                await engine.LoadProjects('env-1', contextUser);
+
+                const ok = await engine.MoveProjectToParent('p2', 'p1', contextUser);
+                expect(ok).toBe(true);
+                const moved = engine.Projects.find(p => (p as { ID: string }).ID === 'p2') as { ParentID: string | null };
+                expect(moved.ParentID).toBe('p1');
+            });
+
+            it('should clear ParentID when moving to top level (null)', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p2', ParentID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+
+                await engine.MoveProjectToParent('p2', null, contextUser);
+                const moved = engine.Projects.find(p => (p as { ID: string }).ID === 'p2') as { ParentID: string | null };
+                expect(moved.ParentID).toBeNull();
+            });
+        });
+
+        describe('ClearCache', () => {
+            it('should clear the projects list', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+                expect(engine.Projects).toHaveLength(1);
+
+                engine.ClearCache();
+                expect(engine.Projects).toHaveLength(0);
+            });
+        });
+    });
 });
