@@ -633,17 +633,28 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             }
         }
 
+        // Remove from the cached list BEFORE calling Delete(). BaseEntity.Delete() calls
+        // NewRecord() which wipes the entity's fields — including ID — so filtering the list
+        // by ID *after* the delete wouldn't match the (now-blank) cached entity and the folder
+        // would linger until a manual refresh. Capture the pre-delete array so we can restore
+        // it if the delete fails.
+        const projectsBeforeDelete = this._projects$.value;
+        this._projects$.next(projectsBeforeDelete.filter(p => !UUIDsEqual(p.ID, id)));
+
         this._selfMutating = true;
+        let deleted = false;
         try {
-            const deleted = await project.Delete();
-            if (!deleted) {
-                throw new Error(project.LatestResult?.CompleteMessage || 'Failed to delete folder');
-            }
+            deleted = await project.Delete();
         } finally {
             this._selfMutating = false;
         }
 
-        this._projects$.next(this._projects$.value.filter(p => !UUIDsEqual(p.ID, id)));
+        if (!deleted) {
+            // Restore the list on failure (the entity wasn't deleted, so its fields are intact)
+            this._projects$.next(projectsBeforeDelete);
+            throw new Error(project.LatestResult?.CompleteMessage || 'Failed to delete folder');
+        }
+
         return true;
     }
 

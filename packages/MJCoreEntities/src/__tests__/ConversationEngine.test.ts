@@ -716,18 +716,25 @@ describe('ConversationEngine', () => {
     // ========================================================================
     describe('Projects (folders)', () => {
         function createMockProject(overrides: Record<string, unknown> = {}) {
-            return {
+            const project: Record<string, unknown> = {
                 ID: overrides['ID'] ?? 'p1',
                 Name: overrides['Name'] ?? 'Folder',
                 EnvironmentID: overrides['EnvironmentID'] ?? 'env-1',
                 ParentID: overrides['ParentID'] ?? null,
                 IsArchived: overrides['IsArchived'] ?? false,
                 Save: vi.fn().mockResolvedValue(true),
-                Delete: vi.fn().mockResolvedValue(true),
                 GetAll: vi.fn().mockReturnValue({}),
                 LatestResult: { Success: true, CompleteMessage: '' },
                 ...overrides,
             };
+            // Faithfully simulate BaseEntity.Delete(): on success NewRecord() wipes the
+            // entity's fields, including ID. Code that filters the cache by ID must do so
+            // BEFORE calling Delete(), so this guards against that regression.
+            project['Delete'] = vi.fn().mockImplementation(async () => {
+                project['ID'] = '';
+                return true;
+            });
+            return project;
         }
 
         describe('LoadProjects', () => {
