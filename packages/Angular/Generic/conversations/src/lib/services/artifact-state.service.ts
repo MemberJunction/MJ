@@ -243,7 +243,8 @@ export class ArtifactStateService {
    */
   async loadArtifactVersionsForCollection(
     collectionId: string,
-    currentUser: UserInfo
+    currentUser: UserInfo,
+    bypassCache: boolean = false
   ): Promise<Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }>> {
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
@@ -254,11 +255,16 @@ export class ArtifactStateService {
       // 'MJ: Artifact Versions' query whose subquery happens to reference the link table,
       // so the removed artifact would keep appearing. Querying the join entity directly
       // means this read is invalidated whenever a link is added or removed.
+      //
+      // `bypassCache` is passed right after a move: the link delete's cache invalidation
+      // is asynchronous relative to Delete() resolving, so an immediate cached read can
+      // still return the old membership. Bypassing reads the committed DB state directly.
       const linkResult = await rv.RunView<{ ArtifactVersionID: string }>({
         EntityName: 'MJ: Collection Artifacts',
         ExtraFilter: `CollectionID='${collectionId}'`,
         Fields: ['ArtifactVersionID'],
-        ResultType: 'simple'
+        ResultType: 'simple',
+        BypassCache: bypassCache
       }, currentUser);
 
       if (!linkResult.Success) {
