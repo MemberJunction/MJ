@@ -883,8 +883,14 @@ export class AIPromptRunner {
       // we received model selection info, need to lookup vendor driver class and api name from there
       const vendorID = modelSelectionInfo.vendorSelected?.ID;
       const modelID = modelSelectionInfo.modelSelected.ID;
+      // Match the selected vendor's inference-provider row that actually has a driver — not
+      // its Model-Developer row (DriverClass = NULL), which would force the executeModel
+      // fallback to model.DriverClass (the highest-priority vendor's driver).
       const modelVendor = AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelID))
-                                  ?.find(mv => UUIDsEqual(mv.VendorID, vendorID));
+                                  ?.find(mv => UUIDsEqual(mv.VendorID, vendorID) &&
+                                               mv.Status === 'Active' &&
+                                               this.isInferenceProvider(mv) &&
+                                               mv.DriverClass);
       if (modelVendor) {
         vendorDriverClass = modelVendor.DriverClass;
         vendorApiName = modelVendor.APIName;
@@ -2428,8 +2434,11 @@ export class AIPromptRunner {
     // Get all vendors for this model - filter for inference providers only.
     // Uses the model's precomputed ModelVendors (grouped at engine load) rather than scanning
     // the global ModelVendors array.
+    // Require a vendor-specific DriverClass: an inference row without one can't run, and the
+    // `|| model.DriverClass` fallbacks below would otherwise graft the highest-priority vendor's
+    // driver (vwAIModels computes model.DriverClass cross-vendor) onto this vendor's candidate.
     const modelVendors = model.ModelVendors
-      .filter(mv => mv.Status === 'Active' && this.isInferenceProvider(mv))
+      .filter(mv => mv.Status === 'Active' && this.isInferenceProvider(mv) && mv.DriverClass)
       .sort((a, b) => b.Priority - a.Priority);
 
     // First, add preferred vendor if it exists
@@ -2523,25 +2532,46 @@ export class AIPromptRunner {
     selectionInfo: AIModelSelectionInfo
   ): ModelVendorCandidate[] {
     const validModels = selectionInfo.extractValidCandidates();
+    const candidates: ModelVendorCandidate[] = [];
 
-    return validModels.map(considered => {
-      // Find matching model vendor for driver and API info
+    for (const considered of validModels) {
+      // Resolve the candidate's OWN inference-provider vendor row (with a usable driver),
+      // using the same filter the execution path uses (see executeModel). A bare VendorID
+      // match can return that vendor's Model-Developer row (DriverClass = NULL); falling back
+      // to model.DriverClass then grafts a DIFFERENT vendor's driver onto this candidate,
+      // because vwAIModels computes model.DriverClass from the highest-priority vendor. That
+      // mismatch is what let a Google candidate execute under OpenRouterLLM.
       const modelVendor = considered.vendor
-        ? considered.model.ModelVendors.find(mv => UUIDsEqual(mv.VendorID, considered.vendor!.ID))
+        ? considered.model.ModelVendors.find(mv =>
+            UUIDsEqual(mv.VendorID, considered.vendor!.ID) &&
+            mv.Status === 'Active' &&
+            this.isInferenceProvider(mv) &&
+            mv.DriverClass)
         : undefined;
 
-      return {
+      // The driver must come from the matched vendor. Only fall back to the model-level
+      // (highest-priority-vendor) driver when NO specific vendor was selected — never pair a
+      // specific vendorId with another vendor's driver.
+      const driverClass = modelVendor?.DriverClass ?? (considered.vendor ? null : considered.model.DriverClass);
+      if (!driverClass) {
+        // The selected vendor has no resolvable inference driver — not a usable candidate.
+        continue;
+      }
+
+      candidates.push({
         model: considered.model,
         vendorId: considered.vendor?.ID,
         vendorName: considered.vendor?.Name,
-        driverClass: modelVendor?.DriverClass || considered.model.DriverClass,
-        apiName: modelVendor?.APIName || considered.model.APIName,
+        driverClass,
+        apiName: modelVendor?.APIName || considered.model.APIName || undefined,
         supportsEffortLevel: modelVendor?.SupportsEffortLevel ?? considered.model.SupportsEffortLevel ?? false,
         isPreferredVendor: false, // Can't determine from selection info alone
         priority: considered.priority,
         source: (selectionInfo.selectionStrategy === 'ByPower' ? 'power-rank' : 'model-type') as 'power-rank' | 'model-type'
-      };
-    }).sort((a, b) => b.priority - a.priority); // Sort by priority descending
+      });
+    }
+
+    return candidates.sort((a, b) => b.priority - a.priority); // Sort by priority descending
   }
 
   /**
