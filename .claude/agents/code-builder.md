@@ -177,3 +177,37 @@ You consume the output of `freeze-contract` and your output is consumed by the `
 ## Escalation
 
 If, while implementing, you discover the metadata is inconsistent with what the vendor's API requires (e.g., metadata says `CreateAPIPath` is `/contacts` but the vendor's actual response uses `/v3/objects/contacts`), DO NOT silently fix it in connector code. Escalate via `amendment-review` — the workflow then re-runs `ioiof-extractor` for that IO. Connector code silently working around metadata bugs is how the framework breaks long-term.
+
+## Build the connector COMPLETE in ONE pass — the completeness checklist (token-efficiency, REQUIRED)
+
+The single biggest avoidable cost is building a connector that "compiles + lists the easy objects", then
+re-dispatching `code-builder` round after round as each later tier (T12 idempotency, the watermark/C1 cell,
+HybridE2E) discovers another missing capability. Neon cost THREE sequential ~200k rounds this way
+(Account-PK-flatten, then multi-level descent, then server-side watermark) — each a defect a complete first
+build would have covered. **Before you finish, walk this checklist and handle EVERY dimension the connector
+actually needs in THIS pass.** Apply judgment per connector (skip a dimension only when the vendor genuinely
+lacks it — and say so), but never leave one for a later round to "discover".
+
+1. **Enumeration, not by-id.** Every `SupportsRead` IO must LIST via an enumeration door (direct GET-list, or
+   POST-search with `ListMethod`/`ListBody`), NEVER a by-id detail path as the primary `APIPath` (a `/{id}`
+   hub enumerates nothing → 0 rows). If the metadata gave a by-id path for a hub, that's an extractor bug —
+   escalate, don't paper over it.
+2. **Access-path descent (consume `Configuration.AccessPath`).** For nested objects, list the DOOR, then
+   descend the nesting chain IN MEMORY to the leaf — supporting ≥2 levels and object- AND array-valued
+   segments. Carry the ROOT door's primary key down the whole chain and stamp it into any leaf IOF whose
+   `RelatedIntegrationObjectID` points at a chain ancestor (so 1:1 sub-objects get a stable parent-FK identity).
+3. **Nested/wrapped PK → flatten.** If an object's real PK is nested (e.g. `individualAccount.accountId` on a
+   polymorphic wrapper), lift it to a top-level field in `TransformRecord` (full-record pass-through preserved)
+   so the PK is resolvable. A keyless-at-top-level object falls back to a volatile content-hash → duplicate
+   rows on every sync (the GZ #22 / T12 class).
+4. **Incremental: server-side filter where provable, content-hash narrowing otherwise.** For watermark-capable
+   objects, issue a server-side `*_since` filter when the vendor's last-modified field is documented
+   (credential-free). When the field is credential-gated, the correct fallback is content-hash narrowing
+   (re-fetch, write nothing) — both are valid; just don't re-write everything (non-idempotent).
+5. **Capability ↔ path bijection.** `SupportsCreate/Update/Delete=true` ⇒ the matching `*APIPath` + `*Method`
+   are wired and route through `BuildCreatedResult`; a capability flag with null columns is a runtime crash.
+6. **Full-record pass-through.** `Fields` carries the full source record (`raw`/spread), never a hand-picked
+   literal — customs are captured downstream.
+
+This list is exactly the set of tiers' assertions, pulled forward to the first build. Satisfying it up front
+turns N code-builder rounds into one — the largest single token saving in the arc.
