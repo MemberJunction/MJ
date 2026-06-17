@@ -2124,7 +2124,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     SourceConversationDetail: z.string().nullable().describe(`
         * * Field Name: SourceConversationDetail
-        * * Display Name: Source Conversation Detail
+        * * Display Name: Source Conversation Detail Name
         * * SQL Data Type: nvarchar(100)`),
     SourceAIAgentRun: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRun
@@ -15374,6 +15374,16 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`),
+    ExternalDataSourceID: z.string().nullable().describe(`
+        * * Field Name: ExternalDataSourceID
+        * * Display Name: External Data Source ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)`),
+    ExternalObjectName: z.string().nullable().describe(`
+        * * Field Name: ExternalObjectName
+        * * Display Name: External Object Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Remote object name (table / view / collection) on the external system that backs this entity. Resolved against the data source DefaultSchema/DefaultDatabase when unqualified. Only meaningful when ExternalDataSourceID is set.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -17577,6 +17587,212 @@ export const MJExplorerNavigationItemSchema = z.object({
 });
 
 export type MJExplorerNavigationItemEntityType = z.infer<typeof MJExplorerNavigationItemSchema>;
+
+/**
+ * zod schema definition for the entity MJ: External Data Source Types
+ */
+export const MJExternalDataSourceTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Display name of the external data source driver type (e.g. Snowflake, Oracle, MongoDB, PostgreSQL).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of the driver type and what remote systems it targets.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Driver class resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseExternalDataSourceDriver, DriverClass). MUST match the @RegisterClass key on the concrete driver (e.g. 'SnowflakeExternalDriver').`),
+    RequiredCredentialTypeID: z.string().nullable().describe(`
+        * * Field Name: RequiredCredentialTypeID
+        * * Display Name: Required Credential Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)`),
+    MetadataIntrospectionStrategy: z.union([z.literal('InformationSchema'), z.literal('Manual'), z.literal('NativeCatalog'), z.literal('SampledDocuments')]).describe(`
+        * * Field Name: MetadataIntrospectionStrategy
+        * * Display Name: Metadata Introspection Strategy
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * InformationSchema
+    *   * Manual
+    *   * NativeCatalog
+    *   * SampledDocuments
+        * * Description: How the metadata-introspection command hydrates Entity/EntityField rows from this driver family: InformationSchema (ANSI INFORMATION_SCHEMA), NativeCatalog (vendor catalog views), SampledDocuments (infer shape from sampled documents, e.g. MongoDB), or Manual (no automated introspection).`),
+    FilterDialect: z.union([z.literal('ansi'), z.literal('mongo-ast'), z.literal('mysql'), z.literal('oracle'), z.literal('pgsql'), z.literal('tsql')]).describe(`
+        * * Field Name: FilterDialect
+        * * Display Name: Filter Dialect
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: ansi
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ansi
+    *   * mongo-ast
+    *   * mysql
+    *   * oracle
+    *   * pgsql
+    *   * tsql
+        * * Description: Dialect the driver expects for RunView filter pass-through: tsql, ansi, pgsql, mysql, oracle, or mongo-ast (MongoDB filter AST translated within the driver).`),
+    PagingStrategy: z.union([z.literal('Cursor'), z.literal('LimitOffset'), z.literal('OffsetFetch'), z.literal('TopSkip')]).describe(`
+        * * Field Name: PagingStrategy
+        * * Display Name: Paging Strategy
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: LimitOffset
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cursor
+    *   * LimitOffset
+    *   * OffsetFetch
+    *   * TopSkip
+        * * Description: Pagination mechanism the driver uses: OffsetFetch (SQL Server OFFSET/FETCH), LimitOffset (Postgres/MySQL LIMIT/OFFSET), TopSkip, or Cursor.`),
+    SupportsSchemaIntrospection: z.boolean().describe(`
+        * * Field Name: SupportsSchemaIntrospection
+        * * Display Name: Supports Schema Introspection
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the driver can introspect remote schema metadata to assist Entity/EntityField generation.`),
+    SupportsNativeQueries: z.boolean().describe(`
+        * * Field Name: SupportsNativeQueries
+        * * Display Name: Supports Native Queries
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the driver supports native-dialect query execution for MJ Queries that set ExternalDataSourceID.`),
+    SupportsReadWrite: z.boolean().describe(`
+        * * Field Name: SupportsReadWrite
+        * * Display Name: Supports Read Write
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Reserved for a future write-capable phase. Always 0 in the current read-only design; external entities are read-only.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+        * * Description: Lifecycle status of the driver-type catalog entry: Active or Deprecated.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    RequiredCredentialType: z.string().nullable().describe(`
+        * * Field Name: RequiredCredentialType
+        * * Display Name: Required Credential Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJExternalDataSourceTypeEntityType = z.infer<typeof MJExternalDataSourceTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: External Data Sources
+ */
+export const MJExternalDataSourceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Display name of this configured external data source instance.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of what this data source connects to and what it is used for.`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: External Data Source Types (vwExternalDataSourceTypes.ID)`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)`),
+    DefaultSchema: z.string().nullable().describe(`
+        * * Field Name: DefaultSchema
+        * * Display Name: Default Schema
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Default schema/namespace to resolve unqualified ExternalObjectName values against on the remote system (e.g. a SQL schema, Snowflake schema).`),
+    DefaultDatabase: z.string().nullable().describe(`
+        * * Field Name: DefaultDatabase
+        * * Display Name: Default Database
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Default database/catalog on the remote system (e.g. Snowflake database, MongoDB dbName). Nullable when the driver derives it from connection config.`),
+    ConnectionConfig: z.string().nullable().describe(`
+        * * Field Name: ConnectionConfig
+        * * Display Name: Connection Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON blob of NON-SECRET driver configuration (host, port, region, warehouse, replica-set name, pool sizing). All secrets flow through CredentialID -> Credential -> CredentialEngine; never store secrets here.`),
+    DefaultCacheTTLSeconds: z.number().describe(`
+        * * Field Name: DefaultCacheTTLSeconds
+        * * Display Name: Default Cache TTL Seconds
+        * * SQL Data Type: int
+        * * Default Value: 300
+        * * Description: Default server-side cache TTL (seconds) for reads against this source. External reads use time-based TTL because no event-driven invalidation is possible on remote systems. Default 300.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('TestFailed')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * TestFailed
+        * * Description: Operational status of this data source: Active (usable), Disabled (RunView fails fast), or TestFailed (last connection test failed).`),
+    LastConnectionTestAt: z.date().nullable().describe(`
+        * * Field Name: LastConnectionTestAt
+        * * Display Name: Last Connection Test At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the most recent connection test against this source.`),
+    LastConnectionTestResult: z.string().nullable().describe(`
+        * * Field Name: LastConnectionTestResult
+        * * Display Name: Last Connection Test Result
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Result message from the most recent connection test (success detail or error text).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJExternalDataSourceEntityType = z.infer<typeof MJExternalDataSourceSchema>;
 
 /**
  * zod schema definition for the entity MJ: File Categories
@@ -21393,6 +21609,11 @@ export const MJQuerySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this query can be referenced by other queries using composition syntax. Only queries that are both Reusable and Approved can be composed into other queries.`),
+    ExternalDataSourceID: z.string().nullable().describe(`
+        * * Field Name: ExternalDataSourceID
+        * * Display Name: External Data Source ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -21404,6 +21625,10 @@ export const MJQuerySchema = z.object({
     SQLDialect: z.string().describe(`
         * * Field Name: SQLDialect
         * * Display Name: SQL Dialect Name
+        * * SQL Data Type: nvarchar(100)`),
+    ExternalDataSource: z.string().nullable().describe(`
+        * * Field Name: ExternalDataSource
+        * * Display Name: External Data Source
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -34853,7 +35078,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
     /**
     * * Field Name: SourceConversationDetail
-    * * Display Name: Source Conversation Detail
+    * * Display Name: Source Conversation Detail Name
     * * SQL Data Type: nvarchar(100)
     */
     get SourceConversationDetail(): string | null {
@@ -69861,6 +70086,32 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
+    * * Field Name: ExternalDataSourceID
+    * * Display Name: External Data Source ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)
+    */
+    get ExternalDataSourceID(): string | null {
+        return this.Get('ExternalDataSourceID');
+    }
+    set ExternalDataSourceID(value: string | null) {
+        this.Set('ExternalDataSourceID', value);
+    }
+
+    /**
+    * * Field Name: ExternalObjectName
+    * * Display Name: External Object Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Remote object name (table / view / collection) on the external system that backs this entity. Resolved against the data source DefaultSchema/DefaultDatabase when unqualified. Only meaningful when ExternalDataSourceID is set.
+    */
+    get ExternalObjectName(): string | null {
+        return this.Get('ExternalObjectName');
+    }
+    set ExternalObjectName(value: string | null) {
+        this.Set('ExternalObjectName', value);
+    }
+
+    /**
     * * Field Name: CodeName
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -71448,6 +71699,41 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Entity Documents - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJEntityDocumentEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -75389,6 +75675,485 @@ export class MJExplorerNavigationItemEntity extends BaseEntity<MJExplorerNavigat
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: External Data Source Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ExternalDataSourceType
+ * * Base View: vwExternalDataSourceTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: External Data Source Types')
+export class MJExternalDataSourceTypeEntity extends BaseEntity<MJExternalDataSourceTypeEntityType> {
+    /**
+    * Loads the MJ: External Data Source Types record from the database
+    * @param ID: string - primary key value to load the MJ: External Data Source Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJExternalDataSourceTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Display name of the external data source driver type (e.g. Snowflake, Oracle, MongoDB, PostgreSQL).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of the driver type and what remote systems it targets.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Driver class resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseExternalDataSourceDriver, DriverClass). MUST match the @RegisterClass key on the concrete driver (e.g. 'SnowflakeExternalDriver').
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: RequiredCredentialTypeID
+    * * Display Name: Required Credential Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
+    */
+    get RequiredCredentialTypeID(): string | null {
+        return this.Get('RequiredCredentialTypeID');
+    }
+    set RequiredCredentialTypeID(value: string | null) {
+        this.Set('RequiredCredentialTypeID', value);
+    }
+
+    /**
+    * * Field Name: MetadataIntrospectionStrategy
+    * * Display Name: Metadata Introspection Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * InformationSchema
+    *   * Manual
+    *   * NativeCatalog
+    *   * SampledDocuments
+    * * Description: How the metadata-introspection command hydrates Entity/EntityField rows from this driver family: InformationSchema (ANSI INFORMATION_SCHEMA), NativeCatalog (vendor catalog views), SampledDocuments (infer shape from sampled documents, e.g. MongoDB), or Manual (no automated introspection).
+    */
+    get MetadataIntrospectionStrategy(): 'InformationSchema' | 'Manual' | 'NativeCatalog' | 'SampledDocuments' {
+        return this.Get('MetadataIntrospectionStrategy');
+    }
+    set MetadataIntrospectionStrategy(value: 'InformationSchema' | 'Manual' | 'NativeCatalog' | 'SampledDocuments') {
+        this.Set('MetadataIntrospectionStrategy', value);
+    }
+
+    /**
+    * * Field Name: FilterDialect
+    * * Display Name: Filter Dialect
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: ansi
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ansi
+    *   * mongo-ast
+    *   * mysql
+    *   * oracle
+    *   * pgsql
+    *   * tsql
+    * * Description: Dialect the driver expects for RunView filter pass-through: tsql, ansi, pgsql, mysql, oracle, or mongo-ast (MongoDB filter AST translated within the driver).
+    */
+    get FilterDialect(): 'ansi' | 'mongo-ast' | 'mysql' | 'oracle' | 'pgsql' | 'tsql' {
+        return this.Get('FilterDialect');
+    }
+    set FilterDialect(value: 'ansi' | 'mongo-ast' | 'mysql' | 'oracle' | 'pgsql' | 'tsql') {
+        this.Set('FilterDialect', value);
+    }
+
+    /**
+    * * Field Name: PagingStrategy
+    * * Display Name: Paging Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: LimitOffset
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cursor
+    *   * LimitOffset
+    *   * OffsetFetch
+    *   * TopSkip
+    * * Description: Pagination mechanism the driver uses: OffsetFetch (SQL Server OFFSET/FETCH), LimitOffset (Postgres/MySQL LIMIT/OFFSET), TopSkip, or Cursor.
+    */
+    get PagingStrategy(): 'Cursor' | 'LimitOffset' | 'OffsetFetch' | 'TopSkip' {
+        return this.Get('PagingStrategy');
+    }
+    set PagingStrategy(value: 'Cursor' | 'LimitOffset' | 'OffsetFetch' | 'TopSkip') {
+        this.Set('PagingStrategy', value);
+    }
+
+    /**
+    * * Field Name: SupportsSchemaIntrospection
+    * * Display Name: Supports Schema Introspection
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the driver can introspect remote schema metadata to assist Entity/EntityField generation.
+    */
+    get SupportsSchemaIntrospection(): boolean {
+        return this.Get('SupportsSchemaIntrospection');
+    }
+    set SupportsSchemaIntrospection(value: boolean) {
+        this.Set('SupportsSchemaIntrospection', value);
+    }
+
+    /**
+    * * Field Name: SupportsNativeQueries
+    * * Display Name: Supports Native Queries
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the driver supports native-dialect query execution for MJ Queries that set ExternalDataSourceID.
+    */
+    get SupportsNativeQueries(): boolean {
+        return this.Get('SupportsNativeQueries');
+    }
+    set SupportsNativeQueries(value: boolean) {
+        this.Set('SupportsNativeQueries', value);
+    }
+
+    /**
+    * * Field Name: SupportsReadWrite
+    * * Display Name: Supports Read Write
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Reserved for a future write-capable phase. Always 0 in the current read-only design; external entities are read-only.
+    */
+    get SupportsReadWrite(): boolean {
+        return this.Get('SupportsReadWrite');
+    }
+    set SupportsReadWrite(value: boolean) {
+        this.Set('SupportsReadWrite', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    * * Description: Lifecycle status of the driver-type catalog entry: Active or Deprecated.
+    */
+    get Status(): 'Active' | 'Deprecated' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RequiredCredentialType
+    * * Display Name: Required Credential Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get RequiredCredentialType(): string | null {
+        return this.Get('RequiredCredentialType');
+    }
+}
+
+
+/**
+ * MJ: External Data Sources - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ExternalDataSource
+ * * Base View: vwExternalDataSources
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: External Data Sources')
+export class MJExternalDataSourceEntity extends BaseEntity<MJExternalDataSourceEntityType> {
+    /**
+    * Loads the MJ: External Data Sources record from the database
+    * @param ID: string - primary key value to load the MJ: External Data Sources record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJExternalDataSourceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Display name of this configured external data source instance.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of what this data source connects to and what it is used for.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: External Data Source Types (vwExternalDataSourceTypes.ID)
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: DefaultSchema
+    * * Display Name: Default Schema
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Default schema/namespace to resolve unqualified ExternalObjectName values against on the remote system (e.g. a SQL schema, Snowflake schema).
+    */
+    get DefaultSchema(): string | null {
+        return this.Get('DefaultSchema');
+    }
+    set DefaultSchema(value: string | null) {
+        this.Set('DefaultSchema', value);
+    }
+
+    /**
+    * * Field Name: DefaultDatabase
+    * * Display Name: Default Database
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Default database/catalog on the remote system (e.g. Snowflake database, MongoDB dbName). Nullable when the driver derives it from connection config.
+    */
+    get DefaultDatabase(): string | null {
+        return this.Get('DefaultDatabase');
+    }
+    set DefaultDatabase(value: string | null) {
+        this.Set('DefaultDatabase', value);
+    }
+
+    /**
+    * * Field Name: ConnectionConfig
+    * * Display Name: Connection Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON blob of NON-SECRET driver configuration (host, port, region, warehouse, replica-set name, pool sizing). All secrets flow through CredentialID -> Credential -> CredentialEngine; never store secrets here.
+    */
+    get ConnectionConfig(): string | null {
+        return this.Get('ConnectionConfig');
+    }
+    set ConnectionConfig(value: string | null) {
+        this.Set('ConnectionConfig', value);
+    }
+
+    /**
+    * * Field Name: DefaultCacheTTLSeconds
+    * * Display Name: Default Cache TTL Seconds
+    * * SQL Data Type: int
+    * * Default Value: 300
+    * * Description: Default server-side cache TTL (seconds) for reads against this source. External reads use time-based TTL because no event-driven invalidation is possible on remote systems. Default 300.
+    */
+    get DefaultCacheTTLSeconds(): number {
+        return this.Get('DefaultCacheTTLSeconds');
+    }
+    set DefaultCacheTTLSeconds(value: number) {
+        this.Set('DefaultCacheTTLSeconds', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * TestFailed
+    * * Description: Operational status of this data source: Active (usable), Disabled (RunView fails fast), or TestFailed (last connection test failed).
+    */
+    get Status(): 'Active' | 'Disabled' | 'TestFailed' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'TestFailed') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: LastConnectionTestAt
+    * * Display Name: Last Connection Test At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the most recent connection test against this source.
+    */
+    get LastConnectionTestAt(): Date | null {
+        return this.Get('LastConnectionTestAt');
+    }
+    set LastConnectionTestAt(value: Date | null) {
+        this.Set('LastConnectionTestAt', value);
+    }
+
+    /**
+    * * Field Name: LastConnectionTestResult
+    * * Display Name: Last Connection Test Result
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Result message from the most recent connection test (success detail or error text).
+    */
+    get LastConnectionTestResult(): string | null {
+        return this.Get('LastConnectionTestResult');
+    }
+    set LastConnectionTestResult(value: string | null) {
+        this.Set('LastConnectionTestResult', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 
@@ -85232,6 +85997,19 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: ExternalDataSourceID
+    * * Display Name: External Data Source ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)
+    */
+    get ExternalDataSourceID(): string | null {
+        return this.Get('ExternalDataSourceID');
+    }
+    set ExternalDataSourceID(value: string | null) {
+        this.Set('ExternalDataSourceID', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -85256,6 +86034,15 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     */
     get SQLDialect(): string {
         return this.Get('SQLDialect');
+    }
+
+    /**
+    * * Field Name: ExternalDataSource
+    * * Display Name: External Data Source
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ExternalDataSource(): string | null {
+        return this.Get('ExternalDataSource');
     }
 }
 

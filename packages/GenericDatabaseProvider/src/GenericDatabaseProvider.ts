@@ -65,6 +65,7 @@ import {
     SaveSQLResult,
     AfterKeyNotSupportedError,
     IsKeysetPaginationOrderableType,
+    ExternalDataSourceReadRouter,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -1451,6 +1452,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             this.CheckUserReadPermissions(entityInfo.Name, user);
 
+            // ── External data source dispatch ──
+            // Entities backed by an external data source are proxied live through a
+            // driver and have no view/sproc in the MJ DB, so delegate before any SQL
+            // generation. This is a no-op for every MJ-DB entity (ExternalDataSourceID null).
+            if (entityInfo.ExternalDataSourceID) {
+                const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
+                if (!externalRouter) {
+                    throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
+                }
+                return await externalRouter.RunViewExternal<T>(entityInfo, params, user, this);
+            }
+
             // ── Parameters (transform user-provided SQL clauses for platform compatibility) ──
             const extraFilter: string = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
             const userSearchString: string = params.UserSearchString ?? '';
@@ -2831,6 +2844,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Process parameters (composition + Nunjucks templates)
             const { finalSQL, appliedParameters } = this.processQueryParameters(query, params.Parameters, contextUser);
+
+            // ── External data source dispatch ──
+            // Queries bound to an external data source execute their (now fully-rendered)
+            // native SQL via the driver, not the MJ DB. No-op for MJ-DB queries.
+            if (query.ExternalDataSourceID) {
+                const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
+                if (!externalRouter) {
+                    throw new Error(`Query '${query.Name}' is bound to an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
+                }
+                return await externalRouter.RunQueryExternal(query.ExternalDataSourceID, query.ID, query.Name, finalSQL, params, contextUser, this);
+            }
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
             const useSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);

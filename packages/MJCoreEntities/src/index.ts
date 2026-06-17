@@ -2,6 +2,7 @@
 export * from './generated/entity_subclasses.js'
 
 export * from "./custom/MJUserViewEntityExtended";
+export * from "./custom/ReadOnlyExternalBaseEntity";
 export * from './custom/MJDashboardEntityExtended';
 export * from './custom/MJListDetailEntityExtended';
 export * from './custom/MJScheduledActionEntityExtended';

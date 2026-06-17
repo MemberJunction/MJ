@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "PostgreSQL (External)",
+      "Description": "Live, read-only proxied access to an external PostgreSQL database via the node-postgres (pg) driver. Use for querying a Postgres instance that lives outside the MemberJunction database.",
+      "DriverClass": "PostgresExternalDriver",
+      "MetadataIntrospectionStrategy": "InformationSchema",
+      "FilterDialect": "pgsql",
+      "PagingStrategy": "LimitOffset",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "6B667710-EE23-4FA1-81BB-B867F008DD17"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T20:41:16.512Z",
+      "checksum": "3b92dc18205802e246f1fdb381b2246970f9e679c8500ea5fca87202fb2eaaa3"
+    }
+  }
+]

@@ -33,6 +33,8 @@
     "packages/Scheduling/*",
     "packages/TestingFramework/*",
     "packages/Credentials/*",
+    "packages/ExternalDataSources/*",
+    "packages/ExternalDataSources/Providers/*",
     "packages/APIKeys/*",
     "packages/OpenApp/*",
     "packages/Integration/*",

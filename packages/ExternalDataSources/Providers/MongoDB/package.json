@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/external-data-source-mongodb",
+  "version": "5.41.0",
+  "description": "MongoDB driver for the MemberJunction External Data Sources primitive. Registers a BaseExternalDataSourceDriver implementation via @RegisterClass(BaseExternalDataSourceDriver, 'MongoExternalDriver') using the official mongodb client, with a contained SQL-WHERE -> Mongo filter translator and document-sampling schema introspection.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.41.0",
+    "@memberjunction/global": "5.41.0",
+    "@memberjunction/core-entities": "5.41.0",
+    "@memberjunction/external-data-sources": "5.41.0",
+    "mongodb": "^6.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "tsc-alias": "^1.8.16",
+    "ts-node-dev": "^2.0.0",
+    "vitest": "^3.1.1",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
