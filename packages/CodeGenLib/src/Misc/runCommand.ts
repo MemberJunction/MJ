@@ -26,8 +26,13 @@ export class RunCommandsBase {
           results.push(await this.runCommand(command));
         }
         catch (e) {
-          // LOG but do not throw because we want to continue running the other commands
-          logError(e as string);
+          // A failed command (non-zero exit / spawn error) rejects. Record it as a
+          // failed result instead of dropping it — so callers can detect and report
+          // the failure, and `results` stays index-aligned with `commands`. We still
+          // don't rethrow, so the remaining commands continue to run.
+          const message = e instanceof Error ? e.message : String(e);
+          logError(message);
+          results.push({ output: '', error: message, success: false, elapsedTime: 0 });
         }
       }
 
