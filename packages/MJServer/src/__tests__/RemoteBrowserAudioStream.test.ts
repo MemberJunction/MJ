@@ -55,7 +55,12 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
 // Keep the AI imports (visual interpreter) inert — they aren't exercised by the audio path.
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: { Config: vi.fn(), Prompts: [] } } }));
 vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
-vi.mock('@memberjunction/ai-core-plus', () => ({ AIPromptParams: class {} }));
+// Spread the real module so transitively-loaded code (e.g. ArtifactToolManager → DataSnapshotToolLibrary,
+// which needs BaseArtifactToolLibrary) still resolves; only AIPromptParams is overridden for the test.
+vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@memberjunction/ai-core-plus')>()),
+  AIPromptParams: class {},
+}));
 
 import { RemoteBrowserActionResolver } from '../resolvers/RemoteBrowserActionResolver.js';
 

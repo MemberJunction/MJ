@@ -19,9 +19,14 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@memberjunction/livekit-room-server', () => ({
   LiveKitTokenService: vi.fn(() => ({ MintClientToken: h.mintClientToken })),
-  LiveKitAgentRoomCoordinator: { Instance: { StartAgentRoomSession: vi.fn() } },
+  // SetSessionFactory is exercised by the resolver's module-load binding of the realtime-session factory.
+  LiveKitAgentRoomCoordinator: { Instance: { StartAgentRoomSession: vi.fn(), SetSessionFactory: vi.fn() } },
   LiveKitEgressService: vi.fn(() => ({ StartRoomRecording: h.startRecording, StopRecording: h.stopRecording })),
 }));
+
+// Mock the agent factory so importing the resolver doesn't pull the heavy @memberjunction/ai-agents graph
+// into this thin resolver test (the binding only needs the symbol to exist).
+vi.mock('@memberjunction/ai-agents', () => ({ CreateBridgeRealtimeSession: vi.fn() }));
 
 import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput } from '../resolvers/RealtimeBridgeResolver';
 import type { AppContext } from '../types.js';
