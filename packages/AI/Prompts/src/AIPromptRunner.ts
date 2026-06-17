@@ -93,6 +93,21 @@ function mimeFromBlockType(type: string): string {
  * ```
  */
 /**
+ * Bundles the full output of selectModel so it can be threaded through
+ * ExecutePrompt → executeSinglePrompt / executePromptInParallel without
+ * discarding vendor-resolution data that would need to be re-derived.
+ */
+interface ModelSelectionResult {
+  model: MJAIModelEntityExtended | null;
+  vendorDriverClass?: string;
+  vendorApiName?: string;
+  vendorSupportsEffortLevel?: boolean;
+  modelEffortLevel?: number;
+  selectionInfo?: AIModelSelectionInfo;
+  allCandidates: ModelVendorCandidate[];
+}
+
+/**
  * Represents a model-vendor pair candidate for execution
  */
 interface ModelVendorCandidate {
@@ -683,28 +698,23 @@ export class AIPromptRunner {
 
       // For hierarchical prompts, we need to create the parent prompt run first to get its ID
       let parentPromptRun: MJAIPromptRunEntityExtended | undefined;
-      let selectedModel: MJAIModelEntityExtended | undefined;
       let childTemplateRenderingResult: { renderedTemplates: Record<string, string> } | undefined;
-      let modelSelectionInfo: AIModelSelectionInfo | undefined;
+      let selection: ModelSelectionResult | undefined;
 
       // Handle different prompt execution modes
       if (params.childPrompts && params.childPrompts.length > 0) {
         // Hierarchical template composition mode - render child templates first, then compose
-        //this.logStatus(`🌳 Composing prompt with ${params.childPrompts.length} child templates in hierarchical mode`, true, params);
-        
+
         // Determine which prompt to use for model selection
         let modelSelectionPrompt = prompt;
         if (params.modelSelectionPrompt) {
           modelSelectionPrompt = params.modelSelectionPrompt;
-          //this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of parent prompt`, true, params);
         }
-        
-        // Select model using the appropriate prompt
-        const modelResult = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
-        selectedModel = modelResult.model;
-        modelSelectionInfo = modelResult.selectionInfo;
-        if (!selectedModel) {
-          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
+
+        // Select model using the appropriate prompt — capture the FULL result
+        selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+        if (!selection.model) {
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
         }
 
         // Check if we have a system prompt override
@@ -719,8 +729,8 @@ export class AIPromptRunner {
           renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
         }
 
-          // Create parent prompt run for the final composed prompt execution
-        parentPromptRun = await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo);
+        // Create parent prompt run for the final composed prompt execution
+        parentPromptRun = await this.createPromptRun(prompt, selection.model, params, renderedPromptText, startTime, params.override?.vendorId, selection.selectionInfo);
       } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
         // Check if we have a system prompt override
         if (params.systemPromptOverride) {
@@ -753,33 +763,30 @@ export class AIPromptRunner {
         throw new Error('Prompt execution was cancelled during template rendering');
       }
 
-      // If no model was selected yet (no template case), select one now
-      if (!selectedModel) {
+      // If no model was selected yet (non-hierarchical case), select one now — capture the FULL result
+      if (!selection?.model) {
         let modelSelectionPrompt = prompt;
         if (params.modelSelectionPrompt) {
           modelSelectionPrompt = params.modelSelectionPrompt;
           this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
         }
-        
-        const modelResult = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
-        selectedModel = modelResult.model;
-        modelSelectionInfo = modelResult.selectionInfo;
-        if (!selectedModel) {
-          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
+
+        selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+        if (!selection.model) {
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
         }
       }
-
 
       // Check if we need parallel execution based on ParallelizationMode
       const shouldUseParallelExecution = prompt.ParallelizationMode && prompt.ParallelizationMode !== 'None';
 
       let result: AIPromptRunResult<T>;
       if (shouldUseParallelExecution) {
-        // Use parallel execution path
-        result = await this.executePromptInParallel<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selectedModel, modelSelectionInfo);
+        // Use parallel execution path — pass full selection through
+        result = await this.executePromptInParallel<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selection);
       } else {
-        // Use traditional single execution path
-        result = await this.executeSinglePrompt<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selectedModel, modelSelectionInfo);
+        // Use traditional single execution path — pass full selection through
+        result = await this.executeSinglePrompt<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selection);
       }
 
       // Note: With template composition, we only execute once so no rollup calculations needed
@@ -862,38 +869,21 @@ export class AIPromptRunner {
     params: AIPromptParams,
     startTime: Date,
     existingPromptRun?: MJAIPromptRunEntityExtended,
-    existingModel?: MJAIModelEntityExtended,
-    existingModelSelectionInfo?: AIModelSelectionInfo
+    existingSelection?: ModelSelectionResult
   ): Promise<AIPromptRunResult<T>> {
     // Check for cancellation before model selection
     if (params.cancellationToken?.aborted) {
       throw new Error('Prompt execution was cancelled before model selection');
     }
 
-    // Use existing model if provided (hierarchical case) or select one
-    let selectedModel = existingModel;
-    let modelSelectionInfo = existingModelSelectionInfo;
-    let vendorDriverClass: string | undefined;
-    let vendorApiName: string | undefined;
-    let vendorSupportsEffortLevel: boolean | undefined;
-    let modelEffortLevel: number | undefined;
-    let allCandidates: ModelVendorCandidate[] = [];
-
-    if (modelSelectionInfo) {
-      // we received model selection info, need to lookup vendor driver class and api name from there
-      const vendorID = modelSelectionInfo.vendorSelected?.ID;
-      const modelID = modelSelectionInfo.modelSelected.ID;
-      const modelVendor = AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelID))
-                                  ?.find(mv => UUIDsEqual(mv.VendorID, vendorID));
-      if (modelVendor) {
-        vendorDriverClass = modelVendor.DriverClass;
-        vendorApiName = modelVendor.APIName;
-        vendorSupportsEffortLevel = modelVendor.SupportsEffortLevel;
-      }
-
-      // Extract valid candidates from selection info for retry logic
-      allCandidates = this.buildCandidatesFromSelectionInfo(modelSelectionInfo);
-    }
+    // Use existing selection if provided (hierarchical case) or select now
+    let selectedModel = existingSelection?.model ?? undefined;
+    let modelSelectionInfo = existingSelection?.selectionInfo;
+    let vendorDriverClass = existingSelection?.vendorDriverClass;
+    let vendorApiName = existingSelection?.vendorApiName;
+    let vendorSupportsEffortLevel = existingSelection?.vendorSupportsEffortLevel;
+    let modelEffortLevel = existingSelection?.modelEffortLevel;
+    let allCandidates: ModelVendorCandidate[] = existingSelection?.allCandidates ?? [];
 
     if (!selectedModel) {
       // Determine which prompt to use for model selection
@@ -1011,8 +1001,7 @@ export class AIPromptRunner {
     params: AIPromptParams,
     startTime: Date,
     existingPromptRun?: MJAIPromptRunEntityExtended,
-    existingModel?: MJAIModelEntityExtended,
-    existingModelSelectionInfo?: AIModelSelectionInfo
+    existingSelection?: ModelSelectionResult
   ): Promise<AIPromptRunResult<T>> {
     // Check for cancellation before starting parallel execution
     if (params.cancellationToken?.aborted) {
@@ -1023,22 +1012,22 @@ export class AIPromptRunner {
     await AIEngine.Instance.Config(false, params.contextUser);
 
     let executionTasks: any[];
-    
-    // If a model is already selected (from hierarchical template composition), 
+
+    // If a model is already selected (from hierarchical template composition),
     // create a single task with that model instead of using the planner
-    if (existingModel) {
+    if (existingSelection?.model) {
       // Create a single execution task with the pre-selected model
       executionTasks = [{
         taskId: 'pre-selected',
-        model: existingModel,
-        vendorDriverClass: undefined, // Would need to look up vendor entity for this
-        vendorApiName: existingModel.Vendor, // Vendor is already the name string
+        model: existingSelection.model,
+        vendorDriverClass: existingSelection.vendorDriverClass,
+        vendorApiName: existingSelection.vendorApiName,
         messages: params.conversationMessages || [],
         promptText: renderedPromptText,
         templateMessageRole: params.templateMessageRole || 'system',
         contextUser: params.contextUser
       }];
-      this.logStatus(`   Using pre-selected model "${existingModel.Name}" for parallel execution`, true, params);
+      this.logStatus(`   Using pre-selected model "${existingSelection.model.Name}" for parallel execution`, true, params);
     } else {
       // Normal parallel execution path - let the planner decide
       // Determine which prompt to use for model selection
@@ -1132,7 +1121,7 @@ export class AIPromptRunner {
 
     // Use existing prompt run if provided (hierarchical case) or create new one
     // Use the model selection info if provided (from hierarchical execution)
-    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, renderedPromptText, startTime, params.override?.vendorId, existingModelSelectionInfo);
+    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, renderedPromptText, startTime, params.override?.vendorId, existingSelection?.selectionInfo);
 
     // Update with parallel execution metadata
     const endTime = new Date();
@@ -1267,11 +1256,11 @@ export class AIPromptRunner {
       modelInfo: {
         modelId: selectedResult.task.model.ID,
         modelName: selectedResult.task.model.Name,
-        vendorId: existingModelSelectionInfo?.vendorSelected?.ID, // VendorID not directly available on AIModel
+        vendorId: existingSelection?.selectionInfo?.vendorSelected?.ID, // VendorID not directly available on AIModel
         vendorName: selectedResult.task.model.Vendor,
       },
       judgeMetadata: selectedResult.judgeMetadata,
-      modelSelectionInfo: existingModelSelectionInfo, // Include model selection info if provided
+      modelSelectionInfo: existingSelection?.selectionInfo, // Include model selection info if provided
     };
   }
 
@@ -1610,15 +1599,7 @@ export class AIPromptRunner {
     configurationId?: string,
     vendorId?: string,
     params?: AIPromptParams
-  ): Promise<{
-    model: MJAIModelEntityExtended | null;
-    vendorDriverClass?: string;
-    vendorApiName?: string;
-    vendorSupportsEffortLevel?: boolean;
-    modelEffortLevel?: number; // Model-specific effort level from AIPromptModel
-    selectionInfo?: AIModelSelectionInfo;
-    allCandidates?: ModelVendorCandidate[];
-  }> {
+  ): Promise<ModelSelectionResult> {
     // Declare variables outside try block for catch block access
     let configurationName: string | undefined;
     let configuration: MJAIConfigurationEntity | undefined;
@@ -2510,38 +2491,6 @@ export class AIPromptRunner {
     const info = new AIModelSelectionInfo();
     Object.assign(info, data);
     return info;
-  }
-
-  /**
-   * Converts model selection info into ModelVendorCandidate array for retry logic.
-   * Extracts only the valid candidates (those with available API keys) from the selection info.
-   *
-   * @param selectionInfo - Model selection information containing considered models
-   * @returns Array of valid model-vendor candidates sorted by priority
-   */
-  private buildCandidatesFromSelectionInfo(
-    selectionInfo: AIModelSelectionInfo
-  ): ModelVendorCandidate[] {
-    const validModels = selectionInfo.extractValidCandidates();
-
-    return validModels.map(considered => {
-      // Find matching model vendor for driver and API info
-      const modelVendor = considered.vendor
-        ? considered.model.ModelVendors.find(mv => UUIDsEqual(mv.VendorID, considered.vendor!.ID))
-        : undefined;
-
-      return {
-        model: considered.model,
-        vendorId: considered.vendor?.ID,
-        vendorName: considered.vendor?.Name,
-        driverClass: modelVendor?.DriverClass || considered.model.DriverClass,
-        apiName: modelVendor?.APIName || considered.model.APIName,
-        supportsEffortLevel: modelVendor?.SupportsEffortLevel ?? considered.model.SupportsEffortLevel ?? false,
-        isPreferredVendor: false, // Can't determine from selection info alone
-        priority: considered.priority,
-        source: (selectionInfo.selectionStrategy === 'ByPower' ? 'power-rank' : 'model-type') as 'power-rank' | 'model-type'
-      };
-    }).sort((a, b) => b.priority - a.priority); // Sort by priority descending
   }
 
   /**
