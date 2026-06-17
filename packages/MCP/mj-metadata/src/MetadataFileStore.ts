@@ -66,6 +66,10 @@ export class MetadataFileStore {
     public UpsertIO(connectorName: string, io: IntegrationObjectPayload & Record<string, unknown>): void {
         const file = this.ReadIntegration(connectorName) ?? this.NewEmptyFile(connectorName);
         const ios = file.relatedEntities?.['MJ: Integration Objects'] ?? [];
+        // Every IO under an Integration MUST carry its parent FK or `mj sync push` fails with
+        // "IntegrationID cannot be null" → full rollback (metadata-file-conventions §3). Auto-inject
+        // the deploy-safe @parent ref so the extractor can never omit it.
+        if (io.IntegrationID == null) io.IntegrationID = '@parent:ID';
         const idx = ios.findIndex((i) => i.fields.Name.toLowerCase() === io.Name.toLowerCase());
         if (idx >= 0) {
             ios[idx].fields = { ...ios[idx].fields, ...io };
@@ -87,11 +91,15 @@ export class MetadataFileStore {
         const ios = file.relatedEntities?.['MJ: Integration Objects'] ?? [];
         let io = ios.find((i) => i.fields.Name.toLowerCase() === ioName.toLowerCase());
         if (!io) {
-            io = { fields: { Name: ioName } };
+            io = { fields: { Name: ioName, IntegrationID: '@parent:ID' } };
             ios.push(io);
         }
         const related = io.relatedEntities ?? {};
         const iofs = related['MJ: Integration Object Fields'] ?? [];
+        // Every IOF under an IO MUST carry its parent FK or `mj sync push` fails with
+        // "IntegrationObjectID cannot be null" → full rollback (the leak #13 deploy defect: 1077
+        // IOFs missing it). Auto-inject the @parent ref so the extractor can never omit it.
+        if (iof.IntegrationObjectID == null) iof.IntegrationObjectID = '@parent:ID';
         const idx = iofs.findIndex((f) => f.fields.Name.toLowerCase() === iof.Name.toLowerCase());
         if (idx >= 0) {
             iofs[idx].fields = { ...iofs[idx].fields, ...iof };
