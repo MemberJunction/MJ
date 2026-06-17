@@ -40,7 +40,9 @@ function makeContext(log: CtxLog): RealtimeChannelContext {
     SendContextNote: () => undefined,
     RequestSave: (stateJson: string) => log.Saves.push(stateJson),
     SetFocusMode: () => undefined,
-    SaveAsArtifact: async () => null
+    SaveAsArtifact: async () => null,
+    AgentSessionID: null,
+    ExecuteServerAction: async () => null
   };
 }
 

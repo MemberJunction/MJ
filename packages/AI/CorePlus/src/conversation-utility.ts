@@ -235,7 +235,7 @@ export class ConversationUtility {
    * @returns Formatted @{...} string for the mention
    */
   public static CreateMention(
-    type: 'agent' | 'user',
+    type: 'agent' | 'user' | 'entity',
     id: string,
     name: string,
     configurationId?: string,
@@ -599,7 +599,9 @@ export class ConversationUtility {
       if (user) name = user.Name;
     }
 
-    return `@${name}`;
+    // Entity mentions use a distinct '#' prefix; agents/users use '@'
+    const prefix = content.type === 'entity' ? '#' : '@';
+    return `${prefix}${name}`;
   }
 
   /**
@@ -680,7 +682,7 @@ export interface MentionContent {
   /** Mode identifier (optional for backward compatibility) */
   _mode?: 'mention';
   /** Type of mention */
-  type: 'agent' | 'user';
+  type: 'agent' | 'user' | 'entity';
   /** ID of the mentioned entity */
   id: string;
   /** Name of the mentioned entity */

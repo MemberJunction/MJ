@@ -4,13 +4,14 @@ import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
 import {
   BaseRealtimeClient,
   LoadAssemblyAIRealtimeClient,
   LoadElevenLabsRealtimeClient,
   LoadGeminiRealtimeClient,
   LoadOpenAIRealtimeClient,
+  LoadxAIRealtimeClient,
   RealtimeAudioActivity,
   RealtimeClientError,
   RealtimeClientState,
@@ -33,6 +34,7 @@ LoadOpenAIRealtimeClient();
 LoadGeminiRealtimeClient();
 LoadElevenLabsRealtimeClient();
 LoadAssemblyAIRealtimeClient();
+LoadxAIRealtimeClient();
 
 /**
  * Connection / turn state for a real-time voice session, surfaced to the UI overlay.
@@ -156,6 +158,35 @@ interface RealtimeDelegationProgressPayload {
   step: string;
   message: string;
   percentage?: number;
+}
+
+/**
+ * Raw shape of the JSON `message` the server publishes on the push-status topic for each live Remote
+ * Browser screencast frame (mirrors {@link RealtimeDelegationProgressPayload}, distinguished by
+ * `resolver` + `type`). Routed to the active Remote Browser channel plugin — never narrated.
+ */
+interface RemoteBrowserScreencastPayload {
+  type: 'RemoteBrowserScreencastFrame';
+  agentSessionID: string;
+  dataBase64: string;
+  width: number;
+  height: number;
+  seq: number;
+}
+
+/**
+ * Raw shape of the JSON `message` the server publishes on the push-status topic for each live Remote
+ * Browser tab-audio chunk (mirrors {@link RemoteBrowserScreencastPayload}, distinguished by `type`).
+ * Routed to the active Remote Browser channel plugin's audio player — never narrated.
+ */
+interface RemoteBrowserAudioChunkPayload {
+  type: 'RemoteBrowserAudioChunk';
+  agentSessionID: string;
+  dataBase64: string;
+  codec: string;
+  sampleRate: number;
+  channels: number;
+  seq: number;
 }
 
 /**
@@ -767,14 +798,41 @@ export class RealtimeSessionService {
 
   /** Builds the host-services context one channel plugin sees (its only line to the session). */
   private buildChannelContext(plugin: BaseRealtimeChannelClient): RealtimeChannelContext {
+    // Capture the service in a local so the AgentSessionID getter reads the SERVICE's live
+    // field (not the object literal's `this`) every time it's accessed.
+    const service = this;
     return {
       AgentName: this.CurrentAgentName,
       SendContextNote: (text: string) => this.SendContextNote(text),
       RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
       SaveAsArtifact: (name: string, contentJson: string) => this.saveChannelArtifact(plugin.ChannelName, name, contentJson),
-      SetFocusMode: (on: boolean) => this._channelFocus$.next({ Channel: plugin, Focused: on })
+      SetFocusMode: (on: boolean) => this._channelFocus$.next({ Channel: plugin, Focused: on }),
+      // Live session id + GraphQL escape hatch for SERVER-BACKED channels (e.g. Remote
+      // Browser). `get` so a channel always reads the CURRENT id — it's null at Initialize
+      // (the plugin is built before mintSession resolves) and set once the session is live.
+      get AgentSessionID(): string | null {
+        return service.agentSessionId;
+      },
+      ExecuteServerAction: <TResult>(query: string, variables: Record<string, JSONValue>) =>
+        this.executeChannelServerAction<TResult>(query, variables)
     };
+  }
+
+  /**
+   * Runs a channel-specific GraphQL operation through the live session's provider (the
+   * {@link RealtimeChannelContext.ExecuteServerAction} implementation). Best-effort: any
+   * transport/server error is logged and resolves to `null` so the calling channel can map
+   * the failure to a model-readable result string without `try/catch`.
+   */
+  private async executeChannelServerAction<TResult>(query: string, variables: Record<string, JSONValue>): Promise<TResult | null> {
+    try {
+      const result = await this.gql().ExecuteGQL(query, variables);
+      return (result as TResult) ?? null;
+    } catch (error) {
+      console.error('[RealtimeSession] Channel server action failed:', error);
+      return null;
+    }
   }
 
   /**
@@ -1069,6 +1127,13 @@ export class RealtimeSessionService {
         this.appendCaption({ Role: 'Assistant', Text: transcript.Text });
         await this.relayTranscript('assistant', transcript.Text);
       }
+    } else if (transcript.ReplacesPrevious) {
+      // STREAMING user transcription: providers like Grok emit the growing utterance as repeated
+      // events (each the full text so far), flagging all but the first ReplacesPrevious. Update the
+      // in-place User caption + persisted turn instead of stacking a new bubble per increment — the
+      // same correction semantics the assistant branch uses. (OpenAI sends one final → the else path.)
+      this.replaceLastCaption('User', transcript.Text);
+      await this.relayTranscript('user', transcript.Text, true);
     } else {
       await this.onUserTranscript(transcript.Text);
     }
@@ -1120,6 +1185,10 @@ export class RealtimeSessionService {
       // are fast, in-browser surface mutations (e.g. drawing on the whiteboard).
       const resultJson = await this.executeClientTool(clientHandler, call);
       this.client?.SendToolResult(call.CallID, resultJson);
+      // Observability: record the channel tool call on the co-agent's run (run-only — NOT a chat
+      // turn). Without this the run shows speech but never the browser_/Whiteboard_ actions the
+      // co-agent took. Fire-and-forget; never disturbs the live surface mutation.
+      void this.relayToolTurn(call.ToolName, call.ArgumentsJson, resultJson);
       return;
     }
     this._connectionState$.next('thinking');
@@ -1431,6 +1500,33 @@ export class RealtimeSessionService {
     }
   }
 
+  /**
+   * Relays a co-agent CHANNEL tool-call turn (browser_ / Whiteboard_ etc.) to the session's run for
+   * observability via `RelayRealtimeToolTurn` — so the co-agent's AIPromptRun shows what it DID, not
+   * just what it said. Run-only by design: deliberately NOT a `ConversationDetail` turn, so the chat
+   * thread stays speech-only. Best-effort — a failed relay never disturbs the live call.
+   */
+  private async relayToolTurn(toolName: string, argsJson: string, resultJson: string): Promise<void> {
+    if (!this.agentSessionId) {
+      return;
+    }
+    try {
+      const mutation = `
+        mutation RelayRealtimeToolTurn($agentSessionId: String!, $toolName: String!, $argsJson: String, $resultJson: String) {
+          RelayRealtimeToolTurn(agentSessionId: $agentSessionId, toolName: $toolName, argsJson: $argsJson, resultJson: $resultJson)
+        }
+      `;
+      await this.gql().ExecuteGQL(mutation, {
+        agentSessionId: this.agentSessionId,
+        toolName,
+        argsJson,
+        resultJson
+      });
+    } catch (error) {
+      console.error('[RealtimeSession] Failed to relay tool turn:', error);
+    }
+  }
+
   // ── Usage telemetry relay (B7) ─────────────────────────────────────────────
 
   /**
@@ -1523,12 +1619,115 @@ export class RealtimeSessionService {
       });
   }
 
-  /** Parses one push-status message and, if it's our delegation progress, dispatches it. */
+  /**
+   * Parses one push-status message and routes it: a Remote Browser screencast frame goes to the active
+   * Remote Browser channel's canvas; a delegation-progress event is dispatched + narrated. Other shapes
+   * (normal agent-run streams) are ignored. Screencast frames are checked FIRST and short-circuit, so the
+   * delegation path is untouched.
+   */
   private onDelegationStatusMessage(raw: string): void {
+    const frame = this.parseScreencastFrame(raw);
+    if (frame) {
+      this.routeScreencastFrame(frame);
+      return;
+    }
+    const audio = this.parseAudioChunk(raw);
+    if (audio) {
+      this.routeAudioChunk(audio);
+      return;
+    }
     const progress = this.parseProgress(raw);
     if (progress) {
       this.dispatchProgress(progress);
     }
+  }
+
+  /**
+   * Parses a push-status message and returns it only when it's a Remote Browser screencast frame for the
+   * active session — otherwise `null` (ignored, so delegation progress falls through). Matched by
+   * `resolver` + `type`, then scoped to THIS session by `agentSessionID`.
+   */
+  private parseScreencastFrame(raw: string): RemoteBrowserScreencastPayload | null {
+    let payload: { resolver?: string } & Partial<RemoteBrowserScreencastPayload>;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    const matches =
+      payload?.resolver === 'RemoteBrowserActionResolver' &&
+      payload?.type === 'RemoteBrowserScreencastFrame' &&
+      payload?.agentSessionID === this.agentSessionId &&
+      typeof payload?.dataBase64 === 'string';
+    return matches ? (payload as RemoteBrowserScreencastPayload) : null;
+  }
+
+  /**
+   * Forwards a screencast frame to the active Remote Browser channel plugin so it paints the frame on its
+   * surface canvas. The plugin is found among the session's active channels by its `ChannelName`; located
+   * via a structural guard so the service stays decoupled from the concrete channel class.
+   */
+  private routeScreencastFrame(frame: RemoteBrowserScreencastPayload): void {
+    for (const channel of this._activeChannels$.value) {
+      if (channel.ChannelName === 'Remote Browser' && this.hasOnScreencastFrame(channel)) {
+        channel.OnScreencastFrame(frame.dataBase64);
+        return;
+      }
+    }
+  }
+
+  /** Structural guard: true when the channel exposes an `OnScreencastFrame(dataBase64)` method. */
+  private hasOnScreencastFrame(
+    channel: BaseRealtimeChannelClient,
+  ): channel is BaseRealtimeChannelClient & { OnScreencastFrame(dataBase64: string): void } {
+    return typeof (channel as { OnScreencastFrame?: unknown }).OnScreencastFrame === 'function';
+  }
+
+  /**
+   * Parses a push-status message and returns it only when it's a Remote Browser audio chunk for the active
+   * session — otherwise `null` (ignored). Matched by `resolver` + `type`, then scoped to THIS session by
+   * `agentSessionID`.
+   */
+  private parseAudioChunk(raw: string): RemoteBrowserAudioChunkPayload | null {
+    let payload: { resolver?: string } & Partial<RemoteBrowserAudioChunkPayload>;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    const matches =
+      payload?.resolver === 'RemoteBrowserActionResolver' &&
+      payload?.type === 'RemoteBrowserAudioChunk' &&
+      payload?.agentSessionID === this.agentSessionId &&
+      typeof payload?.dataBase64 === 'string';
+    return matches ? (payload as RemoteBrowserAudioChunkPayload) : null;
+  }
+
+  /**
+   * Forwards an audio chunk to the active Remote Browser channel plugin so it plays the chunk through its
+   * client-side audio player. The plugin is found among the session's active channels by its `ChannelName`;
+   * located via a structural guard so the service stays decoupled from the concrete channel class.
+   */
+  private routeAudioChunk(chunk: RemoteBrowserAudioChunkPayload): void {
+    for (const channel of this._activeChannels$.value) {
+      if (channel.ChannelName === 'Remote Browser' && this.hasOnAudioChunk(channel)) {
+        channel.OnAudioChunk({
+          dataBase64: chunk.dataBase64,
+          codec: chunk.codec,
+          sampleRate: chunk.sampleRate,
+          channels: chunk.channels,
+          seq: chunk.seq,
+        });
+        return;
+      }
+    }
+  }
+
+  /** Structural guard: true when the channel exposes an `OnAudioChunk(chunk)` method. */
+  private hasOnAudioChunk(
+    channel: BaseRealtimeChannelClient,
+  ): channel is BaseRealtimeChannelClient & { OnAudioChunk(chunk: { dataBase64: string; codec: string; sampleRate: number; channels: number; seq: number }): void } {
+    return typeof (channel as { OnAudioChunk?: unknown }).OnAudioChunk === 'function';
   }
 
   /**

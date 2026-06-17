@@ -1,5 +1,128 @@
 # @memberjunction/server-bootstrap
 
+## 5.41.0
+
+### Minor Changes
+
+- cd6c5f0: Realtime AI Agents wave 3: consolidated v5.41 migration (sessions, channels, co-agent schema) with the AIAgentCoAgent affinity registry replacing AIAgentPairedAgent — typed relationship vocabulary (CoAgent implemented; Peer/Delegate/Fallback/Reviewer/Observer reserved), type-level co-agent defaults as junction rows (removing the only FK cycle in core MJ), and the full code sweep (engine cache, resolver resolution chain, server-side invariants, client pairing reads, regenerated manifests). Realtime UX: progressive-disclosure voice console with persisted captions preference, user-owned composer and tabs toggles, audio-reactive visuals; whiteboard pages/multi-select and review-persistence fixes. Gemini Live triggering turns ride realtime text so widget clicks/typed input/narration speak immediately on native-audio models. CodeGen: single-winner IsNameField enforcement with eligibility guardrail fixes, SCC-based cycle diagnostics, and clean-database bootstrap robustness (conditional engine registry datasets).
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- 15b743b: Real-Time AI Agents — Sessions, Channels & the Realtime Model (plans/ai-agent-sessions.md). Adds the AIAgentSession/AIAgentChannel/AIAgentSessionChannel schema (+ AgentSessionID on AIAgentRun/ConversationDetail, CloseReason on AIAgentSession); the BaseRealtimeModel server primitive with OpenAIRealtime + GeminiRealtime drivers (server-bridged StartSession and client-direct ephemeral-token CreateClientSession, optional SendContextNote/RequestSpokenUpdate interim updates); the new @memberjunction/ai-realtime-client package with the BaseRealtimeClient browser abstraction + OpenAI/Gemini client drivers resolved via ClassFactory by provider key; the Realtime agent type + Voice Co-Agent with RealtimeSessionRunner/RealtimeToolBroker, AgentMemoryContextBuilder extraction, server session lifecycle (SessionManager, SessionJanitor, start/close/heartbeat + client-direct resolvers with delegated-run progress streaming, AwaitingFeedback resume, co-agent observability runs, user-selectable realtime model); the full-panel realtime voice call UX in ng-conversations (phone trigger + agent/model picker, banner/thread/activity rail, delegation working/result cards with provenance, ephemeral paced first-person progress narration driven by DB prompt templates, in-call text composer); Realtime Voice admin (AI Analytics dashboard sections, session/channel custom forms, agent Runs|Sessions execution history); and Query Builder/Strategist reliability fixes (entity catalog in prompt, Get Entity Details sample caps + semantic fallback, plan formatting). Also: the standalone @memberjunction/ng-whiteboard package (collaborative board with agent tool API, sandboxed interactive widgets + input bridge, markdown panels, exports, cancelable before/after events); ElevenLabs Agents + AssemblyAI Voice Agent realtime provider pairs (4-provider matrix, zero contract changes); session review mode with multi-leg resume carryover (timeline dividers, artifact junction closure, prior-transcript model hydration); delegation cancel channel; usage telemetry relay; Realtime Co-Agent rename with run-step/prompt-run observability.
+- Updated dependencies [8fd6f59]
+- Updated dependencies [a69b0fa]
+- Updated dependencies [6f227ab]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [34d17e2]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [cb1c102]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/core-entities-server@5.41.0
+  - @memberjunction/server@5.41.0
+  - @memberjunction/codegen-lib@5.41.0
+  - @memberjunction/ai-agents@5.41.0
+  - @memberjunction/ai-xai@5.41.0
+  - @memberjunction/scheduling-engine@5.41.0
+  - @memberjunction/ai-gemini@5.41.0
+  - @memberjunction/ai-cohere@5.41.0
+  - @memberjunction/ai-vertex@5.41.0
+  - @memberjunction/ai-engine-base@5.41.0
+  - @memberjunction/ai-elevenlabs@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ai-openai@5.41.0
+  - @memberjunction/ai-assemblyai@5.41.0
+  - @memberjunction/core-actions@5.41.0
+  - @memberjunction/remote-browser-server@5.41.0
+  - @memberjunction/remote-browser-selfhost@5.41.0
+  - @memberjunction/ai-inworld@5.41.0
+  - @memberjunction/ai-provider-bundle@5.41.0
+  - @memberjunction/ai-agent-manager@5.41.0
+  - @memberjunction/database-designer-actions@5.41.0
+  - @memberjunction/database-designer-core@5.41.0
+  - @memberjunction/ai-form-builder@5.41.0
+  - @memberjunction/tag-engine-base@5.41.0
+  - @memberjunction/computer-use-engine@5.41.0
+  - @memberjunction/ai-recommendations-rex@5.41.0
+  - @memberjunction/ai-reranker@5.41.0
+  - @memberjunction/ai-vectors-memory@5.41.0
+  - @memberjunction/ai-vectors-pinecone@5.41.0
+  - @memberjunction/ai-vectors-qdrant@5.41.0
+  - @memberjunction/ai-vectors-sqlserver@5.41.0
+  - @memberjunction/ai-vectors-pgvector@5.41.0
+  - @memberjunction/actions-apollo@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/actions-bizapps-accounting@5.41.0
+  - @memberjunction/actions-bizapps-crm@5.41.0
+  - @memberjunction/actions-bizapps-formbuilders@5.41.0
+  - @memberjunction/actions-bizapps-lms@5.41.0
+  - @memberjunction/actions-bizapps-social@5.41.0
+  - @memberjunction/actions-content-autotag@5.41.0
+  - @memberjunction/actions@5.41.0
+  - @memberjunction/action-runtime-host@5.41.0
+  - @memberjunction/archiving-action@5.41.0
+  - @memberjunction/archiving-engine@5.41.0
+  - @memberjunction/auth-providers@5.41.0
+  - @memberjunction/communication-types@5.41.0
+  - @memberjunction/entity-communications-base@5.41.0
+  - @memberjunction/communication-ms-graph@5.41.0
+  - @memberjunction/communication-sendgrid@5.41.0
+  - @memberjunction/content-autotagging@5.41.0
+  - @memberjunction/doc-utils@5.41.0
+  - @memberjunction/encryption@5.41.0
+  - @memberjunction/integration-actions@5.41.0
+  - @memberjunction/integration-connectors@5.41.0
+  - @memberjunction/integration-engine@5.41.0
+  - @memberjunction/data-context-server@5.41.0
+  - @memberjunction/queue@5.41.0
+  - @memberjunction/storage@5.41.0
+  - @memberjunction/messaging-adapters@5.41.0
+  - @memberjunction/react-linter@5.41.0
+  - @memberjunction/scheduling-actions@5.41.0
+  - @memberjunction/scheduling-engine-base@5.41.0
+  - @memberjunction/search-engine@5.41.0
+  - @memberjunction/server-extensions-core@5.41.0
+  - @memberjunction/templates@5.41.0
+  - @memberjunction/testing-engine@5.41.0
+  - @memberjunction/esignature@5.41.0
+  - @memberjunction/geo-core@5.41.0
+  - @memberjunction/ai-anthropic@5.41.0
+  - @memberjunction/ai-azure@5.41.0
+  - @memberjunction/ai-bedrock@5.41.0
+  - @memberjunction/ai-betty-bot@5.41.0
+  - @memberjunction/ai-blackforestlabs@5.41.0
+  - @memberjunction/ai-cerebras@5.41.0
+  - @memberjunction/ai-fireworks@5.41.0
+  - @memberjunction/ai-groq@5.41.0
+  - @memberjunction/ai-heygen@5.41.0
+  - @memberjunction/ai-inception@5.41.0
+  - @memberjunction/ai-lmstudio@5.41.0
+  - @memberjunction/ai-llamacpp@5.41.0
+  - @memberjunction/ai-local-embeddings@5.41.0
+  - @memberjunction/ai-minimax@5.41.0
+  - @memberjunction/ai-mistral@5.41.0
+  - @memberjunction/ai-ollama@5.41.0
+  - @memberjunction/ai-openrouter@5.41.0
+  - @memberjunction/ai-zhipu@5.41.0
+  - @memberjunction/esignature-docusign@5.41.0
+  - @memberjunction/esignature-dropboxsign@5.41.0
+  - @memberjunction/esignature-pandadoc@5.41.0
+
 ## 5.40.2
 
 ### Patch Changes

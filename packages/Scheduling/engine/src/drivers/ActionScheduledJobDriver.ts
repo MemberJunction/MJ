@@ -50,8 +50,15 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
 
         this.log(`Executing action: ${action.Name}`);
 
-        // Process parameters (static values or SQL queries)
-        const params = await this.processParams(config.Params || [], context.ContextUser);
+        // Process parameters (static values or SQL queries). Heartbeat per param
+        // so a config with several slow `SQL Statement` params keeps its lease
+        // renewed during prep (GH #2749).
+        const params = await this.processParams(config.Params || [], context.ContextUser, context.heartbeat);
+
+        // Beat once more right before the action runs. NOTE (documented caveat):
+        // a single long-running action cannot beat mid-call — that is precisely
+        // the ScheduledJob.MaxRuntimeMinutes use case (bump the acquire-time lease).
+        void context.heartbeat?.();
 
         // Execute the action
         const actionResult = await ActionEngineServer.Instance.RunAction({
@@ -163,7 +170,8 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
 
     private async processParams(
         params: ActionJobConfiguration['Params'],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        heartbeat?: () => Promise<void>
     ): Promise<ActionParam[]> {
         if (!params) {
             return [];
@@ -173,6 +181,10 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         const result: ActionParam[] = [];
 
         for (const param of params) {
+            // Heartbeat per param — keeps the lease renewed while preparing a
+            // config with several slow `SQL Statement` params (GH #2749).
+            void heartbeat?.();
+
             const actionParam = allActionParams.find(p => UUIDsEqual(p.ID, param.ActionParamID));
             if (!actionParam) {
                 this.logError(`Action param ${param.ActionParamID} not found`);

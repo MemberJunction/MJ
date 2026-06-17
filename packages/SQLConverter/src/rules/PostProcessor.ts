@@ -447,8 +447,11 @@ function countNetQuotes(line: string): number {
 
 /**
  * Replace [bracket] identifiers with "quoted" identifiers, but skip content
- * inside dollar-quoted blocks ($$...$$, $tag$...$tag$) and single-quoted strings.
- * This prevents corrupting regex patterns like [A-Za-z0-9] inside function bodies.
+ * inside dollar-quoted blocks ($$...$$, $tag$...$tag$), single-quoted strings,
+ * and `--` line comments. This prevents corrupting regex patterns like
+ * [A-Za-z0-9] inside function bodies, and stops an apostrophe inside a comment
+ * (e.g. "the sproc's default") from being misread as a string-literal opener,
+ * which would desync quote tracking and mangle nearby ARRAY[...] / [bracket] text.
  */
 function replaceBracketsOutsideDollarBlocks(sql: string): string {
   const result: string[] = [];
@@ -468,6 +471,16 @@ function replaceBracketsOutsideDollarBlocks(sql: string): string {
           continue;
         }
       }
+    }
+
+    // Check for `--` line comment: consume through end-of-line unchanged. Comments
+    // can contain apostrophes and brackets that must not be treated as SQL tokens.
+    if (sql[i] === '-' && sql[i + 1] === '-') {
+      let j = i + 2;
+      while (j < sql.length && sql[j] !== '\n') j++;
+      result.push(sql.slice(i, j));
+      i = j;
+      continue;
     }
 
     // Check for single-quoted string start
@@ -493,7 +506,11 @@ function replaceBracketsOutsideDollarBlocks(sql: string): string {
     // Check for bracket identifier: [Name] but not [1] (array access)
     if (sql[i] === '[') {
       const bracketMatch = sql.slice(i).match(/^\[([^\]\d][^\]]*)\]/);
-      if (bracketMatch) {
+      // A real T-SQL bracket identifier never contains a single quote, and is never
+      // a PG array constructor. Skip `['x','y']` (a quoted-literal list, e.g.
+      // `ARRAY['AgentID','Status']`) — converting it to `"'x','y'"` is corruption.
+      const isArrayConstructor = /ARRAY\s*$/i.test(sql.slice(Math.max(0, i - 8), i));
+      if (bracketMatch && !bracketMatch[1].includes("'") && !isArrayConstructor) {
         result.push(`"${bracketMatch[1]}"`);
         i += bracketMatch[0].length;
         continue;

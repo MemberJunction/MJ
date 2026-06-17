@@ -1,5 +1,5 @@
 import type { Type } from '@angular/core';
-import { RealtimeToolDefinition } from '@memberjunction/ai';
+import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
 
 /**
  * Host services handed to a {@link BaseRealtimeChannelClient} at {@link BaseRealtimeChannelClient.Initialize}.
@@ -62,6 +62,55 @@ export interface RealtimeChannelContext {
    * the call AND right after it ends (the host retains the session id for late saves).
    */
   SaveAsArtifact(name: string, contentJson: string): Promise<string | null>;
+
+  /**
+   * The live `MJ: AI Agent Sessions` id this channel belongs to, or `null` before the
+   * session has minted / after it has torn down. A channel whose tools or surface drive a
+   * SERVER-SIDE resource (e.g. the Remote Browser channel's server-hosted browser) passes
+   * this as the `agentSessionID` argument to its own GraphQL resolvers via
+   * {@link ExecuteServerAction}. Most channels (whiteboard, shared doc) keep all state
+   * client-side and never read it.
+   */
+  AgentSessionID: string | null;
+
+  /**
+   * Executes a CHANNEL-SPECIFIC GraphQL operation against the session's MJ server — the
+   * escape hatch for channels backed by a SERVER-SIDE resource that the generic
+   * {@link RequestSave} / {@link SaveAsArtifact} contract doesn't cover (e.g. the Remote
+   * Browser channel driving a server-hosted browser through its own
+   * `ExecuteRemoteBrowserAction` mutation + `RemoteBrowserSnapshot` query).
+   *
+   * The host runs the operation through the SAME provider the live session uses, so the
+   * request rides the authenticated session. Best-effort and tolerant: a transport or
+   * server error resolves to `null` (logged host-side) rather than throwing, so a channel
+   * can map the failure to a model-readable result string without `try/catch`.
+   *
+   * @typeParam TResult The expected shape of the GraphQL operation's data payload.
+   * @param query The GraphQL query/mutation document.
+   * @param variables The operation variables (all JSON-serializable).
+   * @returns The operation's `data` payload, or `null` on any failure / when no session is live.
+   */
+  ExecuteServerAction<TResult>(query: string, variables: Record<string, JSONValue>): Promise<TResult | null>;
+}
+
+/**
+ * The first-run INTRO content for an interactive channel — the concise "what is this surface
+ * and how do I use it" copy the overlay shows the very first time a user opens this channel's
+ * tab (persisted "seen" per user, so it's shown ONCE per channel per user).
+ *
+ * A channel opts in by overriding {@link BaseRealtimeChannelClient.GetOnboardingDetails}; the
+ * default returns `null`, so the base Voice/text channel (which has no plugin at all) AND any
+ * plugin that doesn't override it show nothing.
+ */
+export interface ChannelOnboardingDetails {
+  /** Short title, usually the surface name (e.g. `"Whiteboard"`). */
+  Heading: string;
+  /** One or two sentences: what the surface is and what the user can expect to see on it. */
+  Description: string;
+  /** Optional quick-tip bullets (kept to 2-3 short, scannable lines). */
+  Tips?: string[];
+  /** Optional Font Awesome icon class for the intro panel (e.g. `'fa-solid fa-chalkboard'`). */
+  IconClass?: string;
 }
 
 /**
@@ -79,9 +128,13 @@ export interface RealtimeChannelContext {
  *  2. a STATE→CONTEXT SERIALIZER policy — the plugin owns its state engine and pushes
  *     coalesced deltas through {@link RealtimeChannelContext.SendContextNote} — the
  *     PERCEPTION direction;
- *  3. an ANGULAR SURFACE ({@link GetSurfaceComponent}) the overlay creates dynamically in
- *     a channel tab, handed back through {@link BindSurface} so the plugin wires its own
- *     inputs/outputs (the host never knows the component's API);
+ *  3. an OPTIONAL ANGULAR SURFACE ({@link GetSurfaceComponent}) the overlay creates dynamically
+ *     in a channel tab, handed back through {@link BindSurface} so the plugin wires its own
+ *     inputs/outputs (the host never knows the component's API). A channel may be **server-only**
+ *     (no rendered surface) — e.g. a bridge-contributed meeting-controls or native-whiteboard
+ *     channel whose surface lives on the external platform, not in MJ. Such a channel returns
+ *     `null` from {@link GetSurfaceComponent} ({@link HasSurface} is `false`) and the overlay
+ *     simply skips its tab while still wiring its tools + perception;
  *  4. a STATE OF RECORD ({@link SerializeState}, persisted via
  *     {@link RealtimeChannelContext.RequestSave} under {@link ChannelName}).
  *
@@ -149,11 +202,47 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   public abstract ApplyAgentTool(toolName: string, argsJson: string): string | Promise<string>;
 
   /**
-   * The Angular component the overlay creates dynamically as this channel's tab pane.
-   * The created instance is handed straight back via {@link BindSurface} — the host treats
-   * it as opaque.
+   * The Angular component the overlay creates dynamically as this channel's tab pane, or `null`
+   * for a **server-only** channel that renders no MJ surface (its surface, if any, lives on the
+   * external platform — e.g. a bridge-contributed native whiteboard or meeting-controls channel).
+   *
+   * When this returns `null`, the overlay renders NO tab for the channel and never calls
+   * {@link BindSurface}/{@link UnbindSurface} — but the channel's tools ({@link GetToolDefinitions} /
+   * {@link ApplyAgentTool}) and perception ({@link RealtimeChannelContext.SendContextNote}) still run.
+   * A created surface instance is handed straight back via {@link BindSurface}; the host treats it as
+   * opaque.
+   *
+   * Default: `null` (server-only). A channel with a rendered surface overrides this to return its
+   * component type.
    */
-  public abstract GetSurfaceComponent(): Type<TSurface>;
+  public GetSurfaceComponent(): Type<TSurface> | null {
+    return null;
+  }
+
+  /**
+   * Whether this channel has a rendered MJ surface ({@link GetSurfaceComponent} returns non-null).
+   * The overlay uses this to decide whether to register a surface tab; server-only channels are
+   * `false`. Override only if surface availability must be decided WITHOUT constructing the type
+   * (the default calls {@link GetSurfaceComponent} once).
+   */
+  public HasSurface(): boolean {
+    return this.GetSurfaceComponent() != null;
+  }
+
+  /**
+   * The channel's FIRST-RUN INTRO content, or `null` when the channel offers no onboarding.
+   * The overlay shows this once per channel per user — the first time the user opens this
+   * channel's surface tab — and remembers "seen" via the user's settings (NOT localStorage),
+   * so it never re-appears on later sessions or other devices.
+   *
+   * Default: `null` (no intro). The base Voice/text channel has no plugin at all, so it never
+   * shows an intro; an interactive channel with a surface worth explaining (whiteboard, remote
+   * browser, …) overrides this to return its {@link ChannelOnboardingDetails}. A plugin that
+   * doesn't override it simply shows nothing — onboarding is strictly opt-in.
+   */
+  public GetOnboardingDetails(): ChannelOnboardingDetails | null {
+    return null;
+  }
 
   /**
    * Called by the host right after it created the surface component (and BEFORE the

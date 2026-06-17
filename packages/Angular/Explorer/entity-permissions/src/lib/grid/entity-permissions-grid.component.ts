@@ -2,7 +2,7 @@ import { Component, Output, EventEmitter, OnInit, Input, SimpleChanges, OnChange
 
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJEntityPermissionEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -32,6 +32,13 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
   public gridHeight: number = 750;
   public isLoading: boolean = false;
 
+  /**
+   * Role-name lookup keyed by NormalizeUUID(roleID). Built once when roles are
+   * available (data load) so {@link getRoleName} is an O(1) Map read per table
+   * row instead of an O(roles) UUIDsEqual scan over `md.Roles` every CD cycle.
+   */
+  private roleNameMap = new Map<string, string>();
+
   constructor() {
     super();
   }
@@ -59,6 +66,7 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
     this.isLoading = true
 
     const md = this.ProviderToUse;
+    this.buildRoleNameMap();
     const entity = md.Entities.find(e => e.Name === this.EntityName);
     if (this.Mode === 'Entity' && !entity)
       throw new Error("Entity not found: " + this.EntityName)
@@ -130,10 +138,22 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
   }
     
 
-  public getRoleName(roleID: string): string {
+  /**
+   * Populates {@link roleNameMap} from the provider's role list. Called on data
+   * load so the per-row template binding {@link getRoleName} never scans
+   * `md.Roles` during change detection.
+   */
+  private buildRoleNameMap(): void {
     const md = this.ProviderToUse;
-    const r = md.Roles.find(r => UUIDsEqual(r.ID, roleID));
-    return r ? r.Name : '';
+    this.roleNameMap.clear();
+    for (const r of md.Roles) {
+      this.roleNameMap.set(NormalizeUUID(r.ID), r.Name);
+    }
+  }
+
+  public getRoleName(roleID: string): string {
+    if (!roleID) return '';
+    return this.roleNameMap.get(NormalizeUUID(roleID)) ?? '';
   }
   
   public async savePermissions() {

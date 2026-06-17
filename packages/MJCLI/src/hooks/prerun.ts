@@ -8,17 +8,24 @@ const hook: Hook<'prerun'> = async function (options) {
     return;
   }
 
-  options.context.log(
-    process.stdout.columns >= 81
-      ? figlet.textSync('MemberJunction', {
-          font: 'Standard',
-          horizontalLayout: 'default',
-          verticalLayout: 'default',
-          width: 100,
-          whitespaceBreak: true,
-        })
-      : '~ M e m b e r J u n c t i o n ~'
-  );
+  // Suppress the large figlet banner for hot-path, frequently-run commands (e.g. `mj sync *`)
+  // where it's pure scrollback cost. The compact userAgent line below still prints.
+  const commandIdForBanner = options.Command.id ?? '';
+  const showFiglet = !commandIdForBanner.startsWith('sync');
+
+  if (showFiglet) {
+    options.context.log(
+      process.stdout.columns >= 81
+        ? figlet.textSync('MemberJunction', {
+            font: 'Standard',
+            horizontalLayout: 'default',
+            verticalLayout: 'default',
+            width: 100,
+            whitespaceBreak: true,
+          })
+        : '~ M e m b e r J u n c t i o n ~'
+    );
+  }
 
   if (options.Command.id !== 'version') {
     options.context.log(options.config.userAgent + '\n');

@@ -3,7 +3,7 @@
  * @module MJServer/services
  */
 
-import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { SchedulingEngine } from '@memberjunction/scheduling-engine';
 import { ScheduledJobsConfig } from '../config.js';
@@ -81,20 +81,21 @@ export class ScheduledJobsService {
             await this.engine.StartPolling(this.systemUser);
             this.isRunning = true;
 
-            // Single consolidated console message
+            // Single consolidated status message — verbose-only (boot cadence detail; the job count is
+            // already in the startup summary banner, and actual job runs log their own ▶️/✅ lines).
             const jobCount = this.engine.ScheduledJobs.length;
             if (jobCount === 0) {
-                console.log(`📅 Scheduled Jobs: No active jobs, polling suspended (will auto-start when jobs are added)`);
+                LogStatusEx({ message: `📅 Scheduled Jobs: No active jobs, polling suspended (will auto-start when jobs are added)`, verboseOnly: true });
             } else {
                 const interval = this.engine.ActivePollingInterval;
                 if (interval !== null) {
                     const intervalDisplay = interval >= 60000
                         ? `${Math.round(interval / 60000)} minute(s)`
                         : `${Math.round(interval / 1000)} second(s)`;
-                    console.log(`📅 Scheduled Jobs: ${jobCount} active job(s), polling every ${intervalDisplay}`);
+                    LogStatusEx({ message: `📅 Scheduled Jobs: ${jobCount} active job(s), polling every ${intervalDisplay}`, verboseOnly: true });
                 } else {
                     // This shouldn't happen if jobCount > 0, but handle it gracefully
-                    console.log(`📅 Scheduled Jobs: ${jobCount} active job(s), polling interval not set`);
+                    LogStatusEx({ message: `📅 Scheduled Jobs: ${jobCount} active job(s), polling interval not set`, verboseOnly: true });
                 }
             }
         } catch (error) {

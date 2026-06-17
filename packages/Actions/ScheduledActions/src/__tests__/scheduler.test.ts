@@ -55,6 +55,11 @@ vi.mock('cron-parser', () => ({
 vi.mock('@memberjunction/global', () => ({
     SafeJSONParse: (val: string) => {
         try { return JSON.parse(val); } catch { return null; }
+    },
+    UUIDsEqual: (uuid1: string | null | undefined, uuid2: string | null | undefined): boolean => {
+        if (uuid1 == null && uuid2 == null) return true;
+        if (uuid1 == null || uuid2 == null) return false;
+        return uuid1.trim().toLowerCase() === uuid2.trim().toLowerCase();
     }
 }));
 
