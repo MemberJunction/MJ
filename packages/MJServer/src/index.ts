@@ -372,8 +372,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
         // Set up in-process CodeGen runner for RSU
         try {
-          const { RunCodeGenBase } = await import('@memberjunction/codegen-lib');
-          const { PostgreSQLCodeGenConnection } = await import('@memberjunction/codegen-lib/dist/Database/providers/postgresql/PostgreSQLCodeGenConnection.js');
+          const { RunCodeGenBase, PostgreSQLCodeGenConnection } = await import('@memberjunction/codegen-lib');
 
           const codegenConnection = new PostgreSQLCodeGenConnection(codegenPgPool);
           const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
@@ -495,8 +494,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
         // Set up in-process CodeGen runner for RSU
         try {
-          const { RunCodeGenBase } = await import('@memberjunction/codegen-lib');
-          const { SQLServerCodeGenConnection } = await import('@memberjunction/codegen-lib/dist/Database/providers/sqlserver/SQLServerCodeGenConnection.js');
+          const { RunCodeGenBase, SQLServerCodeGenConnection } = await import('@memberjunction/codegen-lib');
 
           const codegenConnection = new SQLServerCodeGenConnection(codegenPool);
           const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
