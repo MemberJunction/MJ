@@ -314,8 +314,11 @@ interface MetaFile {
                 Name?: string;
                 APIPath?: string | null;
                 CreateAPIPath?: string | null;
+                CreateMethod?: string | null;
                 UpdateAPIPath?: string | null;
+                UpdateMethod?: string | null;
                 DeleteAPIPath?: string | null;
+                DeleteMethod?: string | null;
             };
         }>;
     };
@@ -336,9 +339,9 @@ function loadDeclaredRequests(connector: string): DeclaredRequest[] {
         const f = io.fields ?? {};
         const name = f.Name ?? '<unnamed>';
         if (f.APIPath) out.push({ Object: name, Path: f.APIPath, Method: 'GET' });
-        if (f.CreateAPIPath) out.push({ Object: name, Path: f.CreateAPIPath, Method: 'POST' });
-        if (f.UpdateAPIPath) out.push({ Object: name, Path: f.UpdateAPIPath, Method: 'PATCH' });
-        if (f.DeleteAPIPath) out.push({ Object: name, Path: f.DeleteAPIPath, Method: 'DELETE' });
+        if (f.CreateAPIPath) out.push({ Object: name, Path: f.CreateAPIPath, Method: f.CreateMethod || 'POST' });
+        if (f.UpdateAPIPath) out.push({ Object: name, Path: f.UpdateAPIPath, Method: f.UpdateMethod || 'PATCH' });
+        if (f.DeleteAPIPath) out.push({ Object: name, Path: f.DeleteAPIPath, Method: f.DeleteMethod || 'DELETE' });
     }
     return out;
 }

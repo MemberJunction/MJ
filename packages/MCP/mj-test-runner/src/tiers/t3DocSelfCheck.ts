@@ -29,6 +29,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { CHILD_PREAMBLE, CHILD_TRANSPORT, spawnChildRunner, clipStderr, REGISTRY_ROOT, type ConnectorIdentity } from './childRunner.js';
+import { isExplicitCredentialAbsence } from './credentialAbsence.js';
 import { loadFixtures, type FixtureManifest } from './fixtures.js';
 
 /** Portion of a TierResult an individual tier handler returns. */
@@ -68,6 +69,11 @@ export function runT3DocSelfCheck(connector: string, identity: ConnectorIdentity
     const manifest: FixtureManifest = Manifest ?? { Transport: 'http', Configuration: {}, Routes: [] };
     const outcome = spawnChildRunner<T3Data>({
         identity,
+        connector, // REQUIRED: lets spawnChildRunner inject MJ_TIER_METADATA_FILE so the child's
+                   // seedEngineCache() seeds IntegrationEngineBase from the Declared metadata. Without
+                   // it, a Declared connector's cache-driven DiscoverObjects reads an EMPTY cache and
+                   // returns 0 objects → every persisted object flags as "structure drift" → false T3
+                   // fail + CodeBuild deadlock. (Harness bug, fixed 2026-06-15; affects all Declared connectors.)
         childSource: T3_CHILD_SOURCE,
         env: { MJ_TIER_FIXTURES: JSON.stringify(manifest) },
         timeoutMs: 60_000,
@@ -84,7 +90,20 @@ export function runT3DocSelfCheck(connector: string, identity: ConnectorIdentity
             Details: { connector, class: identity.ClassName },
         };
     }
+    // A connector whose discovery is a credential-gated runtime mechanism can't self-check
+    // credential-free — honest Skip (proven at the live tier), not Fail. #H14: NARROWED to an EXPLICIT
+    // credential-ABSENCE signal only — a generic auth/token/401 failure now FAILS (it means credential-free
+    // discovery was implemented wrong — the T3-deadlock class), rather than being waved through as a Skip.
+    const credGated = (msg: unknown) => isExplicitCredentialAbsence(String(msg ?? ''));
     if (!outcome.parsed.ok) {
+        if (credGated(outcome.parsed.reason)) {
+            return {
+                Status: 'Skipped',
+                Output: 'doc self-check requires credential-gated runtime discovery — proven at the live tier',
+                Errors: ['discovery-requires-credentials'],
+                Details: { connector, class: identity.ClassName, reason: 'discovery-requires-credentials', detail: String(outcome.parsed.reason).slice(0, 200) },
+            };
+        }
         return {
             Status: 'Fail',
             Output: '',
@@ -95,6 +114,14 @@ export function runT3DocSelfCheck(connector: string, identity: ConnectorIdentity
 
     const data = outcome.parsed.data ?? {};
     if (data.discoverError || !data.objects) {
+        if (credGated(data.discoverError)) {
+            return {
+                Status: 'Skipped',
+                Output: 'doc self-check requires credential-gated runtime discovery — proven at the live tier',
+                Errors: ['discovery-requires-credentials'],
+                Details: { connector, class: identity.ClassName, reason: 'discovery-requires-credentials', detail: String(data.discoverError).slice(0, 200) },
+            };
+        }
         return {
             Status: 'Fail',
             Output: '',
@@ -157,22 +184,33 @@ function evaluateDrift(
     };
 }
 
-/** Flag persisted PKs the connector no longer marks as a PK. */
+/** Flag persisted PKs the connector EXPLICITLY contradicts. */
 function driftPrimaryKeys(p: ObjectClaims, r: ObjectClaims, failures: string[]): void {
+    // Declared-fallback overlay (matches IntegrationSchemaSync.decideBooleanOverlay: discovered=undefined
+    // → no opinion → curated/static value sticks). A spec/OpenAPI connector's runtime DiscoverFields
+    // cannot re-derive PKs (no machine PK marker) and returns an EMPTY PK set — that is SILENCE, not a
+    // contradiction. PK is a build-time classification (id-convention + SoftPKClassifier); the static
+    // metadata is authoritative when discovery is silent. Only a NON-EMPTY discovered PK set that omits
+    // a persisted PK is real drift (the connector has a different opinion).
     const rPk = new Set(r.PrimaryKeys.map((k) => k.toLowerCase()));
+    if (rPk.size === 0) return; // discovery silent on PKs → static metadata wins → NOT drift
     for (const pk of p.PrimaryKeys) {
         if (!rPk.has(pk.toLowerCase())) {
-            failures.push(`${p.Name}.${pk}: persisted as PRIMARY KEY but connector no longer reports it as a primary key (drift).`);
+            failures.push(`${p.Name}.${pk}: persisted PRIMARY KEY contradicted by the connector's non-empty discovered key set (real drift).`);
         }
     }
 }
 
 /** Flag persisted FKs whose target the connector no longer reports. */
 function driftForeignKeys(p: ObjectClaims, r: ObjectClaims, failures: string[], warnings: string[]): void {
+    // Same Declared-fallback overlay as PKs: an empty discovered FK set is SILENCE (spec connectors
+    // can't re-derive FKs), so the static/Declared FK stands — NOT drift. Only a non-empty discovered
+    // FK set that omits a persisted FK is real drift.
     const rFk = new Map(r.ForeignKeys.map((fk) => [fk.Field.toLowerCase(), fk.Target]));
+    if (rFk.size === 0) return; // discovery silent on FKs → static metadata wins → NOT drift
     for (const fk of p.ForeignKeys) {
         if (!rFk.has(fk.Field.toLowerCase())) {
-            failures.push(`${p.Name}.${fk.Field}: persisted as FOREIGN KEY but connector no longer reports it as a foreign key (drift).`);
+            failures.push(`${p.Name}.${fk.Field}: persisted FOREIGN KEY contradicted by the connector's non-empty discovered FK set (real drift).`);
             continue;
         }
         const reTarget = rFk.get(fk.Field.toLowerCase()) ?? null;

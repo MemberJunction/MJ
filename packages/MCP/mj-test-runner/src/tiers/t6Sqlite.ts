@@ -195,15 +195,17 @@ function makeApplier() {
   const upsert = db.prepare('INSERT INTO staging (ExternalID,ObjectType,Payload,IsDeleted,OrderKey,ApplySeq) VALUES (?,?,?,0,?,?) ON CONFLICT(ExternalID) DO UPDATE SET Payload=excluded.Payload, ObjectType=excluded.ObjectType, IsDeleted=0, OrderKey=excluded.OrderKey, ApplySeq=excluded.ApplySeq');
   const tombstone = db.prepare('UPDATE staging SET IsDeleted=1, ApplySeq=? WHERE ExternalID=?');
   let seq = 0;
-  const orderTrace = []; // [{ExternalID, OrderKey}] in apply order
+  let pullIndex = -1;
+  const orderTrace = []; // [{ExternalID, OrderKey, pull}] in apply order
   function apply(records, orderingField) {
+    pullIndex++;
     for (const r of records) {
       seq++;
       if (r && r.IsDeleted) { tombstone.run(seq, String(r.ExternalID)); continue; }
       const fields = (r && r.Fields) || {};
       const orderKey = orderingField != null ? String(fields[orderingField] != null ? fields[orderingField] : '') : '';
       upsert.run(String(r.ExternalID), String(r.ObjectType || ''), JSON.stringify(fields), orderKey, seq);
-      if (orderingField != null) orderTrace.push({ ExternalID: String(r.ExternalID), OrderKey: orderKey });
+      if (orderingField != null) orderTrace.push({ ExternalID: String(r.ExternalID), OrderKey: orderKey, pull: pullIndex });
     }
   }
   function rowCount() { return db.prepare('SELECT COUNT(*) AS n FROM staging WHERE IsDeleted=0').get().n; }
@@ -323,6 +325,11 @@ function assertOrdering(trace, assertions) {
   if (!trace || trace.length < 2) return; // nothing to assert
   let monotonic = true, firstViolation = '';
   for (let k = 1; k < trace.length; k++) {
+    // Ordering is a WITHIN-pull property. A delta re-pull legitimately restarts the
+    // source's order-key sequence (the source returns the lowest id again), so only
+    // compare consecutive records that came from the SAME pull — not across the
+    // initial/delta boundary, where a restart is correct behavior, not a regression.
+    if (trace[k].pull !== trace[k-1].pull) continue;
     if (String(trace[k].OrderKey) < String(trace[k-1].OrderKey)) { monotonic = false; firstViolation = trace[k-1].OrderKey + ' then ' + trace[k].OrderKey; break; }
   }
   assertions.push({ name: 'ordering-respected', passed: monotonic, detail: monotonic ? trace.length + ' records applied in non-decreasing order-key order' : 'order-key regressed: ' + firstViolation });

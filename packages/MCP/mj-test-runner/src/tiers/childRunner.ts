@@ -349,6 +349,10 @@ async function seedEngineCache(companyIntegration) {
     };
     const integ = scrubRefs({ ...root.fields });
     integ.ID = companyIntegration.IntegrationID; // align with the in-memory CI so GetCachedObject resolves
+    // Metadata files omit Status (mj-sync sets it to 'Active' at push). The engine's Active-only
+    // filters (GetActiveIntegrationObjects etc.) drop null-Status seeded rows → no PK detected →
+    // content-hash identity drift (T12) / "IntegrationObject not found" (T6). Default to 'Active'.
+    if (integ.Status == null) integ.Status = 'Active';
     const ios = []; const iofs = [];
     const ioRecs = (root.relatedEntities && root.relatedEntities['MJ: Integration Objects']) || [];
     let i = 0;
@@ -357,6 +361,7 @@ async function seedEngineCache(companyIntegration) {
       const io = scrubRefs({ ...((ioRec && ioRec.fields) || {}) });
       io.ID = 'seed-io-' + i;
       io.IntegrationID = integ.ID;
+      if (io.Status == null) io.Status = 'Active';
       ios.push(io);
       const iofRecs = (ioRec && ioRec.relatedEntities && ioRec.relatedEntities['MJ: Integration Object Fields']) || [];
       let j = 0;
@@ -365,6 +370,7 @@ async function seedEngineCache(companyIntegration) {
         const iof = scrubRefs({ ...((fr && fr.fields) || {}) });
         iof.ID = 'seed-iof-' + i + '-' + j;
         iof.IntegrationObjectID = io.ID;
+        if (iof.Status == null) iof.Status = 'Active';
         iofs.push(iof);
       }
     }

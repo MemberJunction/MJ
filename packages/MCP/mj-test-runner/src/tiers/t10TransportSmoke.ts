@@ -49,6 +49,7 @@ export function runT10TransportSmoke(connector: string, identity: ConnectorIdent
 
     const outcome = spawnChildRunner<T10Data>({
         identity,
+        connector, // inject MJ_TIER_METADATA_FILE so seedEngineCache populates the engine cache that DiscoverObjects reads (else 0 requests → false "transport unexercised")
         childSource: T10_CHILD_SOURCE,
         env: {
             MJ_T10_BASE_CONFIG: JSON.stringify(baseConfig),
@@ -186,6 +187,7 @@ async function main() {
   // (AccountID/subdomain/etc.) + dummy secret(s). Whatever the connector reads is populated.
   const cfgObj = { ...baseConfig,
     AccountID: DUMMY_ACCOUNT, accountId: DUMMY_ACCOUNT, account_id: DUMMY_ACCOUNT, AccountId: DUMMY_ACCOUNT,
+    OrgID: DUMMY_ACCOUNT, orgId: DUMMY_ACCOUNT, org_id: DUMMY_ACCOUNT, OrganizationID: DUMMY_ACCOUNT, OrganizationId: DUMMY_ACCOUNT,
     Subdomain: 'tier', Domain: 'tier.example.com', InstanceURL: 'https://tier.example.com',
     Token: DUMMY_TOKEN, token: DUMMY_TOKEN, ApiKey: DUMMY_TOKEN, apiKey: DUMMY_TOKEN, AccessToken: DUMMY_TOKEN, ClientSecret: DUMMY_TOKEN,
   };
