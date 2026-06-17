@@ -3491,7 +3491,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   }
 
   public onNavigatorDragOver(collection: MJCollectionEntity, event: DragEvent): void {
-    if (this.draggedItemIds.length === 0 || this.draggedItemIds.includes(collection.ID)) return;
+    if (this.draggedItemIds.length === 0 || this.draggedItemIds.some(id => UUIDsEqual(id, collection.ID))) return;
     if (!this.canDropOnCollection(collection.ID)) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';

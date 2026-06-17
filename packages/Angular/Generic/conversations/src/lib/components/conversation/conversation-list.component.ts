@@ -236,7 +236,7 @@ interface FolderNode {
       <div class="conversation-item"
            [class.active]="IsConversationActive(conversation)"
            [class.renamed]="IsConversationRenamed(conversation)"
-           [class.dragging]="draggedConversationId === conversation.ID"
+           [class.dragging]="IsConversationDragging(conversation)"
            [style.paddingLeft.px]="depth ? 16 + depth * 14 : 16"
            [draggable]="!isSelectionMode"
            (dragstart)="onConversationDragStart(conversation, $event)"
@@ -276,7 +276,7 @@ interface FolderNode {
             </button>
             @if (IsMenuOpen(conversation)) {
               <div class="context-menu" (click)="$event.stopPropagation()">
-                @if (moveSubmenuConversationId === conversation.ID) {
+                @if (IsMoveSubmenuOpen(conversation)) {
                   <button class="menu-item back" (click)="closeMoveSubmenu($event)">
                     <i class="fas fa-chevron-left"></i>
                     <span>Move to folder</span>
@@ -1579,6 +1579,14 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   IsMenuOpen(conversation: MJConversationEntity): boolean {
     return UUIDsEqual(this.openMenuConversationId, conversation.ID);
+  }
+
+  IsConversationDragging(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(this.draggedConversationId, conversation.ID);
+  }
+
+  IsMoveSubmenuOpen(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(this.moveSubmenuConversationId, conversation.ID);
   }
 
   selectConversation(conversation: MJConversationEntity): void {
