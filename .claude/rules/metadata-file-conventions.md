@@ -81,6 +81,16 @@ The slot table at `packages/Integration/connector-builder-workshop/floor/phase0-
 
 ## Preflight: reconcile authored metadata to the DEPLOYED schema before any test push (REQUIRED)
 
+> **AUTOMATED — run this BEFORE any push, it collapses the serial-rollback tax into one pass:**
+> `node packages/Integration/connector-builder-workshop/floor/deploy-preflight.mjs metadata/integrations/<vendor>/.<vendor>.integration.json`
+> It is deterministic + DB-free (no creds, no MJAPI) and reports EVERY push-blocker at once —
+> missing `@parent` FKs (IO `IntegrationID` / IOF `IntegrationObjectID`), `Description` > 255,
+> invalid enums (`PaginationType` / `*BodyShape` / `*IDLocation` / `MetadataSource` / `Status`),
+> silently-dropped fields, capability↔path bijection gaps, missing `CredentialTypeID`. Exit 1 =
+> do NOT push (fix the listed ERRORS first); exit 0 = safe to push. This is what turns the
+> "leak #13" tax (each deploy defect found one-at-a-time across N failed pushes) into a single edit.
+> Verified on Neon: caught all 1078 errors (1077 missing IOF FKs + Description-255) in ONE run.
+
 Most reseed-push failures trace to ONE root cause: the connector metadata was authored against the framework's *ideal* schema, but `mj sync push` writes to the **deployed** DB schema. Before the test/reseed push, reconcile the metadata to the actual schema. Each bullet below was a real, separate PropFuel failure (2026-06-09) — check all of them:
 
 1. **Every field must be a real column.** Diff the IO/IOF field names against the actual `__mj.IntegrationObject` / `__mj.IntegrationObjectField` columns. Fields that exist only in the framework's ideal-but-unmigrated schema — `SupportsCreate/Update/Delete`, `SyncStrategy`, `StableOrderingKey`, `IsMutable`, `IsAppendOnly`, `ContentHashApplicable`, `IncludeInActionGeneration`, and `Source` (the column is `MetadataSource`) — are **silently dropped** (`BaseEntity.SetLocal` no-ops on unknown fields). They will NOT persist; don't rely on them, and put any live-relevant semantics in `Configuration`.
