@@ -45,10 +45,13 @@ ActionExecutionResult → RemoteBrowserActionResult
 | --- | --- |
 | `mapRemoteBrowserAction(action)` | Lossless, exhaustive Base `RemoteBrowserAction` → computer-use `BrowserAction`. |
 | `mapHumanInput(input)` | Base `RemoteBrowserHumanInput` (pointer-move / pointer-click / key) → computer-use `BrowserAction`. |
-| `CdpRemoteBrowserSession` | The shared `IRemoteBrowserSession`: core CDP methods + capability-gated screencast / human-input / live-view / native-AI. |
+| `CdpRemoteBrowserSession` | The shared `IRemoteBrowserSession`: core CDP methods + capability-gated screencast / human-input / live-view / native-AI + the goal-driven `RunComputerUseGoal`. |
 | `BaseCdpRemoteBrowserProvider` | Abstract base provider; implements `Connect`/`Disconnect`, leaves `AcquireSession` to the driver. |
 | `AcquiredCdpSession` | `{ CdpEndpoint, Backend }` — what `AcquireSession` returns. |
 | `ICdpSessionBackend` | Driver-supplied hooks: `GetLiveViewUrl()`, `InvokeNativeAIControl(intent)`, `Release()`. |
+| `ComputerUseGoalRun` + `ComputerUseGoalEngineFactory` + `SetGoalEngineFactory` | The injectable goal-engine seam `RunComputerUseGoal` runs behind — default `ProgressComputerUseEngine` (base computer-use); production binds MJ's engine. |
+| `buildProgressNote(step)` / `PROGRESS_MESSAGE_MAX_LENGTH` | Shared, model-safe per-step progress note (truncated controller reasoning) used by every goal engine. |
+| `wrapAdapterWithContext` / `resolveActionTemplates` / `resolveTemplateString` / `getValueFromPath` | **Model-blind context injection** — resolve `{{label}}` tokens to real values at the CDP boundary (credentials never seen by any model). |
 
 ## Writing a driver
 
@@ -89,6 +92,33 @@ export class BrowserbaseRemoteBrowserProvider extends BaseCdpRemoteBrowserProvid
 
 The base class attaches a `PlaywrightBrowserAdapter` to `CdpEndpoint` (`ConnectType: 'cdp'`), wraps it
 in a `CdpRemoteBrowserSession`, and the driver is done.
+
+## Goal-driven control + model-blind credentials
+
+`CdpRemoteBrowserSession.RunComputerUseGoal(goal, options)` runs MJ's **computer-use** loop against the
+session's **own** already-attached `PlaywrightBrowserAdapter` — the same instance/CDP connection the human
+watches, so the goal loop and the live view are the *same* page (no second browser). The engine sits behind
+an injectable seam:
+
+```typescript
+import { CdpRemoteBrowserSession } from '@memberjunction/remote-browser-cdp';
+
+// Production binds an MJ-aware engine (defaults to the stored Computer Use controller/judge prompts —
+// which carry the model selection — with prompt-run logging; auto-selects a vision model only as a
+// fallback). Tests bind a fake (no browser, no LLM). Default is ProgressComputerUseEngine (base
+// computer-use, no metadata prompts, no model auto-selection).
+CdpRemoteBrowserSession.SetGoalEngineFactory(() => new MyGoalEngine());
+```
+
+Progress flows out via `options.OnProgress` (a voice session narrates it); barge-in flows in via
+`options.Signal` → the engine's cooperative `Stop()`.
+
+**Model-blind credentials.** When `options.Context` is supplied, `RunComputerUseGoal` drives a **proxy
+adapter** (`wrapAdapterWithContext`) that resolves `{{label}}` tokens — e.g. `{{creds.password}}` — to real
+values **in a clone of the action** at the `ExecuteAction` boundary. The original action the engine recorded
+(and everything in logs/transcripts) keeps the `{{label}}`, so **neither the realtime model nor the
+computer-use controller ever sees the secret value**. Mirrors the MJ agents context-variable pattern,
+re-implemented here so the kit needs no agents dependency.
 
 ## Capability gating
 

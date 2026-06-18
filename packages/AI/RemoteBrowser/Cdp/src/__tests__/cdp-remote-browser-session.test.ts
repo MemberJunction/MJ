@@ -5,7 +5,7 @@ import {
     RemoteBrowserCapabilityNotSupportedError,
     RemoteBrowserScreencastFrame,
 } from '@memberjunction/remote-browser-base';
-import { ActionExecutionResult, ClickAction, ScreencastFrame } from '@memberjunction/computer-use';
+import { ActionExecutionResult, ClickAction, ScreencastFrame, TypeAction } from '@memberjunction/computer-use';
 import { RemoteBrowserAudioChunk } from '@memberjunction/remote-browser-base';
 import { CdpRemoteBrowserSession } from '../cdp-remote-browser-session';
 import { FakeCdpSessionBackend, FakePlaywrightBrowserAdapter, LoopbackAudioCdpSessionBackend } from './fakes';
@@ -138,6 +138,12 @@ describe('CdpRemoteBrowserSession — capability gating (flags OFF → throw)', 
             RemoteBrowserCapabilityNotSupportedError,
         );
     });
+
+    it('GetSelectionText throws when HumanTakeover is off', async () => {
+        await expect(session.GetSelectionText()).rejects.toBeInstanceOf(
+            RemoteBrowserCapabilityNotSupportedError,
+        );
+    });
 });
 
 describe('CdpRemoteBrowserSession — capability gating (flags ON → delegate)', () => {
@@ -215,6 +221,26 @@ describe('CdpRemoteBrowserSession — capability gating (flags ON → delegate)'
         await Promise.resolve();
         await Promise.resolve();
         expect(adapter.ExecutedActions.map((a) => a.Type)).toEqual(['MouseDown', 'MouseUp']);
+    });
+
+    it('RouteHumanInput maps a text (paste) input to a TypeAction on the adapter', async () => {
+        const { session, adapter } = buildSession({ HumanTakeover: true });
+        session.RouteHumanInput({ Kind: 'text', Text: 'pasted text' });
+        await Promise.resolve();
+        expect(adapter.ExecutedActions[0]).toBeInstanceOf(TypeAction);
+        expect((adapter.ExecutedActions[0] as TypeAction).Text).toBe('pasted text');
+    });
+
+    it('GetSelectionText (copy-out) reads the adapter selection when HumanTakeover is on', async () => {
+        const { session, adapter } = buildSession({ HumanTakeover: true });
+        adapter.SelectionTextValue = 'the remote selection';
+        expect(await session.GetSelectionText()).toBe('the remote selection');
+    });
+
+    it('GetSelectionText degrades to "" when the adapter read fails (best-effort)', async () => {
+        const { session, adapter } = buildSession({ HumanTakeover: true });
+        adapter.GetSelectionTextError = new Error('selection read failed');
+        expect(await session.GetSelectionText()).toBe('');
     });
 });
 

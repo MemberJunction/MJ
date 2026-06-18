@@ -641,7 +641,23 @@ class SameEntityMultipleCallsAnalyzer implements TelemetryAnalyzer {
 }
 
 /**
- * Detects sequential RunView calls that could be batched with RunViews.
+ * Detects sequential **single** RunView calls that could be merged into one parallel RunViews batch.
+ *
+ * Two guards keep this from firing on calls that can't actually be merged — the source of the
+ * boot-time false positive where independent recovery subsystems (engine config loads, the session
+ * janitor's keyset sweep, orphaned-sync resume) happen to overlap inside the timing window:
+ *
+ * 1. **Batch events are not candidates** (all telemetry levels). An event that is already a
+ *    `RunViews` batch can't be "batched" — suggesting it is incoherent (the prior bug listed `batch`
+ *    entries and then said "Use RunViews batch"). Both the trigger event and its neighbors must be
+ *    SINGLE RunViews. This guard alone clears the reported boot trace, where the lone single RunView
+ *    (the session janitor's keyset sweep) was surrounded only by `batch` engine-config loads.
+ * 2. **Best-effort same-call-site** (verbose+ only, when stack traces are captured). When call sites
+ *    are available, neighbors must share the trigger's call site — only single RunViews issued from
+ *    the *same* caller are a real merge opportunity; calls from unrelated subsystems that merely
+ *    overlap in time are not. (A keyset-paginated loop's pages are data-dependent — page N needs
+ *    page N-1's `AfterKey` — so they're sequential by necessity and not a parallelization target.)
+ *    At `standard` and below there are no stack traces, so this guard is skipped and Guard 1 carries.
  */
 class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
     name = 'ParallelizationOpportunityAnalyzer';
@@ -652,12 +668,24 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
     analyze(event: TelemetryEvent, context: TelemetryAnalyzerContext): TelemetryInsight | null {
         if (event.category !== 'RunView') return null;
 
-        // Find RunView events that completed just before this one started
+        // Guard 1: an already-batched RunViews call is not a candidate to be batched.
+        if (!isSingleRunViewParams(event.params)) return null;
+
+        // Guard 2 (best-effort): when this event carries a stack trace, attribute it to a caller and
+        // require neighbors to match. Absent stack traces (standard level), callSite is null and the
+        // per-neighbor match is skipped — Guard 1's single-only filter still applies.
+        const callSite = event.stackTrace ? this.callSiteOf(event.stackTrace) : null;
+
+        // Find SINGLE RunView events that completed just before this one started (same caller when known).
         const recentSequential = context.recentEvents.filter(e => {
             if (e.category !== 'RunView') return false;
             if (e.id === event.id) return false;
             if (!e.endTime) return false;
-            // Check if previous event ended shortly before this one started
+            // Guard 1 (neighbors): only single RunViews can be merged into a batch.
+            if (!isSingleRunViewParams(e.params)) return false;
+            // Guard 2 (neighbors): when both sides have call sites, they must match.
+            if (callSite && e.stackTrace && this.callSiteOf(e.stackTrace) !== callSite) return false;
+            // Previous event ended shortly before this one started.
             const gap = event.startTime - e.endTime;
             return gap >= 0 && gap < this.SEQUENCE_THRESHOLD_MS;
         });
@@ -683,6 +711,12 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
             };
         }
         return null;
+    }
+
+    /** First meaningful (already-cleaned) stack frame, used to attribute a RunView to its caller. */
+    private callSiteOf(stackTrace: string): string | null {
+        const first = stackTrace.split('\n').map(l => l.trim()).find(Boolean);
+        return first || null;
     }
 }
 

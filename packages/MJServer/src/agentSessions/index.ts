@@ -10,6 +10,7 @@
 import { LoadWhiteboardChannelServer, LoadMeetingControlsChannelServer } from '@memberjunction/ai-agents';
 import { LoadRemoteBrowserChannel } from '@memberjunction/remote-browser-server';
 import { LoadSelfHostRemoteBrowser } from '@memberjunction/remote-browser-selfhost';
+import { BindRemoteBrowserGoalEngine } from './remoteBrowserGoalEngine.js';
 
 // Tree-shaking prevention: force the server-side channel plugin registrations
 // (`@RegisterClass(BaseRealtimeChannelServer, ...)`) to execute on any static path that touches
@@ -21,7 +22,11 @@ LoadMeetingControlsChannelServer();
 // Playwright — pulled in transitively through the SelfHost package, documented and acceptable).
 LoadRemoteBrowserChannel();
 LoadSelfHostRemoteBrowser();
+// Bind goal-driven browser control to MJ's computer-use engine (vision-model auto-selection, prompt-run
+// logging, credential resolution). Without this, RunComputerUseGoal falls back to the bare base engine.
+BindRemoteBrowserGoalEngine();
 
+export * from './remoteBrowserGoalEngine.js';
 export * from './HostInstance.js';
 export * from './SessionManager.js';
 export * from './SessionJanitor.js';

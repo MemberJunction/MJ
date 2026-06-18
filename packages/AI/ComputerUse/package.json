@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "prebuild": "node scripts/sync-prompts.mjs",
+    "prebuild": "node scripts/generate-prompt-parts.mjs",
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
     "test:watch": "vitest"

@@ -2,8 +2,8 @@
  * Tests for schema name validation, including the double-underscore override.
  */
 import { describe, it, expect, vi } from 'vitest';
-import type { DatabaseProviderBase } from '@memberjunction/core';
-import { CreateAppSchema, ValidateSchemaName } from '../install/schema-manager.js';
+import type { DatabaseProviderBase, DatabasePlatform } from '@memberjunction/core';
+import { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName } from '../install/schema-manager.js';
 
 describe('ValidateSchemaName', () => {
     it('accepts a normal schema name', () => {
@@ -44,14 +44,20 @@ describe('ValidateSchemaName', () => {
  * queue, then empty. Lets us simulate "schema does not yet exist" for the
  * existence check, followed by a no-op for CREATE SCHEMA.
  */
-function makeMockProvider(sqlResults: Array<Array<Record<string, unknown>>>): {
+function makeMockProvider(
+    sqlResults: Array<Array<Record<string, unknown>>>,
+    platform: DatabasePlatform = 'sqlserver'
+): {
     provider: DatabaseProviderBase;
     executeSql: ReturnType<typeof vi.fn>;
 } {
     const queue = [...sqlResults];
     const executeSql = vi.fn(async () => queue.shift() ?? []);
-    // Only the ExecuteSQL surface is used by CreateAppSchema.
-    return { provider: { ExecuteSQL: executeSql } as unknown as DatabaseProviderBase, executeSql };
+    // ExecuteSQL + Dialect.PlatformKey are the surfaces used by the schema-manager.
+    return {
+        provider: { ExecuteSQL: executeSql, Dialect: { PlatformKey: platform } } as unknown as DatabaseProviderBase,
+        executeSql,
+    };
 }
 
 describe('CreateAppSchema with allowDoubleUnderscore override', () => {
@@ -96,5 +102,61 @@ describe('CreateAppSchema with allowDoubleUnderscore override', () => {
         const result = await CreateAppSchema('bcsaas', provider);
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toMatch(/already exists/);
+    });
+});
+
+describe('SchemaExists — ANSI information_schema (dialect-neutral)', () => {
+    it('queries information_schema.schemata, not the SQL-Server-only sys.schemas', async () => {
+        const { provider, executeSql } = makeMockProvider([[]], 'postgresql');
+        await SchemaExists('bcsaas', provider);
+        const sql = executeSql.mock.calls[0][0] as string;
+        expect(sql).toContain('information_schema.schemata');
+        expect(sql).toContain('schema_name');
+        expect(sql).not.toContain('sys.schemas');
+    });
+});
+
+describe('CreateAppSchema — dialect-aware identifier quoting', () => {
+    it('SQL Server quotes with [brackets]', async () => {
+        const { provider, executeSql } = makeMockProvider([[]], 'sqlserver');
+        const result = await CreateAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(true);
+        expect(executeSql.mock.calls[1][0] as string).toBe('CREATE SCHEMA [bcsaas]');
+    });
+
+    it('PostgreSQL quotes with "double quotes"', async () => {
+        const { provider, executeSql } = makeMockProvider([[]], 'postgresql');
+        const result = await CreateAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(true);
+        expect(executeSql.mock.calls[1][0] as string).toBe('CREATE SCHEMA "bcsaas"');
+    });
+});
+
+describe('DropAppSchema — PostgreSQL CASCADE vs SQL Server object-drop', () => {
+    it('PostgreSQL uses a single DROP SCHEMA ... CASCADE (no sys.* object enumeration)', async () => {
+        // [0] existence probe returns a row (exists), then [1] the DROP.
+        const { provider, executeSql } = makeMockProvider([[{ Exists_: 1 }]], 'postgresql');
+        const result = await DropAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(true);
+        // Exactly two calls: existence check + the cascading drop.
+        expect(executeSql).toHaveBeenCalledTimes(2);
+        expect(executeSql.mock.calls[1][0] as string).toBe('DROP SCHEMA "bcsaas" CASCADE');
+        // No T-SQL catalog enumeration on PG.
+        for (const call of executeSql.mock.calls) {
+            expect(call[0] as string).not.toContain('sys.');
+            expect(call[0] as string).not.toContain('sp_executesql');
+        }
+    });
+
+    it('SQL Server empties the schema first (sys.* drops), then DROP SCHEMA without CASCADE', async () => {
+        // [0] existence probe (exists) + 7 object-drop batches + final DROP SCHEMA.
+        const { provider, executeSql } = makeMockProvider([[{ Exists_: 1 }]], 'sqlserver');
+        const result = await DropAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(true);
+        const allSql = executeSql.mock.calls.map((c) => c[0] as string).join('\n');
+        expect(allSql).toContain('sp_executesql'); // object-drop batches ran
+        const lastSql = executeSql.mock.calls[executeSql.mock.calls.length - 1][0] as string;
+        expect(lastSql).toBe('DROP SCHEMA [bcsaas]');
+        expect(lastSql).not.toContain('CASCADE');
     });
 });

@@ -71,6 +71,7 @@
     "mj:manifest:server-bootstrap-lite": "mj codegen manifest --appDir ./packages/ServerBootstrapLite --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./packages/ServerBootstrapLite/src/generated/mj-class-registrations.ts",
     "mj:manifest:ng-bootstrap-lite": "mj codegen manifest --appDir ./packages/Angular/BootstrapLite --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./packages/Angular/BootstrapLite/src/generated/mj-class-registrations.ts --scan-dist",
     "mj:manifest": "npm run mj:manifest:server-bootstrap && npm run mj:manifest:server-bootstrap-lite && npm run mj:manifest:ng-bootstrap && npm run mj:manifest:ng-bootstrap-lite && npm run mj:manifest:api && npm run mj:manifest:explorer && npm run mj:manifest:a2a-server && npm run mj:manifest:mcp-server && npm run mj:manifest:codegen-api",
+    "claude-pack:build": "node templates/claude-pack/build-pack.mjs",
     "deps:check": "syncpack list-mismatches",
     "deps:fix": "syncpack fix-mismatches",
     "deps:update": "syncpack update",
@@ -102,7 +103,8 @@
   "dependencies": {
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",
-    "simple-git": "^3.30.0"
+    "simple-git": "^3.30.0",
+    "unzipper": "^0.12.3"
   },
   "devDependencies": {
     "@analogjs/vite-plugin-angular": "^2.6.1",

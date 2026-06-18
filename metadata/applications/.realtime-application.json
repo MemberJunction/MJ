@@ -1,0 +1,28 @@
+[
+  {
+    "fields": {
+      "Name": "Realtime",
+      "Description": "Live, low-latency realtime rooms — multi-party audio/video/screen with MJ agents, built on the MJ-native LiveKit bridge.",
+      "Icon": "fa-solid fa-video",
+      "Color": "#0076b6",
+      "DefaultForNewUser": false,
+      "Status": "Active",
+      "DefaultNavItems": [
+        {
+          "Label": "Live Room",
+          "Icon": "fa-solid fa-video",
+          "ResourceType": "Custom",
+          "DriverClass": "LiveKitRoomResource",
+          "isDefault": true
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4FBD1C76-BE86-448D-815F-42100DCEC010"
+    },
+    "sync": {
+      "lastModified": "2026-06-17T13:38:02.851Z",
+      "checksum": "d2ec8a317a6433d966b20eb79897a919c6dd2ecc971dac78f655a12de2cb31ab"
+    }
+  }
+]

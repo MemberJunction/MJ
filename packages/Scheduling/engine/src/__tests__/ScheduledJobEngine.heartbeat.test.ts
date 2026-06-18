@@ -561,3 +561,44 @@ describe('H7/H8: MaxRuntimeMinutes adjusts the acquire-time lease', () => {
         expect(offset).toBeLessThanOrEqual(TEN_MIN + (after - before) + 50);
     });
 });
+
+// ============================================================================
+// H9: extend-lease call is dialect-routed (regression: it used to hardcode EXEC)
+// ============================================================================
+
+describe('H9: spExtendScheduledJobLease is built via the dialect, not a hardcoded EXEC', () => {
+    it('emits the PostgreSQL SELECT * FROM fn($1,...) form when the provider is PG', async () => {
+        const engine = SchedulingEngine.Instance;
+        const provider = mockBase.ProviderToUse as unknown as {
+            PlatformKey: string;
+            Dialect: { ProcedureCallSyntax: (s: string, n: string, p: string[]) => string };
+        };
+        const originalPlatform = provider.PlatformKey;
+        const originalDialect = provider.Dialect;
+        // Flip the mock provider to PostgreSQL dialect for this test.
+        provider.PlatformKey = 'postgresql';
+        provider.Dialect = {
+            ProcedureCallSyntax: (schema: string, name: string, paramList: string[]) =>
+                `SELECT * FROM ${schema}."${name}"(${paramList.join(', ')})`,
+        };
+
+        try {
+            mockExecuteSQLQueue.push([{ Extended: 1 }]);
+            // @ts-expect-error: private method exercised directly
+            const extended = await engine.extendLeaseIfTokenMatches(
+                'job-x', '11111111-1111-1111-1111-111111111111', new Date()
+            );
+            expect(extended).toBe(true);
+
+            const call = lastSprocCall('spExtendScheduledJobLease');
+            expect(call).toBeDefined();
+            const sql = String(call?.[0]);
+            // PG positional placeholders + SELECT FROM function — NOT a T-SQL EXEC.
+            expect(sql).toBe('SELECT * FROM __mj."spExtendScheduledJobLease"($1, $2, $3)');
+            expect(sql).not.toContain('EXEC');
+        } finally {
+            provider.PlatformKey = originalPlatform;
+            provider.Dialect = originalDialect;
+        }
+    });
+});
