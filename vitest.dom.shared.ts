@@ -57,5 +57,18 @@ export default defineConfig({
     pool: 'forks',
     include: ['src/**/__tests__/**/*.test.ts', 'src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/generated/**'],
+    coverage: {
+      provider: 'v8',
+      // List EVERY source file, not just the ones a test imported — so untested
+      // components surface as 0% instead of silently vanishing from the report.
+      include: ['src/**/*.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/**/index.ts',
+        'src/**/public-api.ts',
+        'src/**/*.module.ts',
+      ],
+      reporter: ['text', 'html'],
+    },
   },
 });
