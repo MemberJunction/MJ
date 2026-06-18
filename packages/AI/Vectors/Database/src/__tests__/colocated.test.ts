@@ -69,4 +69,7 @@ describe('VectorDBBase colocated defaults', () => {
     it('TryWireColocatedHost is a no-op when SupportsColocatedQuery is false', () => {
         expect(new StubVectorDB().TryWireColocatedHost(fakeHost)).toBe(false);
     });
+    it('requires an API key by default (external cloud providers)', () => {
+        expect(new StubVectorDB().RequiresAPIKey).toBe(true);
+    });
 });

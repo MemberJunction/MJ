@@ -727,7 +727,7 @@ export class EntityVectorSyncer extends VectorBase {
     // Wire in the active data-provider connection; they need no API key. External providers
     // (Pinecone/Qdrant) still require a key — enforce that here, after instantiation.
     vectorDB.TryWireColocatedHost(this.Provider);
-    if (!vectorDB.SupportsColocatedQuery && !vectorDBAPIKey) {
+    if (!vectorDB.SupportsColocatedQuery && vectorDB.RequiresAPIKey && !vectorDBAPIKey) {
       throw Error(`No API Key found for Vector Database ${vectorDBEntity.ClassKey}`);
     }
 
