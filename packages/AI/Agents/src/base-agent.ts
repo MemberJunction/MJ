@@ -2410,8 +2410,13 @@ export class BaseAgent {
      * @protected
      */
     protected async initializeEngines(contextUser?: UserInfo): Promise<void> {
-        await AIEngine.Instance.Config(false, contextUser);
+        // Load the Action engine BEFORE the AI engine. AIEngine.RefreshActions()
+        // (invoked by AIEngine.Config) reuses already-cached 'MJ: Actions'
+        // metadata via BaseEngineRegistry, so priming ActionEngineServer first
+        // lets AIEngine skip loading a second copy into ActionEngineBase —
+        // eliminating the duplicate-RunView telemetry warning at agent startup.
         await ActionEngineServer.Instance.Config(false, contextUser);
+        await AIEngine.Instance.Config(false, contextUser);
     }
 
     /**
