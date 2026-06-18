@@ -12,6 +12,9 @@ import {
 import { ExternalDataSourceRouter } from "./ExternalDataSourceRouter";
 import { ExternalRow, ExternalViewParams } from "./types";
 
+/** Fallback cache TTL (seconds) when a data source has no DefaultCacheTTLSeconds configured. Matches the plan's default. */
+const DEFAULT_EXTERNAL_CACHE_TTL_SECONDS = 300;
+
 /**
  * Concrete {@link ExternalDataSourceReadRouter} registered for the ClassFactory
  * so foundational providers can reach the External Data Sources engine without a
@@ -90,6 +93,23 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
       };
     } catch (e) {
       return this.failQuery(queryID, queryName, this.errorText(e), Date.now() - start);
+    }
+  }
+
+  public async GetCacheTTLSeconds(
+    externalDataSourceID: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<number> {
+    try {
+      const { dataSource } = await ExternalDataSourceRouter.Instance.resolve(externalDataSourceID, contextUser, provider);
+      const ttl = dataSource.DefaultCacheTTLSeconds;
+      // A configured 0 means "do not cache this source"; null/undefined falls back to the default.
+      return typeof ttl === 'number' ? ttl : DEFAULT_EXTERNAL_CACHE_TTL_SECONDS;
+    } catch {
+      // Any resolution failure here will resurface on the actual read; default the TTL so a
+      // transient hiccup doesn't silently change caching behavior.
+      return DEFAULT_EXTERNAL_CACHE_TTL_SECONDS;
     }
   }
 

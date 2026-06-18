@@ -44,4 +44,19 @@ export abstract class ExternalDataSourceReadRouter {
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<RunQueryResult>;
+
+  /**
+   * Returns the cache TTL (in seconds) configured on the external data source — the basis for
+   * time-bounded caching of external reads. Unlike MJ-DB entities, external reads can't be
+   * event-invalidated (their data changes on the remote system), so callers cache them with a
+   * TTL instead. Implementations resolve the `ExternalDataSource` and return its
+   * `DefaultCacheTTLSeconds` (falling back to a sane default when unset). A return value of `0`
+   * signals "do not cache this source." Resolved through the engine's already-cached data
+   * source, so this is cheap to call on the read hot path.
+   */
+  public abstract GetCacheTTLSeconds(
+    externalDataSourceID: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<number>;
 }

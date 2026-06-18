@@ -2351,10 +2351,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // eligibility gate matters: BypassCache/AfterKey/count_only results were
             // never widened and must NOT be written under the superset fingerprint.
             if (this.runViewCacheEligible(params) && LocalCacheManager.Instance.IsInitialized) {
-                const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
-                const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-                await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this);
+                // External entities cache with a TTL (no BaseEntity events to invalidate them);
+                // MJ-DB entities get undefined (event-invalidated as before). A 0 means the
+                // external source has caching disabled — skip the write to avoid stale data.
+                const ttlMs = await this.resolveExternalCacheTTLMs(params, contextUser);
+                if (ttlMs !== 0) {
+                    const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
+                    const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
+                    await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this, ttlMs);
+                }
             }
             // Project the response down to the caller's requested shape AFTER the
             // cache write — the cache keeps the superset, the caller gets their fields.
@@ -2363,6 +2369,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
         return result;
+    }
+
+    /**
+     * Resolves the cache TTL (in ms) for a RunView's entity, or `undefined` for MJ-DB entities
+     * (which use event-based cache invalidation, not TTL). External-data-source entities MUST be
+     * time-bounded — their remote data changes never emit BaseEntity events — so this returns the
+     * data source's DefaultCacheTTLSeconds (via the external router) in ms, or `0` to signal "do
+     * not cache" (TTL disabled on the source, or no router available to resolve one).
+     */
+    protected async resolveExternalCacheTTLMs(params: RunViewParams, contextUser?: UserInfo): Promise<number | undefined> {
+        if (!params.EntityName) return undefined;
+        const entityInfo = this.EntityByName(params.EntityName);
+        if (!entityInfo?.ExternalDataSourceID) return undefined; // MJ-DB entity — event-invalidated, no TTL
+        const router = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
+        if (!router) return 0; // external but no router resolvable — don't cache (avoid stale-forever)
+        const ttlSeconds = await router.GetCacheTTLSeconds(entityInfo.ExternalDataSourceID, contextUser, this);
+        return ttlSeconds > 0 ? ttlSeconds * 1000 : 0;
     }
 
     /**
@@ -2853,8 +2876,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!externalRouter) {
                     throw new Error(`Query '${query.Name}' is bound to an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
                 }
-                const externalResult = await externalRouter.RunQueryExternal(query.ExternalDataSourceID, query.ID, query.Name, finalSQL, params, contextUser, this);
-                return this.warnIfExternalQueryFieldsMissing(query, externalResult);
+                return await this.runExternalQueryWithCache(query, finalSQL, params, externalRouter, contextUser);
             }
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
@@ -3079,6 +3101,64 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * when the query declares no fields or returned no rows (columns can't be inspected without
      * a row, and an empty result is legitimate). Extra columns beyond the declared set are fine.
      */
+    /**
+     * Executes an external-data-source query with TTL-based result caching keyed off the data
+     * source's DefaultCacheTTLSeconds. External queries can't be event-invalidated (their data
+     * lives on a remote system), so a time-bounded cache is the read-cost mitigation the plan
+     * calls for — notably for warehouses like Snowflake. The data source's TTL is the source of
+     * truth (a TTL of <= 0 disables caching for the source); field-drift warnings still apply to
+     * freshly-fetched rows. Ad-hoc SQL (params.SQL) is never cached.
+     */
+    protected async runExternalQueryWithCache(
+        query: MJQueryEntityExtended,
+        finalSQL: string,
+        params: RunQueryParams,
+        router: ExternalDataSourceReadRouter,
+        contextUser?: UserInfo,
+    ): Promise<RunQueryResult> {
+        const externalDataSourceID = query.ExternalDataSourceID!;
+        const ttlSeconds = await router.GetCacheTTLSeconds(externalDataSourceID, contextUser, this);
+        const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized;
+
+        let fingerprint: string | undefined;
+        if (cacheable) {
+            // MaxRows/StartRow shape the result set, and the data source ID disambiguates slots.
+            const fingerprintParams: Record<string, unknown> = {
+                ...(params.Parameters ?? {}),
+                __maxRows: params.MaxRows ?? -1,
+                __startRow: params.StartRow ?? 0,
+                __eds: externalDataSourceID,
+            };
+            fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString);
+            const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint); // TTL-enforced
+            if (cached) {
+                return {
+                    QueryID: cached.queryId ?? query.ID,
+                    QueryName: query.Name,
+                    Success: true,
+                    Results: cached.results as RunQueryResult['Results'],
+                    RowCount: cached.results.length,
+                    TotalRowCount: cached.rowCount ?? cached.results.length,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    CacheHit: true,
+                    CacheKey: fingerprint,
+                };
+            }
+        }
+
+        const externalResult = await router.RunQueryExternal(externalDataSourceID, query.ID, query.Name, finalSQL, params, contextUser, this);
+        const checked = this.warnIfExternalQueryFieldsMissing(query, externalResult);
+
+        if (cacheable && fingerprint && checked.Success) {
+            // Fire-and-forget store with the data source's TTL (ms).
+            LocalCacheManager.Instance.SetRunQueryResult(
+                fingerprint, query.Name, checked.Results, '', checked.TotalRowCount, query.ID, ttlSeconds * 1000,
+            ).catch(e => LogError(`External RunQuery cache write failed: ${e}`));
+        }
+        return checked;
+    }
+
     protected warnIfExternalQueryFieldsMissing(query: MJQueryEntityExtended, result: RunQueryResult): RunQueryResult {
         if (!result.Success || !result.Results || result.Results.length === 0) {
             return result;

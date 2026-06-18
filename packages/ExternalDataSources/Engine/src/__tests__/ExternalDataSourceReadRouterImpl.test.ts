@@ -116,4 +116,33 @@ describe('ExternalDataSourceReadRouterImpl', () => {
       expect(res.QueryID).toBe('q-2');
     });
   });
+
+  describe('GetCacheTTLSeconds', () => {
+    const mockResolveWithTTL = (ttl: unknown) =>
+      vi.spyOn(ExternalDataSourceRouter.Instance, 'resolve').mockResolvedValue({
+        driver: makeFakeDriver(),
+        dataSource: { ID: 'ds-1', Name: 'Demo', DefaultCacheTTLSeconds: ttl } as never,
+        dataSourceType: { DriverClass: 'PostgresExternalDriver' } as never,
+      });
+
+    it("returns the data source's DefaultCacheTTLSeconds when set", async () => {
+      mockResolveWithTTL(120);
+      expect(await impl.GetCacheTTLSeconds('ds-1')).toBe(120);
+    });
+
+    it('returns 0 (caching disabled) when DefaultCacheTTLSeconds is explicitly 0', async () => {
+      mockResolveWithTTL(0);
+      expect(await impl.GetCacheTTLSeconds('ds-1')).toBe(0);
+    });
+
+    it('falls back to the default 300 when DefaultCacheTTLSeconds is null/unset', async () => {
+      mockResolveWithTTL(null);
+      expect(await impl.GetCacheTTLSeconds('ds-1')).toBe(300);
+    });
+
+    it('falls back to the default 300 when the source cannot be resolved', async () => {
+      vi.spyOn(ExternalDataSourceRouter.Instance, 'resolve').mockRejectedValue(new Error('not found'));
+      expect(await impl.GetCacheTTLSeconds('missing')).toBe(300);
+    });
+  });
 });
