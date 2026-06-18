@@ -121,11 +121,11 @@ class TestPipelineProvider extends GenericDatabaseProvider {
         this.auditQueryExecution(query, params, finalSQL, rowCount, totalRowCount, executionTime, contextUser);
     }
 
-    public testValidateExternalQueryResultFields(
+    public testWarnIfExternalQueryFieldsMissing(
         query: MJQueryEntityExtended,
         result: RunQueryResult,
     ): RunQueryResult {
-        return this.validateExternalQueryResultFields(query, result);
+        return this.warnIfExternalQueryFieldsMissing(query, result);
     }
 }
 
@@ -858,9 +858,10 @@ ORDER BY bridge.LastName, bridge.FirstName`,
     });
 
     // ================================================================
-    // validateExternalQueryResultFields (external data source queries)
+    // warnIfExternalQueryFieldsMissing (external data source queries)
+    // Drift detection is intentionally NON-FATAL per the EDS plan: warn, return rows.
     // ================================================================
-    describe('validateExternalQueryResultFields', () => {
+    describe('warnIfExternalQueryFieldsMissing', () => {
         const makeExternalQuery = (name: string, fieldNames: string[]): MJQueryEntityExtended =>
             ({ Name: name, QueryFields: fieldNames.map(n => ({ Name: n })) } as unknown as MJQueryEntityExtended);
 
@@ -876,7 +877,7 @@ ORDER BY bridge.LastName, bridge.FirstName`,
         });
 
         it('passes through when all declared fields are present', () => {
-            const out = provider.testValidateExternalQueryResultFields(
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
                 makeExternalQuery('Sales', ['Region', 'Amount']),
                 makeResult([{ Region: 'East', Amount: 100 }]),
             );
@@ -885,7 +886,7 @@ ORDER BY bridge.LastName, bridge.FirstName`,
         });
 
         it('matches declared fields case-insensitively (e.g. Snowflake uppercased columns)', () => {
-            const out = provider.testValidateExternalQueryResultFields(
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
                 makeExternalQuery('Sales', ['Region', 'Amount']),
                 makeResult([{ REGION: 'East', AMOUNT: 100 }]),
             );
@@ -893,27 +894,28 @@ ORDER BY bridge.LastName, bridge.FirstName`,
         });
 
         it('allows extra columns beyond the declared set', () => {
-            const out = provider.testValidateExternalQueryResultFields(
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
                 makeExternalQuery('Sales', ['Region']),
                 makeResult([{ Region: 'East', Amount: 100, Extra: 'x' }]),
             );
             expect(out.Success).toBe(true);
         });
 
-        it('fails with a clear error naming missing declared fields', () => {
-            const out = provider.testValidateExternalQueryResultFields(
+        it('is non-fatal when declared fields are missing — warns but returns the rows unchanged', () => {
+            // Per the EDS plan, schema drift is logged as a warning, not failed. Rows pass through.
+            const rows = [{ Region: 'East', Amount: 100 }];
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
                 makeExternalQuery('Sales', ['Region', 'Amount', 'Margin']),
-                makeResult([{ Region: 'East', Amount: 100 }]),
+                makeResult(rows),
             );
-            expect(out.Success).toBe(false);
-            expect(out.Results).toHaveLength(0);
-            expect(out.RowCount).toBe(0);
-            expect(out.ErrorMessage).toContain('Margin');
-            expect(out.ErrorMessage).toContain('Sales');
+            expect(out.Success).toBe(true);
+            expect(out.Results).toEqual(rows);
+            expect(out.RowCount).toBe(1);
+            expect(out.ErrorMessage).toBe('');
         });
 
         it('no-ops when the query declares no fields', () => {
-            const out = provider.testValidateExternalQueryResultFields(
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
                 makeExternalQuery('Sales', []),
                 makeResult([{ Anything: 1 }]),
             );
@@ -921,7 +923,7 @@ ORDER BY bridge.LastName, bridge.FirstName`,
         });
 
         it('no-ops when the result has no rows (columns cannot be inspected)', () => {
-            const out = provider.testValidateExternalQueryResultFields(
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
                 makeExternalQuery('Sales', ['Region']),
                 makeResult([]),
             );
@@ -930,7 +932,7 @@ ORDER BY bridge.LastName, bridge.FirstName`,
 
         it('passes an already-failed result through unchanged', () => {
             const failed: RunQueryResult = { ...makeResult([]), Success: false, ErrorMessage: 'driver exploded' };
-            const out = provider.testValidateExternalQueryResultFields(makeExternalQuery('Sales', ['Region']), failed);
+            const out = provider.testWarnIfExternalQueryFieldsMissing(makeExternalQuery('Sales', ['Region']), failed);
             expect(out.Success).toBe(false);
             expect(out.ErrorMessage).toBe('driver exploded');
         });

@@ -2854,7 +2854,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     throw new Error(`Query '${query.Name}' is bound to an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
                 }
                 const externalResult = await externalRouter.RunQueryExternal(query.ExternalDataSourceID, query.ID, query.Name, finalSQL, params, contextUser, this);
-                return this.validateExternalQueryResultFields(query, externalResult);
+                return this.warnIfExternalQueryFieldsMissing(query, externalResult);
             }
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
@@ -3066,19 +3066,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Validates that the columns an external-data-source query actually returned contain
-     * every field the Query *declares* (its QueryField metadata). External SQL runs against
-     * a foreign system MJ does not control, so a renamed or dropped remote column would
-     * otherwise silently yield result rows missing expected fields — breaking downstream
-     * consumers far from the cause. When declared fields are missing, this converts the
-     * result into a clear error naming them.
+     * Checks the columns an external-data-source query returned against the fields the Query
+     * *declares* (its QueryField metadata) and logs a warning naming any declared field that
+     * is missing — the signature of a remote object whose columns have drifted (renamed or
+     * dropped).
      *
-     * Matching is case-insensitive because remote dialects differ in column casing (e.g.
-     * Snowflake uppercases unquoted identifiers). No-op when the query declares no fields
-     * or returned no rows (columns can't be inspected without a row, and an empty result is
-     * legitimate). Extra columns beyond the declared set are allowed.
+     * Per the External Data Sources plan this is intentionally NON-FATAL: the rows are still
+     * returned unchanged. Drift is surfaced for diagnosis, not treated as a hard failure —
+     * the declared field metadata can legitimately lag the remote schema, and the plan calls
+     * for "a warning logged, rows still returned." Matching is case-insensitive because remote
+     * dialects differ in column casing (e.g. Snowflake uppercases unquoted identifiers). No-op
+     * when the query declares no fields or returned no rows (columns can't be inspected without
+     * a row, and an empty result is legitimate). Extra columns beyond the declared set are fine.
      */
-    protected validateExternalQueryResultFields(query: MJQueryEntityExtended, result: RunQueryResult): RunQueryResult {
+    protected warnIfExternalQueryFieldsMissing(query: MJQueryEntityExtended, result: RunQueryResult): RunQueryResult {
         if (!result.Success || !result.Results || result.Results.length === 0) {
             return result;
         }
@@ -3092,18 +3093,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const missing = declaredFields
             .map(f => f.Name)
             .filter(name => name && !presentKeys.has(name.trim().toLowerCase()));
-        if (missing.length === 0) {
-            return result;
+        if (missing.length > 0) {
+            LogStatus(
+                `Warning: external query '${query.Name}' returned rows missing declared field(s): ${missing.join(', ')}. ` +
+                `The remote object's columns may have drifted from the query's field metadata. Rows are returned as-is.`,
+            );
         }
-        return {
-            ...result,
-            Success: false,
-            Results: [],
-            RowCount: 0,
-            ErrorMessage:
-                `External query '${query.Name}' returned rows missing declared field(s): ${missing.join(', ')}. ` +
-                `The remote object's columns may have drifted from the query's field metadata.`,
-        };
+        return result;
     }
 
     /**

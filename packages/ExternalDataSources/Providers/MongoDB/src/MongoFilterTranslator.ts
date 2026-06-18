@@ -145,7 +145,7 @@ class Parser {
       this.next();
       return { [field]: negated ? { $ne: null } : { $eq: null } };
     }
-    if (this.isKw('LIKE')) { this.next(); const pat = this.expect('string').value as string; return { [field]: { $regex: MongoFilterTranslator.likeToRegex(pat) } }; }
+    if (this.isKw('LIKE')) { this.next(); const pat = this.expect('string').value as string; return { [field]: { $regex: MongoFilterTranslator.likeToRegex(pat), $options: 'i' } }; }
 
     throw new Error(`Unsupported predicate for field '${field}' in filter.`);
   }
