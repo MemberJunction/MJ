@@ -1,0 +1,11 @@
+[
+  {
+    "entity": "MJ: Scheduled Job Types",
+    "fields": {
+      "Name": "Integration Discovery",
+      "Description": "Re-discovers a company integration's SCHEMA on a cron (RefreshConnectorSchema only — no data sync, no table creation). Evolves the Integration Objects / Integration Object Fields catalog so the entity-map / field-map picker keeps offering newly-appeared tables and columns, and deactivates (reversibly) objects/fields the source no longer exposes when discovery is authoritative.",
+      "DriverClass": "IntegrationDiscoveryScheduledJobDriver",
+      "NotificationsAvailable": true
+    }
+  }
+]

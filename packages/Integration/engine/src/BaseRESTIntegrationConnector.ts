@@ -3,6 +3,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { computeContentHash } from './ContentHash.js';
+import { serializeKeyValue } from './KeySerialization.js';
 import {
     BaseIntegrationConnector,
     type ExternalObjectSchema,
@@ -189,6 +190,41 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         return raw;
     }
 
+    /**
+     * Source keys a connector DELIBERATELY removes in its {@link TransformRecord} override
+     * (vendor noise, a flattened parent blob, a nested child collection emitted as its own object).
+     * These are the only sanctioned drops — excluded from the {@link applyTransformPreservingKeys}
+     * re-add. Default: none. Override per-object to declare intentional removals.
+     */
+    protected ExcludedSourceKeys(_objectName: string): string[] {
+        return [];
+    }
+
+    /**
+     * Runs {@link TransformRecord}, then RE-ADDS any source key the transform dropped (present in
+     * `raw`, absent from the output) unless declared in {@link ExcludedSourceKeys}. This makes the
+     * base-fetch path structurally full-record (§0 forward-compat contract): a TransformRecord
+     * override may reshape/coerce but cannot SILENTLY drop a source key from `ExternalRecord.Fields`,
+     * so the framework's custom-column capture sees everything the source returned. The default
+     * identity transform returns `raw` unchanged → fast-path no-op (zero overhead, zero behavior
+     * change for connectors that don't override TransformRecord).
+     */
+    protected applyTransformPreservingKeys(
+        raw: Record<string, unknown>,
+        obj: MJIntegrationObjectEntity,
+        fields: MJIntegrationObjectFieldEntity[]
+    ): Record<string, unknown> {
+        const transformed = this.TransformRecord(raw, obj, fields);
+        if (transformed === raw) return raw; // identity (default) — nothing dropped
+        const excluded = new Set(this.ExcludedSourceKeys(obj.Name));
+        const out: Record<string, unknown> = { ...transformed };
+        for (const key of Object.keys(raw)) {
+            if (key in out || excluded.has(key)) continue;
+            out[key] = raw[key]; // re-add a key the transform dropped but did not exclude
+        }
+        return out;
+    }
+
     // ── BaseIntegrationConnector implementations ─────────────────────
 
     /**
@@ -237,7 +273,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     ): Promise<SourceSchemaInfo> {
         const integrationID = companyIntegration.IntegrationID;
         const objects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
-        const result: SourceSchemaInfo = { Objects: [] };
+        // §7 — CACHE-DRIVEN IntrospectSchema (re-reads persisted ACTIVE metadata, not a live source
+        // enumeration): NEVER authoritative for deactivation — it can only return what is already Active.
+        // A REST connector doing genuine live full-gamut discovery must override IntrospectSchema +
+        // DiscoveryIsAuthoritative itself.
+        const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: false };
 
         for (const obj of objects) {
             const fields = this.GetCachedFields(obj.ID);
@@ -393,7 +433,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         }
         const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
         if (records.length === 0) return null;
-        const transformed = this.TransformRecord(records[0], obj, fields);
+        const transformed = this.applyTransformPreservingKeys(records[0], obj, fields);
         return this.ToExternalRecord(transformed, ctx.ObjectName, this.FindPrimaryKeyFieldNames(fields));
     }
 
@@ -494,7 +534,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
 
         return {
             Records: result.Records.map(r => this.ToExternalRecord(
-                this.TransformRecord(r, obj, fields),
+                this.applyTransformPreservingKeys(r, obj, fields),
                 ctx.ObjectName,
                 pkFieldNames
             )),
@@ -530,31 +570,109 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const resolutions: ResolvedTemplateVar[] = [];
         const seenParents = new Set<string>();
         for (const tVar of templateVars) {
-            const info = this.ResolveParentForVar(fields, tVar, ctx.CompanyIntegration.IntegrationID);
+            const info = this.ResolveParentForVar(obj, fields, tVar, ctx.CompanyIntegration.IntegrationID);
             if (!info) {
-                console.warn(
-                    `[BaseRESTIntegrationConnector] Skipping "${obj.Name}": template variable ` +
-                    `{${tVar}} could not be resolved to a parent object.`
-                );
-                return { Records: [], HasMore: false };
+                return { Records: [], HasMore: false, Warnings: [{
+                    Code: 'PARENT_UNRESOLVED',
+                    Message: `"${obj.Name}": template variable {${tVar}} could not be resolved to a parent object — declare Configuration.parentObjectName (deploy-safe by-name) or an unambiguous FK.`,
+                    Data: { object: obj.Name, templateVar: tVar },
+                }] };
             }
             // Cycle guard: a parent chain that revisits an object is a metadata error —
             // name the offending edge instead of looping forever.
             if (seenParents.has(info.parentObjectID)) {
-                console.warn(
-                    `[BaseRESTIntegrationConnector] Skipping "${obj.Name}": template-var dependency ` +
-                    `cycle at {${tVar}} → a parent object already present in the chain.`
-                );
-                return { Records: [], HasMore: false };
+                return { Records: [], HasMore: false, Warnings: [{
+                    Code: 'PARENT_CYCLE',
+                    Message: `"${obj.Name}": template-var dependency cycle at {${tVar}} → a parent object already present in the chain.`,
+                    Data: { object: obj.Name, templateVar: tVar },
+                }] };
             }
             seenParents.add(info.parentObjectID);
             resolutions.push(info);
         }
 
         const pkFieldNames = this.FindPrimaryKeyFieldNames(fields);
+
+        // ── TOP-LEVEL parent iteration: RESUMABLE + BOUNDED-BATCH + CONCURRENT + ADAPTIVELY RATE-LIMITED ──
+        // A second-layer object fires one request PER PARENT. Doing that for all parents in a single
+        // FetchChanges call (a) blows the engine's per-call op-timeout once there are many parents, and
+        // (b) was previously sequential + fixed-self-throttled — defeating concurrency and ignoring 429
+        // back-off. Instead: process a BOUNDED batch of parents per call (keyset-resumable via
+        // AfterKeyValue, so the engine loops to completion), fetch them CONCURRENTLY up to the engine's
+        // MaxConcurrency, and gate each on the engine's adaptive AIMD bucket (RateLimitAcquire/Report).
+        const top = resolutions[0];
+        const allParentIDs = this.SortIdsStable(await this.LoadParentIDs(top.parentObjectID, ctx.ContextUser, []));
+        if (allParentIDs.length === 0) {
+            const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(top.parentObjectID);
+            return { Records: [], HasMore: false, Warnings: [{
+                Code: 'ZERO_PARENTS',
+                Message: `"${obj.Name}": no "${parentObj?.Name ?? top.parentObjectID}" parent records available to iterate {${top.templateVar}} over — sync the parent first (check DAG order/priority).`,
+                Data: { object: obj.Name, parentObject: parentObj?.Name, templateVar: top.templateVar },
+            }] };
+        }
+        const after = ctx.AfterKeyValue ?? null;
+        const remaining = after != null ? allParentIDs.filter(id => this.CompareIds(id, after) > 0) : allParentIDs;
+        const batchParents = remaining.slice(0, Math.max(1, this.TemplateVarParentBatchSize()));
+
         const out: ExternalRecord[] = [];
-        await this.DescendTemplateVars(auth, baseURL, obj, fields, resolutions, 0, obj.APIPath, {}, [], ctx, pkFieldNames, out);
-        return { Records: out, HasMore: false };
+        await this.RunBounded(batchParents, Math.max(1, ctx.MaxConcurrency ?? 1), async (parentID) => {
+            if (ctx.RateLimitAcquire) await ctx.RateLimitAcquire();   // adaptive token (replaces fixed self-throttle)
+            const nextPath = this.SubstituteTemplateVars(obj.APIPath, top.templateVar, parentID);
+            const nextTags: Record<string, string> = { [top.fkFieldName]: parentID };
+            const sub: ExternalRecord[] = [];
+            try {
+                await this.DescendTemplateVars(
+                    auth, baseURL, obj, fields, resolutions, 1, nextPath, nextTags,
+                    [{ objectID: top.parentObjectID, idValue: parentID }], ctx, pkFieldNames, sub
+                );
+                ctx.RateLimitReport?.();          // clean fetch → ramp the adaptive rate up
+            } catch (e) {
+                ctx.RateLimitReport?.(e);         // 429 → back off (engine honors Retry-After)
+                throw e;
+            }
+            for (const r of sub) out.push(r);     // single-threaded async: append between awaits is safe
+        });
+
+        const hasMore = remaining.length > batchParents.length;
+        return { Records: out, HasMore: hasMore, NextAfterKeyValue: hasMore ? batchParents[batchParents.length - 1] : undefined };
+    }
+
+    /**
+     * Per-call cap on how many PARENTS a parent-iterated object processes before yielding a resumable
+     * batch (the engine loops on HasMore). Kept conservative so a single FetchChanges call fits the
+     * engine's op-timeout even at a slow initial adaptive rate; the AIMD bucket ramps up over batches.
+     * Override in a concrete connector if a vendor tolerates larger per-call parent runs.
+     */
+    protected TemplateVarParentBatchSize(): number {
+        return 10;
+    }
+
+    /** Stable total order over ID strings — numeric when ALL are integer-like, else lexical. */
+    private SortIdsStable(ids: string[]): string[] {
+        return [...ids].sort((a, b) => this.CompareIds(a, b));
+    }
+
+    /** Total-order comparator matching SortIdsStable, used for keyset resume (id > AfterKeyValue). */
+    private CompareIds(a: string, b: string): number {
+        const na = Number(a), nb = Number(b);
+        if (Number.isFinite(na) && Number.isFinite(nb) && /^\d+$/.test(a) && /^\d+$/.test(b)) {
+            return na === nb ? 0 : (na < nb ? -1 : 1);
+        }
+        return a < b ? -1 : (a > b ? 1 : 0);
+    }
+
+    /** Runs `worker` over `items` with at most `concurrency` in flight. Rejects on the first worker error. */
+    private async RunBounded<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+        let idx = 0;
+        const runners: Promise<void>[] = [];
+        const next = async (): Promise<void> => {
+            while (idx < items.length) {
+                const i = idx++;
+                await worker(items[i]);
+            }
+        };
+        for (let c = 0; c < Math.min(concurrency, items.length); c++) runners.push(next());
+        await Promise.all(runners);
     }
 
     /**
@@ -588,7 +706,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
             for (const r of result.Records) {
                 for (const [k, v] of Object.entries(fkTags)) r[k] = v;
-                const transformed = this.TransformRecord(r, obj, fields);
+                const transformed = this.applyTransformPreservingKeys(r, obj, fields);
                 out.push(this.ToExternalRecord(transformed, ctx.ObjectName, pkFieldNames));
             }
             return;
@@ -625,31 +743,58 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      *
      * Returns null when neither strategy matches.
      */
+    /** Reads a trimmed string value from an IntegrationObject's Configuration JSON (tolerant of absent/invalid). */
+    private ReadObjectConfigString(obj: MJIntegrationObjectEntity, key: string): string | null {
+        const raw = (obj as unknown as { Configuration?: string | null }).Configuration;
+        if (!raw || typeof raw !== 'string') return null;
+        try {
+            const cfg = JSON.parse(raw) as Record<string, unknown>;
+            const v = cfg[key];
+            return (typeof v === 'string' && v.trim().length > 0) ? v.trim() : null;
+        } catch { return null; }
+    }
+
     private ResolveParentForVar(
+        obj: MJIntegrationObjectEntity,
         fields: MJIntegrationObjectFieldEntity[],
         templateVar: string,
         integrationID: string
     ): ResolvedTemplateVar | null {
         const tVarLower = templateVar.toLowerCase();
+        const siblingObjects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
 
-        // Strategy 1: explicit FK field whose name matches this var.
+        // Strategy A (PREFERRED — deterministic + deploy-safe): the object DECLARES its parent BY NAME in
+        // Configuration.parentObjectName (the extractor emits this for second-layer / {param} objects). A
+        // by-name reference needs NO RelatedIntegrationObjectID FK-UUID — which a dense @lookup FK graph
+        // often can't deploy (same-transaction rollback). When a valid declaration is present it WINS.
+        const declaredParent = this.ReadObjectConfigString(obj, 'parentObjectName');
+        if (declaredParent) {
+            const parent = siblingObjects.find(s => s.Name.toLowerCase() === declaredParent.toLowerCase());
+            if (parent) {
+                const fkFieldName = this.ReadObjectConfigString(obj, 'parentObjectIDFieldName') ?? templateVar;
+                return { templateVar, fkFieldName, parentObjectID: parent.ID };
+            }
+            console.warn(
+                `[BaseRESTIntegrationConnector] "${obj.Name}": Configuration.parentObjectName="${declaredParent}" ` +
+                `matches no sibling IntegrationObject — cannot resolve parent (will skip, not guess).`
+            );
+        }
+
+        // Strategy B (DECLARED FK only): an EXPLICIT FK field (RelatedIntegrationObjectID set) whose name
+        // EXACTLY equals this template var. Exact, NOT substring (substring can bind the wrong FK) — this
+        // resolves only via authored metadata, never a guess.
         for (const field of fields) {
             if (!field.RelatedIntegrationObjectID) continue;
-            if (field.Name.toLowerCase().includes(tVarLower)) {
+            if (field.Name.toLowerCase() === tVarLower) {
                 return { templateVar, fkFieldName: field.Name, parentObjectID: field.RelatedIntegrationObjectID };
             }
         }
 
-        // Strategy 2: sibling object whose PK field name equals this var.
-        const siblingObjects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
-        for (const sibling of siblingObjects) {
-            const siblingFields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(sibling.ID);
-            const pkField = siblingFields.find(f => f.IsPrimaryKey);
-            if (pkField && pkField.Name.toLowerCase() === tVarLower) {
-                return { templateVar, fkFieldName: templateVar, parentObjectID: sibling.ID };
-            }
-        }
-
+        // §19 — NO heuristic fallback. The removed "sibling whose PK name equals this var" strategy was a
+        // GUESS: on a name collision it silently bound the WRONG parent → children fetched under the wrong
+        // owner IDs (silent cross-owner data corruption, not an error). An undeclared/unresolvable parent is
+        // now a LOUD skip — the caller surfaces "declare Configuration.parentObjectName" and fetches nothing
+        // rather than guess. Resolution is by authored metadata only (declared name or declared FK).
         return null;
     }
 
@@ -989,14 +1134,30 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // (a composite key with a missing part — e.g. "abc|" — is not a stable identity). When any
         // part is missing, fall back to a deterministic content-derived identity (identity hash) so
         // PK-less / partial-key tables are still syncable + dedupable. Stable while content is unchanged.
+        // serializeKeyValue mirrors the write-side coercion (objects → JSON, not "[object Object]"),
+        // so an object-valued PK (a connector that surfaces a nested {id,...} blob as its key) yields
+        // a stable, distinct ExternalID instead of every record collapsing to "[object Object]".
         const allPkPresent = pkFieldNames.length > 0
-            && pkFieldNames.every(name => raw[name] != null && String(raw[name]).length > 0);
-        const externalID = pkFieldNames.map(name => String(raw[name] ?? '')).join('|');
+            && pkFieldNames.every(name => raw[name] != null && serializeKeyValue(raw[name]).length > 0);
+        const externalID = pkFieldNames.map(name => serializeKeyValue(raw[name])).join('|');
         const resolvedID = allPkPresent ? externalID : computeContentHash(raw);
+
+        // §4 cont'd — write the synthetic identity INTO the PK column. When the source never populates the
+        // declared PK (nested/derived records: contact phones, event sponsors, scheduled billing, …) the row
+        // has no usable storage key: the codegen-generated spCreate reloads the inserted row `WHERE [pk]=@pk`,
+        // and `WHERE col = NULL` returns 0 rows → "no rows returned from SQL" → the record can't be stored.
+        // Stamping the deterministic content-hash into the (single) empty PK field gives every row a real,
+        // stable key WITHOUT any codegen change: identity == PK == hash, so the reload finds it and re-syncs
+        // are idempotent (same content → same hash → upsert match). Single-PK only; the full source record is
+        // otherwise preserved (full-record pass-through), so this never drops a source key.
+        let fields = raw;
+        if (!allPkPresent && pkFieldNames.length === 1 && (raw[pkFieldNames[0]] == null || serializeKeyValue(raw[pkFieldNames[0]]).length === 0)) {
+            fields = { ...raw, [pkFieldNames[0]]: resolvedID };
+        }
         return {
             ExternalID: resolvedID,
             ObjectType: objectType,
-            Fields: raw,
+            Fields: fields,
         };
     }
 
