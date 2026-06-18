@@ -100,6 +100,16 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
     return connection;
   }
 
+  protected async invalidateConnection(dataSourceId: string): Promise<void> {
+    const conn = this.connections.get(dataSourceId);
+    if (conn) {
+      this.connections.delete(dataSourceId);
+      await new Promise<void>((resolve) => {
+        try { conn.destroy(() => resolve()); } catch { resolve(); /* best-effort close */ }
+      });
+    }
+  }
+
   /** Promisified statement execution. */
   private execute<TRow extends ExternalRow = ExternalRow>(conn: Connection, sqlText: string, binds?: SnowflakeBind[]): Promise<TRow[]> {
     return new Promise<TRow[]>((resolve, reject) => {
@@ -131,11 +141,13 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
   ): Promise<ExternalViewResult<TRow>> {
     const start = Date.now();
     try {
-      const conn = await this.getConnection(dataSource, contextUser);
-      const target = this.qualifyObject(dataSource, params.objectName);
-      const rows = await this.execute<TRow>(conn, this.buildSelectSql(target, params));
-      const totalRowCount = await this.maybeCount(conn, target, params);
-      return { success: true, rows, totalRowCount, executionTimeMs: Date.now() - start };
+      return await this.withConnectionRetry(dataSource, async () => {
+        const conn = await this.getConnection(dataSource, contextUser);
+        const target = this.qualifyObject(dataSource, params.objectName);
+        const rows = await this.execute<TRow>(conn, this.buildSelectSql(target, params));
+        const totalRowCount = await this.maybeCount(conn, target, params);
+        return { success: true, rows, totalRowCount, executionTimeMs: Date.now() - start };
+      });
     } catch (e) {
       return { success: false, rows: [], errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
     }
@@ -161,10 +173,12 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
   ): Promise<ExternalQueryResult<TRow>> {
     const start = Date.now();
     try {
-      const conn = await this.getConnection(dataSource, contextUser);
-      const binds = params?.length ? params.map((p) => p.value) : undefined;
-      const rows = await this.execute<TRow>(conn, queryText, binds);
-      return { success: true, rows, rowCount: rows.length, executionTimeMs: Date.now() - start };
+      return await this.withConnectionRetry(dataSource, async () => {
+        const conn = await this.getConnection(dataSource, contextUser);
+        const binds = params?.length ? params.map((p) => p.value) : undefined;
+        const rows = await this.execute<TRow>(conn, queryText, binds);
+        return { success: true, rows, rowCount: rows.length, executionTimeMs: Date.now() - start };
+      });
     } catch (e) {
       return { success: false, rows: [], rowCount: 0, errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
     }

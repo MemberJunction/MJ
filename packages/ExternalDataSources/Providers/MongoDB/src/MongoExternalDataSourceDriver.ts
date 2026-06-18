@@ -77,6 +77,14 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     return client.db(dbName);
   }
 
+  protected async invalidateConnection(dataSourceId: string): Promise<void> {
+    const client = this.clients.get(dataSourceId);
+    if (client) {
+      this.clients.delete(dataSourceId);
+      try { await client.close(); } catch { /* best-effort close on the failure path */ }
+    }
+  }
+
   public async TestConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<ExternalConnectionTestResult> {
     const start = Date.now();
     try {
@@ -98,18 +106,20 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
   ): Promise<ExternalViewResult<TRow>> {
     const start = Date.now();
     try {
-      const db = await this.getConnection(dataSource, contextUser);
-      const coll = db.collection(params.objectName);
-      const filter = MongoFilterTranslator.translate(params.filter);
-      const options: FindOptions = {};
-      if (params.fields?.length) options.projection = this.buildProjection(params.fields);
-      if (params.orderBy) options.sort = this.parseSort(params.orderBy);
-      if (params.offset) options.skip = params.offset;
-      if (params.maxRows != null) options.limit = params.maxRows;
+      return await this.withConnectionRetry(dataSource, async () => {
+        const db = await this.getConnection(dataSource, contextUser);
+        const coll = db.collection(params.objectName);
+        const filter = MongoFilterTranslator.translate(params.filter);
+        const options: FindOptions = {};
+        if (params.fields?.length) options.projection = this.buildProjection(params.fields);
+        if (params.orderBy) options.sort = this.parseSort(params.orderBy);
+        if (params.offset) options.skip = params.offset;
+        if (params.maxRows != null) options.limit = params.maxRows;
 
-      const rows = await coll.find(filter, options).toArray();
-      const totalRowCount = params.maxRows != null ? await coll.countDocuments(filter) : undefined;
-      return { success: true, rows: rows as unknown as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
+        const rows = await coll.find(filter, options).toArray();
+        const totalRowCount = params.maxRows != null ? await coll.countDocuments(filter) : undefined;
+        return { success: true, rows: rows as unknown as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
+      });
     } catch (e) {
       return { success: false, rows: [], errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
     }
@@ -134,13 +144,15 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
   ): Promise<ExternalQueryResult<TRow>> {
     const start = Date.now();
     try {
-      const db = await this.getConnection(dataSource, contextUser);
-      const spec = JSON.parse(queryText) as MongoNativeQuery;
-      if (!spec.collection || !Array.isArray(spec.pipeline)) {
-        throw new Error('MongoDB native query must be JSON of the form { "collection": "<name>", "pipeline": [ ... ] }.');
-      }
-      const rows = await db.collection(spec.collection).aggregate(spec.pipeline as Document[]).toArray();
-      return { success: true, rows: rows as unknown as TRow[], rowCount: rows.length, executionTimeMs: Date.now() - start };
+      return await this.withConnectionRetry(dataSource, async () => {
+        const db = await this.getConnection(dataSource, contextUser);
+        const spec = JSON.parse(queryText) as MongoNativeQuery;
+        if (!spec.collection || !Array.isArray(spec.pipeline)) {
+          throw new Error('MongoDB native query must be JSON of the form { "collection": "<name>", "pipeline": [ ... ] }.');
+        }
+        const rows = await db.collection(spec.collection).aggregate(spec.pipeline as Document[]).toArray();
+        return { success: true, rows: rows as unknown as TRow[], rowCount: rows.length, executionTimeMs: Date.now() - start };
+      });
     } catch (e) {
       return { success: false, rows: [], rowCount: 0, errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
     }

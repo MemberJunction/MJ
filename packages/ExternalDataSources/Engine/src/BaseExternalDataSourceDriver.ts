@@ -122,4 +122,53 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
       throw new Error(`ExternalDataSource '${dataSource.Name}' has invalid ConnectionConfig JSON.`);
     }
   }
+
+  /**
+   * Evict (and close) the cached connection/pool for a data source so the next operation
+   * re-resolves its credential and reconnects. Called by {@link withConnectionRetry} on an auth
+   * failure. Implementations must be safe to call when nothing is cached for the id.
+   */
+  protected abstract invalidateConnection(dataSourceId: string): Promise<void>;
+
+  /**
+   * Runs a read operation and, if it fails with what looks like an auth/credential error, evicts
+   * the cached connection (so the retry re-resolves the credential and reconnects) and retries
+   * exactly once. This self-heals the common "credential rotated / token expired while a pooled
+   * connection was cached" case without a process restart. Safe because external reads are
+   * idempotent; non-auth errors propagate immediately with no retry.
+   */
+  protected async withConnectionRetry<T>(
+    dataSource: MJExternalDataSourceEntity,
+    op: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await op();
+    } catch (e) {
+      if (!this.isAuthError(e)) {
+        throw e;
+      }
+      await this.invalidateConnection(dataSource.ID);
+      return await op();
+    }
+  }
+
+  /**
+   * Heuristic: does this error look like an authentication/authorization failure (vs. a query or
+   * network error)? Drives {@link withConnectionRetry}'s decision to re-resolve + retry. Drivers
+   * may override for vendor-specific error codes.
+   */
+  protected isAuthError(e: unknown): boolean {
+    const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+    return (
+      msg.includes('password') ||
+      msg.includes('authentic') ||   // authentication / authenticate
+      msg.includes('authoriz') ||    // authorization / unauthorized / "not authorized"
+      msg.includes('credential') ||
+      msg.includes('login failed') ||
+      msg.includes('access denied') ||
+      msg.includes('permission denied') ||
+      msg.includes('28p01') ||       // PostgreSQL invalid_password
+      msg.includes('28000')          // PostgreSQL/ANSI invalid_authorization_specification
+    );
+  }
 }

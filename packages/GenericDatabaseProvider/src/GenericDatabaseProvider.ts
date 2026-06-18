@@ -1460,11 +1460,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // Refuse rather than silently bypass Row-Level Security — a remote system can't
                 // enforce MJ's RLS WHERE clauses, so returning unfiltered rows would be a data leak.
                 this.assertExternalReadAllowedUnderRLS(entityInfo, user);
+                // Refuse params we can't honor remotely rather than silently dropping them — most
+                // importantly AfterKey, which would otherwise return the same page on every call.
+                this.assertExternalRunViewParamsSupported(params, entityInfo.Name);
                 const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
                 if (!externalRouter) {
                     throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
                 }
-                return await externalRouter.RunViewExternal<T>(entityInfo, params, user, this);
+                const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, params, user, this);
+                // Apply the same row post-processing MJ-DB reads get (field decryption + datetime
+                // normalization). Without this, an Encrypt-flagged external field surfaces as ciphertext.
+                if (externalResult.Success && externalResult.Results && externalResult.Results.length > 0) {
+                    const rows = externalResult.Results as unknown as Record<string, unknown>[];
+                    externalResult.Results = (await this.PostProcessRows(rows, entityInfo, user)) as unknown as T[];
+                }
+                return externalResult;
             }
 
             // ── Parameters (transform user-provided SQL clauses for platform compatibility) ──
@@ -2416,6 +2426,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * (standard SQL escaping that every external SQL driver and the Mongo filter translator
      * understand); null values become "IS NULL".
      */
+    /**
+     * Rejects RunView params an external data source can't honor, rather than silently dropping
+     * them. Most important is AfterKey (keyset pagination): the external read path only supports
+     * offset paging, so a silently-dropped AfterKey would return the same page on every call — an
+     * infinite loop / duplicate processing in deep-pagination jobs. Aggregates and a non-empty
+     * UserSearchString likewise can't be evaluated remotely. Throws a clear error naming the param.
+     */
+    protected assertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
+        if (params.AfterKey) {
+            throw new Error(`Keyset pagination (AfterKey) is not supported for external-data-source entity '${entityName}'. Use StartRow/MaxRows offset paging instead.`);
+        }
+        if (params.Aggregates && params.Aggregates.length > 0) {
+            throw new Error(`Aggregates are not supported for external-data-source entity '${entityName}'. Author an external MJ Query for aggregate results instead.`);
+        }
+        if (typeof params.UserSearchString === 'string' && params.UserSearchString.trim().length > 0) {
+            throw new Error(`UserSearchString is not supported for external-data-source entity '${entityName}'. Use ExtraFilter instead.`);
+        }
+    }
+
     protected buildExternalPrimaryKeyFilter(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
         return compositeKey.KeyValuePairs.map(val => {
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
@@ -3466,7 +3495,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (!externalResult.Success) {
                 throw new Error(`External Load failed for '${entityInfo.Name}': ${externalResult.ErrorMessage}`);
             }
-            return externalResult.Results && externalResult.Results.length > 0 ? externalResult.Results[0] : null;
+            if (externalResult.Results && externalResult.Results.length > 0) {
+                // Same post-processing MJ-DB Load applies (field decryption + datetime normalization).
+                const processed = await this.PostProcessRows(externalResult.Results as Record<string, unknown>[], entityInfo, user);
+                return processed.length > 0 ? processed[0] : null;
+            }
+            return null;
         }
 
         // Build WHERE from composite key

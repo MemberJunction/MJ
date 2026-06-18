@@ -65,6 +65,14 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
     return pool;
   }
 
+  protected async invalidateConnection(dataSourceId: string): Promise<void> {
+    const pool = this.pools.get(dataSourceId);
+    if (pool) {
+      this.pools.delete(dataSourceId);
+      try { await pool.end(); } catch { /* best-effort close on the failure path */ }
+    }
+  }
+
   public async TestConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<ExternalConnectionTestResult> {
     const start = Date.now();
     try {
@@ -83,12 +91,14 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
   ): Promise<ExternalViewResult<TRow>> {
     const start = Date.now();
     try {
-      const pool = await this.getConnection(dataSource, contextUser);
-      const target = this.qualifyObject(dataSource, params.objectName);
-      const sql = this.buildSelectSql(target, params);
-      const res = await pool.query(sql);
-      const totalRowCount = await this.maybeCount(pool, target, params);
-      return { success: true, rows: res.rows as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
+      return await this.withConnectionRetry(dataSource, async () => {
+        const pool = await this.getConnection(dataSource, contextUser);
+        const target = this.qualifyObject(dataSource, params.objectName);
+        const sql = this.buildSelectSql(target, params);
+        const res = await pool.query(sql);
+        const totalRowCount = await this.maybeCount(pool, target, params);
+        return { success: true, rows: res.rows as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
+      });
     } catch (e) {
       return { success: false, rows: [], errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
     }
@@ -115,16 +125,18 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
   ): Promise<ExternalQueryResult<TRow>> {
     const start = Date.now();
     try {
-      const pool = await this.getConnection(dataSource, contextUser);
-      // pg uses positional placeholders ($1..$n); bind values in array order.
-      const values = (params ?? []).map((p) => p.value);
-      const res = await pool.query(queryText, values);
-      return {
-        success: true,
-        rows: res.rows as TRow[],
-        rowCount: res.rowCount ?? res.rows.length,
-        executionTimeMs: Date.now() - start,
-      };
+      return await this.withConnectionRetry(dataSource, async () => {
+        const pool = await this.getConnection(dataSource, contextUser);
+        // pg uses positional placeholders ($1..$n); bind values in array order.
+        const values = (params ?? []).map((p) => p.value);
+        const res = await pool.query(queryText, values);
+        return {
+          success: true,
+          rows: res.rows as TRow[],
+          rowCount: res.rowCount ?? res.rows.length,
+          executionTimeMs: Date.now() - start,
+        };
+      });
     } catch (e) {
       return { success: false, rows: [], rowCount: 0, errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
     }

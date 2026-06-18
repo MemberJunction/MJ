@@ -12,6 +12,7 @@ import {
     UserInfo,
     RunQueryParams,
     RunQueryResult,
+    RunViewParams,
     EntityInfo,
     CompositeKey,
 } from '@memberjunction/core';
@@ -136,6 +137,10 @@ class TestPipelineProvider extends GenericDatabaseProvider {
 
     public testBuildExternalPrimaryKeyFilter(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
         return this.buildExternalPrimaryKeyFilter(entityInfo, compositeKey);
+    }
+
+    public testAssertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
+        this.assertExternalRunViewParamsSupported(params, entityName);
     }
 }
 
@@ -1018,6 +1023,36 @@ ORDER BY bridge.LastName, bridge.FirstName`,
                 entity([{ Name: 'ID', NeedsQuotes: true }]),
                 key([{ FieldName: 'Bogus', Value: 'x' }]),
             )).toThrow(/Primary key Bogus not found/);
+        });
+    });
+
+    describe('assertExternalRunViewParamsSupported', () => {
+        it('throws on AfterKey (keyset pagination) — prevents the silent same-page-forever loop', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', AfterKey: { KeyValuePairs: [{ FieldName: 'ID', Value: '1' }] } } as unknown as RunViewParams,
+                'Sales',
+            )).toThrow(/Keyset pagination \(AfterKey\) is not supported/);
+        });
+
+        it('throws on Aggregates', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', Aggregates: [{ Expression: 'COUNT(*)' }] } as unknown as RunViewParams,
+                'Sales',
+            )).toThrow(/Aggregates are not supported/);
+        });
+
+        it('throws on a non-empty UserSearchString', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', UserSearchString: 'acme' } as RunViewParams,
+                'Sales',
+            )).toThrow(/UserSearchString is not supported/);
+        });
+
+        it('does not throw for supported params (filter/order/page/fields) or empty search', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', ExtraFilter: "Region='NW'", OrderBy: 'Amount DESC', MaxRows: 50, StartRow: 100, Fields: ['ID'], UserSearchString: '  ' } as RunViewParams,
+                'Sales',
+            )).not.toThrow();
         });
     });
 });
