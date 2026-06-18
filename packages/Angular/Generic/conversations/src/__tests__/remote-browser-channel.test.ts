@@ -615,6 +615,122 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
   });
 });
 
+describe('RemoteBrowserChannel — browser_AchieveGoal (async start + poll)', () => {
+  let channel: RemoteBrowserChannel;
+  let log: CtxLog;
+
+  beforeEach(() => {
+    channel = new RemoteBrowserChannel();
+    log = { Notes: [], Calls: [] };
+  });
+
+  /** Shrinks the goal poll cadence/deadline so tests don't wait the 2.5s/5min production bounds. */
+  function shrinkGoalPoll(c: RemoteBrowserChannel, intervalMs = 5, timeoutMs = 500): void {
+    const x = c as unknown as { GoalPollIntervalMs: number; GoalPollTimeoutMs: number };
+    x.GoalPollIntervalMs = intervalMs;
+    x.GoalPollTimeoutMs = timeoutMs;
+  }
+
+  /**
+   * Builds a context that answers the START mutation with a `Running` + GoalRunID, then answers each
+   * subsequent POLL query from `pollResults` in order (the last entry repeats if polled further).
+   * `startPayload`/poll entries are the inner payload objects (or null to simulate a dropped response).
+   */
+  function makeGoalContext(
+    startPayload: Record<string, JSONValue> | null,
+    pollResults: Array<Record<string, JSONValue> | null>
+  ): RealtimeChannelContext {
+    let pollIdx = 0;
+    return {
+      AgentName: 'Sage',
+      SendContextNote: (text: string) => log.Notes.push(text),
+      RequestSave: () => undefined,
+      SetFocusMode: () => undefined,
+      SaveAsArtifact: async () => null,
+      AgentSessionID: 'session-1',
+      ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+        log.Calls.push({ Query: query, Variables: variables });
+        if (query.includes('ExecuteRemoteBrowserGoal')) {
+          return (startPayload ? { ExecuteRemoteBrowserGoal: startPayload } : null) as T | null;
+        }
+        if (query.includes('GetRemoteBrowserGoalResult')) {
+          const r = pollResults[Math.min(pollIdx, pollResults.length - 1)];
+          pollIdx++;
+          return (r ? { GetRemoteBrowserGoalResult: r } : null) as T | null;
+        }
+        return null;
+      }
+    };
+  }
+
+  it('starts the goal, polls past Running ticks, and returns the terminal success', async () => {
+    channel.Initialize(makeGoalContext(
+      { Success: true, GoalRunID: 'g1', Status: 'Running' },
+      [
+        { Status: 'Running', GoalRunID: 'g1' },
+        { Status: 'Running', GoalRunID: 'g1' },
+        { Success: true, GoalRunID: 'g1', Status: 'Completed', StepCount: 6, CurrentUrl: 'https://done', Detail: 'Goal done' }
+      ]
+    ));
+    shrinkGoalPoll(channel);
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_AchieveGoal', JSON.stringify({ goal: 'open the dashboard' })));
+    expect(result.success).toBe(true);
+    expect(result.detail).toBe('Goal done');
+    // One start mutation + at least one poll that returned terminal.
+    expect(log.Calls.some(c => c.Query.includes('ExecuteRemoteBrowserGoal'))).toBe(true);
+    expect(log.Calls.filter(c => c.Query.includes('GetRemoteBrowserGoalResult')).length).toBeGreaterThanOrEqual(1);
+    // The start mutation carried the goal; polls carried the GoalRunID.
+    const startCall = log.Calls.find(c => c.Query.includes('ExecuteRemoteBrowserGoal'));
+    expect(startCall?.Variables).toMatchObject({ agentSessionID: 'session-1', goal: 'open the dashboard' });
+    const pollCall = log.Calls.find(c => c.Query.includes('GetRemoteBrowserGoalResult'));
+    expect(pollCall?.Variables).toMatchObject({ agentSessionID: 'session-1', goalRunID: 'g1' });
+  });
+
+  it('surfaces the terminal failure detail when the goal completes unsuccessfully', async () => {
+    channel.Initialize(makeGoalContext(
+      { Success: true, GoalRunID: 'g1', Status: 'Running' },
+      [{ Success: false, GoalRunID: 'g1', Status: 'Impossible', Detail: 'The page has no login form.' }]
+    ));
+    shrinkGoalPoll(channel);
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_AchieveGoal', JSON.stringify({ goal: 'log in' })));
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('The page has no login form.');
+  });
+
+  it('fails fast when the goal could not be started (no response from the server)', async () => {
+    channel.Initialize(makeGoalContext(null, []));
+    shrinkGoalPoll(channel);
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_AchieveGoal', JSON.stringify({ goal: 'do a thing' })));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('could not be started');
+    // No poll attempted when the start failed.
+    expect(log.Calls.some(c => c.Query.includes('GetRemoteBrowserGoalResult'))).toBe(false);
+  });
+
+  it('reports "still running" when the goal never reaches a terminal status before the deadline', async () => {
+    channel.Initialize(makeGoalContext(
+      { Success: true, GoalRunID: 'g1', Status: 'Running' },
+      [{ Status: 'Running', GoalRunID: 'g1' }] // every poll stays Running
+    ));
+    shrinkGoalPoll(channel, 5, 30); // tiny deadline so the loop exits fast
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_AchieveGoal', JSON.stringify({ goal: 'browse forever' })));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('still be running');
+  });
+
+  it('requires a goal argument (no server call)', async () => {
+    channel.Initialize(makeGoalContext({ Success: true, GoalRunID: 'g1', Status: 'Running' }, []));
+    const result = parseResult(await channel.ApplyAgentTool('browser_AchieveGoal', '{}'));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('goal');
+    expect(log.Calls).toHaveLength(0);
+  });
+});
+
 describe('MapToViewportCoords (display → viewport coordinate mapping)', () => {
   it('maps a click on a scaled-up canvas back to viewport pixels', () => {
     // Canvas internal resolution 1280x720, displayed at 640x360 (2x downscale) at offset (100, 50).

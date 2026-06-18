@@ -23,6 +23,8 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { beginBrowserGoalStep, finalizeBrowserGoalStep, extractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
+import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
+import { randomUUID } from 'node:crypto';
 import {
   RemoteBrowserAction,
   RemoteBrowserAudioChunk,
@@ -88,6 +90,14 @@ export class RemoteBrowserGoalResultType {
   /** Whether the goal was achieved. */
   @Field(() => Boolean)
   Success: boolean;
+
+  /**
+   * Handle for the async goal run. `ExecuteRemoteBrowserGoal` STARTS the goal and returns this with
+   * `Status: 'Running'`; the client polls {@link RemoteBrowserActionResolver.GetRemoteBrowserGoalResult}
+   * with it until the run reports a terminal status.
+   */
+  @Field(() => String, { nullable: true })
+  GoalRunID?: string;
 
   /** Which control strategy executed the goal (`ComputerUse` / `NativeAI`). */
   @Field(() => String, { nullable: true })
@@ -319,25 +329,63 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     // co-agent run (when the session has one). Best-effort — a null step just means the goal runs unlinked.
     const coAgentRunID = extractCoAgentRunID(session.Config_);
     const goalStep = await beginBrowserGoalStep(provider, contextUser, coAgentRunID, goal);
-    try {
-      const result = await RemoteBrowserEngine.Instance.AchieveGoal(agentSessionID, goal, {
-        ContextUser: contextUser,
-        ProviderName: providerName,
-        StartUrl: startUrl,
-        MaxSteps: maxSteps,
-        PreferredStrategy: preferredStrategy === 'NativeAI' || preferredStrategy === 'ComputerUse' ? preferredStrategy : undefined,
-        AgentRunID: coAgentRunID,
-        AgentRunStepID: goalStep?.ID,
+
+    // ASYNC START: a goal loop can run for minutes; do NOT hold this request open for it (browser
+    // fetch / proxy / janitor timeouts would kill the request while the loop runs on, and the agent
+    // would get "no response from the server" despite a successful run). Register the run, kick the
+    // loop off WITHOUT awaiting, and return a GoalRunID the client polls via GetRemoteBrowserGoalResult.
+    const goalRunID = randomUUID();
+    RemoteBrowserGoalRegistry.Instance.Begin(agentSessionID, goalRunID);
+    void RemoteBrowserEngine.Instance.AchieveGoal(agentSessionID, goal, {
+      ContextUser: contextUser,
+      ProviderName: providerName,
+      StartUrl: startUrl,
+      MaxSteps: maxSteps,
+      PreferredStrategy: preferredStrategy === 'NativeAI' || preferredStrategy === 'ComputerUse' ? preferredStrategy : undefined,
+      AgentRunID: coAgentRunID,
+      AgentRunStepID: goalStep?.ID,
+    })
+      .then(async (result) => {
+        await finalizeBrowserGoalStep(goalStep, result);
+        RemoteBrowserGoalRegistry.Instance.Complete(agentSessionID, goalRunID, result);
+      })
+      .catch(async (err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        LogError(`ExecuteRemoteBrowserGoal failed (provider='${providerName}'): ${message}`);
+        const failure = { Success: false, Status: 'Error', Detail: `Remote browser error (${providerName}): ${message}` };
+        await finalizeBrowserGoalStep(goalStep, failure);
+        RemoteBrowserGoalRegistry.Instance.Complete(agentSessionID, goalRunID, failure);
       });
-      await finalizeBrowserGoalStep(goalStep, result);
-      return result;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      LogError(`ExecuteRemoteBrowserGoal failed (provider='${providerName}'): ${message}`);
-      const failure = { Success: false, Status: 'Error', Detail: `Remote browser error (${providerName}): ${message}` };
-      await finalizeBrowserGoalStep(goalStep, failure);
-      return failure;
+
+    return { Success: true, Status: 'Running', GoalRunID: goalRunID, Detail: 'Goal started.' };
+  }
+
+  /**
+   * Poll the outcome of a goal STARTED by {@link RemoteBrowserActionResolver.ExecuteRemoteBrowserGoal}.
+   * Returns `Status: 'Running'` while the loop is in flight, then the terminal outcome (success,
+   * strategy, status, step count, url, detail) once it finishes. Ownership-gated. A `Status: 'Unknown'`
+   * result means the run id is unrecognized — it expired (results are retained briefly) or never existed.
+   *
+   * @param agentSessionID The `AIAgentSession` id the goal runs against.
+   * @param goalRunID The handle returned by `ExecuteRemoteBrowserGoal`.
+   * @returns The current/terminal goal outcome.
+   */
+  @Query(() => RemoteBrowserGoalResultType)
+  async GetRemoteBrowserGoalResult(
+    @Arg('agentSessionID', () => String) agentSessionID: string,
+    @Arg('goalRunID', () => String) goalRunID: string,
+    @Ctx() { userPayload, providers }: AppContext,
+  ): Promise<RemoteBrowserGoalResultType> {
+    const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    const record = RemoteBrowserGoalRegistry.Instance.Get(agentSessionID, goalRunID);
+    if (!record) {
+      return { Success: false, Status: 'Unknown', GoalRunID: goalRunID, Detail: 'No such goal run (it may have expired).' };
     }
+    if (record.Status === 'Running' || !record.Outcome) {
+      return { Success: false, Status: 'Running', GoalRunID: goalRunID };
+    }
+    return { ...record.Outcome, GoalRunID: goalRunID };
   }
 
   /**
