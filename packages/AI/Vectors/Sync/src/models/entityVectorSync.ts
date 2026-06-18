@@ -727,7 +727,7 @@ export class EntityVectorSyncer extends VectorBase {
     // Wire in the active data-provider connection; they need no API key. External providers
     // (Pinecone/Qdrant) still require a key — enforce that here, after instantiation.
     vectorDB.TryWireColocatedHost(this.Provider);
-    if (!vectorDB.SupportsColocatedQuery && !vectorDBAPIKey) {
+    if (!vectorDB.SupportsColocatedQuery && vectorDB.RequiresAPIKey && !vectorDBAPIKey) {
       throw Error(`No API Key found for Vector Database ${vectorDBEntity.ClassKey}`);
     }
 
@@ -815,8 +815,16 @@ export class EntityVectorSyncer extends VectorBase {
    * the cached rows, so the type and entity filters are pure client-side
    * predicates.
    *
+   * **Empty result is not an error.** When no Active documents match (none configured
+   * yet, or all inactive), this returns an empty array — it does NOT throw. An unknown/
+   * misspelled `entityDocumentType` is surfaced as a `LogStatus` warning, still returning
+   * `[]`. Callers treat the empty case as "nothing to do" (e.g. `VectorizeEntityAction`
+   * reports `NO_DOCUMENTS` success), so the unattended daily Entity Vector Sync job isn't
+   * flagged as failed on a fresh DB with no Search documents.
+   *
    * @param entityNames If provided, only Entity Documents for the specified entities will be returned.
-   * @param entityDocumentType Name of the EntityDocumentType to filter by. Defaults to 'Record Duplicate'.
+   * @param entityDocumentType Name of the EntityDocumentType to filter by. Defaults to 'Record Duplicate'. Pass 'Search' for the search-tier pool.
+   * @returns Active, de-duped-per-entity Entity Documents of the given type; `[]` when none match.
    */
   public async GetActiveEntityDocuments(entityNames?: string[], entityDocumentType: string = 'Record Duplicate'): Promise<MJEntityDocumentEntity[]> {
     // Ensure the engine is loaded (idempotent — Config() above already ran it,
@@ -837,21 +845,22 @@ export class EntityVectorSyncer extends VectorBase {
       ? candidates.filter(d => entityNamesLower.has(d.Entity?.trim().toLowerCase() ?? ''))
       : candidates;
 
-    if (filtered.length === 0 && candidates.length === 0) {
-      // The engine has no doc-type by that name — that's the only error case
-      // worth surfacing. An empty type filter would silently return [] before.
+    if (filtered.length === 0) {
+      // No active EntityDocuments matched. This is a benign "nothing configured
+      // (yet)" state, NOT an error: we return an empty array and let the caller
+      // decide what to do (the Vectorize Entity action treats it as a no-op
+      // success). This previously threw when the type name resolved to zero rows
+      // of any status, but that hard-failed unattended jobs — e.g. the daily
+      // "Entity Vector Sync" on a fresh DB with no Search-type docs configured —
+      // reporting the run as failed for an expected empty state. A warning is
+      // enough to flag a likely-misspelled type name without crashing the caller.
       const typeExists = KnowledgeHubMetadataEngine.Instance.EntityDocuments.some(
         d => d.Type?.trim().toLowerCase() === typeNameLower
       );
       if (!typeExists) {
-        // Only throw if we can confirm NO docs (active or inactive) reference
-        // the type — that's a real misconfiguration. Otherwise an empty result
-        // just means nothing is active right now.
-        const anyOfType = candidates.length > 0;
-        if (!anyOfType) {
-          throw new Error(`No EntityDocuments found for type "${entityDocumentType}" (also no inactive ones — type may not exist).`);
-        }
+        LogStatus(`GetActiveEntityDocuments: no EntityDocuments reference type "${entityDocumentType}" (the type name may be misspelled, or no documents of this type exist yet). Returning empty set.`);
       }
+      return [];
     }
 
     // Dedupe per EntityID — preserve the existing "one doc per entity" contract.

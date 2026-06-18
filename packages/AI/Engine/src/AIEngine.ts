@@ -9,7 +9,7 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, BaseEntityEvent, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
+import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
@@ -702,8 +702,22 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public async RefreshActions(contextUser?: UserInfo): Promise<void> {
         try {
-            await ActionEngineBase.Instance.Config(false, contextUser);
-            const actions = ActionEngineBase.Instance.Actions.filter(a => a.Status === 'Active');
+            // Reuse action metadata already cached by ANY loaded engine before
+            // loading our own copy. ActionEngineBase and ActionEngineServer are
+            // SEPARATE singletons that each cache the identical unfiltered
+            // 'MJ: Actions' set; on the server, server-side callers prime
+            // ActionEngineServer while this method historically loaded
+            // ActionEngineBase — issuing a second, redundant RunViews batch
+            // (flagged by the duplicate-RunView telemetry). The registry returns
+            // whichever sibling already holds the full set, so we only pay for a
+            // load when nothing has it yet. See guides/CACHING_AND_PUBSUB_GUIDE.md
+            // "Check the Registry Before You Query".
+            let allActions = BaseEngineRegistry.Instance.TryGetCachedRecords<MJActionEntity>('MJ: Actions', { unfilteredOnly: true });
+            if (!allActions) {
+                await ActionEngineBase.Instance.Config(false, contextUser);
+                allActions = ActionEngineBase.Instance.Actions;
+            }
+            const actions = allActions.filter(a => a.Status === 'Active');
 
             if (actions && actions.length > 0) {
                 this._actions = actions;
