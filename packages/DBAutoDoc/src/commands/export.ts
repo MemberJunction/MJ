@@ -101,7 +101,7 @@ export default class Export extends Command {
       const generatorOptions = {
         approvedOnly: flags['approved-only'],
         confidenceThreshold: parseFloat(flags['confidence-threshold']),
-        provider: (config?.database?.provider as 'sqlserver' | 'mysql' | 'postgresql' | 'oracle') || 'sqlserver'
+        provider: (config?.database?.provider as 'sqlserver' | 'postgresql') || 'sqlserver'
       };
 
       // Generate SQL
