@@ -20,7 +20,8 @@
     "@memberjunction/integration-engine": "5.41.0",
     "@memberjunction/integration-engine-base": "5.41.0",
     "jsonwebtoken": "9.0.3",
-    "mssql": "^12.2.0"
+    "mssql": "^12.2.0",
+    "zod": "~3.24.4"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",

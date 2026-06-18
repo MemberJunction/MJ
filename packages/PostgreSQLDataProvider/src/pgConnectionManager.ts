@@ -82,7 +82,11 @@ export class PGConnectionManager {
             database: config.Database,
             user: config.User,
             password: config.Password,
-            ssl: config.SSL ?? false,
+            // SSL default: explicit config wins; otherwise ON in production so managed Postgres (e.g. AWS
+            // Aurora with rds.force_ssl=1, the AWS default) is not rejected or silently downgraded to an
+            // unencrypted channel. Dev/local stays OFF unless explicitly enabled. For Aurora, pass an SSL
+            // object (e.g. { rejectUnauthorized: true, ca: <Aurora CA bundle> }) via config.SSL.
+            ssl: config.SSL ?? (process.env.NODE_ENV === 'production'),
             max: config.MaxConnections ?? 20,
             min: config.MinConnections ?? 2,
             idleTimeoutMillis: config.IdleTimeoutMillis ?? 30000,

@@ -397,6 +397,121 @@ describe('IntegrationEngine — RecordMap on UPDATE (1:1, no drift)', () => {
         }
     });
 
+    it('SKIPS an unchanged matched record but STILL writes the record map (dirty-skip path)', async () => {
+        // Regression for the Fonteva e2e defect: a record matches an existing dest row by KEY FIELD
+        // (so ChangeType=Update, MatchedMJRecordID set) but is content-UNCHANGED, so UpdateRecord's
+        // dirty-flag fast path returns early (RecordsSkipped++, no write). The bug: that early return
+        // ALSO skipped SaveRecordMap, so a matched-but-unmapped record (e.g. dest rows persisted while
+        // their record maps were deleted — a maps delete+re-add, or a fresh CompanyIntegration over
+        // pre-existing rows) never got its map (re-)established → CompanyIntegrationRecordMap stayed
+        // empty, breaking the 1:1 completeness invariant + orphan detection. The fix re-establishes the
+        // map on the skip path. The mock target entity reports Dirty=false unless Set() changes a value;
+        // here SetEntityFields sets the SAME value it already holds → !Dirty → the skip branch runs.
+        const targetEntity = createMockTargetEntity();
+        // Pre-seed the dest row's mapped field with the SAME value the incoming record carries, so
+        // SetEntityFields produces no change → entity.Dirty === false → the dirty-skip branch is taken.
+        targetEntity._data['Name'] = 'Unchanged Contact';
+        targetEntity._data['Email'] = 'same@test.com';
+
+        const incoming: ExternalRecord[] = [{
+            ExternalID: 'ext-skip-1',
+            ObjectType: 'Contact',
+            Fields: { Name: 'Unchanged Contact', Email: 'same@test.com' },
+            IsDeleted: false,
+        }];
+        const connector = createMockConnector({
+            Records: incoming,
+            HasMore: false,
+            NewWatermarkValue: '2024-06-15T12:00:00.000Z',
+        });
+
+        const companyIntegration = createMockCompanyIntegration();
+        const integration = {
+            ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+            Name: 'TestIntegration',
+            ClassName: 'TestConnector',
+        } as unknown as MJIntegrationEntity;
+
+        mockRunViewsFn.mockResolvedValueOnce([
+            { Success: true, Results: [companyIntegration] },
+            {
+                Success: true,
+                Results: [{
+                    Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                    ID: 'em-1',
+                    CompanyIntegrationID: 'ci-1',
+                    EntityID: 'entity-1',
+                    ConflictResolution: 'SourceWins',
+                    DeleteBehavior: 'SoftDelete',
+                    Entity: 'Contacts',
+                    ExternalObjectName: 'contacts',
+                    SyncEnabled: true,
+                    Status: 'Active',
+                } as unknown as ICompanyIntegrationEntityMap],
+            },
+            { Success: true, Results: [integration] },
+            { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+        ]);
+
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+            const entityName = params['EntityName'] as string;
+            if (entityName === 'MJ: Company Integration Field Maps') {
+                return {
+                    Success: true,
+                    Results: [{
+                        SourceFieldName: 'Name', DestinationFieldName: 'Name',
+                        TransformPipeline: null, IsKeyField: true, Status: 'Active', Priority: 0,
+                    } as unknown as ICompanyIntegrationFieldMap],
+                };
+            }
+            if (entityName === 'MJ: Company Integration Sync Watermarks') return { Success: true, Results: [] };
+            // FindByKeyFields: the existing dest row matches on Name → resolves to Update.
+            if (entityName === 'Contacts') return { Success: true, Results: [{ ID: 'mj-contact-1' }] };
+            // No prior map row (the defect scenario: dest row exists, map was lost) → NewRecord() the map.
+            if (entityName === 'MJ: Company Integration Record Maps') return { Success: true, Results: [] };
+            return { Success: true, Results: [] };
+        });
+
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        // Route GetEntityObject('Contacts') to our pre-seeded entity so the dirty-flag stays false.
+        const { Metadata } = await import('@memberjunction/core');
+        const provider = (Metadata as unknown as { Provider: { GetEntityObject: (...a: unknown[]) => Promise<unknown> } }).Provider;
+        const getEntityObjectOrig = provider.GetEntityObject;
+        provider.GetEntityObject = vi.fn(async (entityName: string) => {
+            if (entityName === 'Contacts') return targetEntity;
+            if (entityName === 'MJ: Company Integration Record Maps') return createMockRecordMapEntity();
+            return createMockBookkeepingEntity({ ID: `new-${entityName}-id` });
+        }) as unknown as typeof provider.GetEntityObject;
+
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser);
+
+            // The record was SKIPPED (unchanged), not created or updated.
+            expect(result.Success).toBe(true);
+            expect(result.RecordsProcessed).toBe(1);
+            expect(result.RecordsCreated).toBe(0);
+            expect(result.RecordsUpdated).toBe(0);
+            expect(result.RecordsSkipped).toBe(1);
+            // No write to the dest entity (the whole point of the skip).
+            expect(targetSaveCount).toBe(0);
+
+            // ...but the record map MUST STILL be (re-)established for the matched record.
+            expect(savedRecordMapRows.length).toBe(1);
+            const row = savedRecordMapRows[0];
+            expect(row.CompanyIntegrationID).toBe('ci-1');
+            expect(row.EntityID).toBe('entity-1');
+            expect(row.ExternalSystemRecordID).toBe('ext-skip-1');
+            expect(row.EntityRecordID).toBe('mj-contact-1');
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+            provider.GetEntityObject = getEntityObjectOrig;
+        }
+    });
+
     it('re-updating the same external record reuses the existing map row (idempotent upsert, still 1:1)', async () => {
         // The SAME external record is updated across TWO separate sync runs. The FIRST run's
         // UpdateRecord creates the map row; the SECOND run's UpdateRecord must LOOK IT UP via

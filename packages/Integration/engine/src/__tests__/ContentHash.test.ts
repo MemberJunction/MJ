@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeContentHash, CONTENT_HASH_COLUMN } from '../ContentHash.js';
+import { computeContentHash, computeContentHashWithOverflow, contentHashBasis, CONTENT_HASH_COLUMN } from '../ContentHash.js';
 
 describe('computeContentHash', () => {
     it('is a 64-char hex SHA-256 string', () => {
@@ -57,5 +57,47 @@ describe('computeContentHash', () => {
 
     it('exposes the mirror column name', () => {
         expect(CONTENT_HASH_COLUMN).toBe('__mj_integration_ContentHash');
+    });
+});
+
+describe('computeContentHashWithOverflow (custom/overflow fields counted as changes)', () => {
+    const mapped = { Name: 'Acme', Score: 42 };
+
+    it('BACKWARD-COMPATIBLE: no overflow → identical to the legacy mapped-only hash', () => {
+        expect(computeContentHashWithOverflow(mapped)).toBe(computeContentHash(mapped));
+        expect(computeContentHashWithOverflow(mapped, {})).toBe(computeContentHash(mapped));
+        expect(computeContentHashWithOverflow(mapped, null)).toBe(computeContentHash(mapped));
+    });
+
+    it('THE FIX: a delta touching ONLY a custom/overflow field changes the hash', () => {
+        // Mapped fields identical; only the captured (overflow) field differs. Pre-fix this hashed
+        // the same → the delta was silently skipped (the overflow change was never re-written).
+        const before = computeContentHashWithOverflow(mapped, { UD_Tier: 'Silver' });
+        const after = computeContentHashWithOverflow(mapped, { UD_Tier: 'Platinum' });
+        expect(before).not.toBe(after);
+    });
+
+    it('adding/removing an overflow field changes the hash', () => {
+        const none = computeContentHashWithOverflow(mapped);
+        const some = computeContentHashWithOverflow(mapped, { Cf_Code: 'X' });
+        expect(none).not.toBe(some);
+    });
+
+    it('is order-independent across mapped + overflow keys', () => {
+        const a = computeContentHashWithOverflow({ Name: 'Acme', Score: 42 }, { b: 2, a: 1 });
+        const b = computeContentHashWithOverflow({ Score: 42, Name: 'Acme' }, { a: 1, b: 2 });
+        expect(a).toBe(b);
+    });
+
+    it('contentHashBasis returns the mapped object unchanged when there is no overflow', () => {
+        expect(contentHashBasis(mapped)).toBe(mapped);
+        expect(contentHashBasis(mapped, {})).toBe(mapped);
+    });
+
+    it('contentHashBasis folds overflow under the reserved __mj_integration_ prefix (no collision with mapped columns)', () => {
+        const basis = contentHashBasis(mapped, { UD_Tier: 'Gold' });
+        expect(basis).not.toBe(mapped);
+        expect(basis.Name).toBe('Acme');
+        expect(basis['__mj_integration_overflow']).toEqual({ UD_Tier: 'Gold' });
     });
 });

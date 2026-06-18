@@ -9,6 +9,7 @@ import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provi
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
+import { registerIntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -536,6 +537,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         console.warn(`RSU DDL provider setup failed (RSU will fall back to default provider): ${(err as Error).message}`);
       }
     }
+  }
+
+  // Register the post-sync custom-column promotion hook (gaps.md §2). Safe to call regardless of
+  // RSU config: the hook self-gates on captured overflow data and uses RSU only at fire time.
+  try {
+    registerIntegrationCustomColumnPromoter();
+  } catch (err) {
+    console.warn(`Custom-column promoter registration failed (post-sync promotion disabled): ${(err as Error).message}`);
   }
 
   let tServe = performance.now();
