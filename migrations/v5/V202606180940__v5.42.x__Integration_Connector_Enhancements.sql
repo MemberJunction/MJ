@@ -98,6 +98,46 @@ END
 GO
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
 -- =============================================================================
 -- CODEGEN OUTPUT --
 -- Regenerated IntegrationObject / Integration views, CRUD sprocs, FK indexes and
