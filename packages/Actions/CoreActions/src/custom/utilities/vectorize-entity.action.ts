@@ -4,7 +4,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
 import { MJEntityDocumentEntity } from "@memberjunction/core-entities";
-import { LogStatus } from "@memberjunction/core";
+import { LogStatus, LogError } from "@memberjunction/core";
 
 /**
  * Action that vectorizes entities by creating and storing vector embeddings for entity documents.
@@ -42,11 +42,17 @@ export class VectorizeEntityAction extends BaseAction {
      *   - ContextUser: The user context for permissions and logging
      * 
      * @returns A promise resolving to an ActionResultSimple with:
-     *   - Success: true if all entities were vectorized successfully
+     *   - Success: true if all matched documents were vectorized (or there were none to do)
      *   - Message: Combined messages from all vectorization operations
-     *   - ResultCode: "SUCCESS" if all succeeded, "FAILED" if any failed
-     * 
-     * @throws Never throws directly - all errors are caught and returned in the result
+     *   - ResultCode:
+     *       - "SUCCESS" if every matched Entity Document vectorized
+     *       - "NO_DOCUMENTS" (Success: true) when no Active documents of the requested
+     *         type exist — a benign no-op so unattended jobs (the daily Entity Vector
+     *         Sync) don't report a failed run on a fresh/empty DB
+     *       - "FAILED" if any document failed, or Config()/lookup threw
+     *
+     * @throws Never throws - all errors (per-document and top-level) are caught and
+     *   returned as a FAILED result.
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
 
@@ -71,37 +77,56 @@ export class VectorizeEntityAction extends BaseAction {
         const entityDocumentType: string = (entityDocumentTypeParam?.Value ? String(entityDocumentTypeParam.Value).trim() : '') || 'Record Duplicate';
 
         LogStatus(`VectorizeEntityAction: Entities to vectorize: ${entityNames.join(', ') || '(all)'} (EntityDocumentType="${entityDocumentType}")`);
-        let vectorizer = new EntityVectorSyncer();
-        await vectorizer.Config(false, params.ContextUser);
 
-        const entityDocuments: MJEntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames, entityDocumentType);
-        let results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: MJEntityDocumentEntity) => {
-            try{
-                await vectorizer.VectorizeEntity({
-                    entityID: entityDocument.EntityID,
-                    entityDocumentID: entityDocument.ID,
-                    listBatchCount: 20,
-                    options: {},
-                }, params.ContextUser);
-    
-                return {
-                    Success: true,
-                    ResultCode: "SUCCESS"            
-                };
-            }
-            catch(error){
-                return {
-                    Success: false,
-                    Message: error as any,
-                    ResultCode: "FAILED"            
-                };
-            }
-        }));
+        try {
+            const vectorizer = new EntityVectorSyncer();
+            await vectorizer.Config(false, params.ContextUser);
 
-        return {
-            Success: results.every(r => r.Success),
-            Message: results.map(r => r.Message).join('\n'),
-            ResultCode: results.every(r => r.Success) ? "SUCCESS" : "FAILED"            
-        };
+            const entityDocuments: MJEntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames, entityDocumentType);
+
+            // Nothing to vectorize is a benign no-op for unattended jobs (e.g. the
+            // daily Entity Vector Sync on a fresh DB with no Search-type Entity
+            // Documents configured yet), NOT a failure. Report success with a
+            // distinct result code so operators can tell "nothing to do" apart
+            // from "did work" — and so the scheduled-job run isn't flagged failed.
+            if (entityDocuments.length === 0) {
+                const msg = `No active "${entityDocumentType}" Entity Documents found` +
+                    `${entityNames.length ? ` for: ${entityNames.join(', ')}` : ''} — nothing to vectorize.`;
+                LogStatus(`VectorizeEntityAction: ${msg}`);
+                return { Success: true, Message: msg, ResultCode: "NO_DOCUMENTS" };
+            }
+
+            const results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: MJEntityDocumentEntity) => {
+                try {
+                    await vectorizer.VectorizeEntity({
+                        entityID: entityDocument.EntityID,
+                        entityDocumentID: entityDocument.ID,
+                        listBatchCount: 20,
+                        options: {},
+                    }, params.ContextUser);
+
+                    return { Success: true, ResultCode: "SUCCESS" };
+                }
+                catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    LogError(`VectorizeEntityAction: failed to vectorize Entity Document "${entityDocument.Name}" (${entityDocument.ID})`, undefined, message);
+                    return { Success: false, Message: message, ResultCode: "FAILED" };
+                }
+            }));
+
+            const allSucceeded = results.every(r => r.Success);
+            return {
+                Success: allSucceeded,
+                Message: results.map(r => r.Message).filter(Boolean).join('\n'),
+                ResultCode: allSucceeded ? "SUCCESS" : "FAILED"
+            };
+        }
+        catch (error) {
+            // Config()/GetActiveEntityDocuments() failures (DB, misconfiguration)
+            // surface here as a legible FAILED result instead of an uncaught throw.
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`VectorizeEntityAction: unexpected error`, undefined, message);
+            return { Success: false, Message: message, ResultCode: "FAILED" };
+        }
     }
 }

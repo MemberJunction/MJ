@@ -304,6 +304,24 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
 
   /**
    * @inheritdoc
+   *
+   * Copy-out: reads the live page's current selection via the adapter's `GetSelectionText` (which runs
+   * `window.getSelection().toString()` in the page). Gated by `HumanTakeover` like {@link RouteHumanInput} —
+   * copy-out is part of the human-control path. Best-effort: an adapter read failure is logged and mapped to
+   * `''` so a best-effort copy never throws past the gate (and a page with nothing selected yields `''`).
+   */
+  public async GetSelectionText(): Promise<string> {
+    this.requireFeature('HumanTakeover');
+    try {
+      return await this.adapter.GetSelectionText();
+    } catch (err) {
+      LogError(`CdpRemoteBrowserSession.GetSelectionText failed: ${this.errorDetail(err)}`);
+      return '';
+    }
+  }
+
+  /**
+   * @inheritdoc
    */
   public async GetLiveViewUrl(): Promise<string> {
     this.requireFeature('LiveView');

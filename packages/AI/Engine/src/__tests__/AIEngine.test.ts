@@ -61,6 +61,14 @@ const { mockRegistrations, mockStartupManagerInstance } = vi.hoisted(() => {
     };
 });
 
+// Shared mock surface for RefreshActions() — the BaseEngineRegistry "reuse what's
+// already cached" lookup, plus the ActionEngineBase fallback load.
+const { mockTryGetCachedRecords, mockActionEngineBaseConfig, actionEngineBaseState } = vi.hoisted(() => ({
+    mockTryGetCachedRecords: vi.fn(),
+    mockActionEngineBaseConfig: vi.fn().mockResolvedValue(undefined),
+    actionEngineBaseState: { actions: [] as any[] },
+}));
+
 vi.mock('@memberjunction/core', () => ({
     BaseEntity: class BaseEntity {
         // Matches the real BaseEntity.BaseEventCode static used by the catalog listener
@@ -101,6 +109,11 @@ vi.mock('@memberjunction/core', () => ({
     IStartupSink: class IStartupSink {},
     StartupManager: {
         Instance: mockStartupManagerInstance
+    },
+    BaseEngineRegistry: {
+        Instance: {
+            TryGetCachedRecords: mockTryGetCachedRecords
+        }
     }
 }));
 
@@ -285,8 +298,8 @@ vi.mock('@memberjunction/ai-vectors-memory', () => ({
 vi.mock('@memberjunction/actions-base', () => ({
     ActionEngineBase: {
         Instance: {
-            Config: vi.fn().mockResolvedValue(undefined),
-            Actions: [],
+            Config: mockActionEngineBaseConfig,
+            get Actions() { return actionEngineBaseState.actions; },
         }
     }
 }));
@@ -1346,6 +1359,60 @@ describe('AIEngine', () => {
     describe('SystemActions', () => {
         it('should return empty array initially', () => {
             expect(engine.SystemActions).toEqual([]);
+        });
+    });
+
+    // ======================================================================
+    // RefreshActions — reuse already-cached 'MJ: Actions' metadata via the
+    // BaseEngineRegistry instead of loading a second copy into ActionEngineBase
+    // (the duplicate-RunView telemetry fix). Only loads the base engine on a miss.
+    // ======================================================================
+
+    describe('RefreshActions', () => {
+        beforeEach(() => {
+            mockTryGetCachedRecords.mockReset();
+            mockActionEngineBaseConfig.mockClear();
+            actionEngineBaseState.actions = [];
+        });
+
+        it('reuses registry-cached Actions and does NOT load ActionEngineBase', async () => {
+            mockTryGetCachedRecords.mockReturnValue([
+                { Status: 'Active', Name: 'A' },
+                { Status: 'Inactive', Name: 'B' },
+                { Status: 'Active', Name: 'C' },
+            ]);
+
+            const e = AIEngine.Instance;
+            await e.RefreshActions(undefined);
+
+            expect(mockTryGetCachedRecords).toHaveBeenCalledWith('MJ: Actions', { unfilteredOnly: true });
+            expect(mockActionEngineBaseConfig).not.toHaveBeenCalled();
+            // Only Active actions are kept
+            expect(e.SystemActions.map((a: { Name: string }) => a.Name)).toEqual(['A', 'C']);
+        });
+
+        it('falls back to loading ActionEngineBase when the registry has no cache', async () => {
+            mockTryGetCachedRecords.mockReturnValue(null);
+            actionEngineBaseState.actions = [
+                { Status: 'Active', Name: 'X' },
+                { Status: 'Pending', Name: 'Y' },
+            ];
+
+            const e = AIEngine.Instance;
+            await e.RefreshActions(undefined);
+
+            expect(mockTryGetCachedRecords).toHaveBeenCalledWith('MJ: Actions', { unfilteredOnly: true });
+            expect(mockActionEngineBaseConfig).toHaveBeenCalledTimes(1);
+            expect(e.SystemActions.map((a: { Name: string }) => a.Name)).toEqual(['X']);
+        });
+
+        it('sets an empty actions array when no active actions are found anywhere', async () => {
+            mockTryGetCachedRecords.mockReturnValue([{ Status: 'Inactive', Name: 'Z' }]);
+
+            const e = AIEngine.Instance;
+            await e.RefreshActions(undefined);
+
+            expect(e.SystemActions).toEqual([]);
         });
     });
 

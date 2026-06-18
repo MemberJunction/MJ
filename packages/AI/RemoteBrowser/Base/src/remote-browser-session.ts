@@ -347,6 +347,18 @@ export interface RemoteBrowserKeyInput {
 }
 
 /**
+ * A block of text the human pastes INTO the browser during takeover — the human-input twin of the
+ * agent's {@link RemoteBrowserTypeAction}. The text is inserted into the remote page's currently-focused
+ * element (no key-by-key synthesis), which is how VNC/remote-desktop paste works: the viewer reads the
+ * LOCAL clipboard on a `paste` event and relays the text here, sidestepping the isolated remote clipboard.
+ */
+export interface RemoteBrowserTextInput {
+  Kind: 'text';
+  /** The text inserted verbatim into the remote browser's focused element (for human paste). */
+  Text: string;
+}
+
+/**
  * A human mouse-wheel / trackpad scroll into the browser viewport (Magic Mouse scroll, trackpad
  * two-finger scroll, wheel). `X` / `Y` are the viewport pixel position the scroll occurred over (so a
  * scroll targets the element under the pointer); `DeltaX` / `DeltaY` are the scroll deltas in pixels
@@ -376,6 +388,7 @@ export type RemoteBrowserHumanInput =
   | RemoteBrowserPointerDownInput
   | RemoteBrowserPointerUpInput
   | RemoteBrowserKeyInput
+  | RemoteBrowserTextInput
   | RemoteBrowserScrollInput;
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -511,6 +524,20 @@ export interface IRemoteBrowserSession {
    * @param input The human input event; narrow on `input.Kind`.
    */
   RouteHumanInput(input: RemoteBrowserHumanInput): void;
+
+  /**
+   * Reads the remote page's CURRENT text selection — the copy-out half of human clipboard support. The
+   * viewer captures a local `copy` / Cmd+C, calls this to read what the human has selected on the remote
+   * page, and writes the returned text to the LOCAL clipboard (again sidestepping the isolated remote
+   * clipboard, the mirror of the {@link RemoteBrowserTextInput} paste path).
+   *
+   * **Capability-gated** by `HumanTakeover` (copy-out belongs to the human-control path). Degrades
+   * gracefully: backends that cannot read the selection — or a page with nothing selected — resolve to
+   * `''` rather than throwing, so a best-effort copy never breaks the live view.
+   *
+   * @returns The selected text, or `''` when nothing is selected / the selection can't be read.
+   */
+  GetSelectionText(): Promise<string>;
 
   /**
    * Delegates a high-level natural-language intent to the backend's own AI-control harness (e.g.
