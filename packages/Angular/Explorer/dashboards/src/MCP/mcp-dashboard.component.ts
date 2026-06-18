@@ -597,11 +597,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // forceRefresh=true is needed after sync operations since backend changes
             // won't trigger local BaseEntity events
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            // Dialect-neutral 7-day cutoff: compute in JS and inject an ISO-8601
+            // literal rather than DATEADD/GETUTCDATE, which don't exist on PostgreSQL.
+            const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
             const [, logsResult] = await Promise.all([
                 MCPEngine.Instance.Config(forceRefresh),
                 rv.RunView<MJMCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
-                    ExtraFilter: `StartedAt >= DATEADD(day, -7, GETUTCDATE())`,
+                    ExtraFilter: `StartedAt >= '${sevenDaysAgoIso}'`,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 100,
                     ResultType: 'simple'
