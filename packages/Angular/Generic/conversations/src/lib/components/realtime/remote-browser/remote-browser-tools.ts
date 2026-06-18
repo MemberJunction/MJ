@@ -21,6 +21,7 @@ export const REMOTE_BROWSER_TOOL_NAMES = {
   GetPageText: 'browser_GetPageText',
   DescribePage: 'browser_DescribePage',
   LocateElement: 'browser_LocateElement',
+  AchieveGoal: 'browser_AchieveGoal',
 } as const;
 
 /**
@@ -252,6 +253,19 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
         description: { type: 'string', description: "Visual description of the element to find (e.g. 'the blue Sign In button')." },
       },
       required: ['description'],
+    },
+  },
+  {
+    Name: REMOTE_BROWSER_TOOL_NAMES.AchieveGoal,
+    Description:
+      'Hand a high-level GOAL to the autonomous browser agent (a stronger vision/action model) and let it plan and execute all the steps itself — e.g. "log in and open the latest invoice", "search for X and add the first result to the cart". Prefer this over issuing many granular browser_* steps when the task is multi-step. Returns when the goal is done (or could not be completed).',
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        goal: { type: 'string', description: 'The natural-language goal to accomplish in the shared browser.' },
+        startUrl: { type: 'string', description: 'Optional absolute URL to open before starting.' },
+      },
+      required: ['goal'],
     },
   },
 ];

@@ -1,0 +1,7 @@
+{
+  "$comment": "Plugins enumerated here are loaded by the mj CLI at startup (plan §4). Each entry is an ESM specifier whose module registers BaseCLIPlugin subclasses via @RegisterClass. The metadata-sync and codegen-lib plugin entry points below are also loaded as built-ins, so they remain available even without this file; list third-party plugins here to extend the CLI without modifying MJCLI.",
+  "plugins": [
+    "@memberjunction/metadata-sync/plugins",
+    "@memberjunction/codegen-lib/plugins"
+  ]
+}
