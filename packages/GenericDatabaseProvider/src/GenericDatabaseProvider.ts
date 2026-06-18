@@ -3283,6 +3283,36 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): Promise<Record<string, unknown> | null> {
         const entityInfo = entity.EntityInfo;
 
+        // ── External data source dispatch ──
+        // Entities backed by an external data source have no MJ view/sproc, so proxy the
+        // single-record load through the external router as a RunView with a primary-key
+        // filter and MaxRows=1. No-op for every MJ-DB entity (ExternalDataSourceID null).
+        // Relationship loading is intentionally not supported for external entities (they
+        // are read-only leaf records); entityRelationshipsToLoad is ignored here.
+        if (entityInfo.ExternalDataSourceID) {
+            const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
+            if (!externalRouter) {
+                throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
+            }
+            // Plain (unquoted) identifiers: each driver applies its own dialect quoting/translation to the filter body.
+            const externalFilter = compositeKey.KeyValuePairs.map(val => {
+                const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
+                if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
+                const quotes = pk.NeedsQuotes ? "'" : '';
+                return `${pk.Name}=${quotes}${val.Value}${quotes}`;
+            }).join(' AND ');
+            const externalResult = await externalRouter.RunViewExternal<Record<string, unknown>>(
+                entityInfo,
+                { EntityName: entityInfo.Name, ExtraFilter: externalFilter, MaxRows: 1 },
+                user,
+                this,
+            );
+            if (!externalResult.Success) {
+                throw new Error(`External Load failed for '${entityInfo.Name}': ${externalResult.ErrorMessage}`);
+            }
+            return externalResult.Results && externalResult.Results.length > 0 ? externalResult.Results[0] : null;
+        }
+
         // Build WHERE from composite key
         const where = compositeKey.KeyValuePairs.map(val => {
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());

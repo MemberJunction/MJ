@@ -1033,6 +1033,15 @@ export class SQLCodeGenBase {
     }): Promise<{sql: string, permissionsSQL: string, files: string[]}> {
         const files: string[] = [];
         try {
+            // External-data-source entities are backed by a remote system (Snowflake/MongoDB/
+            // Postgres) and have NO table, view, stored proc, or index in the MJ database. Skip
+            // all SQL object generation entirely — including the permissions-only pass, since
+            // there is no view/sproc to grant on. (This is the total-skip analogue of the
+            // per-object VirtualEntity guards below.)
+            if (options.entity.ExternalDataSourceID) {
+                return { sql: '', permissionsSQL: '', files };
+            }
+
             // create the directory if it doesn't exist
             if (options.writeFiles && !fs.existsSync(options.directory))
                 fs.mkdirSync(options.directory, { recursive: true });

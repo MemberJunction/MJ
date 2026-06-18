@@ -298,11 +298,29 @@ export const loadModule = () => {
         return sRet;
       }).join('\n\n');
 
-      const subClass: string = entity.EntityObjectSubclassName ? entity.EntityObjectSubclassName : '';
-      const subClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
-      const sBaseClass: string = subClass.length > 0 && subClassImport.length > 0 ? `${subClass}` : 'BaseEntity';
-      const subClassImportStatement: string =
-        subClass.length > 0 && subClassImport.length > 0 ? `import { ${subClass} } from '${subClassImport}';\n` : '';
+      // Base-class resolution, in precedence order:
+      //   1. An explicit custom subclass configured on the entity (EntityObjectSubclassName/Import).
+      //   2. ReadOnlyExternalBaseEntity for entities backed by an external data source — they
+      //      proxy a remote system live and must reject Save/Delete. (External entities only ever
+      //      appear in downstream generated packages, so the @memberjunction/core-entities import
+      //      is always a clean cross-package import, never a self-import.)
+      //   3. BaseEntity for everything else.
+      const explicitSubClass: string = entity.EntityObjectSubclassName ? entity.EntityObjectSubclassName : '';
+      const explicitSubClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
+      const hasExplicitSubClass: boolean = explicitSubClass.length > 0 && explicitSubClassImport.length > 0;
+
+      let sBaseClass: string;
+      let subClassImportStatement: string;
+      if (hasExplicitSubClass) {
+        sBaseClass = explicitSubClass;
+        subClassImportStatement = `import { ${explicitSubClass} } from '${explicitSubClassImport}';\n`;
+      } else if (entity.ExternalDataSourceID) {
+        sBaseClass = 'ReadOnlyExternalBaseEntity';
+        subClassImportStatement = `import { ReadOnlyExternalBaseEntity } from '@memberjunction/core-entities';\n`;
+      } else {
+        sBaseClass = 'BaseEntity';
+        subClassImportStatement = '';
+      }
       const loadFieldString: string = entity.PrimaryKeys.map((f) => `${f.CodeName}: ${f.TSType}`).join(', ');
       const loadFunction: string = `    /**
     * Loads the ${entity.Name} record from the database
