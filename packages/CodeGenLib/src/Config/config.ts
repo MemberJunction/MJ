@@ -769,10 +769,14 @@ export function initializeConfig(cwd: string): ConfigInfo {
     : DEFAULT_CODEGEN_CONFIG;
 
   const maybeConfig = configInfoSchema.safeParse(mergedConfig);
-  // Don't log errors - let the calling code handle validation failures
-  // if (!maybeConfig.success) {
-  //   LogError('Error parsing config file', null, JSON.stringify(maybeConfig.error.issues, null, 2));
-  // }
+  if (!maybeConfig.success) {
+    // Surface schema-validation failures so misconfiguration doesn't silently
+    // fall through to an empty configInfo (which then crashes downstream with
+    // confusing errors like "config.server is required" — see Bug #8/#9).
+    LogError(
+      `Error parsing mj.config.cjs - falling back to defaults. Schema issues:\n${JSON.stringify(maybeConfig.error.issues, null, 2)}`
+    );
+  }
 
   const config = maybeConfig.success ? maybeConfig.data : configInfo;
 
