@@ -122,7 +122,7 @@ export default class Export extends Command {
             spinner.start('Applying SQL to database');
             const { DatabaseConnection } = await import('../database/Database.js');
             const dbConfig = {
-              provider: (config.database.provider as 'sqlserver' | 'mysql' | 'postgresql' | 'oracle') || 'sqlserver',
+              provider: (config.database.provider as 'sqlserver' | 'postgresql') || 'sqlserver',
               host: config.database.server,
               port: config.database.port,
               database: config.database.database,
