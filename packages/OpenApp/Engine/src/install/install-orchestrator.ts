@@ -944,6 +944,8 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
     DatabaseConfig: context.DatabaseConfig,
     MJCoreSchema: context.MJCoreSchema,
     ExtraPlaceholders: context.MigrationPlaceholders,
+    // Select the Skyway provider matching the live DB platform.
+    Platform: context.DatabaseProvider.Dialect.PlatformKey,
   });
 
   return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
