@@ -1,8 +1,8 @@
 [
   {
     "fields": {
-      "Name": "Realtime",
-      "Description": "Live, low-latency realtime rooms — multi-party audio/video/screen with MJ agents, built on the MJ-native LiveKit bridge.",
+      "Name": "Meet",
+      "Description": "Multi-party live meetings inside MemberJunction — audio, video, and screen share with people and MJ agents together in the room. Built on the MJ-native LiveKit bridge.",
       "Icon": "fa-solid fa-video",
       "Color": "#0076b6",
       "DefaultForNewUser": false,
@@ -21,8 +21,8 @@
       "ID": "4FBD1C76-BE86-448D-815F-42100DCEC010"
     },
     "sync": {
-      "lastModified": "2026-06-17T13:38:02.851Z",
-      "checksum": "d2ec8a317a6433d966b20eb79897a919c6dd2ecc971dac78f655a12de2cb31ab"
+      "lastModified": "2026-06-18T21:53:39.915Z",
+      "checksum": "afe06cfd31d14c1f20871a7cfc76c47cc6d20ca9412461b45ecee1eaec321c99"
     }
   }
 ]

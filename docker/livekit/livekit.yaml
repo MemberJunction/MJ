@@ -1,0 +1,19 @@
+# LiveKit server config — LOCAL DEVELOPMENT ONLY.
+# These are throwaway dev credentials; never use them (or this permissive config) anywhere real.
+# Pairs with ./docker-compose.yml and the LIVEKIT_* values in the repo-root .env.
+
+port: 7880                  # HTTP + WebSocket signaling — this is the port in LIVEKIT_URL
+
+rtc:
+  tcp_port: 7881            # WebRTC media over TCP — the reliable fallback on Docker / macOS
+  port_range_start: 7882    # WebRTC media over UDP (single port, so it's trivial to map in compose)
+  port_range_end: 7882
+  use_external_ip: false    # advertise the local IP; on a dev box media falls back to TCP if UDP can't traverse
+
+keys:
+  # API key : secret — these MUST match LIVEKIT_API_KEY / LIVEKIT_API_SECRET in the repo-root .env.
+  # LiveKit requires the secret to be >= 32 chars; this is a throwaway local-dev value.
+  devkey: mj-local-dev-livekit-secret-0123456789
+
+logging:
+  level: info
