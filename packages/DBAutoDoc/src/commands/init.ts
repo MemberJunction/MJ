@@ -66,12 +66,12 @@ export default class Init extends Command {
       }
     ]);
     // Default connection port per platform.
-    const defaultPort: Record<string, number> = { sqlserver: 1433, postgresql: 5432, mysql: 3306, oracle: 1521 };
+    const defaultPort: Record<string, number> = { sqlserver: 1433, postgresql: 5432 };
 
     // Test connection
     this.log(chalk.yellow('\nTesting database connection...'));
     const dbConfig = {
-      provider: dbAnswers.provider as 'sqlserver' | 'mysql' | 'postgresql' | 'oracle',
+      provider: dbAnswers.provider as 'sqlserver' | 'postgresql',
       host: dbAnswers.server,
       port: defaultPort[dbAnswers.provider] ?? 1433,
       database: dbAnswers.database,
