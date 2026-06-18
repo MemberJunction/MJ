@@ -18,6 +18,15 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'version',
   'help',
 
+  // Progressive-disclosure usage (tier 1 + tier 2) — composes plugin static
+  // metadata only; no bootstrap needed. Plugin entry points are light.
+  'usage',
+  'sync usage',
+  'codegen usage',
+
+  // Plugin registry editing — just writes mj-cli-plugins.json
+  'plugin add',
+
   // Bump - uses zod, fast-glob, fs only
   'bump',
 

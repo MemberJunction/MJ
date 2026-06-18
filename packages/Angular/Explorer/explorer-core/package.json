@@ -63,6 +63,7 @@
     "@memberjunction/ng-generic-dialog": "5.41.0",
     "@memberjunction/ng-list-detail-grid": "5.41.0",
     "@memberjunction/ng-list-management": "5.41.0",
+    "@memberjunction/ng-mj-livekit-room": "5.41.0",
     "@memberjunction/ng-notifications": "5.41.0",
     "@memberjunction/ng-pagination": "5.41.0",
     "@memberjunction/ng-query-viewer": "5.41.0",

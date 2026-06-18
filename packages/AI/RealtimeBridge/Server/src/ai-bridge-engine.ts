@@ -36,6 +36,8 @@ import {
     IBridgeChannelHost,
     BridgeChannelToolDefinition,
     BridgeChannelToolResult,
+    BridgeNativeSdkRegistry,
+    BridgeNativeSdkBinding,
 } from '@memberjunction/ai-bridge-base';
 import { MultiAgentRoomCoordinator } from './multi-agent-room-coordinator';
 
@@ -165,6 +167,15 @@ export interface StartBridgeSessionParams {
 
     /** The request-scoped metadata provider for all entity operations (multi-provider safe). */
     MetadataProvider?: IMetadataProvider;
+
+    /**
+     * Optional per-session override for binding the driver's SDK factory, applied to the resolved driver
+     * just before `Connect`. When supplied it takes precedence over the {@link BridgeNativeSdkRegistry}
+     * default — use it to choose a non-default binding for a provider that has more than one (e.g. Zoom's
+     * RTMS receive-only binding instead of the native two-way default) or to inject a fake in a test.
+     * When omitted, the engine applies the provider's registered native binding (if any).
+     */
+    BindSdk?: BridgeNativeSdkBinding;
 }
 
 /**
@@ -469,6 +480,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             // Resolve the driver inside the try so a resolution failure still stamps the row Failed
             // (the row already exists at this point — it must not be left dangling as Pending).
             const driver = this.resolveDriver(params.Provider);
+            // Bind the driver's SDK factory BEFORE Connect (Connect constructs the SDK from it). A
+            // per-session BindSdk override wins; otherwise apply the provider's registered native binding.
+            // Resolved drivers start with a default factory that throws "no SDK bound", so this is what
+            // makes a real provider session actually connect.
+            this.bindDriverSdk(params, driver);
             await this.transitionStatus(bridgeRow, 'Connecting', params);
             const ctx = this.buildBridgeContext(params);
             const result = await driver.Connect(ctx);
@@ -967,6 +983,25 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     // ──────────────────────────────────────────────────────────────────────────────
     // Driver resolution + bridge-row persistence.
     // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Binds the SDK factory onto a resolved driver before `Connect`. Precedence: a per-session
+     * {@link StartBridgeSessionParams.BindSdk} override wins; otherwise the provider's registered native
+     * binding from the {@link BridgeNativeSdkRegistry} is applied. When neither exists the driver keeps its
+     * default factory (which fails loudly at connect if it actually needs an SDK — e.g. LoopbackBridge has
+     * no SDK and needs no binding, so this is a harmless no-op for it).
+     *
+     * @param params The start params (its `BindSdk` is the override).
+     * @param driver The resolved driver to bind onto.
+     */
+    private bindDriverSdk(params: StartBridgeSessionParams, driver: BaseRealtimeBridge): void {
+        const override: BridgeNativeSdkBinding | undefined = params.BindSdk;
+        if (override) {
+            override(driver);
+            return;
+        }
+        BridgeNativeSdkRegistry.Instance.Apply(params.Provider.DriverClass, driver);
+    }
 
     /**
      * Resolves the concrete bridge driver for a provider via the MJ `ClassFactory`, keyed by the

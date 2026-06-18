@@ -96,12 +96,26 @@ no-ops** (they never throw, so a live session is not killed when the model emits
 | `muteParticipant` | no-op — host mute is a Meeting-SDK control |
 | `onHandRaise` | no-op — RTMS surfaces no hand-raise signal |
 
-**To get full two-way audio (the agent *speaking* into Zoom)** you need one of:
-- the native **Zoom Meeting SDK** (a heavy C++/Linux server-bot build with the raw-data / virtual-mic
-  entitlement) — implement a second `IZoomMeetingSdk` adapter over it and bind that instead; or
-- a **third-party meeting-bot service** that injects audio into the meeting on your behalf.
+**For full two-way audio (the agent *speaking* into Zoom)**, this package now ships the second binding:
+**`ZoomNativeMeetingSdk`** (`zoom-native-sdk.ts`) — a real, two-way `IZoomMeetingSdk` adapter whose
+`sendAudioFrame` forwards to the native virtual-mic send path and whose host controls (chat/mute) actually
+act. Activate it with `bridge.SetSdkFactory(BindZoomNative())` (or just let the engine auto-bind it — it is
+the registered default for `DriverClass = 'ZoomBridge'`; pass `StartBridgeSessionParams.BindSdk` with
+`BindZoomRtms()` to choose the receive-only RTMS binding instead).
 
-Both implement the same `IZoomMeetingSdk` seam, so the `ZoomBridge` driver and its tests are unchanged.
+`ZoomNativeMeetingSdk` is the **MJ-side adapter**, fully unit-tested against a fake native module. It still
+requires a real backing media client at deployment — one of:
+- the native **Zoom Meeting SDK** (a C++/Linux server-bot build with the raw-data send+receive entitlement),
+  wrapped as a N-API addon or sidecar exposing the adapter's `NativeMeetingModule` surface and pointed at via
+  `ZoomNativeSdkConfig.NativeModuleSpecifier`; or
+- a **third-party meeting-bot service** that injects audio on your behalf, behind the same module surface.
+
+Both satisfy the same `NativeMeetingModule` contract, so the `ZoomNativeMeetingSdk` adapter and its tests are
+unchanged. See [`plans/realtime/native-bridge-buildout-plan.md`](../../../../plans/realtime/native-bridge-buildout-plan.md) §3 for the build steps.
+
+All three bindings (`ZoomRtmsMeetingSdk` receive-only, `ZoomNativeMeetingSdk` two-way, and a test
+`FakeZoomSdk`) implement the same `IZoomMeetingSdk` seam, so the `ZoomBridge` driver and its tests are
+unchanged regardless of which is bound.
 
 ### Webhook + credential configuration a deployment provides
 

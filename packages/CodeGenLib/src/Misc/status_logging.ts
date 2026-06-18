@@ -5,6 +5,19 @@ import path from 'path';
 import ora from 'ora-classic';
 
 /**
+ * Output stream the CodeGen spinner writes to. Defaults to stdout for normal
+ * human runs. The pluggable CLI (`mj codegen --format=json`) redirects this to
+ * stderr via {@link setCodeGenSpinnerStream} so stdout carries only the
+ * machine-readable result.
+ */
+let _spinnerStream: NodeJS.WriteStream = process.stdout;
+
+/** Redirect the CodeGen spinner to {@link stream} (e.g. stderr in JSON mode). */
+export function setCodeGenSpinnerStream(stream: NodeJS.WriteStream): void {
+   _spinnerStream = stream;
+}
+
+/**
  * Base class for logging, you can sub-class this class to create your own logger and override the logError and logStatus methods if desired.
  * The default behavior in the base class is to use the LogError/LogStatus functions from the @memberjunction/core package to log to the console and to a log file if configured in the config.json file.
  * 
@@ -28,7 +41,7 @@ export class LoggerBase {
 
    private ensureSpinner(): void {
       if (!this.isVerbose && !this._spinner) {
-         this._spinner = ora();
+         this._spinner = ora({ stream: _spinnerStream });
       }
    }
 
