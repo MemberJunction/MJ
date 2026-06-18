@@ -20,23 +20,23 @@ MemberJunction).
 
 - **`CLAUDE.md` managed block** — root file with `MJ-MANAGED:CLAUDE-PACK
   START/END` markers preserving any user content above and below.
-- **`.claude/mj/core.md`** — 17 cross-version markdown files concatenated
-  in lexicographic order, covering: mental model, entity essentials,
-  RunView patterns, type safety, actions philosophy, CodeGen contract,
-  migration basics, singletons, imports and deps, Angular essentials,
-  design tokens, class naming, functional decomposition, testing,
-  performance and caching, metadata files, anti-pattern cheat sheet,
-  and getting help.
+- **`.claude/mj/core.md`** — 18 cross-version markdown files concatenated
+  in lexicographic order (plus a pack header), covering: mental model,
+  entity essentials, RunView patterns, type safety, actions philosophy,
+  CodeGen contract, migration basics, singletons, imports and deps,
+  Angular essentials, design tokens, class naming, functional
+  decomposition, testing, performance and caching, metadata files,
+  anti-pattern cheat sheet, and getting help.
 - **`.claude/mj/v5.md`** — v5-specific overlay covering the `MJ: ` entity
   name prefix, breaking changes from v4, known v5 footguns (UUID
   comparison across platforms, browser cache after backend swap,
   `BaseEntity.Save()` return semantics), and the AI subsystem snapshot.
-- **`.claude/commands/`** — 19 slash commands ready for use in any MJ
+- **`.claude/commands/`** — 18 slash commands ready for use in any MJ
   project: `commit`, `update-pr`, `clean-branch`, `save-plan-new-pr`,
-  `add-ai-model`, `debug-agent-run`, `generate-integration-actions`,
-  `new-branch`, `create-pr`, `refresh-pack`, and all 9 speckit.* commands
-  (`specify`, `plan`, `clarify`, `tasks`, `taskstoissues`, `analyze`,
-  `checklist`, `implement`, `constitution`).
+  `add-ai-model`, `debug-agent-run`, `new-branch`, `create-pr`,
+  `refresh-pack`, and all 9 speckit.* commands (`specify`, `plan`,
+  `clarify`, `tasks`, `taskstoissues`, `analyze`, `checklist`,
+  `implement`, `constitution`).
 - **`.claude/skills/playwright-cli/SKILL.md`** — browser automation skill
   for testing MJExplorer UIs in a user's project.
 - **`.claude/mj/VERSION`** — `5.1.0` (matches `versions/v5/PACK_VERSION`).
@@ -63,11 +63,9 @@ MemberJunction).
 
 ### Tooling shipped alongside
 
-- `mj doctor` includes a `claude-pack` check group (6 checks: managed
-  block, VERSION, MANIFEST, file integrity, hook helper, hook wired).
-- `mj codegen integration-actions` generates mj-sync action JSON for a
-  user-authored `BaseIntegrationConnector` subclass. Used by
-  `/generate-integration-actions` slash command.
+- `mj doctor` includes a `claude-pack` check group (5 checks: managed
+  block, VERSION file, MANIFEST integrity, managed-file hash drift,
+  SessionStart hook wired).
 
 ### Notes
 

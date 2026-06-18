@@ -135,7 +135,7 @@ To refresh the pack to the latest published version at any time:
 mj update:claude
 ```
 
-To verify the pack is intact, run `mj doctor` — it includes 6 checks for managed-block presence, manifest integrity, and the SessionStart hook.
+To verify the pack is intact, run `mj doctor` — it includes 5 checks for managed-block presence, manifest integrity, and the SessionStart hook.
 
 If you don't use Claude Code, you can leave the files alone or remove them — they're optional. The rest of MemberJunction works fine without the pack.
 
