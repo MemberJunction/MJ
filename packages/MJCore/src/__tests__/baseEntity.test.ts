@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EntityField } from '../generic/baseEntity';
 import { EntityFieldInfo, EntityFieldTSType } from '../generic/entityInfo';
-import { ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
+import { ValidationResult, ValidationErrorInfo, ValidationErrorType, WarningManager } from '@memberjunction/global';
 
 // Create minimal mock EntityFieldInfo for testing EntityField
 function createMockFieldInfo(overrides: Partial<EntityFieldInfo> = {}): EntityFieldInfo {
@@ -191,6 +191,40 @@ describe('EntityField', () => {
             const result = field.Validate();
 
             expect(result.Success).toBe(true);
+        });
+
+        // Validate() reads this.Value internally on every Save(). For a deprecated field, that
+        // internal read must NOT emit a deprecation warning — validating a record is not "using"
+        // the deprecated field. Regression guard for the AgentState-on-load/save false warning.
+        it('should NOT record a deprecation warning for a deprecated field during Validate', () => {
+            const fieldInfo = createMockFieldInfo({ Status: 'Deprecated' } as Partial<EntityFieldInfo>);
+            const field = new EntityField(fieldInfo, 'some value');
+
+            const spy = vi.spyOn(WarningManager.Instance, 'RecordFieldDeprecationWarning');
+            try {
+                field.Validate();
+                expect(spy).not.toHaveBeenCalled();
+            } finally {
+                spy.mockRestore();
+            }
+        });
+
+        it('should restore active-status assertions after Validate so genuine reads still warn', () => {
+            const fieldInfo = createMockFieldInfo({ Status: 'Deprecated' } as Partial<EntityFieldInfo>);
+            const field = new EntityField(fieldInfo, 'some value');
+
+            const spy = vi.spyOn(WarningManager.Instance, 'RecordFieldDeprecationWarning');
+            try {
+                field.Validate();
+                expect(spy).not.toHaveBeenCalled();
+
+                // A genuine read AFTER validation must still warn — proving the flag was restored,
+                // not left permanently disabled.
+                void field.Value;
+                expect(spy).toHaveBeenCalled();
+            } finally {
+                spy.mockRestore();
+            }
         });
     });
 });

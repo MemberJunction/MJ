@@ -298,6 +298,16 @@ export class EntityField {
         const ef = this._entityFieldInfo;
         const result = new ValidationResult();
         result.Success = true; // assume success
+
+        // Validation reads this.Value below to apply the metadata rules. That is a
+        // framework-internal read (triggered on every Save()), NOT user use of the field, so a
+        // deprecated field must not emit a deprecation warning (and a disabled field must not throw)
+        // merely because we validated it. Suppress active-status assertions for the duration of the
+        // value reads, then restore — mirroring the exact pattern used by SetMany / GetAll /
+        // hydrateFieldsIfNeeded so genuine post-validation reads/writes still assert.
+        const priorActiveStatusAssertions = this.ActiveStatusAssertions;
+        this.ActiveStatusAssertions = false;
+
         if (!ef.ReadOnly && !ef.SkipValidation) {
             // only do validation on updatable fields and skip the special case fields defined inside the SkipValidation property (like ID/CreatedAt/UpdatedAt)
             if (!ef.AllowsNull && (this.Value === null || this.Value === undefined)) {
@@ -337,6 +347,7 @@ export class EntityField {
             }
         }
 
+        this.ActiveStatusAssertions = priorActiveStatusAssertions; // restore the prior assertion state
         return result;
     }
 
