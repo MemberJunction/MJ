@@ -218,6 +218,32 @@ are NOT blockers. Genuine blockers are the `needs-hand-authoring` routines.
 
 If there are zero `.needs-hand` files, skip Phase 2.
 
+### Step 1d: Inline-bake the post-baseline set (`mj migrate rebake`)
+
+After `--split` (and any Phase 2 hand-authoring), bake native PG CodeGen **inline** into each
+post-baseline migration so the set deploys with `mj migrate` alone — **no `mj codegen` at deploy**
+(Path C). `mj migrate rebake` advances a fresh-baseline working DB by applying each migration's
+committed `.pg.sql` in order, captures native CodeGen **read-only** for the entities that migration
+touched, and rewrites the file as `hand DDL + metadata DML + native CodeGen objects`. A migration
+with a transpile gap (hand-procedural / collation-dependent) or mj-sync metadata keeps its committed
+file unchanged.
+
+```bash
+docker exec claude-dev bash -lc '
+cd /workspace/MJ
+# working DB MUST already be seeded to the latest baseline (it is advanced via each committed file)
+export DB_PLATFORM=postgresql PG_HOST=postgres-claude PG_PORT=5432 \
+  PG_DATABASE=MJ_PG_Rebake PG_USERNAME=mj_admin PG_PASSWORD=Claude2Pg99 \
+  CODEGEN_DB_USERNAME=mj_admin CODEGEN_DB_PASSWORD=Claude2Pg99 MJ_CORE_SCHEMA=__mj
+MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 npx mj migrate rebake --verbose
+'
+```
+
+Reports `baked native / preserved committed / skipped`. Validate standalone via the Step 3b gate
+(`mj migrate` with **no codegen**). NOTE: a brand-new migration with no committed `.pg.sql` yet is
+not re-baked here — bake it forward with `convert --split --bake-codegen`, or commit its first
+`.pg.sql` and re-bake.
+
 ---
 
 ## Phase 2: Resolve gaps — hand-author the residue (delegated to Docker Claude)
@@ -322,7 +348,12 @@ BOOT
 '
 ```
 
-### Step 3b: Two-pass deploy — THE GATE (`migrate → codegen → sync push`)
+### Step 3b: Deploy — THE GATE (`migrate → sync push`, NO codegen)
+
+The post-baseline set is **inline-native-baked** (Path C — `mj migrate rebake`, see Step 1d):
+each migration carries its own natively-regenerated PG CodeGen objects (views / sprocs / triggers
+/ grants), so `mj migrate` alone yields the correct schema. **The deploy-time `mj codegen` step is
+gone** — only `mj sync push` (metadata re-seed) follows.
 
 `DB_PLATFORM=postgresql` triggers the PG provider and auto-swaps
 `migrations/` → `migrations-pg/`.
@@ -334,23 +365,18 @@ export DB_PLATFORM=postgresql DB_HOST=postgres-claude DB_PORT=5432 \
   DB_DATABASE=MJ_PG_Migrate_Test DB_ENCRYPT=false DB_TRUST_SERVER_CERTIFICATE=true \
   CODEGEN_DB_USERNAME=mj_admin CODEGEN_DB_PASSWORD=Claude2Pg99 MJ_CORE_SCHEMA=__mj
 
-# 1. Apply schema (all .pg.sql DDL, in order, via Skyway)
+# 1. Apply schema + inline-baked CodeGen objects (all .pg.sql, in order, via Skyway). No codegen.
 npx mj migrate --verbose 2>&1 | tee /tmp/v2-migrate.log
 
-# 2. Regenerate views/sprocs/permissions natively on PG.
-#    Use the await wrapper — the bare CLI can fire CodeGen without awaiting it
-#    and exit-0 as a silent no-op.
-node scripts/pg-codegen-await.mjs 2>&1 | tee /tmp/v2-codegen.log
-
-# 3. Seed metadata to current state (--ci = non-interactive)
+# 2. Seed metadata to current state (--ci = non-interactive)
 npx mj sync push --dir metadata --ci 2>&1 | tee /tmp/v2-syncpush.log
 '
 ```
 
 **Gate criteria — ALL must hold before proceeding:**
-1. `mj migrate` applies every migration with **no errors** (`/tmp/v2-migrate.log`).
-2. `pg-codegen-await` completes with real work (not a silent no-op).
-3. `mj sync push` completes without errors.
+1. `mj migrate` applies every migration with **no errors** (`/tmp/v2-migrate.log`) — including the
+   inline-baked views/sprocs/triggers/grants, with **no `mj codegen` step**.
+2. `mj sync push` completes without errors.
 
 If `mj migrate` fails on a converted file: capture the exact error, then either
 (a) a hand-authoring bug in a `.needs-hand`-derived `.pg.sql` → re-delegate Phase 2

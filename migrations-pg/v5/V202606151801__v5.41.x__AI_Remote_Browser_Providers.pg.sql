@@ -1,5031 +1,84 @@
 -- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
+-- MemberJunction PostgreSQL Migration — V202606151801__v5.41.x__AI_Remote_Browser_Providers.sql
+-- Split-and-regenerate with INLINE NATIVE CodeGen baking: hand-written DDL transpiled
+-- (AST dialect), metadata DML inline, and CodeGen objects (views/sprocs/triggers/grants)
+-- baked natively from `mj codegen`. Applies standalone via `mj migrate` — no deploy codegen.
 -- ============================================================================
 
--- Extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
 CREATE SCHEMA IF NOT EXISTS __mj;
 SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
 
--- NOTE: Earlier converter versions made INTEGER to BOOLEAN cast implicit by
--- modifying the system catalog so SS-style INSERT INTO bool_col VALUES (1)
--- would work. That modification required pg_catalog write privileges, which
--- managed PG (RDS, Aurora, Cloud SQL, Azure) does not grant. As of v5.30 all
--- bulk INSERTs are emitted with native TRUE/FALSE values directly, so the
--- cast modification is no longer needed. Removed to support managed-PG
--- installs out of the box.
-
-
--- ===================== DDL: Tables, PKs, Indexes =====================
-
 /* ============================================================================
- AI Remote Browser Providers — the backend registry for the Remote Browser channel
- v5.42.x
+   AI Remote Browser Providers — the backend registry for the Remote Browser channel
+   v5.42.x
 
- Companion plan: /plans/realtime/realtime-bridges-architecture.md (§4d)
+   Companion plan: /plans/realtime/realtime-bridges-architecture.md (§4d)
 
- The Remote Browser channel lets an agent drive a real, live browser while it
- talks — a sales agent running an interactive demo, a support agent walking a
- user through a UI, a TRAINER agent that demonstrates a task then hands the
- wheel to the user and watches ("your turn — try X, Y, Z"). It is an in-house
- MJ realtime CHANNEL (not a bridge): its viewport renders in a console panel,
- or screen-shares into a meeting through the bridge's ScreenOut track.
+   The Remote Browser channel lets an agent drive a real, live browser while it
+   talks — a sales agent running an interactive demo, a support agent walking a
+   user through a UI, a TRAINER agent that demonstrates a task then hands the
+   wheel to the user and watches ("your turn — try X, Y, Z"). It is an in-house
+   MJ realtime CHANNEL (not a bridge): its viewport renders in a console panel,
+   or screen-shares into a meeting through the bridge's ScreenOut track.
 
- Every backend sits on the SAME primitive — a Chrome DevTools Protocol (CDP)
- endpoint our @memberjunction/computer-use layer attaches to. This table is
- the registry of those backends:
+   Every backend sits on the SAME primitive — a Chrome DevTools Protocol (CDP)
+   endpoint our @memberjunction/computer-use layer attaches to. This table is
+   the registry of those backends:
 
- * Self-hosted Chrome — we orchestrate a lightweight headless-Chrome
- container (just Chrome + a CDP port; no heavy BYTEA) and connect to it.
- * Browser-as-a-Service — Browserbase, Steel, Browserless, Hyperbrowser run
- the browser and expose a CDP connect endpoint (+ a live-view stream and,
- for some, a first-party AI-control harness like Browserbase Stagehand).
+     * Self-hosted Chrome — we orchestrate a lightweight headless-Chrome
+       container (just Chrome + a CDP port; no heavy image) and connect to it.
+     * Browser-as-a-Service — Browserbase, Steel, Browserless, Hyperbrowser run
+       the browser and expose a CDP connect endpoint (+ a live-view stream and,
+       for some, a first-party AI-control harness like Browserbase Stagehand).
 
- ONE table, mirroring AIBridgeProvider: a driver key resolved via ClassFactory,
- a strongly-typed SupportedFeatures JSON column (the IRemoteBrowserProviderFeatures
- interface, bound via JSONType metadata — capability gating, exactly like
- bridges), and a DefaultControlMode that the channel honors and a per-channel /
- runtime override can change.
+   ONE table, mirroring AIBridgeProvider: a driver key resolved via ClassFactory,
+   a strongly-typed SupportedFeatures JSON column (the IRemoteBrowserProviderFeatures
+   interface, bound via JSONType metadata — capability gating, exactly like
+   bridges), and a DefaultControlMode that the channel honors and a per-channel /
+   runtime override can change.
 
- This migration is the schema only — ONE new table, no destructive changes.
+   This migration is the schema only — ONE new table, no destructive changes.
 
- CodeGen convention (per CLAUDE.md migrations guide):
- * NO __mj_CreatedAt / __mj_UpdatedAt columns — CodeGen adds + triggers them.
- * NO foreign-key indexes — CodeGen creates IDX_AUTO_MJ_FKEY_* automatically.
- * sp_addextendedproperty on business columns so CodeGen surfaces descriptions.
- * Status / enum columns use CHECK constraints so CodeGen emits string-union
- types. Server code that sets/reads the new columns ships AFTER CodeGen
- generates the typed entity properties, per the no-weak-typing rule.
- * Reference data (the five provider rows + capability flags, the JSONType
- binding) is seeded via metadata/mj-sync, NOT here.
+   CodeGen convention (per CLAUDE.md migrations guide):
+     * NO __mj_CreatedAt / __mj_UpdatedAt columns — CodeGen adds + triggers them.
+     * NO foreign-key indexes — CodeGen creates IDX_AUTO_MJ_FKEY_* automatically.
+     * sp_addextendedproperty on business columns so CodeGen surfaces descriptions.
+     * Status / enum columns use CHECK constraints so CodeGen emits string-union
+       types. Server code that sets/reads the new columns ships AFTER CodeGen
+       generates the typed entity properties, per the no-weak-typing rule.
+     * Reference data (the five provider rows + capability flags, the JSONType
+       binding) is seeded via metadata/mj-sync, NOT here.
 
- Entity metadata, the view, and spCreate/Update/Delete are produced by CodeGen
- after this migration runs.
- ============================================================================ */
-
-
--- ============================================================================
--- AIRemoteBrowserProvider ("MJ: AI Remote Browser Providers")
--- The backend registry. Capability flags (SupportedFeatures JSON) declare
--- what each backend supports: the universal CDP-control substrate, an
--- optional provider-native AI-control harness (e.g. Browserbase Stagehand),
--- live-view streaming, human takeover, screen streaming, and operational
--- capabilities (stealth, proxy egress, recording, persistent profiles).
--- The engine gates optional driver calls on these flags; the base driver
--- throws RemoteBrowserCapabilityNotSupportedError when a feature is claimed
--- but unimplemented (defense-in-depth, exactly like bridges).
--- ============================================================================
+   Entity metadata, the view, and spCreate/Update/Delete are produced by CodeGen
+   after this migration runs.
+   ============================================================================ */ /* ============================================================================ */ /* AIRemoteBrowserProvider  ("MJ: AI Remote Browser Providers") */ /*    The backend registry. Capability flags (SupportedFeatures JSON) declare */ /*    what each backend supports: the universal CDP-control substrate, an */ /*    optional provider-native AI-control harness (e.g. Browserbase Stagehand), */ /*    live-view streaming, human takeover, screen streaming, and operational */ /*    capabilities (stealth, proxy egress, recording, persistent profiles). */ /*    The engine gates optional driver calls on these flags; the base driver */ /*    throws RemoteBrowserCapabilityNotSupportedError when a feature is claimed */ /*    but unimplemented (defense-in-depth, exactly like bridges). */ /* ============================================================================ */
 CREATE TABLE __mj."AIRemoteBrowserProvider" (
- "ID" UUID NOT NULL DEFAULT gen_random_uuid(),
- "Name" VARCHAR(100) NOT NULL,
- "Description" VARCHAR(1000) NULL,
- "ProviderType" VARCHAR(20) NOT NULL CONSTRAINT DF_AIRemoteBrowserProvider_ProviderType DEFAULT 'Service',
- "DriverClass" VARCHAR(250) NOT NULL,
- "Status" VARCHAR(20) NOT NULL CONSTRAINT DF_AIRemoteBrowserProvider_Status DEFAULT 'Active',
- "SupportedFeatures" TEXT NULL,
- "DefaultControlMode" VARCHAR(20) NOT NULL CONSTRAINT DF_AIRemoteBrowserProvider_DefaultControlMode DEFAULT 'AgentOnly',
- "ConfigSchema" TEXT NULL,
- "Configuration" TEXT NULL,
- CONSTRAINT PK_AIRemoteBrowserProvider PRIMARY KEY ("ID"),
- CONSTRAINT UQ_AIRemoteBrowserProvider_Name UNIQUE ("Name"),
- CONSTRAINT CK_AIRemoteBrowserProvider_ProviderType
- CHECK ("ProviderType" IN ('SelfHost', 'Service')),
- CONSTRAINT CK_AIRemoteBrowserProvider_Status
- CHECK ("Status" IN ('Active', 'Disabled')),
- CONSTRAINT CK_AIRemoteBrowserProvider_DefaultControlMode
- CHECK ("DefaultControlMode" IN ('AgentOnly', 'ViewOnly', 'Collaborative'))
+  "ID" UUID NOT NULL DEFAULT GEN_RANDOM_UUID(),
+  "Name" VARCHAR(100) NOT NULL,
+  "Description" VARCHAR(1000) NULL,
+  "ProviderType" VARCHAR(20) NOT NULL CONSTRAINT "DF_AIRemoteBrowserProvider_ProviderType" DEFAULT (
+    'Service'
+  ),
+  "DriverClass" VARCHAR(250) NOT NULL,
+  "Status" VARCHAR(20) NOT NULL CONSTRAINT "DF_AIRemoteBrowserProvider_Status" DEFAULT (
+    'Active'
+  ),
+  "SupportedFeatures" TEXT NULL,
+  "DefaultControlMode" VARCHAR(20) NOT NULL CONSTRAINT "DF_AIRemoteBrowserProvider_DefaultControlMode" DEFAULT (
+    'AgentOnly'
+  ),
+  "ConfigSchema" TEXT NULL,
+  "Configuration" TEXT NULL,
+  CONSTRAINT "PK_AIRemoteBrowserProvider" PRIMARY KEY ("ID"),
+  CONSTRAINT "UQ_AIRemoteBrowserProvider_Name" UNIQUE (
+    "Name"
+  ),
+  CONSTRAINT "CK_AIRemoteBrowserProvider_ProviderType" CHECK ("ProviderType" IN ('SelfHost', 'Service')),
+  CONSTRAINT "CK_AIRemoteBrowserProvider_Status" CHECK ("Status" IN ('Active', 'Disabled')),
+  CONSTRAINT "CK_AIRemoteBrowserProvider_DefaultControlMode" CHECK ("DefaultControlMode" IN ('AgentOnly', 'ViewOnly', 'Collaborative'))
 );
-
-ALTER TABLE __mj."AIRemoteBrowserProvider"
- ADD COLUMN IF NOT EXISTS "__mj_CreatedAt" TIMESTAMPTZ NULL;
-
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."AIRemoteBrowserProvider" */
-ALTER TABLE __mj."AIRemoteBrowserProvider"
- ADD COLUMN IF NOT EXISTS "__mj_UpdatedAt" TIMESTAMPTZ NULL;
-
-CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentNote_AgentID" ON __mj."AIAgentNote" ("AgentID");
-
-CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentNote_AgentNoteTypeID" ON __mj."AIAgentNote" ("AgentNoteTypeID");
-
-CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentNote_UserID" ON __mj."AIAgentNote" ("UserID");
-
-CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentNote_SourceConversationID" ON __mj."AIAgentNote" ("SourceConversationID");
-
-CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentNote_SourceConversationDetailID" ON __mj."AIAgentNote" ("SourceConversationDetailID");
-
-CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentNote_SourceAIAgentRunID" ON __mj."AIAgentNote" ("SourceAIAgentRunID");
-
-CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentNote_CompanyID" ON __mj."AIAgentNote" ("CompanyID");
-
-CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentNote_EmbeddingModelID" ON __mj."AIAgentNote" ("EmbeddingModelID");
-
-CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentNote_PrimaryScopeEntityID" ON __mj."AIAgentNote" ("PrimaryScopeEntityID");
-
-CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentNote_ConsolidatedIntoNoteID" ON __mj."AIAgentNote" ("ConsolidatedIntoNoteID");
-
-
--- ===================== Helper Functions (fn*) =====================
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'fnAIAgentNoteConsolidatedIntoNoteID_GetRootID'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."fnAIAgentNoteConsolidatedIntoNoteID_GetRootID"(
-    p_RecordID UUID,
-    p_ParentID UUID
-)
-RETURNS TABLE("RootID" UUID) AS $$
-WITH RECURSIVE CTE_RootParent AS (
-        SELECT
-            "ID",
-            "ConsolidatedIntoNoteID",
-            "ID" AS "RootParentID",
-            0 AS "Depth"
-        FROM
-            __mj."AIAgentNote"
-        WHERE
-            "ID" = COALESCE(p_ParentID, p_RecordID)
-
-        UNION ALL
-
-        SELECT
-            c."ID",
-            c."ConsolidatedIntoNoteID",
-            c."ID" AS "RootParentID",
-            p."Depth" + 1 AS "Depth"
-        FROM
-            __mj."AIAgentNote" c
-        INNER JOIN
-            CTE_RootParent p ON c."ID" = p."ConsolidatedIntoNoteID"
-        WHERE
-            p."Depth" < 100
-    )
-    SELECT         "RootParentID" AS RootID
-    FROM
-        CTE_RootParent
-    WHERE
-        "ConsolidatedIntoNoteID" IS NULL
-    ORDER BY
-        "RootParentID"
-
-LIMIT 1
-$$ LANGUAGE sql;
-
-
--- ===================== Views =====================
-
-DO $do$
-DECLARE
-  v_target_schema CONSTANT TEXT := '__mj';
-  v_target_name CONSTANT TEXT := 'vwAIAgentNotes';
-  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIAgentNotes"
-AS SELECT
-    a.*,
-    "MJAIAgent_AgentID"."Name" AS "Agent",
-    "MJAIAgentNoteType_AgentNoteTypeID"."Name" AS "AgentNoteType",
-    "MJUser_UserID"."Name" AS "User",
-    "MJConversation_SourceConversationID"."Name" AS "SourceConversation",
-    "MJConversationDetail_SourceConversationDetailID"."ExternalID" AS "SourceConversationDetail",
-    "MJAIAgentRun_SourceAIAgentRunID"."RunName" AS "SourceAIAgentRun",
-    "MJCompany_CompanyID"."Name" AS "Company",
-    "MJAIModel_EmbeddingModelID"."Name" AS "EmbeddingModel",
-    "MJEntity_PrimaryScopeEntityID"."Name" AS "PrimaryScopeEntity",
-    "MJAIAgentNote_ConsolidatedIntoNoteID"."Type" AS "ConsolidatedIntoNote",
-    "root_ConsolidatedIntoNoteID"."RootID" AS "RootConsolidatedIntoNoteID"
-FROM
-    __mj."AIAgentNote" AS a
-LEFT OUTER JOIN
-    __mj."AIAgent" AS "MJAIAgent_AgentID"
-  ON
-    a."AgentID" = "MJAIAgent_AgentID"."ID"
-LEFT OUTER JOIN
-    __mj."AIAgentNoteType" AS "MJAIAgentNoteType_AgentNoteTypeID"
-  ON
-    a."AgentNoteTypeID" = "MJAIAgentNoteType_AgentNoteTypeID"."ID"
-LEFT OUTER JOIN
-    __mj."User" AS "MJUser_UserID"
-  ON
-    a."UserID" = "MJUser_UserID"."ID"
-LEFT OUTER JOIN
-    __mj."Conversation" AS "MJConversation_SourceConversationID"
-  ON
-    a."SourceConversationID" = "MJConversation_SourceConversationID"."ID"
-LEFT OUTER JOIN
-    __mj."ConversationDetail" AS "MJConversationDetail_SourceConversationDetailID"
-  ON
-    a."SourceConversationDetailID" = "MJConversationDetail_SourceConversationDetailID"."ID"
-LEFT OUTER JOIN
-    __mj."AIAgentRun" AS "MJAIAgentRun_SourceAIAgentRunID"
-  ON
-    a."SourceAIAgentRunID" = "MJAIAgentRun_SourceAIAgentRunID"."ID"
-LEFT OUTER JOIN
-    __mj."Company" AS "MJCompany_CompanyID"
-  ON
-    a."CompanyID" = "MJCompany_CompanyID"."ID"
-LEFT OUTER JOIN
-    __mj."AIModel" AS "MJAIModel_EmbeddingModelID"
-  ON
-    a."EmbeddingModelID" = "MJAIModel_EmbeddingModelID"."ID"
-LEFT OUTER JOIN
-    __mj."Entity" AS "MJEntity_PrimaryScopeEntityID"
-  ON
-    a."PrimaryScopeEntityID" = "MJEntity_PrimaryScopeEntityID"."ID"
-LEFT OUTER JOIN
-    __mj."AIAgentNote" AS "MJAIAgentNote_ConsolidatedIntoNoteID"
-  ON
-    a."ConsolidatedIntoNoteID" = "MJAIAgentNote_ConsolidatedIntoNoteID"."ID"
-LEFT JOIN LATERAL (SELECT * FROM __mj."fnAIAgentNoteConsolidatedIntoNoteID_GetRootID"(a."ID", a."ConsolidatedIntoNoteID")) AS "root_ConsolidatedIntoNoteID"
-    ON TRUE$vsql$;
-  v_target_oid OID;
-  v_dep RECORD;
-  v_captured JSONB[] := ARRAY[]::JSONB[];
-  v_n INTEGER;
-BEGIN
-  EXECUTE vsql;
-EXCEPTION WHEN invalid_table_definition THEN
-  -- Column list changed; need CASCADE. Preserve dependent views first.
-  SELECT c.oid INTO v_target_oid
-  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
-  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
-  IF v_target_oid IS NOT NULL THEN
-    FOR v_dep IN
-      WITH RECURSIVE deps AS (
-        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
-        FROM pg_rewrite r
-        JOIN pg_depend d ON d.objid = r.oid
-        JOIN pg_class c ON c.oid = r.ev_class
-        JOIN pg_namespace n ON c.relnamespace = n.oid
-        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
-          AND c.oid <> v_target_oid AND c.relkind = 'v'
-        UNION
-        SELECT c.oid, c.relname, n.nspname, p.depth + 1
-        FROM deps p
-        JOIN pg_rewrite r ON TRUE
-        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
-        JOIN pg_class c ON c.oid = r.ev_class
-        JOIN pg_namespace n ON c.relnamespace = n.oid
-        WHERE c.relkind = 'v' AND c.oid <> p.oid
-      )
-      SELECT oid, name, schema, MAX(depth) AS max_depth,
-             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
-      FROM deps GROUP BY oid, name, schema
-      ORDER BY MAX(depth) ASC
-    LOOP
-      v_captured := v_captured || jsonb_build_object(
-        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
-    END LOOP;
-  END IF;
-  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
-  EXECUTE vsql;
-  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
-    FOR v_n IN 1..array_length(v_captured, 1) LOOP
-      BEGIN
-        EXECUTE format('CREATE VIEW %I.%I AS %s',
-          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
-      EXCEPTION WHEN others THEN
-        RAISE WARNING 'Could not restore dependent view %.%: %',
-          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
-      END;
-    END LOOP;
-  END IF;
-END;
-$do$;
-
-DO $do$
-DECLARE
-  v_target_schema CONSTANT TEXT := '__mj';
-  v_target_name CONSTANT TEXT := 'vwAIRemoteBrowserProviders';
-  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIRemoteBrowserProviders"
-AS SELECT
-    a.*
-FROM
-    __mj."AIRemoteBrowserProvider" AS a$vsql$;
-  v_target_oid OID;
-  v_dep RECORD;
-  v_captured JSONB[] := ARRAY[]::JSONB[];
-  v_n INTEGER;
-BEGIN
-  EXECUTE vsql;
-EXCEPTION WHEN invalid_table_definition THEN
-  -- Column list changed; need CASCADE. Preserve dependent views first.
-  SELECT c.oid INTO v_target_oid
-  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
-  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
-  IF v_target_oid IS NOT NULL THEN
-    FOR v_dep IN
-      WITH RECURSIVE deps AS (
-        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
-        FROM pg_rewrite r
-        JOIN pg_depend d ON d.objid = r.oid
-        JOIN pg_class c ON c.oid = r.ev_class
-        JOIN pg_namespace n ON c.relnamespace = n.oid
-        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
-          AND c.oid <> v_target_oid AND c.relkind = 'v'
-        UNION
-        SELECT c.oid, c.relname, n.nspname, p.depth + 1
-        FROM deps p
-        JOIN pg_rewrite r ON TRUE
-        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
-        JOIN pg_class c ON c.oid = r.ev_class
-        JOIN pg_namespace n ON c.relnamespace = n.oid
-        WHERE c.relkind = 'v' AND c.oid <> p.oid
-      )
-      SELECT oid, name, schema, MAX(depth) AS max_depth,
-             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
-      FROM deps GROUP BY oid, name, schema
-      ORDER BY MAX(depth) ASC
-    LOOP
-      v_captured := v_captured || jsonb_build_object(
-        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
-    END LOOP;
-  END IF;
-  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
-  EXECUTE vsql;
-  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
-    FOR v_n IN 1..array_length(v_captured, 1) LOOP
-      BEGIN
-        EXECUTE format('CREATE VIEW %I.%I AS %s',
-          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
-      EXCEPTION WHEN others THEN
-        RAISE WARNING 'Could not restore dependent view %.%: %',
-          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
-      END;
-    END LOOP;
-  END IF;
-END;
-$do$;
-
-
--- ===================== Stored Procedures (sp*) =====================
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'spCreateAIAgentNote'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentNote"(
-    IN p_ID UUID DEFAULT NULL,
-    IN p_AgentID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_AgentID UUID DEFAULT NULL,
-    IN p_AgentNoteTypeID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_AgentNoteTypeID UUID DEFAULT NULL,
-    IN p_Note_Clear BOOLEAN DEFAULT FALSE,
-    IN p_Note TEXT DEFAULT NULL,
-    IN p_UserID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_UserID UUID DEFAULT NULL,
-    IN p_Type VARCHAR(20) DEFAULT NULL,
-    IN p_IsAutoGenerated BOOLEAN DEFAULT NULL,
-    IN p_Comments_Clear BOOLEAN DEFAULT FALSE,
-    IN p_Comments TEXT DEFAULT NULL,
-    IN p_Status VARCHAR(20) DEFAULT NULL,
-    IN p_SourceConversationID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_SourceConversationID UUID DEFAULT NULL,
-    IN p_SourceConversationDetailID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_SourceConversationDetailID UUID DEFAULT NULL,
-    IN p_SourceAIAgentRunID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_SourceAIAgentRunID UUID DEFAULT NULL,
-    IN p_CompanyID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_CompanyID UUID DEFAULT NULL,
-    IN p_EmbeddingVector_Clear BOOLEAN DEFAULT FALSE,
-    IN p_EmbeddingVector TEXT DEFAULT NULL,
-    IN p_EmbeddingModelID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_EmbeddingModelID UUID DEFAULT NULL,
-    IN p_PrimaryScopeEntityID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_PrimaryScopeEntityID UUID DEFAULT NULL,
-    IN p_PrimaryScopeRecordID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_PrimaryScopeRecordID VARCHAR(100) DEFAULT NULL,
-    IN p_SecondaryScopes_Clear BOOLEAN DEFAULT FALSE,
-    IN p_SecondaryScopes TEXT DEFAULT NULL,
-    IN p_LastAccessedAt_Clear BOOLEAN DEFAULT FALSE,
-    IN p_LastAccessedAt TIMESTAMPTZ DEFAULT NULL,
-    IN p_AccessCount INTEGER DEFAULT NULL,
-    IN p_ExpiresAt_Clear BOOLEAN DEFAULT FALSE,
-    IN p_ExpiresAt TIMESTAMPTZ DEFAULT NULL,
-    IN p_ConsolidatedIntoNoteID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_ConsolidatedIntoNoteID UUID DEFAULT NULL,
-    IN p_ConsolidationCount INTEGER DEFAULT NULL,
-    IN p_DerivedFromNoteIDs_Clear BOOLEAN DEFAULT FALSE,
-    IN p_DerivedFromNoteIDs TEXT DEFAULT NULL,
-    IN p_ProtectionTier VARCHAR(20) DEFAULT NULL,
-    IN p_ImportanceScore_Clear BOOLEAN DEFAULT FALSE,
-    IN p_ImportanceScore NUMERIC(5,2) DEFAULT NULL
-)
-RETURNS SETOF __mj."vwAIAgentNotes" AS
-$$
-BEGIN
-IF p_ID IS NOT NULL THEN
-        -- User provided a value, use it
-        INSERT INTO __mj."AIAgentNote"
-            (
-                "ID",
-                "AgentID",
-                "AgentNoteTypeID",
-                "Note",
-                "UserID",
-                "Type",
-                "IsAutoGenerated",
-                "Comments",
-                "Status",
-                "SourceConversationID",
-                "SourceConversationDetailID",
-                "SourceAIAgentRunID",
-                "CompanyID",
-                "EmbeddingVector",
-                "EmbeddingModelID",
-                "PrimaryScopeEntityID",
-                "PrimaryScopeRecordID",
-                "SecondaryScopes",
-                "LastAccessedAt",
-                "AccessCount",
-                "ExpiresAt",
-                "ConsolidatedIntoNoteID",
-                "ConsolidationCount",
-                "DerivedFromNoteIDs",
-                "ProtectionTier",
-                "ImportanceScore"
-            )
-        VALUES
-            (
-                p_ID,
-                CASE WHEN p_AgentID_Clear = TRUE THEN NULL ELSE COALESCE(p_AgentID, NULL) END,
-                CASE WHEN p_AgentNoteTypeID_Clear = TRUE THEN NULL ELSE COALESCE(p_AgentNoteTypeID, NULL) END,
-                CASE WHEN p_Note_Clear = TRUE THEN NULL ELSE COALESCE(p_Note, NULL) END,
-                CASE WHEN p_UserID_Clear = TRUE THEN NULL ELSE COALESCE(p_UserID, NULL) END,
-                COALESCE(p_Type, 'Preference'),
-                COALESCE(p_IsAutoGenerated, FALSE),
-                CASE WHEN p_Comments_Clear = TRUE THEN NULL ELSE COALESCE(p_Comments, NULL) END,
-                COALESCE(p_Status, 'Active'),
-                CASE WHEN p_SourceConversationID_Clear = TRUE THEN NULL ELSE COALESCE(p_SourceConversationID, NULL) END,
-                CASE WHEN p_SourceConversationDetailID_Clear = TRUE THEN NULL ELSE COALESCE(p_SourceConversationDetailID, NULL) END,
-                CASE WHEN p_SourceAIAgentRunID_Clear = TRUE THEN NULL ELSE COALESCE(p_SourceAIAgentRunID, NULL) END,
-                CASE WHEN p_CompanyID_Clear = TRUE THEN NULL ELSE COALESCE(p_CompanyID, NULL) END,
-                CASE WHEN p_EmbeddingVector_Clear = TRUE THEN NULL ELSE COALESCE(p_EmbeddingVector, NULL) END,
-                CASE WHEN p_EmbeddingModelID_Clear = TRUE THEN NULL ELSE COALESCE(p_EmbeddingModelID, NULL) END,
-                CASE WHEN p_PrimaryScopeEntityID_Clear = TRUE THEN NULL ELSE COALESCE(p_PrimaryScopeEntityID, NULL) END,
-                CASE WHEN p_PrimaryScopeRecordID_Clear = TRUE THEN NULL ELSE COALESCE(p_PrimaryScopeRecordID, NULL) END,
-                CASE WHEN p_SecondaryScopes_Clear = TRUE THEN NULL ELSE COALESCE(p_SecondaryScopes, NULL) END,
-                CASE WHEN p_LastAccessedAt_Clear = TRUE THEN NULL ELSE COALESCE(p_LastAccessedAt, NULL) END,
-                COALESCE(p_AccessCount, 0),
-                CASE WHEN p_ExpiresAt_Clear = TRUE THEN NULL ELSE COALESCE(p_ExpiresAt, NULL) END,
-                CASE WHEN p_ConsolidatedIntoNoteID_Clear = TRUE THEN NULL ELSE COALESCE(p_ConsolidatedIntoNoteID, NULL) END,
-                COALESCE(p_ConsolidationCount, 0),
-                CASE WHEN p_DerivedFromNoteIDs_Clear = TRUE THEN NULL ELSE COALESCE(p_DerivedFromNoteIDs, NULL) END,
-                COALESCE(p_ProtectionTier, 'Standard'),
-                CASE WHEN p_ImportanceScore_Clear = TRUE THEN NULL ELSE COALESCE(p_ImportanceScore, NULL) END
-            );
-    ELSE
-        -- No value provided, let database use its default (e.g., gen_random_uuid())
-        INSERT INTO __mj."AIAgentNote"
-            (
-                "AgentID",
-                "AgentNoteTypeID",
-                "Note",
-                "UserID",
-                "Type",
-                "IsAutoGenerated",
-                "Comments",
-                "Status",
-                "SourceConversationID",
-                "SourceConversationDetailID",
-                "SourceAIAgentRunID",
-                "CompanyID",
-                "EmbeddingVector",
-                "EmbeddingModelID",
-                "PrimaryScopeEntityID",
-                "PrimaryScopeRecordID",
-                "SecondaryScopes",
-                "LastAccessedAt",
-                "AccessCount",
-                "ExpiresAt",
-                "ConsolidatedIntoNoteID",
-                "ConsolidationCount",
-                "DerivedFromNoteIDs",
-                "ProtectionTier",
-                "ImportanceScore"
-            )
-        VALUES
-            (
-                CASE WHEN p_AgentID_Clear = TRUE THEN NULL ELSE COALESCE(p_AgentID, NULL) END,
-                CASE WHEN p_AgentNoteTypeID_Clear = TRUE THEN NULL ELSE COALESCE(p_AgentNoteTypeID, NULL) END,
-                CASE WHEN p_Note_Clear = TRUE THEN NULL ELSE COALESCE(p_Note, NULL) END,
-                CASE WHEN p_UserID_Clear = TRUE THEN NULL ELSE COALESCE(p_UserID, NULL) END,
-                COALESCE(p_Type, 'Preference'),
-                COALESCE(p_IsAutoGenerated, FALSE),
-                CASE WHEN p_Comments_Clear = TRUE THEN NULL ELSE COALESCE(p_Comments, NULL) END,
-                COALESCE(p_Status, 'Active'),
-                CASE WHEN p_SourceConversationID_Clear = TRUE THEN NULL ELSE COALESCE(p_SourceConversationID, NULL) END,
-                CASE WHEN p_SourceConversationDetailID_Clear = TRUE THEN NULL ELSE COALESCE(p_SourceConversationDetailID, NULL) END,
-                CASE WHEN p_SourceAIAgentRunID_Clear = TRUE THEN NULL ELSE COALESCE(p_SourceAIAgentRunID, NULL) END,
-                CASE WHEN p_CompanyID_Clear = TRUE THEN NULL ELSE COALESCE(p_CompanyID, NULL) END,
-                CASE WHEN p_EmbeddingVector_Clear = TRUE THEN NULL ELSE COALESCE(p_EmbeddingVector, NULL) END,
-                CASE WHEN p_EmbeddingModelID_Clear = TRUE THEN NULL ELSE COALESCE(p_EmbeddingModelID, NULL) END,
-                CASE WHEN p_PrimaryScopeEntityID_Clear = TRUE THEN NULL ELSE COALESCE(p_PrimaryScopeEntityID, NULL) END,
-                CASE WHEN p_PrimaryScopeRecordID_Clear = TRUE THEN NULL ELSE COALESCE(p_PrimaryScopeRecordID, NULL) END,
-                CASE WHEN p_SecondaryScopes_Clear = TRUE THEN NULL ELSE COALESCE(p_SecondaryScopes, NULL) END,
-                CASE WHEN p_LastAccessedAt_Clear = TRUE THEN NULL ELSE COALESCE(p_LastAccessedAt, NULL) END,
-                COALESCE(p_AccessCount, 0),
-                CASE WHEN p_ExpiresAt_Clear = TRUE THEN NULL ELSE COALESCE(p_ExpiresAt, NULL) END,
-                CASE WHEN p_ConsolidatedIntoNoteID_Clear = TRUE THEN NULL ELSE COALESCE(p_ConsolidatedIntoNoteID, NULL) END,
-                COALESCE(p_ConsolidationCount, 0),
-                CASE WHEN p_DerivedFromNoteIDs_Clear = TRUE THEN NULL ELSE COALESCE(p_DerivedFromNoteIDs, NULL) END,
-                COALESCE(p_ProtectionTier, 'Standard'),
-                CASE WHEN p_ImportanceScore_Clear = TRUE THEN NULL ELSE COALESCE(p_ImportanceScore, NULL) END
-            );
-    END IF;
-    -- return the new record from the base view, which might have some calculated fields
-    RETURN QUERY SELECT * FROM __mj."vwAIAgentNotes" WHERE "ID" = p_ID;
-END;
-$$ LANGUAGE plpgsql;
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'spUpdateAIAgentNote'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgentNote"(
-    IN p_ID UUID,
-    IN p_AgentID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_AgentID UUID DEFAULT NULL,
-    IN p_AgentNoteTypeID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_AgentNoteTypeID UUID DEFAULT NULL,
-    IN p_Note_Clear BOOLEAN DEFAULT FALSE,
-    IN p_Note TEXT DEFAULT NULL,
-    IN p_UserID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_UserID UUID DEFAULT NULL,
-    IN p_Type VARCHAR(20) DEFAULT NULL,
-    IN p_IsAutoGenerated BOOLEAN DEFAULT NULL,
-    IN p_Comments_Clear BOOLEAN DEFAULT FALSE,
-    IN p_Comments TEXT DEFAULT NULL,
-    IN p_Status VARCHAR(20) DEFAULT NULL,
-    IN p_SourceConversationID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_SourceConversationID UUID DEFAULT NULL,
-    IN p_SourceConversationDetailID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_SourceConversationDetailID UUID DEFAULT NULL,
-    IN p_SourceAIAgentRunID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_SourceAIAgentRunID UUID DEFAULT NULL,
-    IN p_CompanyID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_CompanyID UUID DEFAULT NULL,
-    IN p_EmbeddingVector_Clear BOOLEAN DEFAULT FALSE,
-    IN p_EmbeddingVector TEXT DEFAULT NULL,
-    IN p_EmbeddingModelID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_EmbeddingModelID UUID DEFAULT NULL,
-    IN p_PrimaryScopeEntityID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_PrimaryScopeEntityID UUID DEFAULT NULL,
-    IN p_PrimaryScopeRecordID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_PrimaryScopeRecordID VARCHAR(100) DEFAULT NULL,
-    IN p_SecondaryScopes_Clear BOOLEAN DEFAULT FALSE,
-    IN p_SecondaryScopes TEXT DEFAULT NULL,
-    IN p_LastAccessedAt_Clear BOOLEAN DEFAULT FALSE,
-    IN p_LastAccessedAt TIMESTAMPTZ DEFAULT NULL,
-    IN p_AccessCount INTEGER DEFAULT NULL,
-    IN p_ExpiresAt_Clear BOOLEAN DEFAULT FALSE,
-    IN p_ExpiresAt TIMESTAMPTZ DEFAULT NULL,
-    IN p_ConsolidatedIntoNoteID_Clear BOOLEAN DEFAULT FALSE,
-    IN p_ConsolidatedIntoNoteID UUID DEFAULT NULL,
-    IN p_ConsolidationCount INTEGER DEFAULT NULL,
-    IN p_DerivedFromNoteIDs_Clear BOOLEAN DEFAULT FALSE,
-    IN p_DerivedFromNoteIDs TEXT DEFAULT NULL,
-    IN p_ProtectionTier VARCHAR(20) DEFAULT NULL,
-    IN p_ImportanceScore_Clear BOOLEAN DEFAULT FALSE,
-    IN p_ImportanceScore NUMERIC(5,2) DEFAULT NULL
-)
-RETURNS SETOF __mj."vwAIAgentNotes" AS
-$$
-DECLARE
-    _v_row_count INTEGER;
-BEGIN
-UPDATE
-        __mj."AIAgentNote"
-    SET
-        "AgentID" = CASE WHEN p_AgentID_Clear = TRUE THEN NULL ELSE COALESCE(p_AgentID, "AgentID") END,
-        "AgentNoteTypeID" = CASE WHEN p_AgentNoteTypeID_Clear = TRUE THEN NULL ELSE COALESCE(p_AgentNoteTypeID, "AgentNoteTypeID") END,
-        "Note" = CASE WHEN p_Note_Clear = TRUE THEN NULL ELSE COALESCE(p_Note, "Note") END,
-        "UserID" = CASE WHEN p_UserID_Clear = TRUE THEN NULL ELSE COALESCE(p_UserID, "UserID") END,
-        "Type" = COALESCE(p_Type, "Type"),
-        "IsAutoGenerated" = COALESCE(p_IsAutoGenerated, "IsAutoGenerated"),
-        "Comments" = CASE WHEN p_Comments_Clear = TRUE THEN NULL ELSE COALESCE(p_Comments, "Comments") END,
-        "Status" = COALESCE(p_Status, "Status"),
-        "SourceConversationID" = CASE WHEN p_SourceConversationID_Clear = TRUE THEN NULL ELSE COALESCE(p_SourceConversationID, "SourceConversationID") END,
-        "SourceConversationDetailID" = CASE WHEN p_SourceConversationDetailID_Clear = TRUE THEN NULL ELSE COALESCE(p_SourceConversationDetailID, "SourceConversationDetailID") END,
-        "SourceAIAgentRunID" = CASE WHEN p_SourceAIAgentRunID_Clear = TRUE THEN NULL ELSE COALESCE(p_SourceAIAgentRunID, "SourceAIAgentRunID") END,
-        "CompanyID" = CASE WHEN p_CompanyID_Clear = TRUE THEN NULL ELSE COALESCE(p_CompanyID, "CompanyID") END,
-        "EmbeddingVector" = CASE WHEN p_EmbeddingVector_Clear = TRUE THEN NULL ELSE COALESCE(p_EmbeddingVector, "EmbeddingVector") END,
-        "EmbeddingModelID" = CASE WHEN p_EmbeddingModelID_Clear = TRUE THEN NULL ELSE COALESCE(p_EmbeddingModelID, "EmbeddingModelID") END,
-        "PrimaryScopeEntityID" = CASE WHEN p_PrimaryScopeEntityID_Clear = TRUE THEN NULL ELSE COALESCE(p_PrimaryScopeEntityID, "PrimaryScopeEntityID") END,
-        "PrimaryScopeRecordID" = CASE WHEN p_PrimaryScopeRecordID_Clear = TRUE THEN NULL ELSE COALESCE(p_PrimaryScopeRecordID, "PrimaryScopeRecordID") END,
-        "SecondaryScopes" = CASE WHEN p_SecondaryScopes_Clear = TRUE THEN NULL ELSE COALESCE(p_SecondaryScopes, "SecondaryScopes") END,
-        "LastAccessedAt" = CASE WHEN p_LastAccessedAt_Clear = TRUE THEN NULL ELSE COALESCE(p_LastAccessedAt, "LastAccessedAt") END,
-        "AccessCount" = COALESCE(p_AccessCount, "AccessCount"),
-        "ExpiresAt" = CASE WHEN p_ExpiresAt_Clear = TRUE THEN NULL ELSE COALESCE(p_ExpiresAt, "ExpiresAt") END,
-        "ConsolidatedIntoNoteID" = CASE WHEN p_ConsolidatedIntoNoteID_Clear = TRUE THEN NULL ELSE COALESCE(p_ConsolidatedIntoNoteID, "ConsolidatedIntoNoteID") END,
-        "ConsolidationCount" = COALESCE(p_ConsolidationCount, "ConsolidationCount"),
-        "DerivedFromNoteIDs" = CASE WHEN p_DerivedFromNoteIDs_Clear = TRUE THEN NULL ELSE COALESCE(p_DerivedFromNoteIDs, "DerivedFromNoteIDs") END,
-        "ProtectionTier" = COALESCE(p_ProtectionTier, "ProtectionTier"),
-        "ImportanceScore" = CASE WHEN p_ImportanceScore_Clear = TRUE THEN NULL ELSE COALESCE(p_ImportanceScore, "ImportanceScore") END
-    WHERE
-        "ID" = p_ID;
-
-    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
-
-    IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT * FROM __mj."vwAIAgentNotes" WHERE 1=0;
-    ELSE
-        RETURN QUERY SELECT * FROM __mj."vwAIAgentNotes" WHERE "ID" = p_ID;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'spDeleteAIAgentNote'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgentNote"(
-    IN p_ID UUID
-)
-RETURNS TABLE("_result_id" UUID) AS
-$$
-DECLARE
-    _v_row_count INTEGER;
-BEGIN
-DELETE FROM
-        __mj."AIAgentNote"
-    WHERE
-        "ID" = p_ID;
-
-    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
-
-    IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT NULL::UUID AS "_result_id";
-    ELSE
-        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'spCreateAIRemoteBrowserProvider'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."spCreateAIRemoteBrowserProvider"(
-    IN p_ID UUID DEFAULT NULL,
-    IN p_Name VARCHAR(100) DEFAULT NULL,
-    IN p_Description_Clear BOOLEAN DEFAULT FALSE,
-    IN p_Description VARCHAR(1000) DEFAULT NULL,
-    IN p_ProviderType VARCHAR(20) DEFAULT NULL,
-    IN p_DriverClass VARCHAR(250) DEFAULT NULL,
-    IN p_Status VARCHAR(20) DEFAULT NULL,
-    IN p_SupportedFeatures_Clear BOOLEAN DEFAULT FALSE,
-    IN p_SupportedFeatures TEXT DEFAULT NULL,
-    IN p_DefaultControlMode VARCHAR(20) DEFAULT NULL,
-    IN p_ConfigSchema_Clear BOOLEAN DEFAULT FALSE,
-    IN p_ConfigSchema TEXT DEFAULT NULL,
-    IN p_Configuration_Clear BOOLEAN DEFAULT FALSE,
-    IN p_Configuration TEXT DEFAULT NULL
-)
-RETURNS SETOF __mj."vwAIRemoteBrowserProviders" AS
-$$
-BEGIN
-IF p_ID IS NOT NULL THEN
-        -- User provided a value, use it
-        INSERT INTO __mj."AIRemoteBrowserProvider"
-            (
-                "ID",
-                "Name",
-                "Description",
-                "ProviderType",
-                "DriverClass",
-                "Status",
-                "SupportedFeatures",
-                "DefaultControlMode",
-                "ConfigSchema",
-                "Configuration"
-            )
-        VALUES
-            (
-                p_ID,
-                p_Name,
-                CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, NULL) END,
-                COALESCE(p_ProviderType, 'Service'),
-                p_DriverClass,
-                COALESCE(p_Status, 'Active'),
-                CASE WHEN p_SupportedFeatures_Clear = TRUE THEN NULL ELSE COALESCE(p_SupportedFeatures, NULL) END,
-                COALESCE(p_DefaultControlMode, 'AgentOnly'),
-                CASE WHEN p_ConfigSchema_Clear = TRUE THEN NULL ELSE COALESCE(p_ConfigSchema, NULL) END,
-                CASE WHEN p_Configuration_Clear = TRUE THEN NULL ELSE COALESCE(p_Configuration, NULL) END
-            );
-    ELSE
-        -- No value provided, let database use its default (e.g., gen_random_uuid())
-        INSERT INTO __mj."AIRemoteBrowserProvider"
-            (
-                "Name",
-                "Description",
-                "ProviderType",
-                "DriverClass",
-                "Status",
-                "SupportedFeatures",
-                "DefaultControlMode",
-                "ConfigSchema",
-                "Configuration"
-            )
-        VALUES
-            (
-                p_Name,
-                CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, NULL) END,
-                COALESCE(p_ProviderType, 'Service'),
-                p_DriverClass,
-                COALESCE(p_Status, 'Active'),
-                CASE WHEN p_SupportedFeatures_Clear = TRUE THEN NULL ELSE COALESCE(p_SupportedFeatures, NULL) END,
-                COALESCE(p_DefaultControlMode, 'AgentOnly'),
-                CASE WHEN p_ConfigSchema_Clear = TRUE THEN NULL ELSE COALESCE(p_ConfigSchema, NULL) END,
-                CASE WHEN p_Configuration_Clear = TRUE THEN NULL ELSE COALESCE(p_Configuration, NULL) END
-            );
-    END IF;
-    -- return the new record from the base view, which might have some calculated fields
-    RETURN QUERY SELECT * FROM __mj."vwAIRemoteBrowserProviders" WHERE "ID" = p_ID;
-END;
-$$ LANGUAGE plpgsql;
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'spUpdateAIRemoteBrowserProvider'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."spUpdateAIRemoteBrowserProvider"(
-    IN p_ID UUID,
-    IN p_Name VARCHAR(100) DEFAULT NULL,
-    IN p_Description_Clear BOOLEAN DEFAULT FALSE,
-    IN p_Description VARCHAR(1000) DEFAULT NULL,
-    IN p_ProviderType VARCHAR(20) DEFAULT NULL,
-    IN p_DriverClass VARCHAR(250) DEFAULT NULL,
-    IN p_Status VARCHAR(20) DEFAULT NULL,
-    IN p_SupportedFeatures_Clear BOOLEAN DEFAULT FALSE,
-    IN p_SupportedFeatures TEXT DEFAULT NULL,
-    IN p_DefaultControlMode VARCHAR(20) DEFAULT NULL,
-    IN p_ConfigSchema_Clear BOOLEAN DEFAULT FALSE,
-    IN p_ConfigSchema TEXT DEFAULT NULL,
-    IN p_Configuration_Clear BOOLEAN DEFAULT FALSE,
-    IN p_Configuration TEXT DEFAULT NULL
-)
-RETURNS SETOF __mj."vwAIRemoteBrowserProviders" AS
-$$
-DECLARE
-    _v_row_count INTEGER;
-BEGIN
-UPDATE
-        __mj."AIRemoteBrowserProvider"
-    SET
-        "Name" = COALESCE(p_Name, "Name"),
-        "Description" = CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, "Description") END,
-        "ProviderType" = COALESCE(p_ProviderType, "ProviderType"),
-        "DriverClass" = COALESCE(p_DriverClass, "DriverClass"),
-        "Status" = COALESCE(p_Status, "Status"),
-        "SupportedFeatures" = CASE WHEN p_SupportedFeatures_Clear = TRUE THEN NULL ELSE COALESCE(p_SupportedFeatures, "SupportedFeatures") END,
-        "DefaultControlMode" = COALESCE(p_DefaultControlMode, "DefaultControlMode"),
-        "ConfigSchema" = CASE WHEN p_ConfigSchema_Clear = TRUE THEN NULL ELSE COALESCE(p_ConfigSchema, "ConfigSchema") END,
-        "Configuration" = CASE WHEN p_Configuration_Clear = TRUE THEN NULL ELSE COALESCE(p_Configuration, "Configuration") END
-    WHERE
-        "ID" = p_ID;
-
-    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
-
-    IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT * FROM __mj."vwAIRemoteBrowserProviders" WHERE 1=0;
-    ELSE
-        RETURN QUERY SELECT * FROM __mj."vwAIRemoteBrowserProviders" WHERE "ID" = p_ID;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'spDeleteAIRemoteBrowserProvider'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."spDeleteAIRemoteBrowserProvider"(
-    IN p_ID UUID
-)
-RETURNS TABLE("_result_id" UUID) AS
-$$
-DECLARE
-    _v_row_count INTEGER;
-BEGIN
-DELETE FROM
-        __mj."AIRemoteBrowserProvider"
-    WHERE
-        "ID" = p_ID;
-
-    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
-
-    IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT NULL::UUID AS "_result_id";
-    ELSE
-        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'spDeleteAIAgentRun'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgentRun"(
-    IN p_ID UUID
-)
-RETURNS TABLE("_result_id" UUID) AS
-$$
-DECLARE
-    _rec RECORD;
-    _v_row_count INTEGER;
-    p_MJAIAgentExamples_SourceAIAgentRunIDID UUID;
-    p_MJAIAgentExamples_SourceAIAgentRunID_AgentID UUID;
-    p_MJAIAgentExamples_SourceAIAgentRunID_UserID UUID;
-    p_MJAIAgentExamples_SourceAIAgentRunID_CompanyID UUID;
-    p_MJAIAgentExamples_SourceAIAgentRunID_Type VARCHAR(20);
-    p_MJAIAgentExamples_SourceAIAgentRunID_ExampleInput TEXT;
-    p_MJAIAgentExamples_SourceAIAgentRunID_ExampleOutput TEXT;
-    p_MJAIAgentExamples_SourceAIAgentRunID_IsAutoGenerated BOOLEAN;
-    p_MJAIAgentExamples_SourceAIAgentRunID_SourceConversationID UUID;
-    p_MJAIAgentExamples_SourceAIAgentRunID_SourceConversation_a05cb8 UUID;
-    p_MJAIAgentExamples_SourceAIAgentRunID_SourceAIAgentRunID UUID;
-    p_MJAIAgentExamples_SourceAIAgentRunID_SuccessScore NUMERIC(5,2);
-    p_MJAIAgentExamples_SourceAIAgentRunID_Comments TEXT;
-    p_MJAIAgentExamples_SourceAIAgentRunID_Status VARCHAR(20);
-    p_MJAIAgentExamples_SourceAIAgentRunID_EmbeddingVector TEXT;
-    p_MJAIAgentExamples_SourceAIAgentRunID_EmbeddingModelID UUID;
-    p_MJAIAgentExamples_SourceAIAgentRunID_PrimaryScopeEntityID UUID;
-    p_MJAIAgentExamples_SourceAIAgentRunID_PrimaryScopeRecordID VARCHAR(100);
-    p_MJAIAgentExamples_SourceAIAgentRunID_SecondaryScopes TEXT;
-    p_MJAIAgentExamples_SourceAIAgentRunID_LastAccessedAt TIMESTAMPTZ;
-    p_MJAIAgentExamples_SourceAIAgentRunID_AccessCount INTEGER;
-    p_MJAIAgentExamples_SourceAIAgentRunID_ExpiresAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_SourceAIAgentRunIDID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_AgentID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_AgentNoteTypeID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_Note TEXT;
-    p_MJAIAgentNotes_SourceAIAgentRunID_UserID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_Type VARCHAR(20);
-    p_MJAIAgentNotes_SourceAIAgentRunID_IsAutoGenerated BOOLEAN;
-    p_MJAIAgentNotes_SourceAIAgentRunID_Comments TEXT;
-    p_MJAIAgentNotes_SourceAIAgentRunID_Status VARCHAR(20);
-    p_MJAIAgentNotes_SourceAIAgentRunID_SourceConversationID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_SourceConversationDetailID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_SourceAIAgentRunID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_CompanyID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_EmbeddingVector TEXT;
-    p_MJAIAgentNotes_SourceAIAgentRunID_EmbeddingModelID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_PrimaryScopeEntityID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_PrimaryScopeRecordID VARCHAR(100);
-    p_MJAIAgentNotes_SourceAIAgentRunID_SecondaryScopes TEXT;
-    p_MJAIAgentNotes_SourceAIAgentRunID_LastAccessedAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_SourceAIAgentRunID_AccessCount INTEGER;
-    p_MJAIAgentNotes_SourceAIAgentRunID_ExpiresAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_SourceAIAgentRunID_ConsolidatedIntoNoteID UUID;
-    p_MJAIAgentNotes_SourceAIAgentRunID_ConsolidationCount INTEGER;
-    p_MJAIAgentNotes_SourceAIAgentRunID_DerivedFromNoteIDs TEXT;
-    p_MJAIAgentNotes_SourceAIAgentRunID_ProtectionTier VARCHAR(20);
-    p_MJAIAgentNotes_SourceAIAgentRunID_ImportanceScore NUMERIC(5,2);
-    p_MJAIAgentRequests_OriginatingAgentRunIDID UUID;
-    p_MJAIAgentRequests_OriginatingAgentRunID_AgentID UUID;
-    p_MJAIAgentRequests_OriginatingAgentRunID_RequestedAt TIMESTAMPTZ;
-    p_MJAIAgentRequests_OriginatingAgentRunID_RequestForUserID UUID;
-    p_MJAIAgentRequests_OriginatingAgentRunID_Status VARCHAR(20);
-    p_MJAIAgentRequests_OriginatingAgentRunID_Request TEXT;
-    p_MJAIAgentRequests_OriginatingAgentRunID_Response TEXT;
-    p_MJAIAgentRequests_OriginatingAgentRunID_ResponseByUserID UUID;
-    p_MJAIAgentRequests_OriginatingAgentRunID_RespondedAt TIMESTAMPTZ;
-    p_MJAIAgentRequests_OriginatingAgentRunID_Comments TEXT;
-    p_MJAIAgentRequests_OriginatingAgentRunID_RequestTypeID UUID;
-    p_MJAIAgentRequests_OriginatingAgentRunID_ResponseSchema TEXT;
-    p_MJAIAgentRequests_OriginatingAgentRunID_ResponseData TEXT;
-    p_MJAIAgentRequests_OriginatingAgentRunID_Priority INTEGER;
-    p_MJAIAgentRequests_OriginatingAgentRunID_ExpiresAt TIMESTAMPTZ;
-    p_MJAIAgentRequests_OriginatingAgentRunID_OriginatingAgentRunID UUID;
-    p_MJAIAgentRequests_OriginatingAgentRunID_OriginatingAgen_2294cf UUID;
-    p_MJAIAgentRequests_OriginatingAgentRunID_ResumingAgentRunID UUID;
-    p_MJAIAgentRequests_OriginatingAgentRunID_ResponseSource VARCHAR(20);
-    p_MJAIAgentRequests_ResumingAgentRunIDID UUID;
-    p_MJAIAgentRequests_ResumingAgentRunID_AgentID UUID;
-    p_MJAIAgentRequests_ResumingAgentRunID_RequestedAt TIMESTAMPTZ;
-    p_MJAIAgentRequests_ResumingAgentRunID_RequestForUserID UUID;
-    p_MJAIAgentRequests_ResumingAgentRunID_Status VARCHAR(20);
-    p_MJAIAgentRequests_ResumingAgentRunID_Request TEXT;
-    p_MJAIAgentRequests_ResumingAgentRunID_Response TEXT;
-    p_MJAIAgentRequests_ResumingAgentRunID_ResponseByUserID UUID;
-    p_MJAIAgentRequests_ResumingAgentRunID_RespondedAt TIMESTAMPTZ;
-    p_MJAIAgentRequests_ResumingAgentRunID_Comments TEXT;
-    p_MJAIAgentRequests_ResumingAgentRunID_RequestTypeID UUID;
-    p_MJAIAgentRequests_ResumingAgentRunID_ResponseSchema TEXT;
-    p_MJAIAgentRequests_ResumingAgentRunID_ResponseData TEXT;
-    p_MJAIAgentRequests_ResumingAgentRunID_Priority INTEGER;
-    p_MJAIAgentRequests_ResumingAgentRunID_ExpiresAt TIMESTAMPTZ;
-    p_MJAIAgentRequests_ResumingAgentRunID_OriginatingAgentRunID UUID;
-    p_MJAIAgentRequests_ResumingAgentRunID_OriginatingAgentRu_4faa57 UUID;
-    p_MJAIAgentRequests_ResumingAgentRunID_ResumingAgentRunID UUID;
-    p_MJAIAgentRequests_ResumingAgentRunID_ResponseSource VARCHAR(20);
-    p_MJAIAgentRunMedias_AgentRunIDID UUID;
-    p_MJAIAgentRunSteps_AgentRunIDID UUID;
-    p_MJAIAgentRuns_ParentRunIDID UUID;
-    p_MJAIAgentRuns_ParentRunID_AgentID UUID;
-    p_MJAIAgentRuns_ParentRunID_ParentRunID UUID;
-    p_MJAIAgentRuns_ParentRunID_Status VARCHAR(50);
-    p_MJAIAgentRuns_ParentRunID_StartedAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_ParentRunID_CompletedAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_ParentRunID_Success BOOLEAN;
-    p_MJAIAgentRuns_ParentRunID_ErrorMessage TEXT;
-    p_MJAIAgentRuns_ParentRunID_ConversationID UUID;
-    p_MJAIAgentRuns_ParentRunID_UserID UUID;
-    p_MJAIAgentRuns_ParentRunID_Result TEXT;
-    p_MJAIAgentRuns_ParentRunID_AgentState TEXT;
-    p_MJAIAgentRuns_ParentRunID_TotalTokensUsed INTEGER;
-    p_MJAIAgentRuns_ParentRunID_TotalCost NUMERIC(18,6);
-    p_MJAIAgentRuns_ParentRunID_TotalPromptTokensUsed INTEGER;
-    p_MJAIAgentRuns_ParentRunID_TotalCompletionTokensUsed INTEGER;
-    p_MJAIAgentRuns_ParentRunID_TotalTokensUsedRollup INTEGER;
-    p_MJAIAgentRuns_ParentRunID_TotalPromptTokensUsedRollup INTEGER;
-    p_MJAIAgentRuns_ParentRunID_TotalCompletionTokensUsedRollup INTEGER;
-    p_MJAIAgentRuns_ParentRunID_TotalCostRollup NUMERIC(19,8);
-    p_MJAIAgentRuns_ParentRunID_ConversationDetailID UUID;
-    p_MJAIAgentRuns_ParentRunID_ConversationDetailSequence INTEGER;
-    p_MJAIAgentRuns_ParentRunID_CancellationReason VARCHAR(30);
-    p_MJAIAgentRuns_ParentRunID_FinalStep VARCHAR(30);
-    p_MJAIAgentRuns_ParentRunID_FinalPayload TEXT;
-    p_MJAIAgentRuns_ParentRunID_Message TEXT;
-    p_MJAIAgentRuns_ParentRunID_LastRunID UUID;
-    p_MJAIAgentRuns_ParentRunID_StartingPayload TEXT;
-    p_MJAIAgentRuns_ParentRunID_TotalPromptIterations INTEGER;
-    p_MJAIAgentRuns_ParentRunID_ConfigurationID UUID;
-    p_MJAIAgentRuns_ParentRunID_OverrideModelID UUID;
-    p_MJAIAgentRuns_ParentRunID_OverrideVendorID UUID;
-    p_MJAIAgentRuns_ParentRunID_Data TEXT;
-    p_MJAIAgentRuns_ParentRunID_Verbose BOOLEAN;
-    p_MJAIAgentRuns_ParentRunID_EffortLevel INTEGER;
-    p_MJAIAgentRuns_ParentRunID_RunName VARCHAR(255);
-    p_MJAIAgentRuns_ParentRunID_Comments TEXT;
-    p_MJAIAgentRuns_ParentRunID_ScheduledJobRunID UUID;
-    p_MJAIAgentRuns_ParentRunID_TestRunID UUID;
-    p_MJAIAgentRuns_ParentRunID_PrimaryScopeEntityID UUID;
-    p_MJAIAgentRuns_ParentRunID_PrimaryScopeRecordID VARCHAR(100);
-    p_MJAIAgentRuns_ParentRunID_SecondaryScopes TEXT;
-    p_MJAIAgentRuns_ParentRunID_ExternalReferenceID VARCHAR(200);
-    p_MJAIAgentRuns_ParentRunID_CompanyID UUID;
-    p_MJAIAgentRuns_ParentRunID_TotalCacheReadTokensUsed INTEGER;
-    p_MJAIAgentRuns_ParentRunID_TotalCacheWriteTokensUsed INTEGER;
-    p_MJAIAgentRuns_ParentRunID_LastHeartbeatAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_ParentRunID_AgentSessionID UUID;
-    p_MJAIAgentRuns_LastRunIDID UUID;
-    p_MJAIAgentRuns_LastRunID_AgentID UUID;
-    p_MJAIAgentRuns_LastRunID_ParentRunID UUID;
-    p_MJAIAgentRuns_LastRunID_Status VARCHAR(50);
-    p_MJAIAgentRuns_LastRunID_StartedAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_LastRunID_CompletedAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_LastRunID_Success BOOLEAN;
-    p_MJAIAgentRuns_LastRunID_ErrorMessage TEXT;
-    p_MJAIAgentRuns_LastRunID_ConversationID UUID;
-    p_MJAIAgentRuns_LastRunID_UserID UUID;
-    p_MJAIAgentRuns_LastRunID_Result TEXT;
-    p_MJAIAgentRuns_LastRunID_AgentState TEXT;
-    p_MJAIAgentRuns_LastRunID_TotalTokensUsed INTEGER;
-    p_MJAIAgentRuns_LastRunID_TotalCost NUMERIC(18,6);
-    p_MJAIAgentRuns_LastRunID_TotalPromptTokensUsed INTEGER;
-    p_MJAIAgentRuns_LastRunID_TotalCompletionTokensUsed INTEGER;
-    p_MJAIAgentRuns_LastRunID_TotalTokensUsedRollup INTEGER;
-    p_MJAIAgentRuns_LastRunID_TotalPromptTokensUsedRollup INTEGER;
-    p_MJAIAgentRuns_LastRunID_TotalCompletionTokensUsedRollup INTEGER;
-    p_MJAIAgentRuns_LastRunID_TotalCostRollup NUMERIC(19,8);
-    p_MJAIAgentRuns_LastRunID_ConversationDetailID UUID;
-    p_MJAIAgentRuns_LastRunID_ConversationDetailSequence INTEGER;
-    p_MJAIAgentRuns_LastRunID_CancellationReason VARCHAR(30);
-    p_MJAIAgentRuns_LastRunID_FinalStep VARCHAR(30);
-    p_MJAIAgentRuns_LastRunID_FinalPayload TEXT;
-    p_MJAIAgentRuns_LastRunID_Message TEXT;
-    p_MJAIAgentRuns_LastRunID_LastRunID UUID;
-    p_MJAIAgentRuns_LastRunID_StartingPayload TEXT;
-    p_MJAIAgentRuns_LastRunID_TotalPromptIterations INTEGER;
-    p_MJAIAgentRuns_LastRunID_ConfigurationID UUID;
-    p_MJAIAgentRuns_LastRunID_OverrideModelID UUID;
-    p_MJAIAgentRuns_LastRunID_OverrideVendorID UUID;
-    p_MJAIAgentRuns_LastRunID_Data TEXT;
-    p_MJAIAgentRuns_LastRunID_Verbose BOOLEAN;
-    p_MJAIAgentRuns_LastRunID_EffortLevel INTEGER;
-    p_MJAIAgentRuns_LastRunID_RunName VARCHAR(255);
-    p_MJAIAgentRuns_LastRunID_Comments TEXT;
-    p_MJAIAgentRuns_LastRunID_ScheduledJobRunID UUID;
-    p_MJAIAgentRuns_LastRunID_TestRunID UUID;
-    p_MJAIAgentRuns_LastRunID_PrimaryScopeEntityID UUID;
-    p_MJAIAgentRuns_LastRunID_PrimaryScopeRecordID VARCHAR(100);
-    p_MJAIAgentRuns_LastRunID_SecondaryScopes TEXT;
-    p_MJAIAgentRuns_LastRunID_ExternalReferenceID VARCHAR(200);
-    p_MJAIAgentRuns_LastRunID_CompanyID UUID;
-    p_MJAIAgentRuns_LastRunID_TotalCacheReadTokensUsed INTEGER;
-    p_MJAIAgentRuns_LastRunID_TotalCacheWriteTokensUsed INTEGER;
-    p_MJAIAgentRuns_LastRunID_LastHeartbeatAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_LastRunID_AgentSessionID UUID;
-    p_MJAIPromptRuns_AgentRunIDID UUID;
-    p_MJAIPromptRuns_AgentRunID_PromptID UUID;
-    p_MJAIPromptRuns_AgentRunID_ModelID UUID;
-    p_MJAIPromptRuns_AgentRunID_VendorID UUID;
-    p_MJAIPromptRuns_AgentRunID_AgentID UUID;
-    p_MJAIPromptRuns_AgentRunID_ConfigurationID UUID;
-    p_MJAIPromptRuns_AgentRunID_RunAt TIMESTAMPTZ;
-    p_MJAIPromptRuns_AgentRunID_CompletedAt TIMESTAMPTZ;
-    p_MJAIPromptRuns_AgentRunID_ExecutionTimeMS INTEGER;
-    p_MJAIPromptRuns_AgentRunID_Messages TEXT;
-    p_MJAIPromptRuns_AgentRunID_Result TEXT;
-    p_MJAIPromptRuns_AgentRunID_TokensUsed INTEGER;
-    p_MJAIPromptRuns_AgentRunID_TokensPrompt INTEGER;
-    p_MJAIPromptRuns_AgentRunID_TokensCompletion INTEGER;
-    p_MJAIPromptRuns_AgentRunID_TotalCost NUMERIC(18,6);
-    p_MJAIPromptRuns_AgentRunID_Success BOOLEAN;
-    p_MJAIPromptRuns_AgentRunID_ErrorMessage TEXT;
-    p_MJAIPromptRuns_AgentRunID_ParentID UUID;
-    p_MJAIPromptRuns_AgentRunID_RunType VARCHAR(20);
-    p_MJAIPromptRuns_AgentRunID_ExecutionOrder INTEGER;
-    p_MJAIPromptRuns_AgentRunID_AgentRunID UUID;
-    p_MJAIPromptRuns_AgentRunID_Cost NUMERIC(19,8);
-    p_MJAIPromptRuns_AgentRunID_CostCurrency VARCHAR(10);
-    p_MJAIPromptRuns_AgentRunID_TokensUsedRollup INTEGER;
-    p_MJAIPromptRuns_AgentRunID_TokensPromptRollup INTEGER;
-    p_MJAIPromptRuns_AgentRunID_TokensCompletionRollup INTEGER;
-    p_MJAIPromptRuns_AgentRunID_Temperature NUMERIC(3,2);
-    p_MJAIPromptRuns_AgentRunID_TopP NUMERIC(3,2);
-    p_MJAIPromptRuns_AgentRunID_TopK INTEGER;
-    p_MJAIPromptRuns_AgentRunID_MinP NUMERIC(3,2);
-    p_MJAIPromptRuns_AgentRunID_FrequencyPenalty NUMERIC(3,2);
-    p_MJAIPromptRuns_AgentRunID_PresencePenalty NUMERIC(3,2);
-    p_MJAIPromptRuns_AgentRunID_Seed INTEGER;
-    p_MJAIPromptRuns_AgentRunID_StopSequences TEXT;
-    p_MJAIPromptRuns_AgentRunID_ResponseFormat VARCHAR(50);
-    p_MJAIPromptRuns_AgentRunID_LogProbs BOOLEAN;
-    p_MJAIPromptRuns_AgentRunID_TopLogProbs INTEGER;
-    p_MJAIPromptRuns_AgentRunID_DescendantCost NUMERIC(18,6);
-    p_MJAIPromptRuns_AgentRunID_ValidationAttemptCount INTEGER;
-    p_MJAIPromptRuns_AgentRunID_SuccessfulValidationCount INTEGER;
-    p_MJAIPromptRuns_AgentRunID_FinalValidationPassed BOOLEAN;
-    p_MJAIPromptRuns_AgentRunID_ValidationBehavior VARCHAR(50);
-    p_MJAIPromptRuns_AgentRunID_RetryStrategy VARCHAR(50);
-    p_MJAIPromptRuns_AgentRunID_MaxRetriesConfigured INTEGER;
-    p_MJAIPromptRuns_AgentRunID_FinalValidationError VARCHAR(500);
-    p_MJAIPromptRuns_AgentRunID_ValidationErrorCount INTEGER;
-    p_MJAIPromptRuns_AgentRunID_CommonValidationError VARCHAR(255);
-    p_MJAIPromptRuns_AgentRunID_FirstAttemptAt TIMESTAMPTZ;
-    p_MJAIPromptRuns_AgentRunID_LastAttemptAt TIMESTAMPTZ;
-    p_MJAIPromptRuns_AgentRunID_TotalRetryDurationMS INTEGER;
-    p_MJAIPromptRuns_AgentRunID_ValidationAttempts TEXT;
-    p_MJAIPromptRuns_AgentRunID_ValidationSummary TEXT;
-    p_MJAIPromptRuns_AgentRunID_FailoverAttempts INTEGER;
-    p_MJAIPromptRuns_AgentRunID_FailoverErrors TEXT;
-    p_MJAIPromptRuns_AgentRunID_FailoverDurations TEXT;
-    p_MJAIPromptRuns_AgentRunID_OriginalModelID UUID;
-    p_MJAIPromptRuns_AgentRunID_OriginalRequestStartTime TIMESTAMPTZ;
-    p_MJAIPromptRuns_AgentRunID_TotalFailoverDuration INTEGER;
-    p_MJAIPromptRuns_AgentRunID_RerunFromPromptRunID UUID;
-    p_MJAIPromptRuns_AgentRunID_ModelSelection TEXT;
-    p_MJAIPromptRuns_AgentRunID_Status VARCHAR(50);
-    p_MJAIPromptRuns_AgentRunID_Cancelled BOOLEAN;
-    p_MJAIPromptRuns_AgentRunID_CancellationReason TEXT;
-    p_MJAIPromptRuns_AgentRunID_ModelPowerRank INTEGER;
-    p_MJAIPromptRuns_AgentRunID_SelectionStrategy VARCHAR(50);
-    p_MJAIPromptRuns_AgentRunID_CacheHit BOOLEAN;
-    p_MJAIPromptRuns_AgentRunID_CacheKey VARCHAR(500);
-    p_MJAIPromptRuns_AgentRunID_JudgeID UUID;
-    p_MJAIPromptRuns_AgentRunID_JudgeScore DOUBLE PRECISION;
-    p_MJAIPromptRuns_AgentRunID_WasSelectedResult BOOLEAN;
-    p_MJAIPromptRuns_AgentRunID_StreamingEnabled BOOLEAN;
-    p_MJAIPromptRuns_AgentRunID_FirstTokenTime INTEGER;
-    p_MJAIPromptRuns_AgentRunID_ErrorDetails TEXT;
-    p_MJAIPromptRuns_AgentRunID_ChildPromptID UUID;
-    p_MJAIPromptRuns_AgentRunID_QueueTime INTEGER;
-    p_MJAIPromptRuns_AgentRunID_PromptTime INTEGER;
-    p_MJAIPromptRuns_AgentRunID_CompletionTime INTEGER;
-    p_MJAIPromptRuns_AgentRunID_ModelSpecificResponseDetails TEXT;
-    p_MJAIPromptRuns_AgentRunID_EffortLevel INTEGER;
-    p_MJAIPromptRuns_AgentRunID_RunName VARCHAR(255);
-    p_MJAIPromptRuns_AgentRunID_Comments TEXT;
-    p_MJAIPromptRuns_AgentRunID_TestRunID UUID;
-    p_MJAIPromptRuns_AgentRunID_AssistantPrefill TEXT;
-    p_MJAIPromptRuns_AgentRunID_TokensCacheRead INTEGER;
-    p_MJAIPromptRuns_AgentRunID_TokensCacheWrite INTEGER;
-    p_MJAIPromptRuns_AgentRunID_TokensCacheReadRollup INTEGER;
-    p_MJAIPromptRuns_AgentRunID_TokensCacheWriteRollup INTEGER;
-BEGIN
--- Cascade update on AIAgentExample using cursor to call spUpdateAIAgentExample
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "UserID", "CompanyID", "Type", "ExampleInput", "ExampleOutput", "IsAutoGenerated", "SourceConversationID", "SourceConversationDetailID", "SourceAIAgentRunID", "SuccessScore", "Comments", "Status", "EmbeddingVector", "EmbeddingModelID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "LastAccessedAt", "AccessCount", "ExpiresAt" FROM __mj."AIAgentExample" WHERE "SourceAIAgentRunID" = p_ID
-    LOOP
-        p_MJAIAgentExamples_SourceAIAgentRunIDID := _rec."ID";
-        p_MJAIAgentExamples_SourceAIAgentRunID_AgentID := _rec."AgentID";
-        p_MJAIAgentExamples_SourceAIAgentRunID_UserID := _rec."UserID";
-        p_MJAIAgentExamples_SourceAIAgentRunID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentExamples_SourceAIAgentRunID_Type := _rec."Type";
-        p_MJAIAgentExamples_SourceAIAgentRunID_ExampleInput := _rec."ExampleInput";
-        p_MJAIAgentExamples_SourceAIAgentRunID_ExampleOutput := _rec."ExampleOutput";
-        p_MJAIAgentExamples_SourceAIAgentRunID_IsAutoGenerated := _rec."IsAutoGenerated";
-        p_MJAIAgentExamples_SourceAIAgentRunID_SourceConversationID := _rec."SourceConversationID";
-        p_MJAIAgentExamples_SourceAIAgentRunID_SourceConversation_a05cb8 := _rec."SourceConversationDetailID";
-        p_MJAIAgentExamples_SourceAIAgentRunID_SourceAIAgentRunID := _rec."SourceAIAgentRunID";
-        p_MJAIAgentExamples_SourceAIAgentRunID_SuccessScore := _rec."SuccessScore";
-        p_MJAIAgentExamples_SourceAIAgentRunID_Comments := _rec."Comments";
-        p_MJAIAgentExamples_SourceAIAgentRunID_Status := _rec."Status";
-        p_MJAIAgentExamples_SourceAIAgentRunID_EmbeddingVector := _rec."EmbeddingVector";
-        p_MJAIAgentExamples_SourceAIAgentRunID_EmbeddingModelID := _rec."EmbeddingModelID";
-        p_MJAIAgentExamples_SourceAIAgentRunID_PrimaryScopeEntityID := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentExamples_SourceAIAgentRunID_PrimaryScopeRecordID := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentExamples_SourceAIAgentRunID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentExamples_SourceAIAgentRunID_LastAccessedAt := _rec."LastAccessedAt";
-        p_MJAIAgentExamples_SourceAIAgentRunID_AccessCount := _rec."AccessCount";
-        p_MJAIAgentExamples_SourceAIAgentRunID_ExpiresAt := _rec."ExpiresAt";
-        -- Set the FK field to NULL
-        p_MJAIAgentExamples_SourceAIAgentRunID_SourceAIAgentRunID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentExample"(p_ID => p_MJAIAgentExamples_SourceAIAgentRunIDID, p_AgentID => p_MJAIAgentExamples_SourceAIAgentRunID_AgentID, p_UserID => p_MJAIAgentExamples_SourceAIAgentRunID_UserID, p_CompanyID => p_MJAIAgentExamples_SourceAIAgentRunID_CompanyID, p_Type => p_MJAIAgentExamples_SourceAIAgentRunID_Type, p_ExampleInput => p_MJAIAgentExamples_SourceAIAgentRunID_ExampleInput, p_ExampleOutput => p_MJAIAgentExamples_SourceAIAgentRunID_ExampleOutput, p_IsAutoGenerated => p_MJAIAgentExamples_SourceAIAgentRunID_IsAutoGenerated, p_SourceConversationID => p_MJAIAgentExamples_SourceAIAgentRunID_SourceConversationID, p_SourceConversationDetailID => p_MJAIAgentExamples_SourceAIAgentRunID_SourceConversation_a05cb8, p_SourceAIAgentRunID_Clear => 1, p_SourceAIAgentRunID => p_MJAIAgentExamples_SourceAIAgentRunID_SourceAIAgentRunID, p_SuccessScore => p_MJAIAgentExamples_SourceAIAgentRunID_SuccessScore, p_Comments => p_MJAIAgentExamples_SourceAIAgentRunID_Comments, p_Status => p_MJAIAgentExamples_SourceAIAgentRunID_Status, p_EmbeddingVector => p_MJAIAgentExamples_SourceAIAgentRunID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentExamples_SourceAIAgentRunID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentExamples_SourceAIAgentRunID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentExamples_SourceAIAgentRunID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentExamples_SourceAIAgentRunID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentExamples_SourceAIAgentRunID_LastAccessedAt, p_AccessCount => p_MJAIAgentExamples_SourceAIAgentRunID_AccessCount, p_ExpiresAt => p_MJAIAgentExamples_SourceAIAgentRunID_ExpiresAt);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentNote using cursor to call spUpdateAIAgentNote
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "AgentNoteTypeID", "Note", "UserID", "Type", "IsAutoGenerated", "Comments", "Status", "SourceConversationID", "SourceConversationDetailID", "SourceAIAgentRunID", "CompanyID", "EmbeddingVector", "EmbeddingModelID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "LastAccessedAt", "AccessCount", "ExpiresAt", "ConsolidatedIntoNoteID", "ConsolidationCount", "DerivedFromNoteIDs", "ProtectionTier", "ImportanceScore" FROM __mj."AIAgentNote" WHERE "SourceAIAgentRunID" = p_ID
-    LOOP
-        p_MJAIAgentNotes_SourceAIAgentRunIDID := _rec."ID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_AgentID := _rec."AgentID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_AgentNoteTypeID := _rec."AgentNoteTypeID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_Note := _rec."Note";
-        p_MJAIAgentNotes_SourceAIAgentRunID_UserID := _rec."UserID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_Type := _rec."Type";
-        p_MJAIAgentNotes_SourceAIAgentRunID_IsAutoGenerated := _rec."IsAutoGenerated";
-        p_MJAIAgentNotes_SourceAIAgentRunID_Comments := _rec."Comments";
-        p_MJAIAgentNotes_SourceAIAgentRunID_Status := _rec."Status";
-        p_MJAIAgentNotes_SourceAIAgentRunID_SourceConversationID := _rec."SourceConversationID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_SourceConversationDetailID := _rec."SourceConversationDetailID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_SourceAIAgentRunID := _rec."SourceAIAgentRunID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_EmbeddingVector := _rec."EmbeddingVector";
-        p_MJAIAgentNotes_SourceAIAgentRunID_EmbeddingModelID := _rec."EmbeddingModelID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_PrimaryScopeEntityID := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_PrimaryScopeRecordID := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentNotes_SourceAIAgentRunID_LastAccessedAt := _rec."LastAccessedAt";
-        p_MJAIAgentNotes_SourceAIAgentRunID_AccessCount := _rec."AccessCount";
-        p_MJAIAgentNotes_SourceAIAgentRunID_ExpiresAt := _rec."ExpiresAt";
-        p_MJAIAgentNotes_SourceAIAgentRunID_ConsolidatedIntoNoteID := _rec."ConsolidatedIntoNoteID";
-        p_MJAIAgentNotes_SourceAIAgentRunID_ConsolidationCount := _rec."ConsolidationCount";
-        p_MJAIAgentNotes_SourceAIAgentRunID_DerivedFromNoteIDs := _rec."DerivedFromNoteIDs";
-        p_MJAIAgentNotes_SourceAIAgentRunID_ProtectionTier := _rec."ProtectionTier";
-        p_MJAIAgentNotes_SourceAIAgentRunID_ImportanceScore := _rec."ImportanceScore";
-        -- Set the FK field to NULL
-        p_MJAIAgentNotes_SourceAIAgentRunID_SourceAIAgentRunID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentNote"(p_ID => p_MJAIAgentNotes_SourceAIAgentRunIDID, p_AgentID => p_MJAIAgentNotes_SourceAIAgentRunID_AgentID, p_AgentNoteTypeID => p_MJAIAgentNotes_SourceAIAgentRunID_AgentNoteTypeID, p_Note => p_MJAIAgentNotes_SourceAIAgentRunID_Note, p_UserID => p_MJAIAgentNotes_SourceAIAgentRunID_UserID, p_Type => p_MJAIAgentNotes_SourceAIAgentRunID_Type, p_IsAutoGenerated => p_MJAIAgentNotes_SourceAIAgentRunID_IsAutoGenerated, p_Comments => p_MJAIAgentNotes_SourceAIAgentRunID_Comments, p_Status => p_MJAIAgentNotes_SourceAIAgentRunID_Status, p_SourceConversationID => p_MJAIAgentNotes_SourceAIAgentRunID_SourceConversationID, p_SourceConversationDetailID => p_MJAIAgentNotes_SourceAIAgentRunID_SourceConversationDetailID, p_SourceAIAgentRunID_Clear => 1, p_SourceAIAgentRunID => p_MJAIAgentNotes_SourceAIAgentRunID_SourceAIAgentRunID, p_CompanyID => p_MJAIAgentNotes_SourceAIAgentRunID_CompanyID, p_EmbeddingVector => p_MJAIAgentNotes_SourceAIAgentRunID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentNotes_SourceAIAgentRunID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentNotes_SourceAIAgentRunID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentNotes_SourceAIAgentRunID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentNotes_SourceAIAgentRunID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentNotes_SourceAIAgentRunID_LastAccessedAt, p_AccessCount => p_MJAIAgentNotes_SourceAIAgentRunID_AccessCount, p_ExpiresAt => p_MJAIAgentNotes_SourceAIAgentRunID_ExpiresAt, p_ConsolidatedIntoNoteID => p_MJAIAgentNotes_SourceAIAgentRunID_ConsolidatedIntoNoteID, p_ConsolidationCount => p_MJAIAgentNotes_SourceAIAgentRunID_ConsolidationCount, p_DerivedFromNoteIDs => p_MJAIAgentNotes_SourceAIAgentRunID_DerivedFromNoteIDs, p_ProtectionTier => p_MJAIAgentNotes_SourceAIAgentRunID_ProtectionTier, p_ImportanceScore => p_MJAIAgentNotes_SourceAIAgentRunID_ImportanceScore);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentRequest using cursor to call spUpdateAIAgentRequest
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "RequestedAt", "RequestForUserID", "Status", "Request", "Response", "ResponseByUserID", "RespondedAt", "Comments", "RequestTypeID", "ResponseSchema", "ResponseData", "Priority", "ExpiresAt", "OriginatingAgentRunID", "OriginatingAgentRunStepID", "ResumingAgentRunID", "ResponseSource" FROM __mj."AIAgentRequest" WHERE "OriginatingAgentRunID" = p_ID
-    LOOP
-        p_MJAIAgentRequests_OriginatingAgentRunIDID := _rec."ID";
-        p_MJAIAgentRequests_OriginatingAgentRunID_AgentID := _rec."AgentID";
-        p_MJAIAgentRequests_OriginatingAgentRunID_RequestedAt := _rec."RequestedAt";
-        p_MJAIAgentRequests_OriginatingAgentRunID_RequestForUserID := _rec."RequestForUserID";
-        p_MJAIAgentRequests_OriginatingAgentRunID_Status := _rec."Status";
-        p_MJAIAgentRequests_OriginatingAgentRunID_Request := _rec."Request";
-        p_MJAIAgentRequests_OriginatingAgentRunID_Response := _rec."Response";
-        p_MJAIAgentRequests_OriginatingAgentRunID_ResponseByUserID := _rec."ResponseByUserID";
-        p_MJAIAgentRequests_OriginatingAgentRunID_RespondedAt := _rec."RespondedAt";
-        p_MJAIAgentRequests_OriginatingAgentRunID_Comments := _rec."Comments";
-        p_MJAIAgentRequests_OriginatingAgentRunID_RequestTypeID := _rec."RequestTypeID";
-        p_MJAIAgentRequests_OriginatingAgentRunID_ResponseSchema := _rec."ResponseSchema";
-        p_MJAIAgentRequests_OriginatingAgentRunID_ResponseData := _rec."ResponseData";
-        p_MJAIAgentRequests_OriginatingAgentRunID_Priority := _rec."Priority";
-        p_MJAIAgentRequests_OriginatingAgentRunID_ExpiresAt := _rec."ExpiresAt";
-        p_MJAIAgentRequests_OriginatingAgentRunID_OriginatingAgentRunID := _rec."OriginatingAgentRunID";
-        p_MJAIAgentRequests_OriginatingAgentRunID_OriginatingAgen_2294cf := _rec."OriginatingAgentRunStepID";
-        p_MJAIAgentRequests_OriginatingAgentRunID_ResumingAgentRunID := _rec."ResumingAgentRunID";
-        p_MJAIAgentRequests_OriginatingAgentRunID_ResponseSource := _rec."ResponseSource";
-        -- Set the FK field to NULL
-        p_MJAIAgentRequests_OriginatingAgentRunID_OriginatingAgentRunID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentRequest"(p_ID => p_MJAIAgentRequests_OriginatingAgentRunIDID, p_AgentID => p_MJAIAgentRequests_OriginatingAgentRunID_AgentID, p_RequestedAt => p_MJAIAgentRequests_OriginatingAgentRunID_RequestedAt, p_RequestForUserID => p_MJAIAgentRequests_OriginatingAgentRunID_RequestForUserID, p_Status => p_MJAIAgentRequests_OriginatingAgentRunID_Status, p_Request => p_MJAIAgentRequests_OriginatingAgentRunID_Request, p_Response => p_MJAIAgentRequests_OriginatingAgentRunID_Response, p_ResponseByUserID => p_MJAIAgentRequests_OriginatingAgentRunID_ResponseByUserID, p_RespondedAt => p_MJAIAgentRequests_OriginatingAgentRunID_RespondedAt, p_Comments => p_MJAIAgentRequests_OriginatingAgentRunID_Comments, p_RequestTypeID => p_MJAIAgentRequests_OriginatingAgentRunID_RequestTypeID, p_ResponseSchema => p_MJAIAgentRequests_OriginatingAgentRunID_ResponseSchema, p_ResponseData => p_MJAIAgentRequests_OriginatingAgentRunID_ResponseData, p_Priority => p_MJAIAgentRequests_OriginatingAgentRunID_Priority, p_ExpiresAt => p_MJAIAgentRequests_OriginatingAgentRunID_ExpiresAt, p_OriginatingAgentRunID_Clear => 1, p_OriginatingAgentRunID => p_MJAIAgentRequests_OriginatingAgentRunID_OriginatingAgentRunID, p_OriginatingAgentRunStepID => p_MJAIAgentRequests_OriginatingAgentRunID_OriginatingAgen_2294cf, p_ResumingAgentRunID => p_MJAIAgentRequests_OriginatingAgentRunID_ResumingAgentRunID, p_ResponseSource => p_MJAIAgentRequests_OriginatingAgentRunID_ResponseSource);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentRequest using cursor to call spUpdateAIAgentRequest
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "RequestedAt", "RequestForUserID", "Status", "Request", "Response", "ResponseByUserID", "RespondedAt", "Comments", "RequestTypeID", "ResponseSchema", "ResponseData", "Priority", "ExpiresAt", "OriginatingAgentRunID", "OriginatingAgentRunStepID", "ResumingAgentRunID", "ResponseSource" FROM __mj."AIAgentRequest" WHERE "ResumingAgentRunID" = p_ID
-    LOOP
-        p_MJAIAgentRequests_ResumingAgentRunIDID := _rec."ID";
-        p_MJAIAgentRequests_ResumingAgentRunID_AgentID := _rec."AgentID";
-        p_MJAIAgentRequests_ResumingAgentRunID_RequestedAt := _rec."RequestedAt";
-        p_MJAIAgentRequests_ResumingAgentRunID_RequestForUserID := _rec."RequestForUserID";
-        p_MJAIAgentRequests_ResumingAgentRunID_Status := _rec."Status";
-        p_MJAIAgentRequests_ResumingAgentRunID_Request := _rec."Request";
-        p_MJAIAgentRequests_ResumingAgentRunID_Response := _rec."Response";
-        p_MJAIAgentRequests_ResumingAgentRunID_ResponseByUserID := _rec."ResponseByUserID";
-        p_MJAIAgentRequests_ResumingAgentRunID_RespondedAt := _rec."RespondedAt";
-        p_MJAIAgentRequests_ResumingAgentRunID_Comments := _rec."Comments";
-        p_MJAIAgentRequests_ResumingAgentRunID_RequestTypeID := _rec."RequestTypeID";
-        p_MJAIAgentRequests_ResumingAgentRunID_ResponseSchema := _rec."ResponseSchema";
-        p_MJAIAgentRequests_ResumingAgentRunID_ResponseData := _rec."ResponseData";
-        p_MJAIAgentRequests_ResumingAgentRunID_Priority := _rec."Priority";
-        p_MJAIAgentRequests_ResumingAgentRunID_ExpiresAt := _rec."ExpiresAt";
-        p_MJAIAgentRequests_ResumingAgentRunID_OriginatingAgentRunID := _rec."OriginatingAgentRunID";
-        p_MJAIAgentRequests_ResumingAgentRunID_OriginatingAgentRu_4faa57 := _rec."OriginatingAgentRunStepID";
-        p_MJAIAgentRequests_ResumingAgentRunID_ResumingAgentRunID := _rec."ResumingAgentRunID";
-        p_MJAIAgentRequests_ResumingAgentRunID_ResponseSource := _rec."ResponseSource";
-        -- Set the FK field to NULL
-        p_MJAIAgentRequests_ResumingAgentRunID_ResumingAgentRunID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentRequest"(p_ID => p_MJAIAgentRequests_ResumingAgentRunIDID, p_AgentID => p_MJAIAgentRequests_ResumingAgentRunID_AgentID, p_RequestedAt => p_MJAIAgentRequests_ResumingAgentRunID_RequestedAt, p_RequestForUserID => p_MJAIAgentRequests_ResumingAgentRunID_RequestForUserID, p_Status => p_MJAIAgentRequests_ResumingAgentRunID_Status, p_Request => p_MJAIAgentRequests_ResumingAgentRunID_Request, p_Response => p_MJAIAgentRequests_ResumingAgentRunID_Response, p_ResponseByUserID => p_MJAIAgentRequests_ResumingAgentRunID_ResponseByUserID, p_RespondedAt => p_MJAIAgentRequests_ResumingAgentRunID_RespondedAt, p_Comments => p_MJAIAgentRequests_ResumingAgentRunID_Comments, p_RequestTypeID => p_MJAIAgentRequests_ResumingAgentRunID_RequestTypeID, p_ResponseSchema => p_MJAIAgentRequests_ResumingAgentRunID_ResponseSchema, p_ResponseData => p_MJAIAgentRequests_ResumingAgentRunID_ResponseData, p_Priority => p_MJAIAgentRequests_ResumingAgentRunID_Priority, p_ExpiresAt => p_MJAIAgentRequests_ResumingAgentRunID_ExpiresAt, p_OriginatingAgentRunID => p_MJAIAgentRequests_ResumingAgentRunID_OriginatingAgentRunID, p_OriginatingAgentRunStepID => p_MJAIAgentRequests_ResumingAgentRunID_OriginatingAgentRu_4faa57, p_ResumingAgentRunID_Clear => 1, p_ResumingAgentRunID => p_MJAIAgentRequests_ResumingAgentRunID_ResumingAgentRunID, p_ResponseSource => p_MJAIAgentRequests_ResumingAgentRunID_ResponseSource);
-
-    END LOOP;
-
-    
-    -- Cascade delete from AIAgentRunMedia using cursor to call spDeleteAIAgentRunMedia
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentRunMedia" WHERE "AgentRunID" = p_ID
-    LOOP
-        p_MJAIAgentRunMedias_AgentRunIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRunMedia"(p_ID => p_MJAIAgentRunMedias_AgentRunIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentRunStep using cursor to call spDeleteAIAgentRunStep
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentRunStep" WHERE "AgentRunID" = p_ID
-    LOOP
-        p_MJAIAgentRunSteps_AgentRunIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRunStep"(p_ID => p_MJAIAgentRunSteps_AgentRunIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade update on AIAgentRun using cursor to call spUpdateAIAgentRun
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "ParentRunID", "Status", "StartedAt", "CompletedAt", "Success", "ErrorMessage", "ConversationID", "UserID", "Result", "AgentState", "TotalTokensUsed", "TotalCost", "TotalPromptTokensUsed", "TotalCompletionTokensUsed", "TotalTokensUsedRollup", "TotalPromptTokensUsedRollup", "TotalCompletionTokensUsedRollup", "TotalCostRollup", "ConversationDetailID", "ConversationDetailSequence", "CancellationReason", "FinalStep", "FinalPayload", "Message", "LastRunID", "StartingPayload", "TotalPromptIterations", "ConfigurationID", "OverrideModelID", "OverrideVendorID", "Data", "Verbose", "EffortLevel", "RunName", "Comments", "ScheduledJobRunID", "TestRunID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "ExternalReferenceID", "CompanyID", "TotalCacheReadTokensUsed", "TotalCacheWriteTokensUsed", "LastHeartbeatAt", "AgentSessionID" FROM __mj."AIAgentRun" WHERE "ParentRunID" = p_ID
-    LOOP
-        p_MJAIAgentRuns_ParentRunIDID := _rec."ID";
-        p_MJAIAgentRuns_ParentRunID_AgentID := _rec."AgentID";
-        p_MJAIAgentRuns_ParentRunID_ParentRunID := _rec."ParentRunID";
-        p_MJAIAgentRuns_ParentRunID_Status := _rec."Status";
-        p_MJAIAgentRuns_ParentRunID_StartedAt := _rec."StartedAt";
-        p_MJAIAgentRuns_ParentRunID_CompletedAt := _rec."CompletedAt";
-        p_MJAIAgentRuns_ParentRunID_Success := _rec."Success";
-        p_MJAIAgentRuns_ParentRunID_ErrorMessage := _rec."ErrorMessage";
-        p_MJAIAgentRuns_ParentRunID_ConversationID := _rec."ConversationID";
-        p_MJAIAgentRuns_ParentRunID_UserID := _rec."UserID";
-        p_MJAIAgentRuns_ParentRunID_Result := _rec."Result";
-        p_MJAIAgentRuns_ParentRunID_AgentState := _rec."AgentState";
-        p_MJAIAgentRuns_ParentRunID_TotalTokensUsed := _rec."TotalTokensUsed";
-        p_MJAIAgentRuns_ParentRunID_TotalCost := _rec."TotalCost";
-        p_MJAIAgentRuns_ParentRunID_TotalPromptTokensUsed := _rec."TotalPromptTokensUsed";
-        p_MJAIAgentRuns_ParentRunID_TotalCompletionTokensUsed := _rec."TotalCompletionTokensUsed";
-        p_MJAIAgentRuns_ParentRunID_TotalTokensUsedRollup := _rec."TotalTokensUsedRollup";
-        p_MJAIAgentRuns_ParentRunID_TotalPromptTokensUsedRollup := _rec."TotalPromptTokensUsedRollup";
-        p_MJAIAgentRuns_ParentRunID_TotalCompletionTokensUsedRollup := _rec."TotalCompletionTokensUsedRollup";
-        p_MJAIAgentRuns_ParentRunID_TotalCostRollup := _rec."TotalCostRollup";
-        p_MJAIAgentRuns_ParentRunID_ConversationDetailID := _rec."ConversationDetailID";
-        p_MJAIAgentRuns_ParentRunID_ConversationDetailSequence := _rec."ConversationDetailSequence";
-        p_MJAIAgentRuns_ParentRunID_CancellationReason := _rec."CancellationReason";
-        p_MJAIAgentRuns_ParentRunID_FinalStep := _rec."FinalStep";
-        p_MJAIAgentRuns_ParentRunID_FinalPayload := _rec."FinalPayload";
-        p_MJAIAgentRuns_ParentRunID_Message := _rec."Message";
-        p_MJAIAgentRuns_ParentRunID_LastRunID := _rec."LastRunID";
-        p_MJAIAgentRuns_ParentRunID_StartingPayload := _rec."StartingPayload";
-        p_MJAIAgentRuns_ParentRunID_TotalPromptIterations := _rec."TotalPromptIterations";
-        p_MJAIAgentRuns_ParentRunID_ConfigurationID := _rec."ConfigurationID";
-        p_MJAIAgentRuns_ParentRunID_OverrideModelID := _rec."OverrideModelID";
-        p_MJAIAgentRuns_ParentRunID_OverrideVendorID := _rec."OverrideVendorID";
-        p_MJAIAgentRuns_ParentRunID_Data := _rec."Data";
-        p_MJAIAgentRuns_ParentRunID_Verbose := _rec."Verbose";
-        p_MJAIAgentRuns_ParentRunID_EffortLevel := _rec."EffortLevel";
-        p_MJAIAgentRuns_ParentRunID_RunName := _rec."RunName";
-        p_MJAIAgentRuns_ParentRunID_Comments := _rec."Comments";
-        p_MJAIAgentRuns_ParentRunID_ScheduledJobRunID := _rec."ScheduledJobRunID";
-        p_MJAIAgentRuns_ParentRunID_TestRunID := _rec."TestRunID";
-        p_MJAIAgentRuns_ParentRunID_PrimaryScopeEntityID := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentRuns_ParentRunID_PrimaryScopeRecordID := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentRuns_ParentRunID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentRuns_ParentRunID_ExternalReferenceID := _rec."ExternalReferenceID";
-        p_MJAIAgentRuns_ParentRunID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentRuns_ParentRunID_TotalCacheReadTokensUsed := _rec."TotalCacheReadTokensUsed";
-        p_MJAIAgentRuns_ParentRunID_TotalCacheWriteTokensUsed := _rec."TotalCacheWriteTokensUsed";
-        p_MJAIAgentRuns_ParentRunID_LastHeartbeatAt := _rec."LastHeartbeatAt";
-        p_MJAIAgentRuns_ParentRunID_AgentSessionID := _rec."AgentSessionID";
-        -- Set the FK field to NULL
-        p_MJAIAgentRuns_ParentRunID_ParentRunID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentRun"(p_ID => p_MJAIAgentRuns_ParentRunIDID, p_AgentID => p_MJAIAgentRuns_ParentRunID_AgentID, p_ParentRunID_Clear => 1, p_ParentRunID => p_MJAIAgentRuns_ParentRunID_ParentRunID, p_Status => p_MJAIAgentRuns_ParentRunID_Status, p_StartedAt => p_MJAIAgentRuns_ParentRunID_StartedAt, p_CompletedAt => p_MJAIAgentRuns_ParentRunID_CompletedAt, p_Success => p_MJAIAgentRuns_ParentRunID_Success, p_ErrorMessage => p_MJAIAgentRuns_ParentRunID_ErrorMessage, p_ConversationID => p_MJAIAgentRuns_ParentRunID_ConversationID, p_UserID => p_MJAIAgentRuns_ParentRunID_UserID, p_Result => p_MJAIAgentRuns_ParentRunID_Result, p_AgentState => p_MJAIAgentRuns_ParentRunID_AgentState, p_TotalTokensUsed => p_MJAIAgentRuns_ParentRunID_TotalTokensUsed, p_TotalCost => p_MJAIAgentRuns_ParentRunID_TotalCost, p_TotalPromptTokensUsed => p_MJAIAgentRuns_ParentRunID_TotalPromptTokensUsed, p_TotalCompletionTokensUsed => p_MJAIAgentRuns_ParentRunID_TotalCompletionTokensUsed, p_TotalTokensUsedRollup => p_MJAIAgentRuns_ParentRunID_TotalTokensUsedRollup, p_TotalPromptTokensUsedRollup => p_MJAIAgentRuns_ParentRunID_TotalPromptTokensUsedRollup, p_TotalCompletionTokensUsedRollup => p_MJAIAgentRuns_ParentRunID_TotalCompletionTokensUsedRollup, p_TotalCostRollup => p_MJAIAgentRuns_ParentRunID_TotalCostRollup, p_ConversationDetailID => p_MJAIAgentRuns_ParentRunID_ConversationDetailID, p_ConversationDetailSequence => p_MJAIAgentRuns_ParentRunID_ConversationDetailSequence, p_CancellationReason => p_MJAIAgentRuns_ParentRunID_CancellationReason, p_FinalStep => p_MJAIAgentRuns_ParentRunID_FinalStep, p_FinalPayload => p_MJAIAgentRuns_ParentRunID_FinalPayload, p_Message => p_MJAIAgentRuns_ParentRunID_Message, p_LastRunID => p_MJAIAgentRuns_ParentRunID_LastRunID, p_StartingPayload => p_MJAIAgentRuns_ParentRunID_StartingPayload, p_TotalPromptIterations => p_MJAIAgentRuns_ParentRunID_TotalPromptIterations, p_ConfigurationID => p_MJAIAgentRuns_ParentRunID_ConfigurationID, p_OverrideModelID => p_MJAIAgentRuns_ParentRunID_OverrideModelID, p_OverrideVendorID => p_MJAIAgentRuns_ParentRunID_OverrideVendorID, p_Data => p_MJAIAgentRuns_ParentRunID_Data, p_Verbose => p_MJAIAgentRuns_ParentRunID_Verbose, p_EffortLevel => p_MJAIAgentRuns_ParentRunID_EffortLevel, p_RunName => p_MJAIAgentRuns_ParentRunID_RunName, p_Comments => p_MJAIAgentRuns_ParentRunID_Comments, p_ScheduledJobRunID => p_MJAIAgentRuns_ParentRunID_ScheduledJobRunID, p_TestRunID => p_MJAIAgentRuns_ParentRunID_TestRunID, p_PrimaryScopeEntityID => p_MJAIAgentRuns_ParentRunID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentRuns_ParentRunID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentRuns_ParentRunID_SecondaryScopes, p_ExternalReferenceID => p_MJAIAgentRuns_ParentRunID_ExternalReferenceID, p_CompanyID => p_MJAIAgentRuns_ParentRunID_CompanyID, p_TotalCacheReadTokensUsed => p_MJAIAgentRuns_ParentRunID_TotalCacheReadTokensUsed, p_TotalCacheWriteTokensUsed => p_MJAIAgentRuns_ParentRunID_TotalCacheWriteTokensUsed, p_LastHeartbeatAt => p_MJAIAgentRuns_ParentRunID_LastHeartbeatAt, p_AgentSessionID => p_MJAIAgentRuns_ParentRunID_AgentSessionID);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentRun using cursor to call spUpdateAIAgentRun
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "ParentRunID", "Status", "StartedAt", "CompletedAt", "Success", "ErrorMessage", "ConversationID", "UserID", "Result", "AgentState", "TotalTokensUsed", "TotalCost", "TotalPromptTokensUsed", "TotalCompletionTokensUsed", "TotalTokensUsedRollup", "TotalPromptTokensUsedRollup", "TotalCompletionTokensUsedRollup", "TotalCostRollup", "ConversationDetailID", "ConversationDetailSequence", "CancellationReason", "FinalStep", "FinalPayload", "Message", "LastRunID", "StartingPayload", "TotalPromptIterations", "ConfigurationID", "OverrideModelID", "OverrideVendorID", "Data", "Verbose", "EffortLevel", "RunName", "Comments", "ScheduledJobRunID", "TestRunID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "ExternalReferenceID", "CompanyID", "TotalCacheReadTokensUsed", "TotalCacheWriteTokensUsed", "LastHeartbeatAt", "AgentSessionID" FROM __mj."AIAgentRun" WHERE "LastRunID" = p_ID
-    LOOP
-        p_MJAIAgentRuns_LastRunIDID := _rec."ID";
-        p_MJAIAgentRuns_LastRunID_AgentID := _rec."AgentID";
-        p_MJAIAgentRuns_LastRunID_ParentRunID := _rec."ParentRunID";
-        p_MJAIAgentRuns_LastRunID_Status := _rec."Status";
-        p_MJAIAgentRuns_LastRunID_StartedAt := _rec."StartedAt";
-        p_MJAIAgentRuns_LastRunID_CompletedAt := _rec."CompletedAt";
-        p_MJAIAgentRuns_LastRunID_Success := _rec."Success";
-        p_MJAIAgentRuns_LastRunID_ErrorMessage := _rec."ErrorMessage";
-        p_MJAIAgentRuns_LastRunID_ConversationID := _rec."ConversationID";
-        p_MJAIAgentRuns_LastRunID_UserID := _rec."UserID";
-        p_MJAIAgentRuns_LastRunID_Result := _rec."Result";
-        p_MJAIAgentRuns_LastRunID_AgentState := _rec."AgentState";
-        p_MJAIAgentRuns_LastRunID_TotalTokensUsed := _rec."TotalTokensUsed";
-        p_MJAIAgentRuns_LastRunID_TotalCost := _rec."TotalCost";
-        p_MJAIAgentRuns_LastRunID_TotalPromptTokensUsed := _rec."TotalPromptTokensUsed";
-        p_MJAIAgentRuns_LastRunID_TotalCompletionTokensUsed := _rec."TotalCompletionTokensUsed";
-        p_MJAIAgentRuns_LastRunID_TotalTokensUsedRollup := _rec."TotalTokensUsedRollup";
-        p_MJAIAgentRuns_LastRunID_TotalPromptTokensUsedRollup := _rec."TotalPromptTokensUsedRollup";
-        p_MJAIAgentRuns_LastRunID_TotalCompletionTokensUsedRollup := _rec."TotalCompletionTokensUsedRollup";
-        p_MJAIAgentRuns_LastRunID_TotalCostRollup := _rec."TotalCostRollup";
-        p_MJAIAgentRuns_LastRunID_ConversationDetailID := _rec."ConversationDetailID";
-        p_MJAIAgentRuns_LastRunID_ConversationDetailSequence := _rec."ConversationDetailSequence";
-        p_MJAIAgentRuns_LastRunID_CancellationReason := _rec."CancellationReason";
-        p_MJAIAgentRuns_LastRunID_FinalStep := _rec."FinalStep";
-        p_MJAIAgentRuns_LastRunID_FinalPayload := _rec."FinalPayload";
-        p_MJAIAgentRuns_LastRunID_Message := _rec."Message";
-        p_MJAIAgentRuns_LastRunID_LastRunID := _rec."LastRunID";
-        p_MJAIAgentRuns_LastRunID_StartingPayload := _rec."StartingPayload";
-        p_MJAIAgentRuns_LastRunID_TotalPromptIterations := _rec."TotalPromptIterations";
-        p_MJAIAgentRuns_LastRunID_ConfigurationID := _rec."ConfigurationID";
-        p_MJAIAgentRuns_LastRunID_OverrideModelID := _rec."OverrideModelID";
-        p_MJAIAgentRuns_LastRunID_OverrideVendorID := _rec."OverrideVendorID";
-        p_MJAIAgentRuns_LastRunID_Data := _rec."Data";
-        p_MJAIAgentRuns_LastRunID_Verbose := _rec."Verbose";
-        p_MJAIAgentRuns_LastRunID_EffortLevel := _rec."EffortLevel";
-        p_MJAIAgentRuns_LastRunID_RunName := _rec."RunName";
-        p_MJAIAgentRuns_LastRunID_Comments := _rec."Comments";
-        p_MJAIAgentRuns_LastRunID_ScheduledJobRunID := _rec."ScheduledJobRunID";
-        p_MJAIAgentRuns_LastRunID_TestRunID := _rec."TestRunID";
-        p_MJAIAgentRuns_LastRunID_PrimaryScopeEntityID := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentRuns_LastRunID_PrimaryScopeRecordID := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentRuns_LastRunID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentRuns_LastRunID_ExternalReferenceID := _rec."ExternalReferenceID";
-        p_MJAIAgentRuns_LastRunID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentRuns_LastRunID_TotalCacheReadTokensUsed := _rec."TotalCacheReadTokensUsed";
-        p_MJAIAgentRuns_LastRunID_TotalCacheWriteTokensUsed := _rec."TotalCacheWriteTokensUsed";
-        p_MJAIAgentRuns_LastRunID_LastHeartbeatAt := _rec."LastHeartbeatAt";
-        p_MJAIAgentRuns_LastRunID_AgentSessionID := _rec."AgentSessionID";
-        -- Set the FK field to NULL
-        p_MJAIAgentRuns_LastRunID_LastRunID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentRun"(p_ID => p_MJAIAgentRuns_LastRunIDID, p_AgentID => p_MJAIAgentRuns_LastRunID_AgentID, p_ParentRunID => p_MJAIAgentRuns_LastRunID_ParentRunID, p_Status => p_MJAIAgentRuns_LastRunID_Status, p_StartedAt => p_MJAIAgentRuns_LastRunID_StartedAt, p_CompletedAt => p_MJAIAgentRuns_LastRunID_CompletedAt, p_Success => p_MJAIAgentRuns_LastRunID_Success, p_ErrorMessage => p_MJAIAgentRuns_LastRunID_ErrorMessage, p_ConversationID => p_MJAIAgentRuns_LastRunID_ConversationID, p_UserID => p_MJAIAgentRuns_LastRunID_UserID, p_Result => p_MJAIAgentRuns_LastRunID_Result, p_AgentState => p_MJAIAgentRuns_LastRunID_AgentState, p_TotalTokensUsed => p_MJAIAgentRuns_LastRunID_TotalTokensUsed, p_TotalCost => p_MJAIAgentRuns_LastRunID_TotalCost, p_TotalPromptTokensUsed => p_MJAIAgentRuns_LastRunID_TotalPromptTokensUsed, p_TotalCompletionTokensUsed => p_MJAIAgentRuns_LastRunID_TotalCompletionTokensUsed, p_TotalTokensUsedRollup => p_MJAIAgentRuns_LastRunID_TotalTokensUsedRollup, p_TotalPromptTokensUsedRollup => p_MJAIAgentRuns_LastRunID_TotalPromptTokensUsedRollup, p_TotalCompletionTokensUsedRollup => p_MJAIAgentRuns_LastRunID_TotalCompletionTokensUsedRollup, p_TotalCostRollup => p_MJAIAgentRuns_LastRunID_TotalCostRollup, p_ConversationDetailID => p_MJAIAgentRuns_LastRunID_ConversationDetailID, p_ConversationDetailSequence => p_MJAIAgentRuns_LastRunID_ConversationDetailSequence, p_CancellationReason => p_MJAIAgentRuns_LastRunID_CancellationReason, p_FinalStep => p_MJAIAgentRuns_LastRunID_FinalStep, p_FinalPayload => p_MJAIAgentRuns_LastRunID_FinalPayload, p_Message => p_MJAIAgentRuns_LastRunID_Message, p_LastRunID_Clear => 1, p_LastRunID => p_MJAIAgentRuns_LastRunID_LastRunID, p_StartingPayload => p_MJAIAgentRuns_LastRunID_StartingPayload, p_TotalPromptIterations => p_MJAIAgentRuns_LastRunID_TotalPromptIterations, p_ConfigurationID => p_MJAIAgentRuns_LastRunID_ConfigurationID, p_OverrideModelID => p_MJAIAgentRuns_LastRunID_OverrideModelID, p_OverrideVendorID => p_MJAIAgentRuns_LastRunID_OverrideVendorID, p_Data => p_MJAIAgentRuns_LastRunID_Data, p_Verbose => p_MJAIAgentRuns_LastRunID_Verbose, p_EffortLevel => p_MJAIAgentRuns_LastRunID_EffortLevel, p_RunName => p_MJAIAgentRuns_LastRunID_RunName, p_Comments => p_MJAIAgentRuns_LastRunID_Comments, p_ScheduledJobRunID => p_MJAIAgentRuns_LastRunID_ScheduledJobRunID, p_TestRunID => p_MJAIAgentRuns_LastRunID_TestRunID, p_PrimaryScopeEntityID => p_MJAIAgentRuns_LastRunID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentRuns_LastRunID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentRuns_LastRunID_SecondaryScopes, p_ExternalReferenceID => p_MJAIAgentRuns_LastRunID_ExternalReferenceID, p_CompanyID => p_MJAIAgentRuns_LastRunID_CompanyID, p_TotalCacheReadTokensUsed => p_MJAIAgentRuns_LastRunID_TotalCacheReadTokensUsed, p_TotalCacheWriteTokensUsed => p_MJAIAgentRuns_LastRunID_TotalCacheWriteTokensUsed, p_LastHeartbeatAt => p_MJAIAgentRuns_LastRunID_LastHeartbeatAt, p_AgentSessionID => p_MJAIAgentRuns_LastRunID_AgentSessionID);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIPromptRun using cursor to call spUpdateAIPromptRun
-
-
-    FOR _rec IN SELECT "ID", "PromptID", "ModelID", "VendorID", "AgentID", "ConfigurationID", "RunAt", "CompletedAt", "ExecutionTimeMS", "Messages", "Result", "TokensUsed", "TokensPrompt", "TokensCompletion", "TotalCost", "Success", "ErrorMessage", "ParentID", "RunType", "ExecutionOrder", "AgentRunID", "Cost", "CostCurrency", "TokensUsedRollup", "TokensPromptRollup", "TokensCompletionRollup", "Temperature", "TopP", "TopK", "MinP", "FrequencyPenalty", "PresencePenalty", "Seed", "StopSequences", "ResponseFormat", "LogProbs", "TopLogProbs", "DescendantCost", "ValidationAttemptCount", "SuccessfulValidationCount", "FinalValidationPassed", "ValidationBehavior", "RetryStrategy", "MaxRetriesConfigured", "FinalValidationError", "ValidationErrorCount", "CommonValidationError", "FirstAttemptAt", "LastAttemptAt", "TotalRetryDurationMS", "ValidationAttempts", "ValidationSummary", "FailoverAttempts", "FailoverErrors", "FailoverDurations", "OriginalModelID", "OriginalRequestStartTime", "TotalFailoverDuration", "RerunFromPromptRunID", "ModelSelection", "Status", "Cancelled", "CancellationReason", "ModelPowerRank", "SelectionStrategy", "CacheHit", "CacheKey", "JudgeID", "JudgeScore", "WasSelectedResult", "StreamingEnabled", "FirstTokenTime", "ErrorDetails", "ChildPromptID", "QueueTime", "PromptTime", "CompletionTime", "ModelSpecificResponseDetails", "EffortLevel", "RunName", "Comments", "TestRunID", "AssistantPrefill", "TokensCacheRead", "TokensCacheWrite", "TokensCacheReadRollup", "TokensCacheWriteRollup" FROM __mj."AIPromptRun" WHERE "AgentRunID" = p_ID
-    LOOP
-        p_MJAIPromptRuns_AgentRunIDID := _rec."ID";
-        p_MJAIPromptRuns_AgentRunID_PromptID := _rec."PromptID";
-        p_MJAIPromptRuns_AgentRunID_ModelID := _rec."ModelID";
-        p_MJAIPromptRuns_AgentRunID_VendorID := _rec."VendorID";
-        p_MJAIPromptRuns_AgentRunID_AgentID := _rec."AgentID";
-        p_MJAIPromptRuns_AgentRunID_ConfigurationID := _rec."ConfigurationID";
-        p_MJAIPromptRuns_AgentRunID_RunAt := _rec."RunAt";
-        p_MJAIPromptRuns_AgentRunID_CompletedAt := _rec."CompletedAt";
-        p_MJAIPromptRuns_AgentRunID_ExecutionTimeMS := _rec."ExecutionTimeMS";
-        p_MJAIPromptRuns_AgentRunID_Messages := _rec."Messages";
-        p_MJAIPromptRuns_AgentRunID_Result := _rec."Result";
-        p_MJAIPromptRuns_AgentRunID_TokensUsed := _rec."TokensUsed";
-        p_MJAIPromptRuns_AgentRunID_TokensPrompt := _rec."TokensPrompt";
-        p_MJAIPromptRuns_AgentRunID_TokensCompletion := _rec."TokensCompletion";
-        p_MJAIPromptRuns_AgentRunID_TotalCost := _rec."TotalCost";
-        p_MJAIPromptRuns_AgentRunID_Success := _rec."Success";
-        p_MJAIPromptRuns_AgentRunID_ErrorMessage := _rec."ErrorMessage";
-        p_MJAIPromptRuns_AgentRunID_ParentID := _rec."ParentID";
-        p_MJAIPromptRuns_AgentRunID_RunType := _rec."RunType";
-        p_MJAIPromptRuns_AgentRunID_ExecutionOrder := _rec."ExecutionOrder";
-        p_MJAIPromptRuns_AgentRunID_AgentRunID := _rec."AgentRunID";
-        p_MJAIPromptRuns_AgentRunID_Cost := _rec."Cost";
-        p_MJAIPromptRuns_AgentRunID_CostCurrency := _rec."CostCurrency";
-        p_MJAIPromptRuns_AgentRunID_TokensUsedRollup := _rec."TokensUsedRollup";
-        p_MJAIPromptRuns_AgentRunID_TokensPromptRollup := _rec."TokensPromptRollup";
-        p_MJAIPromptRuns_AgentRunID_TokensCompletionRollup := _rec."TokensCompletionRollup";
-        p_MJAIPromptRuns_AgentRunID_Temperature := _rec."Temperature";
-        p_MJAIPromptRuns_AgentRunID_TopP := _rec."TopP";
-        p_MJAIPromptRuns_AgentRunID_TopK := _rec."TopK";
-        p_MJAIPromptRuns_AgentRunID_MinP := _rec."MinP";
-        p_MJAIPromptRuns_AgentRunID_FrequencyPenalty := _rec."FrequencyPenalty";
-        p_MJAIPromptRuns_AgentRunID_PresencePenalty := _rec."PresencePenalty";
-        p_MJAIPromptRuns_AgentRunID_Seed := _rec."Seed";
-        p_MJAIPromptRuns_AgentRunID_StopSequences := _rec."StopSequences";
-        p_MJAIPromptRuns_AgentRunID_ResponseFormat := _rec."ResponseFormat";
-        p_MJAIPromptRuns_AgentRunID_LogProbs := _rec."LogProbs";
-        p_MJAIPromptRuns_AgentRunID_TopLogProbs := _rec."TopLogProbs";
-        p_MJAIPromptRuns_AgentRunID_DescendantCost := _rec."DescendantCost";
-        p_MJAIPromptRuns_AgentRunID_ValidationAttemptCount := _rec."ValidationAttemptCount";
-        p_MJAIPromptRuns_AgentRunID_SuccessfulValidationCount := _rec."SuccessfulValidationCount";
-        p_MJAIPromptRuns_AgentRunID_FinalValidationPassed := _rec."FinalValidationPassed";
-        p_MJAIPromptRuns_AgentRunID_ValidationBehavior := _rec."ValidationBehavior";
-        p_MJAIPromptRuns_AgentRunID_RetryStrategy := _rec."RetryStrategy";
-        p_MJAIPromptRuns_AgentRunID_MaxRetriesConfigured := _rec."MaxRetriesConfigured";
-        p_MJAIPromptRuns_AgentRunID_FinalValidationError := _rec."FinalValidationError";
-        p_MJAIPromptRuns_AgentRunID_ValidationErrorCount := _rec."ValidationErrorCount";
-        p_MJAIPromptRuns_AgentRunID_CommonValidationError := _rec."CommonValidationError";
-        p_MJAIPromptRuns_AgentRunID_FirstAttemptAt := _rec."FirstAttemptAt";
-        p_MJAIPromptRuns_AgentRunID_LastAttemptAt := _rec."LastAttemptAt";
-        p_MJAIPromptRuns_AgentRunID_TotalRetryDurationMS := _rec."TotalRetryDurationMS";
-        p_MJAIPromptRuns_AgentRunID_ValidationAttempts := _rec."ValidationAttempts";
-        p_MJAIPromptRuns_AgentRunID_ValidationSummary := _rec."ValidationSummary";
-        p_MJAIPromptRuns_AgentRunID_FailoverAttempts := _rec."FailoverAttempts";
-        p_MJAIPromptRuns_AgentRunID_FailoverErrors := _rec."FailoverErrors";
-        p_MJAIPromptRuns_AgentRunID_FailoverDurations := _rec."FailoverDurations";
-        p_MJAIPromptRuns_AgentRunID_OriginalModelID := _rec."OriginalModelID";
-        p_MJAIPromptRuns_AgentRunID_OriginalRequestStartTime := _rec."OriginalRequestStartTime";
-        p_MJAIPromptRuns_AgentRunID_TotalFailoverDuration := _rec."TotalFailoverDuration";
-        p_MJAIPromptRuns_AgentRunID_RerunFromPromptRunID := _rec."RerunFromPromptRunID";
-        p_MJAIPromptRuns_AgentRunID_ModelSelection := _rec."ModelSelection";
-        p_MJAIPromptRuns_AgentRunID_Status := _rec."Status";
-        p_MJAIPromptRuns_AgentRunID_Cancelled := _rec."Cancelled";
-        p_MJAIPromptRuns_AgentRunID_CancellationReason := _rec."CancellationReason";
-        p_MJAIPromptRuns_AgentRunID_ModelPowerRank := _rec."ModelPowerRank";
-        p_MJAIPromptRuns_AgentRunID_SelectionStrategy := _rec."SelectionStrategy";
-        p_MJAIPromptRuns_AgentRunID_CacheHit := _rec."CacheHit";
-        p_MJAIPromptRuns_AgentRunID_CacheKey := _rec."CacheKey";
-        p_MJAIPromptRuns_AgentRunID_JudgeID := _rec."JudgeID";
-        p_MJAIPromptRuns_AgentRunID_JudgeScore := _rec."JudgeScore";
-        p_MJAIPromptRuns_AgentRunID_WasSelectedResult := _rec."WasSelectedResult";
-        p_MJAIPromptRuns_AgentRunID_StreamingEnabled := _rec."StreamingEnabled";
-        p_MJAIPromptRuns_AgentRunID_FirstTokenTime := _rec."FirstTokenTime";
-        p_MJAIPromptRuns_AgentRunID_ErrorDetails := _rec."ErrorDetails";
-        p_MJAIPromptRuns_AgentRunID_ChildPromptID := _rec."ChildPromptID";
-        p_MJAIPromptRuns_AgentRunID_QueueTime := _rec."QueueTime";
-        p_MJAIPromptRuns_AgentRunID_PromptTime := _rec."PromptTime";
-        p_MJAIPromptRuns_AgentRunID_CompletionTime := _rec."CompletionTime";
-        p_MJAIPromptRuns_AgentRunID_ModelSpecificResponseDetails := _rec."ModelSpecificResponseDetails";
-        p_MJAIPromptRuns_AgentRunID_EffortLevel := _rec."EffortLevel";
-        p_MJAIPromptRuns_AgentRunID_RunName := _rec."RunName";
-        p_MJAIPromptRuns_AgentRunID_Comments := _rec."Comments";
-        p_MJAIPromptRuns_AgentRunID_TestRunID := _rec."TestRunID";
-        p_MJAIPromptRuns_AgentRunID_AssistantPrefill := _rec."AssistantPrefill";
-        p_MJAIPromptRuns_AgentRunID_TokensCacheRead := _rec."TokensCacheRead";
-        p_MJAIPromptRuns_AgentRunID_TokensCacheWrite := _rec."TokensCacheWrite";
-        p_MJAIPromptRuns_AgentRunID_TokensCacheReadRollup := _rec."TokensCacheReadRollup";
-        p_MJAIPromptRuns_AgentRunID_TokensCacheWriteRollup := _rec."TokensCacheWriteRollup";
-        -- Set the FK field to NULL
-        p_MJAIPromptRuns_AgentRunID_AgentRunID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_AgentRunIDID, p_PromptID => p_MJAIPromptRuns_AgentRunID_PromptID, p_ModelID => p_MJAIPromptRuns_AgentRunID_ModelID, p_VendorID => p_MJAIPromptRuns_AgentRunID_VendorID, p_AgentID => p_MJAIPromptRuns_AgentRunID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_AgentRunID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_AgentRunID_RunAt, p_CompletedAt => p_MJAIPromptRuns_AgentRunID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_AgentRunID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_AgentRunID_Messages, p_Result => p_MJAIPromptRuns_AgentRunID_Result, p_TokensUsed => p_MJAIPromptRuns_AgentRunID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_AgentRunID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_AgentRunID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_AgentRunID_TotalCost, p_Success => p_MJAIPromptRuns_AgentRunID_Success, p_ErrorMessage => p_MJAIPromptRuns_AgentRunID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_AgentRunID_ParentID, p_RunType => p_MJAIPromptRuns_AgentRunID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_AgentRunID_ExecutionOrder, p_AgentRunID_Clear => 1, p_AgentRunID => p_MJAIPromptRuns_AgentRunID_AgentRunID, p_Cost => p_MJAIPromptRuns_AgentRunID_Cost, p_CostCurrency => p_MJAIPromptRuns_AgentRunID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_AgentRunID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_AgentRunID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_AgentRunID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_AgentRunID_Temperature, p_TopP => p_MJAIPromptRuns_AgentRunID_TopP, p_TopK => p_MJAIPromptRuns_AgentRunID_TopK, p_MinP => p_MJAIPromptRuns_AgentRunID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_AgentRunID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_AgentRunID_PresencePenalty, p_Seed => p_MJAIPromptRuns_AgentRunID_Seed, p_StopSequences => p_MJAIPromptRuns_AgentRunID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_AgentRunID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_AgentRunID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_AgentRunID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_AgentRunID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_AgentRunID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_AgentRunID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_AgentRunID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_AgentRunID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_AgentRunID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_AgentRunID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_AgentRunID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_AgentRunID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_AgentRunID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_AgentRunID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_AgentRunID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_AgentRunID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_AgentRunID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_AgentRunID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_AgentRunID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_AgentRunID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_AgentRunID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_AgentRunID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_AgentRunID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_AgentRunID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_AgentRunID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_AgentRunID_ModelSelection, p_Status => p_MJAIPromptRuns_AgentRunID_Status, p_Cancelled => p_MJAIPromptRuns_AgentRunID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_AgentRunID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_AgentRunID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_AgentRunID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_AgentRunID_CacheHit, p_CacheKey => p_MJAIPromptRuns_AgentRunID_CacheKey, p_JudgeID => p_MJAIPromptRuns_AgentRunID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_AgentRunID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_AgentRunID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_AgentRunID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_AgentRunID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_AgentRunID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_AgentRunID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_AgentRunID_QueueTime, p_PromptTime => p_MJAIPromptRuns_AgentRunID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_AgentRunID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_AgentRunID_ModelSpecificResponseDetails, p_EffortLevel => p_MJAIPromptRuns_AgentRunID_EffortLevel, p_RunName => p_MJAIPromptRuns_AgentRunID_RunName, p_Comments => p_MJAIPromptRuns_AgentRunID_Comments, p_TestRunID => p_MJAIPromptRuns_AgentRunID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_AgentRunID_AssistantPrefill, p_TokensCacheRead => p_MJAIPromptRuns_AgentRunID_TokensCacheRead, p_TokensCacheWrite => p_MJAIPromptRuns_AgentRunID_TokensCacheWrite, p_TokensCacheReadRollup => p_MJAIPromptRuns_AgentRunID_TokensCacheReadRollup, p_TokensCacheWriteRollup => p_MJAIPromptRuns_AgentRunID_TokensCacheWriteRollup);
-
-    END LOOP;
-
-    
-
-    DELETE FROM
-        __mj."AIAgentRun"
-    WHERE
-        "ID" = p_ID;
-
-    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
-
-    IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT NULL::UUID AS "_result_id";
-    ELSE
-        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'spDeleteConversationDetail'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."spDeleteConversationDetail"(
-    IN p_ID UUID
-)
-RETURNS TABLE("_result_id" UUID) AS
-$$
-DECLARE
-    _rec RECORD;
-    _v_row_count INTEGER;
-    p_MJAIAgentExamples_SourceConversationDetailIDID UUID;
-    p_MJAIAgentExamples_SourceConversationDetailID_AgentID UUID;
-    p_MJAIAgentExamples_SourceConversationDetailID_UserID UUID;
-    p_MJAIAgentExamples_SourceConversationDetailID_CompanyID UUID;
-    p_MJAIAgentExamples_SourceConversationDetailID_Type VARCHAR(20);
-    p_MJAIAgentExamples_SourceConversationDetailID_ExampleInput TEXT;
-    p_MJAIAgentExamples_SourceConversationDetailID_ExampleOutput TEXT;
-    p_MJAIAgentExamples_SourceConversationDetailID_IsAutoGenerated BOOLEAN;
-    p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_b3263f UUID;
-    p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_591540 UUID;
-    p_MJAIAgentExamples_SourceConversationDetailID_SourceAIAg_987eaf UUID;
-    p_MJAIAgentExamples_SourceConversationDetailID_SuccessScore NUMERIC(5,2);
-    p_MJAIAgentExamples_SourceConversationDetailID_Comments TEXT;
-    p_MJAIAgentExamples_SourceConversationDetailID_Status VARCHAR(20);
-    p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingVector TEXT;
-    p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingModelID UUID;
-    p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_8c9509 UUID;
-    p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_da3d2d VARCHAR(100);
-    p_MJAIAgentExamples_SourceConversationDetailID_SecondaryScopes TEXT;
-    p_MJAIAgentExamples_SourceConversationDetailID_LastAccessedAt TIMESTAMPTZ;
-    p_MJAIAgentExamples_SourceConversationDetailID_AccessCount INTEGER;
-    p_MJAIAgentExamples_SourceConversationDetailID_ExpiresAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_SourceConversationDetailIDID UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_AgentID UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_AgentNoteTypeID UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_Note TEXT;
-    p_MJAIAgentNotes_SourceConversationDetailID_UserID UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_Type VARCHAR(20);
-    p_MJAIAgentNotes_SourceConversationDetailID_IsAutoGenerated BOOLEAN;
-    p_MJAIAgentNotes_SourceConversationDetailID_Comments TEXT;
-    p_MJAIAgentNotes_SourceConversationDetailID_Status VARCHAR(20);
-    p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_d7e41b UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_ec3b0d UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_SourceAIAgentRunID UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_CompanyID UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingVector TEXT;
-    p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingModelID UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeE_b152e5 UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeR_fefb0a VARCHAR(100);
-    p_MJAIAgentNotes_SourceConversationDetailID_SecondaryScopes TEXT;
-    p_MJAIAgentNotes_SourceConversationDetailID_LastAccessedAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_SourceConversationDetailID_AccessCount INTEGER;
-    p_MJAIAgentNotes_SourceConversationDetailID_ExpiresAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_SourceConversationDetailID_ConsolidatedI_88bda0 UUID;
-    p_MJAIAgentNotes_SourceConversationDetailID_ConsolidationCount INTEGER;
-    p_MJAIAgentNotes_SourceConversationDetailID_DerivedFromNoteIDs TEXT;
-    p_MJAIAgentNotes_SourceConversationDetailID_ProtectionTier VARCHAR(20);
-    p_MJAIAgentNotes_SourceConversationDetailID_ImportanceScore NUMERIC(5,2);
-    p_MJAIAgentRuns_ConversationDetailIDID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_AgentID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_ParentRunID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_Status VARCHAR(50);
-    p_MJAIAgentRuns_ConversationDetailID_StartedAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_ConversationDetailID_CompletedAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_ConversationDetailID_Success BOOLEAN;
-    p_MJAIAgentRuns_ConversationDetailID_ErrorMessage TEXT;
-    p_MJAIAgentRuns_ConversationDetailID_ConversationID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_UserID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_Result TEXT;
-    p_MJAIAgentRuns_ConversationDetailID_AgentState TEXT;
-    p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsed INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_TotalCost NUMERIC(18,6);
-    p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUsed INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_TotalCompletionTokensUsed INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsedRollup INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUse_5ca82d INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_TotalCompletionToken_43c4ab INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_TotalCostRollup NUMERIC(19,8);
-    p_MJAIAgentRuns_ConversationDetailID_ConversationDetailID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_ConversationDetailSequence INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_CancellationReason VARCHAR(30);
-    p_MJAIAgentRuns_ConversationDetailID_FinalStep VARCHAR(30);
-    p_MJAIAgentRuns_ConversationDetailID_FinalPayload TEXT;
-    p_MJAIAgentRuns_ConversationDetailID_Message TEXT;
-    p_MJAIAgentRuns_ConversationDetailID_LastRunID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_StartingPayload TEXT;
-    p_MJAIAgentRuns_ConversationDetailID_TotalPromptIterations INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_ConfigurationID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_OverrideModelID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_OverrideVendorID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_Data TEXT;
-    p_MJAIAgentRuns_ConversationDetailID_Verbose BOOLEAN;
-    p_MJAIAgentRuns_ConversationDetailID_EffortLevel INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_RunName VARCHAR(255);
-    p_MJAIAgentRuns_ConversationDetailID_Comments TEXT;
-    p_MJAIAgentRuns_ConversationDetailID_ScheduledJobRunID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_TestRunID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeEntityID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeRecordID VARCHAR(100);
-    p_MJAIAgentRuns_ConversationDetailID_SecondaryScopes TEXT;
-    p_MJAIAgentRuns_ConversationDetailID_ExternalReferenceID VARCHAR(200);
-    p_MJAIAgentRuns_ConversationDetailID_CompanyID UUID;
-    p_MJAIAgentRuns_ConversationDetailID_TotalCacheReadTokensUsed INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_TotalCacheWriteTokensUsed INTEGER;
-    p_MJAIAgentRuns_ConversationDetailID_LastHeartbeatAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_ConversationDetailID_AgentSessionID UUID;
-    p_MJConversationDetailArtifacts_ConversationDetailIDID UUID;
-    p_MJConversationDetailAttachments_ConversationDetailIDID UUID;
-    p_MJConversationDetailRatings_ConversationDetailIDID UUID;
-    p_MJConversationDetails_ParentIDID UUID;
-    p_MJConversationDetails_ParentID_ConversationID UUID;
-    p_MJConversationDetails_ParentID_ExternalID VARCHAR(100);
-    p_MJConversationDetails_ParentID_Role VARCHAR(20);
-    p_MJConversationDetails_ParentID_Message TEXT;
-    p_MJConversationDetails_ParentID_Error TEXT;
-    p_MJConversationDetails_ParentID_HiddenToUser BOOLEAN;
-    p_MJConversationDetails_ParentID_UserRating INTEGER;
-    p_MJConversationDetails_ParentID_UserFeedback TEXT;
-    p_MJConversationDetails_ParentID_ReflectionInsights TEXT;
-    p_MJConversationDetails_ParentID_SummaryOfEarlierConversation TEXT;
-    p_MJConversationDetails_ParentID_UserID UUID;
-    p_MJConversationDetails_ParentID_ArtifactID UUID;
-    p_MJConversationDetails_ParentID_ArtifactVersionID UUID;
-    p_MJConversationDetails_ParentID_CompletionTime BIGINT;
-    p_MJConversationDetails_ParentID_IsPinned BOOLEAN;
-    p_MJConversationDetails_ParentID_ParentID UUID;
-    p_MJConversationDetails_ParentID_AgentID UUID;
-    p_MJConversationDetails_ParentID_Status VARCHAR(20);
-    p_MJConversationDetails_ParentID_SuggestedResponses TEXT;
-    p_MJConversationDetails_ParentID_TestRunID UUID;
-    p_MJConversationDetails_ParentID_ResponseForm TEXT;
-    p_MJConversationDetails_ParentID_ActionableCommands TEXT;
-    p_MJConversationDetails_ParentID_AutomaticCommands TEXT;
-    p_MJConversationDetails_ParentID_OriginalMessageChanged BOOLEAN;
-    p_MJConversationDetails_ParentID_AgentSessionID UUID;
-    p_MJReports_ConversationDetailIDID UUID;
-    p_MJReports_ConversationDetailID_Name VARCHAR(255);
-    p_MJReports_ConversationDetailID_Description TEXT;
-    p_MJReports_ConversationDetailID_CategoryID UUID;
-    p_MJReports_ConversationDetailID_UserID UUID;
-    p_MJReports_ConversationDetailID_SharingScope VARCHAR(20);
-    p_MJReports_ConversationDetailID_ConversationID UUID;
-    p_MJReports_ConversationDetailID_ConversationDetailID UUID;
-    p_MJReports_ConversationDetailID_DataContextID UUID;
-    p_MJReports_ConversationDetailID_Configuration TEXT;
-    p_MJReports_ConversationDetailID_OutputTriggerTypeID UUID;
-    p_MJReports_ConversationDetailID_OutputFormatTypeID UUID;
-    p_MJReports_ConversationDetailID_OutputDeliveryTypeID UUID;
-    p_MJReports_ConversationDetailID_OutputFrequency VARCHAR(50);
-    p_MJReports_ConversationDetailID_OutputTargetEmail VARCHAR(255);
-    p_MJReports_ConversationDetailID_OutputWorkflowID UUID;
-    p_MJReports_ConversationDetailID_Thumbnail TEXT;
-    p_MJReports_ConversationDetailID_EnvironmentID UUID;
-    p_MJTasks_ConversationDetailIDID UUID;
-    p_MJTasks_ConversationDetailID_ParentID UUID;
-    p_MJTasks_ConversationDetailID_Name VARCHAR(255);
-    p_MJTasks_ConversationDetailID_Description TEXT;
-    p_MJTasks_ConversationDetailID_TypeID UUID;
-    p_MJTasks_ConversationDetailID_EnvironmentID UUID;
-    p_MJTasks_ConversationDetailID_ProjectID UUID;
-    p_MJTasks_ConversationDetailID_ConversationDetailID UUID;
-    p_MJTasks_ConversationDetailID_UserID UUID;
-    p_MJTasks_ConversationDetailID_AgentID UUID;
-    p_MJTasks_ConversationDetailID_Status VARCHAR(50);
-    p_MJTasks_ConversationDetailID_PercentComplete INTEGER;
-    p_MJTasks_ConversationDetailID_DueAt TIMESTAMPTZ;
-    p_MJTasks_ConversationDetailID_StartedAt TIMESTAMPTZ;
-    p_MJTasks_ConversationDetailID_CompletedAt TIMESTAMPTZ;
-BEGIN
--- Cascade update on AIAgentExample using cursor to call spUpdateAIAgentExample
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "UserID", "CompanyID", "Type", "ExampleInput", "ExampleOutput", "IsAutoGenerated", "SourceConversationID", "SourceConversationDetailID", "SourceAIAgentRunID", "SuccessScore", "Comments", "Status", "EmbeddingVector", "EmbeddingModelID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "LastAccessedAt", "AccessCount", "ExpiresAt" FROM __mj."AIAgentExample" WHERE "SourceConversationDetailID" = p_ID
-    LOOP
-        p_MJAIAgentExamples_SourceConversationDetailIDID := _rec."ID";
-        p_MJAIAgentExamples_SourceConversationDetailID_AgentID := _rec."AgentID";
-        p_MJAIAgentExamples_SourceConversationDetailID_UserID := _rec."UserID";
-        p_MJAIAgentExamples_SourceConversationDetailID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentExamples_SourceConversationDetailID_Type := _rec."Type";
-        p_MJAIAgentExamples_SourceConversationDetailID_ExampleInput := _rec."ExampleInput";
-        p_MJAIAgentExamples_SourceConversationDetailID_ExampleOutput := _rec."ExampleOutput";
-        p_MJAIAgentExamples_SourceConversationDetailID_IsAutoGenerated := _rec."IsAutoGenerated";
-        p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_b3263f := _rec."SourceConversationID";
-        p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_591540 := _rec."SourceConversationDetailID";
-        p_MJAIAgentExamples_SourceConversationDetailID_SourceAIAg_987eaf := _rec."SourceAIAgentRunID";
-        p_MJAIAgentExamples_SourceConversationDetailID_SuccessScore := _rec."SuccessScore";
-        p_MJAIAgentExamples_SourceConversationDetailID_Comments := _rec."Comments";
-        p_MJAIAgentExamples_SourceConversationDetailID_Status := _rec."Status";
-        p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingVector := _rec."EmbeddingVector";
-        p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingModelID := _rec."EmbeddingModelID";
-        p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_8c9509 := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_da3d2d := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentExamples_SourceConversationDetailID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentExamples_SourceConversationDetailID_LastAccessedAt := _rec."LastAccessedAt";
-        p_MJAIAgentExamples_SourceConversationDetailID_AccessCount := _rec."AccessCount";
-        p_MJAIAgentExamples_SourceConversationDetailID_ExpiresAt := _rec."ExpiresAt";
-        -- Set the FK field to NULL
-        p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_591540 := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentExample"(p_ID => p_MJAIAgentExamples_SourceConversationDetailIDID, p_AgentID => p_MJAIAgentExamples_SourceConversationDetailID_AgentID, p_UserID => p_MJAIAgentExamples_SourceConversationDetailID_UserID, p_CompanyID => p_MJAIAgentExamples_SourceConversationDetailID_CompanyID, p_Type => p_MJAIAgentExamples_SourceConversationDetailID_Type, p_ExampleInput => p_MJAIAgentExamples_SourceConversationDetailID_ExampleInput, p_ExampleOutput => p_MJAIAgentExamples_SourceConversationDetailID_ExampleOutput, p_IsAutoGenerated => p_MJAIAgentExamples_SourceConversationDetailID_IsAutoGenerated, p_SourceConversationID => p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_b3263f, p_SourceConversationDetailID_Clear => 1, p_SourceConversationDetailID => p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_591540, p_SourceAIAgentRunID => p_MJAIAgentExamples_SourceConversationDetailID_SourceAIAg_987eaf, p_SuccessScore => p_MJAIAgentExamples_SourceConversationDetailID_SuccessScore, p_Comments => p_MJAIAgentExamples_SourceConversationDetailID_Comments, p_Status => p_MJAIAgentExamples_SourceConversationDetailID_Status, p_EmbeddingVector => p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_8c9509, p_PrimaryScopeRecordID => p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_da3d2d, p_SecondaryScopes => p_MJAIAgentExamples_SourceConversationDetailID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentExamples_SourceConversationDetailID_LastAccessedAt, p_AccessCount => p_MJAIAgentExamples_SourceConversationDetailID_AccessCount, p_ExpiresAt => p_MJAIAgentExamples_SourceConversationDetailID_ExpiresAt);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentNote using cursor to call spUpdateAIAgentNote
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "AgentNoteTypeID", "Note", "UserID", "Type", "IsAutoGenerated", "Comments", "Status", "SourceConversationID", "SourceConversationDetailID", "SourceAIAgentRunID", "CompanyID", "EmbeddingVector", "EmbeddingModelID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "LastAccessedAt", "AccessCount", "ExpiresAt", "ConsolidatedIntoNoteID", "ConsolidationCount", "DerivedFromNoteIDs", "ProtectionTier", "ImportanceScore" FROM __mj."AIAgentNote" WHERE "SourceConversationDetailID" = p_ID
-    LOOP
-        p_MJAIAgentNotes_SourceConversationDetailIDID := _rec."ID";
-        p_MJAIAgentNotes_SourceConversationDetailID_AgentID := _rec."AgentID";
-        p_MJAIAgentNotes_SourceConversationDetailID_AgentNoteTypeID := _rec."AgentNoteTypeID";
-        p_MJAIAgentNotes_SourceConversationDetailID_Note := _rec."Note";
-        p_MJAIAgentNotes_SourceConversationDetailID_UserID := _rec."UserID";
-        p_MJAIAgentNotes_SourceConversationDetailID_Type := _rec."Type";
-        p_MJAIAgentNotes_SourceConversationDetailID_IsAutoGenerated := _rec."IsAutoGenerated";
-        p_MJAIAgentNotes_SourceConversationDetailID_Comments := _rec."Comments";
-        p_MJAIAgentNotes_SourceConversationDetailID_Status := _rec."Status";
-        p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_d7e41b := _rec."SourceConversationID";
-        p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_ec3b0d := _rec."SourceConversationDetailID";
-        p_MJAIAgentNotes_SourceConversationDetailID_SourceAIAgentRunID := _rec."SourceAIAgentRunID";
-        p_MJAIAgentNotes_SourceConversationDetailID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingVector := _rec."EmbeddingVector";
-        p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingModelID := _rec."EmbeddingModelID";
-        p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeE_b152e5 := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeR_fefb0a := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentNotes_SourceConversationDetailID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentNotes_SourceConversationDetailID_LastAccessedAt := _rec."LastAccessedAt";
-        p_MJAIAgentNotes_SourceConversationDetailID_AccessCount := _rec."AccessCount";
-        p_MJAIAgentNotes_SourceConversationDetailID_ExpiresAt := _rec."ExpiresAt";
-        p_MJAIAgentNotes_SourceConversationDetailID_ConsolidatedI_88bda0 := _rec."ConsolidatedIntoNoteID";
-        p_MJAIAgentNotes_SourceConversationDetailID_ConsolidationCount := _rec."ConsolidationCount";
-        p_MJAIAgentNotes_SourceConversationDetailID_DerivedFromNoteIDs := _rec."DerivedFromNoteIDs";
-        p_MJAIAgentNotes_SourceConversationDetailID_ProtectionTier := _rec."ProtectionTier";
-        p_MJAIAgentNotes_SourceConversationDetailID_ImportanceScore := _rec."ImportanceScore";
-        -- Set the FK field to NULL
-        p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_ec3b0d := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentNote"(p_ID => p_MJAIAgentNotes_SourceConversationDetailIDID, p_AgentID => p_MJAIAgentNotes_SourceConversationDetailID_AgentID, p_AgentNoteTypeID => p_MJAIAgentNotes_SourceConversationDetailID_AgentNoteTypeID, p_Note => p_MJAIAgentNotes_SourceConversationDetailID_Note, p_UserID => p_MJAIAgentNotes_SourceConversationDetailID_UserID, p_Type => p_MJAIAgentNotes_SourceConversationDetailID_Type, p_IsAutoGenerated => p_MJAIAgentNotes_SourceConversationDetailID_IsAutoGenerated, p_Comments => p_MJAIAgentNotes_SourceConversationDetailID_Comments, p_Status => p_MJAIAgentNotes_SourceConversationDetailID_Status, p_SourceConversationID => p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_d7e41b, p_SourceConversationDetailID_Clear => 1, p_SourceConversationDetailID => p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_ec3b0d, p_SourceAIAgentRunID => p_MJAIAgentNotes_SourceConversationDetailID_SourceAIAgentRunID, p_CompanyID => p_MJAIAgentNotes_SourceConversationDetailID_CompanyID, p_EmbeddingVector => p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeE_b152e5, p_PrimaryScopeRecordID => p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeR_fefb0a, p_SecondaryScopes => p_MJAIAgentNotes_SourceConversationDetailID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentNotes_SourceConversationDetailID_LastAccessedAt, p_AccessCount => p_MJAIAgentNotes_SourceConversationDetailID_AccessCount, p_ExpiresAt => p_MJAIAgentNotes_SourceConversationDetailID_ExpiresAt, p_ConsolidatedIntoNoteID => p_MJAIAgentNotes_SourceConversationDetailID_ConsolidatedI_88bda0, p_ConsolidationCount => p_MJAIAgentNotes_SourceConversationDetailID_ConsolidationCount, p_DerivedFromNoteIDs => p_MJAIAgentNotes_SourceConversationDetailID_DerivedFromNoteIDs, p_ProtectionTier => p_MJAIAgentNotes_SourceConversationDetailID_ProtectionTier, p_ImportanceScore => p_MJAIAgentNotes_SourceConversationDetailID_ImportanceScore);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentRun using cursor to call spUpdateAIAgentRun
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "ParentRunID", "Status", "StartedAt", "CompletedAt", "Success", "ErrorMessage", "ConversationID", "UserID", "Result", "AgentState", "TotalTokensUsed", "TotalCost", "TotalPromptTokensUsed", "TotalCompletionTokensUsed", "TotalTokensUsedRollup", "TotalPromptTokensUsedRollup", "TotalCompletionTokensUsedRollup", "TotalCostRollup", "ConversationDetailID", "ConversationDetailSequence", "CancellationReason", "FinalStep", "FinalPayload", "Message", "LastRunID", "StartingPayload", "TotalPromptIterations", "ConfigurationID", "OverrideModelID", "OverrideVendorID", "Data", "Verbose", "EffortLevel", "RunName", "Comments", "ScheduledJobRunID", "TestRunID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "ExternalReferenceID", "CompanyID", "TotalCacheReadTokensUsed", "TotalCacheWriteTokensUsed", "LastHeartbeatAt", "AgentSessionID" FROM __mj."AIAgentRun" WHERE "ConversationDetailID" = p_ID
-    LOOP
-        p_MJAIAgentRuns_ConversationDetailIDID := _rec."ID";
-        p_MJAIAgentRuns_ConversationDetailID_AgentID := _rec."AgentID";
-        p_MJAIAgentRuns_ConversationDetailID_ParentRunID := _rec."ParentRunID";
-        p_MJAIAgentRuns_ConversationDetailID_Status := _rec."Status";
-        p_MJAIAgentRuns_ConversationDetailID_StartedAt := _rec."StartedAt";
-        p_MJAIAgentRuns_ConversationDetailID_CompletedAt := _rec."CompletedAt";
-        p_MJAIAgentRuns_ConversationDetailID_Success := _rec."Success";
-        p_MJAIAgentRuns_ConversationDetailID_ErrorMessage := _rec."ErrorMessage";
-        p_MJAIAgentRuns_ConversationDetailID_ConversationID := _rec."ConversationID";
-        p_MJAIAgentRuns_ConversationDetailID_UserID := _rec."UserID";
-        p_MJAIAgentRuns_ConversationDetailID_Result := _rec."Result";
-        p_MJAIAgentRuns_ConversationDetailID_AgentState := _rec."AgentState";
-        p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsed := _rec."TotalTokensUsed";
-        p_MJAIAgentRuns_ConversationDetailID_TotalCost := _rec."TotalCost";
-        p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUsed := _rec."TotalPromptTokensUsed";
-        p_MJAIAgentRuns_ConversationDetailID_TotalCompletionTokensUsed := _rec."TotalCompletionTokensUsed";
-        p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsedRollup := _rec."TotalTokensUsedRollup";
-        p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUse_5ca82d := _rec."TotalPromptTokensUsedRollup";
-        p_MJAIAgentRuns_ConversationDetailID_TotalCompletionToken_43c4ab := _rec."TotalCompletionTokensUsedRollup";
-        p_MJAIAgentRuns_ConversationDetailID_TotalCostRollup := _rec."TotalCostRollup";
-        p_MJAIAgentRuns_ConversationDetailID_ConversationDetailID := _rec."ConversationDetailID";
-        p_MJAIAgentRuns_ConversationDetailID_ConversationDetailSequence := _rec."ConversationDetailSequence";
-        p_MJAIAgentRuns_ConversationDetailID_CancellationReason := _rec."CancellationReason";
-        p_MJAIAgentRuns_ConversationDetailID_FinalStep := _rec."FinalStep";
-        p_MJAIAgentRuns_ConversationDetailID_FinalPayload := _rec."FinalPayload";
-        p_MJAIAgentRuns_ConversationDetailID_Message := _rec."Message";
-        p_MJAIAgentRuns_ConversationDetailID_LastRunID := _rec."LastRunID";
-        p_MJAIAgentRuns_ConversationDetailID_StartingPayload := _rec."StartingPayload";
-        p_MJAIAgentRuns_ConversationDetailID_TotalPromptIterations := _rec."TotalPromptIterations";
-        p_MJAIAgentRuns_ConversationDetailID_ConfigurationID := _rec."ConfigurationID";
-        p_MJAIAgentRuns_ConversationDetailID_OverrideModelID := _rec."OverrideModelID";
-        p_MJAIAgentRuns_ConversationDetailID_OverrideVendorID := _rec."OverrideVendorID";
-        p_MJAIAgentRuns_ConversationDetailID_Data := _rec."Data";
-        p_MJAIAgentRuns_ConversationDetailID_Verbose := _rec."Verbose";
-        p_MJAIAgentRuns_ConversationDetailID_EffortLevel := _rec."EffortLevel";
-        p_MJAIAgentRuns_ConversationDetailID_RunName := _rec."RunName";
-        p_MJAIAgentRuns_ConversationDetailID_Comments := _rec."Comments";
-        p_MJAIAgentRuns_ConversationDetailID_ScheduledJobRunID := _rec."ScheduledJobRunID";
-        p_MJAIAgentRuns_ConversationDetailID_TestRunID := _rec."TestRunID";
-        p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeEntityID := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeRecordID := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentRuns_ConversationDetailID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentRuns_ConversationDetailID_ExternalReferenceID := _rec."ExternalReferenceID";
-        p_MJAIAgentRuns_ConversationDetailID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentRuns_ConversationDetailID_TotalCacheReadTokensUsed := _rec."TotalCacheReadTokensUsed";
-        p_MJAIAgentRuns_ConversationDetailID_TotalCacheWriteTokensUsed := _rec."TotalCacheWriteTokensUsed";
-        p_MJAIAgentRuns_ConversationDetailID_LastHeartbeatAt := _rec."LastHeartbeatAt";
-        p_MJAIAgentRuns_ConversationDetailID_AgentSessionID := _rec."AgentSessionID";
-        -- Set the FK field to NULL
-        p_MJAIAgentRuns_ConversationDetailID_ConversationDetailID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentRun"(p_ID => p_MJAIAgentRuns_ConversationDetailIDID, p_AgentID => p_MJAIAgentRuns_ConversationDetailID_AgentID, p_ParentRunID => p_MJAIAgentRuns_ConversationDetailID_ParentRunID, p_Status => p_MJAIAgentRuns_ConversationDetailID_Status, p_StartedAt => p_MJAIAgentRuns_ConversationDetailID_StartedAt, p_CompletedAt => p_MJAIAgentRuns_ConversationDetailID_CompletedAt, p_Success => p_MJAIAgentRuns_ConversationDetailID_Success, p_ErrorMessage => p_MJAIAgentRuns_ConversationDetailID_ErrorMessage, p_ConversationID => p_MJAIAgentRuns_ConversationDetailID_ConversationID, p_UserID => p_MJAIAgentRuns_ConversationDetailID_UserID, p_Result => p_MJAIAgentRuns_ConversationDetailID_Result, p_AgentState => p_MJAIAgentRuns_ConversationDetailID_AgentState, p_TotalTokensUsed => p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsed, p_TotalCost => p_MJAIAgentRuns_ConversationDetailID_TotalCost, p_TotalPromptTokensUsed => p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUsed, p_TotalCompletionTokensUsed => p_MJAIAgentRuns_ConversationDetailID_TotalCompletionTokensUsed, p_TotalTokensUsedRollup => p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsedRollup, p_TotalPromptTokensUsedRollup => p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUse_5ca82d, p_TotalCompletionTokensUsedRollup => p_MJAIAgentRuns_ConversationDetailID_TotalCompletionToken_43c4ab, p_TotalCostRollup => p_MJAIAgentRuns_ConversationDetailID_TotalCostRollup, p_ConversationDetailID_Clear => 1, p_ConversationDetailID => p_MJAIAgentRuns_ConversationDetailID_ConversationDetailID, p_ConversationDetailSequence => p_MJAIAgentRuns_ConversationDetailID_ConversationDetailSequence, p_CancellationReason => p_MJAIAgentRuns_ConversationDetailID_CancellationReason, p_FinalStep => p_MJAIAgentRuns_ConversationDetailID_FinalStep, p_FinalPayload => p_MJAIAgentRuns_ConversationDetailID_FinalPayload, p_Message => p_MJAIAgentRuns_ConversationDetailID_Message, p_LastRunID => p_MJAIAgentRuns_ConversationDetailID_LastRunID, p_StartingPayload => p_MJAIAgentRuns_ConversationDetailID_StartingPayload, p_TotalPromptIterations => p_MJAIAgentRuns_ConversationDetailID_TotalPromptIterations, p_ConfigurationID => p_MJAIAgentRuns_ConversationDetailID_ConfigurationID, p_OverrideModelID => p_MJAIAgentRuns_ConversationDetailID_OverrideModelID, p_OverrideVendorID => p_MJAIAgentRuns_ConversationDetailID_OverrideVendorID, p_Data => p_MJAIAgentRuns_ConversationDetailID_Data, p_Verbose => p_MJAIAgentRuns_ConversationDetailID_Verbose, p_EffortLevel => p_MJAIAgentRuns_ConversationDetailID_EffortLevel, p_RunName => p_MJAIAgentRuns_ConversationDetailID_RunName, p_Comments => p_MJAIAgentRuns_ConversationDetailID_Comments, p_ScheduledJobRunID => p_MJAIAgentRuns_ConversationDetailID_ScheduledJobRunID, p_TestRunID => p_MJAIAgentRuns_ConversationDetailID_TestRunID, p_PrimaryScopeEntityID => p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentRuns_ConversationDetailID_SecondaryScopes, p_ExternalReferenceID => p_MJAIAgentRuns_ConversationDetailID_ExternalReferenceID, p_CompanyID => p_MJAIAgentRuns_ConversationDetailID_CompanyID, p_TotalCacheReadTokensUsed => p_MJAIAgentRuns_ConversationDetailID_TotalCacheReadTokensUsed, p_TotalCacheWriteTokensUsed => p_MJAIAgentRuns_ConversationDetailID_TotalCacheWriteTokensUsed, p_LastHeartbeatAt => p_MJAIAgentRuns_ConversationDetailID_LastHeartbeatAt, p_AgentSessionID => p_MJAIAgentRuns_ConversationDetailID_AgentSessionID);
-
-    END LOOP;
-
-    
-    -- Cascade delete from ConversationDetailArtifact using cursor to call spDeleteConversationDetailArtifact
-
-    FOR _rec IN SELECT "ID" FROM __mj."ConversationDetailArtifact" WHERE "ConversationDetailID" = p_ID
-    LOOP
-        p_MJConversationDetailArtifacts_ConversationDetailIDID := _rec."ID";
-        PERFORM __mj."spDeleteConversationDetailArtifact"(p_ID => p_MJConversationDetailArtifacts_ConversationDetailIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from ConversationDetailAttachment using cursor to call spDeleteConversationDetailAttachment
-
-    FOR _rec IN SELECT "ID" FROM __mj."ConversationDetailAttachment" WHERE "ConversationDetailID" = p_ID
-    LOOP
-        p_MJConversationDetailAttachments_ConversationDetailIDID := _rec."ID";
-        PERFORM __mj."spDeleteConversationDetailAttachment"(p_ID => p_MJConversationDetailAttachments_ConversationDetailIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from ConversationDetailRating using cursor to call spDeleteConversationDetailRating
-
-    FOR _rec IN SELECT "ID" FROM __mj."ConversationDetailRating" WHERE "ConversationDetailID" = p_ID
-    LOOP
-        p_MJConversationDetailRatings_ConversationDetailIDID := _rec."ID";
-        PERFORM __mj."spDeleteConversationDetailRating"(p_ID => p_MJConversationDetailRatings_ConversationDetailIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade update on ConversationDetail using cursor to call spUpdateConversationDetail
-
-
-    FOR _rec IN SELECT "ID", "ConversationID", "ExternalID", "Role", "Message", "Error", "HiddenToUser", "UserRating", "UserFeedback", "ReflectionInsights", "SummaryOfEarlierConversation", "UserID", "ArtifactID", "ArtifactVersionID", "CompletionTime", "IsPinned", "ParentID", "AgentID", "Status", "SuggestedResponses", "TestRunID", "ResponseForm", "ActionableCommands", "AutomaticCommands", "OriginalMessageChanged", "AgentSessionID" FROM __mj."ConversationDetail" WHERE "ParentID" = p_ID
-    LOOP
-        p_MJConversationDetails_ParentIDID := _rec."ID";
-        p_MJConversationDetails_ParentID_ConversationID := _rec."ConversationID";
-        p_MJConversationDetails_ParentID_ExternalID := _rec."ExternalID";
-        p_MJConversationDetails_ParentID_Role := _rec."Role";
-        p_MJConversationDetails_ParentID_Message := _rec."Message";
-        p_MJConversationDetails_ParentID_Error := _rec."Error";
-        p_MJConversationDetails_ParentID_HiddenToUser := _rec."HiddenToUser";
-        p_MJConversationDetails_ParentID_UserRating := _rec."UserRating";
-        p_MJConversationDetails_ParentID_UserFeedback := _rec."UserFeedback";
-        p_MJConversationDetails_ParentID_ReflectionInsights := _rec."ReflectionInsights";
-        p_MJConversationDetails_ParentID_SummaryOfEarlierConversation := _rec."SummaryOfEarlierConversation";
-        p_MJConversationDetails_ParentID_UserID := _rec."UserID";
-        p_MJConversationDetails_ParentID_ArtifactID := _rec."ArtifactID";
-        p_MJConversationDetails_ParentID_ArtifactVersionID := _rec."ArtifactVersionID";
-        p_MJConversationDetails_ParentID_CompletionTime := _rec."CompletionTime";
-        p_MJConversationDetails_ParentID_IsPinned := _rec."IsPinned";
-        p_MJConversationDetails_ParentID_ParentID := _rec."ParentID";
-        p_MJConversationDetails_ParentID_AgentID := _rec."AgentID";
-        p_MJConversationDetails_ParentID_Status := _rec."Status";
-        p_MJConversationDetails_ParentID_SuggestedResponses := _rec."SuggestedResponses";
-        p_MJConversationDetails_ParentID_TestRunID := _rec."TestRunID";
-        p_MJConversationDetails_ParentID_ResponseForm := _rec."ResponseForm";
-        p_MJConversationDetails_ParentID_ActionableCommands := _rec."ActionableCommands";
-        p_MJConversationDetails_ParentID_AutomaticCommands := _rec."AutomaticCommands";
-        p_MJConversationDetails_ParentID_OriginalMessageChanged := _rec."OriginalMessageChanged";
-        p_MJConversationDetails_ParentID_AgentSessionID := _rec."AgentSessionID";
-        -- Set the FK field to NULL
-        p_MJConversationDetails_ParentID_ParentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateConversationDetail"(p_ID => p_MJConversationDetails_ParentIDID, p_ConversationID => p_MJConversationDetails_ParentID_ConversationID, p_ExternalID => p_MJConversationDetails_ParentID_ExternalID, p_Role => p_MJConversationDetails_ParentID_Role, p_Message => p_MJConversationDetails_ParentID_Message, p_Error => p_MJConversationDetails_ParentID_Error, p_HiddenToUser => p_MJConversationDetails_ParentID_HiddenToUser, p_UserRating => p_MJConversationDetails_ParentID_UserRating, p_UserFeedback => p_MJConversationDetails_ParentID_UserFeedback, p_ReflectionInsights => p_MJConversationDetails_ParentID_ReflectionInsights, p_SummaryOfEarlierConversation => p_MJConversationDetails_ParentID_SummaryOfEarlierConversation, p_UserID => p_MJConversationDetails_ParentID_UserID, p_ArtifactID => p_MJConversationDetails_ParentID_ArtifactID, p_ArtifactVersionID => p_MJConversationDetails_ParentID_ArtifactVersionID, p_CompletionTime => p_MJConversationDetails_ParentID_CompletionTime, p_IsPinned => p_MJConversationDetails_ParentID_IsPinned, p_ParentID_Clear => 1, p_ParentID => p_MJConversationDetails_ParentID_ParentID, p_AgentID => p_MJConversationDetails_ParentID_AgentID, p_Status => p_MJConversationDetails_ParentID_Status, p_SuggestedResponses => p_MJConversationDetails_ParentID_SuggestedResponses, p_TestRunID => p_MJConversationDetails_ParentID_TestRunID, p_ResponseForm => p_MJConversationDetails_ParentID_ResponseForm, p_ActionableCommands => p_MJConversationDetails_ParentID_ActionableCommands, p_AutomaticCommands => p_MJConversationDetails_ParentID_AutomaticCommands, p_OriginalMessageChanged => p_MJConversationDetails_ParentID_OriginalMessageChanged, p_AgentSessionID => p_MJConversationDetails_ParentID_AgentSessionID);
-
-    END LOOP;
-
-    
-    -- Cascade update on Report using cursor to call spUpdateReport
-
-
-    FOR _rec IN SELECT "ID", "Name", "Description", "CategoryID", "UserID", "SharingScope", "ConversationID", "ConversationDetailID", "DataContextID", "Configuration", "OutputTriggerTypeID", "OutputFormatTypeID", "OutputDeliveryTypeID", "OutputFrequency", "OutputTargetEmail", "OutputWorkflowID", "Thumbnail", "EnvironmentID" FROM __mj."Report" WHERE "ConversationDetailID" = p_ID
-    LOOP
-        p_MJReports_ConversationDetailIDID := _rec."ID";
-        p_MJReports_ConversationDetailID_Name := _rec."Name";
-        p_MJReports_ConversationDetailID_Description := _rec."Description";
-        p_MJReports_ConversationDetailID_CategoryID := _rec."CategoryID";
-        p_MJReports_ConversationDetailID_UserID := _rec."UserID";
-        p_MJReports_ConversationDetailID_SharingScope := _rec."SharingScope";
-        p_MJReports_ConversationDetailID_ConversationID := _rec."ConversationID";
-        p_MJReports_ConversationDetailID_ConversationDetailID := _rec."ConversationDetailID";
-        p_MJReports_ConversationDetailID_DataContextID := _rec."DataContextID";
-        p_MJReports_ConversationDetailID_Configuration := _rec."Configuration";
-        p_MJReports_ConversationDetailID_OutputTriggerTypeID := _rec."OutputTriggerTypeID";
-        p_MJReports_ConversationDetailID_OutputFormatTypeID := _rec."OutputFormatTypeID";
-        p_MJReports_ConversationDetailID_OutputDeliveryTypeID := _rec."OutputDeliveryTypeID";
-        p_MJReports_ConversationDetailID_OutputFrequency := _rec."OutputFrequency";
-        p_MJReports_ConversationDetailID_OutputTargetEmail := _rec."OutputTargetEmail";
-        p_MJReports_ConversationDetailID_OutputWorkflowID := _rec."OutputWorkflowID";
-        p_MJReports_ConversationDetailID_Thumbnail := _rec."Thumbnail";
-        p_MJReports_ConversationDetailID_EnvironmentID := _rec."EnvironmentID";
-        -- Set the FK field to NULL
-        p_MJReports_ConversationDetailID_ConversationDetailID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateReport"(p_ID => p_MJReports_ConversationDetailIDID, p_Name => p_MJReports_ConversationDetailID_Name, p_Description => p_MJReports_ConversationDetailID_Description, p_CategoryID => p_MJReports_ConversationDetailID_CategoryID, p_UserID => p_MJReports_ConversationDetailID_UserID, p_SharingScope => p_MJReports_ConversationDetailID_SharingScope, p_ConversationID => p_MJReports_ConversationDetailID_ConversationID, p_ConversationDetailID_Clear => 1, p_ConversationDetailID => p_MJReports_ConversationDetailID_ConversationDetailID, p_DataContextID => p_MJReports_ConversationDetailID_DataContextID, p_Configuration => p_MJReports_ConversationDetailID_Configuration, p_OutputTriggerTypeID => p_MJReports_ConversationDetailID_OutputTriggerTypeID, p_OutputFormatTypeID => p_MJReports_ConversationDetailID_OutputFormatTypeID, p_OutputDeliveryTypeID => p_MJReports_ConversationDetailID_OutputDeliveryTypeID, p_OutputFrequency => p_MJReports_ConversationDetailID_OutputFrequency, p_OutputTargetEmail => p_MJReports_ConversationDetailID_OutputTargetEmail, p_OutputWorkflowID => p_MJReports_ConversationDetailID_OutputWorkflowID, p_Thumbnail => p_MJReports_ConversationDetailID_Thumbnail, p_EnvironmentID => p_MJReports_ConversationDetailID_EnvironmentID);
-
-    END LOOP;
-
-    
-    -- Cascade update on Task using cursor to call spUpdateTask
-
-
-    FOR _rec IN SELECT "ID", "ParentID", "Name", "Description", "TypeID", "EnvironmentID", "ProjectID", "ConversationDetailID", "UserID", "AgentID", "Status", "PercentComplete", "DueAt", "StartedAt", "CompletedAt" FROM __mj."Task" WHERE "ConversationDetailID" = p_ID
-    LOOP
-        p_MJTasks_ConversationDetailIDID := _rec."ID";
-        p_MJTasks_ConversationDetailID_ParentID := _rec."ParentID";
-        p_MJTasks_ConversationDetailID_Name := _rec."Name";
-        p_MJTasks_ConversationDetailID_Description := _rec."Description";
-        p_MJTasks_ConversationDetailID_TypeID := _rec."TypeID";
-        p_MJTasks_ConversationDetailID_EnvironmentID := _rec."EnvironmentID";
-        p_MJTasks_ConversationDetailID_ProjectID := _rec."ProjectID";
-        p_MJTasks_ConversationDetailID_ConversationDetailID := _rec."ConversationDetailID";
-        p_MJTasks_ConversationDetailID_UserID := _rec."UserID";
-        p_MJTasks_ConversationDetailID_AgentID := _rec."AgentID";
-        p_MJTasks_ConversationDetailID_Status := _rec."Status";
-        p_MJTasks_ConversationDetailID_PercentComplete := _rec."PercentComplete";
-        p_MJTasks_ConversationDetailID_DueAt := _rec."DueAt";
-        p_MJTasks_ConversationDetailID_StartedAt := _rec."StartedAt";
-        p_MJTasks_ConversationDetailID_CompletedAt := _rec."CompletedAt";
-        -- Set the FK field to NULL
-        p_MJTasks_ConversationDetailID_ConversationDetailID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateTask"(p_ID => p_MJTasks_ConversationDetailIDID, p_ParentID => p_MJTasks_ConversationDetailID_ParentID, p_Name => p_MJTasks_ConversationDetailID_Name, p_Description => p_MJTasks_ConversationDetailID_Description, p_TypeID => p_MJTasks_ConversationDetailID_TypeID, p_EnvironmentID => p_MJTasks_ConversationDetailID_EnvironmentID, p_ProjectID => p_MJTasks_ConversationDetailID_ProjectID, p_ConversationDetailID_Clear => 1, p_ConversationDetailID => p_MJTasks_ConversationDetailID_ConversationDetailID, p_UserID => p_MJTasks_ConversationDetailID_UserID, p_AgentID => p_MJTasks_ConversationDetailID_AgentID, p_Status => p_MJTasks_ConversationDetailID_Status, p_PercentComplete => p_MJTasks_ConversationDetailID_PercentComplete, p_DueAt => p_MJTasks_ConversationDetailID_DueAt, p_StartedAt => p_MJTasks_ConversationDetailID_StartedAt, p_CompletedAt => p_MJTasks_ConversationDetailID_CompletedAt);
-
-    END LOOP;
-
-    
-
-    DELETE FROM
-        __mj."ConversationDetail"
-    WHERE
-        "ID" = p_ID;
-
-    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
-
-    IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT NULL::UUID AS "_result_id";
-    ELSE
-        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'spDeleteConversation'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."spDeleteConversation"(
-    IN p_ID UUID
-)
-RETURNS TABLE("_result_id" UUID) AS
-$$
-DECLARE
-    _rec RECORD;
-    _v_row_count INTEGER;
-    p_MJAIAgentExamples_SourceConversationIDID UUID;
-    p_MJAIAgentExamples_SourceConversationID_AgentID UUID;
-    p_MJAIAgentExamples_SourceConversationID_UserID UUID;
-    p_MJAIAgentExamples_SourceConversationID_CompanyID UUID;
-    p_MJAIAgentExamples_SourceConversationID_Type VARCHAR(20);
-    p_MJAIAgentExamples_SourceConversationID_ExampleInput TEXT;
-    p_MJAIAgentExamples_SourceConversationID_ExampleOutput TEXT;
-    p_MJAIAgentExamples_SourceConversationID_IsAutoGenerated BOOLEAN;
-    p_MJAIAgentExamples_SourceConversationID_SourceConversationID UUID;
-    p_MJAIAgentExamples_SourceConversationID_SourceConversati_b98bb5 UUID;
-    p_MJAIAgentExamples_SourceConversationID_SourceAIAgentRunID UUID;
-    p_MJAIAgentExamples_SourceConversationID_SuccessScore NUMERIC(5,2);
-    p_MJAIAgentExamples_SourceConversationID_Comments TEXT;
-    p_MJAIAgentExamples_SourceConversationID_Status VARCHAR(20);
-    p_MJAIAgentExamples_SourceConversationID_EmbeddingVector TEXT;
-    p_MJAIAgentExamples_SourceConversationID_EmbeddingModelID UUID;
-    p_MJAIAgentExamples_SourceConversationID_PrimaryScopeEntityID UUID;
-    p_MJAIAgentExamples_SourceConversationID_PrimaryScopeRecordID VARCHAR(100);
-    p_MJAIAgentExamples_SourceConversationID_SecondaryScopes TEXT;
-    p_MJAIAgentExamples_SourceConversationID_LastAccessedAt TIMESTAMPTZ;
-    p_MJAIAgentExamples_SourceConversationID_AccessCount INTEGER;
-    p_MJAIAgentExamples_SourceConversationID_ExpiresAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_SourceConversationIDID UUID;
-    p_MJAIAgentNotes_SourceConversationID_AgentID UUID;
-    p_MJAIAgentNotes_SourceConversationID_AgentNoteTypeID UUID;
-    p_MJAIAgentNotes_SourceConversationID_Note TEXT;
-    p_MJAIAgentNotes_SourceConversationID_UserID UUID;
-    p_MJAIAgentNotes_SourceConversationID_Type VARCHAR(20);
-    p_MJAIAgentNotes_SourceConversationID_IsAutoGenerated BOOLEAN;
-    p_MJAIAgentNotes_SourceConversationID_Comments TEXT;
-    p_MJAIAgentNotes_SourceConversationID_Status VARCHAR(20);
-    p_MJAIAgentNotes_SourceConversationID_SourceConversationID UUID;
-    p_MJAIAgentNotes_SourceConversationID_SourceConversationD_de4992 UUID;
-    p_MJAIAgentNotes_SourceConversationID_SourceAIAgentRunID UUID;
-    p_MJAIAgentNotes_SourceConversationID_CompanyID UUID;
-    p_MJAIAgentNotes_SourceConversationID_EmbeddingVector TEXT;
-    p_MJAIAgentNotes_SourceConversationID_EmbeddingModelID UUID;
-    p_MJAIAgentNotes_SourceConversationID_PrimaryScopeEntityID UUID;
-    p_MJAIAgentNotes_SourceConversationID_PrimaryScopeRecordID VARCHAR(100);
-    p_MJAIAgentNotes_SourceConversationID_SecondaryScopes TEXT;
-    p_MJAIAgentNotes_SourceConversationID_LastAccessedAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_SourceConversationID_AccessCount INTEGER;
-    p_MJAIAgentNotes_SourceConversationID_ExpiresAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_SourceConversationID_ConsolidatedIntoNoteID UUID;
-    p_MJAIAgentNotes_SourceConversationID_ConsolidationCount INTEGER;
-    p_MJAIAgentNotes_SourceConversationID_DerivedFromNoteIDs TEXT;
-    p_MJAIAgentNotes_SourceConversationID_ProtectionTier VARCHAR(20);
-    p_MJAIAgentNotes_SourceConversationID_ImportanceScore NUMERIC(5,2);
-    p_MJAIAgentRuns_ConversationIDID UUID;
-    p_MJAIAgentRuns_ConversationID_AgentID UUID;
-    p_MJAIAgentRuns_ConversationID_ParentRunID UUID;
-    p_MJAIAgentRuns_ConversationID_Status VARCHAR(50);
-    p_MJAIAgentRuns_ConversationID_StartedAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_ConversationID_CompletedAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_ConversationID_Success BOOLEAN;
-    p_MJAIAgentRuns_ConversationID_ErrorMessage TEXT;
-    p_MJAIAgentRuns_ConversationID_ConversationID UUID;
-    p_MJAIAgentRuns_ConversationID_UserID UUID;
-    p_MJAIAgentRuns_ConversationID_Result TEXT;
-    p_MJAIAgentRuns_ConversationID_AgentState TEXT;
-    p_MJAIAgentRuns_ConversationID_TotalTokensUsed INTEGER;
-    p_MJAIAgentRuns_ConversationID_TotalCost NUMERIC(18,6);
-    p_MJAIAgentRuns_ConversationID_TotalPromptTokensUsed INTEGER;
-    p_MJAIAgentRuns_ConversationID_TotalCompletionTokensUsed INTEGER;
-    p_MJAIAgentRuns_ConversationID_TotalTokensUsedRollup INTEGER;
-    p_MJAIAgentRuns_ConversationID_TotalPromptTokensUsedRollup INTEGER;
-    p_MJAIAgentRuns_ConversationID_TotalCompletionTokensUsedRollup INTEGER;
-    p_MJAIAgentRuns_ConversationID_TotalCostRollup NUMERIC(19,8);
-    p_MJAIAgentRuns_ConversationID_ConversationDetailID UUID;
-    p_MJAIAgentRuns_ConversationID_ConversationDetailSequence INTEGER;
-    p_MJAIAgentRuns_ConversationID_CancellationReason VARCHAR(30);
-    p_MJAIAgentRuns_ConversationID_FinalStep VARCHAR(30);
-    p_MJAIAgentRuns_ConversationID_FinalPayload TEXT;
-    p_MJAIAgentRuns_ConversationID_Message TEXT;
-    p_MJAIAgentRuns_ConversationID_LastRunID UUID;
-    p_MJAIAgentRuns_ConversationID_StartingPayload TEXT;
-    p_MJAIAgentRuns_ConversationID_TotalPromptIterations INTEGER;
-    p_MJAIAgentRuns_ConversationID_ConfigurationID UUID;
-    p_MJAIAgentRuns_ConversationID_OverrideModelID UUID;
-    p_MJAIAgentRuns_ConversationID_OverrideVendorID UUID;
-    p_MJAIAgentRuns_ConversationID_Data TEXT;
-    p_MJAIAgentRuns_ConversationID_Verbose BOOLEAN;
-    p_MJAIAgentRuns_ConversationID_EffortLevel INTEGER;
-    p_MJAIAgentRuns_ConversationID_RunName VARCHAR(255);
-    p_MJAIAgentRuns_ConversationID_Comments TEXT;
-    p_MJAIAgentRuns_ConversationID_ScheduledJobRunID UUID;
-    p_MJAIAgentRuns_ConversationID_TestRunID UUID;
-    p_MJAIAgentRuns_ConversationID_PrimaryScopeEntityID UUID;
-    p_MJAIAgentRuns_ConversationID_PrimaryScopeRecordID VARCHAR(100);
-    p_MJAIAgentRuns_ConversationID_SecondaryScopes TEXT;
-    p_MJAIAgentRuns_ConversationID_ExternalReferenceID VARCHAR(200);
-    p_MJAIAgentRuns_ConversationID_CompanyID UUID;
-    p_MJAIAgentRuns_ConversationID_TotalCacheReadTokensUsed INTEGER;
-    p_MJAIAgentRuns_ConversationID_TotalCacheWriteTokensUsed INTEGER;
-    p_MJAIAgentRuns_ConversationID_LastHeartbeatAt TIMESTAMPTZ;
-    p_MJAIAgentRuns_ConversationID_AgentSessionID UUID;
-    p_MJAIAgentSessions_ConversationIDID UUID;
-    p_MJAIAgentSessions_ConversationID_AgentID UUID;
-    p_MJAIAgentSessions_ConversationID_UserID UUID;
-    p_MJAIAgentSessions_ConversationID_Status VARCHAR(20);
-    p_MJAIAgentSessions_ConversationID_ConversationID UUID;
-    p_MJAIAgentSessions_ConversationID_LastSessionID UUID;
-    p_MJAIAgentSessions_ConversationID_HostInstanceID VARCHAR(200);
-    p_MJAIAgentSessions_ConversationID_Config TEXT;
-    p_MJAIAgentSessions_ConversationID_LastActiveAt TIMESTAMPTZ;
-    p_MJAIAgentSessions_ConversationID_ClosedAt TIMESTAMPTZ;
-    p_MJAIAgentSessions_ConversationID_CloseReason VARCHAR(20);
-    p_MJConversationArtifacts_ConversationIDID UUID;
-    p_MJConversationDetails_ConversationIDID UUID;
-    p_MJReports_ConversationIDID UUID;
-    p_MJReports_ConversationID_Name VARCHAR(255);
-    p_MJReports_ConversationID_Description TEXT;
-    p_MJReports_ConversationID_CategoryID UUID;
-    p_MJReports_ConversationID_UserID UUID;
-    p_MJReports_ConversationID_SharingScope VARCHAR(20);
-    p_MJReports_ConversationID_ConversationID UUID;
-    p_MJReports_ConversationID_ConversationDetailID UUID;
-    p_MJReports_ConversationID_DataContextID UUID;
-    p_MJReports_ConversationID_Configuration TEXT;
-    p_MJReports_ConversationID_OutputTriggerTypeID UUID;
-    p_MJReports_ConversationID_OutputFormatTypeID UUID;
-    p_MJReports_ConversationID_OutputDeliveryTypeID UUID;
-    p_MJReports_ConversationID_OutputFrequency VARCHAR(50);
-    p_MJReports_ConversationID_OutputTargetEmail VARCHAR(255);
-    p_MJReports_ConversationID_OutputWorkflowID UUID;
-    p_MJReports_ConversationID_Thumbnail TEXT;
-    p_MJReports_ConversationID_EnvironmentID UUID;
-BEGIN
--- Cascade update on AIAgentExample using cursor to call spUpdateAIAgentExample
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "UserID", "CompanyID", "Type", "ExampleInput", "ExampleOutput", "IsAutoGenerated", "SourceConversationID", "SourceConversationDetailID", "SourceAIAgentRunID", "SuccessScore", "Comments", "Status", "EmbeddingVector", "EmbeddingModelID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "LastAccessedAt", "AccessCount", "ExpiresAt" FROM __mj."AIAgentExample" WHERE "SourceConversationID" = p_ID
-    LOOP
-        p_MJAIAgentExamples_SourceConversationIDID := _rec."ID";
-        p_MJAIAgentExamples_SourceConversationID_AgentID := _rec."AgentID";
-        p_MJAIAgentExamples_SourceConversationID_UserID := _rec."UserID";
-        p_MJAIAgentExamples_SourceConversationID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentExamples_SourceConversationID_Type := _rec."Type";
-        p_MJAIAgentExamples_SourceConversationID_ExampleInput := _rec."ExampleInput";
-        p_MJAIAgentExamples_SourceConversationID_ExampleOutput := _rec."ExampleOutput";
-        p_MJAIAgentExamples_SourceConversationID_IsAutoGenerated := _rec."IsAutoGenerated";
-        p_MJAIAgentExamples_SourceConversationID_SourceConversationID := _rec."SourceConversationID";
-        p_MJAIAgentExamples_SourceConversationID_SourceConversati_b98bb5 := _rec."SourceConversationDetailID";
-        p_MJAIAgentExamples_SourceConversationID_SourceAIAgentRunID := _rec."SourceAIAgentRunID";
-        p_MJAIAgentExamples_SourceConversationID_SuccessScore := _rec."SuccessScore";
-        p_MJAIAgentExamples_SourceConversationID_Comments := _rec."Comments";
-        p_MJAIAgentExamples_SourceConversationID_Status := _rec."Status";
-        p_MJAIAgentExamples_SourceConversationID_EmbeddingVector := _rec."EmbeddingVector";
-        p_MJAIAgentExamples_SourceConversationID_EmbeddingModelID := _rec."EmbeddingModelID";
-        p_MJAIAgentExamples_SourceConversationID_PrimaryScopeEntityID := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentExamples_SourceConversationID_PrimaryScopeRecordID := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentExamples_SourceConversationID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentExamples_SourceConversationID_LastAccessedAt := _rec."LastAccessedAt";
-        p_MJAIAgentExamples_SourceConversationID_AccessCount := _rec."AccessCount";
-        p_MJAIAgentExamples_SourceConversationID_ExpiresAt := _rec."ExpiresAt";
-        -- Set the FK field to NULL
-        p_MJAIAgentExamples_SourceConversationID_SourceConversationID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentExample"(p_ID => p_MJAIAgentExamples_SourceConversationIDID, p_AgentID => p_MJAIAgentExamples_SourceConversationID_AgentID, p_UserID => p_MJAIAgentExamples_SourceConversationID_UserID, p_CompanyID => p_MJAIAgentExamples_SourceConversationID_CompanyID, p_Type => p_MJAIAgentExamples_SourceConversationID_Type, p_ExampleInput => p_MJAIAgentExamples_SourceConversationID_ExampleInput, p_ExampleOutput => p_MJAIAgentExamples_SourceConversationID_ExampleOutput, p_IsAutoGenerated => p_MJAIAgentExamples_SourceConversationID_IsAutoGenerated, p_SourceConversationID_Clear => 1, p_SourceConversationID => p_MJAIAgentExamples_SourceConversationID_SourceConversationID, p_SourceConversationDetailID => p_MJAIAgentExamples_SourceConversationID_SourceConversati_b98bb5, p_SourceAIAgentRunID => p_MJAIAgentExamples_SourceConversationID_SourceAIAgentRunID, p_SuccessScore => p_MJAIAgentExamples_SourceConversationID_SuccessScore, p_Comments => p_MJAIAgentExamples_SourceConversationID_Comments, p_Status => p_MJAIAgentExamples_SourceConversationID_Status, p_EmbeddingVector => p_MJAIAgentExamples_SourceConversationID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentExamples_SourceConversationID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentExamples_SourceConversationID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentExamples_SourceConversationID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentExamples_SourceConversationID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentExamples_SourceConversationID_LastAccessedAt, p_AccessCount => p_MJAIAgentExamples_SourceConversationID_AccessCount, p_ExpiresAt => p_MJAIAgentExamples_SourceConversationID_ExpiresAt);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentNote using cursor to call spUpdateAIAgentNote
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "AgentNoteTypeID", "Note", "UserID", "Type", "IsAutoGenerated", "Comments", "Status", "SourceConversationID", "SourceConversationDetailID", "SourceAIAgentRunID", "CompanyID", "EmbeddingVector", "EmbeddingModelID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "LastAccessedAt", "AccessCount", "ExpiresAt", "ConsolidatedIntoNoteID", "ConsolidationCount", "DerivedFromNoteIDs", "ProtectionTier", "ImportanceScore" FROM __mj."AIAgentNote" WHERE "SourceConversationID" = p_ID
-    LOOP
-        p_MJAIAgentNotes_SourceConversationIDID := _rec."ID";
-        p_MJAIAgentNotes_SourceConversationID_AgentID := _rec."AgentID";
-        p_MJAIAgentNotes_SourceConversationID_AgentNoteTypeID := _rec."AgentNoteTypeID";
-        p_MJAIAgentNotes_SourceConversationID_Note := _rec."Note";
-        p_MJAIAgentNotes_SourceConversationID_UserID := _rec."UserID";
-        p_MJAIAgentNotes_SourceConversationID_Type := _rec."Type";
-        p_MJAIAgentNotes_SourceConversationID_IsAutoGenerated := _rec."IsAutoGenerated";
-        p_MJAIAgentNotes_SourceConversationID_Comments := _rec."Comments";
-        p_MJAIAgentNotes_SourceConversationID_Status := _rec."Status";
-        p_MJAIAgentNotes_SourceConversationID_SourceConversationID := _rec."SourceConversationID";
-        p_MJAIAgentNotes_SourceConversationID_SourceConversationD_de4992 := _rec."SourceConversationDetailID";
-        p_MJAIAgentNotes_SourceConversationID_SourceAIAgentRunID := _rec."SourceAIAgentRunID";
-        p_MJAIAgentNotes_SourceConversationID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentNotes_SourceConversationID_EmbeddingVector := _rec."EmbeddingVector";
-        p_MJAIAgentNotes_SourceConversationID_EmbeddingModelID := _rec."EmbeddingModelID";
-        p_MJAIAgentNotes_SourceConversationID_PrimaryScopeEntityID := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentNotes_SourceConversationID_PrimaryScopeRecordID := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentNotes_SourceConversationID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentNotes_SourceConversationID_LastAccessedAt := _rec."LastAccessedAt";
-        p_MJAIAgentNotes_SourceConversationID_AccessCount := _rec."AccessCount";
-        p_MJAIAgentNotes_SourceConversationID_ExpiresAt := _rec."ExpiresAt";
-        p_MJAIAgentNotes_SourceConversationID_ConsolidatedIntoNoteID := _rec."ConsolidatedIntoNoteID";
-        p_MJAIAgentNotes_SourceConversationID_ConsolidationCount := _rec."ConsolidationCount";
-        p_MJAIAgentNotes_SourceConversationID_DerivedFromNoteIDs := _rec."DerivedFromNoteIDs";
-        p_MJAIAgentNotes_SourceConversationID_ProtectionTier := _rec."ProtectionTier";
-        p_MJAIAgentNotes_SourceConversationID_ImportanceScore := _rec."ImportanceScore";
-        -- Set the FK field to NULL
-        p_MJAIAgentNotes_SourceConversationID_SourceConversationID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentNote"(p_ID => p_MJAIAgentNotes_SourceConversationIDID, p_AgentID => p_MJAIAgentNotes_SourceConversationID_AgentID, p_AgentNoteTypeID => p_MJAIAgentNotes_SourceConversationID_AgentNoteTypeID, p_Note => p_MJAIAgentNotes_SourceConversationID_Note, p_UserID => p_MJAIAgentNotes_SourceConversationID_UserID, p_Type => p_MJAIAgentNotes_SourceConversationID_Type, p_IsAutoGenerated => p_MJAIAgentNotes_SourceConversationID_IsAutoGenerated, p_Comments => p_MJAIAgentNotes_SourceConversationID_Comments, p_Status => p_MJAIAgentNotes_SourceConversationID_Status, p_SourceConversationID_Clear => 1, p_SourceConversationID => p_MJAIAgentNotes_SourceConversationID_SourceConversationID, p_SourceConversationDetailID => p_MJAIAgentNotes_SourceConversationID_SourceConversationD_de4992, p_SourceAIAgentRunID => p_MJAIAgentNotes_SourceConversationID_SourceAIAgentRunID, p_CompanyID => p_MJAIAgentNotes_SourceConversationID_CompanyID, p_EmbeddingVector => p_MJAIAgentNotes_SourceConversationID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentNotes_SourceConversationID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentNotes_SourceConversationID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentNotes_SourceConversationID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentNotes_SourceConversationID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentNotes_SourceConversationID_LastAccessedAt, p_AccessCount => p_MJAIAgentNotes_SourceConversationID_AccessCount, p_ExpiresAt => p_MJAIAgentNotes_SourceConversationID_ExpiresAt, p_ConsolidatedIntoNoteID => p_MJAIAgentNotes_SourceConversationID_ConsolidatedIntoNoteID, p_ConsolidationCount => p_MJAIAgentNotes_SourceConversationID_ConsolidationCount, p_DerivedFromNoteIDs => p_MJAIAgentNotes_SourceConversationID_DerivedFromNoteIDs, p_ProtectionTier => p_MJAIAgentNotes_SourceConversationID_ProtectionTier, p_ImportanceScore => p_MJAIAgentNotes_SourceConversationID_ImportanceScore);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentRun using cursor to call spUpdateAIAgentRun
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "ParentRunID", "Status", "StartedAt", "CompletedAt", "Success", "ErrorMessage", "ConversationID", "UserID", "Result", "AgentState", "TotalTokensUsed", "TotalCost", "TotalPromptTokensUsed", "TotalCompletionTokensUsed", "TotalTokensUsedRollup", "TotalPromptTokensUsedRollup", "TotalCompletionTokensUsedRollup", "TotalCostRollup", "ConversationDetailID", "ConversationDetailSequence", "CancellationReason", "FinalStep", "FinalPayload", "Message", "LastRunID", "StartingPayload", "TotalPromptIterations", "ConfigurationID", "OverrideModelID", "OverrideVendorID", "Data", "Verbose", "EffortLevel", "RunName", "Comments", "ScheduledJobRunID", "TestRunID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "ExternalReferenceID", "CompanyID", "TotalCacheReadTokensUsed", "TotalCacheWriteTokensUsed", "LastHeartbeatAt", "AgentSessionID" FROM __mj."AIAgentRun" WHERE "ConversationID" = p_ID
-    LOOP
-        p_MJAIAgentRuns_ConversationIDID := _rec."ID";
-        p_MJAIAgentRuns_ConversationID_AgentID := _rec."AgentID";
-        p_MJAIAgentRuns_ConversationID_ParentRunID := _rec."ParentRunID";
-        p_MJAIAgentRuns_ConversationID_Status := _rec."Status";
-        p_MJAIAgentRuns_ConversationID_StartedAt := _rec."StartedAt";
-        p_MJAIAgentRuns_ConversationID_CompletedAt := _rec."CompletedAt";
-        p_MJAIAgentRuns_ConversationID_Success := _rec."Success";
-        p_MJAIAgentRuns_ConversationID_ErrorMessage := _rec."ErrorMessage";
-        p_MJAIAgentRuns_ConversationID_ConversationID := _rec."ConversationID";
-        p_MJAIAgentRuns_ConversationID_UserID := _rec."UserID";
-        p_MJAIAgentRuns_ConversationID_Result := _rec."Result";
-        p_MJAIAgentRuns_ConversationID_AgentState := _rec."AgentState";
-        p_MJAIAgentRuns_ConversationID_TotalTokensUsed := _rec."TotalTokensUsed";
-        p_MJAIAgentRuns_ConversationID_TotalCost := _rec."TotalCost";
-        p_MJAIAgentRuns_ConversationID_TotalPromptTokensUsed := _rec."TotalPromptTokensUsed";
-        p_MJAIAgentRuns_ConversationID_TotalCompletionTokensUsed := _rec."TotalCompletionTokensUsed";
-        p_MJAIAgentRuns_ConversationID_TotalTokensUsedRollup := _rec."TotalTokensUsedRollup";
-        p_MJAIAgentRuns_ConversationID_TotalPromptTokensUsedRollup := _rec."TotalPromptTokensUsedRollup";
-        p_MJAIAgentRuns_ConversationID_TotalCompletionTokensUsedRollup := _rec."TotalCompletionTokensUsedRollup";
-        p_MJAIAgentRuns_ConversationID_TotalCostRollup := _rec."TotalCostRollup";
-        p_MJAIAgentRuns_ConversationID_ConversationDetailID := _rec."ConversationDetailID";
-        p_MJAIAgentRuns_ConversationID_ConversationDetailSequence := _rec."ConversationDetailSequence";
-        p_MJAIAgentRuns_ConversationID_CancellationReason := _rec."CancellationReason";
-        p_MJAIAgentRuns_ConversationID_FinalStep := _rec."FinalStep";
-        p_MJAIAgentRuns_ConversationID_FinalPayload := _rec."FinalPayload";
-        p_MJAIAgentRuns_ConversationID_Message := _rec."Message";
-        p_MJAIAgentRuns_ConversationID_LastRunID := _rec."LastRunID";
-        p_MJAIAgentRuns_ConversationID_StartingPayload := _rec."StartingPayload";
-        p_MJAIAgentRuns_ConversationID_TotalPromptIterations := _rec."TotalPromptIterations";
-        p_MJAIAgentRuns_ConversationID_ConfigurationID := _rec."ConfigurationID";
-        p_MJAIAgentRuns_ConversationID_OverrideModelID := _rec."OverrideModelID";
-        p_MJAIAgentRuns_ConversationID_OverrideVendorID := _rec."OverrideVendorID";
-        p_MJAIAgentRuns_ConversationID_Data := _rec."Data";
-        p_MJAIAgentRuns_ConversationID_Verbose := _rec."Verbose";
-        p_MJAIAgentRuns_ConversationID_EffortLevel := _rec."EffortLevel";
-        p_MJAIAgentRuns_ConversationID_RunName := _rec."RunName";
-        p_MJAIAgentRuns_ConversationID_Comments := _rec."Comments";
-        p_MJAIAgentRuns_ConversationID_ScheduledJobRunID := _rec."ScheduledJobRunID";
-        p_MJAIAgentRuns_ConversationID_TestRunID := _rec."TestRunID";
-        p_MJAIAgentRuns_ConversationID_PrimaryScopeEntityID := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentRuns_ConversationID_PrimaryScopeRecordID := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentRuns_ConversationID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentRuns_ConversationID_ExternalReferenceID := _rec."ExternalReferenceID";
-        p_MJAIAgentRuns_ConversationID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentRuns_ConversationID_TotalCacheReadTokensUsed := _rec."TotalCacheReadTokensUsed";
-        p_MJAIAgentRuns_ConversationID_TotalCacheWriteTokensUsed := _rec."TotalCacheWriteTokensUsed";
-        p_MJAIAgentRuns_ConversationID_LastHeartbeatAt := _rec."LastHeartbeatAt";
-        p_MJAIAgentRuns_ConversationID_AgentSessionID := _rec."AgentSessionID";
-        -- Set the FK field to NULL
-        p_MJAIAgentRuns_ConversationID_ConversationID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentRun"(p_ID => p_MJAIAgentRuns_ConversationIDID, p_AgentID => p_MJAIAgentRuns_ConversationID_AgentID, p_ParentRunID => p_MJAIAgentRuns_ConversationID_ParentRunID, p_Status => p_MJAIAgentRuns_ConversationID_Status, p_StartedAt => p_MJAIAgentRuns_ConversationID_StartedAt, p_CompletedAt => p_MJAIAgentRuns_ConversationID_CompletedAt, p_Success => p_MJAIAgentRuns_ConversationID_Success, p_ErrorMessage => p_MJAIAgentRuns_ConversationID_ErrorMessage, p_ConversationID_Clear => 1, p_ConversationID => p_MJAIAgentRuns_ConversationID_ConversationID, p_UserID => p_MJAIAgentRuns_ConversationID_UserID, p_Result => p_MJAIAgentRuns_ConversationID_Result, p_AgentState => p_MJAIAgentRuns_ConversationID_AgentState, p_TotalTokensUsed => p_MJAIAgentRuns_ConversationID_TotalTokensUsed, p_TotalCost => p_MJAIAgentRuns_ConversationID_TotalCost, p_TotalPromptTokensUsed => p_MJAIAgentRuns_ConversationID_TotalPromptTokensUsed, p_TotalCompletionTokensUsed => p_MJAIAgentRuns_ConversationID_TotalCompletionTokensUsed, p_TotalTokensUsedRollup => p_MJAIAgentRuns_ConversationID_TotalTokensUsedRollup, p_TotalPromptTokensUsedRollup => p_MJAIAgentRuns_ConversationID_TotalPromptTokensUsedRollup, p_TotalCompletionTokensUsedRollup => p_MJAIAgentRuns_ConversationID_TotalCompletionTokensUsedRollup, p_TotalCostRollup => p_MJAIAgentRuns_ConversationID_TotalCostRollup, p_ConversationDetailID => p_MJAIAgentRuns_ConversationID_ConversationDetailID, p_ConversationDetailSequence => p_MJAIAgentRuns_ConversationID_ConversationDetailSequence, p_CancellationReason => p_MJAIAgentRuns_ConversationID_CancellationReason, p_FinalStep => p_MJAIAgentRuns_ConversationID_FinalStep, p_FinalPayload => p_MJAIAgentRuns_ConversationID_FinalPayload, p_Message => p_MJAIAgentRuns_ConversationID_Message, p_LastRunID => p_MJAIAgentRuns_ConversationID_LastRunID, p_StartingPayload => p_MJAIAgentRuns_ConversationID_StartingPayload, p_TotalPromptIterations => p_MJAIAgentRuns_ConversationID_TotalPromptIterations, p_ConfigurationID => p_MJAIAgentRuns_ConversationID_ConfigurationID, p_OverrideModelID => p_MJAIAgentRuns_ConversationID_OverrideModelID, p_OverrideVendorID => p_MJAIAgentRuns_ConversationID_OverrideVendorID, p_Data => p_MJAIAgentRuns_ConversationID_Data, p_Verbose => p_MJAIAgentRuns_ConversationID_Verbose, p_EffortLevel => p_MJAIAgentRuns_ConversationID_EffortLevel, p_RunName => p_MJAIAgentRuns_ConversationID_RunName, p_Comments => p_MJAIAgentRuns_ConversationID_Comments, p_ScheduledJobRunID => p_MJAIAgentRuns_ConversationID_ScheduledJobRunID, p_TestRunID => p_MJAIAgentRuns_ConversationID_TestRunID, p_PrimaryScopeEntityID => p_MJAIAgentRuns_ConversationID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentRuns_ConversationID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentRuns_ConversationID_SecondaryScopes, p_ExternalReferenceID => p_MJAIAgentRuns_ConversationID_ExternalReferenceID, p_CompanyID => p_MJAIAgentRuns_ConversationID_CompanyID, p_TotalCacheReadTokensUsed => p_MJAIAgentRuns_ConversationID_TotalCacheReadTokensUsed, p_TotalCacheWriteTokensUsed => p_MJAIAgentRuns_ConversationID_TotalCacheWriteTokensUsed, p_LastHeartbeatAt => p_MJAIAgentRuns_ConversationID_LastHeartbeatAt, p_AgentSessionID => p_MJAIAgentRuns_ConversationID_AgentSessionID);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentSession using cursor to call spUpdateAIAgentSession
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "UserID", "Status", "ConversationID", "LastSessionID", "HostInstanceID", "Config", "LastActiveAt", "ClosedAt", "CloseReason" FROM __mj."AIAgentSession" WHERE "ConversationID" = p_ID
-    LOOP
-        p_MJAIAgentSessions_ConversationIDID := _rec."ID";
-        p_MJAIAgentSessions_ConversationID_AgentID := _rec."AgentID";
-        p_MJAIAgentSessions_ConversationID_UserID := _rec."UserID";
-        p_MJAIAgentSessions_ConversationID_Status := _rec."Status";
-        p_MJAIAgentSessions_ConversationID_ConversationID := _rec."ConversationID";
-        p_MJAIAgentSessions_ConversationID_LastSessionID := _rec."LastSessionID";
-        p_MJAIAgentSessions_ConversationID_HostInstanceID := _rec."HostInstanceID";
-        p_MJAIAgentSessions_ConversationID_Config := _rec."Config";
-        p_MJAIAgentSessions_ConversationID_LastActiveAt := _rec."LastActiveAt";
-        p_MJAIAgentSessions_ConversationID_ClosedAt := _rec."ClosedAt";
-        p_MJAIAgentSessions_ConversationID_CloseReason := _rec."CloseReason";
-        -- Set the FK field to NULL
-        p_MJAIAgentSessions_ConversationID_ConversationID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentSession"(p_ID => p_MJAIAgentSessions_ConversationIDID, p_AgentID => p_MJAIAgentSessions_ConversationID_AgentID, p_UserID => p_MJAIAgentSessions_ConversationID_UserID, p_Status => p_MJAIAgentSessions_ConversationID_Status, p_ConversationID_Clear => 1, p_ConversationID => p_MJAIAgentSessions_ConversationID_ConversationID, p_LastSessionID => p_MJAIAgentSessions_ConversationID_LastSessionID, p_HostInstanceID => p_MJAIAgentSessions_ConversationID_HostInstanceID, p_Config => p_MJAIAgentSessions_ConversationID_Config, p_LastActiveAt => p_MJAIAgentSessions_ConversationID_LastActiveAt, p_ClosedAt => p_MJAIAgentSessions_ConversationID_ClosedAt, p_CloseReason => p_MJAIAgentSessions_ConversationID_CloseReason);
-
-    END LOOP;
-
-    
-    -- Cascade delete from ConversationArtifact using cursor to call spDeleteConversationArtifact
-
-    FOR _rec IN SELECT "ID" FROM __mj."ConversationArtifact" WHERE "ConversationID" = p_ID
-    LOOP
-        p_MJConversationArtifacts_ConversationIDID := _rec."ID";
-        PERFORM __mj."spDeleteConversationArtifact"(p_ID => p_MJConversationArtifacts_ConversationIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from ConversationDetail using cursor to call spDeleteConversationDetail
-
-    FOR _rec IN SELECT "ID" FROM __mj."ConversationDetail" WHERE "ConversationID" = p_ID
-    LOOP
-        p_MJConversationDetails_ConversationIDID := _rec."ID";
-        PERFORM __mj."spDeleteConversationDetail"(p_ID => p_MJConversationDetails_ConversationIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade update on Report using cursor to call spUpdateReport
-
-
-    FOR _rec IN SELECT "ID", "Name", "Description", "CategoryID", "UserID", "SharingScope", "ConversationID", "ConversationDetailID", "DataContextID", "Configuration", "OutputTriggerTypeID", "OutputFormatTypeID", "OutputDeliveryTypeID", "OutputFrequency", "OutputTargetEmail", "OutputWorkflowID", "Thumbnail", "EnvironmentID" FROM __mj."Report" WHERE "ConversationID" = p_ID
-    LOOP
-        p_MJReports_ConversationIDID := _rec."ID";
-        p_MJReports_ConversationID_Name := _rec."Name";
-        p_MJReports_ConversationID_Description := _rec."Description";
-        p_MJReports_ConversationID_CategoryID := _rec."CategoryID";
-        p_MJReports_ConversationID_UserID := _rec."UserID";
-        p_MJReports_ConversationID_SharingScope := _rec."SharingScope";
-        p_MJReports_ConversationID_ConversationID := _rec."ConversationID";
-        p_MJReports_ConversationID_ConversationDetailID := _rec."ConversationDetailID";
-        p_MJReports_ConversationID_DataContextID := _rec."DataContextID";
-        p_MJReports_ConversationID_Configuration := _rec."Configuration";
-        p_MJReports_ConversationID_OutputTriggerTypeID := _rec."OutputTriggerTypeID";
-        p_MJReports_ConversationID_OutputFormatTypeID := _rec."OutputFormatTypeID";
-        p_MJReports_ConversationID_OutputDeliveryTypeID := _rec."OutputDeliveryTypeID";
-        p_MJReports_ConversationID_OutputFrequency := _rec."OutputFrequency";
-        p_MJReports_ConversationID_OutputTargetEmail := _rec."OutputTargetEmail";
-        p_MJReports_ConversationID_OutputWorkflowID := _rec."OutputWorkflowID";
-        p_MJReports_ConversationID_Thumbnail := _rec."Thumbnail";
-        p_MJReports_ConversationID_EnvironmentID := _rec."EnvironmentID";
-        -- Set the FK field to NULL
-        p_MJReports_ConversationID_ConversationID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateReport"(p_ID => p_MJReports_ConversationIDID, p_Name => p_MJReports_ConversationID_Name, p_Description => p_MJReports_ConversationID_Description, p_CategoryID => p_MJReports_ConversationID_CategoryID, p_UserID => p_MJReports_ConversationID_UserID, p_SharingScope => p_MJReports_ConversationID_SharingScope, p_ConversationID_Clear => 1, p_ConversationID => p_MJReports_ConversationID_ConversationID, p_ConversationDetailID => p_MJReports_ConversationID_ConversationDetailID, p_DataContextID => p_MJReports_ConversationID_DataContextID, p_Configuration => p_MJReports_ConversationID_Configuration, p_OutputTriggerTypeID => p_MJReports_ConversationID_OutputTriggerTypeID, p_OutputFormatTypeID => p_MJReports_ConversationID_OutputFormatTypeID, p_OutputDeliveryTypeID => p_MJReports_ConversationID_OutputDeliveryTypeID, p_OutputFrequency => p_MJReports_ConversationID_OutputFrequency, p_OutputTargetEmail => p_MJReports_ConversationID_OutputTargetEmail, p_OutputWorkflowID => p_MJReports_ConversationID_OutputWorkflowID, p_Thumbnail => p_MJReports_ConversationID_Thumbnail, p_EnvironmentID => p_MJReports_ConversationID_EnvironmentID);
-
-    END LOOP;
-
-    
-
-    DELETE FROM
-        __mj."Conversation"
-    WHERE
-        "ID" = p_ID;
-
-    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
-
-    IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT NULL::UUID AS "_result_id";
-    ELSE
-        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
-DO $$ DECLARE r record;
-BEGIN
-  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
-           WHERE proname = 'spDeleteAIAgent'
-             AND pronamespace = '__mj'::regnamespace
-  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
-  END LOOP;
-END $$;
-CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgent"(
-    IN p_ID UUID
-)
-RETURNS TABLE("_result_id" UUID) AS
-$$
-DECLARE
-    _rec RECORD;
-    _v_row_count INTEGER;
-    p_MJActions_CreatedByAgentIDID UUID;
-    p_MJActions_CreatedByAgentID_CategoryID UUID;
-    p_MJActions_CreatedByAgentID_Name VARCHAR(425);
-    p_MJActions_CreatedByAgentID_Description TEXT;
-    p_MJActions_CreatedByAgentID_Type VARCHAR(20);
-    p_MJActions_CreatedByAgentID_UserPrompt TEXT;
-    p_MJActions_CreatedByAgentID_UserComments TEXT;
-    p_MJActions_CreatedByAgentID_Code TEXT;
-    p_MJActions_CreatedByAgentID_CodeComments TEXT;
-    p_MJActions_CreatedByAgentID_CodeApprovalStatus VARCHAR(20);
-    p_MJActions_CreatedByAgentID_CodeApprovalComments TEXT;
-    p_MJActions_CreatedByAgentID_CodeApprovedByUserID UUID;
-    p_MJActions_CreatedByAgentID_CodeApprovedAt TIMESTAMPTZ;
-    p_MJActions_CreatedByAgentID_CodeLocked BOOLEAN;
-    p_MJActions_CreatedByAgentID_ForceCodeGeneration BOOLEAN;
-    p_MJActions_CreatedByAgentID_RetentionPeriod INTEGER;
-    p_MJActions_CreatedByAgentID_Status VARCHAR(20);
-    p_MJActions_CreatedByAgentID_DriverClass VARCHAR(255);
-    p_MJActions_CreatedByAgentID_ParentID UUID;
-    p_MJActions_CreatedByAgentID_IconClass VARCHAR(100);
-    p_MJActions_CreatedByAgentID_DefaultCompactPromptID UUID;
-    p_MJActions_CreatedByAgentID_Config TEXT;
-    p_MJActions_CreatedByAgentID_RuntimeActionConfiguration TEXT;
-    p_MJActions_CreatedByAgentID_MaxExecutionTimeMS INTEGER;
-    p_MJActions_CreatedByAgentID_CreatedByAgentID UUID;
-    p_MJAIAgentActions_AgentIDID UUID;
-    p_MJAIAgentActions_AgentID_AgentID UUID;
-    p_MJAIAgentActions_AgentID_ActionID UUID;
-    p_MJAIAgentActions_AgentID_Status VARCHAR(15);
-    p_MJAIAgentActions_AgentID_MinExecutionsPerRun INTEGER;
-    p_MJAIAgentActions_AgentID_MaxExecutionsPerRun INTEGER;
-    p_MJAIAgentActions_AgentID_ResultExpirationTurns INTEGER;
-    p_MJAIAgentActions_AgentID_ResultExpirationMode VARCHAR(20);
-    p_MJAIAgentActions_AgentID_CompactMode VARCHAR(20);
-    p_MJAIAgentActions_AgentID_CompactLength INTEGER;
-    p_MJAIAgentActions_AgentID_CompactPromptID UUID;
-    p_MJAIAgentArtifactTypes_AgentIDID UUID;
-    p_MJAIAgentClientTools_AgentIDID UUID;
-    p_MJAIAgentCoAgents_CoAgentIDID UUID;
-    p_MJAIAgentCoAgents_TargetAgentIDID UUID;
-    p_MJAIAgentCoAgents_TargetAgentID_CoAgentID UUID;
-    p_MJAIAgentCoAgents_TargetAgentID_TargetAgentID UUID;
-    p_MJAIAgentCoAgents_TargetAgentID_TargetAgentTypeID UUID;
-    p_MJAIAgentCoAgents_TargetAgentID_Type VARCHAR(30);
-    p_MJAIAgentCoAgents_TargetAgentID_IsDefault BOOLEAN;
-    p_MJAIAgentCoAgents_TargetAgentID_Sequence INTEGER;
-    p_MJAIAgentCoAgents_TargetAgentID_Status VARCHAR(20);
-    p_MJAIAgentCoAgents_TargetAgentID_Configuration TEXT;
-    p_MJAIAgentConfigurations_AgentIDID UUID;
-    p_MJAIAgentDataSources_AgentIDID UUID;
-    p_MJAIAgentExamples_AgentIDID UUID;
-    p_MJAIAgentLearningCycles_AgentIDID UUID;
-    p_MJAIAgentModalities_AgentIDID UUID;
-    p_MJAIAgentModels_AgentIDID UUID;
-    p_MJAIAgentModels_AgentID_AgentID UUID;
-    p_MJAIAgentModels_AgentID_ModelID UUID;
-    p_MJAIAgentModels_AgentID_Active BOOLEAN;
-    p_MJAIAgentModels_AgentID_Priority INTEGER;
-    p_MJAIAgentNotes_AgentIDID UUID;
-    p_MJAIAgentNotes_AgentID_AgentID UUID;
-    p_MJAIAgentNotes_AgentID_AgentNoteTypeID UUID;
-    p_MJAIAgentNotes_AgentID_Note TEXT;
-    p_MJAIAgentNotes_AgentID_UserID UUID;
-    p_MJAIAgentNotes_AgentID_Type VARCHAR(20);
-    p_MJAIAgentNotes_AgentID_IsAutoGenerated BOOLEAN;
-    p_MJAIAgentNotes_AgentID_Comments TEXT;
-    p_MJAIAgentNotes_AgentID_Status VARCHAR(20);
-    p_MJAIAgentNotes_AgentID_SourceConversationID UUID;
-    p_MJAIAgentNotes_AgentID_SourceConversationDetailID UUID;
-    p_MJAIAgentNotes_AgentID_SourceAIAgentRunID UUID;
-    p_MJAIAgentNotes_AgentID_CompanyID UUID;
-    p_MJAIAgentNotes_AgentID_EmbeddingVector TEXT;
-    p_MJAIAgentNotes_AgentID_EmbeddingModelID UUID;
-    p_MJAIAgentNotes_AgentID_PrimaryScopeEntityID UUID;
-    p_MJAIAgentNotes_AgentID_PrimaryScopeRecordID VARCHAR(100);
-    p_MJAIAgentNotes_AgentID_SecondaryScopes TEXT;
-    p_MJAIAgentNotes_AgentID_LastAccessedAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_AgentID_AccessCount INTEGER;
-    p_MJAIAgentNotes_AgentID_ExpiresAt TIMESTAMPTZ;
-    p_MJAIAgentNotes_AgentID_ConsolidatedIntoNoteID UUID;
-    p_MJAIAgentNotes_AgentID_ConsolidationCount INTEGER;
-    p_MJAIAgentNotes_AgentID_DerivedFromNoteIDs TEXT;
-    p_MJAIAgentNotes_AgentID_ProtectionTier VARCHAR(20);
-    p_MJAIAgentNotes_AgentID_ImportanceScore NUMERIC(5,2);
-    p_MJAIAgentPermissions_AgentIDID UUID;
-    p_MJAIAgentPrompts_AgentIDID UUID;
-    p_MJAIAgentRelationships_AgentIDID UUID;
-    p_MJAIAgentRelationships_SubAgentIDID UUID;
-    p_MJAIAgentRequests_AgentIDID UUID;
-    p_MJAIAgentRuns_AgentIDID UUID;
-    p_MJAIAgentSearchScopes_AgentIDID UUID;
-    p_MJAIAgentSessions_AgentIDID UUID;
-    p_MJAIAgentSteps_AgentIDID UUID;
-    p_MJAIAgentSteps_SubAgentIDID UUID;
-    p_MJAIAgentSteps_SubAgentID_AgentID UUID;
-    p_MJAIAgentSteps_SubAgentID_Name VARCHAR(255);
-    p_MJAIAgentSteps_SubAgentID_Description TEXT;
-    p_MJAIAgentSteps_SubAgentID_StepType VARCHAR(20);
-    p_MJAIAgentSteps_SubAgentID_StartingStep BOOLEAN;
-    p_MJAIAgentSteps_SubAgentID_TimeoutSeconds INTEGER;
-    p_MJAIAgentSteps_SubAgentID_RetryCount INTEGER;
-    p_MJAIAgentSteps_SubAgentID_OnErrorBehavior VARCHAR(20);
-    p_MJAIAgentSteps_SubAgentID_ActionID UUID;
-    p_MJAIAgentSteps_SubAgentID_SubAgentID UUID;
-    p_MJAIAgentSteps_SubAgentID_PromptID UUID;
-    p_MJAIAgentSteps_SubAgentID_ActionOutputMapping TEXT;
-    p_MJAIAgentSteps_SubAgentID_PositionX INTEGER;
-    p_MJAIAgentSteps_SubAgentID_PositionY INTEGER;
-    p_MJAIAgentSteps_SubAgentID_Width INTEGER;
-    p_MJAIAgentSteps_SubAgentID_Height INTEGER;
-    p_MJAIAgentSteps_SubAgentID_Status VARCHAR(20);
-    p_MJAIAgentSteps_SubAgentID_ActionInputMapping TEXT;
-    p_MJAIAgentSteps_SubAgentID_LoopBodyType VARCHAR(50);
-    p_MJAIAgentSteps_SubAgentID_Configuration TEXT;
-    p_MJAIAgents_ParentIDID UUID;
-    p_MJAIAgents_ParentID_Name VARCHAR(255);
-    p_MJAIAgents_ParentID_Description TEXT;
-    p_MJAIAgents_ParentID_LogoURL VARCHAR(255);
-    p_MJAIAgents_ParentID_ParentID UUID;
-    p_MJAIAgents_ParentID_ExposeAsAction BOOLEAN;
-    p_MJAIAgents_ParentID_ExecutionOrder INTEGER;
-    p_MJAIAgents_ParentID_ExecutionMode VARCHAR(20);
-    p_MJAIAgents_ParentID_EnableContextCompression BOOLEAN;
-    p_MJAIAgents_ParentID_ContextCompressionMessageThreshold INTEGER;
-    p_MJAIAgents_ParentID_ContextCompressionPromptID UUID;
-    p_MJAIAgents_ParentID_ContextCompressionMessageRetentionCount INTEGER;
-    p_MJAIAgents_ParentID_TypeID UUID;
-    p_MJAIAgents_ParentID_Status VARCHAR(20);
-    p_MJAIAgents_ParentID_DriverClass VARCHAR(255);
-    p_MJAIAgents_ParentID_IconClass VARCHAR(100);
-    p_MJAIAgents_ParentID_ModelSelectionMode VARCHAR(50);
-    p_MJAIAgents_ParentID_PayloadDownstreamPaths TEXT;
-    p_MJAIAgents_ParentID_PayloadUpstreamPaths TEXT;
-    p_MJAIAgents_ParentID_PayloadSelfReadPaths TEXT;
-    p_MJAIAgents_ParentID_PayloadSelfWritePaths TEXT;
-    p_MJAIAgents_ParentID_PayloadScope TEXT;
-    p_MJAIAgents_ParentID_FinalPayloadValidation TEXT;
-    p_MJAIAgents_ParentID_FinalPayloadValidationMode VARCHAR(25);
-    p_MJAIAgents_ParentID_FinalPayloadValidationMaxRetries INTEGER;
-    p_MJAIAgents_ParentID_MaxCostPerRun NUMERIC(10,4);
-    p_MJAIAgents_ParentID_MaxTokensPerRun INTEGER;
-    p_MJAIAgents_ParentID_MaxIterationsPerRun INTEGER;
-    p_MJAIAgents_ParentID_MaxTimePerRun INTEGER;
-    p_MJAIAgents_ParentID_MinExecutionsPerRun INTEGER;
-    p_MJAIAgents_ParentID_MaxExecutionsPerRun INTEGER;
-    p_MJAIAgents_ParentID_StartingPayloadValidation TEXT;
-    p_MJAIAgents_ParentID_StartingPayloadValidationMode VARCHAR(25);
-    p_MJAIAgents_ParentID_DefaultPromptEffortLevel INTEGER;
-    p_MJAIAgents_ParentID_ChatHandlingOption VARCHAR(30);
-    p_MJAIAgents_ParentID_DefaultArtifactTypeID UUID;
-    p_MJAIAgents_ParentID_OwnerUserID UUID;
-    p_MJAIAgents_ParentID_InvocationMode VARCHAR(20);
-    p_MJAIAgents_ParentID_ArtifactCreationMode VARCHAR(20);
-    p_MJAIAgents_ParentID_FunctionalRequirements TEXT;
-    p_MJAIAgents_ParentID_TechnicalDesign TEXT;
-    p_MJAIAgents_ParentID_InjectNotes BOOLEAN;
-    p_MJAIAgents_ParentID_MaxNotesToInject INTEGER;
-    p_MJAIAgents_ParentID_NoteInjectionStrategy VARCHAR(20);
-    p_MJAIAgents_ParentID_InjectExamples BOOLEAN;
-    p_MJAIAgents_ParentID_MaxExamplesToInject INTEGER;
-    p_MJAIAgents_ParentID_ExampleInjectionStrategy VARCHAR(20);
-    p_MJAIAgents_ParentID_IsRestricted BOOLEAN;
-    p_MJAIAgents_ParentID_MessageMode VARCHAR(50);
-    p_MJAIAgents_ParentID_MaxMessages INTEGER;
-    p_MJAIAgents_ParentID_AttachmentStorageProviderID UUID;
-    p_MJAIAgents_ParentID_AttachmentRootPath VARCHAR(500);
-    p_MJAIAgents_ParentID_InlineStorageThresholdBytes INTEGER;
-    p_MJAIAgents_ParentID_AgentTypePromptParams TEXT;
-    p_MJAIAgents_ParentID_ScopeConfig TEXT;
-    p_MJAIAgents_ParentID_NoteRetentionDays INTEGER;
-    p_MJAIAgents_ParentID_ExampleRetentionDays INTEGER;
-    p_MJAIAgents_ParentID_AutoArchiveEnabled BOOLEAN;
-    p_MJAIAgents_ParentID_RerankerConfiguration TEXT;
-    p_MJAIAgents_ParentID_CategoryID UUID;
-    p_MJAIAgents_ParentID_AllowEphemeralClientTools BOOLEAN;
-    p_MJAIAgents_ParentID_DefaultStorageAccountID UUID;
-    p_MJAIAgents_ParentID_SearchScopeAccess VARCHAR(20);
-    p_MJAIAgents_ParentID_AcceptUnregisteredFiles BOOLEAN;
-    p_MJAIAgents_ParentID_DefaultCoAgentID UUID;
-    p_MJAIAgents_ParentID_TypeConfiguration TEXT;
-    p_MJAIAgents_DefaultCoAgentIDID UUID;
-    p_MJAIAgents_DefaultCoAgentID_Name VARCHAR(255);
-    p_MJAIAgents_DefaultCoAgentID_Description TEXT;
-    p_MJAIAgents_DefaultCoAgentID_LogoURL VARCHAR(255);
-    p_MJAIAgents_DefaultCoAgentID_ParentID UUID;
-    p_MJAIAgents_DefaultCoAgentID_ExposeAsAction BOOLEAN;
-    p_MJAIAgents_DefaultCoAgentID_ExecutionOrder INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_ExecutionMode VARCHAR(20);
-    p_MJAIAgents_DefaultCoAgentID_EnableContextCompression BOOLEAN;
-    p_MJAIAgents_DefaultCoAgentID_ContextCompressionMessageTh_2ba4d7 INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_ContextCompressionPromptID UUID;
-    p_MJAIAgents_DefaultCoAgentID_ContextCompressionMessageRe_601f1d INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_TypeID UUID;
-    p_MJAIAgents_DefaultCoAgentID_Status VARCHAR(20);
-    p_MJAIAgents_DefaultCoAgentID_DriverClass VARCHAR(255);
-    p_MJAIAgents_DefaultCoAgentID_IconClass VARCHAR(100);
-    p_MJAIAgents_DefaultCoAgentID_ModelSelectionMode VARCHAR(50);
-    p_MJAIAgents_DefaultCoAgentID_PayloadDownstreamPaths TEXT;
-    p_MJAIAgents_DefaultCoAgentID_PayloadUpstreamPaths TEXT;
-    p_MJAIAgents_DefaultCoAgentID_PayloadSelfReadPaths TEXT;
-    p_MJAIAgents_DefaultCoAgentID_PayloadSelfWritePaths TEXT;
-    p_MJAIAgents_DefaultCoAgentID_PayloadScope TEXT;
-    p_MJAIAgents_DefaultCoAgentID_FinalPayloadValidation TEXT;
-    p_MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMode VARCHAR(25);
-    p_MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMaxRetries INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_MaxCostPerRun NUMERIC(10,4);
-    p_MJAIAgents_DefaultCoAgentID_MaxTokensPerRun INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_MaxIterationsPerRun INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_MaxTimePerRun INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_MinExecutionsPerRun INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_MaxExecutionsPerRun INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_StartingPayloadValidation TEXT;
-    p_MJAIAgents_DefaultCoAgentID_StartingPayloadValidationMode VARCHAR(25);
-    p_MJAIAgents_DefaultCoAgentID_DefaultPromptEffortLevel INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_ChatHandlingOption VARCHAR(30);
-    p_MJAIAgents_DefaultCoAgentID_DefaultArtifactTypeID UUID;
-    p_MJAIAgents_DefaultCoAgentID_OwnerUserID UUID;
-    p_MJAIAgents_DefaultCoAgentID_InvocationMode VARCHAR(20);
-    p_MJAIAgents_DefaultCoAgentID_ArtifactCreationMode VARCHAR(20);
-    p_MJAIAgents_DefaultCoAgentID_FunctionalRequirements TEXT;
-    p_MJAIAgents_DefaultCoAgentID_TechnicalDesign TEXT;
-    p_MJAIAgents_DefaultCoAgentID_InjectNotes BOOLEAN;
-    p_MJAIAgents_DefaultCoAgentID_MaxNotesToInject INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_NoteInjectionStrategy VARCHAR(20);
-    p_MJAIAgents_DefaultCoAgentID_InjectExamples BOOLEAN;
-    p_MJAIAgents_DefaultCoAgentID_MaxExamplesToInject INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_ExampleInjectionStrategy VARCHAR(20);
-    p_MJAIAgents_DefaultCoAgentID_IsRestricted BOOLEAN;
-    p_MJAIAgents_DefaultCoAgentID_MessageMode VARCHAR(50);
-    p_MJAIAgents_DefaultCoAgentID_MaxMessages INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_AttachmentStorageProviderID UUID;
-    p_MJAIAgents_DefaultCoAgentID_AttachmentRootPath VARCHAR(500);
-    p_MJAIAgents_DefaultCoAgentID_InlineStorageThresholdBytes INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_AgentTypePromptParams TEXT;
-    p_MJAIAgents_DefaultCoAgentID_ScopeConfig TEXT;
-    p_MJAIAgents_DefaultCoAgentID_NoteRetentionDays INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_ExampleRetentionDays INTEGER;
-    p_MJAIAgents_DefaultCoAgentID_AutoArchiveEnabled BOOLEAN;
-    p_MJAIAgents_DefaultCoAgentID_RerankerConfiguration TEXT;
-    p_MJAIAgents_DefaultCoAgentID_CategoryID UUID;
-    p_MJAIAgents_DefaultCoAgentID_AllowEphemeralClientTools BOOLEAN;
-    p_MJAIAgents_DefaultCoAgentID_DefaultStorageAccountID UUID;
-    p_MJAIAgents_DefaultCoAgentID_SearchScopeAccess VARCHAR(20);
-    p_MJAIAgents_DefaultCoAgentID_AcceptUnregisteredFiles BOOLEAN;
-    p_MJAIAgents_DefaultCoAgentID_DefaultCoAgentID UUID;
-    p_MJAIAgents_DefaultCoAgentID_TypeConfiguration TEXT;
-    p_MJAIBridgeAgentIdentities_AgentIDID UUID;
-    p_MJAIPromptRuns_AgentIDID UUID;
-    p_MJAIPromptRuns_AgentID_PromptID UUID;
-    p_MJAIPromptRuns_AgentID_ModelID UUID;
-    p_MJAIPromptRuns_AgentID_VendorID UUID;
-    p_MJAIPromptRuns_AgentID_AgentID UUID;
-    p_MJAIPromptRuns_AgentID_ConfigurationID UUID;
-    p_MJAIPromptRuns_AgentID_RunAt TIMESTAMPTZ;
-    p_MJAIPromptRuns_AgentID_CompletedAt TIMESTAMPTZ;
-    p_MJAIPromptRuns_AgentID_ExecutionTimeMS INTEGER;
-    p_MJAIPromptRuns_AgentID_Messages TEXT;
-    p_MJAIPromptRuns_AgentID_Result TEXT;
-    p_MJAIPromptRuns_AgentID_TokensUsed INTEGER;
-    p_MJAIPromptRuns_AgentID_TokensPrompt INTEGER;
-    p_MJAIPromptRuns_AgentID_TokensCompletion INTEGER;
-    p_MJAIPromptRuns_AgentID_TotalCost NUMERIC(18,6);
-    p_MJAIPromptRuns_AgentID_Success BOOLEAN;
-    p_MJAIPromptRuns_AgentID_ErrorMessage TEXT;
-    p_MJAIPromptRuns_AgentID_ParentID UUID;
-    p_MJAIPromptRuns_AgentID_RunType VARCHAR(20);
-    p_MJAIPromptRuns_AgentID_ExecutionOrder INTEGER;
-    p_MJAIPromptRuns_AgentID_AgentRunID UUID;
-    p_MJAIPromptRuns_AgentID_Cost NUMERIC(19,8);
-    p_MJAIPromptRuns_AgentID_CostCurrency VARCHAR(10);
-    p_MJAIPromptRuns_AgentID_TokensUsedRollup INTEGER;
-    p_MJAIPromptRuns_AgentID_TokensPromptRollup INTEGER;
-    p_MJAIPromptRuns_AgentID_TokensCompletionRollup INTEGER;
-    p_MJAIPromptRuns_AgentID_Temperature NUMERIC(3,2);
-    p_MJAIPromptRuns_AgentID_TopP NUMERIC(3,2);
-    p_MJAIPromptRuns_AgentID_TopK INTEGER;
-    p_MJAIPromptRuns_AgentID_MinP NUMERIC(3,2);
-    p_MJAIPromptRuns_AgentID_FrequencyPenalty NUMERIC(3,2);
-    p_MJAIPromptRuns_AgentID_PresencePenalty NUMERIC(3,2);
-    p_MJAIPromptRuns_AgentID_Seed INTEGER;
-    p_MJAIPromptRuns_AgentID_StopSequences TEXT;
-    p_MJAIPromptRuns_AgentID_ResponseFormat VARCHAR(50);
-    p_MJAIPromptRuns_AgentID_LogProbs BOOLEAN;
-    p_MJAIPromptRuns_AgentID_TopLogProbs INTEGER;
-    p_MJAIPromptRuns_AgentID_DescendantCost NUMERIC(18,6);
-    p_MJAIPromptRuns_AgentID_ValidationAttemptCount INTEGER;
-    p_MJAIPromptRuns_AgentID_SuccessfulValidationCount INTEGER;
-    p_MJAIPromptRuns_AgentID_FinalValidationPassed BOOLEAN;
-    p_MJAIPromptRuns_AgentID_ValidationBehavior VARCHAR(50);
-    p_MJAIPromptRuns_AgentID_RetryStrategy VARCHAR(50);
-    p_MJAIPromptRuns_AgentID_MaxRetriesConfigured INTEGER;
-    p_MJAIPromptRuns_AgentID_FinalValidationError VARCHAR(500);
-    p_MJAIPromptRuns_AgentID_ValidationErrorCount INTEGER;
-    p_MJAIPromptRuns_AgentID_CommonValidationError VARCHAR(255);
-    p_MJAIPromptRuns_AgentID_FirstAttemptAt TIMESTAMPTZ;
-    p_MJAIPromptRuns_AgentID_LastAttemptAt TIMESTAMPTZ;
-    p_MJAIPromptRuns_AgentID_TotalRetryDurationMS INTEGER;
-    p_MJAIPromptRuns_AgentID_ValidationAttempts TEXT;
-    p_MJAIPromptRuns_AgentID_ValidationSummary TEXT;
-    p_MJAIPromptRuns_AgentID_FailoverAttempts INTEGER;
-    p_MJAIPromptRuns_AgentID_FailoverErrors TEXT;
-    p_MJAIPromptRuns_AgentID_FailoverDurations TEXT;
-    p_MJAIPromptRuns_AgentID_OriginalModelID UUID;
-    p_MJAIPromptRuns_AgentID_OriginalRequestStartTime TIMESTAMPTZ;
-    p_MJAIPromptRuns_AgentID_TotalFailoverDuration INTEGER;
-    p_MJAIPromptRuns_AgentID_RerunFromPromptRunID UUID;
-    p_MJAIPromptRuns_AgentID_ModelSelection TEXT;
-    p_MJAIPromptRuns_AgentID_Status VARCHAR(50);
-    p_MJAIPromptRuns_AgentID_Cancelled BOOLEAN;
-    p_MJAIPromptRuns_AgentID_CancellationReason TEXT;
-    p_MJAIPromptRuns_AgentID_ModelPowerRank INTEGER;
-    p_MJAIPromptRuns_AgentID_SelectionStrategy VARCHAR(50);
-    p_MJAIPromptRuns_AgentID_CacheHit BOOLEAN;
-    p_MJAIPromptRuns_AgentID_CacheKey VARCHAR(500);
-    p_MJAIPromptRuns_AgentID_JudgeID UUID;
-    p_MJAIPromptRuns_AgentID_JudgeScore DOUBLE PRECISION;
-    p_MJAIPromptRuns_AgentID_WasSelectedResult BOOLEAN;
-    p_MJAIPromptRuns_AgentID_StreamingEnabled BOOLEAN;
-    p_MJAIPromptRuns_AgentID_FirstTokenTime INTEGER;
-    p_MJAIPromptRuns_AgentID_ErrorDetails TEXT;
-    p_MJAIPromptRuns_AgentID_ChildPromptID UUID;
-    p_MJAIPromptRuns_AgentID_QueueTime INTEGER;
-    p_MJAIPromptRuns_AgentID_PromptTime INTEGER;
-    p_MJAIPromptRuns_AgentID_CompletionTime INTEGER;
-    p_MJAIPromptRuns_AgentID_ModelSpecificResponseDetails TEXT;
-    p_MJAIPromptRuns_AgentID_EffortLevel INTEGER;
-    p_MJAIPromptRuns_AgentID_RunName VARCHAR(255);
-    p_MJAIPromptRuns_AgentID_Comments TEXT;
-    p_MJAIPromptRuns_AgentID_TestRunID UUID;
-    p_MJAIPromptRuns_AgentID_AssistantPrefill TEXT;
-    p_MJAIPromptRuns_AgentID_TokensCacheRead INTEGER;
-    p_MJAIPromptRuns_AgentID_TokensCacheWrite INTEGER;
-    p_MJAIPromptRuns_AgentID_TokensCacheReadRollup INTEGER;
-    p_MJAIPromptRuns_AgentID_TokensCacheWriteRollup INTEGER;
-    p_MJAIResultCache_AgentIDID UUID;
-    p_MJAIResultCache_AgentID_AIPromptID UUID;
-    p_MJAIResultCache_AgentID_AIModelID UUID;
-    p_MJAIResultCache_AgentID_RunAt TIMESTAMPTZ;
-    p_MJAIResultCache_AgentID_PromptText TEXT;
-    p_MJAIResultCache_AgentID_ResultText TEXT;
-    p_MJAIResultCache_AgentID_Status VARCHAR(50);
-    p_MJAIResultCache_AgentID_ExpiredOn TIMESTAMPTZ;
-    p_MJAIResultCache_AgentID_VendorID UUID;
-    p_MJAIResultCache_AgentID_AgentID UUID;
-    p_MJAIResultCache_AgentID_ConfigurationID UUID;
-    p_MJAIResultCache_AgentID_PromptEmbedding BYTEA;
-    p_MJAIResultCache_AgentID_PromptRunID UUID;
-    p_MJConversationDetails_AgentIDID UUID;
-    p_MJConversationDetails_AgentID_ConversationID UUID;
-    p_MJConversationDetails_AgentID_ExternalID VARCHAR(100);
-    p_MJConversationDetails_AgentID_Role VARCHAR(20);
-    p_MJConversationDetails_AgentID_Message TEXT;
-    p_MJConversationDetails_AgentID_Error TEXT;
-    p_MJConversationDetails_AgentID_HiddenToUser BOOLEAN;
-    p_MJConversationDetails_AgentID_UserRating INTEGER;
-    p_MJConversationDetails_AgentID_UserFeedback TEXT;
-    p_MJConversationDetails_AgentID_ReflectionInsights TEXT;
-    p_MJConversationDetails_AgentID_SummaryOfEarlierConversation TEXT;
-    p_MJConversationDetails_AgentID_UserID UUID;
-    p_MJConversationDetails_AgentID_ArtifactID UUID;
-    p_MJConversationDetails_AgentID_ArtifactVersionID UUID;
-    p_MJConversationDetails_AgentID_CompletionTime BIGINT;
-    p_MJConversationDetails_AgentID_IsPinned BOOLEAN;
-    p_MJConversationDetails_AgentID_ParentID UUID;
-    p_MJConversationDetails_AgentID_AgentID UUID;
-    p_MJConversationDetails_AgentID_Status VARCHAR(20);
-    p_MJConversationDetails_AgentID_SuggestedResponses TEXT;
-    p_MJConversationDetails_AgentID_TestRunID UUID;
-    p_MJConversationDetails_AgentID_ResponseForm TEXT;
-    p_MJConversationDetails_AgentID_ActionableCommands TEXT;
-    p_MJConversationDetails_AgentID_AutomaticCommands TEXT;
-    p_MJConversationDetails_AgentID_OriginalMessageChanged BOOLEAN;
-    p_MJConversationDetails_AgentID_AgentSessionID UUID;
-    p_MJConversations_DefaultAgentIDID UUID;
-    p_MJConversations_DefaultAgentID_UserID UUID;
-    p_MJConversations_DefaultAgentID_ExternalID VARCHAR(500);
-    p_MJConversations_DefaultAgentID_Name VARCHAR(255);
-    p_MJConversations_DefaultAgentID_Description TEXT;
-    p_MJConversations_DefaultAgentID_Type VARCHAR(50);
-    p_MJConversations_DefaultAgentID_IsArchived BOOLEAN;
-    p_MJConversations_DefaultAgentID_LinkedEntityID UUID;
-    p_MJConversations_DefaultAgentID_LinkedRecordID VARCHAR(500);
-    p_MJConversations_DefaultAgentID_DataContextID UUID;
-    p_MJConversations_DefaultAgentID_Status VARCHAR(20);
-    p_MJConversations_DefaultAgentID_EnvironmentID UUID;
-    p_MJConversations_DefaultAgentID_ProjectID UUID;
-    p_MJConversations_DefaultAgentID_IsPinned BOOLEAN;
-    p_MJConversations_DefaultAgentID_TestRunID UUID;
-    p_MJConversations_DefaultAgentID_ApplicationScope VARCHAR(20);
-    p_MJConversations_DefaultAgentID_ApplicationID UUID;
-    p_MJConversations_DefaultAgentID_DefaultAgentID UUID;
-    p_MJConversations_DefaultAgentID_AdditionalData TEXT;
-    p_MJSearchExecutionLogs_AIAgentIDID UUID;
-    p_MJSearchExecutionLogs_AIAgentID_SearchScopeID UUID;
-    p_MJSearchExecutionLogs_AIAgentID_UserID UUID;
-    p_MJSearchExecutionLogs_AIAgentID_AIAgentID UUID;
-    p_MJSearchExecutionLogs_AIAgentID_Query TEXT;
-    p_MJSearchExecutionLogs_AIAgentID_TotalDurationMs INTEGER;
-    p_MJSearchExecutionLogs_AIAgentID_ResultCount INTEGER;
-    p_MJSearchExecutionLogs_AIAgentID_RerankerName VARCHAR(100);
-    p_MJSearchExecutionLogs_AIAgentID_RerankerCostCents NUMERIC(10,4);
-    p_MJSearchExecutionLogs_AIAgentID_Status VARCHAR(20);
-    p_MJSearchExecutionLogs_AIAgentID_FailureReason VARCHAR(500);
-    p_MJSearchExecutionLogs_AIAgentID_ProvidersJSON TEXT;
-    p_MJTasks_AgentIDID UUID;
-    p_MJTasks_AgentID_ParentID UUID;
-    p_MJTasks_AgentID_Name VARCHAR(255);
-    p_MJTasks_AgentID_Description TEXT;
-    p_MJTasks_AgentID_TypeID UUID;
-    p_MJTasks_AgentID_EnvironmentID UUID;
-    p_MJTasks_AgentID_ProjectID UUID;
-    p_MJTasks_AgentID_ConversationDetailID UUID;
-    p_MJTasks_AgentID_UserID UUID;
-    p_MJTasks_AgentID_AgentID UUID;
-    p_MJTasks_AgentID_Status VARCHAR(50);
-    p_MJTasks_AgentID_PercentComplete INTEGER;
-    p_MJTasks_AgentID_DueAt TIMESTAMPTZ;
-    p_MJTasks_AgentID_StartedAt TIMESTAMPTZ;
-    p_MJTasks_AgentID_CompletedAt TIMESTAMPTZ;
-BEGIN
--- Cascade update on Action using cursor to call spUpdateAction
-
-
-    FOR _rec IN SELECT "ID", "CategoryID", "Name", "Description", "Type", "UserPrompt", "UserComments", "Code", "CodeComments", "CodeApprovalStatus", "CodeApprovalComments", "CodeApprovedByUserID", "CodeApprovedAt", "CodeLocked", "ForceCodeGeneration", "RetentionPeriod", "Status", "DriverClass", "ParentID", "IconClass", "DefaultCompactPromptID", "Config", "RuntimeActionConfiguration", "MaxExecutionTimeMS", "CreatedByAgentID" FROM __mj."Action" WHERE "CreatedByAgentID" = p_ID
-    LOOP
-        p_MJActions_CreatedByAgentIDID := _rec."ID";
-        p_MJActions_CreatedByAgentID_CategoryID := _rec."CategoryID";
-        p_MJActions_CreatedByAgentID_Name := _rec."Name";
-        p_MJActions_CreatedByAgentID_Description := _rec."Description";
-        p_MJActions_CreatedByAgentID_Type := _rec."Type";
-        p_MJActions_CreatedByAgentID_UserPrompt := _rec."UserPrompt";
-        p_MJActions_CreatedByAgentID_UserComments := _rec."UserComments";
-        p_MJActions_CreatedByAgentID_Code := _rec."Code";
-        p_MJActions_CreatedByAgentID_CodeComments := _rec."CodeComments";
-        p_MJActions_CreatedByAgentID_CodeApprovalStatus := _rec."CodeApprovalStatus";
-        p_MJActions_CreatedByAgentID_CodeApprovalComments := _rec."CodeApprovalComments";
-        p_MJActions_CreatedByAgentID_CodeApprovedByUserID := _rec."CodeApprovedByUserID";
-        p_MJActions_CreatedByAgentID_CodeApprovedAt := _rec."CodeApprovedAt";
-        p_MJActions_CreatedByAgentID_CodeLocked := _rec."CodeLocked";
-        p_MJActions_CreatedByAgentID_ForceCodeGeneration := _rec."ForceCodeGeneration";
-        p_MJActions_CreatedByAgentID_RetentionPeriod := _rec."RetentionPeriod";
-        p_MJActions_CreatedByAgentID_Status := _rec."Status";
-        p_MJActions_CreatedByAgentID_DriverClass := _rec."DriverClass";
-        p_MJActions_CreatedByAgentID_ParentID := _rec."ParentID";
-        p_MJActions_CreatedByAgentID_IconClass := _rec."IconClass";
-        p_MJActions_CreatedByAgentID_DefaultCompactPromptID := _rec."DefaultCompactPromptID";
-        p_MJActions_CreatedByAgentID_Config := _rec."Config";
-        p_MJActions_CreatedByAgentID_RuntimeActionConfiguration := _rec."RuntimeActionConfiguration";
-        p_MJActions_CreatedByAgentID_MaxExecutionTimeMS := _rec."MaxExecutionTimeMS";
-        p_MJActions_CreatedByAgentID_CreatedByAgentID := _rec."CreatedByAgentID";
-        -- Set the FK field to NULL
-        p_MJActions_CreatedByAgentID_CreatedByAgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAction"(p_ID => p_MJActions_CreatedByAgentIDID, p_CategoryID => p_MJActions_CreatedByAgentID_CategoryID, p_Name => p_MJActions_CreatedByAgentID_Name, p_Description => p_MJActions_CreatedByAgentID_Description, p_Type => p_MJActions_CreatedByAgentID_Type, p_UserPrompt => p_MJActions_CreatedByAgentID_UserPrompt, p_UserComments => p_MJActions_CreatedByAgentID_UserComments, p_Code => p_MJActions_CreatedByAgentID_Code, p_CodeComments => p_MJActions_CreatedByAgentID_CodeComments, p_CodeApprovalStatus => p_MJActions_CreatedByAgentID_CodeApprovalStatus, p_CodeApprovalComments => p_MJActions_CreatedByAgentID_CodeApprovalComments, p_CodeApprovedByUserID => p_MJActions_CreatedByAgentID_CodeApprovedByUserID, p_CodeApprovedAt => p_MJActions_CreatedByAgentID_CodeApprovedAt, p_CodeLocked => p_MJActions_CreatedByAgentID_CodeLocked, p_ForceCodeGeneration => p_MJActions_CreatedByAgentID_ForceCodeGeneration, p_RetentionPeriod => p_MJActions_CreatedByAgentID_RetentionPeriod, p_Status => p_MJActions_CreatedByAgentID_Status, p_DriverClass => p_MJActions_CreatedByAgentID_DriverClass, p_ParentID => p_MJActions_CreatedByAgentID_ParentID, p_IconClass => p_MJActions_CreatedByAgentID_IconClass, p_DefaultCompactPromptID => p_MJActions_CreatedByAgentID_DefaultCompactPromptID, p_Config => p_MJActions_CreatedByAgentID_Config, p_RuntimeActionConfiguration => p_MJActions_CreatedByAgentID_RuntimeActionConfiguration, p_MaxExecutionTimeMS => p_MJActions_CreatedByAgentID_MaxExecutionTimeMS, p_CreatedByAgentID_Clear => 1, p_CreatedByAgentID => p_MJActions_CreatedByAgentID_CreatedByAgentID);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentAction using cursor to call spUpdateAIAgentAction
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "ActionID", "Status", "MinExecutionsPerRun", "MaxExecutionsPerRun", "ResultExpirationTurns", "ResultExpirationMode", "CompactMode", "CompactLength", "CompactPromptID" FROM __mj."AIAgentAction" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentActions_AgentIDID := _rec."ID";
-        p_MJAIAgentActions_AgentID_AgentID := _rec."AgentID";
-        p_MJAIAgentActions_AgentID_ActionID := _rec."ActionID";
-        p_MJAIAgentActions_AgentID_Status := _rec."Status";
-        p_MJAIAgentActions_AgentID_MinExecutionsPerRun := _rec."MinExecutionsPerRun";
-        p_MJAIAgentActions_AgentID_MaxExecutionsPerRun := _rec."MaxExecutionsPerRun";
-        p_MJAIAgentActions_AgentID_ResultExpirationTurns := _rec."ResultExpirationTurns";
-        p_MJAIAgentActions_AgentID_ResultExpirationMode := _rec."ResultExpirationMode";
-        p_MJAIAgentActions_AgentID_CompactMode := _rec."CompactMode";
-        p_MJAIAgentActions_AgentID_CompactLength := _rec."CompactLength";
-        p_MJAIAgentActions_AgentID_CompactPromptID := _rec."CompactPromptID";
-        -- Set the FK field to NULL
-        p_MJAIAgentActions_AgentID_AgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentAction"(p_ID => p_MJAIAgentActions_AgentIDID, p_AgentID_Clear => 1, p_AgentID => p_MJAIAgentActions_AgentID_AgentID, p_ActionID => p_MJAIAgentActions_AgentID_ActionID, p_Status => p_MJAIAgentActions_AgentID_Status, p_MinExecutionsPerRun => p_MJAIAgentActions_AgentID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgentActions_AgentID_MaxExecutionsPerRun, p_ResultExpirationTurns => p_MJAIAgentActions_AgentID_ResultExpirationTurns, p_ResultExpirationMode => p_MJAIAgentActions_AgentID_ResultExpirationMode, p_CompactMode => p_MJAIAgentActions_AgentID_CompactMode, p_CompactLength => p_MJAIAgentActions_AgentID_CompactLength, p_CompactPromptID => p_MJAIAgentActions_AgentID_CompactPromptID);
-
-    END LOOP;
-
-    
-    -- Cascade delete from AIAgentArtifactType using cursor to call spDeleteAIAgentArtifactType
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentArtifactType" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentArtifactTypes_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentArtifactType"(p_ID => p_MJAIAgentArtifactTypes_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentClientTool using cursor to call spDeleteAIAgentClientTool
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentClientTool" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentClientTools_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentClientTool"(p_ID => p_MJAIAgentClientTools_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentCoAgent using cursor to call spDeleteAIAgentCoAgent
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentCoAgent" WHERE "CoAgentID" = p_ID
-    LOOP
-        p_MJAIAgentCoAgents_CoAgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentCoAgent"(p_ID => p_MJAIAgentCoAgents_CoAgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade update on AIAgentCoAgent using cursor to call spUpdateAIAgentCoAgent
-
-
-    FOR _rec IN SELECT "ID", "CoAgentID", "TargetAgentID", "TargetAgentTypeID", "Type", "IsDefault", "Sequence", "Status", "Configuration" FROM __mj."AIAgentCoAgent" WHERE "TargetAgentID" = p_ID
-    LOOP
-        p_MJAIAgentCoAgents_TargetAgentIDID := _rec."ID";
-        p_MJAIAgentCoAgents_TargetAgentID_CoAgentID := _rec."CoAgentID";
-        p_MJAIAgentCoAgents_TargetAgentID_TargetAgentID := _rec."TargetAgentID";
-        p_MJAIAgentCoAgents_TargetAgentID_TargetAgentTypeID := _rec."TargetAgentTypeID";
-        p_MJAIAgentCoAgents_TargetAgentID_Type := _rec."Type";
-        p_MJAIAgentCoAgents_TargetAgentID_IsDefault := _rec."IsDefault";
-        p_MJAIAgentCoAgents_TargetAgentID_Sequence := _rec."Sequence";
-        p_MJAIAgentCoAgents_TargetAgentID_Status := _rec."Status";
-        p_MJAIAgentCoAgents_TargetAgentID_Configuration := _rec."Configuration";
-        -- Set the FK field to NULL
-        p_MJAIAgentCoAgents_TargetAgentID_TargetAgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentCoAgent"(p_ID => p_MJAIAgentCoAgents_TargetAgentIDID, p_CoAgentID => p_MJAIAgentCoAgents_TargetAgentID_CoAgentID, p_TargetAgentID_Clear => 1, p_TargetAgentID => p_MJAIAgentCoAgents_TargetAgentID_TargetAgentID, p_TargetAgentTypeID => p_MJAIAgentCoAgents_TargetAgentID_TargetAgentTypeID, p_Type => p_MJAIAgentCoAgents_TargetAgentID_Type, p_IsDefault => p_MJAIAgentCoAgents_TargetAgentID_IsDefault, p_Sequence => p_MJAIAgentCoAgents_TargetAgentID_Sequence, p_Status => p_MJAIAgentCoAgents_TargetAgentID_Status, p_Configuration => p_MJAIAgentCoAgents_TargetAgentID_Configuration);
-
-    END LOOP;
-
-    
-    -- Cascade delete from AIAgentConfiguration using cursor to call spDeleteAIAgentConfiguration
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentConfiguration" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentConfigurations_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentConfiguration"(p_ID => p_MJAIAgentConfigurations_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentDataSource using cursor to call spDeleteAIAgentDataSource
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentDataSource" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentDataSources_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentDataSource"(p_ID => p_MJAIAgentDataSources_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentExample using cursor to call spDeleteAIAgentExample
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentExample" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentExamples_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentExample"(p_ID => p_MJAIAgentExamples_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentLearningCycle using cursor to call spDeleteAIAgentLearningCycle
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentLearningCycle" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentLearningCycles_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentLearningCycle"(p_ID => p_MJAIAgentLearningCycles_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentModality using cursor to call spDeleteAIAgentModality
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentModality" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentModalities_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentModality"(p_ID => p_MJAIAgentModalities_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade update on AIAgentModel using cursor to call spUpdateAIAgentModel
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "ModelID", "Active", "Priority" FROM __mj."AIAgentModel" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentModels_AgentIDID := _rec."ID";
-        p_MJAIAgentModels_AgentID_AgentID := _rec."AgentID";
-        p_MJAIAgentModels_AgentID_ModelID := _rec."ModelID";
-        p_MJAIAgentModels_AgentID_Active := _rec."Active";
-        p_MJAIAgentModels_AgentID_Priority := _rec."Priority";
-        -- Set the FK field to NULL
-        p_MJAIAgentModels_AgentID_AgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentModel"(p_ID => p_MJAIAgentModels_AgentIDID, p_AgentID_Clear => 1, p_AgentID => p_MJAIAgentModels_AgentID_AgentID, p_ModelID => p_MJAIAgentModels_AgentID_ModelID, p_Active => p_MJAIAgentModels_AgentID_Active, p_Priority => p_MJAIAgentModels_AgentID_Priority);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgentNote using cursor to call spUpdateAIAgentNote
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "AgentNoteTypeID", "Note", "UserID", "Type", "IsAutoGenerated", "Comments", "Status", "SourceConversationID", "SourceConversationDetailID", "SourceAIAgentRunID", "CompanyID", "EmbeddingVector", "EmbeddingModelID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "LastAccessedAt", "AccessCount", "ExpiresAt", "ConsolidatedIntoNoteID", "ConsolidationCount", "DerivedFromNoteIDs", "ProtectionTier", "ImportanceScore" FROM __mj."AIAgentNote" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentNotes_AgentIDID := _rec."ID";
-        p_MJAIAgentNotes_AgentID_AgentID := _rec."AgentID";
-        p_MJAIAgentNotes_AgentID_AgentNoteTypeID := _rec."AgentNoteTypeID";
-        p_MJAIAgentNotes_AgentID_Note := _rec."Note";
-        p_MJAIAgentNotes_AgentID_UserID := _rec."UserID";
-        p_MJAIAgentNotes_AgentID_Type := _rec."Type";
-        p_MJAIAgentNotes_AgentID_IsAutoGenerated := _rec."IsAutoGenerated";
-        p_MJAIAgentNotes_AgentID_Comments := _rec."Comments";
-        p_MJAIAgentNotes_AgentID_Status := _rec."Status";
-        p_MJAIAgentNotes_AgentID_SourceConversationID := _rec."SourceConversationID";
-        p_MJAIAgentNotes_AgentID_SourceConversationDetailID := _rec."SourceConversationDetailID";
-        p_MJAIAgentNotes_AgentID_SourceAIAgentRunID := _rec."SourceAIAgentRunID";
-        p_MJAIAgentNotes_AgentID_CompanyID := _rec."CompanyID";
-        p_MJAIAgentNotes_AgentID_EmbeddingVector := _rec."EmbeddingVector";
-        p_MJAIAgentNotes_AgentID_EmbeddingModelID := _rec."EmbeddingModelID";
-        p_MJAIAgentNotes_AgentID_PrimaryScopeEntityID := _rec."PrimaryScopeEntityID";
-        p_MJAIAgentNotes_AgentID_PrimaryScopeRecordID := _rec."PrimaryScopeRecordID";
-        p_MJAIAgentNotes_AgentID_SecondaryScopes := _rec."SecondaryScopes";
-        p_MJAIAgentNotes_AgentID_LastAccessedAt := _rec."LastAccessedAt";
-        p_MJAIAgentNotes_AgentID_AccessCount := _rec."AccessCount";
-        p_MJAIAgentNotes_AgentID_ExpiresAt := _rec."ExpiresAt";
-        p_MJAIAgentNotes_AgentID_ConsolidatedIntoNoteID := _rec."ConsolidatedIntoNoteID";
-        p_MJAIAgentNotes_AgentID_ConsolidationCount := _rec."ConsolidationCount";
-        p_MJAIAgentNotes_AgentID_DerivedFromNoteIDs := _rec."DerivedFromNoteIDs";
-        p_MJAIAgentNotes_AgentID_ProtectionTier := _rec."ProtectionTier";
-        p_MJAIAgentNotes_AgentID_ImportanceScore := _rec."ImportanceScore";
-        -- Set the FK field to NULL
-        p_MJAIAgentNotes_AgentID_AgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentNote"(p_ID => p_MJAIAgentNotes_AgentIDID, p_AgentID_Clear => 1, p_AgentID => p_MJAIAgentNotes_AgentID_AgentID, p_AgentNoteTypeID => p_MJAIAgentNotes_AgentID_AgentNoteTypeID, p_Note => p_MJAIAgentNotes_AgentID_Note, p_UserID => p_MJAIAgentNotes_AgentID_UserID, p_Type => p_MJAIAgentNotes_AgentID_Type, p_IsAutoGenerated => p_MJAIAgentNotes_AgentID_IsAutoGenerated, p_Comments => p_MJAIAgentNotes_AgentID_Comments, p_Status => p_MJAIAgentNotes_AgentID_Status, p_SourceConversationID => p_MJAIAgentNotes_AgentID_SourceConversationID, p_SourceConversationDetailID => p_MJAIAgentNotes_AgentID_SourceConversationDetailID, p_SourceAIAgentRunID => p_MJAIAgentNotes_AgentID_SourceAIAgentRunID, p_CompanyID => p_MJAIAgentNotes_AgentID_CompanyID, p_EmbeddingVector => p_MJAIAgentNotes_AgentID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentNotes_AgentID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentNotes_AgentID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentNotes_AgentID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentNotes_AgentID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentNotes_AgentID_LastAccessedAt, p_AccessCount => p_MJAIAgentNotes_AgentID_AccessCount, p_ExpiresAt => p_MJAIAgentNotes_AgentID_ExpiresAt, p_ConsolidatedIntoNoteID => p_MJAIAgentNotes_AgentID_ConsolidatedIntoNoteID, p_ConsolidationCount => p_MJAIAgentNotes_AgentID_ConsolidationCount, p_DerivedFromNoteIDs => p_MJAIAgentNotes_AgentID_DerivedFromNoteIDs, p_ProtectionTier => p_MJAIAgentNotes_AgentID_ProtectionTier, p_ImportanceScore => p_MJAIAgentNotes_AgentID_ImportanceScore);
-
-    END LOOP;
-
-    
-    -- Cascade delete from AIAgentPermission using cursor to call spDeleteAIAgentPermission
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentPermission" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentPermissions_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentPermission"(p_ID => p_MJAIAgentPermissions_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentPrompt using cursor to call spDeleteAIAgentPrompt
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentPrompt" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentPrompts_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentPrompt"(p_ID => p_MJAIAgentPrompts_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentRelationship using cursor to call spDeleteAIAgentRelationship
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentRelationship" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentRelationships_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRelationship"(p_ID => p_MJAIAgentRelationships_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentRelationship using cursor to call spDeleteAIAgentRelationship
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentRelationship" WHERE "SubAgentID" = p_ID
-    LOOP
-        p_MJAIAgentRelationships_SubAgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRelationship"(p_ID => p_MJAIAgentRelationships_SubAgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentRequest using cursor to call spDeleteAIAgentRequest
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentRequest" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentRequests_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRequest"(p_ID => p_MJAIAgentRequests_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentRun using cursor to call spDeleteAIAgentRun
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentRun" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentRuns_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRun"(p_ID => p_MJAIAgentRuns_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentSearchScope using cursor to call spDeleteAIAgentSearchScope
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentSearchScope" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentSearchScopes_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentSearchScope"(p_ID => p_MJAIAgentSearchScopes_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentSession using cursor to call spDeleteAIAgentSession
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentSession" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentSessions_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentSession"(p_ID => p_MJAIAgentSessions_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade delete from AIAgentStep using cursor to call spDeleteAIAgentStep
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIAgentStep" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIAgentSteps_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentStep"(p_ID => p_MJAIAgentSteps_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade update on AIAgentStep using cursor to call spUpdateAIAgentStep
-
-
-    FOR _rec IN SELECT "ID", "AgentID", "Name", "Description", "StepType", "StartingStep", "TimeoutSeconds", "RetryCount", "OnErrorBehavior", "ActionID", "SubAgentID", "PromptID", "ActionOutputMapping", "PositionX", "PositionY", "Width", "Height", "Status", "ActionInputMapping", "LoopBodyType", "Configuration" FROM __mj."AIAgentStep" WHERE "SubAgentID" = p_ID
-    LOOP
-        p_MJAIAgentSteps_SubAgentIDID := _rec."ID";
-        p_MJAIAgentSteps_SubAgentID_AgentID := _rec."AgentID";
-        p_MJAIAgentSteps_SubAgentID_Name := _rec."Name";
-        p_MJAIAgentSteps_SubAgentID_Description := _rec."Description";
-        p_MJAIAgentSteps_SubAgentID_StepType := _rec."StepType";
-        p_MJAIAgentSteps_SubAgentID_StartingStep := _rec."StartingStep";
-        p_MJAIAgentSteps_SubAgentID_TimeoutSeconds := _rec."TimeoutSeconds";
-        p_MJAIAgentSteps_SubAgentID_RetryCount := _rec."RetryCount";
-        p_MJAIAgentSteps_SubAgentID_OnErrorBehavior := _rec."OnErrorBehavior";
-        p_MJAIAgentSteps_SubAgentID_ActionID := _rec."ActionID";
-        p_MJAIAgentSteps_SubAgentID_SubAgentID := _rec."SubAgentID";
-        p_MJAIAgentSteps_SubAgentID_PromptID := _rec."PromptID";
-        p_MJAIAgentSteps_SubAgentID_ActionOutputMapping := _rec."ActionOutputMapping";
-        p_MJAIAgentSteps_SubAgentID_PositionX := _rec."PositionX";
-        p_MJAIAgentSteps_SubAgentID_PositionY := _rec."PositionY";
-        p_MJAIAgentSteps_SubAgentID_Width := _rec."Width";
-        p_MJAIAgentSteps_SubAgentID_Height := _rec."Height";
-        p_MJAIAgentSteps_SubAgentID_Status := _rec."Status";
-        p_MJAIAgentSteps_SubAgentID_ActionInputMapping := _rec."ActionInputMapping";
-        p_MJAIAgentSteps_SubAgentID_LoopBodyType := _rec."LoopBodyType";
-        p_MJAIAgentSteps_SubAgentID_Configuration := _rec."Configuration";
-        -- Set the FK field to NULL
-        p_MJAIAgentSteps_SubAgentID_SubAgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentStep"(p_ID => p_MJAIAgentSteps_SubAgentIDID, p_AgentID => p_MJAIAgentSteps_SubAgentID_AgentID, p_Name => p_MJAIAgentSteps_SubAgentID_Name, p_Description => p_MJAIAgentSteps_SubAgentID_Description, p_StepType => p_MJAIAgentSteps_SubAgentID_StepType, p_StartingStep => p_MJAIAgentSteps_SubAgentID_StartingStep, p_TimeoutSeconds => p_MJAIAgentSteps_SubAgentID_TimeoutSeconds, p_RetryCount => p_MJAIAgentSteps_SubAgentID_RetryCount, p_OnErrorBehavior => p_MJAIAgentSteps_SubAgentID_OnErrorBehavior, p_ActionID => p_MJAIAgentSteps_SubAgentID_ActionID, p_SubAgentID_Clear => 1, p_SubAgentID => p_MJAIAgentSteps_SubAgentID_SubAgentID, p_PromptID => p_MJAIAgentSteps_SubAgentID_PromptID, p_ActionOutputMapping => p_MJAIAgentSteps_SubAgentID_ActionOutputMapping, p_PositionX => p_MJAIAgentSteps_SubAgentID_PositionX, p_PositionY => p_MJAIAgentSteps_SubAgentID_PositionY, p_Width => p_MJAIAgentSteps_SubAgentID_Width, p_Height => p_MJAIAgentSteps_SubAgentID_Height, p_Status => p_MJAIAgentSteps_SubAgentID_Status, p_ActionInputMapping => p_MJAIAgentSteps_SubAgentID_ActionInputMapping, p_LoopBodyType => p_MJAIAgentSteps_SubAgentID_LoopBodyType, p_Configuration => p_MJAIAgentSteps_SubAgentID_Configuration);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgent using cursor to call spUpdateAIAgent
-
-
-    FOR _rec IN SELECT "ID", "Name", "Description", "LogoURL", "ParentID", "ExposeAsAction", "ExecutionOrder", "ExecutionMode", "EnableContextCompression", "ContextCompressionMessageThreshold", "ContextCompressionPromptID", "ContextCompressionMessageRetentionCount", "TypeID", "Status", "DriverClass", "IconClass", "ModelSelectionMode", "PayloadDownstreamPaths", "PayloadUpstreamPaths", "PayloadSelfReadPaths", "PayloadSelfWritePaths", "PayloadScope", "FinalPayloadValidation", "FinalPayloadValidationMode", "FinalPayloadValidationMaxRetries", "MaxCostPerRun", "MaxTokensPerRun", "MaxIterationsPerRun", "MaxTimePerRun", "MinExecutionsPerRun", "MaxExecutionsPerRun", "StartingPayloadValidation", "StartingPayloadValidationMode", "DefaultPromptEffortLevel", "ChatHandlingOption", "DefaultArtifactTypeID", "OwnerUserID", "InvocationMode", "ArtifactCreationMode", "FunctionalRequirements", "TechnicalDesign", "InjectNotes", "MaxNotesToInject", "NoteInjectionStrategy", "InjectExamples", "MaxExamplesToInject", "ExampleInjectionStrategy", "IsRestricted", "MessageMode", "MaxMessages", "AttachmentStorageProviderID", "AttachmentRootPath", "InlineStorageThresholdBytes", "AgentTypePromptParams", "ScopeConfig", "NoteRetentionDays", "ExampleRetentionDays", "AutoArchiveEnabled", "RerankerConfiguration", "CategoryID", "AllowEphemeralClientTools", "DefaultStorageAccountID", "SearchScopeAccess", "AcceptUnregisteredFiles", "DefaultCoAgentID", "TypeConfiguration" FROM __mj."AIAgent" WHERE "ParentID" = p_ID
-    LOOP
-        p_MJAIAgents_ParentIDID := _rec."ID";
-        p_MJAIAgents_ParentID_Name := _rec."Name";
-        p_MJAIAgents_ParentID_Description := _rec."Description";
-        p_MJAIAgents_ParentID_LogoURL := _rec."LogoURL";
-        p_MJAIAgents_ParentID_ParentID := _rec."ParentID";
-        p_MJAIAgents_ParentID_ExposeAsAction := _rec."ExposeAsAction";
-        p_MJAIAgents_ParentID_ExecutionOrder := _rec."ExecutionOrder";
-        p_MJAIAgents_ParentID_ExecutionMode := _rec."ExecutionMode";
-        p_MJAIAgents_ParentID_EnableContextCompression := _rec."EnableContextCompression";
-        p_MJAIAgents_ParentID_ContextCompressionMessageThreshold := _rec."ContextCompressionMessageThreshold";
-        p_MJAIAgents_ParentID_ContextCompressionPromptID := _rec."ContextCompressionPromptID";
-        p_MJAIAgents_ParentID_ContextCompressionMessageRetentionCount := _rec."ContextCompressionMessageRetentionCount";
-        p_MJAIAgents_ParentID_TypeID := _rec."TypeID";
-        p_MJAIAgents_ParentID_Status := _rec."Status";
-        p_MJAIAgents_ParentID_DriverClass := _rec."DriverClass";
-        p_MJAIAgents_ParentID_IconClass := _rec."IconClass";
-        p_MJAIAgents_ParentID_ModelSelectionMode := _rec."ModelSelectionMode";
-        p_MJAIAgents_ParentID_PayloadDownstreamPaths := _rec."PayloadDownstreamPaths";
-        p_MJAIAgents_ParentID_PayloadUpstreamPaths := _rec."PayloadUpstreamPaths";
-        p_MJAIAgents_ParentID_PayloadSelfReadPaths := _rec."PayloadSelfReadPaths";
-        p_MJAIAgents_ParentID_PayloadSelfWritePaths := _rec."PayloadSelfWritePaths";
-        p_MJAIAgents_ParentID_PayloadScope := _rec."PayloadScope";
-        p_MJAIAgents_ParentID_FinalPayloadValidation := _rec."FinalPayloadValidation";
-        p_MJAIAgents_ParentID_FinalPayloadValidationMode := _rec."FinalPayloadValidationMode";
-        p_MJAIAgents_ParentID_FinalPayloadValidationMaxRetries := _rec."FinalPayloadValidationMaxRetries";
-        p_MJAIAgents_ParentID_MaxCostPerRun := _rec."MaxCostPerRun";
-        p_MJAIAgents_ParentID_MaxTokensPerRun := _rec."MaxTokensPerRun";
-        p_MJAIAgents_ParentID_MaxIterationsPerRun := _rec."MaxIterationsPerRun";
-        p_MJAIAgents_ParentID_MaxTimePerRun := _rec."MaxTimePerRun";
-        p_MJAIAgents_ParentID_MinExecutionsPerRun := _rec."MinExecutionsPerRun";
-        p_MJAIAgents_ParentID_MaxExecutionsPerRun := _rec."MaxExecutionsPerRun";
-        p_MJAIAgents_ParentID_StartingPayloadValidation := _rec."StartingPayloadValidation";
-        p_MJAIAgents_ParentID_StartingPayloadValidationMode := _rec."StartingPayloadValidationMode";
-        p_MJAIAgents_ParentID_DefaultPromptEffortLevel := _rec."DefaultPromptEffortLevel";
-        p_MJAIAgents_ParentID_ChatHandlingOption := _rec."ChatHandlingOption";
-        p_MJAIAgents_ParentID_DefaultArtifactTypeID := _rec."DefaultArtifactTypeID";
-        p_MJAIAgents_ParentID_OwnerUserID := _rec."OwnerUserID";
-        p_MJAIAgents_ParentID_InvocationMode := _rec."InvocationMode";
-        p_MJAIAgents_ParentID_ArtifactCreationMode := _rec."ArtifactCreationMode";
-        p_MJAIAgents_ParentID_FunctionalRequirements := _rec."FunctionalRequirements";
-        p_MJAIAgents_ParentID_TechnicalDesign := _rec."TechnicalDesign";
-        p_MJAIAgents_ParentID_InjectNotes := _rec."InjectNotes";
-        p_MJAIAgents_ParentID_MaxNotesToInject := _rec."MaxNotesToInject";
-        p_MJAIAgents_ParentID_NoteInjectionStrategy := _rec."NoteInjectionStrategy";
-        p_MJAIAgents_ParentID_InjectExamples := _rec."InjectExamples";
-        p_MJAIAgents_ParentID_MaxExamplesToInject := _rec."MaxExamplesToInject";
-        p_MJAIAgents_ParentID_ExampleInjectionStrategy := _rec."ExampleInjectionStrategy";
-        p_MJAIAgents_ParentID_IsRestricted := _rec."IsRestricted";
-        p_MJAIAgents_ParentID_MessageMode := _rec."MessageMode";
-        p_MJAIAgents_ParentID_MaxMessages := _rec."MaxMessages";
-        p_MJAIAgents_ParentID_AttachmentStorageProviderID := _rec."AttachmentStorageProviderID";
-        p_MJAIAgents_ParentID_AttachmentRootPath := _rec."AttachmentRootPath";
-        p_MJAIAgents_ParentID_InlineStorageThresholdBytes := _rec."InlineStorageThresholdBytes";
-        p_MJAIAgents_ParentID_AgentTypePromptParams := _rec."AgentTypePromptParams";
-        p_MJAIAgents_ParentID_ScopeConfig := _rec."ScopeConfig";
-        p_MJAIAgents_ParentID_NoteRetentionDays := _rec."NoteRetentionDays";
-        p_MJAIAgents_ParentID_ExampleRetentionDays := _rec."ExampleRetentionDays";
-        p_MJAIAgents_ParentID_AutoArchiveEnabled := _rec."AutoArchiveEnabled";
-        p_MJAIAgents_ParentID_RerankerConfiguration := _rec."RerankerConfiguration";
-        p_MJAIAgents_ParentID_CategoryID := _rec."CategoryID";
-        p_MJAIAgents_ParentID_AllowEphemeralClientTools := _rec."AllowEphemeralClientTools";
-        p_MJAIAgents_ParentID_DefaultStorageAccountID := _rec."DefaultStorageAccountID";
-        p_MJAIAgents_ParentID_SearchScopeAccess := _rec."SearchScopeAccess";
-        p_MJAIAgents_ParentID_AcceptUnregisteredFiles := _rec."AcceptUnregisteredFiles";
-        p_MJAIAgents_ParentID_DefaultCoAgentID := _rec."DefaultCoAgentID";
-        p_MJAIAgents_ParentID_TypeConfiguration := _rec."TypeConfiguration";
-        -- Set the FK field to NULL
-        p_MJAIAgents_ParentID_ParentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgent"(p_ID => p_MJAIAgents_ParentIDID, p_Name => p_MJAIAgents_ParentID_Name, p_Description => p_MJAIAgents_ParentID_Description, p_LogoURL => p_MJAIAgents_ParentID_LogoURL, p_ParentID_Clear => 1, p_ParentID => p_MJAIAgents_ParentID_ParentID, p_ExposeAsAction => p_MJAIAgents_ParentID_ExposeAsAction, p_ExecutionOrder => p_MJAIAgents_ParentID_ExecutionOrder, p_ExecutionMode => p_MJAIAgents_ParentID_ExecutionMode, p_EnableContextCompression => p_MJAIAgents_ParentID_EnableContextCompression, p_ContextCompressionMessageThreshold => p_MJAIAgents_ParentID_ContextCompressionMessageThreshold, p_ContextCompressionPromptID => p_MJAIAgents_ParentID_ContextCompressionPromptID, p_ContextCompressionMessageRetentionCount => p_MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, p_TypeID => p_MJAIAgents_ParentID_TypeID, p_Status => p_MJAIAgents_ParentID_Status, p_DriverClass => p_MJAIAgents_ParentID_DriverClass, p_IconClass => p_MJAIAgents_ParentID_IconClass, p_ModelSelectionMode => p_MJAIAgents_ParentID_ModelSelectionMode, p_PayloadDownstreamPaths => p_MJAIAgents_ParentID_PayloadDownstreamPaths, p_PayloadUpstreamPaths => p_MJAIAgents_ParentID_PayloadUpstreamPaths, p_PayloadSelfReadPaths => p_MJAIAgents_ParentID_PayloadSelfReadPaths, p_PayloadSelfWritePaths => p_MJAIAgents_ParentID_PayloadSelfWritePaths, p_PayloadScope => p_MJAIAgents_ParentID_PayloadScope, p_FinalPayloadValidation => p_MJAIAgents_ParentID_FinalPayloadValidation, p_FinalPayloadValidationMode => p_MJAIAgents_ParentID_FinalPayloadValidationMode, p_FinalPayloadValidationMaxRetries => p_MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, p_MaxCostPerRun => p_MJAIAgents_ParentID_MaxCostPerRun, p_MaxTokensPerRun => p_MJAIAgents_ParentID_MaxTokensPerRun, p_MaxIterationsPerRun => p_MJAIAgents_ParentID_MaxIterationsPerRun, p_MaxTimePerRun => p_MJAIAgents_ParentID_MaxTimePerRun, p_MinExecutionsPerRun => p_MJAIAgents_ParentID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgents_ParentID_MaxExecutionsPerRun, p_StartingPayloadValidation => p_MJAIAgents_ParentID_StartingPayloadValidation, p_StartingPayloadValidationMode => p_MJAIAgents_ParentID_StartingPayloadValidationMode, p_DefaultPromptEffortLevel => p_MJAIAgents_ParentID_DefaultPromptEffortLevel, p_ChatHandlingOption => p_MJAIAgents_ParentID_ChatHandlingOption, p_DefaultArtifactTypeID => p_MJAIAgents_ParentID_DefaultArtifactTypeID, p_OwnerUserID => p_MJAIAgents_ParentID_OwnerUserID, p_InvocationMode => p_MJAIAgents_ParentID_InvocationMode, p_ArtifactCreationMode => p_MJAIAgents_ParentID_ArtifactCreationMode, p_FunctionalRequirements => p_MJAIAgents_ParentID_FunctionalRequirements, p_TechnicalDesign => p_MJAIAgents_ParentID_TechnicalDesign, p_InjectNotes => p_MJAIAgents_ParentID_InjectNotes, p_MaxNotesToInject => p_MJAIAgents_ParentID_MaxNotesToInject, p_NoteInjectionStrategy => p_MJAIAgents_ParentID_NoteInjectionStrategy, p_InjectExamples => p_MJAIAgents_ParentID_InjectExamples, p_MaxExamplesToInject => p_MJAIAgents_ParentID_MaxExamplesToInject, p_ExampleInjectionStrategy => p_MJAIAgents_ParentID_ExampleInjectionStrategy, p_IsRestricted => p_MJAIAgents_ParentID_IsRestricted, p_MessageMode => p_MJAIAgents_ParentID_MessageMode, p_MaxMessages => p_MJAIAgents_ParentID_MaxMessages, p_AttachmentStorageProviderID => p_MJAIAgents_ParentID_AttachmentStorageProviderID, p_AttachmentRootPath => p_MJAIAgents_ParentID_AttachmentRootPath, p_InlineStorageThresholdBytes => p_MJAIAgents_ParentID_InlineStorageThresholdBytes, p_AgentTypePromptParams => p_MJAIAgents_ParentID_AgentTypePromptParams, p_ScopeConfig => p_MJAIAgents_ParentID_ScopeConfig, p_NoteRetentionDays => p_MJAIAgents_ParentID_NoteRetentionDays, p_ExampleRetentionDays => p_MJAIAgents_ParentID_ExampleRetentionDays, p_AutoArchiveEnabled => p_MJAIAgents_ParentID_AutoArchiveEnabled, p_RerankerConfiguration => p_MJAIAgents_ParentID_RerankerConfiguration, p_CategoryID => p_MJAIAgents_ParentID_CategoryID, p_AllowEphemeralClientTools => p_MJAIAgents_ParentID_AllowEphemeralClientTools, p_DefaultStorageAccountID => p_MJAIAgents_ParentID_DefaultStorageAccountID, p_SearchScopeAccess => p_MJAIAgents_ParentID_SearchScopeAccess, p_AcceptUnregisteredFiles => p_MJAIAgents_ParentID_AcceptUnregisteredFiles, p_DefaultCoAgentID => p_MJAIAgents_ParentID_DefaultCoAgentID, p_TypeConfiguration => p_MJAIAgents_ParentID_TypeConfiguration);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIAgent using cursor to call spUpdateAIAgent
-
-
-    FOR _rec IN SELECT "ID", "Name", "Description", "LogoURL", "ParentID", "ExposeAsAction", "ExecutionOrder", "ExecutionMode", "EnableContextCompression", "ContextCompressionMessageThreshold", "ContextCompressionPromptID", "ContextCompressionMessageRetentionCount", "TypeID", "Status", "DriverClass", "IconClass", "ModelSelectionMode", "PayloadDownstreamPaths", "PayloadUpstreamPaths", "PayloadSelfReadPaths", "PayloadSelfWritePaths", "PayloadScope", "FinalPayloadValidation", "FinalPayloadValidationMode", "FinalPayloadValidationMaxRetries", "MaxCostPerRun", "MaxTokensPerRun", "MaxIterationsPerRun", "MaxTimePerRun", "MinExecutionsPerRun", "MaxExecutionsPerRun", "StartingPayloadValidation", "StartingPayloadValidationMode", "DefaultPromptEffortLevel", "ChatHandlingOption", "DefaultArtifactTypeID", "OwnerUserID", "InvocationMode", "ArtifactCreationMode", "FunctionalRequirements", "TechnicalDesign", "InjectNotes", "MaxNotesToInject", "NoteInjectionStrategy", "InjectExamples", "MaxExamplesToInject", "ExampleInjectionStrategy", "IsRestricted", "MessageMode", "MaxMessages", "AttachmentStorageProviderID", "AttachmentRootPath", "InlineStorageThresholdBytes", "AgentTypePromptParams", "ScopeConfig", "NoteRetentionDays", "ExampleRetentionDays", "AutoArchiveEnabled", "RerankerConfiguration", "CategoryID", "AllowEphemeralClientTools", "DefaultStorageAccountID", "SearchScopeAccess", "AcceptUnregisteredFiles", "DefaultCoAgentID", "TypeConfiguration" FROM __mj."AIAgent" WHERE "DefaultCoAgentID" = p_ID
-    LOOP
-        p_MJAIAgents_DefaultCoAgentIDID := _rec."ID";
-        p_MJAIAgents_DefaultCoAgentID_Name := _rec."Name";
-        p_MJAIAgents_DefaultCoAgentID_Description := _rec."Description";
-        p_MJAIAgents_DefaultCoAgentID_LogoURL := _rec."LogoURL";
-        p_MJAIAgents_DefaultCoAgentID_ParentID := _rec."ParentID";
-        p_MJAIAgents_DefaultCoAgentID_ExposeAsAction := _rec."ExposeAsAction";
-        p_MJAIAgents_DefaultCoAgentID_ExecutionOrder := _rec."ExecutionOrder";
-        p_MJAIAgents_DefaultCoAgentID_ExecutionMode := _rec."ExecutionMode";
-        p_MJAIAgents_DefaultCoAgentID_EnableContextCompression := _rec."EnableContextCompression";
-        p_MJAIAgents_DefaultCoAgentID_ContextCompressionMessageTh_2ba4d7 := _rec."ContextCompressionMessageThreshold";
-        p_MJAIAgents_DefaultCoAgentID_ContextCompressionPromptID := _rec."ContextCompressionPromptID";
-        p_MJAIAgents_DefaultCoAgentID_ContextCompressionMessageRe_601f1d := _rec."ContextCompressionMessageRetentionCount";
-        p_MJAIAgents_DefaultCoAgentID_TypeID := _rec."TypeID";
-        p_MJAIAgents_DefaultCoAgentID_Status := _rec."Status";
-        p_MJAIAgents_DefaultCoAgentID_DriverClass := _rec."DriverClass";
-        p_MJAIAgents_DefaultCoAgentID_IconClass := _rec."IconClass";
-        p_MJAIAgents_DefaultCoAgentID_ModelSelectionMode := _rec."ModelSelectionMode";
-        p_MJAIAgents_DefaultCoAgentID_PayloadDownstreamPaths := _rec."PayloadDownstreamPaths";
-        p_MJAIAgents_DefaultCoAgentID_PayloadUpstreamPaths := _rec."PayloadUpstreamPaths";
-        p_MJAIAgents_DefaultCoAgentID_PayloadSelfReadPaths := _rec."PayloadSelfReadPaths";
-        p_MJAIAgents_DefaultCoAgentID_PayloadSelfWritePaths := _rec."PayloadSelfWritePaths";
-        p_MJAIAgents_DefaultCoAgentID_PayloadScope := _rec."PayloadScope";
-        p_MJAIAgents_DefaultCoAgentID_FinalPayloadValidation := _rec."FinalPayloadValidation";
-        p_MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMode := _rec."FinalPayloadValidationMode";
-        p_MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMaxRetries := _rec."FinalPayloadValidationMaxRetries";
-        p_MJAIAgents_DefaultCoAgentID_MaxCostPerRun := _rec."MaxCostPerRun";
-        p_MJAIAgents_DefaultCoAgentID_MaxTokensPerRun := _rec."MaxTokensPerRun";
-        p_MJAIAgents_DefaultCoAgentID_MaxIterationsPerRun := _rec."MaxIterationsPerRun";
-        p_MJAIAgents_DefaultCoAgentID_MaxTimePerRun := _rec."MaxTimePerRun";
-        p_MJAIAgents_DefaultCoAgentID_MinExecutionsPerRun := _rec."MinExecutionsPerRun";
-        p_MJAIAgents_DefaultCoAgentID_MaxExecutionsPerRun := _rec."MaxExecutionsPerRun";
-        p_MJAIAgents_DefaultCoAgentID_StartingPayloadValidation := _rec."StartingPayloadValidation";
-        p_MJAIAgents_DefaultCoAgentID_StartingPayloadValidationMode := _rec."StartingPayloadValidationMode";
-        p_MJAIAgents_DefaultCoAgentID_DefaultPromptEffortLevel := _rec."DefaultPromptEffortLevel";
-        p_MJAIAgents_DefaultCoAgentID_ChatHandlingOption := _rec."ChatHandlingOption";
-        p_MJAIAgents_DefaultCoAgentID_DefaultArtifactTypeID := _rec."DefaultArtifactTypeID";
-        p_MJAIAgents_DefaultCoAgentID_OwnerUserID := _rec."OwnerUserID";
-        p_MJAIAgents_DefaultCoAgentID_InvocationMode := _rec."InvocationMode";
-        p_MJAIAgents_DefaultCoAgentID_ArtifactCreationMode := _rec."ArtifactCreationMode";
-        p_MJAIAgents_DefaultCoAgentID_FunctionalRequirements := _rec."FunctionalRequirements";
-        p_MJAIAgents_DefaultCoAgentID_TechnicalDesign := _rec."TechnicalDesign";
-        p_MJAIAgents_DefaultCoAgentID_InjectNotes := _rec."InjectNotes";
-        p_MJAIAgents_DefaultCoAgentID_MaxNotesToInject := _rec."MaxNotesToInject";
-        p_MJAIAgents_DefaultCoAgentID_NoteInjectionStrategy := _rec."NoteInjectionStrategy";
-        p_MJAIAgents_DefaultCoAgentID_InjectExamples := _rec."InjectExamples";
-        p_MJAIAgents_DefaultCoAgentID_MaxExamplesToInject := _rec."MaxExamplesToInject";
-        p_MJAIAgents_DefaultCoAgentID_ExampleInjectionStrategy := _rec."ExampleInjectionStrategy";
-        p_MJAIAgents_DefaultCoAgentID_IsRestricted := _rec."IsRestricted";
-        p_MJAIAgents_DefaultCoAgentID_MessageMode := _rec."MessageMode";
-        p_MJAIAgents_DefaultCoAgentID_MaxMessages := _rec."MaxMessages";
-        p_MJAIAgents_DefaultCoAgentID_AttachmentStorageProviderID := _rec."AttachmentStorageProviderID";
-        p_MJAIAgents_DefaultCoAgentID_AttachmentRootPath := _rec."AttachmentRootPath";
-        p_MJAIAgents_DefaultCoAgentID_InlineStorageThresholdBytes := _rec."InlineStorageThresholdBytes";
-        p_MJAIAgents_DefaultCoAgentID_AgentTypePromptParams := _rec."AgentTypePromptParams";
-        p_MJAIAgents_DefaultCoAgentID_ScopeConfig := _rec."ScopeConfig";
-        p_MJAIAgents_DefaultCoAgentID_NoteRetentionDays := _rec."NoteRetentionDays";
-        p_MJAIAgents_DefaultCoAgentID_ExampleRetentionDays := _rec."ExampleRetentionDays";
-        p_MJAIAgents_DefaultCoAgentID_AutoArchiveEnabled := _rec."AutoArchiveEnabled";
-        p_MJAIAgents_DefaultCoAgentID_RerankerConfiguration := _rec."RerankerConfiguration";
-        p_MJAIAgents_DefaultCoAgentID_CategoryID := _rec."CategoryID";
-        p_MJAIAgents_DefaultCoAgentID_AllowEphemeralClientTools := _rec."AllowEphemeralClientTools";
-        p_MJAIAgents_DefaultCoAgentID_DefaultStorageAccountID := _rec."DefaultStorageAccountID";
-        p_MJAIAgents_DefaultCoAgentID_SearchScopeAccess := _rec."SearchScopeAccess";
-        p_MJAIAgents_DefaultCoAgentID_AcceptUnregisteredFiles := _rec."AcceptUnregisteredFiles";
-        p_MJAIAgents_DefaultCoAgentID_DefaultCoAgentID := _rec."DefaultCoAgentID";
-        p_MJAIAgents_DefaultCoAgentID_TypeConfiguration := _rec."TypeConfiguration";
-        -- Set the FK field to NULL
-        p_MJAIAgents_DefaultCoAgentID_DefaultCoAgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgent"(p_ID => p_MJAIAgents_DefaultCoAgentIDID, p_Name => p_MJAIAgents_DefaultCoAgentID_Name, p_Description => p_MJAIAgents_DefaultCoAgentID_Description, p_LogoURL => p_MJAIAgents_DefaultCoAgentID_LogoURL, p_ParentID => p_MJAIAgents_DefaultCoAgentID_ParentID, p_ExposeAsAction => p_MJAIAgents_DefaultCoAgentID_ExposeAsAction, p_ExecutionOrder => p_MJAIAgents_DefaultCoAgentID_ExecutionOrder, p_ExecutionMode => p_MJAIAgents_DefaultCoAgentID_ExecutionMode, p_EnableContextCompression => p_MJAIAgents_DefaultCoAgentID_EnableContextCompression, p_ContextCompressionMessageThreshold => p_MJAIAgents_DefaultCoAgentID_ContextCompressionMessageTh_2ba4d7, p_ContextCompressionPromptID => p_MJAIAgents_DefaultCoAgentID_ContextCompressionPromptID, p_ContextCompressionMessageRetentionCount => p_MJAIAgents_DefaultCoAgentID_ContextCompressionMessageRe_601f1d, p_TypeID => p_MJAIAgents_DefaultCoAgentID_TypeID, p_Status => p_MJAIAgents_DefaultCoAgentID_Status, p_DriverClass => p_MJAIAgents_DefaultCoAgentID_DriverClass, p_IconClass => p_MJAIAgents_DefaultCoAgentID_IconClass, p_ModelSelectionMode => p_MJAIAgents_DefaultCoAgentID_ModelSelectionMode, p_PayloadDownstreamPaths => p_MJAIAgents_DefaultCoAgentID_PayloadDownstreamPaths, p_PayloadUpstreamPaths => p_MJAIAgents_DefaultCoAgentID_PayloadUpstreamPaths, p_PayloadSelfReadPaths => p_MJAIAgents_DefaultCoAgentID_PayloadSelfReadPaths, p_PayloadSelfWritePaths => p_MJAIAgents_DefaultCoAgentID_PayloadSelfWritePaths, p_PayloadScope => p_MJAIAgents_DefaultCoAgentID_PayloadScope, p_FinalPayloadValidation => p_MJAIAgents_DefaultCoAgentID_FinalPayloadValidation, p_FinalPayloadValidationMode => p_MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMode, p_FinalPayloadValidationMaxRetries => p_MJAIAgents_DefaultCoAgentID_FinalPayloadValidationMaxRetries, p_MaxCostPerRun => p_MJAIAgents_DefaultCoAgentID_MaxCostPerRun, p_MaxTokensPerRun => p_MJAIAgents_DefaultCoAgentID_MaxTokensPerRun, p_MaxIterationsPerRun => p_MJAIAgents_DefaultCoAgentID_MaxIterationsPerRun, p_MaxTimePerRun => p_MJAIAgents_DefaultCoAgentID_MaxTimePerRun, p_MinExecutionsPerRun => p_MJAIAgents_DefaultCoAgentID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgents_DefaultCoAgentID_MaxExecutionsPerRun, p_StartingPayloadValidation => p_MJAIAgents_DefaultCoAgentID_StartingPayloadValidation, p_StartingPayloadValidationMode => p_MJAIAgents_DefaultCoAgentID_StartingPayloadValidationMode, p_DefaultPromptEffortLevel => p_MJAIAgents_DefaultCoAgentID_DefaultPromptEffortLevel, p_ChatHandlingOption => p_MJAIAgents_DefaultCoAgentID_ChatHandlingOption, p_DefaultArtifactTypeID => p_MJAIAgents_DefaultCoAgentID_DefaultArtifactTypeID, p_OwnerUserID => p_MJAIAgents_DefaultCoAgentID_OwnerUserID, p_InvocationMode => p_MJAIAgents_DefaultCoAgentID_InvocationMode, p_ArtifactCreationMode => p_MJAIAgents_DefaultCoAgentID_ArtifactCreationMode, p_FunctionalRequirements => p_MJAIAgents_DefaultCoAgentID_FunctionalRequirements, p_TechnicalDesign => p_MJAIAgents_DefaultCoAgentID_TechnicalDesign, p_InjectNotes => p_MJAIAgents_DefaultCoAgentID_InjectNotes, p_MaxNotesToInject => p_MJAIAgents_DefaultCoAgentID_MaxNotesToInject, p_NoteInjectionStrategy => p_MJAIAgents_DefaultCoAgentID_NoteInjectionStrategy, p_InjectExamples => p_MJAIAgents_DefaultCoAgentID_InjectExamples, p_MaxExamplesToInject => p_MJAIAgents_DefaultCoAgentID_MaxExamplesToInject, p_ExampleInjectionStrategy => p_MJAIAgents_DefaultCoAgentID_ExampleInjectionStrategy, p_IsRestricted => p_MJAIAgents_DefaultCoAgentID_IsRestricted, p_MessageMode => p_MJAIAgents_DefaultCoAgentID_MessageMode, p_MaxMessages => p_MJAIAgents_DefaultCoAgentID_MaxMessages, p_AttachmentStorageProviderID => p_MJAIAgents_DefaultCoAgentID_AttachmentStorageProviderID, p_AttachmentRootPath => p_MJAIAgents_DefaultCoAgentID_AttachmentRootPath, p_InlineStorageThresholdBytes => p_MJAIAgents_DefaultCoAgentID_InlineStorageThresholdBytes, p_AgentTypePromptParams => p_MJAIAgents_DefaultCoAgentID_AgentTypePromptParams, p_ScopeConfig => p_MJAIAgents_DefaultCoAgentID_ScopeConfig, p_NoteRetentionDays => p_MJAIAgents_DefaultCoAgentID_NoteRetentionDays, p_ExampleRetentionDays => p_MJAIAgents_DefaultCoAgentID_ExampleRetentionDays, p_AutoArchiveEnabled => p_MJAIAgents_DefaultCoAgentID_AutoArchiveEnabled, p_RerankerConfiguration => p_MJAIAgents_DefaultCoAgentID_RerankerConfiguration, p_CategoryID => p_MJAIAgents_DefaultCoAgentID_CategoryID, p_AllowEphemeralClientTools => p_MJAIAgents_DefaultCoAgentID_AllowEphemeralClientTools, p_DefaultStorageAccountID => p_MJAIAgents_DefaultCoAgentID_DefaultStorageAccountID, p_SearchScopeAccess => p_MJAIAgents_DefaultCoAgentID_SearchScopeAccess, p_AcceptUnregisteredFiles => p_MJAIAgents_DefaultCoAgentID_AcceptUnregisteredFiles, p_DefaultCoAgentID_Clear => 1, p_DefaultCoAgentID => p_MJAIAgents_DefaultCoAgentID_DefaultCoAgentID, p_TypeConfiguration => p_MJAIAgents_DefaultCoAgentID_TypeConfiguration);
-
-    END LOOP;
-
-    
-    -- Cascade delete from AIBridgeAgentIdentity using cursor to call spDeleteAIBridgeAgentIdentity
-
-    FOR _rec IN SELECT "ID" FROM __mj."AIBridgeAgentIdentity" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIBridgeAgentIdentities_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIBridgeAgentIdentity"(p_ID => p_MJAIBridgeAgentIdentities_AgentIDID);
-        
-    END LOOP;
-    
-    
-    -- Cascade update on AIPromptRun using cursor to call spUpdateAIPromptRun
-
-
-    FOR _rec IN SELECT "ID", "PromptID", "ModelID", "VendorID", "AgentID", "ConfigurationID", "RunAt", "CompletedAt", "ExecutionTimeMS", "Messages", "Result", "TokensUsed", "TokensPrompt", "TokensCompletion", "TotalCost", "Success", "ErrorMessage", "ParentID", "RunType", "ExecutionOrder", "AgentRunID", "Cost", "CostCurrency", "TokensUsedRollup", "TokensPromptRollup", "TokensCompletionRollup", "Temperature", "TopP", "TopK", "MinP", "FrequencyPenalty", "PresencePenalty", "Seed", "StopSequences", "ResponseFormat", "LogProbs", "TopLogProbs", "DescendantCost", "ValidationAttemptCount", "SuccessfulValidationCount", "FinalValidationPassed", "ValidationBehavior", "RetryStrategy", "MaxRetriesConfigured", "FinalValidationError", "ValidationErrorCount", "CommonValidationError", "FirstAttemptAt", "LastAttemptAt", "TotalRetryDurationMS", "ValidationAttempts", "ValidationSummary", "FailoverAttempts", "FailoverErrors", "FailoverDurations", "OriginalModelID", "OriginalRequestStartTime", "TotalFailoverDuration", "RerunFromPromptRunID", "ModelSelection", "Status", "Cancelled", "CancellationReason", "ModelPowerRank", "SelectionStrategy", "CacheHit", "CacheKey", "JudgeID", "JudgeScore", "WasSelectedResult", "StreamingEnabled", "FirstTokenTime", "ErrorDetails", "ChildPromptID", "QueueTime", "PromptTime", "CompletionTime", "ModelSpecificResponseDetails", "EffortLevel", "RunName", "Comments", "TestRunID", "AssistantPrefill", "TokensCacheRead", "TokensCacheWrite", "TokensCacheReadRollup", "TokensCacheWriteRollup" FROM __mj."AIPromptRun" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIPromptRuns_AgentIDID := _rec."ID";
-        p_MJAIPromptRuns_AgentID_PromptID := _rec."PromptID";
-        p_MJAIPromptRuns_AgentID_ModelID := _rec."ModelID";
-        p_MJAIPromptRuns_AgentID_VendorID := _rec."VendorID";
-        p_MJAIPromptRuns_AgentID_AgentID := _rec."AgentID";
-        p_MJAIPromptRuns_AgentID_ConfigurationID := _rec."ConfigurationID";
-        p_MJAIPromptRuns_AgentID_RunAt := _rec."RunAt";
-        p_MJAIPromptRuns_AgentID_CompletedAt := _rec."CompletedAt";
-        p_MJAIPromptRuns_AgentID_ExecutionTimeMS := _rec."ExecutionTimeMS";
-        p_MJAIPromptRuns_AgentID_Messages := _rec."Messages";
-        p_MJAIPromptRuns_AgentID_Result := _rec."Result";
-        p_MJAIPromptRuns_AgentID_TokensUsed := _rec."TokensUsed";
-        p_MJAIPromptRuns_AgentID_TokensPrompt := _rec."TokensPrompt";
-        p_MJAIPromptRuns_AgentID_TokensCompletion := _rec."TokensCompletion";
-        p_MJAIPromptRuns_AgentID_TotalCost := _rec."TotalCost";
-        p_MJAIPromptRuns_AgentID_Success := _rec."Success";
-        p_MJAIPromptRuns_AgentID_ErrorMessage := _rec."ErrorMessage";
-        p_MJAIPromptRuns_AgentID_ParentID := _rec."ParentID";
-        p_MJAIPromptRuns_AgentID_RunType := _rec."RunType";
-        p_MJAIPromptRuns_AgentID_ExecutionOrder := _rec."ExecutionOrder";
-        p_MJAIPromptRuns_AgentID_AgentRunID := _rec."AgentRunID";
-        p_MJAIPromptRuns_AgentID_Cost := _rec."Cost";
-        p_MJAIPromptRuns_AgentID_CostCurrency := _rec."CostCurrency";
-        p_MJAIPromptRuns_AgentID_TokensUsedRollup := _rec."TokensUsedRollup";
-        p_MJAIPromptRuns_AgentID_TokensPromptRollup := _rec."TokensPromptRollup";
-        p_MJAIPromptRuns_AgentID_TokensCompletionRollup := _rec."TokensCompletionRollup";
-        p_MJAIPromptRuns_AgentID_Temperature := _rec."Temperature";
-        p_MJAIPromptRuns_AgentID_TopP := _rec."TopP";
-        p_MJAIPromptRuns_AgentID_TopK := _rec."TopK";
-        p_MJAIPromptRuns_AgentID_MinP := _rec."MinP";
-        p_MJAIPromptRuns_AgentID_FrequencyPenalty := _rec."FrequencyPenalty";
-        p_MJAIPromptRuns_AgentID_PresencePenalty := _rec."PresencePenalty";
-        p_MJAIPromptRuns_AgentID_Seed := _rec."Seed";
-        p_MJAIPromptRuns_AgentID_StopSequences := _rec."StopSequences";
-        p_MJAIPromptRuns_AgentID_ResponseFormat := _rec."ResponseFormat";
-        p_MJAIPromptRuns_AgentID_LogProbs := _rec."LogProbs";
-        p_MJAIPromptRuns_AgentID_TopLogProbs := _rec."TopLogProbs";
-        p_MJAIPromptRuns_AgentID_DescendantCost := _rec."DescendantCost";
-        p_MJAIPromptRuns_AgentID_ValidationAttemptCount := _rec."ValidationAttemptCount";
-        p_MJAIPromptRuns_AgentID_SuccessfulValidationCount := _rec."SuccessfulValidationCount";
-        p_MJAIPromptRuns_AgentID_FinalValidationPassed := _rec."FinalValidationPassed";
-        p_MJAIPromptRuns_AgentID_ValidationBehavior := _rec."ValidationBehavior";
-        p_MJAIPromptRuns_AgentID_RetryStrategy := _rec."RetryStrategy";
-        p_MJAIPromptRuns_AgentID_MaxRetriesConfigured := _rec."MaxRetriesConfigured";
-        p_MJAIPromptRuns_AgentID_FinalValidationError := _rec."FinalValidationError";
-        p_MJAIPromptRuns_AgentID_ValidationErrorCount := _rec."ValidationErrorCount";
-        p_MJAIPromptRuns_AgentID_CommonValidationError := _rec."CommonValidationError";
-        p_MJAIPromptRuns_AgentID_FirstAttemptAt := _rec."FirstAttemptAt";
-        p_MJAIPromptRuns_AgentID_LastAttemptAt := _rec."LastAttemptAt";
-        p_MJAIPromptRuns_AgentID_TotalRetryDurationMS := _rec."TotalRetryDurationMS";
-        p_MJAIPromptRuns_AgentID_ValidationAttempts := _rec."ValidationAttempts";
-        p_MJAIPromptRuns_AgentID_ValidationSummary := _rec."ValidationSummary";
-        p_MJAIPromptRuns_AgentID_FailoverAttempts := _rec."FailoverAttempts";
-        p_MJAIPromptRuns_AgentID_FailoverErrors := _rec."FailoverErrors";
-        p_MJAIPromptRuns_AgentID_FailoverDurations := _rec."FailoverDurations";
-        p_MJAIPromptRuns_AgentID_OriginalModelID := _rec."OriginalModelID";
-        p_MJAIPromptRuns_AgentID_OriginalRequestStartTime := _rec."OriginalRequestStartTime";
-        p_MJAIPromptRuns_AgentID_TotalFailoverDuration := _rec."TotalFailoverDuration";
-        p_MJAIPromptRuns_AgentID_RerunFromPromptRunID := _rec."RerunFromPromptRunID";
-        p_MJAIPromptRuns_AgentID_ModelSelection := _rec."ModelSelection";
-        p_MJAIPromptRuns_AgentID_Status := _rec."Status";
-        p_MJAIPromptRuns_AgentID_Cancelled := _rec."Cancelled";
-        p_MJAIPromptRuns_AgentID_CancellationReason := _rec."CancellationReason";
-        p_MJAIPromptRuns_AgentID_ModelPowerRank := _rec."ModelPowerRank";
-        p_MJAIPromptRuns_AgentID_SelectionStrategy := _rec."SelectionStrategy";
-        p_MJAIPromptRuns_AgentID_CacheHit := _rec."CacheHit";
-        p_MJAIPromptRuns_AgentID_CacheKey := _rec."CacheKey";
-        p_MJAIPromptRuns_AgentID_JudgeID := _rec."JudgeID";
-        p_MJAIPromptRuns_AgentID_JudgeScore := _rec."JudgeScore";
-        p_MJAIPromptRuns_AgentID_WasSelectedResult := _rec."WasSelectedResult";
-        p_MJAIPromptRuns_AgentID_StreamingEnabled := _rec."StreamingEnabled";
-        p_MJAIPromptRuns_AgentID_FirstTokenTime := _rec."FirstTokenTime";
-        p_MJAIPromptRuns_AgentID_ErrorDetails := _rec."ErrorDetails";
-        p_MJAIPromptRuns_AgentID_ChildPromptID := _rec."ChildPromptID";
-        p_MJAIPromptRuns_AgentID_QueueTime := _rec."QueueTime";
-        p_MJAIPromptRuns_AgentID_PromptTime := _rec."PromptTime";
-        p_MJAIPromptRuns_AgentID_CompletionTime := _rec."CompletionTime";
-        p_MJAIPromptRuns_AgentID_ModelSpecificResponseDetails := _rec."ModelSpecificResponseDetails";
-        p_MJAIPromptRuns_AgentID_EffortLevel := _rec."EffortLevel";
-        p_MJAIPromptRuns_AgentID_RunName := _rec."RunName";
-        p_MJAIPromptRuns_AgentID_Comments := _rec."Comments";
-        p_MJAIPromptRuns_AgentID_TestRunID := _rec."TestRunID";
-        p_MJAIPromptRuns_AgentID_AssistantPrefill := _rec."AssistantPrefill";
-        p_MJAIPromptRuns_AgentID_TokensCacheRead := _rec."TokensCacheRead";
-        p_MJAIPromptRuns_AgentID_TokensCacheWrite := _rec."TokensCacheWrite";
-        p_MJAIPromptRuns_AgentID_TokensCacheReadRollup := _rec."TokensCacheReadRollup";
-        p_MJAIPromptRuns_AgentID_TokensCacheWriteRollup := _rec."TokensCacheWriteRollup";
-        -- Set the FK field to NULL
-        p_MJAIPromptRuns_AgentID_AgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_AgentIDID, p_PromptID => p_MJAIPromptRuns_AgentID_PromptID, p_ModelID => p_MJAIPromptRuns_AgentID_ModelID, p_VendorID => p_MJAIPromptRuns_AgentID_VendorID, p_AgentID_Clear => 1, p_AgentID => p_MJAIPromptRuns_AgentID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_AgentID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_AgentID_RunAt, p_CompletedAt => p_MJAIPromptRuns_AgentID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_AgentID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_AgentID_Messages, p_Result => p_MJAIPromptRuns_AgentID_Result, p_TokensUsed => p_MJAIPromptRuns_AgentID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_AgentID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_AgentID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_AgentID_TotalCost, p_Success => p_MJAIPromptRuns_AgentID_Success, p_ErrorMessage => p_MJAIPromptRuns_AgentID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_AgentID_ParentID, p_RunType => p_MJAIPromptRuns_AgentID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_AgentID_ExecutionOrder, p_AgentRunID => p_MJAIPromptRuns_AgentID_AgentRunID, p_Cost => p_MJAIPromptRuns_AgentID_Cost, p_CostCurrency => p_MJAIPromptRuns_AgentID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_AgentID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_AgentID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_AgentID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_AgentID_Temperature, p_TopP => p_MJAIPromptRuns_AgentID_TopP, p_TopK => p_MJAIPromptRuns_AgentID_TopK, p_MinP => p_MJAIPromptRuns_AgentID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_AgentID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_AgentID_PresencePenalty, p_Seed => p_MJAIPromptRuns_AgentID_Seed, p_StopSequences => p_MJAIPromptRuns_AgentID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_AgentID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_AgentID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_AgentID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_AgentID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_AgentID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_AgentID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_AgentID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_AgentID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_AgentID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_AgentID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_AgentID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_AgentID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_AgentID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_AgentID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_AgentID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_AgentID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_AgentID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_AgentID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_AgentID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_AgentID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_AgentID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_AgentID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_AgentID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_AgentID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_AgentID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_AgentID_ModelSelection, p_Status => p_MJAIPromptRuns_AgentID_Status, p_Cancelled => p_MJAIPromptRuns_AgentID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_AgentID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_AgentID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_AgentID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_AgentID_CacheHit, p_CacheKey => p_MJAIPromptRuns_AgentID_CacheKey, p_JudgeID => p_MJAIPromptRuns_AgentID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_AgentID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_AgentID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_AgentID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_AgentID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_AgentID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_AgentID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_AgentID_QueueTime, p_PromptTime => p_MJAIPromptRuns_AgentID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_AgentID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, p_EffortLevel => p_MJAIPromptRuns_AgentID_EffortLevel, p_RunName => p_MJAIPromptRuns_AgentID_RunName, p_Comments => p_MJAIPromptRuns_AgentID_Comments, p_TestRunID => p_MJAIPromptRuns_AgentID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_AgentID_AssistantPrefill, p_TokensCacheRead => p_MJAIPromptRuns_AgentID_TokensCacheRead, p_TokensCacheWrite => p_MJAIPromptRuns_AgentID_TokensCacheWrite, p_TokensCacheReadRollup => p_MJAIPromptRuns_AgentID_TokensCacheReadRollup, p_TokensCacheWriteRollup => p_MJAIPromptRuns_AgentID_TokensCacheWriteRollup);
-
-    END LOOP;
-
-    
-    -- Cascade update on AIResultCache using cursor to call spUpdateAIResultCache
-
-
-    FOR _rec IN SELECT "ID", "AIPromptID", "AIModelID", "RunAt", "PromptText", "ResultText", "Status", "ExpiredOn", "VendorID", "AgentID", "ConfigurationID", "PromptEmbedding", "PromptRunID" FROM __mj."AIResultCache" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJAIResultCache_AgentIDID := _rec."ID";
-        p_MJAIResultCache_AgentID_AIPromptID := _rec."AIPromptID";
-        p_MJAIResultCache_AgentID_AIModelID := _rec."AIModelID";
-        p_MJAIResultCache_AgentID_RunAt := _rec."RunAt";
-        p_MJAIResultCache_AgentID_PromptText := _rec."PromptText";
-        p_MJAIResultCache_AgentID_ResultText := _rec."ResultText";
-        p_MJAIResultCache_AgentID_Status := _rec."Status";
-        p_MJAIResultCache_AgentID_ExpiredOn := _rec."ExpiredOn";
-        p_MJAIResultCache_AgentID_VendorID := _rec."VendorID";
-        p_MJAIResultCache_AgentID_AgentID := _rec."AgentID";
-        p_MJAIResultCache_AgentID_ConfigurationID := _rec."ConfigurationID";
-        p_MJAIResultCache_AgentID_PromptEmbedding := _rec."PromptEmbedding";
-        p_MJAIResultCache_AgentID_PromptRunID := _rec."PromptRunID";
-        -- Set the FK field to NULL
-        p_MJAIResultCache_AgentID_AgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIResultCache"(p_ID => p_MJAIResultCache_AgentIDID, p_AIPromptID => p_MJAIResultCache_AgentID_AIPromptID, p_AIModelID => p_MJAIResultCache_AgentID_AIModelID, p_RunAt => p_MJAIResultCache_AgentID_RunAt, p_PromptText => p_MJAIResultCache_AgentID_PromptText, p_ResultText => p_MJAIResultCache_AgentID_ResultText, p_Status => p_MJAIResultCache_AgentID_Status, p_ExpiredOn => p_MJAIResultCache_AgentID_ExpiredOn, p_VendorID => p_MJAIResultCache_AgentID_VendorID, p_AgentID_Clear => 1, p_AgentID => p_MJAIResultCache_AgentID_AgentID, p_ConfigurationID => p_MJAIResultCache_AgentID_ConfigurationID, p_PromptEmbedding => p_MJAIResultCache_AgentID_PromptEmbedding, p_PromptRunID => p_MJAIResultCache_AgentID_PromptRunID);
-
-    END LOOP;
-
-    
-    -- Cascade update on ConversationDetail using cursor to call spUpdateConversationDetail
-
-
-    FOR _rec IN SELECT "ID", "ConversationID", "ExternalID", "Role", "Message", "Error", "HiddenToUser", "UserRating", "UserFeedback", "ReflectionInsights", "SummaryOfEarlierConversation", "UserID", "ArtifactID", "ArtifactVersionID", "CompletionTime", "IsPinned", "ParentID", "AgentID", "Status", "SuggestedResponses", "TestRunID", "ResponseForm", "ActionableCommands", "AutomaticCommands", "OriginalMessageChanged", "AgentSessionID" FROM __mj."ConversationDetail" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJConversationDetails_AgentIDID := _rec."ID";
-        p_MJConversationDetails_AgentID_ConversationID := _rec."ConversationID";
-        p_MJConversationDetails_AgentID_ExternalID := _rec."ExternalID";
-        p_MJConversationDetails_AgentID_Role := _rec."Role";
-        p_MJConversationDetails_AgentID_Message := _rec."Message";
-        p_MJConversationDetails_AgentID_Error := _rec."Error";
-        p_MJConversationDetails_AgentID_HiddenToUser := _rec."HiddenToUser";
-        p_MJConversationDetails_AgentID_UserRating := _rec."UserRating";
-        p_MJConversationDetails_AgentID_UserFeedback := _rec."UserFeedback";
-        p_MJConversationDetails_AgentID_ReflectionInsights := _rec."ReflectionInsights";
-        p_MJConversationDetails_AgentID_SummaryOfEarlierConversation := _rec."SummaryOfEarlierConversation";
-        p_MJConversationDetails_AgentID_UserID := _rec."UserID";
-        p_MJConversationDetails_AgentID_ArtifactID := _rec."ArtifactID";
-        p_MJConversationDetails_AgentID_ArtifactVersionID := _rec."ArtifactVersionID";
-        p_MJConversationDetails_AgentID_CompletionTime := _rec."CompletionTime";
-        p_MJConversationDetails_AgentID_IsPinned := _rec."IsPinned";
-        p_MJConversationDetails_AgentID_ParentID := _rec."ParentID";
-        p_MJConversationDetails_AgentID_AgentID := _rec."AgentID";
-        p_MJConversationDetails_AgentID_Status := _rec."Status";
-        p_MJConversationDetails_AgentID_SuggestedResponses := _rec."SuggestedResponses";
-        p_MJConversationDetails_AgentID_TestRunID := _rec."TestRunID";
-        p_MJConversationDetails_AgentID_ResponseForm := _rec."ResponseForm";
-        p_MJConversationDetails_AgentID_ActionableCommands := _rec."ActionableCommands";
-        p_MJConversationDetails_AgentID_AutomaticCommands := _rec."AutomaticCommands";
-        p_MJConversationDetails_AgentID_OriginalMessageChanged := _rec."OriginalMessageChanged";
-        p_MJConversationDetails_AgentID_AgentSessionID := _rec."AgentSessionID";
-        -- Set the FK field to NULL
-        p_MJConversationDetails_AgentID_AgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateConversationDetail"(p_ID => p_MJConversationDetails_AgentIDID, p_ConversationID => p_MJConversationDetails_AgentID_ConversationID, p_ExternalID => p_MJConversationDetails_AgentID_ExternalID, p_Role => p_MJConversationDetails_AgentID_Role, p_Message => p_MJConversationDetails_AgentID_Message, p_Error => p_MJConversationDetails_AgentID_Error, p_HiddenToUser => p_MJConversationDetails_AgentID_HiddenToUser, p_UserRating => p_MJConversationDetails_AgentID_UserRating, p_UserFeedback => p_MJConversationDetails_AgentID_UserFeedback, p_ReflectionInsights => p_MJConversationDetails_AgentID_ReflectionInsights, p_SummaryOfEarlierConversation => p_MJConversationDetails_AgentID_SummaryOfEarlierConversation, p_UserID => p_MJConversationDetails_AgentID_UserID, p_ArtifactID => p_MJConversationDetails_AgentID_ArtifactID, p_ArtifactVersionID => p_MJConversationDetails_AgentID_ArtifactVersionID, p_CompletionTime => p_MJConversationDetails_AgentID_CompletionTime, p_IsPinned => p_MJConversationDetails_AgentID_IsPinned, p_ParentID => p_MJConversationDetails_AgentID_ParentID, p_AgentID_Clear => 1, p_AgentID => p_MJConversationDetails_AgentID_AgentID, p_Status => p_MJConversationDetails_AgentID_Status, p_SuggestedResponses => p_MJConversationDetails_AgentID_SuggestedResponses, p_TestRunID => p_MJConversationDetails_AgentID_TestRunID, p_ResponseForm => p_MJConversationDetails_AgentID_ResponseForm, p_ActionableCommands => p_MJConversationDetails_AgentID_ActionableCommands, p_AutomaticCommands => p_MJConversationDetails_AgentID_AutomaticCommands, p_OriginalMessageChanged => p_MJConversationDetails_AgentID_OriginalMessageChanged, p_AgentSessionID => p_MJConversationDetails_AgentID_AgentSessionID);
-
-    END LOOP;
-
-    
-    -- Cascade update on Conversation using cursor to call spUpdateConversation
-
-
-    FOR _rec IN SELECT "ID", "UserID", "ExternalID", "Name", "Description", "Type", "IsArchived", "LinkedEntityID", "LinkedRecordID", "DataContextID", "Status", "EnvironmentID", "ProjectID", "IsPinned", "TestRunID", "ApplicationScope", "ApplicationID", "DefaultAgentID", "AdditionalData" FROM __mj."Conversation" WHERE "DefaultAgentID" = p_ID
-    LOOP
-        p_MJConversations_DefaultAgentIDID := _rec."ID";
-        p_MJConversations_DefaultAgentID_UserID := _rec."UserID";
-        p_MJConversations_DefaultAgentID_ExternalID := _rec."ExternalID";
-        p_MJConversations_DefaultAgentID_Name := _rec."Name";
-        p_MJConversations_DefaultAgentID_Description := _rec."Description";
-        p_MJConversations_DefaultAgentID_Type := _rec."Type";
-        p_MJConversations_DefaultAgentID_IsArchived := _rec."IsArchived";
-        p_MJConversations_DefaultAgentID_LinkedEntityID := _rec."LinkedEntityID";
-        p_MJConversations_DefaultAgentID_LinkedRecordID := _rec."LinkedRecordID";
-        p_MJConversations_DefaultAgentID_DataContextID := _rec."DataContextID";
-        p_MJConversations_DefaultAgentID_Status := _rec."Status";
-        p_MJConversations_DefaultAgentID_EnvironmentID := _rec."EnvironmentID";
-        p_MJConversations_DefaultAgentID_ProjectID := _rec."ProjectID";
-        p_MJConversations_DefaultAgentID_IsPinned := _rec."IsPinned";
-        p_MJConversations_DefaultAgentID_TestRunID := _rec."TestRunID";
-        p_MJConversations_DefaultAgentID_ApplicationScope := _rec."ApplicationScope";
-        p_MJConversations_DefaultAgentID_ApplicationID := _rec."ApplicationID";
-        p_MJConversations_DefaultAgentID_DefaultAgentID := _rec."DefaultAgentID";
-        p_MJConversations_DefaultAgentID_AdditionalData := _rec."AdditionalData";
-        -- Set the FK field to NULL
-        p_MJConversations_DefaultAgentID_DefaultAgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateConversation"(p_ID => p_MJConversations_DefaultAgentIDID, p_UserID => p_MJConversations_DefaultAgentID_UserID, p_ExternalID => p_MJConversations_DefaultAgentID_ExternalID, p_Name => p_MJConversations_DefaultAgentID_Name, p_Description => p_MJConversations_DefaultAgentID_Description, p_Type => p_MJConversations_DefaultAgentID_Type, p_IsArchived => p_MJConversations_DefaultAgentID_IsArchived, p_LinkedEntityID => p_MJConversations_DefaultAgentID_LinkedEntityID, p_LinkedRecordID => p_MJConversations_DefaultAgentID_LinkedRecordID, p_DataContextID => p_MJConversations_DefaultAgentID_DataContextID, p_Status => p_MJConversations_DefaultAgentID_Status, p_EnvironmentID => p_MJConversations_DefaultAgentID_EnvironmentID, p_ProjectID => p_MJConversations_DefaultAgentID_ProjectID, p_IsPinned => p_MJConversations_DefaultAgentID_IsPinned, p_TestRunID => p_MJConversations_DefaultAgentID_TestRunID, p_ApplicationScope => p_MJConversations_DefaultAgentID_ApplicationScope, p_ApplicationID => p_MJConversations_DefaultAgentID_ApplicationID, p_DefaultAgentID_Clear => 1, p_DefaultAgentID => p_MJConversations_DefaultAgentID_DefaultAgentID, p_AdditionalData => p_MJConversations_DefaultAgentID_AdditionalData);
-
-    END LOOP;
-
-    
-    -- Cascade update on SearchExecutionLog using cursor to call spUpdateSearchExecutionLog
-
-
-    FOR _rec IN SELECT "ID", "SearchScopeID", "UserID", "AIAgentID", "Query", "TotalDurationMs", "ResultCount", "RerankerName", "RerankerCostCents", "Status", "FailureReason", "ProvidersJSON" FROM __mj."SearchExecutionLog" WHERE "AIAgentID" = p_ID
-    LOOP
-        p_MJSearchExecutionLogs_AIAgentIDID := _rec."ID";
-        p_MJSearchExecutionLogs_AIAgentID_SearchScopeID := _rec."SearchScopeID";
-        p_MJSearchExecutionLogs_AIAgentID_UserID := _rec."UserID";
-        p_MJSearchExecutionLogs_AIAgentID_AIAgentID := _rec."AIAgentID";
-        p_MJSearchExecutionLogs_AIAgentID_Query := _rec."Query";
-        p_MJSearchExecutionLogs_AIAgentID_TotalDurationMs := _rec."TotalDurationMs";
-        p_MJSearchExecutionLogs_AIAgentID_ResultCount := _rec."ResultCount";
-        p_MJSearchExecutionLogs_AIAgentID_RerankerName := _rec."RerankerName";
-        p_MJSearchExecutionLogs_AIAgentID_RerankerCostCents := _rec."RerankerCostCents";
-        p_MJSearchExecutionLogs_AIAgentID_Status := _rec."Status";
-        p_MJSearchExecutionLogs_AIAgentID_FailureReason := _rec."FailureReason";
-        p_MJSearchExecutionLogs_AIAgentID_ProvidersJSON := _rec."ProvidersJSON";
-        -- Set the FK field to NULL
-        p_MJSearchExecutionLogs_AIAgentID_AIAgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateSearchExecutionLog"(p_ID => p_MJSearchExecutionLogs_AIAgentIDID, p_SearchScopeID => p_MJSearchExecutionLogs_AIAgentID_SearchScopeID, p_UserID => p_MJSearchExecutionLogs_AIAgentID_UserID, p_AIAgentID_Clear => 1, p_AIAgentID => p_MJSearchExecutionLogs_AIAgentID_AIAgentID, p_Query => p_MJSearchExecutionLogs_AIAgentID_Query, p_TotalDurationMs => p_MJSearchExecutionLogs_AIAgentID_TotalDurationMs, p_ResultCount => p_MJSearchExecutionLogs_AIAgentID_ResultCount, p_RerankerName => p_MJSearchExecutionLogs_AIAgentID_RerankerName, p_RerankerCostCents => p_MJSearchExecutionLogs_AIAgentID_RerankerCostCents, p_Status => p_MJSearchExecutionLogs_AIAgentID_Status, p_FailureReason => p_MJSearchExecutionLogs_AIAgentID_FailureReason, p_ProvidersJSON => p_MJSearchExecutionLogs_AIAgentID_ProvidersJSON);
-
-    END LOOP;
-
-    
-    -- Cascade update on Task using cursor to call spUpdateTask
-
-
-    FOR _rec IN SELECT "ID", "ParentID", "Name", "Description", "TypeID", "EnvironmentID", "ProjectID", "ConversationDetailID", "UserID", "AgentID", "Status", "PercentComplete", "DueAt", "StartedAt", "CompletedAt" FROM __mj."Task" WHERE "AgentID" = p_ID
-    LOOP
-        p_MJTasks_AgentIDID := _rec."ID";
-        p_MJTasks_AgentID_ParentID := _rec."ParentID";
-        p_MJTasks_AgentID_Name := _rec."Name";
-        p_MJTasks_AgentID_Description := _rec."Description";
-        p_MJTasks_AgentID_TypeID := _rec."TypeID";
-        p_MJTasks_AgentID_EnvironmentID := _rec."EnvironmentID";
-        p_MJTasks_AgentID_ProjectID := _rec."ProjectID";
-        p_MJTasks_AgentID_ConversationDetailID := _rec."ConversationDetailID";
-        p_MJTasks_AgentID_UserID := _rec."UserID";
-        p_MJTasks_AgentID_AgentID := _rec."AgentID";
-        p_MJTasks_AgentID_Status := _rec."Status";
-        p_MJTasks_AgentID_PercentComplete := _rec."PercentComplete";
-        p_MJTasks_AgentID_DueAt := _rec."DueAt";
-        p_MJTasks_AgentID_StartedAt := _rec."StartedAt";
-        p_MJTasks_AgentID_CompletedAt := _rec."CompletedAt";
-        -- Set the FK field to NULL
-        p_MJTasks_AgentID_AgentID := NULL;
-        -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateTask"(p_ID => p_MJTasks_AgentIDID, p_ParentID => p_MJTasks_AgentID_ParentID, p_Name => p_MJTasks_AgentID_Name, p_Description => p_MJTasks_AgentID_Description, p_TypeID => p_MJTasks_AgentID_TypeID, p_EnvironmentID => p_MJTasks_AgentID_EnvironmentID, p_ProjectID => p_MJTasks_AgentID_ProjectID, p_ConversationDetailID => p_MJTasks_AgentID_ConversationDetailID, p_UserID => p_MJTasks_AgentID_UserID, p_AgentID_Clear => 1, p_AgentID => p_MJTasks_AgentID_AgentID, p_Status => p_MJTasks_AgentID_Status, p_PercentComplete => p_MJTasks_AgentID_PercentComplete, p_DueAt => p_MJTasks_AgentID_DueAt, p_StartedAt => p_MJTasks_AgentID_StartedAt, p_CompletedAt => p_MJTasks_AgentID_CompletedAt);
-
-    END LOOP;
-
-    
-
-    DELETE FROM
-        __mj."AIAgent"
-    WHERE
-        "ID" = p_ID;
-
-    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
-
-    IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT NULL::UUID AS "_result_id";
-    ELSE
-        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
-
--- ===================== Triggers =====================
-
-CREATE OR REPLACE FUNCTION __mj."trgUpdateAIAgentNote_func"()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW."__mj_UpdatedAt" = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS "trgUpdateAIAgentNote" ON __mj."AIAgentNote";
-CREATE TRIGGER "trgUpdateAIAgentNote"
-    BEFORE UPDATE ON __mj."AIAgentNote"
-    FOR EACH ROW
-    EXECUTE FUNCTION __mj."trgUpdateAIAgentNote_func"();
-
-CREATE OR REPLACE FUNCTION __mj."trgUpdateAIRemoteBrowserProvider_func"()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW."__mj_UpdatedAt" = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS "trgUpdateAIRemoteBrowserProvider" ON __mj."AIRemoteBrowserProvider";
-CREATE TRIGGER "trgUpdateAIRemoteBrowserProvider"
-    BEFORE UPDATE ON __mj."AIRemoteBrowserProvider"
-    FOR EACH ROW
-    EXECUTE FUNCTION __mj."trgUpdateAIRemoteBrowserProvider_func"();
-
-
--- ===================== Data (INSERT/UPDATE/DELETE) =====================
-
-INSERT INTO __mj."Entity" (
-         "ID",
-         "Name",
-         "DisplayName",
-         "Description",
-         "NameSuffix",
-         "BaseTable",
-         "BaseView",
-         "SchemaName",
-         "IncludeInAPI",
-         "AllowUserSearchAPI",
-         "AllowCaching"
-         , "TrackRecordChanges"
-         , "AuditRecordAccess"
-         , "AuditViewRuns"
-         , "AllowAllRowsAPI"
-         , "AllowCreateAPI"
-         , "AllowUpdateAPI"
-         , "AllowDeleteAPI"
-         , "UserViewMaxRows"
-         , "__mj_CreatedAt"
-         , "__mj_UpdatedAt"
-      )
-      VALUES (
-         '5af7b1ab-b2d7-4bca-9edc-980980ef4af2',
-         'MJ: AI Remote Browser Providers',
-         'AI Remote Browser Providers',
-         NULL,
-         NULL,
-         'AIRemoteBrowserProvider',
-         'vwAIRemoteBrowserProviders',
-         '__mj',
-         TRUE,
-         TRUE,
-         TRUE
-         , TRUE
-         , FALSE
-         , FALSE
-         , FALSE
-         , TRUE
-         , TRUE
-         , TRUE
-         , 1000
-         , NOW()
-         , NOW()
-      );
-
-/* SQL generated to add new entity MJ: AI Remote Browser Providers to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-
-INSERT INTO __mj."ApplicationEntity"
-                                       ("ApplicationID", "EntityID", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '5af7b1ab-b2d7-4bca-9edc-980980ef4af2', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW());
-
-/* SQL generated to add new permission for entity MJ: AI Remote Browser Providers for role UI */
-
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('5af7b1ab-b2d7-4bca-9edc-980980ef4af2', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
-
-/* SQL generated to add new permission for entity MJ: AI Remote Browser Providers for role Developer */
-
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('5af7b1ab-b2d7-4bca-9edc-980980ef4af2', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
-
-/* SQL generated to add new permission for entity MJ: AI Remote Browser Providers for role Integration */
-
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('5af7b1ab-b2d7-4bca-9edc-980980ef4af2', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
-
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."AIRemoteBrowserProvider" */
-
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."AIRemoteBrowserProvider" */
-UPDATE __mj."AIRemoteBrowserProvider" SET "__mj_CreatedAt" = NOW() WHERE "__mj_CreatedAt" IS NULL;
-
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."AIRemoteBrowserProvider" */
-ALTER TABLE __mj."AIRemoteBrowserProvider" ALTER COLUMN "__mj_CreatedAt" SET NOT NULL;
-
-ALTER TABLE __mj."AIRemoteBrowserProvider"
-  ALTER COLUMN "__mj_CreatedAt" SET DEFAULT NOW();
-
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."AIRemoteBrowserProvider" */
-UPDATE __mj."AIRemoteBrowserProvider" SET "__mj_UpdatedAt" = NOW() WHERE "__mj_UpdatedAt" IS NULL;
-
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."AIRemoteBrowserProvider" */
-ALTER TABLE __mj."AIRemoteBrowserProvider" ALTER COLUMN "__mj_UpdatedAt" SET NOT NULL;
-
-ALTER TABLE __mj."AIRemoteBrowserProvider"
-  ALTER COLUMN "__mj_UpdatedAt" SET DEFAULT NOW();
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'dac3527e-832e-49b7-9508-1660229b8e00' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'ID')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        'dac3527e-832e-49b7-9508-1660229b8e00',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100001,
-        'ID',
-        'ID',
-        NULL,
-        'UUID',
-        16,
-        0,
-        0,
-        FALSE,
-        'gen_random_uuid()',
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        TRUE,
-        FALSE,
-        FALSE,
-        TRUE,
-        TRUE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9e21f25a-f7df-49e4-b573-31b9509f4539' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'Name')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        '9e21f25a-f7df-49e4-b573-31b9509f4539',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100002,
-        'Name',
-        'Name',
-        'Unique backend name (e.g. Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).',
-        'TEXT',
-        200,
-        0,
-        0,
-        FALSE,
-        NULL,
-        FALSE,
-        TRUE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        TRUE,
-        TRUE,
-        FALSE,
-        TRUE,
-        FALSE,
-        TRUE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4fa19a2e-3f4a-4d20-9e9e-3bec8bb595b0' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'Description')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        '4fa19a2e-3f4a-4d20-9e9e-3bec8bb595b0',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100003,
-        'Description',
-        'Description',
-        'Optional human-readable description of the backend / driver.',
-        'TEXT',
-        2000,
-        0,
-        0,
-        TRUE,
-        NULL,
-        FALSE,
-        TRUE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '14eb9c61-d207-416c-bcc2-6b1ac2f65d4f' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'ProviderType')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        '14eb9c61-d207-416c-bcc2-6b1ac2f65d4f',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100004,
-        'ProviderType',
-        'Provider Type',
-        'How the browser is hosted: SelfHost (MJ orchestrates a lightweight headless-Chrome container we connect to over CDP) or Service (a browser-as-a-service such as Browserbase/Steel/Browserless/Hyperbrowser exposes a CDP connect endpoint).',
-        'TEXT',
-        40,
-        0,
-        0,
-        FALSE,
-        'Service',
-        FALSE,
-        TRUE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4bb225ed-d68c-426c-8264-4ee42e83ec22' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'DriverClass')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        '4bb225ed-d68c-426c-8264-4ee42e83ec22',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100005,
-        'DriverClass',
-        'Driver Class',
-        'Driver key resolved at runtime via MJGlobal."ClassFactory"."CreateInstance"(BaseRemoteBrowserProvider, DriverClass). MUST match the @RegisterClass key on the concrete provider driver.',
-        'TEXT',
-        500,
-        0,
-        0,
-        FALSE,
-        NULL,
-        FALSE,
-        TRUE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9abd69b0-582d-4834-9693-e7a270f38ed0' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'Status')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        '9abd69b0-582d-4834-9693-e7a270f38ed0',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100006,
-        'Status',
-        'Status',
-        'Whether this backend is available for use. Disabled backends cannot start new remote-browser sessions.',
-        'TEXT',
-        40,
-        0,
-        0,
-        FALSE,
-        'Active',
-        FALSE,
-        TRUE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '137593f0-a214-4d70-a861-3a3cd4da2f24' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'SupportedFeatures')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        '137593f0-a214-4d70-a861-3a3cd4da2f24',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100007,
-        'SupportedFeatures',
-        'Supported Features',
-        'Strongly-typed JSON of the backend''s supported features (the IRemoteBrowserProviderFeatures interface, bound via JSONType metadata): the universal CDP-control substrate (RawCdpControl), an optional provider-native AI-control harness (NativeAIControl, e.g. Browserbase Stagehand), LiveView, HumanTakeover, ScreenStreaming, and operational capabilities (Stealth, ProxyEgress, SessionRecording, PersistentContext, MultiTab, FileDownloads, CaptchaSolving). The engine gates optional driver calls on these flags; the base driver throws RemoteBrowserCapabilityNotSupportedError when a feature is claimed but unimplemented. Held as JSON so new features need no schema change. NULL/omitted = unsupported.',
-        'TEXT',
-        -1,
-        0,
-        0,
-        TRUE,
-        NULL,
-        FALSE,
-        TRUE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '6e330bdd-9c57-4ffc-8d68-d59953393861' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'DefaultControlMode')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        '6e330bdd-9c57-4ffc-8d68-d59953393861',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100008,
-        'DefaultControlMode',
-        'Default Control Mode',
-        'Default control mode for channels using this backend, overridable per-channel and at runtime: AgentOnly (only the agent drives — e.g. a sales demo), ViewOnly (the agent drives while humans watch the live view but cannot take over), or Collaborative (a human can grab the wheel — e.g. a trainer agent that demonstrates then watches the user try). The backend must support the capabilities a mode requires (HumanTakeover for Collaborative, LiveView for ViewOnly/Collaborative).',
-        'TEXT',
-        40,
-        0,
-        0,
-        FALSE,
-        'AgentOnly',
-        FALSE,
-        TRUE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'b685b29f-0e6f-4a51-9e88-466d37df59a4' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'ConfigSchema')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        'b685b29f-0e6f-4a51-9e88-466d37df59a4',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100009,
-        'ConfigSchema',
-        'Config Schema',
-        'Optional JSON Schema validating the backend Configuration and per-session remote-browser Config payloads.',
-        'TEXT',
-        -1,
-        0,
-        0,
-        TRUE,
-        NULL,
-        FALSE,
-        TRUE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '5ae418a0-30d9-4078-be68-3d74d33cf7be' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'Configuration')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        '5ae418a0-30d9-4078-be68-3d74d33cf7be',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100010,
-        'Configuration',
-        'Configuration',
-        'Backend-level configuration JSON (e.g. API region, default Chrome container BYTEA for SelfHost, credential references resolved via the MJ credential system, egress proxy settings). Never store secrets inline.',
-        'TEXT',
-        -1,
-        0,
-        0,
-        TRUE,
-        NULL,
-        FALSE,
-        TRUE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9498647d-9928-4c85-a635-523b7eb615ae' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = '__mj_CreatedAt')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        '9498647d-9928-4c85-a635-523b7eb615ae',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100011,
-        '__mj_CreatedAt',
-        'Created At',
-        NULL,
-        'TIMESTAMPTZ',
-        10,
-        34,
-        7,
-        FALSE,
-        'NOW()',
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '72589f23-fe72-49de-b13f-0bf70757e984' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = '__mj_UpdatedAt')
-    ) THEN
-        INSERT INTO __mj."EntityField"
-        (
-        "ID",
-        "EntityID",
-        "Sequence",
-        "Name",
-        "DisplayName",
-        "Description",
-        "Type",
-        "Length",
-        "Precision",
-        "Scale",
-        "AllowsNull",
-        "DefaultValue",
-        "AutoIncrement",
-        "AllowUpdateAPI",
-        "IsVirtual",
-        "IsComputed",
-        "RelatedEntityID",
-        "RelatedEntityFieldName",
-        "IsNameField",
-        "IncludeInUserSearchAPI",
-        "IncludeRelatedEntityNameFieldInBaseView",
-        "DefaultInView",
-        "IsPrimaryKey",
-        "IsUnique",
-        "RelatedEntityDisplayType",
-        "__mj_CreatedAt",
-        "__mj_UpdatedAt"
-        )
-        VALUES
-        (
-        '72589f23-fe72-49de-b13f-0bf70757e984',
-        '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', -- "Entity": "MJ": "AI" "Remote" "Browser" "Providers"
-        100012,
-        '__mj_UpdatedAt',
-        'Updated At',
-        NULL,
-        'TIMESTAMPTZ',
-        10,
-        34,
-        7,
-        FALSE,
-        'NOW()',
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        NULL,
-        NULL,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        FALSE,
-        'Search',
-        NOW(),
-        NOW()
-        );
-    END IF;
-END $$;
-
-INSERT INTO __mj."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('163f42a6-37c2-49f9-a92c-431cd0bf035b', '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F', 1, 'SelfHost', 'SelfHost', NOW(), NOW());
-
-/* SQL text to insert entity field value with ID afc46adb-d889-48c5-93ab-5c15c0b2efe7 */
-
-INSERT INTO __mj."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('afc46adb-d889-48c5-93ab-5c15c0b2efe7', '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F', 2, 'Service', 'Service', NOW(), NOW());
-
-/* SQL text to update ValueListType for entity field ID 14EB9C61-D207-416C-BCC2-6B1AC2F65D4F */
-
-UPDATE __mj."EntityField" SET "ValueListType"='List' WHERE "ID"='14EB9C61-D207-416C-BCC2-6B1AC2F65D4F';
-
-/* SQL text to insert entity field value with ID 810644a9-226c-4f27-9851-60601b8826b2 */
-
-INSERT INTO __mj."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('810644a9-226c-4f27-9851-60601b8826b2', '9ABD69B0-582D-4834-9693-E7A270F38ED0', 1, 'Active', 'Active', NOW(), NOW());
-
-/* SQL text to insert entity field value with ID b886179c-2e8f-431e-a450-0c3fed5f1785 */
-
-INSERT INTO __mj."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('b886179c-2e8f-431e-a450-0c3fed5f1785', '9ABD69B0-582D-4834-9693-E7A270F38ED0', 2, 'Disabled', 'Disabled', NOW(), NOW());
-
-/* SQL text to update ValueListType for entity field ID 9ABD69B0-582D-4834-9693-E7A270F38ED0 */
-
-UPDATE __mj."EntityField" SET "ValueListType"='List' WHERE "ID"='9ABD69B0-582D-4834-9693-E7A270F38ED0';
-
-/* SQL text to insert entity field value with ID a5a92188-b0ac-4ffc-8e5a-6a9d1bf9caa4 */
-
-INSERT INTO __mj."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('a5a92188-b0ac-4ffc-8e5a-6a9d1bf9caa4', '6E330BDD-9C57-4FFC-8D68-D59953393861', 1, 'AgentOnly', 'AgentOnly', NOW(), NOW());
-
-/* SQL text to insert entity field value with ID a7f87fff-05b6-413a-8085-6135c67101b3 */
-
-INSERT INTO __mj."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('a7f87fff-05b6-413a-8085-6135c67101b3', '6E330BDD-9C57-4FFC-8D68-D59953393861', 2, 'Collaborative', 'Collaborative', NOW(), NOW());
-
-/* SQL text to insert entity field value with ID 9b287d42-9646-4aa1-a8c6-b1ba6ffc71f8 */
-
-INSERT INTO __mj."EntityFieldValue"
-                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
-                                    VALUES
-                                       ('9b287d42-9646-4aa1-a8c6-b1ba6ffc71f8', '6E330BDD-9C57-4FFC-8D68-D59953393861', 3, 'ViewOnly', 'ViewOnly', NOW(), NOW());
-
-/* SQL text to update ValueListType for entity field ID 6E330BDD-9C57-4FFC-8D68-D59953393861 */
-
-UPDATE __mj."EntityField" SET "ValueListType"='List' WHERE "ID"='6E330BDD-9C57-4FFC-8D68-D59953393861';
-
-/* Index for Foreign Keys for AIAgentNote */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Agent Notes
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key AgentID in table AIAgentNote
-
-UPDATE __mj."EntityField"
-               SET "DefaultInView" = TRUE
-               WHERE "ID" = '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F'
-               AND "AutoUpdateDefaultInView" = TRUE;
-
-UPDATE __mj."EntityField"
-               SET "DefaultInView" = TRUE
-               WHERE "ID" = '9ABD69B0-582D-4834-9693-E7A270F38ED0'
-               AND "AutoUpdateDefaultInView" = TRUE;
-
-UPDATE __mj."EntityField"
-               SET "DefaultInView" = TRUE
-               WHERE "ID" = '6E330BDD-9C57-4FFC-8D68-D59953393861'
-               AND "AutoUpdateDefaultInView" = TRUE;
-
-UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = TRUE
-               WHERE "ID" = '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F'
-               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
-
-UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = TRUE
-               WHERE "ID" = '9ABD69B0-582D-4834-9693-E7A270F38ED0'
-               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
-
-UPDATE __mj."EntityField"
-               SET "UserSearchPredicateAPI" = 'BeginsWith'
-               WHERE "ID" = '9E21F25A-F7DF-49E4-B573-31B9509F4539'
-               AND "AutoUpdateUserSearchPredicate" = TRUE;
-
-UPDATE __mj."EntityField"
-               SET "UserSearchPredicateAPI" = 'Exact'
-               WHERE "ID" = '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F'
-               AND "AutoUpdateUserSearchPredicate" = TRUE;
-
-UPDATE __mj."EntityField"
-               SET "UserSearchPredicateAPI" = 'Exact'
-               WHERE "ID" = '9ABD69B0-582D-4834-9693-E7A270F38ED0'
-               AND "AutoUpdateUserSearchPredicate" = TRUE;
-
-/* Set field properties for entity */
-
-UPDATE __mj."EntityField"
-               SET "UserSearchPredicateAPI" = 'BeginsWith'
-               WHERE "ID" = '70B237B2-D508-4C19-8838-850ACC9961F1'
-               AND "AutoUpdateUserSearchPredicate" = TRUE;
-
-/* Set categories for 12 fields */
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers."ID"
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'System Metadata',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = NULL,
-   "CodeType" = NULL
-WHERE 
-   "ID" = 'DAC3527E-832E-49B7-9508-1660229B8E00' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers."Name"
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'General Information',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = NULL,
-   "CodeType" = NULL
-WHERE 
-   "ID" = '9E21F25A-F7DF-49E4-B573-31B9509F4539' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers."Description"
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'General Information',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = NULL,
-   "CodeType" = NULL
-WHERE 
-   "ID" = '4FA19A2E-3F4A-4D20-9E9E-3BEC8BB595B0' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers."ProviderType"
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'General Information',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = NULL,
-   "CodeType" = NULL
-WHERE 
-   "ID" = '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers."DriverClass"
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'Technical Configuration',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = NULL,
-   "CodeType" = NULL
-WHERE 
-   "ID" = '4BB225ED-D68C-426C-8264-4EE42E83EC22' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers."Status"
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'General Information',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = NULL,
-   "CodeType" = NULL
-WHERE 
-   "ID" = '9ABD69B0-582D-4834-9693-E7A270F38ED0' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers."SupportedFeatures"
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'Technical Configuration',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = 'Code',
-   "CodeType" = 'Other'
-WHERE 
-   "ID" = '137593F0-A214-4D70-A861-3A3CD4DA2F24' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers."DefaultControlMode"
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'Operational Settings',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = NULL,
-   "CodeType" = NULL
-WHERE 
-   "ID" = '6E330BDD-9C57-4FFC-8D68-D59953393861' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers."ConfigSchema"
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'Technical Configuration',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = 'Code',
-   "CodeType" = 'Other'
-WHERE 
-   "ID" = 'B685B29F-0E6F-4A51-9E88-466D37DF59A4' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers."Configuration"
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'Operational Settings',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = 'Code',
-   "CodeType" = 'Other'
-WHERE 
-   "ID" = '5AE418A0-30D9-4078-BE68-3D74D33CF7BE' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.__mj_CreatedAt
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'System Metadata',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = NULL,
-   "CodeType" = NULL
-WHERE 
-   "ID" = '9498647D-9928-4C85-A635-523B7EB615AE' AND "AutoUpdateCategory" = TRUE;
-
--- UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.__mj_UpdatedAt
-
-UPDATE __mj."EntityField"
-SET 
-   "Category" = 'System Metadata',
-   "GeneratedFormSection" = 'Category',
-   "ExtendedType" = NULL,
-   "CodeType" = NULL
-WHERE 
-   "ID" = '72589F23-FE72-49DE-B13F-0BF70757E984' AND "AutoUpdateCategory" = TRUE;
-
-/* Set entity icon to fa fa-globe */
-
-UPDATE __mj."Entity"
-               SET "Icon" = 'fa fa-globe', "__mj_UpdatedAt" = NOW()
-               WHERE "ID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2';
-
-/* Insert FieldCategoryInfo setting for entity */
-
-INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_CreatedAt", "__mj_UpdatedAt")
-               VALUES ('ad075475-aad5-4be2-a5ff-40b9e3bab34e', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', 'FieldCategoryInfo', '{"General Information":{"icon":"fa fa-info-circle","description":"Basic details and status of the remote browser provider"},"Technical Configuration":{"icon":"fa fa-cogs","description":"Technical driver definitions and capability schemas"},"Operational Settings":{"icon":"fa fa-sliders-h","description":"Operational parameters and default session behaviors"},"System Metadata":{"icon":"fa fa-database","description":"System-managed audit and tracking fields"}}', NOW(), NOW());
-
-/* Insert FieldCategoryIcons setting (legacy) */
-
-INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_CreatedAt", "__mj_UpdatedAt")
-               VALUES ('f705ad39-4f1e-4882-b214-23e5d5c80610', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2', 'FieldCategoryIcons', '{"General Information":"fa fa-info-circle","Technical Configuration":"fa fa-cogs","Operational Settings":"fa fa-sliders-h","System Metadata":"fa fa-database"}', NOW(), NOW());
-
-/* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
-
-UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
-         WHERE "EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2';
-
-
--- ===================== Grants =====================
-
-DO $$ BEGIN GRANT SELECT ON __mj."vwAIAgentNotes" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* Base View Permissions SQL for MJ: AI Agent Notes */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Agent Notes
--- Item: Permissions for vwAIAgentNotes
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------;
-
-DO $$ BEGIN GRANT SELECT ON __mj."vwAIAgentNotes" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate SQL for MJ: AI Agent Notes */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Agent Notes
--- Item: spCreateAIAgentNote
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR AIAgentNote
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentNote" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Agent Notes */
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentNote" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spUpdate SQL for MJ: AI Agent Notes */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Agent Notes
--- Item: spUpdateAIAgentNote
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR AIAgentNote
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentNote" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentNote" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete SQL for MJ: AI Agent Notes */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Agent Notes
--- Item: spDeleteAIAgentNote
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR AIAgentNote
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentNote" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Notes */
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentNote" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* Index for Foreign Keys for AIRemoteBrowserProvider */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Remote Browser Providers
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------;
-
-/* Base View SQL for MJ: AI Remote Browser Providers */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Remote Browser Providers
--- Item: vwAIRemoteBrowserProviders
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: AI Remote Browser Providers
------               SCHEMA:      __mj
------               BASE TABLE:  AIRemoteBrowserProvider
------               PRIMARY KEY: ID
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT SELECT ON __mj."vwAIRemoteBrowserProviders" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* Base View Permissions SQL for MJ: AI Remote Browser Providers */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Remote Browser Providers
--- Item: Permissions for vwAIRemoteBrowserProviders
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------;
-
-DO $$ BEGIN GRANT SELECT ON __mj."vwAIRemoteBrowserProviders" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate SQL for MJ: AI Remote Browser Providers */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Remote Browser Providers
--- Item: spCreateAIRemoteBrowserProvider
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR AIRemoteBrowserProvider
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIRemoteBrowserProvider" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: AI Remote Browser Providers */
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAIRemoteBrowserProvider" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spUpdate SQL for MJ: AI Remote Browser Providers */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Remote Browser Providers
--- Item: spUpdateAIRemoteBrowserProvider
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR AIRemoteBrowserProvider
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIRemoteBrowserProvider" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAIRemoteBrowserProvider" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete SQL for MJ: AI Remote Browser Providers */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Remote Browser Providers
--- Item: spDeleteAIRemoteBrowserProvider
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR AIRemoteBrowserProvider
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIRemoteBrowserProvider" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Remote Browser Providers */
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIRemoteBrowserProvider" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete SQL for MJ: AI Agent Runs */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Agent Runs
--- Item: spDeleteAIAgentRun
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR AIAgentRun
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agent Runs */
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete SQL for MJ: Conversation Details */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Conversation Details
--- Item: spDeleteConversationDetail
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR ConversationDetail
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Conversation Details */
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete SQL for MJ: Conversations */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Conversations
--- Item: spDeleteConversation
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR Conversation
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversation" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Conversations */
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversation" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete SQL for MJ: AI Agents */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Agents
--- Item: spDeleteAIAgent
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR AIAgent
-------------------------------------------------------------;
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgent" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: AI Agents */
-
-DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgent" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* Set field properties for entity */
-
-
--- ===================== Comments =====================
 
 COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."Name" IS 'Unique backend name (e.g. Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).';
 
@@ -5033,11 +86,11 @@ COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."Description" IS 'Optional huma
 
 COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."ProviderType" IS 'How the browser is hosted: SelfHost (MJ orchestrates a lightweight headless-Chrome container we connect to over CDP) or Service (a browser-as-a-service such as Browserbase/Steel/Browserless/Hyperbrowser exposes a CDP connect endpoint).';
 
-COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."DriverClass" IS 'Driver key resolved at runtime via MJGlobal."ClassFactory"."CreateInstance"(BaseRemoteBrowserProvider, DriverClass). MUST match the @RegisterClass key on the concrete provider driver.';
+COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."DriverClass" IS 'Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseRemoteBrowserProvider, DriverClass). MUST match the @RegisterClass key on the concrete provider driver.';
 
 COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."Status" IS 'Whether this backend is available for use. Disabled backends cannot start new remote-browser sessions.';
 
-COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."SupportedFeatures" IS 'Strongly-typed JSON of the backend';
+COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."SupportedFeatures" IS 'Strongly-typed JSON of the backend''s supported features (the IRemoteBrowserProviderFeatures interface, bound via JSONType metadata): the universal CDP-control substrate (RawCdpControl), an optional provider-native AI-control harness (NativeAIControl, e.g. Browserbase Stagehand), LiveView, HumanTakeover, ScreenStreaming, and operational capabilities (Stealth, ProxyEgress, SessionRecording, PersistentContext, MultiTab, FileDownloads, CaptchaSolving). The engine gates optional driver calls on these flags; the base driver throws RemoteBrowserCapabilityNotSupportedError when a feature is claimed but unimplemented. Held as JSON so new features need no schema change. NULL/omitted = unsupported.';
 
 COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."DefaultControlMode" IS 'Default control mode for channels using this backend, overridable per-channel and at runtime: AgentOnly (only the agent drives — e.g. a sales demo), ViewOnly (the agent drives while humans watch the live view but cannot take over), or Collaborative (a human can grab the wheel — e.g. a trainer agent that demonstrates then watches the user try). The backend must support the capabilities a mode requires (HumanTakeover for Collaborative, LiveView for ViewOnly/Collaborative).';
 
@@ -5045,11 +98,4863 @@ COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."ConfigSchema" IS 'Optional JSO
 
 COMMENT ON COLUMN __mj."AIRemoteBrowserProvider"."Configuration" IS 'Backend-level configuration JSON (e.g. API region, default Chrome container image for SelfHost, credential references resolved via the MJ credential system, egress proxy settings). Never store secrets inline.';
 
+/* SQL generated to create new entity MJ: AI Remote Browser Providers */
+INSERT INTO __mj."Entity" (
+  "ID",
+  "Name",
+  "DisplayName",
+  "Description",
+  "NameSuffix",
+  "BaseTable",
+  "BaseView",
+  "SchemaName",
+  "IncludeInAPI",
+  "AllowUserSearchAPI",
+  "AllowCaching",
+  "TrackRecordChanges",
+  "AuditRecordAccess",
+  "AuditViewRuns",
+  "AllowAllRowsAPI",
+  "AllowCreateAPI",
+  "AllowUpdateAPI",
+  "AllowDeleteAPI",
+  "UserViewMaxRows",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    '5af7b1ab-b2d7-4bca-9edc-980980ef4af2',
+    'MJ: AI Remote Browser Providers',
+    'AI Remote Browser Providers',
+    NULL,
+    NULL,
+    'AIRemoteBrowserProvider',
+    'vwAIRemoteBrowserProviders',
+    '__mj',
+    TRUE,
+    TRUE,
+    TRUE,
+    TRUE,
+    FALSE,
+    FALSE,
+    FALSE,
+    TRUE,
+    TRUE,
+    TRUE,
+    1000,
+    NOW(),
+    NOW()
+  );
 
--- ===================== Other =====================
+/* SQL generated to add new entity MJ: AI Remote Browser Providers to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO __mj."ApplicationEntity" (
+  "ApplicationID",
+  "EntityID",
+  "Sequence",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E',
+    '5af7b1ab-b2d7-4bca-9edc-980980ef4af2',
+    (
+      SELECT
+        COALESCE(MAX("Sequence"), 0) + 1
+      FROM __mj."ApplicationEntity"
+      WHERE
+        "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'
+    ),
+    NOW(),
+    NOW()
+  );
 
-/* SQL text to insert new entity field */
+/* SQL generated to add new permission for entity MJ: AI Remote Browser Providers for role UI */
+INSERT INTO __mj."EntityPermission" (
+  "EntityID",
+  "RoleID",
+  "CanRead",
+  "CanCreate",
+  "CanUpdate",
+  "CanDelete",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    '5af7b1ab-b2d7-4bca-9edc-980980ef4af2',
+    'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E',
+    TRUE,
+    FALSE,
+    FALSE,
+    FALSE,
+    NOW(),
+    NOW()
+  );
 
-/* spUpdate Permissions for MJ: AI Agent Notes */
+/* SQL generated to add new permission for entity MJ: AI Remote Browser Providers for role Developer */
+INSERT INTO __mj."EntityPermission" (
+  "EntityID",
+  "RoleID",
+  "CanRead",
+  "CanCreate",
+  "CanUpdate",
+  "CanDelete",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    '5af7b1ab-b2d7-4bca-9edc-980980ef4af2',
+    'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E',
+    TRUE,
+    TRUE,
+    TRUE,
+    TRUE,
+    NOW(),
+    NOW()
+  );
 
-/* spUpdate Permissions for MJ: AI Remote Browser Providers */
+/* SQL generated to add new permission for entity MJ: AI Remote Browser Providers for role Integration */
+INSERT INTO __mj."EntityPermission" (
+  "EntityID",
+  "RoleID",
+  "CanRead",
+  "CanCreate",
+  "CanUpdate",
+  "CanDelete",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    '5af7b1ab-b2d7-4bca-9edc-980980ef4af2',
+    'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E',
+    TRUE,
+    TRUE,
+    TRUE,
+    TRUE,
+    NOW(),
+    NOW()
+  );
+
+ALTER TABLE __mj."AIRemoteBrowserProvider"
+ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL /* SQL text to add special date field __mj_CreatedAt to entity __mj.AIRemoteBrowserProvider */;
+
+/* SQL text to add special date field __mj_CreatedAt to entity __mj.AIRemoteBrowserProvider */
+UPDATE __mj."AIRemoteBrowserProvider" SET "__mj_CreatedAt" = NOW()
+WHERE
+  "__mj_CreatedAt" IS NULL;
+
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT DISTINCT ns.nspname AS sch, dv.relname AS vw
+    FROM pg_depend d
+    JOIN pg_rewrite rw ON rw.oid = d.objid
+    JOIN pg_class dv ON dv.oid = rw.ev_class AND dv.relkind = 'v'
+    JOIN pg_namespace ns ON ns.oid = dv.relnamespace
+    JOIN pg_class tc ON tc.oid = d.refobjid
+    JOIN pg_attribute a ON a.attrelid = tc.oid AND a.attnum = d.refobjsubid
+    WHERE tc.relname = 'AIRemoteBrowserProvider' AND a.attname = '__mj_CreatedAt'
+  LOOP
+    EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', r.sch, r.vw);
+  END LOOP;
+END $$;
+ALTER TABLE __mj."AIRemoteBrowserProvider" ALTER COLUMN "__mj_CreatedAt" TYPE TIMESTAMPTZ, ALTER COLUMN "__mj_CreatedAt" SET NOT NULL;
+
+ALTER TABLE __mj."AIRemoteBrowserProvider" ALTER COLUMN "__mj_CreatedAt" SET DEFAULT NOW();
+
+ALTER TABLE __mj."AIRemoteBrowserProvider"
+ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NULL /* SQL text to add special date field __mj_UpdatedAt to entity __mj.AIRemoteBrowserProvider */;
+
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj.AIRemoteBrowserProvider */
+UPDATE __mj."AIRemoteBrowserProvider" SET "__mj_UpdatedAt" = NOW()
+WHERE
+  "__mj_UpdatedAt" IS NULL;
+
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT DISTINCT ns.nspname AS sch, dv.relname AS vw
+    FROM pg_depend d
+    JOIN pg_rewrite rw ON rw.oid = d.objid
+    JOIN pg_class dv ON dv.oid = rw.ev_class AND dv.relkind = 'v'
+    JOIN pg_namespace ns ON ns.oid = dv.relnamespace
+    JOIN pg_class tc ON tc.oid = d.refobjid
+    JOIN pg_attribute a ON a.attrelid = tc.oid AND a.attnum = d.refobjsubid
+    WHERE tc.relname = 'AIRemoteBrowserProvider' AND a.attname = '__mj_UpdatedAt'
+  LOOP
+    EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', r.sch, r.vw);
+  END LOOP;
+END $$;
+ALTER TABLE __mj."AIRemoteBrowserProvider" ALTER COLUMN "__mj_UpdatedAt" TYPE TIMESTAMPTZ, ALTER COLUMN "__mj_UpdatedAt" SET NOT NULL;
+
+ALTER TABLE __mj."AIRemoteBrowserProvider" ALTER COLUMN "__mj_UpdatedAt" SET DEFAULT NOW();
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'dac3527e-832e-49b7-9508-1660229b8e00' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'ID')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('dac3527e-832e-49b7-9508-1660229b8e00', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100001, 'ID', 'ID', NULL, 'uniqueidentifier', 16, 0, 0, FALSE, 'newsequentialid()', FALSE, FALSE, FALSE, FALSE, NULL, NULL, FALSE, TRUE, FALSE, FALSE, TRUE, TRUE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9e21f25a-f7df-49e4-b573-31b9509f4539' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'Name')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('9e21f25a-f7df-49e4-b573-31b9509f4539', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100002, 'Name', 'Name', 'Unique backend name (e.g. Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).', 'nvarchar', 200, 0, 0, FALSE, NULL, FALSE, TRUE, FALSE, FALSE, NULL, NULL, TRUE, TRUE, FALSE, TRUE, FALSE, TRUE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4fa19a2e-3f4a-4d20-9e9e-3bec8bb595b0' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'Description')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('4fa19a2e-3f4a-4d20-9e9e-3bec8bb595b0', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100003, 'Description', 'Description', 'Optional human-readable description of the backend / driver.', 'nvarchar', 2000, 0, 0, TRUE, NULL, FALSE, TRUE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '14eb9c61-d207-416c-bcc2-6b1ac2f65d4f' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'ProviderType')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('14eb9c61-d207-416c-bcc2-6b1ac2f65d4f', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100004, 'ProviderType', 'Provider Type', 'How the browser is hosted: SelfHost (MJ orchestrates a lightweight headless-Chrome container we connect to over CDP) or Service (a browser-as-a-service such as Browserbase/Steel/Browserless/Hyperbrowser exposes a CDP connect endpoint).', 'nvarchar', 40, 0, 0, FALSE, 'Service', FALSE, TRUE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4bb225ed-d68c-426c-8264-4ee42e83ec22' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'DriverClass')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('4bb225ed-d68c-426c-8264-4ee42e83ec22', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100005, 'DriverClass', 'Driver Class', 'Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseRemoteBrowserProvider, DriverClass). MUST match the @RegisterClass key on the concrete provider driver.', 'nvarchar', 500, 0, 0, FALSE, NULL, FALSE, TRUE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9abd69b0-582d-4834-9693-e7a270f38ed0' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'Status')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('9abd69b0-582d-4834-9693-e7a270f38ed0', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100006, 'Status', 'Status', 'Whether this backend is available for use. Disabled backends cannot start new remote-browser sessions.', 'nvarchar', 40, 0, 0, FALSE, 'Active', FALSE, TRUE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '137593f0-a214-4d70-a861-3a3cd4da2f24' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'SupportedFeatures')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('137593f0-a214-4d70-a861-3a3cd4da2f24', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100007, 'SupportedFeatures', 'Supported Features', 'Strongly-typed JSON of the backend''s supported features (the IRemoteBrowserProviderFeatures interface, bound via JSONType metadata): the universal CDP-control substrate (RawCdpControl), an optional provider-native AI-control harness (NativeAIControl, e.g. Browserbase Stagehand), LiveView, HumanTakeover, ScreenStreaming, and operational capabilities (Stealth, ProxyEgress, SessionRecording, PersistentContext, MultiTab, FileDownloads, CaptchaSolving). The engine gates optional driver calls on these flags; the base driver throws RemoteBrowserCapabilityNotSupportedError when a feature is claimed but unimplemented. Held as JSON so new features need no schema change. NULL/omitted = unsupported.', 'nvarchar', -1, 0, 0, TRUE, NULL, FALSE, TRUE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '6e330bdd-9c57-4ffc-8d68-d59953393861' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'DefaultControlMode')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('6e330bdd-9c57-4ffc-8d68-d59953393861', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100008, 'DefaultControlMode', 'Default Control Mode', 'Default control mode for channels using this backend, overridable per-channel and at runtime: AgentOnly (only the agent drives — e.g. a sales demo), ViewOnly (the agent drives while humans watch the live view but cannot take over), or Collaborative (a human can grab the wheel — e.g. a trainer agent that demonstrates then watches the user try). The backend must support the capabilities a mode requires (HumanTakeover for Collaborative, LiveView for ViewOnly/Collaborative).', 'nvarchar', 40, 0, 0, FALSE, 'AgentOnly', FALSE, TRUE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'b685b29f-0e6f-4a51-9e88-466d37df59a4' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'ConfigSchema')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('b685b29f-0e6f-4a51-9e88-466d37df59a4', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100009, 'ConfigSchema', 'Config Schema', 'Optional JSON Schema validating the backend Configuration and per-session remote-browser Config payloads.', 'nvarchar', -1, 0, 0, TRUE, NULL, FALSE, TRUE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '5ae418a0-30d9-4078-be68-3d74d33cf7be' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = 'Configuration')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('5ae418a0-30d9-4078-be68-3d74d33cf7be', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100010, 'Configuration', 'Configuration', 'Backend-level configuration JSON (e.g. API region, default Chrome container image for SelfHost, credential references resolved via the MJ credential system, egress proxy settings). Never store secrets inline.', 'nvarchar', -1, 0, 0, TRUE, NULL, FALSE, TRUE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9498647d-9928-4c85-a635-523b7eb615ae' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = '__mj_CreatedAt')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('9498647d-9928-4c85-a635-523b7eb615ae', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100011, '__mj_CreatedAt', 'Created At', NULL, 'datetimeoffset', 10, 34, 7, FALSE, 'getutcdate()', FALSE, FALSE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '72589f23-fe72-49de-b13f-0bf70757e984' OR ("EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' AND "Name" = '__mj_UpdatedAt')) THEN
+    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('72589f23-fe72-49de-b13f-0bf70757e984', '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2' /* Entity: MJ: AI Remote Browser Providers */, 100012, '__mj_UpdatedAt', 'Updated At', NULL, 'datetimeoffset', 10, 34, 7, FALSE, 'getutcdate()', FALSE, FALSE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
+  END IF;
+END $$;
+
+/* SQL text to insert entity field value with ID 163f42a6-37c2-49f9-a92c-431cd0bf035b */
+INSERT INTO __mj."EntityFieldValue" (
+  "ID",
+  "EntityFieldID",
+  "Sequence",
+  "Value",
+  "Code",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    '163f42a6-37c2-49f9-a92c-431cd0bf035b',
+    '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F',
+    1,
+    'SelfHost',
+    'SelfHost',
+    NOW(),
+    NOW()
+  );
+
+/* SQL text to insert entity field value with ID afc46adb-d889-48c5-93ab-5c15c0b2efe7 */
+INSERT INTO __mj."EntityFieldValue" (
+  "ID",
+  "EntityFieldID",
+  "Sequence",
+  "Value",
+  "Code",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    'afc46adb-d889-48c5-93ab-5c15c0b2efe7',
+    '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F',
+    2,
+    'Service',
+    'Service',
+    NOW(),
+    NOW()
+  );
+
+/* SQL text to update ValueListType for entity field ID 14EB9C61-D207-416C-BCC2-6B1AC2F65D4F */
+UPDATE __mj."EntityField" SET "ValueListType" = 'List'
+WHERE
+  "ID" = '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F';
+
+/* SQL text to insert entity field value with ID 810644a9-226c-4f27-9851-60601b8826b2 */
+INSERT INTO __mj."EntityFieldValue" (
+  "ID",
+  "EntityFieldID",
+  "Sequence",
+  "Value",
+  "Code",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    '810644a9-226c-4f27-9851-60601b8826b2',
+    '9ABD69B0-582D-4834-9693-E7A270F38ED0',
+    1,
+    'Active',
+    'Active',
+    NOW(),
+    NOW()
+  );
+
+/* SQL text to insert entity field value with ID b886179c-2e8f-431e-a450-0c3fed5f1785 */
+INSERT INTO __mj."EntityFieldValue" (
+  "ID",
+  "EntityFieldID",
+  "Sequence",
+  "Value",
+  "Code",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    'b886179c-2e8f-431e-a450-0c3fed5f1785',
+    '9ABD69B0-582D-4834-9693-E7A270F38ED0',
+    2,
+    'Disabled',
+    'Disabled',
+    NOW(),
+    NOW()
+  );
+
+/* SQL text to update ValueListType for entity field ID 9ABD69B0-582D-4834-9693-E7A270F38ED0 */
+UPDATE __mj."EntityField" SET "ValueListType" = 'List'
+WHERE
+  "ID" = '9ABD69B0-582D-4834-9693-E7A270F38ED0';
+
+/* SQL text to insert entity field value with ID a5a92188-b0ac-4ffc-8e5a-6a9d1bf9caa4 */
+INSERT INTO __mj."EntityFieldValue" (
+  "ID",
+  "EntityFieldID",
+  "Sequence",
+  "Value",
+  "Code",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    'a5a92188-b0ac-4ffc-8e5a-6a9d1bf9caa4',
+    '6E330BDD-9C57-4FFC-8D68-D59953393861',
+    1,
+    'AgentOnly',
+    'AgentOnly',
+    NOW(),
+    NOW()
+  );
+
+/* SQL text to insert entity field value with ID a7f87fff-05b6-413a-8085-6135c67101b3 */
+INSERT INTO __mj."EntityFieldValue" (
+  "ID",
+  "EntityFieldID",
+  "Sequence",
+  "Value",
+  "Code",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    'a7f87fff-05b6-413a-8085-6135c67101b3',
+    '6E330BDD-9C57-4FFC-8D68-D59953393861',
+    2,
+    'Collaborative',
+    'Collaborative',
+    NOW(),
+    NOW()
+  );
+
+/* SQL text to insert entity field value with ID 9b287d42-9646-4aa1-a8c6-b1ba6ffc71f8 */
+INSERT INTO __mj."EntityFieldValue" (
+  "ID",
+  "EntityFieldID",
+  "Sequence",
+  "Value",
+  "Code",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    '9b287d42-9646-4aa1-a8c6-b1ba6ffc71f8',
+    '6E330BDD-9C57-4FFC-8D68-D59953393861',
+    3,
+    'ViewOnly',
+    'ViewOnly',
+    NOW(),
+    NOW()
+  );
+
+/* SQL text to update ValueListType for entity field ID 6E330BDD-9C57-4FFC-8D68-D59953393861 */
+UPDATE __mj."EntityField" SET "ValueListType" = 'List'
+WHERE
+  "ID" = '6E330BDD-9C57-4FFC-8D68-D59953393861';
+
+/* Set field properties for entity */
+UPDATE __mj."EntityField" SET "DefaultInView" = TRUE
+WHERE
+  "ID" = '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F'
+  AND "AutoUpdateDefaultInView" = TRUE;
+UPDATE __mj."EntityField" SET "DefaultInView" = TRUE
+WHERE
+  "ID" = '9ABD69B0-582D-4834-9693-E7A270F38ED0'
+  AND "AutoUpdateDefaultInView" = TRUE;
+UPDATE __mj."EntityField" SET "DefaultInView" = TRUE
+WHERE
+  "ID" = '6E330BDD-9C57-4FFC-8D68-D59953393861'
+  AND "AutoUpdateDefaultInView" = TRUE;
+UPDATE __mj."EntityField" SET "IncludeInUserSearchAPI" = TRUE
+WHERE
+  "ID" = '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F'
+  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
+UPDATE __mj."EntityField" SET "IncludeInUserSearchAPI" = TRUE
+WHERE
+  "ID" = '9ABD69B0-582D-4834-9693-E7A270F38ED0'
+  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
+UPDATE __mj."EntityField" SET "UserSearchPredicateAPI" = 'BeginsWith'
+WHERE
+  "ID" = '9E21F25A-F7DF-49E4-B573-31B9509F4539'
+  AND "AutoUpdateUserSearchPredicate" = TRUE;
+UPDATE __mj."EntityField" SET "UserSearchPredicateAPI" = 'Exact'
+WHERE
+  "ID" = '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F'
+  AND "AutoUpdateUserSearchPredicate" = TRUE;
+UPDATE __mj."EntityField" SET "UserSearchPredicateAPI" = 'Exact'
+WHERE
+  "ID" = '9ABD69B0-582D-4834-9693-E7A270F38ED0'
+  AND "AutoUpdateUserSearchPredicate" = TRUE;
+
+/* Set field properties for entity */
+UPDATE __mj."EntityField" SET "UserSearchPredicateAPI" = 'BeginsWith'
+WHERE
+  "ID" = '70B237B2-D508-4C19-8838-850ACC9961F1'
+  AND "AutoUpdateUserSearchPredicate" = TRUE;
+
+/* Set categories for 12 fields */ /* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.ID */
+UPDATE __mj."EntityField" SET "Category" = 'System Metadata', "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
+WHERE
+  "ID" = 'DAC3527E-832E-49B7-9508-1660229B8E00' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.Name */
+UPDATE __mj."EntityField" SET "Category" = 'General Information', "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
+WHERE
+  "ID" = '9E21F25A-F7DF-49E4-B573-31B9509F4539' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.Description */
+UPDATE __mj."EntityField" SET "Category" = 'General Information', "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
+WHERE
+  "ID" = '4FA19A2E-3F4A-4D20-9E9E-3BEC8BB595B0' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.ProviderType */
+UPDATE __mj."EntityField" SET "Category" = 'General Information', "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
+WHERE
+  "ID" = '14EB9C61-D207-416C-BCC2-6B1AC2F65D4F' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.DriverClass */
+UPDATE __mj."EntityField" SET "Category" = 'Technical Configuration', "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
+WHERE
+  "ID" = '4BB225ED-D68C-426C-8264-4EE42E83EC22' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.Status */
+UPDATE __mj."EntityField" SET "Category" = 'General Information', "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
+WHERE
+  "ID" = '9ABD69B0-582D-4834-9693-E7A270F38ED0' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.SupportedFeatures */
+UPDATE __mj."EntityField" SET "Category" = 'Technical Configuration', "GeneratedFormSection" = 'Category', "ExtendedType" = 'Code', "CodeType" = 'Other'
+WHERE
+  "ID" = '137593F0-A214-4D70-A861-3A3CD4DA2F24' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.DefaultControlMode */
+UPDATE __mj."EntityField" SET "Category" = 'Operational Settings', "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
+WHERE
+  "ID" = '6E330BDD-9C57-4FFC-8D68-D59953393861' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.ConfigSchema */
+UPDATE __mj."EntityField" SET "Category" = 'Technical Configuration', "GeneratedFormSection" = 'Category', "ExtendedType" = 'Code', "CodeType" = 'Other'
+WHERE
+  "ID" = 'B685B29F-0E6F-4A51-9E88-466D37DF59A4' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.Configuration */
+UPDATE __mj."EntityField" SET "Category" = 'Operational Settings', "GeneratedFormSection" = 'Category', "ExtendedType" = 'Code', "CodeType" = 'Other'
+WHERE
+  "ID" = '5AE418A0-30D9-4078-BE68-3D74D33CF7BE' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.__mj_CreatedAt */
+UPDATE __mj."EntityField" SET "Category" = 'System Metadata', "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
+WHERE
+  "ID" = '9498647D-9928-4C85-A635-523B7EB615AE' AND "AutoUpdateCategory" = TRUE;
+/* UPDATE Entity Field Category Info MJ: AI Remote Browser Providers.__mj_UpdatedAt */
+UPDATE __mj."EntityField" SET "Category" = 'System Metadata', "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
+WHERE
+  "ID" = '72589F23-FE72-49DE-B13F-0BF70757E984' AND "AutoUpdateCategory" = TRUE;
+
+/* Set entity icon to fa fa-globe */
+UPDATE __mj."Entity" SET "Icon" = 'fa fa-globe', "__mj_UpdatedAt" = NOW()
+WHERE
+  "ID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2';
+
+/* Insert FieldCategoryInfo setting for entity */
+INSERT INTO __mj."EntitySetting" (
+  "ID",
+  "EntityID",
+  "Name",
+  "Value",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    'ad075475-aad5-4be2-a5ff-40b9e3bab34e',
+    '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2',
+    'FieldCategoryInfo',
+    '{"General Information":{"icon":"fa fa-info-circle","description":"Basic details and status of the remote browser provider"},"Technical Configuration":{"icon":"fa fa-cogs","description":"Technical driver definitions and capability schemas"},"Operational Settings":{"icon":"fa fa-sliders-h","description":"Operational parameters and default session behaviors"},"System Metadata":{"icon":"fa fa-database","description":"System-managed audit and tracking fields"}}',
+    NOW(),
+    NOW()
+  );
+
+/* Insert FieldCategoryIcons setting (legacy) */
+INSERT INTO __mj."EntitySetting" (
+  "ID",
+  "EntityID",
+  "Name",
+  "Value",
+  "__mj_CreatedAt",
+  "__mj_UpdatedAt"
+)
+VALUES
+  (
+    'f705ad39-4f1e-4882-b214-23e5d5c80610',
+    '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2',
+    'FieldCategoryIcons',
+    '{"General Information":"fa fa-info-circle","Technical Configuration":"fa fa-cogs","Operational Settings":"fa fa-sliders-h","System Metadata":"fa fa-database"}',
+    NOW(),
+    NOW()
+  );
+
+/* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
+UPDATE __mj."ApplicationEntity" SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
+WHERE
+  "EntityID" = '5AF7B1AB-B2D7-4BCA-9EDC-980980EF4AF2';
+
+-- ===================== CodeGen (native PG, baked) =====================
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Notes
+-- Item: Index for Foreign Keys
+-- ============================================================
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_note_agent_id"
+    ON __mj."AIAgentNote" ("AgentID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_note_agent_note_type_id"
+    ON __mj."AIAgentNote" ("AgentNoteTypeID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_note_user_id"
+    ON __mj."AIAgentNote" ("UserID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_note_source_conversation_id"
+    ON __mj."AIAgentNote" ("SourceConversationID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_note_source_conversation_detail_id"
+    ON __mj."AIAgentNote" ("SourceConversationDetailID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_note_source_ai_agent_run_id"
+    ON __mj."AIAgentNote" ("SourceAIAgentRunID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_note_company_id"
+    ON __mj."AIAgentNote" ("CompanyID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_note_embedding_model_id"
+    ON __mj."AIAgentNote" ("EmbeddingModelID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_note_primary_scope_entity_id"
+    ON __mj."AIAgentNote" ("PrimaryScopeEntityID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_note_consolidated_into_note_id"
+    ON __mj."AIAgentNote" ("ConsolidatedIntoNoteID");
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Notes
+-- Item: fnAIAgentNoteConsolidatedIntoNoteID_GetRootID
+-- ============================================================
+
+------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: AIAgentNote.ConsolidatedIntoNoteID
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_ai_agent_note_consolidated_into_note_id_get_root_id"(
+    p_record_id uuid,
+    p_parent_id uuid
+) RETURNS uuid AS $$
+    WITH RECURSIVE cte_root_parent AS (
+        -- Anchor: Start from p_parent_id if not null, otherwise start from p_record_id
+        SELECT
+            "ID",
+            "ConsolidatedIntoNoteID",
+            "ID" AS root_parent_id,
+            0 AS depth
+        FROM
+            __mj."AIAgentNote"
+        WHERE
+            "ID" = COALESCE(p_parent_id, p_record_id)
+
+        UNION ALL
+
+        -- Recursive: Keep going up the hierarchy
+        SELECT
+            c."ID",
+            c."ConsolidatedIntoNoteID",
+            c."ID" AS root_parent_id,
+            p.depth + 1 AS depth
+        FROM
+            __mj."AIAgentNote" c
+        INNER JOIN
+            cte_root_parent p ON c."ID" = p."ConsolidatedIntoNoteID"
+        WHERE
+            p.depth < 100  -- Prevent infinite loops
+    )
+    SELECT root_parent_id
+    FROM cte_root_parent
+    WHERE "ConsolidatedIntoNoteID" IS NULL
+    ORDER BY root_parent_id
+    LIMIT 1;
+$$ LANGUAGE sql STABLE;
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Notes
+-- Item: vwAIAgentNotes
+-- ============================================================
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: AI Agent Notes
+-----               SCHEMA:      __mj
+-----               BASE TABLE:  AIAgentNote
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DO $vw_regen$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIAgentNotes"
+AS
+SELECT
+    a.*,
+    MJAIAgent_AgentID."Name" AS "Agent",
+    MJAIAgentNoteType_AgentNoteTypeID."Name" AS "AgentNoteType",
+    MJUser_UserID."Name" AS "User",
+    MJConversation_SourceConversationID."Name" AS "SourceConversation",
+    MJConversationDetail_SourceConversationDetailID."ExternalID" AS "SourceConversationDetail",
+    MJAIAgentRun_SourceAIAgentRunID."RunName" AS "SourceAIAgentRun",
+    MJCompany_CompanyID."Name" AS "Company",
+    MJAIModel_EmbeddingModelID."Name" AS "EmbeddingModel",
+    MJEntity_PrimaryScopeEntityID."Name" AS "PrimaryScopeEntity",
+    MJAIAgentNote_ConsolidatedIntoNoteID."Type" AS "ConsolidatedIntoNote",
+    root_ConsolidatedIntoNoteID.root_id AS "RootConsolidatedIntoNoteID"
+FROM
+    __mj."AIAgentNote" AS a
+LEFT OUTER JOIN
+    __mj."AIAgent" AS MJAIAgent_AgentID
+  ON
+    "a"."AgentID" = MJAIAgent_AgentID."ID"
+LEFT OUTER JOIN
+    __mj."AIAgentNoteType" AS MJAIAgentNoteType_AgentNoteTypeID
+  ON
+    "a"."AgentNoteTypeID" = MJAIAgentNoteType_AgentNoteTypeID."ID"
+LEFT OUTER JOIN
+    __mj."User" AS MJUser_UserID
+  ON
+    "a"."UserID" = MJUser_UserID."ID"
+LEFT OUTER JOIN
+    __mj."Conversation" AS MJConversation_SourceConversationID
+  ON
+    "a"."SourceConversationID" = MJConversation_SourceConversationID."ID"
+LEFT OUTER JOIN
+    __mj."ConversationDetail" AS MJConversationDetail_SourceConversationDetailID
+  ON
+    "a"."SourceConversationDetailID" = MJConversationDetail_SourceConversationDetailID."ID"
+LEFT OUTER JOIN
+    __mj."AIAgentRun" AS MJAIAgentRun_SourceAIAgentRunID
+  ON
+    "a"."SourceAIAgentRunID" = MJAIAgentRun_SourceAIAgentRunID."ID"
+LEFT OUTER JOIN
+    __mj."Company" AS MJCompany_CompanyID
+  ON
+    "a"."CompanyID" = MJCompany_CompanyID."ID"
+LEFT OUTER JOIN
+    __mj."AIModel" AS MJAIModel_EmbeddingModelID
+  ON
+    "a"."EmbeddingModelID" = MJAIModel_EmbeddingModelID."ID"
+LEFT OUTER JOIN
+    __mj."Entity" AS MJEntity_PrimaryScopeEntityID
+  ON
+    "a"."PrimaryScopeEntityID" = MJEntity_PrimaryScopeEntityID."ID"
+LEFT OUTER JOIN
+    __mj."AIAgentNote" AS MJAIAgentNote_ConsolidatedIntoNoteID
+  ON
+    "a"."ConsolidatedIntoNoteID" = MJAIAgentNote_ConsolidatedIntoNoteID."ID"
+
+LEFT JOIN LATERAL (
+    SELECT __mj."fn_ai_agent_note_consolidated_into_note_id_get_root_id"(a."ID", a."ConsolidatedIntoNoteID") AS root_id
+) AS root_ConsolidatedIntoNoteID ON true
+$vsql$;
+  rec RECORD;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
+  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
+  -- every dependent view (anything that JOINs this view in its body), so we
+  -- capture each dependent's definition + grants BEFORE the drop and replay
+  -- them afterward (best-effort). Without this, on a fresh-DB replay where
+  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
+  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
+  -- that the wrapper for this entity doesn't know how to recreate, and
+  -- those views stay permanently missing.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
+    schema_name TEXT,
+    view_name   TEXT,
+    relkind     CHAR(1),
+    definition  TEXT,
+    grants_sql  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_deps;
+
+  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
+  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
+  -- pattern) when the target view is dropped. Without restoring them,
+  -- post-codegen CRUD validation reports those routines as missing —
+  -- e.g. "MJ: Recommendation Items → missing create routine
+  -- spCreateRecommendationItem" — even though the next codegen pass
+  -- emits them. The restored definitions are pg_get_functiondef() output
+  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
+  -- trailing semicolon; replaying them verbatim recreates the function
+  -- with its original body, parameter list, and return type.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
+    schema_name TEXT,
+    fn_name     TEXT,
+    fn_oid      OID,
+    definition  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_fn_deps;
+
+  -- Capture dependents. NOTES on the grants_sql build:
+  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
+  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
+  --     exists). pg_get_userbyid is a public catalog function available to
+  --     every database user, including unprivileged accounts on managed
+  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
+  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
+  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
+  --     to pg_authid which works on self-hosted PG but fails with
+  --     "permission denied for table pg_authid" on managed services.
+  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
+  --     which RETURNS the role name pre-quoted when it contains uppercase
+  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
+  --     on the already-quoted string double-wrapped and the GRANT failed at
+  --     replay with "role does not exist". Using
+  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
+  --     correctly exactly once.
+  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
+  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
+  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
+  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
+  SELECT DISTINCT
+      dn.nspname,
+      dc.relname,
+      dc.relkind,
+      pg_get_viewdef(dc.oid),
+      (SELECT string_agg(
+          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
+          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
+          E'
+')
+       FROM (
+           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
+                  (aclexplode(dc.relacl)).privilege_type AS privilege
+       ) g
+       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
+  FROM pg_depend d
+  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
+  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
+  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwAIAgentNotes'
+    AND tc.relkind IN ('v', 'm')
+    AND dc.oid <> tc.oid;
+
+  -- Capture dependent functions. Two paths matter on PG:
+  --   1. Functions whose RETURN type references the view (RETURNS SETOF
+  --      <view>) — pg_depend records this as type=pg_type → pg_class.
+  --   2. Functions whose body references the view (used by sql functions
+  --      and by some plpgsql edge cases) — pg_depend records this as
+  --      pg_proc → pg_class.
+  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
+  -- statement that we replay verbatim. We DO include RETURNS-only
+  -- references because that's the dominant codegen pattern (sp* CRUD
+  -- functions all RETURNS SETOF the matching vwX).
+  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwAIAgentNotes'
+    AND tc.relkind IN ('v', 'm')
+  UNION
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
+  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  WHERE EXISTS (
+      SELECT 1 FROM pg_class tc
+      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+      WHERE tc.reltype = pt.oid
+        AND tn.nspname = '__mj'
+        AND tc.relname = 'vwAIAgentNotes'
+        AND tc.relkind IN ('v', 'm')
+  );
+
+  DROP VIEW IF EXISTS __mj."vwAIAgentNotes" CASCADE;
+  EXECUTE vsql;
+
+  -- Replay captured dependents. Best-effort: log + continue on failure.
+  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
+  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
+  -- and rolls back EVERY statement in the block on any exception. If we
+  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
+  -- present in target environment), the just-recreated VIEW would also
+  -- get rolled back and stay missing — the exact failure mode this
+  -- wrapper exists to prevent.
+  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
+    BEGIN
+      IF rec.relkind = 'm' THEN
+        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      ELSE
+        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+    END;
+
+    IF rec.grants_sql IS NOT NULL THEN
+      BEGIN
+        EXECUTE rec.grants_sql;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+      END;
+    END IF;
+  END LOOP;
+
+  -- Replay captured dependent functions AFTER all dependent views are
+  -- restored — most codegen-emitted sp* functions reference both the
+  -- target view AND the dependent views in their bodies/return types.
+  -- Wrapped per-function in its own savepoint so a single failure
+  -- doesn't poison subsequent restores or the just-recreated target.
+  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
+    BEGIN
+      EXECUTE rec.definition;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
+    END;
+  END LOOP;
+
+  DROP TABLE _vw_regen_deps;
+  DROP TABLE _vw_regen_fn_deps;
+END $vw_regen$;
+GRANT SELECT ON __mj."vwAIAgentNotes" TO "cdp_UI";
+GRANT SELECT ON __mj."vwAIAgentNotes" TO "cdp_Developer";
+GRANT SELECT ON __mj."vwAIAgentNotes" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Notes
+-- Item: spCreateAIAgentNote
+-- ============================================================
+
+------------------------------------------------------------
+----- CREATE FUNCTION FOR AIAgentNote
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spCreateAIAgentNote'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentNote"(
+    p_id uuid DEFAULT NULL,
+    p_agentid_clear boolean DEFAULT false,
+    p_agentid uuid DEFAULT NULL,
+    p_agentnotetypeid_clear boolean DEFAULT false,
+    p_agentnotetypeid uuid DEFAULT NULL,
+    p_note_clear boolean DEFAULT false,
+    p_note text DEFAULT NULL,
+    p_userid_clear boolean DEFAULT false,
+    p_userid uuid DEFAULT NULL,
+    p_type text DEFAULT NULL,
+    p_isautogenerated BOOLEAN DEFAULT NULL,
+    p_comments_clear boolean DEFAULT false,
+    p_comments text DEFAULT NULL,
+    p_status text DEFAULT NULL,
+    p_sourceconversationid_clear boolean DEFAULT false,
+    p_sourceconversationid uuid DEFAULT NULL,
+    p_sourceconversationdetailid_clear boolean DEFAULT false,
+    p_sourceconversationdetailid uuid DEFAULT NULL,
+    p_sourceaiagentrunid_clear boolean DEFAULT false,
+    p_sourceaiagentrunid uuid DEFAULT NULL,
+    p_companyid_clear boolean DEFAULT false,
+    p_companyid uuid DEFAULT NULL,
+    p_embeddingvector_clear boolean DEFAULT false,
+    p_embeddingvector text DEFAULT NULL,
+    p_embeddingmodelid_clear boolean DEFAULT false,
+    p_embeddingmodelid uuid DEFAULT NULL,
+    p_primaryscopeentityid_clear boolean DEFAULT false,
+    p_primaryscopeentityid uuid DEFAULT NULL,
+    p_primaryscoperecordid_clear boolean DEFAULT false,
+    p_primaryscoperecordid text DEFAULT NULL,
+    p_secondaryscopes_clear boolean DEFAULT false,
+    p_secondaryscopes text DEFAULT NULL,
+    p_lastaccessedat_clear boolean DEFAULT false,
+    p_lastaccessedat TIMESTAMPTZ DEFAULT NULL,
+    p_accesscount integer DEFAULT NULL,
+    p_expiresat_clear boolean DEFAULT false,
+    p_expiresat TIMESTAMPTZ DEFAULT NULL,
+    p_consolidatedintonoteid_clear boolean DEFAULT false,
+    p_consolidatedintonoteid uuid DEFAULT NULL,
+    p_consolidationcount integer DEFAULT NULL,
+    p_derivedfromnoteids_clear boolean DEFAULT false,
+    p_derivedfromnoteids text DEFAULT NULL,
+    p_protectiontier text DEFAULT NULL,
+    p_importancescore_clear boolean DEFAULT false,
+    p_importancescore decimal(5, 2) DEFAULT NULL,
+    p_authortype text DEFAULT NULL
+) RETURNS SETOF __mj."vwAIAgentNotes" AS $$
+DECLARE
+    v_new_id uuid;
+BEGIN
+    v_new_id := COALESCE(p_id, gen_random_uuid());
+    INSERT INTO __mj."AIAgentNote"
+        (
+            "ID",
+            "AgentID",
+                "AgentNoteTypeID",
+                "Note",
+                "UserID",
+                "Type",
+                "IsAutoGenerated",
+                "Comments",
+                "Status",
+                "SourceConversationID",
+                "SourceConversationDetailID",
+                "SourceAIAgentRunID",
+                "CompanyID",
+                "EmbeddingVector",
+                "EmbeddingModelID",
+                "PrimaryScopeEntityID",
+                "PrimaryScopeRecordID",
+                "SecondaryScopes",
+                "LastAccessedAt",
+                "AccessCount",
+                "ExpiresAt",
+                "ConsolidatedIntoNoteID",
+                "ConsolidationCount",
+                "DerivedFromNoteIDs",
+                "ProtectionTier",
+                "ImportanceScore",
+                "AuthorType"
+        )
+    VALUES
+        (
+            v_new_id,
+            CASE WHEN p_agentid_clear = true THEN NULL ELSE COALESCE(p_agentid, NULL) END,
+                CASE WHEN p_agentnotetypeid_clear = true THEN NULL ELSE COALESCE(p_agentnotetypeid, NULL) END,
+                CASE WHEN p_note_clear = true THEN NULL ELSE COALESCE(p_note, NULL) END,
+                CASE WHEN p_userid_clear = true THEN NULL ELSE COALESCE(p_userid, NULL) END,
+                COALESCE(p_type, 'Preference'),
+                COALESCE(p_isautogenerated, FALSE),
+                CASE WHEN p_comments_clear = true THEN NULL ELSE COALESCE(p_comments, NULL) END,
+                COALESCE(p_status, 'Active'),
+                CASE WHEN p_sourceconversationid_clear = true THEN NULL ELSE COALESCE(p_sourceconversationid, NULL) END,
+                CASE WHEN p_sourceconversationdetailid_clear = true THEN NULL ELSE COALESCE(p_sourceconversationdetailid, NULL) END,
+                CASE WHEN p_sourceaiagentrunid_clear = true THEN NULL ELSE COALESCE(p_sourceaiagentrunid, NULL) END,
+                CASE WHEN p_companyid_clear = true THEN NULL ELSE COALESCE(p_companyid, NULL) END,
+                CASE WHEN p_embeddingvector_clear = true THEN NULL ELSE COALESCE(p_embeddingvector, NULL) END,
+                CASE WHEN p_embeddingmodelid_clear = true THEN NULL ELSE COALESCE(p_embeddingmodelid, NULL) END,
+                CASE WHEN p_primaryscopeentityid_clear = true THEN NULL ELSE COALESCE(p_primaryscopeentityid, NULL) END,
+                CASE WHEN p_primaryscoperecordid_clear = true THEN NULL ELSE COALESCE(p_primaryscoperecordid, NULL) END,
+                CASE WHEN p_secondaryscopes_clear = true THEN NULL ELSE COALESCE(p_secondaryscopes, NULL) END,
+                CASE WHEN p_lastaccessedat_clear = true THEN NULL ELSE COALESCE(p_lastaccessedat, NULL) END,
+                COALESCE(p_accesscount, 0),
+                CASE WHEN p_expiresat_clear = true THEN NULL ELSE COALESCE(p_expiresat, NULL) END,
+                CASE WHEN p_consolidatedintonoteid_clear = true THEN NULL ELSE COALESCE(p_consolidatedintonoteid, NULL) END,
+                COALESCE(p_consolidationcount, 0),
+                CASE WHEN p_derivedfromnoteids_clear = true THEN NULL ELSE COALESCE(p_derivedfromnoteids, NULL) END,
+                COALESCE(p_protectiontier, 'Standard'),
+                CASE WHEN p_importancescore_clear = true THEN NULL ELSE COALESCE(p_importancescore, NULL) END,
+                COALESCE(p_authortype, 'MemoryManager')
+        )
+    ;
+
+    RETURN QUERY
+    SELECT * FROM __mj."vwAIAgentNotes"
+    WHERE "ID" = v_new_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentNote" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentNote" TO "cdp_Integration";
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Notes
+-- Item: spUpdateAIAgentNote
+-- ============================================================
+
+------------------------------------------------------------
+----- UPDATE FUNCTION FOR AIAgentNote
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spUpdateAIAgentNote'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgentNote"(
+    p_id uuid,
+    p_agentid_clear boolean DEFAULT false,
+    p_agentid uuid DEFAULT NULL,
+    p_agentnotetypeid_clear boolean DEFAULT false,
+    p_agentnotetypeid uuid DEFAULT NULL,
+    p_note_clear boolean DEFAULT false,
+    p_note text DEFAULT NULL,
+    p_userid_clear boolean DEFAULT false,
+    p_userid uuid DEFAULT NULL,
+    p_type text DEFAULT NULL,
+    p_isautogenerated BOOLEAN DEFAULT NULL,
+    p_comments_clear boolean DEFAULT false,
+    p_comments text DEFAULT NULL,
+    p_status text DEFAULT NULL,
+    p_sourceconversationid_clear boolean DEFAULT false,
+    p_sourceconversationid uuid DEFAULT NULL,
+    p_sourceconversationdetailid_clear boolean DEFAULT false,
+    p_sourceconversationdetailid uuid DEFAULT NULL,
+    p_sourceaiagentrunid_clear boolean DEFAULT false,
+    p_sourceaiagentrunid uuid DEFAULT NULL,
+    p_companyid_clear boolean DEFAULT false,
+    p_companyid uuid DEFAULT NULL,
+    p_embeddingvector_clear boolean DEFAULT false,
+    p_embeddingvector text DEFAULT NULL,
+    p_embeddingmodelid_clear boolean DEFAULT false,
+    p_embeddingmodelid uuid DEFAULT NULL,
+    p_primaryscopeentityid_clear boolean DEFAULT false,
+    p_primaryscopeentityid uuid DEFAULT NULL,
+    p_primaryscoperecordid_clear boolean DEFAULT false,
+    p_primaryscoperecordid text DEFAULT NULL,
+    p_secondaryscopes_clear boolean DEFAULT false,
+    p_secondaryscopes text DEFAULT NULL,
+    p_lastaccessedat_clear boolean DEFAULT false,
+    p_lastaccessedat TIMESTAMPTZ DEFAULT NULL,
+    p_accesscount integer DEFAULT NULL,
+    p_expiresat_clear boolean DEFAULT false,
+    p_expiresat TIMESTAMPTZ DEFAULT NULL,
+    p_consolidatedintonoteid_clear boolean DEFAULT false,
+    p_consolidatedintonoteid uuid DEFAULT NULL,
+    p_consolidationcount integer DEFAULT NULL,
+    p_derivedfromnoteids_clear boolean DEFAULT false,
+    p_derivedfromnoteids text DEFAULT NULL,
+    p_protectiontier text DEFAULT NULL,
+    p_importancescore_clear boolean DEFAULT false,
+    p_importancescore decimal(5, 2) DEFAULT NULL,
+    p_authortype text DEFAULT NULL
+) RETURNS SETOF __mj."vwAIAgentNotes" AS $$
+DECLARE
+    v_updated_count INTEGER;
+BEGIN
+    UPDATE __mj."AIAgentNote"
+    SET
+        "AgentID" = CASE WHEN p_agentid_clear = true THEN NULL ELSE COALESCE(p_agentid, "AgentID") END,
+        "AgentNoteTypeID" = CASE WHEN p_agentnotetypeid_clear = true THEN NULL ELSE COALESCE(p_agentnotetypeid, "AgentNoteTypeID") END,
+        "Note" = CASE WHEN p_note_clear = true THEN NULL ELSE COALESCE(p_note, "Note") END,
+        "UserID" = CASE WHEN p_userid_clear = true THEN NULL ELSE COALESCE(p_userid, "UserID") END,
+        "Type" = COALESCE(p_type, "Type"),
+        "IsAutoGenerated" = COALESCE(p_isautogenerated, "IsAutoGenerated"),
+        "Comments" = CASE WHEN p_comments_clear = true THEN NULL ELSE COALESCE(p_comments, "Comments") END,
+        "Status" = COALESCE(p_status, "Status"),
+        "SourceConversationID" = CASE WHEN p_sourceconversationid_clear = true THEN NULL ELSE COALESCE(p_sourceconversationid, "SourceConversationID") END,
+        "SourceConversationDetailID" = CASE WHEN p_sourceconversationdetailid_clear = true THEN NULL ELSE COALESCE(p_sourceconversationdetailid, "SourceConversationDetailID") END,
+        "SourceAIAgentRunID" = CASE WHEN p_sourceaiagentrunid_clear = true THEN NULL ELSE COALESCE(p_sourceaiagentrunid, "SourceAIAgentRunID") END,
+        "CompanyID" = CASE WHEN p_companyid_clear = true THEN NULL ELSE COALESCE(p_companyid, "CompanyID") END,
+        "EmbeddingVector" = CASE WHEN p_embeddingvector_clear = true THEN NULL ELSE COALESCE(p_embeddingvector, "EmbeddingVector") END,
+        "EmbeddingModelID" = CASE WHEN p_embeddingmodelid_clear = true THEN NULL ELSE COALESCE(p_embeddingmodelid, "EmbeddingModelID") END,
+        "PrimaryScopeEntityID" = CASE WHEN p_primaryscopeentityid_clear = true THEN NULL ELSE COALESCE(p_primaryscopeentityid, "PrimaryScopeEntityID") END,
+        "PrimaryScopeRecordID" = CASE WHEN p_primaryscoperecordid_clear = true THEN NULL ELSE COALESCE(p_primaryscoperecordid, "PrimaryScopeRecordID") END,
+        "SecondaryScopes" = CASE WHEN p_secondaryscopes_clear = true THEN NULL ELSE COALESCE(p_secondaryscopes, "SecondaryScopes") END,
+        "LastAccessedAt" = CASE WHEN p_lastaccessedat_clear = true THEN NULL ELSE COALESCE(p_lastaccessedat, "LastAccessedAt") END,
+        "AccessCount" = COALESCE(p_accesscount, "AccessCount"),
+        "ExpiresAt" = CASE WHEN p_expiresat_clear = true THEN NULL ELSE COALESCE(p_expiresat, "ExpiresAt") END,
+        "ConsolidatedIntoNoteID" = CASE WHEN p_consolidatedintonoteid_clear = true THEN NULL ELSE COALESCE(p_consolidatedintonoteid, "ConsolidatedIntoNoteID") END,
+        "ConsolidationCount" = COALESCE(p_consolidationcount, "ConsolidationCount"),
+        "DerivedFromNoteIDs" = CASE WHEN p_derivedfromnoteids_clear = true THEN NULL ELSE COALESCE(p_derivedfromnoteids, "DerivedFromNoteIDs") END,
+        "ProtectionTier" = COALESCE(p_protectiontier, "ProtectionTier"),
+        "ImportanceScore" = CASE WHEN p_importancescore_clear = true THEN NULL ELSE COALESCE(p_importancescore, "ImportanceScore") END,
+        "AuthorType" = COALESCE(p_authortype, "AuthorType")
+    WHERE
+        "ID" = p_id;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+
+    IF v_updated_count = 0 THEN
+        -- Nothing was updated, return empty result set
+        RETURN;
+    END IF;
+
+    -- Return the updated record from the base view
+    RETURN QUERY
+    SELECT * FROM __mj."vwAIAgentNotes"
+    WHERE "ID" = p_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentNote" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentNote" TO "cdp_Integration";
+
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgentNote table
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_trg_update_ai_agent_note"()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."__mj_UpdatedAt" := NOW() AT TIME ZONE 'UTC';
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trg_update_ai_agent_note" ON __mj."AIAgentNote";
+
+CREATE TRIGGER "trg_update_ai_agent_note"
+BEFORE UPDATE ON __mj."AIAgentNote"
+FOR EACH ROW
+EXECUTE FUNCTION __mj."fn_trg_update_ai_agent_note"();
+
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Notes
+-- Item: spDeleteAIAgentNote
+-- ============================================================
+
+------------------------------------------------------------
+----- DELETE FUNCTION FOR AIAgentNote
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spDeleteAIAgentNote'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgentNote"(
+    p_id uuid
+) RETURNS TABLE("ID" uuid) AS $$
+#variable_conflict use_column
+DECLARE
+    v_affected_count INTEGER;
+BEGIN
+
+    DELETE FROM __mj."AIAgentNote"
+    WHERE "ID" = p_id;
+
+    GET DIAGNOSTICS v_affected_count = ROW_COUNT;
+
+    IF v_affected_count = 0 THEN
+        RETURN QUERY SELECT NULL::uuid AS "ID";
+    ELSE
+        RETURN QUERY SELECT p_id AS "ID";
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentNote" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentNote" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Remote Browser Providers
+-- Item: Index for Foreign Keys
+-- ============================================================
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Remote Browser Providers
+-- Item: vwAIRemoteBrowserProviders
+-- ============================================================
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: AI Remote Browser Providers
+-----               SCHEMA:      __mj
+-----               BASE TABLE:  AIRemoteBrowserProvider
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DO $vw_regen$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIRemoteBrowserProviders"
+AS
+SELECT
+    a.*
+FROM
+    __mj."AIRemoteBrowserProvider" AS a
+$vsql$;
+  rec RECORD;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
+  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
+  -- every dependent view (anything that JOINs this view in its body), so we
+  -- capture each dependent's definition + grants BEFORE the drop and replay
+  -- them afterward (best-effort). Without this, on a fresh-DB replay where
+  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
+  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
+  -- that the wrapper for this entity doesn't know how to recreate, and
+  -- those views stay permanently missing.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
+    schema_name TEXT,
+    view_name   TEXT,
+    relkind     CHAR(1),
+    definition  TEXT,
+    grants_sql  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_deps;
+
+  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
+  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
+  -- pattern) when the target view is dropped. Without restoring them,
+  -- post-codegen CRUD validation reports those routines as missing —
+  -- e.g. "MJ: Recommendation Items → missing create routine
+  -- spCreateRecommendationItem" — even though the next codegen pass
+  -- emits them. The restored definitions are pg_get_functiondef() output
+  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
+  -- trailing semicolon; replaying them verbatim recreates the function
+  -- with its original body, parameter list, and return type.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
+    schema_name TEXT,
+    fn_name     TEXT,
+    fn_oid      OID,
+    definition  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_fn_deps;
+
+  -- Capture dependents. NOTES on the grants_sql build:
+  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
+  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
+  --     exists). pg_get_userbyid is a public catalog function available to
+  --     every database user, including unprivileged accounts on managed
+  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
+  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
+  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
+  --     to pg_authid which works on self-hosted PG but fails with
+  --     "permission denied for table pg_authid" on managed services.
+  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
+  --     which RETURNS the role name pre-quoted when it contains uppercase
+  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
+  --     on the already-quoted string double-wrapped and the GRANT failed at
+  --     replay with "role does not exist". Using
+  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
+  --     correctly exactly once.
+  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
+  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
+  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
+  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
+  SELECT DISTINCT
+      dn.nspname,
+      dc.relname,
+      dc.relkind,
+      pg_get_viewdef(dc.oid),
+      (SELECT string_agg(
+          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
+          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
+          E'
+')
+       FROM (
+           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
+                  (aclexplode(dc.relacl)).privilege_type AS privilege
+       ) g
+       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
+  FROM pg_depend d
+  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
+  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
+  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwAIRemoteBrowserProviders'
+    AND tc.relkind IN ('v', 'm')
+    AND dc.oid <> tc.oid;
+
+  -- Capture dependent functions. Two paths matter on PG:
+  --   1. Functions whose RETURN type references the view (RETURNS SETOF
+  --      <view>) — pg_depend records this as type=pg_type → pg_class.
+  --   2. Functions whose body references the view (used by sql functions
+  --      and by some plpgsql edge cases) — pg_depend records this as
+  --      pg_proc → pg_class.
+  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
+  -- statement that we replay verbatim. We DO include RETURNS-only
+  -- references because that's the dominant codegen pattern (sp* CRUD
+  -- functions all RETURNS SETOF the matching vwX).
+  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwAIRemoteBrowserProviders'
+    AND tc.relkind IN ('v', 'm')
+  UNION
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
+  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  WHERE EXISTS (
+      SELECT 1 FROM pg_class tc
+      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+      WHERE tc.reltype = pt.oid
+        AND tn.nspname = '__mj'
+        AND tc.relname = 'vwAIRemoteBrowserProviders'
+        AND tc.relkind IN ('v', 'm')
+  );
+
+  DROP VIEW IF EXISTS __mj."vwAIRemoteBrowserProviders" CASCADE;
+  EXECUTE vsql;
+
+  -- Replay captured dependents. Best-effort: log + continue on failure.
+  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
+  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
+  -- and rolls back EVERY statement in the block on any exception. If we
+  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
+  -- present in target environment), the just-recreated VIEW would also
+  -- get rolled back and stay missing — the exact failure mode this
+  -- wrapper exists to prevent.
+  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
+    BEGIN
+      IF rec.relkind = 'm' THEN
+        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      ELSE
+        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+    END;
+
+    IF rec.grants_sql IS NOT NULL THEN
+      BEGIN
+        EXECUTE rec.grants_sql;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+      END;
+    END IF;
+  END LOOP;
+
+  -- Replay captured dependent functions AFTER all dependent views are
+  -- restored — most codegen-emitted sp* functions reference both the
+  -- target view AND the dependent views in their bodies/return types.
+  -- Wrapped per-function in its own savepoint so a single failure
+  -- doesn't poison subsequent restores or the just-recreated target.
+  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
+    BEGIN
+      EXECUTE rec.definition;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
+    END;
+  END LOOP;
+
+  DROP TABLE _vw_regen_deps;
+  DROP TABLE _vw_regen_fn_deps;
+END $vw_regen$;
+GRANT SELECT ON __mj."vwAIRemoteBrowserProviders" TO "cdp_UI";
+GRANT SELECT ON __mj."vwAIRemoteBrowserProviders" TO "cdp_Developer";
+GRANT SELECT ON __mj."vwAIRemoteBrowserProviders" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Remote Browser Providers
+-- Item: spCreateAIRemoteBrowserProvider
+-- ============================================================
+
+------------------------------------------------------------
+----- CREATE FUNCTION FOR AIRemoteBrowserProvider
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spCreateAIRemoteBrowserProvider'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spCreateAIRemoteBrowserProvider"(
+    p_id uuid DEFAULT NULL,
+    p_name text DEFAULT NULL,
+    p_description_clear boolean DEFAULT false,
+    p_description text DEFAULT NULL,
+    p_providertype text DEFAULT NULL,
+    p_driverclass text DEFAULT NULL,
+    p_status text DEFAULT NULL,
+    p_supportedfeatures_clear boolean DEFAULT false,
+    p_supportedfeatures text DEFAULT NULL,
+    p_defaultcontrolmode text DEFAULT NULL,
+    p_configschema_clear boolean DEFAULT false,
+    p_configschema text DEFAULT NULL,
+    p_configuration_clear boolean DEFAULT false,
+    p_configuration text DEFAULT NULL
+) RETURNS SETOF __mj."vwAIRemoteBrowserProviders" AS $$
+DECLARE
+    v_new_id uuid;
+BEGIN
+    v_new_id := COALESCE(p_id, gen_random_uuid());
+    INSERT INTO __mj."AIRemoteBrowserProvider"
+        (
+            "ID",
+            "Name",
+                "Description",
+                "ProviderType",
+                "DriverClass",
+                "Status",
+                "SupportedFeatures",
+                "DefaultControlMode",
+                "ConfigSchema",
+                "Configuration"
+        )
+    VALUES
+        (
+            v_new_id,
+            p_name,
+                CASE WHEN p_description_clear = true THEN NULL ELSE COALESCE(p_description, NULL) END,
+                COALESCE(p_providertype, 'Service'),
+                p_driverclass,
+                COALESCE(p_status, 'Active'),
+                CASE WHEN p_supportedfeatures_clear = true THEN NULL ELSE COALESCE(p_supportedfeatures, NULL) END,
+                COALESCE(p_defaultcontrolmode, 'AgentOnly'),
+                CASE WHEN p_configschema_clear = true THEN NULL ELSE COALESCE(p_configschema, NULL) END,
+                CASE WHEN p_configuration_clear = true THEN NULL ELSE COALESCE(p_configuration, NULL) END
+        )
+    ;
+
+    RETURN QUERY
+    SELECT * FROM __mj."vwAIRemoteBrowserProviders"
+    WHERE "ID" = v_new_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spCreateAIRemoteBrowserProvider" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spCreateAIRemoteBrowserProvider" TO "cdp_Integration";
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Remote Browser Providers
+-- Item: spUpdateAIRemoteBrowserProvider
+-- ============================================================
+
+------------------------------------------------------------
+----- UPDATE FUNCTION FOR AIRemoteBrowserProvider
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spUpdateAIRemoteBrowserProvider'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spUpdateAIRemoteBrowserProvider"(
+    p_id uuid,
+    p_name text DEFAULT NULL,
+    p_description_clear boolean DEFAULT false,
+    p_description text DEFAULT NULL,
+    p_providertype text DEFAULT NULL,
+    p_driverclass text DEFAULT NULL,
+    p_status text DEFAULT NULL,
+    p_supportedfeatures_clear boolean DEFAULT false,
+    p_supportedfeatures text DEFAULT NULL,
+    p_defaultcontrolmode text DEFAULT NULL,
+    p_configschema_clear boolean DEFAULT false,
+    p_configschema text DEFAULT NULL,
+    p_configuration_clear boolean DEFAULT false,
+    p_configuration text DEFAULT NULL
+) RETURNS SETOF __mj."vwAIRemoteBrowserProviders" AS $$
+DECLARE
+    v_updated_count INTEGER;
+BEGIN
+    UPDATE __mj."AIRemoteBrowserProvider"
+    SET
+        "Name" = COALESCE(p_name, "Name"),
+        "Description" = CASE WHEN p_description_clear = true THEN NULL ELSE COALESCE(p_description, "Description") END,
+        "ProviderType" = COALESCE(p_providertype, "ProviderType"),
+        "DriverClass" = COALESCE(p_driverclass, "DriverClass"),
+        "Status" = COALESCE(p_status, "Status"),
+        "SupportedFeatures" = CASE WHEN p_supportedfeatures_clear = true THEN NULL ELSE COALESCE(p_supportedfeatures, "SupportedFeatures") END,
+        "DefaultControlMode" = COALESCE(p_defaultcontrolmode, "DefaultControlMode"),
+        "ConfigSchema" = CASE WHEN p_configschema_clear = true THEN NULL ELSE COALESCE(p_configschema, "ConfigSchema") END,
+        "Configuration" = CASE WHEN p_configuration_clear = true THEN NULL ELSE COALESCE(p_configuration, "Configuration") END
+    WHERE
+        "ID" = p_id;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+
+    IF v_updated_count = 0 THEN
+        -- Nothing was updated, return empty result set
+        RETURN;
+    END IF;
+
+    -- Return the updated record from the base view
+    RETURN QUERY
+    SELECT * FROM __mj."vwAIRemoteBrowserProviders"
+    WHERE "ID" = p_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spUpdateAIRemoteBrowserProvider" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spUpdateAIRemoteBrowserProvider" TO "cdp_Integration";
+
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIRemoteBrowserProvider table
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_trg_update_ai_remote_browser_provider"()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."__mj_UpdatedAt" := NOW() AT TIME ZONE 'UTC';
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trg_update_ai_remote_browser_provider" ON __mj."AIRemoteBrowserProvider";
+
+CREATE TRIGGER "trg_update_ai_remote_browser_provider"
+BEFORE UPDATE ON __mj."AIRemoteBrowserProvider"
+FOR EACH ROW
+EXECUTE FUNCTION __mj."fn_trg_update_ai_remote_browser_provider"();
+
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Remote Browser Providers
+-- Item: spDeleteAIRemoteBrowserProvider
+-- ============================================================
+
+------------------------------------------------------------
+----- DELETE FUNCTION FOR AIRemoteBrowserProvider
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spDeleteAIRemoteBrowserProvider'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spDeleteAIRemoteBrowserProvider"(
+    p_id uuid
+) RETURNS TABLE("ID" uuid) AS $$
+#variable_conflict use_column
+DECLARE
+    v_affected_count INTEGER;
+BEGIN
+
+    DELETE FROM __mj."AIRemoteBrowserProvider"
+    WHERE "ID" = p_id;
+
+    GET DIAGNOSTICS v_affected_count = ROW_COUNT;
+
+    IF v_affected_count = 0 THEN
+        RETURN QUERY SELECT NULL::uuid AS "ID";
+    ELSE
+        RETURN QUERY SELECT p_id AS "ID";
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spDeleteAIRemoteBrowserProvider" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spDeleteAIRemoteBrowserProvider" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Runs
+-- Item: Index for Foreign Keys
+-- ============================================================
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_agent_id"
+    ON __mj."AIAgentRun" ("AgentID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_parent_run_id"
+    ON __mj."AIAgentRun" ("ParentRunID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_conversation_id"
+    ON __mj."AIAgentRun" ("ConversationID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_user_id"
+    ON __mj."AIAgentRun" ("UserID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_conversation_detail_id"
+    ON __mj."AIAgentRun" ("ConversationDetailID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_last_run_id"
+    ON __mj."AIAgentRun" ("LastRunID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_configuration_id"
+    ON __mj."AIAgentRun" ("ConfigurationID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_override_model_id"
+    ON __mj."AIAgentRun" ("OverrideModelID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_override_vendor_id"
+    ON __mj."AIAgentRun" ("OverrideVendorID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_scheduled_job_run_id"
+    ON __mj."AIAgentRun" ("ScheduledJobRunID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_test_run_id"
+    ON __mj."AIAgentRun" ("TestRunID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_primary_scope_entity_id"
+    ON __mj."AIAgentRun" ("PrimaryScopeEntityID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_run_agent_session_id"
+    ON __mj."AIAgentRun" ("AgentSessionID");
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Runs
+-- Item: fnAIAgentRunParentRunID_GetRootID
+-- ============================================================
+
+------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: AIAgentRun.ParentRunID
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_ai_agent_run_parent_run_id_get_root_id"(
+    p_record_id uuid,
+    p_parent_id uuid
+) RETURNS uuid AS $$
+    WITH RECURSIVE cte_root_parent AS (
+        -- Anchor: Start from p_parent_id if not null, otherwise start from p_record_id
+        SELECT
+            "ID",
+            "ParentRunID",
+            "ID" AS root_parent_id,
+            0 AS depth
+        FROM
+            __mj."AIAgentRun"
+        WHERE
+            "ID" = COALESCE(p_parent_id, p_record_id)
+
+        UNION ALL
+
+        -- Recursive: Keep going up the hierarchy
+        SELECT
+            c."ID",
+            c."ParentRunID",
+            c."ID" AS root_parent_id,
+            p.depth + 1 AS depth
+        FROM
+            __mj."AIAgentRun" c
+        INNER JOIN
+            cte_root_parent p ON c."ID" = p."ParentRunID"
+        WHERE
+            p.depth < 100  -- Prevent infinite loops
+    )
+    SELECT root_parent_id
+    FROM cte_root_parent
+    WHERE "ParentRunID" IS NULL
+    ORDER BY root_parent_id
+    LIMIT 1;
+$$ LANGUAGE sql STABLE;
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Runs
+-- Item: fnAIAgentRunLastRunID_GetRootID
+-- ============================================================
+
+------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: AIAgentRun.LastRunID
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_ai_agent_run_last_run_id_get_root_id"(
+    p_record_id uuid,
+    p_parent_id uuid
+) RETURNS uuid AS $$
+    WITH RECURSIVE cte_root_parent AS (
+        -- Anchor: Start from p_parent_id if not null, otherwise start from p_record_id
+        SELECT
+            "ID",
+            "LastRunID",
+            "ID" AS root_parent_id,
+            0 AS depth
+        FROM
+            __mj."AIAgentRun"
+        WHERE
+            "ID" = COALESCE(p_parent_id, p_record_id)
+
+        UNION ALL
+
+        -- Recursive: Keep going up the hierarchy
+        SELECT
+            c."ID",
+            c."LastRunID",
+            c."ID" AS root_parent_id,
+            p.depth + 1 AS depth
+        FROM
+            __mj."AIAgentRun" c
+        INNER JOIN
+            cte_root_parent p ON c."ID" = p."LastRunID"
+        WHERE
+            p.depth < 100  -- Prevent infinite loops
+    )
+    SELECT root_parent_id
+    FROM cte_root_parent
+    WHERE "LastRunID" IS NULL
+    ORDER BY root_parent_id
+    LIMIT 1;
+$$ LANGUAGE sql STABLE;
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Runs
+-- Item: vwAIAgentRuns
+-- ============================================================
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: AI Agent Runs
+-----               SCHEMA:      __mj
+-----               BASE TABLE:  AIAgentRun
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DO $vw_regen$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIAgentRuns"
+AS
+SELECT
+    a.*,
+    MJAIAgent_AgentID."Name" AS "Agent",
+    MJAIAgentRun_ParentRunID."RunName" AS "ParentRun",
+    MJConversation_ConversationID."Name" AS "Conversation",
+    MJUser_UserID."Name" AS "User",
+    MJConversationDetail_ConversationDetailID."ExternalID" AS "ConversationDetail",
+    MJAIAgentRun_LastRunID."RunName" AS "LastRun",
+    MJAIConfiguration_ConfigurationID."Name" AS "Configuration",
+    MJAIModel_OverrideModelID."Name" AS "OverrideModel",
+    MJAIVendor_OverrideVendorID."Name" AS "OverrideVendor",
+    MJScheduledJobRun_ScheduledJobRunID."ScheduledJob" AS "ScheduledJobRun",
+    MJTestRun_TestRunID."Test" AS "TestRun",
+    MJEntity_PrimaryScopeEntityID."Name" AS "PrimaryScopeEntity",
+    root_ParentRunID.root_id AS "RootParentRunID",
+    root_LastRunID.root_id AS "RootLastRunID"
+FROM
+    __mj."AIAgentRun" AS a
+INNER JOIN
+    __mj."AIAgent" AS MJAIAgent_AgentID
+  ON
+    "a"."AgentID" = MJAIAgent_AgentID."ID"
+LEFT OUTER JOIN
+    __mj."AIAgentRun" AS MJAIAgentRun_ParentRunID
+  ON
+    "a"."ParentRunID" = MJAIAgentRun_ParentRunID."ID"
+LEFT OUTER JOIN
+    __mj."Conversation" AS MJConversation_ConversationID
+  ON
+    "a"."ConversationID" = MJConversation_ConversationID."ID"
+LEFT OUTER JOIN
+    __mj."User" AS MJUser_UserID
+  ON
+    "a"."UserID" = MJUser_UserID."ID"
+LEFT OUTER JOIN
+    __mj."ConversationDetail" AS MJConversationDetail_ConversationDetailID
+  ON
+    "a"."ConversationDetailID" = MJConversationDetail_ConversationDetailID."ID"
+LEFT OUTER JOIN
+    __mj."AIAgentRun" AS MJAIAgentRun_LastRunID
+  ON
+    "a"."LastRunID" = MJAIAgentRun_LastRunID."ID"
+LEFT OUTER JOIN
+    __mj."AIConfiguration" AS MJAIConfiguration_ConfigurationID
+  ON
+    "a"."ConfigurationID" = MJAIConfiguration_ConfigurationID."ID"
+LEFT OUTER JOIN
+    __mj."AIModel" AS MJAIModel_OverrideModelID
+  ON
+    "a"."OverrideModelID" = MJAIModel_OverrideModelID."ID"
+LEFT OUTER JOIN
+    __mj."AIVendor" AS MJAIVendor_OverrideVendorID
+  ON
+    "a"."OverrideVendorID" = MJAIVendor_OverrideVendorID."ID"
+LEFT OUTER JOIN
+    __mj."vwScheduledJobRuns" AS MJScheduledJobRun_ScheduledJobRunID
+  ON
+    "a"."ScheduledJobRunID" = MJScheduledJobRun_ScheduledJobRunID."ID"
+LEFT OUTER JOIN
+    __mj."vwTestRuns" AS MJTestRun_TestRunID
+  ON
+    "a"."TestRunID" = MJTestRun_TestRunID."ID"
+LEFT OUTER JOIN
+    __mj."Entity" AS MJEntity_PrimaryScopeEntityID
+  ON
+    "a"."PrimaryScopeEntityID" = MJEntity_PrimaryScopeEntityID."ID"
+
+LEFT JOIN LATERAL (
+    SELECT __mj."fn_ai_agent_run_parent_run_id_get_root_id"(a."ID", a."ParentRunID") AS root_id
+) AS root_ParentRunID ON true
+LEFT JOIN LATERAL (
+    SELECT __mj."fn_ai_agent_run_last_run_id_get_root_id"(a."ID", a."LastRunID") AS root_id
+) AS root_LastRunID ON true
+$vsql$;
+  rec RECORD;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
+  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
+  -- every dependent view (anything that JOINs this view in its body), so we
+  -- capture each dependent's definition + grants BEFORE the drop and replay
+  -- them afterward (best-effort). Without this, on a fresh-DB replay where
+  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
+  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
+  -- that the wrapper for this entity doesn't know how to recreate, and
+  -- those views stay permanently missing.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
+    schema_name TEXT,
+    view_name   TEXT,
+    relkind     CHAR(1),
+    definition  TEXT,
+    grants_sql  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_deps;
+
+  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
+  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
+  -- pattern) when the target view is dropped. Without restoring them,
+  -- post-codegen CRUD validation reports those routines as missing —
+  -- e.g. "MJ: Recommendation Items → missing create routine
+  -- spCreateRecommendationItem" — even though the next codegen pass
+  -- emits them. The restored definitions are pg_get_functiondef() output
+  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
+  -- trailing semicolon; replaying them verbatim recreates the function
+  -- with its original body, parameter list, and return type.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
+    schema_name TEXT,
+    fn_name     TEXT,
+    fn_oid      OID,
+    definition  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_fn_deps;
+
+  -- Capture dependents. NOTES on the grants_sql build:
+  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
+  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
+  --     exists). pg_get_userbyid is a public catalog function available to
+  --     every database user, including unprivileged accounts on managed
+  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
+  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
+  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
+  --     to pg_authid which works on self-hosted PG but fails with
+  --     "permission denied for table pg_authid" on managed services.
+  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
+  --     which RETURNS the role name pre-quoted when it contains uppercase
+  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
+  --     on the already-quoted string double-wrapped and the GRANT failed at
+  --     replay with "role does not exist". Using
+  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
+  --     correctly exactly once.
+  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
+  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
+  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
+  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
+  SELECT DISTINCT
+      dn.nspname,
+      dc.relname,
+      dc.relkind,
+      pg_get_viewdef(dc.oid),
+      (SELECT string_agg(
+          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
+          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
+          E'
+')
+       FROM (
+           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
+                  (aclexplode(dc.relacl)).privilege_type AS privilege
+       ) g
+       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
+  FROM pg_depend d
+  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
+  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
+  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwAIAgentRuns'
+    AND tc.relkind IN ('v', 'm')
+    AND dc.oid <> tc.oid;
+
+  -- Capture dependent functions. Two paths matter on PG:
+  --   1. Functions whose RETURN type references the view (RETURNS SETOF
+  --      <view>) — pg_depend records this as type=pg_type → pg_class.
+  --   2. Functions whose body references the view (used by sql functions
+  --      and by some plpgsql edge cases) — pg_depend records this as
+  --      pg_proc → pg_class.
+  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
+  -- statement that we replay verbatim. We DO include RETURNS-only
+  -- references because that's the dominant codegen pattern (sp* CRUD
+  -- functions all RETURNS SETOF the matching vwX).
+  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwAIAgentRuns'
+    AND tc.relkind IN ('v', 'm')
+  UNION
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
+  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  WHERE EXISTS (
+      SELECT 1 FROM pg_class tc
+      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+      WHERE tc.reltype = pt.oid
+        AND tn.nspname = '__mj'
+        AND tc.relname = 'vwAIAgentRuns'
+        AND tc.relkind IN ('v', 'm')
+  );
+
+  DROP VIEW IF EXISTS __mj."vwAIAgentRuns" CASCADE;
+  EXECUTE vsql;
+
+  -- Replay captured dependents. Best-effort: log + continue on failure.
+  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
+  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
+  -- and rolls back EVERY statement in the block on any exception. If we
+  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
+  -- present in target environment), the just-recreated VIEW would also
+  -- get rolled back and stay missing — the exact failure mode this
+  -- wrapper exists to prevent.
+  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
+    BEGIN
+      IF rec.relkind = 'm' THEN
+        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      ELSE
+        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+    END;
+
+    IF rec.grants_sql IS NOT NULL THEN
+      BEGIN
+        EXECUTE rec.grants_sql;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+      END;
+    END IF;
+  END LOOP;
+
+  -- Replay captured dependent functions AFTER all dependent views are
+  -- restored — most codegen-emitted sp* functions reference both the
+  -- target view AND the dependent views in their bodies/return types.
+  -- Wrapped per-function in its own savepoint so a single failure
+  -- doesn't poison subsequent restores or the just-recreated target.
+  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
+    BEGIN
+      EXECUTE rec.definition;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
+    END;
+  END LOOP;
+
+  DROP TABLE _vw_regen_deps;
+  DROP TABLE _vw_regen_fn_deps;
+END $vw_regen$;
+GRANT SELECT ON __mj."vwAIAgentRuns" TO "cdp_UI";
+GRANT SELECT ON __mj."vwAIAgentRuns" TO "cdp_Developer";
+GRANT SELECT ON __mj."vwAIAgentRuns" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Runs
+-- Item: spCreateAIAgentRun
+-- ============================================================
+
+------------------------------------------------------------
+----- CREATE FUNCTION FOR AIAgentRun (JSON-arg shape)
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spCreateAIAgentRun'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentRun"(p_data JSONB)
+RETURNS SETOF __mj."vwAIAgentRuns"
+AS $$
+DECLARE
+    v_id uuid;
+    v_field_name TEXT;
+    v_cast_expr  TEXT;
+    v_col_list   TEXT;
+    v_val_list   TEXT;
+    v_sql        TEXT;
+BEGIN
+    IF p_data ? 'ID' THEN
+        v_id := (p_data->>'ID')::uuid;
+    ELSE
+        v_id := gen_random_uuid();
+    END IF;
+
+    v_col_list := quote_ident('ID');
+    v_val_list := quote_literal(v_id) || '::uuid';
+
+    -- Build column / value lists from keys present in p_data. Absent keys are
+    -- omitted entirely so the column's DEFAULT applies (matching the typed-arg
+    -- sproc's default-substitution semantics).
+    FOREACH v_field_name IN ARRAY ARRAY['AgentID', 'ParentRunID', 'Status', 'StartedAt', 'CompletedAt', 'Success', 'ErrorMessage', 'ConversationID', 'UserID', 'Result', 'AgentState', 'TotalTokensUsed', 'TotalCost', 'TotalPromptTokensUsed', 'TotalCompletionTokensUsed', 'TotalTokensUsedRollup', 'TotalPromptTokensUsedRollup', 'TotalCompletionTokensUsedRollup', 'TotalCostRollup', 'ConversationDetailID', 'ConversationDetailSequence', 'CancellationReason', 'FinalStep', 'FinalPayload', 'Message', 'LastRunID', 'StartingPayload', 'TotalPromptIterations', 'ConfigurationID', 'OverrideModelID', 'OverrideVendorID', 'Data', 'Verbose', 'EffortLevel', 'RunName', 'Comments', 'ScheduledJobRunID', 'TestRunID', 'PrimaryScopeEntityID', 'PrimaryScopeRecordID', 'SecondaryScopes', 'ExternalReferenceID', 'CompanyID', 'LastHeartbeatAt', 'TotalCacheReadTokensUsed', 'TotalCacheWriteTokensUsed', 'AgentSessionID']
+    LOOP
+        IF p_data ? v_field_name THEN
+            v_cast_expr := CASE v_field_name
+        WHEN 'AgentID' THEN '($1->>''AgentID'')::UUID'
+        WHEN 'ParentRunID' THEN '($1->>''ParentRunID'')::UUID'
+        WHEN 'Status' THEN 'COALESCE(($1->>''Status''), ''Running'')'
+        WHEN 'StartedAt' THEN 'COALESCE(($1->>''StartedAt'')::TIMESTAMPTZ, NOW())'
+        WHEN 'CompletedAt' THEN '($1->>''CompletedAt'')::TIMESTAMPTZ'
+        WHEN 'Success' THEN '($1->>''Success'')::BOOLEAN'
+        WHEN 'ErrorMessage' THEN '($1->>''ErrorMessage'')'
+        WHEN 'ConversationID' THEN '($1->>''ConversationID'')::UUID'
+        WHEN 'UserID' THEN '($1->>''UserID'')::UUID'
+        WHEN 'Result' THEN '($1->>''Result'')'
+        WHEN 'AgentState' THEN '($1->>''AgentState'')'
+        WHEN 'TotalTokensUsed' THEN '($1->>''TotalTokensUsed'')::INTEGER'
+        WHEN 'TotalCost' THEN '($1->>''TotalCost'')::DECIMAL(18, 6)'
+        WHEN 'TotalPromptTokensUsed' THEN '($1->>''TotalPromptTokensUsed'')::INTEGER'
+        WHEN 'TotalCompletionTokensUsed' THEN '($1->>''TotalCompletionTokensUsed'')::INTEGER'
+        WHEN 'TotalTokensUsedRollup' THEN '($1->>''TotalTokensUsedRollup'')::INTEGER'
+        WHEN 'TotalPromptTokensUsedRollup' THEN '($1->>''TotalPromptTokensUsedRollup'')::INTEGER'
+        WHEN 'TotalCompletionTokensUsedRollup' THEN '($1->>''TotalCompletionTokensUsedRollup'')::INTEGER'
+        WHEN 'TotalCostRollup' THEN '($1->>''TotalCostRollup'')::DECIMAL(19, 8)'
+        WHEN 'ConversationDetailID' THEN '($1->>''ConversationDetailID'')::UUID'
+        WHEN 'ConversationDetailSequence' THEN '($1->>''ConversationDetailSequence'')::INTEGER'
+        WHEN 'CancellationReason' THEN '($1->>''CancellationReason'')'
+        WHEN 'FinalStep' THEN '($1->>''FinalStep'')'
+        WHEN 'FinalPayload' THEN '($1->>''FinalPayload'')'
+        WHEN 'Message' THEN '($1->>''Message'')'
+        WHEN 'LastRunID' THEN '($1->>''LastRunID'')::UUID'
+        WHEN 'StartingPayload' THEN '($1->>''StartingPayload'')'
+        WHEN 'TotalPromptIterations' THEN 'COALESCE(($1->>''TotalPromptIterations'')::INTEGER, 0)'
+        WHEN 'ConfigurationID' THEN '($1->>''ConfigurationID'')::UUID'
+        WHEN 'OverrideModelID' THEN '($1->>''OverrideModelID'')::UUID'
+        WHEN 'OverrideVendorID' THEN '($1->>''OverrideVendorID'')::UUID'
+        WHEN 'Data' THEN '($1->>''Data'')'
+        WHEN 'Verbose' THEN '($1->>''Verbose'')::BOOLEAN'
+        WHEN 'EffortLevel' THEN '($1->>''EffortLevel'')::INTEGER'
+        WHEN 'RunName' THEN '($1->>''RunName'')'
+        WHEN 'Comments' THEN '($1->>''Comments'')'
+        WHEN 'ScheduledJobRunID' THEN '($1->>''ScheduledJobRunID'')::UUID'
+        WHEN 'TestRunID' THEN '($1->>''TestRunID'')::UUID'
+        WHEN 'PrimaryScopeEntityID' THEN '($1->>''PrimaryScopeEntityID'')::UUID'
+        WHEN 'PrimaryScopeRecordID' THEN '($1->>''PrimaryScopeRecordID'')'
+        WHEN 'SecondaryScopes' THEN '($1->>''SecondaryScopes'')'
+        WHEN 'ExternalReferenceID' THEN '($1->>''ExternalReferenceID'')'
+        WHEN 'CompanyID' THEN '($1->>''CompanyID'')::UUID'
+        WHEN 'LastHeartbeatAt' THEN '($1->>''LastHeartbeatAt'')::TIMESTAMPTZ'
+        WHEN 'TotalCacheReadTokensUsed' THEN '($1->>''TotalCacheReadTokensUsed'')::INTEGER'
+        WHEN 'TotalCacheWriteTokensUsed' THEN '($1->>''TotalCacheWriteTokensUsed'')::INTEGER'
+        WHEN 'AgentSessionID' THEN '($1->>''AgentSessionID'')::UUID'
+            END;
+            v_col_list := v_col_list || ', ' || quote_ident(v_field_name);
+            v_val_list := v_val_list || ', ' || v_cast_expr;
+        END IF;
+    END LOOP;
+
+    v_sql := format(
+        'INSERT INTO __mj."AIAgentRun" (%s) VALUES (%s)',
+        v_col_list,
+        v_val_list
+    );
+    -- Pass p_data as a positional parameter so the cast expressions inside
+    -- v_val_list (which reference $1) can read the JSONB payload.
+    EXECUTE v_sql USING p_data;
+
+    RETURN QUERY
+    SELECT * FROM __mj."vwAIAgentRuns"
+    WHERE "ID" = v_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRun" TO "cdp_UI";
+GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRun" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgentRun" TO "cdp_Integration";
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Runs
+-- Item: spUpdateAIAgentRun
+-- ============================================================
+
+------------------------------------------------------------
+----- UPDATE FUNCTION FOR AIAgentRun (JSON-arg shape)
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spUpdateAIAgentRun'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgentRun"(p_data JSONB)
+RETURNS SETOF __mj."vwAIAgentRuns"
+AS $$
+DECLARE
+    v_id uuid := (p_data->>'ID')::uuid;
+    v_updated_count INTEGER;
+BEGIN
+    IF p_data IS NULL OR NOT (p_data ? 'ID') THEN
+        RAISE EXCEPTION 'spUpdateAIAgentRun: p_data must include "ID"';
+    END IF;
+
+    UPDATE __mj."AIAgentRun"
+    SET
+        "AgentID" = CASE WHEN p_data ? 'AgentID' THEN (p_data->>'AgentID')::UUID ELSE "AgentID" END,
+        "ParentRunID" = CASE WHEN p_data ? 'ParentRunID' THEN (p_data->>'ParentRunID')::UUID ELSE "ParentRunID" END,
+        "Status" = CASE WHEN p_data ? 'Status' THEN (p_data->>'Status') ELSE "Status" END,
+        "StartedAt" = CASE WHEN p_data ? 'StartedAt' THEN (p_data->>'StartedAt')::TIMESTAMPTZ ELSE "StartedAt" END,
+        "CompletedAt" = CASE WHEN p_data ? 'CompletedAt' THEN (p_data->>'CompletedAt')::TIMESTAMPTZ ELSE "CompletedAt" END,
+        "Success" = CASE WHEN p_data ? 'Success' THEN (p_data->>'Success')::BOOLEAN ELSE "Success" END,
+        "ErrorMessage" = CASE WHEN p_data ? 'ErrorMessage' THEN (p_data->>'ErrorMessage') ELSE "ErrorMessage" END,
+        "ConversationID" = CASE WHEN p_data ? 'ConversationID' THEN (p_data->>'ConversationID')::UUID ELSE "ConversationID" END,
+        "UserID" = CASE WHEN p_data ? 'UserID' THEN (p_data->>'UserID')::UUID ELSE "UserID" END,
+        "Result" = CASE WHEN p_data ? 'Result' THEN (p_data->>'Result') ELSE "Result" END,
+        "AgentState" = CASE WHEN p_data ? 'AgentState' THEN (p_data->>'AgentState') ELSE "AgentState" END,
+        "TotalTokensUsed" = CASE WHEN p_data ? 'TotalTokensUsed' THEN (p_data->>'TotalTokensUsed')::INTEGER ELSE "TotalTokensUsed" END,
+        "TotalCost" = CASE WHEN p_data ? 'TotalCost' THEN (p_data->>'TotalCost')::DECIMAL(18, 6) ELSE "TotalCost" END,
+        "TotalPromptTokensUsed" = CASE WHEN p_data ? 'TotalPromptTokensUsed' THEN (p_data->>'TotalPromptTokensUsed')::INTEGER ELSE "TotalPromptTokensUsed" END,
+        "TotalCompletionTokensUsed" = CASE WHEN p_data ? 'TotalCompletionTokensUsed' THEN (p_data->>'TotalCompletionTokensUsed')::INTEGER ELSE "TotalCompletionTokensUsed" END,
+        "TotalTokensUsedRollup" = CASE WHEN p_data ? 'TotalTokensUsedRollup' THEN (p_data->>'TotalTokensUsedRollup')::INTEGER ELSE "TotalTokensUsedRollup" END,
+        "TotalPromptTokensUsedRollup" = CASE WHEN p_data ? 'TotalPromptTokensUsedRollup' THEN (p_data->>'TotalPromptTokensUsedRollup')::INTEGER ELSE "TotalPromptTokensUsedRollup" END,
+        "TotalCompletionTokensUsedRollup" = CASE WHEN p_data ? 'TotalCompletionTokensUsedRollup' THEN (p_data->>'TotalCompletionTokensUsedRollup')::INTEGER ELSE "TotalCompletionTokensUsedRollup" END,
+        "TotalCostRollup" = CASE WHEN p_data ? 'TotalCostRollup' THEN (p_data->>'TotalCostRollup')::DECIMAL(19, 8) ELSE "TotalCostRollup" END,
+        "ConversationDetailID" = CASE WHEN p_data ? 'ConversationDetailID' THEN (p_data->>'ConversationDetailID')::UUID ELSE "ConversationDetailID" END,
+        "ConversationDetailSequence" = CASE WHEN p_data ? 'ConversationDetailSequence' THEN (p_data->>'ConversationDetailSequence')::INTEGER ELSE "ConversationDetailSequence" END,
+        "CancellationReason" = CASE WHEN p_data ? 'CancellationReason' THEN (p_data->>'CancellationReason') ELSE "CancellationReason" END,
+        "FinalStep" = CASE WHEN p_data ? 'FinalStep' THEN (p_data->>'FinalStep') ELSE "FinalStep" END,
+        "FinalPayload" = CASE WHEN p_data ? 'FinalPayload' THEN (p_data->>'FinalPayload') ELSE "FinalPayload" END,
+        "Message" = CASE WHEN p_data ? 'Message' THEN (p_data->>'Message') ELSE "Message" END,
+        "LastRunID" = CASE WHEN p_data ? 'LastRunID' THEN (p_data->>'LastRunID')::UUID ELSE "LastRunID" END,
+        "StartingPayload" = CASE WHEN p_data ? 'StartingPayload' THEN (p_data->>'StartingPayload') ELSE "StartingPayload" END,
+        "TotalPromptIterations" = CASE WHEN p_data ? 'TotalPromptIterations' THEN (p_data->>'TotalPromptIterations')::INTEGER ELSE "TotalPromptIterations" END,
+        "ConfigurationID" = CASE WHEN p_data ? 'ConfigurationID' THEN (p_data->>'ConfigurationID')::UUID ELSE "ConfigurationID" END,
+        "OverrideModelID" = CASE WHEN p_data ? 'OverrideModelID' THEN (p_data->>'OverrideModelID')::UUID ELSE "OverrideModelID" END,
+        "OverrideVendorID" = CASE WHEN p_data ? 'OverrideVendorID' THEN (p_data->>'OverrideVendorID')::UUID ELSE "OverrideVendorID" END,
+        "Data" = CASE WHEN p_data ? 'Data' THEN (p_data->>'Data') ELSE "Data" END,
+        "Verbose" = CASE WHEN p_data ? 'Verbose' THEN (p_data->>'Verbose')::BOOLEAN ELSE "Verbose" END,
+        "EffortLevel" = CASE WHEN p_data ? 'EffortLevel' THEN (p_data->>'EffortLevel')::INTEGER ELSE "EffortLevel" END,
+        "RunName" = CASE WHEN p_data ? 'RunName' THEN (p_data->>'RunName') ELSE "RunName" END,
+        "Comments" = CASE WHEN p_data ? 'Comments' THEN (p_data->>'Comments') ELSE "Comments" END,
+        "ScheduledJobRunID" = CASE WHEN p_data ? 'ScheduledJobRunID' THEN (p_data->>'ScheduledJobRunID')::UUID ELSE "ScheduledJobRunID" END,
+        "TestRunID" = CASE WHEN p_data ? 'TestRunID' THEN (p_data->>'TestRunID')::UUID ELSE "TestRunID" END,
+        "PrimaryScopeEntityID" = CASE WHEN p_data ? 'PrimaryScopeEntityID' THEN (p_data->>'PrimaryScopeEntityID')::UUID ELSE "PrimaryScopeEntityID" END,
+        "PrimaryScopeRecordID" = CASE WHEN p_data ? 'PrimaryScopeRecordID' THEN (p_data->>'PrimaryScopeRecordID') ELSE "PrimaryScopeRecordID" END,
+        "SecondaryScopes" = CASE WHEN p_data ? 'SecondaryScopes' THEN (p_data->>'SecondaryScopes') ELSE "SecondaryScopes" END,
+        "ExternalReferenceID" = CASE WHEN p_data ? 'ExternalReferenceID' THEN (p_data->>'ExternalReferenceID') ELSE "ExternalReferenceID" END,
+        "CompanyID" = CASE WHEN p_data ? 'CompanyID' THEN (p_data->>'CompanyID')::UUID ELSE "CompanyID" END,
+        "LastHeartbeatAt" = CASE WHEN p_data ? 'LastHeartbeatAt' THEN (p_data->>'LastHeartbeatAt')::TIMESTAMPTZ ELSE "LastHeartbeatAt" END,
+        "TotalCacheReadTokensUsed" = CASE WHEN p_data ? 'TotalCacheReadTokensUsed' THEN (p_data->>'TotalCacheReadTokensUsed')::INTEGER ELSE "TotalCacheReadTokensUsed" END,
+        "TotalCacheWriteTokensUsed" = CASE WHEN p_data ? 'TotalCacheWriteTokensUsed' THEN (p_data->>'TotalCacheWriteTokensUsed')::INTEGER ELSE "TotalCacheWriteTokensUsed" END,
+        "AgentSessionID" = CASE WHEN p_data ? 'AgentSessionID' THEN (p_data->>'AgentSessionID')::UUID ELSE "AgentSessionID" END,
+        "__mj_UpdatedAt" = NOW()
+    WHERE
+        "ID" = v_id;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+
+    IF v_updated_count = 0 THEN
+        -- Nothing was updated, return empty result set
+        RETURN;
+    END IF;
+
+    -- Return the updated record from the base view
+    RETURN QUERY
+    SELECT * FROM __mj."vwAIAgentRuns"
+    WHERE "ID" = v_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentRun" TO "cdp_UI";
+GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentRun" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgentRun" TO "cdp_Integration";
+
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgentRun table
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_trg_update_ai_agent_run"()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."__mj_UpdatedAt" := NOW() AT TIME ZONE 'UTC';
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trg_update_ai_agent_run" ON __mj."AIAgentRun";
+
+CREATE TRIGGER "trg_update_ai_agent_run"
+BEFORE UPDATE ON __mj."AIAgentRun"
+FOR EACH ROW
+EXECUTE FUNCTION __mj."fn_trg_update_ai_agent_run"();
+
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agent Runs
+-- Item: spDeleteAIAgentRun
+-- ============================================================
+
+------------------------------------------------------------
+----- DELETE FUNCTION FOR AIAgentRun
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spDeleteAIAgentRun'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgentRun"(
+    p_id uuid
+) RETURNS TABLE("ID" uuid) AS $$
+#variable_conflict use_column
+DECLARE
+    v_affected_count INTEGER;
+    v_rec RECORD;
+BEGIN
+    -- Cascade: Set MJ: AI Agent Examples.SourceAIAgentRunID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentExample"
+        WHERE "SourceAIAgentRunID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentExample"
+        SET "SourceAIAgentRunID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Notes.SourceAIAgentRunID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentNote"
+        WHERE "SourceAIAgentRunID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentNote"
+        SET "SourceAIAgentRunID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Requests.OriginatingAgentRunID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRequest"
+        WHERE "OriginatingAgentRunID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentRequest"
+        SET "OriginatingAgentRunID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Requests.ResumingAgentRunID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRequest"
+        WHERE "ResumingAgentRunID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentRequest"
+        SET "ResumingAgentRunID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Run Medias records via AgentRunID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRunMedia"
+        WHERE "AgentRunID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentRunMedia"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Run Steps records via AgentRunID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRunStep"
+        WHERE "AgentRunID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentRunStep"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Runs.ParentRunID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRun"
+        WHERE "ParentRunID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentRun"
+        SET "ParentRunID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Runs.LastRunID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRun"
+        WHERE "LastRunID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentRun"
+        SET "LastRunID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Prompt Runs.AgentRunID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIPromptRun"
+        WHERE "AgentRunID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIPromptRun"
+        SET "AgentRunID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+    
+    DELETE FROM __mj."AIAgentRun"
+    WHERE "ID" = p_id;
+
+    GET DIAGNOSTICS v_affected_count = ROW_COUNT;
+
+    IF v_affected_count = 0 THEN
+        RETURN QUERY SELECT NULL::uuid AS "ID";
+    ELSE
+        RETURN QUERY SELECT p_id AS "ID";
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRun" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgentRun" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
+-- Item: Index for Foreign Keys
+-- ============================================================
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_conversation_id"
+    ON __mj."ConversationDetail" ("ConversationID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_user_id"
+    ON __mj."ConversationDetail" ("UserID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_artifact_id"
+    ON __mj."ConversationDetail" ("ArtifactID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_artifact_version_id"
+    ON __mj."ConversationDetail" ("ArtifactVersionID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_parent_id"
+    ON __mj."ConversationDetail" ("ParentID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_agent_id"
+    ON __mj."ConversationDetail" ("AgentID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_test_run_id"
+    ON __mj."ConversationDetail" ("TestRunID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_agent_session_id"
+    ON __mj."ConversationDetail" ("AgentSessionID");
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
+-- Item: fnConversationDetailParentID_GetRootID
+-- ============================================================
+
+------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: ConversationDetail.ParentID
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_conversation_detail_parent_id_get_root_id"(
+    p_record_id uuid,
+    p_parent_id uuid
+) RETURNS uuid AS $$
+    WITH RECURSIVE cte_root_parent AS (
+        -- Anchor: Start from p_parent_id if not null, otherwise start from p_record_id
+        SELECT
+            "ID",
+            "ParentID",
+            "ID" AS root_parent_id,
+            0 AS depth
+        FROM
+            __mj."ConversationDetail"
+        WHERE
+            "ID" = COALESCE(p_parent_id, p_record_id)
+
+        UNION ALL
+
+        -- Recursive: Keep going up the hierarchy
+        SELECT
+            c."ID",
+            c."ParentID",
+            c."ID" AS root_parent_id,
+            p.depth + 1 AS depth
+        FROM
+            __mj."ConversationDetail" c
+        INNER JOIN
+            cte_root_parent p ON c."ID" = p."ParentID"
+        WHERE
+            p.depth < 100  -- Prevent infinite loops
+    )
+    SELECT root_parent_id
+    FROM cte_root_parent
+    WHERE "ParentID" IS NULL
+    ORDER BY root_parent_id
+    LIMIT 1;
+$$ LANGUAGE sql STABLE;
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
+-- Item: vwConversationDetails
+-- ============================================================
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Conversation Details
+-----               SCHEMA:      __mj
+-----               BASE TABLE:  ConversationDetail
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DO $vw_regen$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwConversationDetails"
+AS
+SELECT
+    c.*,
+    MJConversation_ConversationID."Name" AS "Conversation",
+    MJUser_UserID."Name" AS "User",
+    MJConversationArtifact_ArtifactID."Name" AS "Artifact",
+    MJConversationArtifactVersion_ArtifactVersionID."ConversationArtifact" AS "ArtifactVersion",
+    MJConversationDetail_ParentID."ExternalID" AS "Parent",
+    MJAIAgent_AgentID."Name" AS "Agent",
+    MJTestRun_TestRunID."Test" AS "TestRun",
+    root_ParentID.root_id AS "RootParentID"
+FROM
+    __mj."ConversationDetail" AS c
+INNER JOIN
+    __mj."Conversation" AS MJConversation_ConversationID
+  ON
+    "c"."ConversationID" = MJConversation_ConversationID."ID"
+LEFT OUTER JOIN
+    __mj."User" AS MJUser_UserID
+  ON
+    "c"."UserID" = MJUser_UserID."ID"
+LEFT OUTER JOIN
+    __mj."ConversationArtifact" AS MJConversationArtifact_ArtifactID
+  ON
+    "c"."ArtifactID" = MJConversationArtifact_ArtifactID."ID"
+LEFT OUTER JOIN
+    __mj."vwConversationArtifactVersions" AS MJConversationArtifactVersion_ArtifactVersionID
+  ON
+    "c"."ArtifactVersionID" = MJConversationArtifactVersion_ArtifactVersionID."ID"
+LEFT OUTER JOIN
+    __mj."ConversationDetail" AS MJConversationDetail_ParentID
+  ON
+    "c"."ParentID" = MJConversationDetail_ParentID."ID"
+LEFT OUTER JOIN
+    __mj."AIAgent" AS MJAIAgent_AgentID
+  ON
+    "c"."AgentID" = MJAIAgent_AgentID."ID"
+LEFT OUTER JOIN
+    __mj."vwTestRuns" AS MJTestRun_TestRunID
+  ON
+    "c"."TestRunID" = MJTestRun_TestRunID."ID"
+
+LEFT JOIN LATERAL (
+    SELECT __mj."fn_conversation_detail_parent_id_get_root_id"(c."ID", c."ParentID") AS root_id
+) AS root_ParentID ON true
+$vsql$;
+  rec RECORD;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
+  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
+  -- every dependent view (anything that JOINs this view in its body), so we
+  -- capture each dependent's definition + grants BEFORE the drop and replay
+  -- them afterward (best-effort). Without this, on a fresh-DB replay where
+  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
+  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
+  -- that the wrapper for this entity doesn't know how to recreate, and
+  -- those views stay permanently missing.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
+    schema_name TEXT,
+    view_name   TEXT,
+    relkind     CHAR(1),
+    definition  TEXT,
+    grants_sql  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_deps;
+
+  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
+  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
+  -- pattern) when the target view is dropped. Without restoring them,
+  -- post-codegen CRUD validation reports those routines as missing —
+  -- e.g. "MJ: Recommendation Items → missing create routine
+  -- spCreateRecommendationItem" — even though the next codegen pass
+  -- emits them. The restored definitions are pg_get_functiondef() output
+  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
+  -- trailing semicolon; replaying them verbatim recreates the function
+  -- with its original body, parameter list, and return type.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
+    schema_name TEXT,
+    fn_name     TEXT,
+    fn_oid      OID,
+    definition  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_fn_deps;
+
+  -- Capture dependents. NOTES on the grants_sql build:
+  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
+  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
+  --     exists). pg_get_userbyid is a public catalog function available to
+  --     every database user, including unprivileged accounts on managed
+  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
+  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
+  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
+  --     to pg_authid which works on self-hosted PG but fails with
+  --     "permission denied for table pg_authid" on managed services.
+  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
+  --     which RETURNS the role name pre-quoted when it contains uppercase
+  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
+  --     on the already-quoted string double-wrapped and the GRANT failed at
+  --     replay with "role does not exist". Using
+  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
+  --     correctly exactly once.
+  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
+  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
+  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
+  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
+  SELECT DISTINCT
+      dn.nspname,
+      dc.relname,
+      dc.relkind,
+      pg_get_viewdef(dc.oid),
+      (SELECT string_agg(
+          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
+          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
+          E'
+')
+       FROM (
+           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
+                  (aclexplode(dc.relacl)).privilege_type AS privilege
+       ) g
+       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
+  FROM pg_depend d
+  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
+  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
+  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwConversationDetails'
+    AND tc.relkind IN ('v', 'm')
+    AND dc.oid <> tc.oid;
+
+  -- Capture dependent functions. Two paths matter on PG:
+  --   1. Functions whose RETURN type references the view (RETURNS SETOF
+  --      <view>) — pg_depend records this as type=pg_type → pg_class.
+  --   2. Functions whose body references the view (used by sql functions
+  --      and by some plpgsql edge cases) — pg_depend records this as
+  --      pg_proc → pg_class.
+  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
+  -- statement that we replay verbatim. We DO include RETURNS-only
+  -- references because that's the dominant codegen pattern (sp* CRUD
+  -- functions all RETURNS SETOF the matching vwX).
+  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwConversationDetails'
+    AND tc.relkind IN ('v', 'm')
+  UNION
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
+  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  WHERE EXISTS (
+      SELECT 1 FROM pg_class tc
+      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+      WHERE tc.reltype = pt.oid
+        AND tn.nspname = '__mj'
+        AND tc.relname = 'vwConversationDetails'
+        AND tc.relkind IN ('v', 'm')
+  );
+
+  DROP VIEW IF EXISTS __mj."vwConversationDetails" CASCADE;
+  EXECUTE vsql;
+
+  -- Replay captured dependents. Best-effort: log + continue on failure.
+  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
+  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
+  -- and rolls back EVERY statement in the block on any exception. If we
+  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
+  -- present in target environment), the just-recreated VIEW would also
+  -- get rolled back and stay missing — the exact failure mode this
+  -- wrapper exists to prevent.
+  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
+    BEGIN
+      IF rec.relkind = 'm' THEN
+        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      ELSE
+        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+    END;
+
+    IF rec.grants_sql IS NOT NULL THEN
+      BEGIN
+        EXECUTE rec.grants_sql;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+      END;
+    END IF;
+  END LOOP;
+
+  -- Replay captured dependent functions AFTER all dependent views are
+  -- restored — most codegen-emitted sp* functions reference both the
+  -- target view AND the dependent views in their bodies/return types.
+  -- Wrapped per-function in its own savepoint so a single failure
+  -- doesn't poison subsequent restores or the just-recreated target.
+  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
+    BEGIN
+      EXECUTE rec.definition;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
+    END;
+  END LOOP;
+
+  DROP TABLE _vw_regen_deps;
+  DROP TABLE _vw_regen_fn_deps;
+END $vw_regen$;
+GRANT SELECT ON __mj."vwConversationDetails" TO "cdp_Developer";
+GRANT SELECT ON __mj."vwConversationDetails" TO "cdp_UI";
+GRANT SELECT ON __mj."vwConversationDetails" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
+-- Item: spCreateConversationDetail
+-- ============================================================
+
+------------------------------------------------------------
+----- CREATE FUNCTION FOR ConversationDetail
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spCreateConversationDetail'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spCreateConversationDetail"(
+    p_id uuid DEFAULT NULL,
+    p_conversationid uuid DEFAULT NULL,
+    p_externalid_clear boolean DEFAULT false,
+    p_externalid text DEFAULT NULL,
+    p_role text DEFAULT NULL,
+    p_message text DEFAULT NULL,
+    p_error_clear boolean DEFAULT false,
+    p_error text DEFAULT NULL,
+    p_hiddentouser BOOLEAN DEFAULT NULL,
+    p_userrating_clear boolean DEFAULT false,
+    p_userrating integer DEFAULT NULL,
+    p_userfeedback_clear boolean DEFAULT false,
+    p_userfeedback text DEFAULT NULL,
+    p_reflectioninsights_clear boolean DEFAULT false,
+    p_reflectioninsights text DEFAULT NULL,
+    p_summaryofearlierconversation_clear boolean DEFAULT false,
+    p_summaryofearlierconversation text DEFAULT NULL,
+    p_userid_clear boolean DEFAULT false,
+    p_userid uuid DEFAULT NULL,
+    p_artifactid_clear boolean DEFAULT false,
+    p_artifactid uuid DEFAULT NULL,
+    p_artifactversionid_clear boolean DEFAULT false,
+    p_artifactversionid uuid DEFAULT NULL,
+    p_completiontime_clear boolean DEFAULT false,
+    p_completiontime bigint DEFAULT NULL,
+    p_ispinned BOOLEAN DEFAULT NULL,
+    p_parentid_clear boolean DEFAULT false,
+    p_parentid uuid DEFAULT NULL,
+    p_agentid_clear boolean DEFAULT false,
+    p_agentid uuid DEFAULT NULL,
+    p_status text DEFAULT NULL,
+    p_suggestedresponses_clear boolean DEFAULT false,
+    p_suggestedresponses text DEFAULT NULL,
+    p_testrunid_clear boolean DEFAULT false,
+    p_testrunid uuid DEFAULT NULL,
+    p_responseform_clear boolean DEFAULT false,
+    p_responseform text DEFAULT NULL,
+    p_actionablecommands_clear boolean DEFAULT false,
+    p_actionablecommands text DEFAULT NULL,
+    p_automaticcommands_clear boolean DEFAULT false,
+    p_automaticcommands text DEFAULT NULL,
+    p_originalmessagechanged BOOLEAN DEFAULT NULL,
+    p_agentsessionid_clear boolean DEFAULT false,
+    p_agentsessionid uuid DEFAULT NULL
+) RETURNS SETOF __mj."vwConversationDetails" AS $$
+DECLARE
+    v_new_id uuid;
+BEGIN
+    v_new_id := COALESCE(p_id, gen_random_uuid());
+    INSERT INTO __mj."ConversationDetail"
+        (
+            "ID",
+            "ConversationID",
+                "ExternalID",
+                "Role",
+                "Message",
+                "Error",
+                "HiddenToUser",
+                "UserRating",
+                "UserFeedback",
+                "ReflectionInsights",
+                "SummaryOfEarlierConversation",
+                "UserID",
+                "ArtifactID",
+                "ArtifactVersionID",
+                "CompletionTime",
+                "IsPinned",
+                "ParentID",
+                "AgentID",
+                "Status",
+                "SuggestedResponses",
+                "TestRunID",
+                "ResponseForm",
+                "ActionableCommands",
+                "AutomaticCommands",
+                "OriginalMessageChanged",
+                "AgentSessionID"
+        )
+    VALUES
+        (
+            v_new_id,
+            p_conversationid,
+                CASE WHEN p_externalid_clear = true THEN NULL ELSE COALESCE(p_externalid, NULL) END,
+                COALESCE(p_role, 'current_user'),
+                p_message,
+                CASE WHEN p_error_clear = true THEN NULL ELSE COALESCE(p_error, NULL) END,
+                COALESCE(p_hiddentouser, FALSE),
+                CASE WHEN p_userrating_clear = true THEN NULL ELSE COALESCE(p_userrating, NULL) END,
+                CASE WHEN p_userfeedback_clear = true THEN NULL ELSE COALESCE(p_userfeedback, NULL) END,
+                CASE WHEN p_reflectioninsights_clear = true THEN NULL ELSE COALESCE(p_reflectioninsights, NULL) END,
+                CASE WHEN p_summaryofearlierconversation_clear = true THEN NULL ELSE COALESCE(p_summaryofearlierconversation, NULL) END,
+                CASE WHEN p_userid_clear = true THEN NULL ELSE COALESCE(p_userid, NULL) END,
+                CASE WHEN p_artifactid_clear = true THEN NULL ELSE COALESCE(p_artifactid, NULL) END,
+                CASE WHEN p_artifactversionid_clear = true THEN NULL ELSE COALESCE(p_artifactversionid, NULL) END,
+                CASE WHEN p_completiontime_clear = true THEN NULL ELSE COALESCE(p_completiontime, NULL) END,
+                COALESCE(p_ispinned, FALSE),
+                CASE WHEN p_parentid_clear = true THEN NULL ELSE COALESCE(p_parentid, NULL) END,
+                CASE WHEN p_agentid_clear = true THEN NULL ELSE COALESCE(p_agentid, NULL) END,
+                COALESCE(p_status, 'Complete'),
+                CASE WHEN p_suggestedresponses_clear = true THEN NULL ELSE COALESCE(p_suggestedresponses, NULL) END,
+                CASE WHEN p_testrunid_clear = true THEN NULL ELSE COALESCE(p_testrunid, NULL) END,
+                CASE WHEN p_responseform_clear = true THEN NULL ELSE COALESCE(p_responseform, NULL) END,
+                CASE WHEN p_actionablecommands_clear = true THEN NULL ELSE COALESCE(p_actionablecommands, NULL) END,
+                CASE WHEN p_automaticcommands_clear = true THEN NULL ELSE COALESCE(p_automaticcommands, NULL) END,
+                COALESCE(p_originalmessagechanged, FALSE),
+                CASE WHEN p_agentsessionid_clear = true THEN NULL ELSE COALESCE(p_agentsessionid, NULL) END
+        )
+    ;
+
+    RETURN QUERY
+    SELECT * FROM __mj."vwConversationDetails"
+    WHERE "ID" = v_new_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetail" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetail" TO "cdp_UI";
+GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetail" TO "cdp_Integration";
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
+-- Item: spUpdateConversationDetail
+-- ============================================================
+
+------------------------------------------------------------
+----- UPDATE FUNCTION FOR ConversationDetail
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spUpdateConversationDetail'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spUpdateConversationDetail"(
+    p_id uuid,
+    p_conversationid uuid DEFAULT NULL,
+    p_externalid_clear boolean DEFAULT false,
+    p_externalid text DEFAULT NULL,
+    p_role text DEFAULT NULL,
+    p_message text DEFAULT NULL,
+    p_error_clear boolean DEFAULT false,
+    p_error text DEFAULT NULL,
+    p_hiddentouser BOOLEAN DEFAULT NULL,
+    p_userrating_clear boolean DEFAULT false,
+    p_userrating integer DEFAULT NULL,
+    p_userfeedback_clear boolean DEFAULT false,
+    p_userfeedback text DEFAULT NULL,
+    p_reflectioninsights_clear boolean DEFAULT false,
+    p_reflectioninsights text DEFAULT NULL,
+    p_summaryofearlierconversation_clear boolean DEFAULT false,
+    p_summaryofearlierconversation text DEFAULT NULL,
+    p_userid_clear boolean DEFAULT false,
+    p_userid uuid DEFAULT NULL,
+    p_artifactid_clear boolean DEFAULT false,
+    p_artifactid uuid DEFAULT NULL,
+    p_artifactversionid_clear boolean DEFAULT false,
+    p_artifactversionid uuid DEFAULT NULL,
+    p_completiontime_clear boolean DEFAULT false,
+    p_completiontime bigint DEFAULT NULL,
+    p_ispinned BOOLEAN DEFAULT NULL,
+    p_parentid_clear boolean DEFAULT false,
+    p_parentid uuid DEFAULT NULL,
+    p_agentid_clear boolean DEFAULT false,
+    p_agentid uuid DEFAULT NULL,
+    p_status text DEFAULT NULL,
+    p_suggestedresponses_clear boolean DEFAULT false,
+    p_suggestedresponses text DEFAULT NULL,
+    p_testrunid_clear boolean DEFAULT false,
+    p_testrunid uuid DEFAULT NULL,
+    p_responseform_clear boolean DEFAULT false,
+    p_responseform text DEFAULT NULL,
+    p_actionablecommands_clear boolean DEFAULT false,
+    p_actionablecommands text DEFAULT NULL,
+    p_automaticcommands_clear boolean DEFAULT false,
+    p_automaticcommands text DEFAULT NULL,
+    p_originalmessagechanged BOOLEAN DEFAULT NULL,
+    p_agentsessionid_clear boolean DEFAULT false,
+    p_agentsessionid uuid DEFAULT NULL
+) RETURNS SETOF __mj."vwConversationDetails" AS $$
+DECLARE
+    v_updated_count INTEGER;
+BEGIN
+    UPDATE __mj."ConversationDetail"
+    SET
+        "ConversationID" = COALESCE(p_conversationid, "ConversationID"),
+        "ExternalID" = CASE WHEN p_externalid_clear = true THEN NULL ELSE COALESCE(p_externalid, "ExternalID") END,
+        "Role" = COALESCE(p_role, "Role"),
+        "Message" = COALESCE(p_message, "Message"),
+        "Error" = CASE WHEN p_error_clear = true THEN NULL ELSE COALESCE(p_error, "Error") END,
+        "HiddenToUser" = COALESCE(p_hiddentouser, "HiddenToUser"),
+        "UserRating" = CASE WHEN p_userrating_clear = true THEN NULL ELSE COALESCE(p_userrating, "UserRating") END,
+        "UserFeedback" = CASE WHEN p_userfeedback_clear = true THEN NULL ELSE COALESCE(p_userfeedback, "UserFeedback") END,
+        "ReflectionInsights" = CASE WHEN p_reflectioninsights_clear = true THEN NULL ELSE COALESCE(p_reflectioninsights, "ReflectionInsights") END,
+        "SummaryOfEarlierConversation" = CASE WHEN p_summaryofearlierconversation_clear = true THEN NULL ELSE COALESCE(p_summaryofearlierconversation, "SummaryOfEarlierConversation") END,
+        "UserID" = CASE WHEN p_userid_clear = true THEN NULL ELSE COALESCE(p_userid, "UserID") END,
+        "ArtifactID" = CASE WHEN p_artifactid_clear = true THEN NULL ELSE COALESCE(p_artifactid, "ArtifactID") END,
+        "ArtifactVersionID" = CASE WHEN p_artifactversionid_clear = true THEN NULL ELSE COALESCE(p_artifactversionid, "ArtifactVersionID") END,
+        "CompletionTime" = CASE WHEN p_completiontime_clear = true THEN NULL ELSE COALESCE(p_completiontime, "CompletionTime") END,
+        "IsPinned" = COALESCE(p_ispinned, "IsPinned"),
+        "ParentID" = CASE WHEN p_parentid_clear = true THEN NULL ELSE COALESCE(p_parentid, "ParentID") END,
+        "AgentID" = CASE WHEN p_agentid_clear = true THEN NULL ELSE COALESCE(p_agentid, "AgentID") END,
+        "Status" = COALESCE(p_status, "Status"),
+        "SuggestedResponses" = CASE WHEN p_suggestedresponses_clear = true THEN NULL ELSE COALESCE(p_suggestedresponses, "SuggestedResponses") END,
+        "TestRunID" = CASE WHEN p_testrunid_clear = true THEN NULL ELSE COALESCE(p_testrunid, "TestRunID") END,
+        "ResponseForm" = CASE WHEN p_responseform_clear = true THEN NULL ELSE COALESCE(p_responseform, "ResponseForm") END,
+        "ActionableCommands" = CASE WHEN p_actionablecommands_clear = true THEN NULL ELSE COALESCE(p_actionablecommands, "ActionableCommands") END,
+        "AutomaticCommands" = CASE WHEN p_automaticcommands_clear = true THEN NULL ELSE COALESCE(p_automaticcommands, "AutomaticCommands") END,
+        "OriginalMessageChanged" = COALESCE(p_originalmessagechanged, "OriginalMessageChanged"),
+        "AgentSessionID" = CASE WHEN p_agentsessionid_clear = true THEN NULL ELSE COALESCE(p_agentsessionid, "AgentSessionID") END
+    WHERE
+        "ID" = p_id;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+
+    IF v_updated_count = 0 THEN
+        -- Nothing was updated, return empty result set
+        RETURN;
+    END IF;
+
+    -- Return the updated record from the base view
+    RETURN QUERY
+    SELECT * FROM __mj."vwConversationDetails"
+    WHERE "ID" = p_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetail" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetail" TO "cdp_UI";
+GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetail" TO "cdp_Integration";
+
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ConversationDetail table
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_trg_update_conversation_detail"()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."__mj_UpdatedAt" := NOW() AT TIME ZONE 'UTC';
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trg_update_conversation_detail" ON __mj."ConversationDetail";
+
+CREATE TRIGGER "trg_update_conversation_detail"
+BEFORE UPDATE ON __mj."ConversationDetail"
+FOR EACH ROW
+EXECUTE FUNCTION __mj."fn_trg_update_conversation_detail"();
+
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
+-- Item: spDeleteConversationDetail
+-- ============================================================
+
+------------------------------------------------------------
+----- DELETE FUNCTION FOR ConversationDetail
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spDeleteConversationDetail'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spDeleteConversationDetail"(
+    p_id uuid
+) RETURNS TABLE("ID" uuid) AS $$
+#variable_conflict use_column
+DECLARE
+    v_affected_count INTEGER;
+    v_rec RECORD;
+BEGIN
+    -- Cascade: Set MJ: AI Agent Examples.SourceConversationDetailID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentExample"
+        WHERE "SourceConversationDetailID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentExample"
+        SET "SourceConversationDetailID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Notes.SourceConversationDetailID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentNote"
+        WHERE "SourceConversationDetailID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentNote"
+        SET "SourceConversationDetailID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Runs.ConversationDetailID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRun"
+        WHERE "ConversationDetailID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentRun"
+        SET "ConversationDetailID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Delete MJ: Conversation Detail Artifacts records via ConversationDetailID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."ConversationDetailArtifact"
+        WHERE "ConversationDetailID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteConversationDetailArtifact"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: Conversation Detail Attachments records via ConversationDetailID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."ConversationDetailAttachment"
+        WHERE "ConversationDetailID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteConversationDetailAttachment"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: Conversation Detail Ratings records via ConversationDetailID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."ConversationDetailRating"
+        WHERE "ConversationDetailID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteConversationDetailRating"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Set MJ: Conversation Details.ParentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."ConversationDetail"
+        WHERE "ParentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."ConversationDetail"
+        SET "ParentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: Reports.ConversationDetailID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."Report"
+        WHERE "ConversationDetailID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."Report"
+        SET "ConversationDetailID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: Tasks.ConversationDetailID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."Task"
+        WHERE "ConversationDetailID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."Task"
+        SET "ConversationDetailID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+    
+    DELETE FROM __mj."ConversationDetail"
+    WHERE "ID" = p_id;
+
+    GET DIAGNOSTICS v_affected_count = ROW_COUNT;
+
+    IF v_affected_count = 0 THEN
+        RETURN QUERY SELECT NULL::uuid AS "ID";
+    ELSE
+        RETURN QUERY SELECT p_id AS "ID";
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_UI";
+GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversations
+-- Item: Index for Foreign Keys
+-- ============================================================
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_user_id"
+    ON __mj."Conversation" ("UserID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_linked_entity_id"
+    ON __mj."Conversation" ("LinkedEntityID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_data_context_id"
+    ON __mj."Conversation" ("DataContextID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_environment_id"
+    ON __mj."Conversation" ("EnvironmentID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_project_id"
+    ON __mj."Conversation" ("ProjectID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_test_run_id"
+    ON __mj."Conversation" ("TestRunID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_application_id"
+    ON __mj."Conversation" ("ApplicationID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_default_agent_id"
+    ON __mj."Conversation" ("DefaultAgentID");
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversations
+-- Item: vwConversations
+-- ============================================================
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Conversations
+-----               SCHEMA:      __mj
+-----               BASE TABLE:  Conversation
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DO $vw_regen$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwConversations"
+AS
+SELECT
+    c.*,
+    MJUser_UserID."Name" AS "User",
+    MJEntity_LinkedEntityID."Name" AS "LinkedEntity",
+    MJDataContext_DataContextID."Name" AS "DataContext",
+    MJEnvironment_EnvironmentID."Name" AS "Environment",
+    MJProject_ProjectID."Name" AS "Project",
+    MJTestRun_TestRunID."Test" AS "TestRun",
+    MJApplication_ApplicationID."Name" AS "Application",
+    MJAIAgent_DefaultAgentID."Name" AS "DefaultAgent"
+FROM
+    __mj."Conversation" AS c
+INNER JOIN
+    __mj."User" AS MJUser_UserID
+  ON
+    "c"."UserID" = MJUser_UserID."ID"
+LEFT OUTER JOIN
+    __mj."Entity" AS MJEntity_LinkedEntityID
+  ON
+    "c"."LinkedEntityID" = MJEntity_LinkedEntityID."ID"
+LEFT OUTER JOIN
+    __mj."DataContext" AS MJDataContext_DataContextID
+  ON
+    "c"."DataContextID" = MJDataContext_DataContextID."ID"
+INNER JOIN
+    __mj."Environment" AS MJEnvironment_EnvironmentID
+  ON
+    "c"."EnvironmentID" = MJEnvironment_EnvironmentID."ID"
+LEFT OUTER JOIN
+    __mj."Project" AS MJProject_ProjectID
+  ON
+    "c"."ProjectID" = MJProject_ProjectID."ID"
+LEFT OUTER JOIN
+    __mj."vwTestRuns" AS MJTestRun_TestRunID
+  ON
+    "c"."TestRunID" = MJTestRun_TestRunID."ID"
+LEFT OUTER JOIN
+    __mj."Application" AS MJApplication_ApplicationID
+  ON
+    "c"."ApplicationID" = MJApplication_ApplicationID."ID"
+LEFT OUTER JOIN
+    __mj."AIAgent" AS MJAIAgent_DefaultAgentID
+  ON
+    "c"."DefaultAgentID" = MJAIAgent_DefaultAgentID."ID"
+$vsql$;
+  rec RECORD;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
+  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
+  -- every dependent view (anything that JOINs this view in its body), so we
+  -- capture each dependent's definition + grants BEFORE the drop and replay
+  -- them afterward (best-effort). Without this, on a fresh-DB replay where
+  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
+  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
+  -- that the wrapper for this entity doesn't know how to recreate, and
+  -- those views stay permanently missing.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
+    schema_name TEXT,
+    view_name   TEXT,
+    relkind     CHAR(1),
+    definition  TEXT,
+    grants_sql  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_deps;
+
+  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
+  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
+  -- pattern) when the target view is dropped. Without restoring them,
+  -- post-codegen CRUD validation reports those routines as missing —
+  -- e.g. "MJ: Recommendation Items → missing create routine
+  -- spCreateRecommendationItem" — even though the next codegen pass
+  -- emits them. The restored definitions are pg_get_functiondef() output
+  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
+  -- trailing semicolon; replaying them verbatim recreates the function
+  -- with its original body, parameter list, and return type.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
+    schema_name TEXT,
+    fn_name     TEXT,
+    fn_oid      OID,
+    definition  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_fn_deps;
+
+  -- Capture dependents. NOTES on the grants_sql build:
+  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
+  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
+  --     exists). pg_get_userbyid is a public catalog function available to
+  --     every database user, including unprivileged accounts on managed
+  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
+  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
+  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
+  --     to pg_authid which works on self-hosted PG but fails with
+  --     "permission denied for table pg_authid" on managed services.
+  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
+  --     which RETURNS the role name pre-quoted when it contains uppercase
+  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
+  --     on the already-quoted string double-wrapped and the GRANT failed at
+  --     replay with "role does not exist". Using
+  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
+  --     correctly exactly once.
+  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
+  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
+  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
+  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
+  SELECT DISTINCT
+      dn.nspname,
+      dc.relname,
+      dc.relkind,
+      pg_get_viewdef(dc.oid),
+      (SELECT string_agg(
+          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
+          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
+          E'
+')
+       FROM (
+           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
+                  (aclexplode(dc.relacl)).privilege_type AS privilege
+       ) g
+       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
+  FROM pg_depend d
+  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
+  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
+  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwConversations'
+    AND tc.relkind IN ('v', 'm')
+    AND dc.oid <> tc.oid;
+
+  -- Capture dependent functions. Two paths matter on PG:
+  --   1. Functions whose RETURN type references the view (RETURNS SETOF
+  --      <view>) — pg_depend records this as type=pg_type → pg_class.
+  --   2. Functions whose body references the view (used by sql functions
+  --      and by some plpgsql edge cases) — pg_depend records this as
+  --      pg_proc → pg_class.
+  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
+  -- statement that we replay verbatim. We DO include RETURNS-only
+  -- references because that's the dominant codegen pattern (sp* CRUD
+  -- functions all RETURNS SETOF the matching vwX).
+  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwConversations'
+    AND tc.relkind IN ('v', 'm')
+  UNION
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
+  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  WHERE EXISTS (
+      SELECT 1 FROM pg_class tc
+      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+      WHERE tc.reltype = pt.oid
+        AND tn.nspname = '__mj'
+        AND tc.relname = 'vwConversations'
+        AND tc.relkind IN ('v', 'm')
+  );
+
+  DROP VIEW IF EXISTS __mj."vwConversations" CASCADE;
+  EXECUTE vsql;
+
+  -- Replay captured dependents. Best-effort: log + continue on failure.
+  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
+  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
+  -- and rolls back EVERY statement in the block on any exception. If we
+  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
+  -- present in target environment), the just-recreated VIEW would also
+  -- get rolled back and stay missing — the exact failure mode this
+  -- wrapper exists to prevent.
+  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
+    BEGIN
+      IF rec.relkind = 'm' THEN
+        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      ELSE
+        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+    END;
+
+    IF rec.grants_sql IS NOT NULL THEN
+      BEGIN
+        EXECUTE rec.grants_sql;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+      END;
+    END IF;
+  END LOOP;
+
+  -- Replay captured dependent functions AFTER all dependent views are
+  -- restored — most codegen-emitted sp* functions reference both the
+  -- target view AND the dependent views in their bodies/return types.
+  -- Wrapped per-function in its own savepoint so a single failure
+  -- doesn't poison subsequent restores or the just-recreated target.
+  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
+    BEGIN
+      EXECUTE rec.definition;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
+    END;
+  END LOOP;
+
+  DROP TABLE _vw_regen_deps;
+  DROP TABLE _vw_regen_fn_deps;
+END $vw_regen$;
+GRANT SELECT ON __mj."vwConversations" TO "cdp_Developer";
+GRANT SELECT ON __mj."vwConversations" TO "cdp_UI";
+GRANT SELECT ON __mj."vwConversations" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversations
+-- Item: spCreateConversation
+-- ============================================================
+
+------------------------------------------------------------
+----- CREATE FUNCTION FOR Conversation
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spCreateConversation'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spCreateConversation"(
+    p_id uuid DEFAULT NULL,
+    p_userid uuid DEFAULT NULL,
+    p_externalid_clear boolean DEFAULT false,
+    p_externalid text DEFAULT NULL,
+    p_name_clear boolean DEFAULT false,
+    p_name text DEFAULT NULL,
+    p_description_clear boolean DEFAULT false,
+    p_description text DEFAULT NULL,
+    p_type text DEFAULT NULL,
+    p_isarchived BOOLEAN DEFAULT NULL,
+    p_linkedentityid_clear boolean DEFAULT false,
+    p_linkedentityid uuid DEFAULT NULL,
+    p_linkedrecordid_clear boolean DEFAULT false,
+    p_linkedrecordid text DEFAULT NULL,
+    p_datacontextid_clear boolean DEFAULT false,
+    p_datacontextid uuid DEFAULT NULL,
+    p_status text DEFAULT NULL,
+    p_environmentid uuid DEFAULT NULL,
+    p_projectid_clear boolean DEFAULT false,
+    p_projectid uuid DEFAULT NULL,
+    p_ispinned BOOLEAN DEFAULT NULL,
+    p_testrunid_clear boolean DEFAULT false,
+    p_testrunid uuid DEFAULT NULL,
+    p_applicationscope text DEFAULT NULL,
+    p_applicationid_clear boolean DEFAULT false,
+    p_applicationid uuid DEFAULT NULL,
+    p_defaultagentid_clear boolean DEFAULT false,
+    p_defaultagentid uuid DEFAULT NULL,
+    p_additionaldata_clear boolean DEFAULT false,
+    p_additionaldata text DEFAULT NULL
+) RETURNS SETOF __mj."vwConversations" AS $$
+DECLARE
+    v_new_id uuid;
+BEGIN
+    v_new_id := COALESCE(p_id, gen_random_uuid());
+    INSERT INTO __mj."Conversation"
+        (
+            "ID",
+            "UserID",
+                "ExternalID",
+                "Name",
+                "Description",
+                "Type",
+                "IsArchived",
+                "LinkedEntityID",
+                "LinkedRecordID",
+                "DataContextID",
+                "Status",
+                "EnvironmentID",
+                "ProjectID",
+                "IsPinned",
+                "TestRunID",
+                "ApplicationScope",
+                "ApplicationID",
+                "DefaultAgentID",
+                "AdditionalData"
+        )
+    VALUES
+        (
+            v_new_id,
+            p_userid,
+                CASE WHEN p_externalid_clear = true THEN NULL ELSE COALESCE(p_externalid, NULL) END,
+                CASE WHEN p_name_clear = true THEN NULL ELSE COALESCE(p_name, NULL) END,
+                CASE WHEN p_description_clear = true THEN NULL ELSE COALESCE(p_description, NULL) END,
+                COALESCE(p_type, 'Skip'),
+                COALESCE(p_isarchived, FALSE),
+                CASE WHEN p_linkedentityid_clear = true THEN NULL ELSE COALESCE(p_linkedentityid, NULL) END,
+                CASE WHEN p_linkedrecordid_clear = true THEN NULL ELSE COALESCE(p_linkedrecordid, NULL) END,
+                CASE WHEN p_datacontextid_clear = true THEN NULL ELSE COALESCE(p_datacontextid, NULL) END,
+                COALESCE(p_status, 'Available'),
+                COALESCE(p_environmentid, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE WHEN p_projectid_clear = true THEN NULL ELSE COALESCE(p_projectid, NULL) END,
+                COALESCE(p_ispinned, FALSE),
+                CASE WHEN p_testrunid_clear = true THEN NULL ELSE COALESCE(p_testrunid, NULL) END,
+                COALESCE(p_applicationscope, 'Global'),
+                CASE WHEN p_applicationid_clear = true THEN NULL ELSE COALESCE(p_applicationid, NULL) END,
+                CASE WHEN p_defaultagentid_clear = true THEN NULL ELSE COALESCE(p_defaultagentid, NULL) END,
+                CASE WHEN p_additionaldata_clear = true THEN NULL ELSE COALESCE(p_additionaldata, NULL) END
+        )
+    ;
+
+    RETURN QUERY
+    SELECT * FROM __mj."vwConversations"
+    WHERE "ID" = v_new_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spCreateConversation" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spCreateConversation" TO "cdp_UI";
+GRANT EXECUTE ON FUNCTION __mj."spCreateConversation" TO "cdp_Integration";
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversations
+-- Item: spUpdateConversation
+-- ============================================================
+
+------------------------------------------------------------
+----- UPDATE FUNCTION FOR Conversation
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spUpdateConversation'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spUpdateConversation"(
+    p_id uuid,
+    p_userid uuid DEFAULT NULL,
+    p_externalid_clear boolean DEFAULT false,
+    p_externalid text DEFAULT NULL,
+    p_name_clear boolean DEFAULT false,
+    p_name text DEFAULT NULL,
+    p_description_clear boolean DEFAULT false,
+    p_description text DEFAULT NULL,
+    p_type text DEFAULT NULL,
+    p_isarchived BOOLEAN DEFAULT NULL,
+    p_linkedentityid_clear boolean DEFAULT false,
+    p_linkedentityid uuid DEFAULT NULL,
+    p_linkedrecordid_clear boolean DEFAULT false,
+    p_linkedrecordid text DEFAULT NULL,
+    p_datacontextid_clear boolean DEFAULT false,
+    p_datacontextid uuid DEFAULT NULL,
+    p_status text DEFAULT NULL,
+    p_environmentid uuid DEFAULT NULL,
+    p_projectid_clear boolean DEFAULT false,
+    p_projectid uuid DEFAULT NULL,
+    p_ispinned BOOLEAN DEFAULT NULL,
+    p_testrunid_clear boolean DEFAULT false,
+    p_testrunid uuid DEFAULT NULL,
+    p_applicationscope text DEFAULT NULL,
+    p_applicationid_clear boolean DEFAULT false,
+    p_applicationid uuid DEFAULT NULL,
+    p_defaultagentid_clear boolean DEFAULT false,
+    p_defaultagentid uuid DEFAULT NULL,
+    p_additionaldata_clear boolean DEFAULT false,
+    p_additionaldata text DEFAULT NULL
+) RETURNS SETOF __mj."vwConversations" AS $$
+DECLARE
+    v_updated_count INTEGER;
+BEGIN
+    UPDATE __mj."Conversation"
+    SET
+        "UserID" = COALESCE(p_userid, "UserID"),
+        "ExternalID" = CASE WHEN p_externalid_clear = true THEN NULL ELSE COALESCE(p_externalid, "ExternalID") END,
+        "Name" = CASE WHEN p_name_clear = true THEN NULL ELSE COALESCE(p_name, "Name") END,
+        "Description" = CASE WHEN p_description_clear = true THEN NULL ELSE COALESCE(p_description, "Description") END,
+        "Type" = COALESCE(p_type, "Type"),
+        "IsArchived" = COALESCE(p_isarchived, "IsArchived"),
+        "LinkedEntityID" = CASE WHEN p_linkedentityid_clear = true THEN NULL ELSE COALESCE(p_linkedentityid, "LinkedEntityID") END,
+        "LinkedRecordID" = CASE WHEN p_linkedrecordid_clear = true THEN NULL ELSE COALESCE(p_linkedrecordid, "LinkedRecordID") END,
+        "DataContextID" = CASE WHEN p_datacontextid_clear = true THEN NULL ELSE COALESCE(p_datacontextid, "DataContextID") END,
+        "Status" = COALESCE(p_status, "Status"),
+        "EnvironmentID" = COALESCE(p_environmentid, "EnvironmentID"),
+        "ProjectID" = CASE WHEN p_projectid_clear = true THEN NULL ELSE COALESCE(p_projectid, "ProjectID") END,
+        "IsPinned" = COALESCE(p_ispinned, "IsPinned"),
+        "TestRunID" = CASE WHEN p_testrunid_clear = true THEN NULL ELSE COALESCE(p_testrunid, "TestRunID") END,
+        "ApplicationScope" = COALESCE(p_applicationscope, "ApplicationScope"),
+        "ApplicationID" = CASE WHEN p_applicationid_clear = true THEN NULL ELSE COALESCE(p_applicationid, "ApplicationID") END,
+        "DefaultAgentID" = CASE WHEN p_defaultagentid_clear = true THEN NULL ELSE COALESCE(p_defaultagentid, "DefaultAgentID") END,
+        "AdditionalData" = CASE WHEN p_additionaldata_clear = true THEN NULL ELSE COALESCE(p_additionaldata, "AdditionalData") END
+    WHERE
+        "ID" = p_id;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+
+    IF v_updated_count = 0 THEN
+        -- Nothing was updated, return empty result set
+        RETURN;
+    END IF;
+
+    -- Return the updated record from the base view
+    RETURN QUERY
+    SELECT * FROM __mj."vwConversations"
+    WHERE "ID" = p_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spUpdateConversation" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spUpdateConversation" TO "cdp_UI";
+GRANT EXECUTE ON FUNCTION __mj."spUpdateConversation" TO "cdp_Integration";
+
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the Conversation table
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_trg_update_conversation"()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."__mj_UpdatedAt" := NOW() AT TIME ZONE 'UTC';
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trg_update_conversation" ON __mj."Conversation";
+
+CREATE TRIGGER "trg_update_conversation"
+BEFORE UPDATE ON __mj."Conversation"
+FOR EACH ROW
+EXECUTE FUNCTION __mj."fn_trg_update_conversation"();
+
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: Conversations
+-- Item: spDeleteConversation
+-- ============================================================
+
+------------------------------------------------------------
+----- DELETE FUNCTION FOR Conversation
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spDeleteConversation'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spDeleteConversation"(
+    p_id uuid
+) RETURNS TABLE("ID" uuid) AS $$
+#variable_conflict use_column
+DECLARE
+    v_affected_count INTEGER;
+    v_rec RECORD;
+BEGIN
+    -- Cascade: Set MJ: AI Agent Examples.SourceConversationID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentExample"
+        WHERE "SourceConversationID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentExample"
+        SET "SourceConversationID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Notes.SourceConversationID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentNote"
+        WHERE "SourceConversationID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentNote"
+        SET "SourceConversationID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Runs.ConversationID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRun"
+        WHERE "ConversationID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentRun"
+        SET "ConversationID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Sessions.ConversationID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentSession"
+        WHERE "ConversationID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentSession"
+        SET "ConversationID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Delete MJ: Conversation Artifacts records via ConversationID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."ConversationArtifact"
+        WHERE "ConversationID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteConversationArtifact"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: Conversation Details records via ConversationID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."ConversationDetail"
+        WHERE "ConversationID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteConversationDetail"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Set MJ: Reports.ConversationID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."Report"
+        WHERE "ConversationID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."Report"
+        SET "ConversationID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+    
+    DELETE FROM __mj."Conversation"
+    WHERE "ID" = p_id;
+
+    GET DIAGNOSTICS v_affected_count = ROW_COUNT;
+
+    IF v_affected_count = 0 THEN
+        RETURN QUERY SELECT NULL::uuid AS "ID";
+    ELSE
+        RETURN QUERY SELECT p_id AS "ID";
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spDeleteConversation" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spDeleteConversation" TO "cdp_UI";
+GRANT EXECUTE ON FUNCTION __mj."spDeleteConversation" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agents
+-- Item: Index for Foreign Keys
+-- ============================================================
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_parent_id"
+    ON __mj."AIAgent" ("ParentID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_context_compression_prompt_id"
+    ON __mj."AIAgent" ("ContextCompressionPromptID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_type_id"
+    ON __mj."AIAgent" ("TypeID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_default_artifact_type_id"
+    ON __mj."AIAgent" ("DefaultArtifactTypeID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_owner_user_id"
+    ON __mj."AIAgent" ("OwnerUserID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_attachment_storage_provider_id"
+    ON __mj."AIAgent" ("AttachmentStorageProviderID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_category_id"
+    ON __mj."AIAgent" ("CategoryID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_default_storage_account_id"
+    ON __mj."AIAgent" ("DefaultStorageAccountID");
+
+CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_ai_agent_default_co_agent_id"
+    ON __mj."AIAgent" ("DefaultCoAgentID");
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agents
+-- Item: fnAIAgentParentID_GetRootID
+-- ============================================================
+
+------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: AIAgent.ParentID
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_ai_agent_parent_id_get_root_id"(
+    p_record_id uuid,
+    p_parent_id uuid
+) RETURNS uuid AS $$
+    WITH RECURSIVE cte_root_parent AS (
+        -- Anchor: Start from p_parent_id if not null, otherwise start from p_record_id
+        SELECT
+            "ID",
+            "ParentID",
+            "ID" AS root_parent_id,
+            0 AS depth
+        FROM
+            __mj."AIAgent"
+        WHERE
+            "ID" = COALESCE(p_parent_id, p_record_id)
+
+        UNION ALL
+
+        -- Recursive: Keep going up the hierarchy
+        SELECT
+            c."ID",
+            c."ParentID",
+            c."ID" AS root_parent_id,
+            p.depth + 1 AS depth
+        FROM
+            __mj."AIAgent" c
+        INNER JOIN
+            cte_root_parent p ON c."ID" = p."ParentID"
+        WHERE
+            p.depth < 100  -- Prevent infinite loops
+    )
+    SELECT root_parent_id
+    FROM cte_root_parent
+    WHERE "ParentID" IS NULL
+    ORDER BY root_parent_id
+    LIMIT 1;
+$$ LANGUAGE sql STABLE;
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agents
+-- Item: fnAIAgentDefaultCoAgentID_GetRootID
+-- ============================================================
+
+------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: AIAgent.DefaultCoAgentID
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_ai_agent_default_co_agent_id_get_root_id"(
+    p_record_id uuid,
+    p_parent_id uuid
+) RETURNS uuid AS $$
+    WITH RECURSIVE cte_root_parent AS (
+        -- Anchor: Start from p_parent_id if not null, otherwise start from p_record_id
+        SELECT
+            "ID",
+            "DefaultCoAgentID",
+            "ID" AS root_parent_id,
+            0 AS depth
+        FROM
+            __mj."AIAgent"
+        WHERE
+            "ID" = COALESCE(p_parent_id, p_record_id)
+
+        UNION ALL
+
+        -- Recursive: Keep going up the hierarchy
+        SELECT
+            c."ID",
+            c."DefaultCoAgentID",
+            c."ID" AS root_parent_id,
+            p.depth + 1 AS depth
+        FROM
+            __mj."AIAgent" c
+        INNER JOIN
+            cte_root_parent p ON c."ID" = p."DefaultCoAgentID"
+        WHERE
+            p.depth < 100  -- Prevent infinite loops
+    )
+    SELECT root_parent_id
+    FROM cte_root_parent
+    WHERE "DefaultCoAgentID" IS NULL
+    ORDER BY root_parent_id
+    LIMIT 1;
+$$ LANGUAGE sql STABLE;
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agents
+-- Item: vwAIAgents
+-- ============================================================
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: AI Agents
+-----               SCHEMA:      __mj
+-----               BASE TABLE:  AIAgent
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DO $vw_regen$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAIAgents"
+AS
+SELECT
+    a.*,
+    MJAIAgent_ParentID."Name" AS "Parent",
+    MJAIPrompt_ContextCompressionPromptID."Name" AS "ContextCompressionPrompt",
+    MJAIAgentType_TypeID."Name" AS "Type",
+    MJArtifactType_DefaultArtifactTypeID."Name" AS "DefaultArtifactType",
+    MJUser_OwnerUserID."Name" AS "OwnerUser",
+    MJFileStorageProvider_AttachmentStorageProviderID."Name" AS "AttachmentStorageProvider",
+    MJAIAgentCategory_CategoryID."Name" AS "Category",
+    MJFileStorageAccount_DefaultStorageAccountID."Name" AS "DefaultStorageAccount",
+    MJAIAgent_DefaultCoAgentID."Name" AS "DefaultCoAgent",
+    root_ParentID.root_id AS "RootParentID",
+    root_DefaultCoAgentID.root_id AS "RootDefaultCoAgentID"
+FROM
+    __mj."AIAgent" AS a
+LEFT OUTER JOIN
+    __mj."AIAgent" AS MJAIAgent_ParentID
+  ON
+    "a"."ParentID" = MJAIAgent_ParentID."ID"
+LEFT OUTER JOIN
+    __mj."AIPrompt" AS MJAIPrompt_ContextCompressionPromptID
+  ON
+    "a"."ContextCompressionPromptID" = MJAIPrompt_ContextCompressionPromptID."ID"
+LEFT OUTER JOIN
+    __mj."AIAgentType" AS MJAIAgentType_TypeID
+  ON
+    "a"."TypeID" = MJAIAgentType_TypeID."ID"
+LEFT OUTER JOIN
+    __mj."ArtifactType" AS MJArtifactType_DefaultArtifactTypeID
+  ON
+    "a"."DefaultArtifactTypeID" = MJArtifactType_DefaultArtifactTypeID."ID"
+INNER JOIN
+    __mj."User" AS MJUser_OwnerUserID
+  ON
+    "a"."OwnerUserID" = MJUser_OwnerUserID."ID"
+LEFT OUTER JOIN
+    __mj."FileStorageProvider" AS MJFileStorageProvider_AttachmentStorageProviderID
+  ON
+    "a"."AttachmentStorageProviderID" = MJFileStorageProvider_AttachmentStorageProviderID."ID"
+LEFT OUTER JOIN
+    __mj."AIAgentCategory" AS MJAIAgentCategory_CategoryID
+  ON
+    "a"."CategoryID" = MJAIAgentCategory_CategoryID."ID"
+LEFT OUTER JOIN
+    __mj."FileStorageAccount" AS MJFileStorageAccount_DefaultStorageAccountID
+  ON
+    "a"."DefaultStorageAccountID" = MJFileStorageAccount_DefaultStorageAccountID."ID"
+LEFT OUTER JOIN
+    __mj."AIAgent" AS MJAIAgent_DefaultCoAgentID
+  ON
+    "a"."DefaultCoAgentID" = MJAIAgent_DefaultCoAgentID."ID"
+
+LEFT JOIN LATERAL (
+    SELECT __mj."fn_ai_agent_parent_id_get_root_id"(a."ID", a."ParentID") AS root_id
+) AS root_ParentID ON true
+LEFT JOIN LATERAL (
+    SELECT __mj."fn_ai_agent_default_co_agent_id_get_root_id"(a."ID", a."DefaultCoAgentID") AS root_id
+) AS root_DefaultCoAgentID ON true
+$vsql$;
+  rec RECORD;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
+  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
+  -- every dependent view (anything that JOINs this view in its body), so we
+  -- capture each dependent's definition + grants BEFORE the drop and replay
+  -- them afterward (best-effort). Without this, on a fresh-DB replay where
+  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
+  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
+  -- that the wrapper for this entity doesn't know how to recreate, and
+  -- those views stay permanently missing.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
+    schema_name TEXT,
+    view_name   TEXT,
+    relkind     CHAR(1),
+    definition  TEXT,
+    grants_sql  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_deps;
+
+  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
+  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
+  -- pattern) when the target view is dropped. Without restoring them,
+  -- post-codegen CRUD validation reports those routines as missing —
+  -- e.g. "MJ: Recommendation Items → missing create routine
+  -- spCreateRecommendationItem" — even though the next codegen pass
+  -- emits them. The restored definitions are pg_get_functiondef() output
+  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
+  -- trailing semicolon; replaying them verbatim recreates the function
+  -- with its original body, parameter list, and return type.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
+    schema_name TEXT,
+    fn_name     TEXT,
+    fn_oid      OID,
+    definition  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_fn_deps;
+
+  -- Capture dependents. NOTES on the grants_sql build:
+  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
+  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
+  --     exists). pg_get_userbyid is a public catalog function available to
+  --     every database user, including unprivileged accounts on managed
+  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
+  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
+  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
+  --     to pg_authid which works on self-hosted PG but fails with
+  --     "permission denied for table pg_authid" on managed services.
+  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
+  --     which RETURNS the role name pre-quoted when it contains uppercase
+  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
+  --     on the already-quoted string double-wrapped and the GRANT failed at
+  --     replay with "role does not exist". Using
+  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
+  --     correctly exactly once.
+  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
+  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
+  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
+  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
+  SELECT DISTINCT
+      dn.nspname,
+      dc.relname,
+      dc.relkind,
+      pg_get_viewdef(dc.oid),
+      (SELECT string_agg(
+          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
+          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
+          E'
+')
+       FROM (
+           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
+                  (aclexplode(dc.relacl)).privilege_type AS privilege
+       ) g
+       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
+  FROM pg_depend d
+  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
+  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
+  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwAIAgents'
+    AND tc.relkind IN ('v', 'm')
+    AND dc.oid <> tc.oid;
+
+  -- Capture dependent functions. Two paths matter on PG:
+  --   1. Functions whose RETURN type references the view (RETURNS SETOF
+  --      <view>) — pg_depend records this as type=pg_type → pg_class.
+  --   2. Functions whose body references the view (used by sql functions
+  --      and by some plpgsql edge cases) — pg_depend records this as
+  --      pg_proc → pg_class.
+  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
+  -- statement that we replay verbatim. We DO include RETURNS-only
+  -- references because that's the dominant codegen pattern (sp* CRUD
+  -- functions all RETURNS SETOF the matching vwX).
+  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '__mj'
+    AND tc.relname = 'vwAIAgents'
+    AND tc.relkind IN ('v', 'm')
+  UNION
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
+  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  WHERE EXISTS (
+      SELECT 1 FROM pg_class tc
+      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+      WHERE tc.reltype = pt.oid
+        AND tn.nspname = '__mj'
+        AND tc.relname = 'vwAIAgents'
+        AND tc.relkind IN ('v', 'm')
+  );
+
+  DROP VIEW IF EXISTS __mj."vwAIAgents" CASCADE;
+  EXECUTE vsql;
+
+  -- Replay captured dependents. Best-effort: log + continue on failure.
+  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
+  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
+  -- and rolls back EVERY statement in the block on any exception. If we
+  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
+  -- present in target environment), the just-recreated VIEW would also
+  -- get rolled back and stay missing — the exact failure mode this
+  -- wrapper exists to prevent.
+  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
+    BEGIN
+      IF rec.relkind = 'm' THEN
+        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      ELSE
+        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+    END;
+
+    IF rec.grants_sql IS NOT NULL THEN
+      BEGIN
+        EXECUTE rec.grants_sql;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+      END;
+    END IF;
+  END LOOP;
+
+  -- Replay captured dependent functions AFTER all dependent views are
+  -- restored — most codegen-emitted sp* functions reference both the
+  -- target view AND the dependent views in their bodies/return types.
+  -- Wrapped per-function in its own savepoint so a single failure
+  -- doesn't poison subsequent restores or the just-recreated target.
+  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
+    BEGIN
+      EXECUTE rec.definition;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
+    END;
+  END LOOP;
+
+  DROP TABLE _vw_regen_deps;
+  DROP TABLE _vw_regen_fn_deps;
+END $vw_regen$;
+GRANT SELECT ON __mj."vwAIAgents" TO "cdp_UI";
+GRANT SELECT ON __mj."vwAIAgents" TO "cdp_Developer";
+GRANT SELECT ON __mj."vwAIAgents" TO "cdp_Integration";
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agents
+-- Item: spCreateAIAgent
+-- ============================================================
+
+------------------------------------------------------------
+----- CREATE FUNCTION FOR AIAgent (JSON-arg shape)
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spCreateAIAgent'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spCreateAIAgent"(p_data JSONB)
+RETURNS SETOF __mj."vwAIAgents"
+AS $$
+DECLARE
+    v_id uuid;
+    v_field_name TEXT;
+    v_cast_expr  TEXT;
+    v_col_list   TEXT;
+    v_val_list   TEXT;
+    v_sql        TEXT;
+BEGIN
+    IF p_data ? 'ID' THEN
+        v_id := (p_data->>'ID')::uuid;
+    ELSE
+        v_id := gen_random_uuid();
+    END IF;
+
+    v_col_list := quote_ident('ID');
+    v_val_list := quote_literal(v_id) || '::uuid';
+
+    -- Build column / value lists from keys present in p_data. Absent keys are
+    -- omitted entirely so the column's DEFAULT applies (matching the typed-arg
+    -- sproc's default-substitution semantics).
+    FOREACH v_field_name IN ARRAY ARRAY['Name', 'Description', 'LogoURL', 'ParentID', 'ExposeAsAction', 'ExecutionOrder', 'ExecutionMode', 'EnableContextCompression', 'ContextCompressionMessageThreshold', 'ContextCompressionPromptID', 'ContextCompressionMessageRetentionCount', 'TypeID', 'Status', 'DriverClass', 'IconClass', 'ModelSelectionMode', 'PayloadDownstreamPaths', 'PayloadUpstreamPaths', 'PayloadSelfReadPaths', 'PayloadSelfWritePaths', 'PayloadScope', 'FinalPayloadValidation', 'FinalPayloadValidationMode', 'FinalPayloadValidationMaxRetries', 'MaxCostPerRun', 'MaxTokensPerRun', 'MaxIterationsPerRun', 'MaxTimePerRun', 'MinExecutionsPerRun', 'MaxExecutionsPerRun', 'StartingPayloadValidation', 'StartingPayloadValidationMode', 'DefaultPromptEffortLevel', 'ChatHandlingOption', 'DefaultArtifactTypeID', 'OwnerUserID', 'InvocationMode', 'ArtifactCreationMode', 'FunctionalRequirements', 'TechnicalDesign', 'InjectNotes', 'MaxNotesToInject', 'NoteInjectionStrategy', 'InjectExamples', 'MaxExamplesToInject', 'ExampleInjectionStrategy', 'IsRestricted', 'MessageMode', 'MaxMessages', 'AttachmentStorageProviderID', 'AttachmentRootPath', 'InlineStorageThresholdBytes', 'AgentTypePromptParams', 'ScopeConfig', 'NoteRetentionDays', 'ExampleRetentionDays', 'AutoArchiveEnabled', 'RerankerConfiguration', 'CategoryID', 'AllowEphemeralClientTools', 'DefaultStorageAccountID', 'SearchScopeAccess', 'AcceptUnregisteredFiles', 'DefaultCoAgentID', 'TypeConfiguration', 'AllowMemoryWrite']
+    LOOP
+        IF p_data ? v_field_name THEN
+            v_cast_expr := CASE v_field_name
+        WHEN 'Name' THEN '($1->>''Name'')'
+        WHEN 'Description' THEN '($1->>''Description'')'
+        WHEN 'LogoURL' THEN '($1->>''LogoURL'')'
+        WHEN 'ParentID' THEN '($1->>''ParentID'')::UUID'
+        WHEN 'ExposeAsAction' THEN 'COALESCE(($1->>''ExposeAsAction'')::BOOLEAN, FALSE)'
+        WHEN 'ExecutionOrder' THEN 'COALESCE(($1->>''ExecutionOrder'')::INTEGER, 0)'
+        WHEN 'ExecutionMode' THEN 'COALESCE(($1->>''ExecutionMode''), ''Sequential'')'
+        WHEN 'EnableContextCompression' THEN 'COALESCE(($1->>''EnableContextCompression'')::BOOLEAN, FALSE)'
+        WHEN 'ContextCompressionMessageThreshold' THEN '($1->>''ContextCompressionMessageThreshold'')::INTEGER'
+        WHEN 'ContextCompressionPromptID' THEN '($1->>''ContextCompressionPromptID'')::UUID'
+        WHEN 'ContextCompressionMessageRetentionCount' THEN '($1->>''ContextCompressionMessageRetentionCount'')::INTEGER'
+        WHEN 'TypeID' THEN '($1->>''TypeID'')::UUID'
+        WHEN 'Status' THEN 'COALESCE(($1->>''Status''), ''Pending'')'
+        WHEN 'DriverClass' THEN '($1->>''DriverClass'')'
+        WHEN 'IconClass' THEN '($1->>''IconClass'')'
+        WHEN 'ModelSelectionMode' THEN 'COALESCE(($1->>''ModelSelectionMode''), ''Agent Type'')'
+        WHEN 'PayloadDownstreamPaths' THEN 'COALESCE(($1->>''PayloadDownstreamPaths''), ''["*"]'')'
+        WHEN 'PayloadUpstreamPaths' THEN 'COALESCE(($1->>''PayloadUpstreamPaths''), ''["*"]'')'
+        WHEN 'PayloadSelfReadPaths' THEN '($1->>''PayloadSelfReadPaths'')'
+        WHEN 'PayloadSelfWritePaths' THEN '($1->>''PayloadSelfWritePaths'')'
+        WHEN 'PayloadScope' THEN '($1->>''PayloadScope'')'
+        WHEN 'FinalPayloadValidation' THEN '($1->>''FinalPayloadValidation'')'
+        WHEN 'FinalPayloadValidationMode' THEN 'COALESCE(($1->>''FinalPayloadValidationMode''), ''Retry'')'
+        WHEN 'FinalPayloadValidationMaxRetries' THEN 'COALESCE(($1->>''FinalPayloadValidationMaxRetries'')::INTEGER, 3)'
+        WHEN 'MaxCostPerRun' THEN '($1->>''MaxCostPerRun'')::DECIMAL(10, 4)'
+        WHEN 'MaxTokensPerRun' THEN '($1->>''MaxTokensPerRun'')::INTEGER'
+        WHEN 'MaxIterationsPerRun' THEN '($1->>''MaxIterationsPerRun'')::INTEGER'
+        WHEN 'MaxTimePerRun' THEN '($1->>''MaxTimePerRun'')::INTEGER'
+        WHEN 'MinExecutionsPerRun' THEN '($1->>''MinExecutionsPerRun'')::INTEGER'
+        WHEN 'MaxExecutionsPerRun' THEN '($1->>''MaxExecutionsPerRun'')::INTEGER'
+        WHEN 'StartingPayloadValidation' THEN '($1->>''StartingPayloadValidation'')'
+        WHEN 'StartingPayloadValidationMode' THEN 'COALESCE(($1->>''StartingPayloadValidationMode''), ''Fail'')'
+        WHEN 'DefaultPromptEffortLevel' THEN '($1->>''DefaultPromptEffortLevel'')::INTEGER'
+        WHEN 'ChatHandlingOption' THEN '($1->>''ChatHandlingOption'')'
+        WHEN 'DefaultArtifactTypeID' THEN '($1->>''DefaultArtifactTypeID'')::UUID'
+        WHEN 'OwnerUserID' THEN 'COALESCE(($1->>''OwnerUserID'')::UUID, ''ECAFCCEC-6A37-EF11-86D4-000D3A4E707E'')'
+        WHEN 'InvocationMode' THEN 'COALESCE(($1->>''InvocationMode''), ''Any'')'
+        WHEN 'ArtifactCreationMode' THEN 'COALESCE(($1->>''ArtifactCreationMode''), ''Always'')'
+        WHEN 'FunctionalRequirements' THEN '($1->>''FunctionalRequirements'')'
+        WHEN 'TechnicalDesign' THEN '($1->>''TechnicalDesign'')'
+        WHEN 'InjectNotes' THEN 'COALESCE(($1->>''InjectNotes'')::BOOLEAN, TRUE)'
+        WHEN 'MaxNotesToInject' THEN 'COALESCE(($1->>''MaxNotesToInject'')::INTEGER, 5)'
+        WHEN 'NoteInjectionStrategy' THEN 'COALESCE(($1->>''NoteInjectionStrategy''), ''Relevant'')'
+        WHEN 'InjectExamples' THEN 'COALESCE(($1->>''InjectExamples'')::BOOLEAN, FALSE)'
+        WHEN 'MaxExamplesToInject' THEN 'COALESCE(($1->>''MaxExamplesToInject'')::INTEGER, 3)'
+        WHEN 'ExampleInjectionStrategy' THEN 'COALESCE(($1->>''ExampleInjectionStrategy''), ''Semantic'')'
+        WHEN 'IsRestricted' THEN 'COALESCE(($1->>''IsRestricted'')::BOOLEAN, FALSE)'
+        WHEN 'MessageMode' THEN 'COALESCE(($1->>''MessageMode''), ''None'')'
+        WHEN 'MaxMessages' THEN '($1->>''MaxMessages'')::INTEGER'
+        WHEN 'AttachmentStorageProviderID' THEN '($1->>''AttachmentStorageProviderID'')::UUID'
+        WHEN 'AttachmentRootPath' THEN '($1->>''AttachmentRootPath'')'
+        WHEN 'InlineStorageThresholdBytes' THEN '($1->>''InlineStorageThresholdBytes'')::INTEGER'
+        WHEN 'AgentTypePromptParams' THEN '($1->>''AgentTypePromptParams'')'
+        WHEN 'ScopeConfig' THEN '($1->>''ScopeConfig'')'
+        WHEN 'NoteRetentionDays' THEN '($1->>''NoteRetentionDays'')::INTEGER'
+        WHEN 'ExampleRetentionDays' THEN '($1->>''ExampleRetentionDays'')::INTEGER'
+        WHEN 'AutoArchiveEnabled' THEN 'COALESCE(($1->>''AutoArchiveEnabled'')::BOOLEAN, TRUE)'
+        WHEN 'RerankerConfiguration' THEN '($1->>''RerankerConfiguration'')'
+        WHEN 'CategoryID' THEN '($1->>''CategoryID'')::UUID'
+        WHEN 'AllowEphemeralClientTools' THEN 'COALESCE(($1->>''AllowEphemeralClientTools'')::BOOLEAN, TRUE)'
+        WHEN 'DefaultStorageAccountID' THEN '($1->>''DefaultStorageAccountID'')::UUID'
+        WHEN 'SearchScopeAccess' THEN 'COALESCE(($1->>''SearchScopeAccess''), ''None'')'
+        WHEN 'AcceptUnregisteredFiles' THEN 'COALESCE(($1->>''AcceptUnregisteredFiles'')::BOOLEAN, FALSE)'
+        WHEN 'DefaultCoAgentID' THEN '($1->>''DefaultCoAgentID'')::UUID'
+        WHEN 'TypeConfiguration' THEN '($1->>''TypeConfiguration'')'
+        WHEN 'AllowMemoryWrite' THEN 'COALESCE(($1->>''AllowMemoryWrite'')::BOOLEAN, TRUE)'
+            END;
+            v_col_list := v_col_list || ', ' || quote_ident(v_field_name);
+            v_val_list := v_val_list || ', ' || v_cast_expr;
+        END IF;
+    END LOOP;
+
+    v_sql := format(
+        'INSERT INTO __mj."AIAgent" (%s) VALUES (%s)',
+        v_col_list,
+        v_val_list
+    );
+    -- Pass p_data as a positional parameter so the cast expressions inside
+    -- v_val_list (which reference $1) can read the JSONB payload.
+    EXECUTE v_sql USING p_data;
+
+    RETURN QUERY
+    SELECT * FROM __mj."vwAIAgents"
+    WHERE "ID" = v_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgent" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spCreateAIAgent" TO "cdp_Integration";
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agents
+-- Item: spUpdateAIAgent
+-- ============================================================
+
+------------------------------------------------------------
+----- UPDATE FUNCTION FOR AIAgent (JSON-arg shape)
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spUpdateAIAgent'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgent"(p_data JSONB)
+RETURNS SETOF __mj."vwAIAgents"
+AS $$
+DECLARE
+    v_id uuid := (p_data->>'ID')::uuid;
+    v_updated_count INTEGER;
+BEGIN
+    IF p_data IS NULL OR NOT (p_data ? 'ID') THEN
+        RAISE EXCEPTION 'spUpdateAIAgent: p_data must include "ID"';
+    END IF;
+
+    UPDATE __mj."AIAgent"
+    SET
+        "Name" = CASE WHEN p_data ? 'Name' THEN (p_data->>'Name') ELSE "Name" END,
+        "Description" = CASE WHEN p_data ? 'Description' THEN (p_data->>'Description') ELSE "Description" END,
+        "LogoURL" = CASE WHEN p_data ? 'LogoURL' THEN (p_data->>'LogoURL') ELSE "LogoURL" END,
+        "ParentID" = CASE WHEN p_data ? 'ParentID' THEN (p_data->>'ParentID')::UUID ELSE "ParentID" END,
+        "ExposeAsAction" = CASE WHEN p_data ? 'ExposeAsAction' THEN (p_data->>'ExposeAsAction')::BOOLEAN ELSE "ExposeAsAction" END,
+        "ExecutionOrder" = CASE WHEN p_data ? 'ExecutionOrder' THEN (p_data->>'ExecutionOrder')::INTEGER ELSE "ExecutionOrder" END,
+        "ExecutionMode" = CASE WHEN p_data ? 'ExecutionMode' THEN (p_data->>'ExecutionMode') ELSE "ExecutionMode" END,
+        "EnableContextCompression" = CASE WHEN p_data ? 'EnableContextCompression' THEN (p_data->>'EnableContextCompression')::BOOLEAN ELSE "EnableContextCompression" END,
+        "ContextCompressionMessageThreshold" = CASE WHEN p_data ? 'ContextCompressionMessageThreshold' THEN (p_data->>'ContextCompressionMessageThreshold')::INTEGER ELSE "ContextCompressionMessageThreshold" END,
+        "ContextCompressionPromptID" = CASE WHEN p_data ? 'ContextCompressionPromptID' THEN (p_data->>'ContextCompressionPromptID')::UUID ELSE "ContextCompressionPromptID" END,
+        "ContextCompressionMessageRetentionCount" = CASE WHEN p_data ? 'ContextCompressionMessageRetentionCount' THEN (p_data->>'ContextCompressionMessageRetentionCount')::INTEGER ELSE "ContextCompressionMessageRetentionCount" END,
+        "TypeID" = CASE WHEN p_data ? 'TypeID' THEN (p_data->>'TypeID')::UUID ELSE "TypeID" END,
+        "Status" = CASE WHEN p_data ? 'Status' THEN (p_data->>'Status') ELSE "Status" END,
+        "DriverClass" = CASE WHEN p_data ? 'DriverClass' THEN (p_data->>'DriverClass') ELSE "DriverClass" END,
+        "IconClass" = CASE WHEN p_data ? 'IconClass' THEN (p_data->>'IconClass') ELSE "IconClass" END,
+        "ModelSelectionMode" = CASE WHEN p_data ? 'ModelSelectionMode' THEN (p_data->>'ModelSelectionMode') ELSE "ModelSelectionMode" END,
+        "PayloadDownstreamPaths" = CASE WHEN p_data ? 'PayloadDownstreamPaths' THEN (p_data->>'PayloadDownstreamPaths') ELSE "PayloadDownstreamPaths" END,
+        "PayloadUpstreamPaths" = CASE WHEN p_data ? 'PayloadUpstreamPaths' THEN (p_data->>'PayloadUpstreamPaths') ELSE "PayloadUpstreamPaths" END,
+        "PayloadSelfReadPaths" = CASE WHEN p_data ? 'PayloadSelfReadPaths' THEN (p_data->>'PayloadSelfReadPaths') ELSE "PayloadSelfReadPaths" END,
+        "PayloadSelfWritePaths" = CASE WHEN p_data ? 'PayloadSelfWritePaths' THEN (p_data->>'PayloadSelfWritePaths') ELSE "PayloadSelfWritePaths" END,
+        "PayloadScope" = CASE WHEN p_data ? 'PayloadScope' THEN (p_data->>'PayloadScope') ELSE "PayloadScope" END,
+        "FinalPayloadValidation" = CASE WHEN p_data ? 'FinalPayloadValidation' THEN (p_data->>'FinalPayloadValidation') ELSE "FinalPayloadValidation" END,
+        "FinalPayloadValidationMode" = CASE WHEN p_data ? 'FinalPayloadValidationMode' THEN (p_data->>'FinalPayloadValidationMode') ELSE "FinalPayloadValidationMode" END,
+        "FinalPayloadValidationMaxRetries" = CASE WHEN p_data ? 'FinalPayloadValidationMaxRetries' THEN (p_data->>'FinalPayloadValidationMaxRetries')::INTEGER ELSE "FinalPayloadValidationMaxRetries" END,
+        "MaxCostPerRun" = CASE WHEN p_data ? 'MaxCostPerRun' THEN (p_data->>'MaxCostPerRun')::DECIMAL(10, 4) ELSE "MaxCostPerRun" END,
+        "MaxTokensPerRun" = CASE WHEN p_data ? 'MaxTokensPerRun' THEN (p_data->>'MaxTokensPerRun')::INTEGER ELSE "MaxTokensPerRun" END,
+        "MaxIterationsPerRun" = CASE WHEN p_data ? 'MaxIterationsPerRun' THEN (p_data->>'MaxIterationsPerRun')::INTEGER ELSE "MaxIterationsPerRun" END,
+        "MaxTimePerRun" = CASE WHEN p_data ? 'MaxTimePerRun' THEN (p_data->>'MaxTimePerRun')::INTEGER ELSE "MaxTimePerRun" END,
+        "MinExecutionsPerRun" = CASE WHEN p_data ? 'MinExecutionsPerRun' THEN (p_data->>'MinExecutionsPerRun')::INTEGER ELSE "MinExecutionsPerRun" END,
+        "MaxExecutionsPerRun" = CASE WHEN p_data ? 'MaxExecutionsPerRun' THEN (p_data->>'MaxExecutionsPerRun')::INTEGER ELSE "MaxExecutionsPerRun" END,
+        "StartingPayloadValidation" = CASE WHEN p_data ? 'StartingPayloadValidation' THEN (p_data->>'StartingPayloadValidation') ELSE "StartingPayloadValidation" END,
+        "StartingPayloadValidationMode" = CASE WHEN p_data ? 'StartingPayloadValidationMode' THEN (p_data->>'StartingPayloadValidationMode') ELSE "StartingPayloadValidationMode" END,
+        "DefaultPromptEffortLevel" = CASE WHEN p_data ? 'DefaultPromptEffortLevel' THEN (p_data->>'DefaultPromptEffortLevel')::INTEGER ELSE "DefaultPromptEffortLevel" END,
+        "ChatHandlingOption" = CASE WHEN p_data ? 'ChatHandlingOption' THEN (p_data->>'ChatHandlingOption') ELSE "ChatHandlingOption" END,
+        "DefaultArtifactTypeID" = CASE WHEN p_data ? 'DefaultArtifactTypeID' THEN (p_data->>'DefaultArtifactTypeID')::UUID ELSE "DefaultArtifactTypeID" END,
+        "OwnerUserID" = CASE WHEN p_data ? 'OwnerUserID' THEN (p_data->>'OwnerUserID')::UUID ELSE "OwnerUserID" END,
+        "InvocationMode" = CASE WHEN p_data ? 'InvocationMode' THEN (p_data->>'InvocationMode') ELSE "InvocationMode" END,
+        "ArtifactCreationMode" = CASE WHEN p_data ? 'ArtifactCreationMode' THEN (p_data->>'ArtifactCreationMode') ELSE "ArtifactCreationMode" END,
+        "FunctionalRequirements" = CASE WHEN p_data ? 'FunctionalRequirements' THEN (p_data->>'FunctionalRequirements') ELSE "FunctionalRequirements" END,
+        "TechnicalDesign" = CASE WHEN p_data ? 'TechnicalDesign' THEN (p_data->>'TechnicalDesign') ELSE "TechnicalDesign" END,
+        "InjectNotes" = CASE WHEN p_data ? 'InjectNotes' THEN (p_data->>'InjectNotes')::BOOLEAN ELSE "InjectNotes" END,
+        "MaxNotesToInject" = CASE WHEN p_data ? 'MaxNotesToInject' THEN (p_data->>'MaxNotesToInject')::INTEGER ELSE "MaxNotesToInject" END,
+        "NoteInjectionStrategy" = CASE WHEN p_data ? 'NoteInjectionStrategy' THEN (p_data->>'NoteInjectionStrategy') ELSE "NoteInjectionStrategy" END,
+        "InjectExamples" = CASE WHEN p_data ? 'InjectExamples' THEN (p_data->>'InjectExamples')::BOOLEAN ELSE "InjectExamples" END,
+        "MaxExamplesToInject" = CASE WHEN p_data ? 'MaxExamplesToInject' THEN (p_data->>'MaxExamplesToInject')::INTEGER ELSE "MaxExamplesToInject" END,
+        "ExampleInjectionStrategy" = CASE WHEN p_data ? 'ExampleInjectionStrategy' THEN (p_data->>'ExampleInjectionStrategy') ELSE "ExampleInjectionStrategy" END,
+        "IsRestricted" = CASE WHEN p_data ? 'IsRestricted' THEN (p_data->>'IsRestricted')::BOOLEAN ELSE "IsRestricted" END,
+        "MessageMode" = CASE WHEN p_data ? 'MessageMode' THEN (p_data->>'MessageMode') ELSE "MessageMode" END,
+        "MaxMessages" = CASE WHEN p_data ? 'MaxMessages' THEN (p_data->>'MaxMessages')::INTEGER ELSE "MaxMessages" END,
+        "AttachmentStorageProviderID" = CASE WHEN p_data ? 'AttachmentStorageProviderID' THEN (p_data->>'AttachmentStorageProviderID')::UUID ELSE "AttachmentStorageProviderID" END,
+        "AttachmentRootPath" = CASE WHEN p_data ? 'AttachmentRootPath' THEN (p_data->>'AttachmentRootPath') ELSE "AttachmentRootPath" END,
+        "InlineStorageThresholdBytes" = CASE WHEN p_data ? 'InlineStorageThresholdBytes' THEN (p_data->>'InlineStorageThresholdBytes')::INTEGER ELSE "InlineStorageThresholdBytes" END,
+        "AgentTypePromptParams" = CASE WHEN p_data ? 'AgentTypePromptParams' THEN (p_data->>'AgentTypePromptParams') ELSE "AgentTypePromptParams" END,
+        "ScopeConfig" = CASE WHEN p_data ? 'ScopeConfig' THEN (p_data->>'ScopeConfig') ELSE "ScopeConfig" END,
+        "NoteRetentionDays" = CASE WHEN p_data ? 'NoteRetentionDays' THEN (p_data->>'NoteRetentionDays')::INTEGER ELSE "NoteRetentionDays" END,
+        "ExampleRetentionDays" = CASE WHEN p_data ? 'ExampleRetentionDays' THEN (p_data->>'ExampleRetentionDays')::INTEGER ELSE "ExampleRetentionDays" END,
+        "AutoArchiveEnabled" = CASE WHEN p_data ? 'AutoArchiveEnabled' THEN (p_data->>'AutoArchiveEnabled')::BOOLEAN ELSE "AutoArchiveEnabled" END,
+        "RerankerConfiguration" = CASE WHEN p_data ? 'RerankerConfiguration' THEN (p_data->>'RerankerConfiguration') ELSE "RerankerConfiguration" END,
+        "CategoryID" = CASE WHEN p_data ? 'CategoryID' THEN (p_data->>'CategoryID')::UUID ELSE "CategoryID" END,
+        "AllowEphemeralClientTools" = CASE WHEN p_data ? 'AllowEphemeralClientTools' THEN (p_data->>'AllowEphemeralClientTools')::BOOLEAN ELSE "AllowEphemeralClientTools" END,
+        "DefaultStorageAccountID" = CASE WHEN p_data ? 'DefaultStorageAccountID' THEN (p_data->>'DefaultStorageAccountID')::UUID ELSE "DefaultStorageAccountID" END,
+        "SearchScopeAccess" = CASE WHEN p_data ? 'SearchScopeAccess' THEN (p_data->>'SearchScopeAccess') ELSE "SearchScopeAccess" END,
+        "AcceptUnregisteredFiles" = CASE WHEN p_data ? 'AcceptUnregisteredFiles' THEN (p_data->>'AcceptUnregisteredFiles')::BOOLEAN ELSE "AcceptUnregisteredFiles" END,
+        "DefaultCoAgentID" = CASE WHEN p_data ? 'DefaultCoAgentID' THEN (p_data->>'DefaultCoAgentID')::UUID ELSE "DefaultCoAgentID" END,
+        "TypeConfiguration" = CASE WHEN p_data ? 'TypeConfiguration' THEN (p_data->>'TypeConfiguration') ELSE "TypeConfiguration" END,
+        "AllowMemoryWrite" = CASE WHEN p_data ? 'AllowMemoryWrite' THEN (p_data->>'AllowMemoryWrite')::BOOLEAN ELSE "AllowMemoryWrite" END,
+        "__mj_UpdatedAt" = NOW()
+    WHERE
+        "ID" = v_id;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+
+    IF v_updated_count = 0 THEN
+        -- Nothing was updated, return empty result set
+        RETURN;
+    END IF;
+
+    -- Return the updated record from the base view
+    RETURN QUERY
+    SELECT * FROM __mj."vwAIAgents"
+    WHERE "ID" = v_id;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgent" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spUpdateAIAgent" TO "cdp_Integration";
+
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgent table
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION __mj."fn_trg_update_ai_agent"()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."__mj_UpdatedAt" := NOW() AT TIME ZONE 'UTC';
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trg_update_ai_agent" ON __mj."AIAgent";
+
+CREATE TRIGGER "trg_update_ai_agent"
+BEFORE UPDATE ON __mj."AIAgent"
+FOR EACH ROW
+EXECUTE FUNCTION __mj."fn_trg_update_ai_agent"();
+
+
+
+-- ============================================================
+-- PostgreSQL Generated SQL for Entity: MJ: AI Agents
+-- Item: spDeleteAIAgent
+-- ============================================================
+
+------------------------------------------------------------
+----- DELETE FUNCTION FOR AIAgent
+------------------------------------------------------------
+DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = 'spDeleteAIAgent'
+               AND pronamespace = '__mj'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+
+CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgent"(
+    p_id uuid
+) RETURNS TABLE("ID" uuid) AS $$
+#variable_conflict use_column
+DECLARE
+    v_affected_count INTEGER;
+    v_rec RECORD;
+BEGIN
+    -- Cascade: Set MJ: Actions.CreatedByAgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."Action"
+        WHERE "CreatedByAgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."Action"
+        SET "CreatedByAgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Actions.AgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentAction"
+        WHERE "AgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentAction"
+        SET "AgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Artifact Types records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentArtifactType"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentArtifactType"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Client Tools records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentClientTool"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentClientTool"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Co Agents records via CoAgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentCoAgent"
+        WHERE "CoAgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentCoAgent"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Co Agents.TargetAgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentCoAgent"
+        WHERE "TargetAgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentCoAgent"
+        SET "TargetAgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Configurations records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentConfiguration"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentConfiguration"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Data Sources records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentDataSource"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentDataSource"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Examples records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentExample"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentExample"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Learning Cycles records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentLearningCycle"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentLearningCycle"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Modalities records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentModality"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentModality"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Models.AgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentModel"
+        WHERE "AgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentModel"
+        SET "AgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Notes.AgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentNote"
+        WHERE "AgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentNote"
+        SET "AgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Permissions records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentPermission"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentPermission"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Prompts records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentPrompt"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentPrompt"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Relationships records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRelationship"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentRelationship"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Relationships records via SubAgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRelationship"
+        WHERE "SubAgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentRelationship"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Requests records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRequest"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentRequest"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Runs records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentRun"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentRun"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Search Scopes records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentSearchScope"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentSearchScope"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Sessions records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentSession"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentSession"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Agent Steps records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentStep"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIAgentStep"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agent Steps.SubAgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgentStep"
+        WHERE "SubAgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgentStep"
+        SET "SubAgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agents.ParentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgent"
+        WHERE "ParentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgent"
+        SET "ParentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Agents.DefaultCoAgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIAgent"
+        WHERE "DefaultCoAgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIAgent"
+        SET "DefaultCoAgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Delete MJ: AI Bridge Agent Identities records via AgentID
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIBridgeAgentIdentity"
+        WHERE "AgentID" = p_id
+    LOOP
+        PERFORM __mj."spDeleteAIBridgeAgentIdentity"(v_rec."ID");
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Prompt Runs.AgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIPromptRun"
+        WHERE "AgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIPromptRun"
+        SET "AgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: AI Result Cache.AgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."AIResultCache"
+        WHERE "AgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."AIResultCache"
+        SET "AgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: Conversation Details.AgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."ConversationDetail"
+        WHERE "AgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."ConversationDetail"
+        SET "AgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: Conversations.DefaultAgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."Conversation"
+        WHERE "DefaultAgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."Conversation"
+        SET "DefaultAgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: Search Execution Logs.AIAgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."SearchExecutionLog"
+        WHERE "AIAgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."SearchExecutionLog"
+        SET "AIAgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+        -- Cascade: Set MJ: Tasks.AgentID to NULL
+    FOR v_rec IN
+        SELECT "ID"
+        FROM __mj."Task"
+        WHERE "AgentID" = p_id
+    LOOP
+        -- Update related record to set FK to NULL
+        UPDATE __mj."Task"
+        SET "AgentID" = NULL
+        WHERE "ID" = v_rec."ID";
+    END LOOP;
+
+    
+    DELETE FROM __mj."AIAgent"
+    WHERE "ID" = p_id;
+
+    GET DIAGNOSTICS v_affected_count = ROW_COUNT;
+
+    IF v_affected_count = 0 THEN
+        RETURN QUERY SELECT NULL::uuid AS "ID";
+    ELSE
+        RETURN QUERY SELECT p_id AS "ID";
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgent" TO "cdp_Developer";
+GRANT EXECUTE ON FUNCTION __mj."spDeleteAIAgent" TO "cdp_Integration";

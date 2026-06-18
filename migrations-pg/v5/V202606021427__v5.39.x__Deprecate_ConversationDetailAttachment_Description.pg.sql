@@ -1,28 +1,13 @@
 -- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
+-- MemberJunction PostgreSQL Migration — V202606021427__v5.39.x__Deprecate_ConversationDetailAttachment_Description.sql
+-- Split-and-regenerate with INLINE NATIVE CodeGen baking: hand-written DDL transpiled
+-- (AST dialect), metadata DML inline, and CodeGen objects (views/sprocs/triggers/grants)
+-- baked natively from `mj codegen`. Applies standalone via `mj migrate` — no deploy codegen.
 -- ============================================================================
 
--- Extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
 CREATE SCHEMA IF NOT EXISTS __mj;
 SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
 
--- NOTE: Earlier converter versions made INTEGER to BOOLEAN cast implicit by
--- modifying the system catalog so SS-style INSERT INTO bool_col VALUES (1)
--- would work. That modification required pg_catalog write privileges, which
--- managed PG (RDS, Aurora, Cloud SQL, Azure) does not grant. As of v5.30 all
--- bulk INSERTs are emitted with native TRUE/FALSE values directly, so the
--- cast modification is no longer needed. Removed to support managed-PG
--- installs out of the box.
-
-
--- ===================== Comments =====================
-
-COMMENT ON TABLE __mj."ConversationDetailAttachment" IS 'DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework';
+-- V202606021427__v5.39.x__Deprecate_ConversationDetailAttachment_Description.sql — no DDL to translate.
