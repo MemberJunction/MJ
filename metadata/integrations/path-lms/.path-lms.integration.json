@@ -1048,7 +1048,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1066,7 +1066,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1084,7 +1084,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Course\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1102,7 +1102,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"CourseItem\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CourseItem&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CourseItem&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -2018,7 +2018,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -2036,7 +2036,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -2071,7 +2071,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Course\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -2628,7 +2628,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -3049,7 +3049,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -3470,7 +3470,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Order\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Order&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Order&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -3585,7 +3585,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Course\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -3637,7 +3637,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -3655,7 +3655,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -3940,7 +3940,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Course\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -4055,7 +4055,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"CourseItem\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CourseItem&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CourseItem&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -4493,7 +4493,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -4863,7 +4863,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -5257,7 +5257,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Order\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Order&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Order&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -5440,7 +5440,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -5708,7 +5708,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -5930,7 +5930,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -6307,7 +6307,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -6393,7 +6393,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -6411,7 +6411,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Course\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -6849,7 +6849,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -6998,7 +6998,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Course\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -7756,7 +7756,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -7883,7 +7883,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -8134,7 +8134,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -8152,7 +8152,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -8874,7 +8874,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -8955,7 +8955,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -9502,7 +9502,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -11219,7 +11219,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -11516,7 +11516,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -12107,7 +12107,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Order\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Order&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Order&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -12188,7 +12188,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -12932,7 +12932,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -13149,7 +13149,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -13264,7 +13264,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -14224,7 +14224,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -14895,7 +14895,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -14913,7 +14913,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -14931,7 +14931,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Course\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -15437,7 +15437,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Scorm\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Scorm&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Scorm&IntegrationID=@parent:IntegrationID"
                 }
               }
             ]
@@ -15790,7 +15790,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -15905,7 +15905,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -15923,7 +15923,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Course\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Course&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -17919,7 +17919,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -17937,7 +17937,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -18307,7 +18307,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"User\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
                 }
               }
             ]
@@ -18735,7 +18735,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID!\",\"ReferencedType\":\"User\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -19020,7 +19020,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -19038,7 +19038,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID!\",\"ReferencedType\":\"User\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -19073,7 +19073,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID!\",\"ReferencedType\":\"UserMetadataTemplate\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=UserMetadataTemplate&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=UserMetadataTemplate&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -19290,7 +19290,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -19575,7 +19575,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -20013,7 +20013,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -20031,7 +20031,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int!\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -20503,7 +20503,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -20732,7 +20732,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Account\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Account&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -20750,7 +20750,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"Int\",\"ReferencedType\":\"Team\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Team&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -22210,7 +22210,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID!\",\"ReferencedType\":\"Webinar\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Webinar&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Webinar&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -22279,7 +22279,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID\",\"ReferencedType\":\"CourseItem\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CourseItem&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CourseItem&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -22411,7 +22411,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID!\",\"ReferencedType\":\"Webinar\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Webinar&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Webinar&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -22480,7 +22480,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "Status": "Active",
                   "Configuration": "{\"GraphQLType\":\"ID\",\"ReferencedType\":\"CourseItem\"}",
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CourseItem&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CourseItem&IntegrationID=@parent:IntegrationID"
                 }
               },
               {

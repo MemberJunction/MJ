@@ -405,7 +405,7 @@
                   "Configuration": {
                     "ReferencedType": "Program"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -425,7 +425,7 @@
                   "Configuration": {
                     "ReferencedType": "User"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -555,7 +555,7 @@
                   "Configuration": {
                     "ReferencedType": "Program"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -575,7 +575,7 @@
                   "Configuration": {
                     "ReferencedType": "Application"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -625,7 +625,7 @@
                   "Configuration": {
                     "ReferencedType": "User"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -740,7 +740,7 @@
                   "Configuration": {
                     "ReferencedType": "Program"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -855,7 +855,7 @@
                   "Configuration": {
                     "ReferencedType": "Application"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -875,7 +875,7 @@
                   "Configuration": {
                     "ReferencedType": "DeletedApplication"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=DeletedApplication&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=DeletedApplication&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -895,7 +895,7 @@
                   "Configuration": {
                     "ReferencedType": "Invoice"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1067,7 +1067,7 @@
                   "Configuration": {
                     "ReferencedType": "Program"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1212,7 +1212,7 @@
                   "Configuration": {
                     "ReferencedType": "Program"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1232,7 +1232,7 @@
                   "Configuration": {
                     "ReferencedType": "Session"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Session&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Session&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1507,7 +1507,7 @@
                   "Configuration": {
                     "ReferencedType": "Program"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1527,7 +1527,7 @@
                   "Configuration": {
                     "ReferencedType": "Rounds"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Rounds&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Rounds&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1566,7 +1566,7 @@
                   "Configuration": {
                     "ReferencedType": "Application"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1809,7 +1809,7 @@
                   "Configuration": {
                     "ReferencedType": "Rounds"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Rounds&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Rounds&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -1909,7 +1909,7 @@
                   "Configuration": {
                     "ReferencedType": "Invoice"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -2129,7 +2129,7 @@
                   "Configuration": {
                     "ReferencedType": "Invoice"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -2344,7 +2344,7 @@
                   "Configuration": {
                     "ReferencedType": "Application"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -2469,7 +2469,7 @@
                   "Configuration": {
                     "ReferencedType": "User"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -2580,7 +2580,7 @@
                   "Configuration": {
                     "ReferencedType": "User"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -2600,7 +2600,7 @@
                   "Configuration": {
                     "ReferencedType": "Application"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -3218,7 +3218,7 @@
                   "Configuration": {
                     "ReferencedType": "ScheduleRoom"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleRoom&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleRoom&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -3238,7 +3238,7 @@
                   "Configuration": {
                     "ReferencedType": "ScheduleDay"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleDay&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleDay&IntegrationID=@parent:IntegrationID"
                 }
               },
               {
@@ -3258,7 +3258,7 @@
                   "Configuration": {
                     "ReferencedType": "ScheduleTimeSlot"
                   },
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleTimeSlot&IntegrationID=@parent:ID"
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleTimeSlot&IntegrationID=@parent:IntegrationID"
                 }
               },
               {

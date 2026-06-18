@@ -7,7 +7,8 @@
       "ID": "8AA5F6F1-9D8E-45C8-A238-438F05B9F6F8"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.333Z"
     }
   },
   {
@@ -18,7 +19,8 @@
       "ID": "2D589A25-EF98-4BE0-B769-67C0C4864412"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.364Z"
     }
   },
   {
@@ -29,7 +31,8 @@
       "ID": "D31EE50E-522F-4F02-8175-8C00FE9E56ED"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.394Z"
     }
   },
   {
@@ -40,7 +43,8 @@
       "ID": "0589A286-0ACE-4960-9242-783E8F0E7598"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.423Z"
     }
   },
   {
@@ -51,7 +55,8 @@
       "ID": "6442E841-1DB4-441D-B195-474C3D38437F"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.452Z"
     }
   },
   {
@@ -62,7 +67,8 @@
       "ID": "1B9B9A37-CE9A-4B88-8A0A-C522F4C9C5DE"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.479Z"
     }
   },
   {
@@ -73,7 +79,8 @@
       "ID": "D6216952-B9DD-4446-97CE-AB3D9E738CF3"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.507Z"
     }
   },
   {
@@ -84,7 +91,8 @@
       "ID": "2972B96D-182A-444D-999E-24C6BE616E78"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.534Z"
     }
   },
   {
@@ -95,7 +103,8 @@
       "ID": "C8B98EB7-EBAA-4DF0-B3B1-C34497504405"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.561Z"
     }
   },
   {
@@ -106,7 +115,8 @@
       "ID": "C227C1C7-409B-450F-A0DA-977DA85B6C57"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.589Z"
     }
   },
   {
@@ -117,7 +127,8 @@
       "ID": "D47B26FA-C772-4E1A-9E86-D48D5B0BCA42"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.617Z"
     }
   },
   {
@@ -128,7 +139,8 @@
       "ID": "2FE3E964-39D7-4373-8D30-F9BCA1839919"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.644Z"
     }
   },
   {
@@ -139,7 +151,8 @@
       "ID": "56589C58-027C-4A73-9AFB-63E7799B6A40"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.670Z"
     }
   },
   {
@@ -150,7 +163,8 @@
       "ID": "04AADB1B-4FB7-454C-A895-75ACAEB21B7F"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.697Z"
     }
   },
   {
@@ -161,7 +175,8 @@
       "ID": "6A3BD0CC-DD02-43FA-BE8B-94E520D5AB0B"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.725Z"
     }
   },
   {
@@ -172,7 +187,8 @@
       "ID": "D14DE655-1336-401B-94B4-33A486D47BA3"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.753Z"
     }
   },
   {
@@ -183,7 +199,8 @@
       "ID": "92BA3CD1-3EB6-41F6-9BBA-6CB4ABA3379B"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.780Z"
     }
   },
   {
@@ -194,7 +211,8 @@
       "ID": "C72AAB44-5455-4C66-B988-DA9F970EF839"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.805Z"
     }
   },
   {
@@ -205,7 +223,8 @@
       "ID": "B09E2D15-F342-478E-B8B5-0718DDF64257"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.833Z"
     }
   },
   {
@@ -216,7 +235,8 @@
       "ID": "9F5B1237-5AF3-4061-9B16-E7AF62EF051F"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-06-17T15:35:21.858Z"
     }
   }
 ]
