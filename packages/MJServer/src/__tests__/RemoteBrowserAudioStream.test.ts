@@ -55,7 +55,10 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
 // Keep the AI imports (visual interpreter) inert — they aren't exercised by the audio path.
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: { Config: vi.fn(), Prompts: [] } } }));
 vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
-vi.mock('@memberjunction/ai-core-plus', () => ({ AIPromptParams: class {} }));
+// `BaseArtifactToolLibrary` is a base class extended by tool libraries pulled in transitively via
+// `@memberjunction/ai-agents` (ArtifactToolManager → DataSnapshotToolLibrary), so the mock must export it
+// as a class for those subclasses to extend at module-load time.
+vi.mock('@memberjunction/ai-core-plus', () => ({ AIPromptParams: class {}, BaseArtifactToolLibrary: class {} }));
 
 import { RemoteBrowserActionResolver } from '../resolvers/RemoteBrowserActionResolver.js';
 
