@@ -23,6 +23,8 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { beginBrowserGoalStep, finalizeBrowserGoalStep, extractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
+import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
+import { randomUUID } from 'node:crypto';
 import {
   RemoteBrowserAction,
   RemoteBrowserAudioChunk,
@@ -89,6 +91,14 @@ export class RemoteBrowserGoalResultType {
   @Field(() => Boolean)
   Success: boolean;
 
+  /**
+   * Handle for the async goal run. `ExecuteRemoteBrowserGoal` STARTS the goal and returns this with
+   * `Status: 'Running'`; the client polls {@link RemoteBrowserActionResolver.GetRemoteBrowserGoalResult}
+   * with it until the run reports a terminal status.
+   */
+  @Field(() => String, { nullable: true })
+  GoalRunID?: string;
+
   /** Which control strategy executed the goal (`ComputerUse` / `NativeAI`). */
   @Field(() => String, { nullable: true })
   Strategy?: string;
@@ -149,6 +159,18 @@ export class RemoteBrowserAudioStreamResult {
   /** Whether the server-pushed tab-audio stream is now running for this session. */
   @Field(() => Boolean)
   Streaming: boolean;
+}
+
+/**
+ * Result of {@link RemoteBrowserActionResolver.GetRemoteBrowserSelection} — the remote page's current text
+ * selection, the copy-out half of human clipboard support. `Text` is `''` when nothing is selected, no live
+ * browser exists, or the backend can't read the selection (the client then writes nothing to the clipboard).
+ */
+@ObjectType()
+export class RemoteBrowserSelection {
+  /** The remote page's current selection text, or `''` when nothing is selected / unavailable. */
+  @Field(() => String)
+  Text: string;
 }
 
 /**
@@ -307,25 +329,63 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     // co-agent run (when the session has one). Best-effort — a null step just means the goal runs unlinked.
     const coAgentRunID = extractCoAgentRunID(session.Config_);
     const goalStep = await beginBrowserGoalStep(provider, contextUser, coAgentRunID, goal);
-    try {
-      const result = await RemoteBrowserEngine.Instance.AchieveGoal(agentSessionID, goal, {
-        ContextUser: contextUser,
-        ProviderName: providerName,
-        StartUrl: startUrl,
-        MaxSteps: maxSteps,
-        PreferredStrategy: preferredStrategy === 'NativeAI' || preferredStrategy === 'ComputerUse' ? preferredStrategy : undefined,
-        AgentRunID: coAgentRunID,
-        AgentRunStepID: goalStep?.ID,
+
+    // ASYNC START: a goal loop can run for minutes; do NOT hold this request open for it (browser
+    // fetch / proxy / janitor timeouts would kill the request while the loop runs on, and the agent
+    // would get "no response from the server" despite a successful run). Register the run, kick the
+    // loop off WITHOUT awaiting, and return a GoalRunID the client polls via GetRemoteBrowserGoalResult.
+    const goalRunID = randomUUID();
+    RemoteBrowserGoalRegistry.Instance.Begin(agentSessionID, goalRunID);
+    void RemoteBrowserEngine.Instance.AchieveGoal(agentSessionID, goal, {
+      ContextUser: contextUser,
+      ProviderName: providerName,
+      StartUrl: startUrl,
+      MaxSteps: maxSteps,
+      PreferredStrategy: preferredStrategy === 'NativeAI' || preferredStrategy === 'ComputerUse' ? preferredStrategy : undefined,
+      AgentRunID: coAgentRunID,
+      AgentRunStepID: goalStep?.ID,
+    })
+      .then(async (result) => {
+        await finalizeBrowserGoalStep(goalStep, result);
+        RemoteBrowserGoalRegistry.Instance.Complete(agentSessionID, goalRunID, result);
+      })
+      .catch(async (err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        LogError(`ExecuteRemoteBrowserGoal failed (provider='${providerName}'): ${message}`);
+        const failure = { Success: false, Status: 'Error', Detail: `Remote browser error (${providerName}): ${message}` };
+        await finalizeBrowserGoalStep(goalStep, failure);
+        RemoteBrowserGoalRegistry.Instance.Complete(agentSessionID, goalRunID, failure);
       });
-      await finalizeBrowserGoalStep(goalStep, result);
-      return result;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      LogError(`ExecuteRemoteBrowserGoal failed (provider='${providerName}'): ${message}`);
-      const failure = { Success: false, Status: 'Error', Detail: `Remote browser error (${providerName}): ${message}` };
-      await finalizeBrowserGoalStep(goalStep, failure);
-      return failure;
+
+    return { Success: true, Status: 'Running', GoalRunID: goalRunID, Detail: 'Goal started.' };
+  }
+
+  /**
+   * Poll the outcome of a goal STARTED by {@link RemoteBrowserActionResolver.ExecuteRemoteBrowserGoal}.
+   * Returns `Status: 'Running'` while the loop is in flight, then the terminal outcome (success,
+   * strategy, status, step count, url, detail) once it finishes. Ownership-gated. A `Status: 'Unknown'`
+   * result means the run id is unrecognized — it expired (results are retained briefly) or never existed.
+   *
+   * @param agentSessionID The `AIAgentSession` id the goal runs against.
+   * @param goalRunID The handle returned by `ExecuteRemoteBrowserGoal`.
+   * @returns The current/terminal goal outcome.
+   */
+  @Query(() => RemoteBrowserGoalResultType)
+  async GetRemoteBrowserGoalResult(
+    @Arg('agentSessionID', () => String) agentSessionID: string,
+    @Arg('goalRunID', () => String) goalRunID: string,
+    @Ctx() { userPayload, providers }: AppContext,
+  ): Promise<RemoteBrowserGoalResultType> {
+    const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    const record = RemoteBrowserGoalRegistry.Instance.Get(agentSessionID, goalRunID);
+    if (!record) {
+      return { Success: false, Status: 'Unknown', GoalRunID: goalRunID, Detail: 'No such goal run (it may have expired).' };
     }
+    if (record.Status === 'Running' || !record.Outcome) {
+      return { Success: false, Status: 'Running', GoalRunID: goalRunID };
+    }
+    return { ...record.Outcome, GoalRunID: goalRunID };
   }
 
   /**
@@ -568,7 +628,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * agent⇄human floor, so we just relay. Finer floor / `AgentOnly` gating is a follow-up.
    *
    * @param agentSessionID The `AIAgentSession` id the browser is bound to.
-   * @param kind The input kind (`'pointer-move' | 'pointer-click' | 'pointer-down' | 'pointer-up' | 'key' | 'scroll'`).
+   * @param kind The input kind (`'pointer-move' | 'pointer-click' | 'pointer-down' | 'pointer-up' | 'key' | 'text' | 'scroll'`).
+   * @param text The pasted text (the `'text'` paste-in kind only) — inserted into the page's focused element.
    * @param modifiers Optional comma-separated modifier keys held during the input (`'Shift'`, `'Control'`,
    *   `'Alt'`, `'Meta'`) — carries Shift-click selection and Ctrl/Cmd+key chords faithfully.
    * @returns `true` when the input was routed, else `false`.
@@ -582,6 +643,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('y', () => Float, { nullable: true }) y?: number,
     @Arg('button', () => String, { nullable: true }) button?: string,
     @Arg('key', () => String, { nullable: true }) key?: string,
+    @Arg('text', () => String, { nullable: true }) text?: string,
     @Arg('deltaX', () => Float, { nullable: true }) deltaX?: number,
     @Arg('deltaY', () => Float, { nullable: true }) deltaY?: number,
     @Arg('modifiers', () => String, { nullable: true }) modifiers?: string,
@@ -594,7 +656,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       return false;
     }
 
-    const input = this.buildHumanInput({ kind, x, y, button, key, deltaX, deltaY, modifiers });
+    const input = this.buildHumanInput({ kind, x, y, button, key, text, deltaX, deltaY, modifiers });
     if (!input) {
       return false;
     }
@@ -610,6 +672,46 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`RelayRemoteBrowserHumanInput failed (kind='${kind}'): ${message}`);
       return false;
+    }
+  }
+
+  /**
+   * Returns the remote page's CURRENT text selection — the copy-out half of human clipboard support. The
+   * viewer captures a local `copy` / Cmd+C, calls this to read what the human selected on the live page, and
+   * writes the result to the LOCAL clipboard (sidestepping the isolated remote clipboard, the mirror of the
+   * `'text'` paste-in path). Ownership-gated.
+   *
+   * Gracefully best-effort, never throws past the ownership gate (mirrors {@link RemoteBrowserSnapshot}):
+   * - No live browser for the session → `{ Text: '' }`.
+   * - Backend lacks `HumanTakeover` ({@link RemoteBrowserCapabilityNotSupportedError}) → `{ Text: '' }`.
+   * - Nothing selected / any other read failure → `{ Text: '' }` (logged).
+   *
+   * @param agentSessionID The `AIAgentSession` id the browser is bound to.
+   * @returns The selection text, or `{ Text: '' }` when none is readable.
+   */
+  @Query(() => RemoteBrowserSelection)
+  async GetRemoteBrowserSelection(
+    @Arg('agentSessionID', () => String) agentSessionID: string,
+    @Ctx() { userPayload, providers }: AppContext,
+  ): Promise<RemoteBrowserSelection> {
+    const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    if (!liveSession) {
+      return { Text: '' };
+    }
+
+    try {
+      return { Text: await liveSession.GetSelectionText() };
+    } catch (err) {
+      if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
+        // Backend can't read the selection — copy-out is simply unavailable. Not an error condition.
+        return { Text: '' };
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      LogError(`GetRemoteBrowserSelection failed for session ${agentSessionID}: ${message}`);
+      return { Text: '' };
     }
   }
 
@@ -926,9 +1028,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   /**
    * Builds a strongly-typed {@link RemoteBrowserHumanInput} from the relayed `kind` + fields, validating
    * each kind's required field(s). Returns `null` for an unknown kind or a kind missing its required
-   * field(s): pointer-move/click/down/up need finite `x`,`y`; key needs a non-empty `key`; scroll needs
-   * finite `x`,`y`,`deltaX`,`deltaY`. The `button` is clamped to the allowed union
-   * (`'left' | 'middle' | 'right'`), defaulting unknown/absent values to `'left'`. Held `modifiers`
+   * field(s): pointer-move/click/down/up need finite `x`,`y`; key needs a non-empty `key`; text needs a
+   * non-empty `text`; scroll needs finite `x`,`y`,`deltaX`,`deltaY`. The `button` is clamped to the allowed
+   * union (`'left' | 'middle' | 'right'`), defaulting unknown/absent values to `'left'`. Held `modifiers`
    * (e.g. Shift-click, Ctrl/Cmd+key) ride on pointer clicks/presses and key presses.
    *
    * @param input The relayed input kind + all optional fields.
@@ -940,6 +1042,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     y?: number;
     button?: string;
     key?: string;
+    text?: string;
     deltaX?: number;
     deltaY?: number;
     modifiers?: string;
@@ -981,6 +1084,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
           : null;
       case 'key':
         return input.key && input.key.length > 0 ? { Kind: 'key', Key: input.key, ...(modifiers.length ? { Modifiers: modifiers } : {}) } : null;
+      case 'text':
+        // Human paste — insert the relayed clipboard text into the focused element. Empty text is a no-op.
+        return typeof input.text === 'string' && input.text.length > 0 ? { Kind: 'text', Text: input.text } : null;
       case 'scroll':
         return hasXy && Number.isFinite(input.deltaX) && Number.isFinite(input.deltaY)
           ? { Kind: 'scroll', X: input.x as number, Y: input.y as number, DeltaX: input.deltaX as number, DeltaY: input.deltaY as number }

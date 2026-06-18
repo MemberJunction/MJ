@@ -90,6 +90,21 @@ export abstract class BaseBrowserAdapter {
     }
 
     /**
+     * Read the page's CURRENT text selection (`window.getSelection().toString()`).
+     *
+     * Used by the remote-browser human "copy-out" path — the viewer reads what the human selected on the
+     * remote page and writes it to the local clipboard. Default implementation returns an empty string so
+     * adapters without a live page don't break — it's a non-throwing, additive default. Adapters backed by
+     * a real page (e.g. Playwright) override this to return the live selection.
+     *
+     * @returns The selected text, or '' when nothing is selected / unavailable.
+     */
+    public async GetSelectionText(): Promise<string> {
+        // No-op default — adapters with a live page override this.
+        return '';
+    }
+
+    /**
      * Capture the current page's title for cheap perception / sync.
      *
      * Default implementation returns an empty string so adapters without a live
