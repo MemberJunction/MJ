@@ -14,7 +14,7 @@
 
 import { DatabaseDocumentation } from '../types/state.js';
 
-export type SQLGeneratorProvider = 'sqlserver' | 'mysql' | 'postgresql' | 'oracle';
+export type SQLGeneratorProvider = 'sqlserver' | 'postgresql';
 
 export interface SQLGeneratorOptions {
   approvedOnly?: boolean;
