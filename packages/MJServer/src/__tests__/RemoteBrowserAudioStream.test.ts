@@ -56,7 +56,9 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: { Config: vi.fn(), Prompts: [] } } }));
 vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
 // Spread the real module so transitively-loaded code (e.g. ArtifactToolManager → DataSnapshotToolLibrary,
-// which needs BaseArtifactToolLibrary) still resolves; only AIPromptParams is overridden for the test.
+// which extends BaseArtifactToolLibrary) still resolves with its REAL base classes; only AIPromptParams is
+// overridden for the test. (Subsumes the narrower stub-two-exports approach — any other transitive export
+// is supplied by the real module rather than coming back undefined.)
 vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@memberjunction/ai-core-plus')>()),
   AIPromptParams: class {},
