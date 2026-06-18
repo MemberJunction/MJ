@@ -128,6 +128,9 @@ export function mapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
  * - `pointer-down` / `pointer-up` → {@link MouseDownAction} / {@link MouseUpAction} at `X`/`Y` — the two
  *   halves of a click-drag (e.g. drag-selecting text). The surface emits down → moves → up over time.
  * - `key` → {@link KeypressAction} carrying the key plus any held `Modifiers` (e.g. Ctrl/Cmd+A select-all).
+ * - `text` → {@link TypeAction} carrying the pasted `Text` (no `Selector` — it inserts into the page's
+ *   currently-focused element). Reuses the exact same insert-text machinery the agent's `type` action uses,
+ *   so a human paste and an agent type follow one code path. This is the paste-in half of clipboard support.
  * - `scroll` → {@link ScrollAction} carrying `DeltaX`/`DeltaY`. The adapter dispatches a CDP mouse-wheel
  *   (`page.mouse.wheel`) at the CURRENT cursor position; the surface emits a `pointer-move` before/with
  *   each scroll, so the cursor already sits over the scroll target's `X`/`Y` and the wheel lands there.
@@ -182,6 +185,13 @@ export function mapHumanInput(input: RemoteBrowserHumanInput): BrowserAction {
             if (modifiers) {
                 mapped.Modifiers = modifiers;
             }
+            return mapped;
+        }
+        case 'text': {
+            // Human paste: insert the text verbatim into the focused element, reusing the agent `type`
+            // path (no Selector — the human's focus, set by their prior clicks, decides the target).
+            const mapped = new TypeAction();
+            mapped.Text = input.Text;
             return mapped;
         }
         case 'scroll': {

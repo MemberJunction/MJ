@@ -3224,21 +3224,20 @@ export class MemoryManagerAgent extends BaseAgent {
             maxNotesPerRun: HARDENING_CONFIG.maxNotesPerRun
         });
         try {
-            const rv = new RunView();
-            const result = await rv.RunView<MJAIAgentNoteEntity>({
-                EntityName: 'MJ: AI Agent Notes',
-                ExtraFilter: `Status = 'Provisional' AND AuthorType = 'Agent'`,
-                OrderBy: '__mj_CreatedAt ASC',
-                MaxRows: HARDENING_CONFIG.maxNotesPerRun,
-                ResultType: 'entity_object'
-            }, contextUser);
+            // Served from AIEngine.Instance.AgentNotes (loaded unfiltered as entity
+            // objects and kept current via BaseEntity + remote-invalidate events),
+            // filtered/ordered/capped in-memory to mirror the former RunView. This
+            // avoids the "Entity Already in Engine" redundancy warning and a DB
+            // round-trip every MM cycle, matching loadDecayCandidates/loadExpiredItems.
+            // Provisional agent notes are in-flight writes already reflected in the
+            // cache, and hardenSingleNote mutates+saves these entities directly —
+            // consistent with the dedupe path, which already saves cached note
+            // instances returned by FindSimilarAgentNotes.
+            const provisionalNotes = AIEngine.Instance.AgentNotes
+                .filter(n => n.Status === 'Provisional' && n.AuthorType === 'Agent')
+                .sort((a, b) => new Date(a.__mj_CreatedAt).getTime() - new Date(b.__mj_CreatedAt).getTime())
+                .slice(0, HARDENING_CONFIG.maxNotesPerRun);
 
-            if (!result.Success) {
-                await this.FinalizeRunStep(step, false, counters, undefined, `Failed to load provisional notes: ${result.ErrorMessage}`);
-                return counters;
-            }
-
-            const provisionalNotes = result.Results || [];
             if (provisionalNotes.length === 0) {
                 await this.FinalizeRunStep(step, true, { ...counters, provisionalCount: 0 });
                 return counters;

@@ -55,6 +55,7 @@ const EXECUTE_REMOTE_BROWSER_GOAL_MUTATION = `
   mutation ExecuteRemoteBrowserGoal($agentSessionID: String!, $goal: String!, $startUrl: String) {
     ExecuteRemoteBrowserGoal(agentSessionID: $agentSessionID, goal: $goal, startUrl: $startUrl) {
       Success
+      GoalRunID
       Strategy
       CurrentUrl
       Status
@@ -64,16 +65,45 @@ const EXECUTE_REMOTE_BROWSER_GOAL_MUTATION = `
   }
 `;
 
-/** The narrow projection of the `ExecuteRemoteBrowserGoal` mutation payload the channel reads. */
+/**
+ * POLL query for the async goal run. `ExecuteRemoteBrowserGoal` STARTS the (potentially multi-minute)
+ * goal loop and returns a `GoalRunID` with `Status: 'Running'`; the channel polls this until the run
+ * reports a terminal status — so no single request is held open for the whole loop (which would die at
+ * a browser/proxy/janitor transport timeout and lose the result).
+ */
+const GET_REMOTE_BROWSER_GOAL_RESULT_QUERY = `
+  query GetRemoteBrowserGoalResult($agentSessionID: String!, $goalRunID: String!) {
+    GetRemoteBrowserGoalResult(agentSessionID: $agentSessionID, goalRunID: $goalRunID) {
+      Success
+      GoalRunID
+      Strategy
+      CurrentUrl
+      Status
+      StepCount
+      Detail
+    }
+  }
+`;
+
+/** The narrow projection of a goal-result payload (shared by the start mutation + the poll query). */
+interface RemoteBrowserGoalPayload {
+  Success: boolean;
+  GoalRunID: string | null;
+  Strategy: string | null;
+  CurrentUrl: string | null;
+  Status: string | null;
+  StepCount: number | null;
+  Detail: string | null;
+}
+
+/** The narrow projection of the `ExecuteRemoteBrowserGoal` (start) mutation payload the channel reads. */
 interface ExecuteRemoteBrowserGoalResult {
-  ExecuteRemoteBrowserGoal: {
-    Success: boolean;
-    Strategy: string | null;
-    CurrentUrl: string | null;
-    Status: string | null;
-    StepCount: number | null;
-    Detail: string | null;
-  } | null;
+  ExecuteRemoteBrowserGoal: RemoteBrowserGoalPayload | null;
+}
+
+/** The narrow projection of the `GetRemoteBrowserGoalResult` (poll) query payload the channel reads. */
+interface GetRemoteBrowserGoalResultPayload {
+  GetRemoteBrowserGoalResult: RemoteBrowserGoalPayload | null;
 }
 
 /**
@@ -133,14 +163,34 @@ interface StartRemoteBrowserAudioStreamResult {
 const RELAY_HUMAN_INPUT_MUTATION = `
   mutation RelayRemoteBrowserHumanInput(
     $agentSessionID: String!, $kind: String!, $x: Float, $y: Float, $button: String, $key: String,
-    $deltaX: Float, $deltaY: Float, $modifiers: String
+    $text: String, $deltaX: Float, $deltaY: Float, $modifiers: String
   ) {
     RelayRemoteBrowserHumanInput(
       agentSessionID: $agentSessionID, kind: $kind, x: $x, y: $y, button: $button, key: $key,
-      deltaX: $deltaX, deltaY: $deltaY, modifiers: $modifiers
+      text: $text, deltaX: $deltaX, deltaY: $deltaY, modifiers: $modifiers
     )
   }
 `;
+
+/**
+ * COPY-OUT query — reads the remote page's current text selection so the surface can write it to the LOCAL
+ * clipboard on a `copy` / Cmd+C (the mirror of the `'text'` paste-in path). Returns `''` when nothing is
+ * selected, no live browser exists, or the backend lacks `HumanTakeover`.
+ */
+const GET_SELECTION_QUERY = `
+  query GetRemoteBrowserSelection($agentSessionID: String!) {
+    GetRemoteBrowserSelection(agentSessionID: $agentSessionID) {
+      Text
+    }
+  }
+`;
+
+/** The narrow projection of the `GetRemoteBrowserSelection` query payload the channel reads. */
+interface GetRemoteBrowserSelectionResult {
+  GetRemoteBrowserSelection: {
+    Text: string;
+  } | null;
+}
 
 /** The narrow projection of the `StartRemoteBrowserScreencast` mutation payload the channel reads. */
 interface StartRemoteBrowserScreencastResult {
@@ -267,6 +317,14 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   /** Subscription to the bound surface's `AudioMutedChange` output (the speaker toggle), torn down on unbind. */
   private audioMutedSub: Subscription | null = null;
 
+  /**
+   * Poll cadence + deadline for {@link pollGoalResult} (the async `browser_AchieveGoal` result poll).
+   * Protected so tests can shrink them; production polls every 2.5s for up to 5 minutes (a goal loop
+   * past 5 min keeps running server-side, the model just gets a "still running" note).
+   */
+  protected GoalPollIntervalMs = 2500;
+  protected GoalPollTimeoutMs = 5 * 60 * 1000;
+
   public get ChannelName(): string {
     return 'Remote Browser';
   }
@@ -329,6 +387,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   public BindSurface(instance: RemoteBrowserSurfaceComponent): void {
     this.surface = instance;
     instance.Fetch = () => this.fetchSnapshot();
+    // Copy-out: the surface reads the remote selection through this on a local `copy` and writes it locally.
+    instance.FetchSelection = () => this.fetchSelection();
     instance.Interactive = true;
     this.humanInputSub = instance.HumanInput.subscribe((input) => this.relayHumanInput(input));
     this.audioMutedSub = instance.AudioMutedChange.subscribe((muted) => this.audioPlayer?.SetMuted(muted));
@@ -454,11 +514,28 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       y: input.y ?? null,
       button: input.button ?? null,
       key: input.key ?? null,
+      // Paste-in: the `'text'` kind carries the local clipboard text the server inserts into the page.
+      text: input.text ?? null,
       deltaX: input.deltaX ?? null,
       deltaY: input.deltaY ?? null,
       // Server expects a comma-separated modifier list (e.g. "Shift,Control"); null when none held.
       modifiers: input.modifiers && input.modifiers.length > 0 ? input.modifiers.join(',') : null,
     });
+  }
+
+  /**
+   * Reads the remote page's current selection for COPY-OUT — backs the surface's `FetchSelection`. Awaits
+   * the `GetRemoteBrowserSelection` query and returns its text. Best-effort by contract
+   * ({@link RemoteBrowserSelectionFetcher}): returns `''` when no session is live or the query fails, so a
+   * best-effort copy never throws.
+   */
+  private async fetchSelection(): Promise<string> {
+    const sessionId = this.Context?.AgentSessionID;
+    if (!sessionId) {
+      return '';
+    }
+    const data = await this.Context?.ExecuteServerAction<GetRemoteBrowserSelectionResult>(GET_SELECTION_QUERY, { agentSessionID: sessionId });
+    return data?.GetRemoteBrowserSelection?.Text ?? '';
   }
 
   /** Asks the server to stop the screencast (best-effort) and clears the streaming flag. */
@@ -518,10 +595,12 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       return this.fail(message);
     }
 
-    const sessionId = this.Context?.AgentSessionID;
+    // Briefly WAIT for the session id rather than failing instantly: the model can fire a tool the
+    // first beat it connects, before mintSession binds the id (the "session id missing" race).
+    const sessionId = await this.ResolveAgentSessionId();
     if (!sessionId) {
-      // Diagnostic: distinguishes "channel never Initialized (no Context)" from "session id not yet
-      // set on the service" — the two distinct causes of a null id at tool-execution time.
+      // Diagnostic: distinguishes "channel never Initialized (no Context)" from "session id never
+      // resolved within the wait window" — the two distinct causes of a null id at tool-execution time.
       console.warn('[RemoteBrowser] browser tool invoked but AgentSessionID is null', {
         tool: toolName,
         hasContext: !!this.Context,
@@ -578,7 +657,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * @returns The model-readable result string.
    */
   private async achieveGoal(argsJson: string): Promise<string> {
-    const sessionId = this.Context?.AgentSessionID;
+    // Wait briefly for the session id (mint/reconnect race) before giving up — see ResolveAgentSessionId.
+    const sessionId = await this.ResolveAgentSessionId();
     if (!sessionId) {
       return this.fail('No live browser session is available yet — the realtime session may still be connecting; try again in a moment.');
     }
@@ -589,14 +669,23 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     }
     const startUrl = this.asArgString(args['startUrl']) ?? null;
 
-    const data = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserGoalResult>(EXECUTE_REMOTE_BROWSER_GOAL_MUTATION, {
+    // START the goal (returns immediately with a GoalRunID) then POLL — a goal loop can run for
+    // minutes, far longer than any single request survives, so we never hold one open for the loop.
+    const startData = await this.Context?.ExecuteServerAction<ExecuteRemoteBrowserGoalResult>(EXECUTE_REMOTE_BROWSER_GOAL_MUTATION, {
       agentSessionID: sessionId,
       goal,
       startUrl,
     });
-    const result = data?.ExecuteRemoteBrowserGoal ?? null;
+    const started = startData?.ExecuteRemoteBrowserGoal ?? null;
+    if (!started) {
+      return this.fail('The browser goal could not be started (no response from the server).');
+    }
+    // Defensive: if the server ever returns a terminal status synchronously, use it directly.
+    const result = started.Status === 'Running' && started.GoalRunID
+      ? await this.pollGoalResult(sessionId, started.GoalRunID)
+      : started;
     if (!result) {
-      return this.fail('The browser goal could not be executed (no response from the server).');
+      return this.fail('The browser goal is taking longer than expected and could not be confirmed. It may still be running.');
     }
     if (result.CurrentUrl) {
       this.Context?.SendContextNote(`[browser] current page: ${result.CurrentUrl}`);
@@ -606,6 +695,36 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       return this.fail(result.Detail ?? `The goal could not be completed (${result.Status ?? 'unknown'}).`);
     }
     return this.ok(result.CurrentUrl, result.Detail ?? `Goal completed (${result.Status ?? 'Completed'}, ${result.StepCount ?? 0} steps).`);
+  }
+
+  /**
+   * Polls {@link GET_REMOTE_BROWSER_GOAL_RESULT_QUERY} for a started goal run until it reports a
+   * terminal status (anything other than `Running`), then returns that terminal payload. Each poll is
+   * a short request, so no transport boundary times out while a long goal loop runs server-side.
+   *
+   * Returns `null` if the goal is still `Running` after {@link GoalPollTimeoutMs} (the loop keeps
+   * running server-side; the caller maps this to a "still running" message), the session went away, or
+   * the run id is no longer known (`Unknown` — expired/superseded).
+   */
+  private async pollGoalResult(sessionId: string, goalRunID: string): Promise<RemoteBrowserGoalPayload | null> {
+    const interval = Math.max(1, this.GoalPollIntervalMs);
+    for (let waited = 0; waited < this.GoalPollTimeoutMs; waited += interval) {
+      await new Promise<void>((resolve) => setTimeout(resolve, interval));
+      // The session ended mid-goal — stop polling (the live browser is gone).
+      if (!this.Context?.AgentSessionID) {
+        return null;
+      }
+      const data = await this.Context.ExecuteServerAction<GetRemoteBrowserGoalResultPayload>(GET_REMOTE_BROWSER_GOAL_RESULT_QUERY, {
+        agentSessionID: sessionId,
+        goalRunID,
+      });
+      const payload = data?.GetRemoteBrowserGoalResult ?? null;
+      // A transient null (one failed poll) shouldn't abort — keep polling until the deadline.
+      if (payload && payload.Status !== 'Running') {
+        return payload;
+      }
+    }
+    return null;
   }
 
   /**
@@ -619,7 +738,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * @returns A JSON string describing the interpretation for the model.
    */
   private async interpretPage(query: string | undefined): Promise<string> {
-    const sessionId = this.Context?.AgentSessionID;
+    // Wait briefly for the session id (mint/reconnect race) before giving up — see ResolveAgentSessionId.
+    const sessionId = await this.ResolveAgentSessionId();
     if (!sessionId) {
       console.warn('[RemoteBrowser] interpret tool invoked but AgentSessionID is null', {
         hasContext: !!this.Context,
