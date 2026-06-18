@@ -193,35 +193,22 @@ describe('EntityField', () => {
             expect(result.Success).toBe(true);
         });
 
-        // Validate() reads this.Value internally on every Save(). For a deprecated field, that
-        // internal read must NOT emit a deprecation warning — validating a record is not "using"
-        // the deprecated field. Regression guard for the AgentState-on-load/save false warning.
-        it('should NOT record a deprecation warning for a deprecated field during Validate', () => {
+        // Active-status (deprecated/disabled) enforcement lives at BaseEntity.Get/Set/SetMany — NOT on
+        // the low-level EntityField accessors. So EntityField.Value / Dirty / Validate must NEVER emit a
+        // deprecation warning, even for a deprecated field: they are framework-internal value machinery.
+        // (Enforcement at the BaseEntity layer is covered in baseEntity.activeStatus.test.ts.)
+        it('does not warn for a deprecated field via EntityField.Value, Dirty, or Validate', () => {
             const fieldInfo = createMockFieldInfo({ Status: 'Deprecated' } as Partial<EntityFieldInfo>);
-            const field = new EntityField(fieldInfo, 'some value');
+            const field = new EntityField(fieldInfo, 'initial');
 
-            const spy = vi.spyOn(WarningManager.Instance, 'RecordFieldDeprecationWarning');
+            const spy = vi.spyOn(WarningManager.Instance, 'RecordFieldDeprecationWarning').mockReturnValue(true);
             try {
-                field.Validate();
+                field.Value = 'changed';   // setter
+                void field.Value;          // getter
+                expect(field.Dirty).toBe(true); // dirty check reads Value
+                field.Validate();          // validation reads Value
+
                 expect(spy).not.toHaveBeenCalled();
-            } finally {
-                spy.mockRestore();
-            }
-        });
-
-        it('should restore active-status assertions after Validate so genuine reads still warn', () => {
-            const fieldInfo = createMockFieldInfo({ Status: 'Deprecated' } as Partial<EntityFieldInfo>);
-            const field = new EntityField(fieldInfo, 'some value');
-
-            const spy = vi.spyOn(WarningManager.Instance, 'RecordFieldDeprecationWarning');
-            try {
-                field.Validate();
-                expect(spy).not.toHaveBeenCalled();
-
-                // A genuine read AFTER validation must still warn — proving the flag was restored,
-                // not left permanently disabled.
-                void field.Value;
-                expect(spy).toHaveBeenCalled();
             } finally {
                 spy.mockRestore();
             }
