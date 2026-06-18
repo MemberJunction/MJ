@@ -20,7 +20,8 @@ This package is Layer 2 of MJ's Computer Use capabilities - it requires the base
 ### 🎨 AIPromptRunner Integration
 - **Template Rendering**: Nunjucks template support with context data
 - **Model Failover**: Automatic alternative model selection on failures
-- **Auto-Selection**: Uses `AIEngine.GetHighestPowerLLM()` for vision models
+- **Stored-Prompt Defaults**: When the caller pins neither prompt nor model, the engine defaults to the stored `Computer Use - Controller` / `Computer Use - Judge` metadata prompts — which carry both the template **and** the model selection (see [Controller & Judge Defaults](#controller--judge-defaults))
+- **Auto-Selection Fallback**: Falls back to vision-model auto-selection only if a stored default prompt is missing
 - **Prompt Entities**: Reference prompts by ID or name for reusability
 - **Token Tracking**: Automatic cost and token logging to AIPromptRun entities
 
@@ -132,8 +133,10 @@ params.ControllerPromptRef.PromptName = "Computer Use: Controller";
 params.JudgePromptRef = new PromptEntityRef();
 params.JudgePromptRef.PromptName = "Computer Use: Judge";
 
-// Controller model will auto-select if not specified
-// params.ControllerModel = undefined; // Auto-selects vision-capable LLM
+// If you pin NEITHER a prompt nor a model, the engine defaults to the stored
+// "Computer Use - Controller" / "Computer Use - Judge" prompts (which carry the
+// model selection too). Auto-selection of a vision LLM happens only if that
+// stored prompt is missing. See "Controller & Judge Defaults" below.
 
 // Provide MJ context
 params.ContextUser = contextUser;
@@ -590,14 +593,34 @@ Expected test outcomes JSON (stored in `TestEntity.ExpectedOutcomes`):
 
 ## Advanced Usage
 
-### Auto-Selecting Vision Models
+### Controller & Judge Defaults
 
-When `ControllerModel` is not specified, MJComputerUseEngine automatically selects the highest-power **vision-capable** model:
+`MJComputerUseEngine.Run` **defaults the controller and judge to the stored `Computer Use - Controller` / `Computer Use - Judge` metadata prompts** (exported as `DEFAULT_CONTROLLER_PROMPT_NAME` / `DEFAULT_JUDGE_PROMPT_NAME`) whenever the caller pins **neither** a prompt **nor** a model. These stored prompts are the golden source of **both** the prompt text **and** the model selection — by default **Gemini 3.1 Flash-Lite → Gemini 3.5 Flash → Claude Haiku 4.5 → GPT 5.5** (each configured on two vendors, highest `Priority` first, for failover). The goal loop therefore routes through `AIPromptRunner`, getting prompt-run logging and model failover for free.
+
+**Resolution order** (per role, controller and judge resolved independently):
+
+1. **Explicit override** — `ControllerPromptRef`/`ControllerModel` (resp. `JudgePromptRef`/`JudgeModel`). If you pin either, it wins.
+2. **Stored default prompt** (the flip) — `resolveDefaultPromptByName(DEFAULT_CONTROLLER_PROMPT_NAME / DEFAULT_JUDGE_PROMPT_NAME)`. Used when nothing was pinned. **This lookup is non-throwing**: a missing stored prompt degrades gracefully to the next step rather than erroring.
+3. **Auto-selection fallback** — `autoSelectControllerModel()` (controller only; the base engine carries a built-in default prompt, so it just needs a model). This is the legacy path, reached only if the stored default prompt is also absent (e.g. standalone / no-metadata callers).
+
+> **Changing the default models is a metadata edit, not a code change.** The model choice and failover order live entirely on the stored `Computer Use - Controller` / `Computer Use - Judge` prompts. Re-point them at different models (or reorder by `Priority`) in metadata and every default run picks up the change — no recompile.
 
 ```typescript
 const params = new MJRunComputerUseParams();
 params.Goal = "Analyze this dashboard and extract key metrics";
-// No ControllerModel specified
+// No prompt and no model pinned → engine uses the stored "Computer Use - Controller"
+// / "Computer Use - Judge" prompts (Gemini 3.1 Flash-Lite → Haiku 4.5 → GPT 5.5).
+const result = await engine.Run(params);
+```
+
+### Auto-Selecting Vision Models (Fallback)
+
+Only when **no** stored default prompt is found (and no `ControllerModel` is pinned) does MJComputerUseEngine fall back to auto-selecting the highest-power **vision-capable** model:
+
+```typescript
+const params = new MJRunComputerUseParams();
+params.Goal = "Analyze this dashboard and extract key metrics";
+// No ControllerModel specified, and the stored default controller prompt is unavailable
 
 // Engine auto-selects a vision-capable controller model (see selection criteria below)
 const result = await engine.Run(params);
@@ -765,7 +788,7 @@ if (result.Status === "Cancelled") {
 | Feature | Base Package | MJ Enhancement |
 |---------|-------------|----------------|
 | **Prompt Execution** | Direct LLM calls | AIPromptRunner with templates and failover |
-| **Model Selection** | Explicit in params | Auto-select via `AIEngine.GetHighestPowerLLM()` |
+| **Model Selection** | Explicit in params | Defaults to the stored controller/judge prompts (which carry the model selection); auto-selects a vision model only as a fallback |
 | **Authentication** | Generic `AuthMethod` | MJ Credential entities auto-resolved |
 | **Tools** | Custom JS functions | MJ Actions with metadata-driven schemas |
 | **Judge** | `LLMJudge` base class | `MJLLMJudge` with prompt entity reference |
@@ -796,7 +819,9 @@ MJComputerUseEngine.Run()
   ↓
 Resolve prompt refs → AIPromptEntityExtended
   ↓
-Auto-select controller model (if needed)
+Default to stored controller/judge prompts if neither prompt nor model pinned
+  ↓
+Auto-select controller model (fallback — only if no stored default prompt)
   ↓
 Resolve credential-backed auth bindings
   ↓
@@ -852,7 +877,7 @@ const judge = new MJLLMJudge(
 - **Set ContextUser** on all MJ operations (required for server-side)
 - **Configure test oracles** with appropriate weights for scoring
 - **Validate test configurations** before execution (driver does this automatically)
-- **Use auto-model-selection** for vision models unless you need specific models
+- **Rely on the stored-prompt defaults** (controller/judge models live in metadata) unless you need to pin specific prompts or models; auto-model-selection is only a fallback
 - **Review AIPromptRunMedia** entities for screenshot audit trails
 - **Test with representative data** in test InputDefinition
 - **Use composite scoring** with multiple oracles for robust tests

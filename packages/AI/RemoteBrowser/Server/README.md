@@ -113,7 +113,9 @@ a fake session, with no engine/DB state.
 `EndSession` abort it, so the computer-use loop **pauses cooperatively** rather than racing the human on the
 shared browser. An `Agent` grant never pauses the agent's own goal.
 
-> The MJ-aware goal **engine** (vision-model auto-selection, prompt-run logging, progress narration) is
+> The MJ-aware goal **engine** (defaults to the stored Computer Use controller/judge prompts for both
+> prompt text and model selection, with vision-model auto-selection only as a fallback; prompt-run
+> logging, progress narration) is
 > bound to the CDP seam at startup by `@memberjunction/server` (`BindRemoteBrowserGoalEngine` →
 > `MJProgressComputerUseEngine`); this package stays free of any computer-use SDK dependency.
 

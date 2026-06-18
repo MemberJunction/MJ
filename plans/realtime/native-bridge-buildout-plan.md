@@ -7,9 +7,17 @@ turns the bindings into live, talking agents.
 
 **Update (post #2860):** the LiveKit UX stack landed — the **session-start harness**
 (`LiveKitAgentRoomCoordinator`), **human token minting** (`RealtimeBridgeResolver`), and a **full Angular
-LiveKit UI** (`@memberjunction/ng-livekit-room` + an Explorer tab) now exist. So the generic harness work in
-§1 collapses to **one piece — the realtime-session factory** the coordinator's `SetSessionFactory` wants —
-and LiveKit (§6) is the fastest path to a live talking agent. See those sections.
+LiveKit UI** (`@memberjunction/ng-livekit-room` + an Explorer tab).
+
+**✅ LiveKit is now CODE-COMPLETE for two-way (pending live test).** Both remaining seams are built:
+- the **realtime-session factory** — `CreateBridgeRealtimeSession` (`@memberjunction/ai-agents`) +
+  `BaseAgent.StartBridgeRealtimeSession`, bound onto the coordinator by `RealtimeBridgeResolver`;
+- the **native room client** — `@memberjunction/ai-bridge-livekit-native` over `@livekit/rtc-node`,
+  auto-selected via the coordinator's `NativeModuleSpecifier`.
+
+What's left for LiveKit is **purely runtime**: install `@livekit/rtc-node` on the agent host, set the
+LiveKit + realtime-model env, and run the live test (§6 / the test plan). The **realtime-session factory is
+generic** — it's the same seam Teams/Zoom will bind, so that work is also unblocked.
 
 Audience: a developer picking this up. Read the
 [Realtime Bridges Guide](../../guides/REALTIME_BRIDGES_GUIDE.md) first.
@@ -42,17 +50,21 @@ and meetings already share it. A new platform is "just a native client + a row."
 
 ---
 
-## 1. The realtime-session factory (build FIRST — provider-agnostic, reused by all)
+## 1. The realtime-session factory — ✅ BUILT (provider-agnostic, reused by all)
 
-> **Update (post #2860):** the *harness itself* now exists for LiveKit as `LiveKitAgentRoomCoordinator`
-> (`@memberjunction/livekit-room-server`) — it resolves the room, opens the session via an injectable
-> `RealtimeSessionFactory` seam (`SetSessionFactory(...)`), and calls `StartBridgeSession`. So the only
-> generic piece still missing is the **factory the coordinator's `SetSessionFactory` wants** — the
-> "resolve an agent + open its realtime model session" function. Build THAT once; it is what every bridge
-> (LiveKit, Teams, Zoom, …) needs, and binding it on the LiveKit coordinator gives a talking agent there
-> immediately.
+> **✅ Done.** Shipped as **`CreateBridgeRealtimeSession`** (`@memberjunction/ai-agents`, `realtime/`) +
+> **`BaseAgent.StartBridgeRealtimeSession`**. The factory resolves the agent from the `AIEngine` cache (by
+> id, else name), instantiates the right `BaseAgent` subclass via the `ClassFactory` (the `AgentRunner`
+> path), and opens a **raw `IRealtimeSession`** — reusing the SAME model resolution + system-prompt/memory
+> assembly as `executeRealtimeSession`, minus the `RealtimeSessionRunner` (the bridge engine owns
+> turn-taking). It is bound onto the LiveKit coordinator by `RealtimeBridgeResolver` (`@memberjunction/server`,
+> the one package depending on both). **Teams/Zoom reuse this exact factory** — only their native media
+> client + a harness call differ.
 
-**Deliverable:** a `RealtimeSessionFactory` — `(ctx) => Promise<IRealtimeSession>` — that:
+The reference design below is retained for the Teams/Zoom harnesses (which call `StartBridgeSession`
+directly rather than via the LiveKit coordinator).
+
+**Shape:** a `RealtimeSessionFactory` — `(ctx) => Promise<IRealtimeSession>` — that:
 
 1. Resolves a `BaseRealtimeModel` driver via ClassFactory + metadata (Gemini / xAI / Inworld already ship).
 2. Opens the session: `const session = await model.StartSession({ systemPrompt, voice, tools, ... })`.
@@ -184,20 +196,22 @@ as scaffolding, but its live media path is **blocked on Slack**, not on us.
 
 These have **Node** SDKs, so the "native module" is a thin TS adapter (no C++):
 
-- **LiveKit** — best **internal proving ground**, and now the closest to live. Per #2860 the
-  **harness (`LiveKitAgentRoomCoordinator`), human token minting (`RealtimeBridgeResolver`), and a full
-  Angular UI (`@memberjunction/ng-livekit-room` + an Explorer `LiveKitRoomResource` tab) already exist.**
-  Only two pieces remain for a talking agent:
-  1. **Bind the realtime-session factory (§1)** via `LiveKitAgentRoomCoordinator.Instance.SetSessionFactory(...)`
-     — generic, reused by every other provider.
-  2. **Build the native room client** `LiveKitNativeRoomModule` over `@livekit/rtc-node`, satisfying our
-     `LiveKitNativeMeetingSdk`'s `NativeRoomModule` surface (`createRoomClient` → `connect` / `publishAudio`
-     / `onAudioFrame` / `onParticipant…` / `publishData` / `disconnect`); point `NativeModuleSpecifier` at it.
-     Thin TS adapter — **no C++, no approval.**
+- **LiveKit — ✅ CODE-COMPLETE for two-way (pending live test).** Per #2860 the harness
+  (`LiveKitAgentRoomCoordinator`), token minting (`RealtimeBridgeResolver`), and the Angular UI
+  (`@memberjunction/ng-livekit-room` + Explorer `LiveKitRoomResource` tab) already existed; this wave added
+  the last two seams:
+  1. ✅ **Realtime-session factory** — `CreateBridgeRealtimeSession` + `BaseAgent.StartBridgeRealtimeSession`
+     (`@memberjunction/ai-agents`), **bound onto the coordinator by `RealtimeBridgeResolver`** at module load.
+     Generic — Teams/Zoom bind the same factory.
+  2. ✅ **Native room client** — `@memberjunction/ai-bridge-livekit-native` over `@livekit/rtc-node`
+     (`NativeRoomModule`: `createRoomClient` → `connect` / `publishAudio` / `onAudioFrame` / `onParticipant…`
+     / `publishData` / `disconnect`), auto-selected via the coordinator's `NativeModuleSpecifier` (default
+     `@memberjunction/ai-bridge-livekit-native`, overridable via `LIVEKIT_NATIVE_MODULE`).
 
-  Then test via the **`mj-livekit-room` Explorer tab** (or the LiveKit Agents Playground). NB: LiveKit is its
-  **own** room, not a Zoom/Teams connector — this validates the whole stack + the §1 factory before the
-  gated platforms.
+  **Remaining = runtime only:** `npm install @livekit/rtc-node` on the agent host, set the LiveKit +
+  realtime-model env, and run the live test via the **`mj-livekit-room` Explorer tab** (or the LiveKit
+  Agents Playground). NB: LiveKit is its **own** room, not a Zoom/Teams connector — it validates the whole
+  stack + the generic factory before the gated platforms.
 - **Twilio (telephony)** — `TwilioNativeCallModule` over **Media Streams** (WebSocket PCM). Easiest live
   telephony test: a Twilio number + ngrok. The binding (`TwilioNativeCallSdk`) is ready.
 - **Vonage** — Voice API WebSocket media. **RingCentral** — RingCX/Voice media stream. Both Node-friendly;
@@ -215,11 +229,11 @@ customer drives it.
 
 ## 8. Recommended sequence
 
-1. **§1 realtime-session factory** + **LiveKit native room client** (§6) — the harness, token minting, and UI
-   already shipped in #2860, so this is the *fastest* path to a live talking agent (bind the factory + write a
-   thin `@livekit/rtc-node` adapter; test via the `mj-livekit-room` Explorer tab). No approvals. The §1
-   factory is reused by every provider below.
-2. **Teams via ACS** (§2) — first real meeting platform, free sandbox, two-way, no entitlement wait.
+1. ✅ **LiveKit** (§6) — **code-complete**; remaining is a runtime live test (`npm install @livekit/rtc-node`
+   + LiveKit/model env, then the `mj-livekit-room` Explorer tab). No approvals. The §1 factory built here is
+   reused by every provider below.
+2. **Teams via ACS** (§2) — first real meeting platform, free sandbox, two-way, no entitlement wait. Binds
+   the **same** `CreateBridgeRealtimeSession` factory + needs an ACS media-streaming native module.
 3. **Zoom Track A** (§3) — RTMS hear + Team Chat respond, in parallel; **kick off the raw-data entitlement
    request (Track B) early** so it unblocks later.
 4. **Twilio** (§6) — easy live telephony proof.

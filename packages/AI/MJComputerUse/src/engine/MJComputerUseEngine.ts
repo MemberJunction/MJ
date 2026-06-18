@@ -52,6 +52,19 @@ import { MJRunComputerUseParams, MJDomainAuthBinding, ActionRef, PromptEntityRef
 import { AgentRunStepTracker } from './agent-run-step-tracker.js';
 
 /**
+ * Default stored-prompt name the goal loop's controller uses when the caller pins neither a prompt nor a
+ * model — the golden-source "Computer Use - Controller" metadata prompt (template + model selection). See
+ * the FLIP in {@link MJComputerUseEngine.Run}.
+ */
+export const DEFAULT_CONTROLLER_PROMPT_NAME = 'Computer Use - Controller';
+
+/**
+ * Default stored-prompt name the judge uses when the caller pins neither a judge prompt nor a judge model —
+ * the "Computer Use - Judge" metadata prompt. See the FLIP in {@link MJComputerUseEngine.Run}.
+ */
+export const DEFAULT_JUDGE_PROMPT_NAME = 'Computer Use - Judge';
+
+/**
  * Picks the highest-power LLM that supports Image **input** (a vision-capable controller), or `undefined`
  * when none qualify. Filters the candidate models to the `LLM` type, narrows to those for which
  * `supportsImageInput` is true, then returns the one with the highest `PowerRank` (descending).
@@ -138,13 +151,27 @@ export class MJComputerUseEngine extends ComputerUseEngine {
             this.stepTracker = tracker;
         }
 
-        // Resolve prompt entity refs → full MJAIPromptEntityExtended
+        // Resolve prompt entity refs → full MJAIPromptEntityExtended (explicit caller override first).
         this.controllerPromptEntity = await this.resolvePromptRef(params.ControllerPromptRef);
         this.judgePromptEntity = await this.resolvePromptRef(params.JudgePromptRef);
 
-        // If no explicit controller prompt or model, auto-select the best
-        // vision-capable LLM from MJ metadata. The base engine already has a
-        // DEFAULT_CONTROLLER_PROMPT, so all we need is a model to send it to.
+        // FLIP THE DEFAULT: when the caller pinned neither a prompt nor a model, default the controller +
+        // judge to the stored "Computer Use - Controller"/"- Judge" metadata prompts — the golden source of
+        // BOTH the prompt text AND model selection (Gemini 3.1 Flash-Lite → Haiku 4.5 → GPT 5.5 by priority).
+        // This routes the goal loop through AIPromptRunner with the prompt's configured models + prompt-run
+        // logging, instead of the legacy "auto-select a vision model + built-in code prompt" path. Resolution
+        // is non-throwing — if the stored prompt is absent from metadata we fall through to that legacy path,
+        // so the engine never hard-fails (and standalone/no-metadata callers are unaffected).
+        if (!this.controllerPromptEntity && !params.ControllerModel) {
+            this.controllerPromptEntity = await this.resolveDefaultPromptByName(DEFAULT_CONTROLLER_PROMPT_NAME);
+        }
+        if (!this.judgePromptEntity && !params.JudgeModel) {
+            this.judgePromptEntity = await this.resolveDefaultPromptByName(DEFAULT_JUDGE_PROMPT_NAME);
+        }
+
+        // If STILL no controller prompt or model (the stored default is missing too), auto-select the best
+        // vision-capable LLM from MJ metadata. The base engine already has a DEFAULT_CONTROLLER_PROMPT, so
+        // all we need is a model to send it to.
         if (!this.controllerPromptEntity && !params.ControllerModel) {
             const autoModel = await this.autoSelectControllerModel();
             if (!autoModel) {
@@ -350,6 +377,24 @@ export class MJComputerUseEngine extends ComputerUseEngine {
             );
         }
 
+        return prompt;
+    }
+
+    /**
+     * Resolves a DEFAULT prompt by name from the AIEngine cache — the goal-loop FLIP's golden-source lookup.
+     * Unlike {@link resolvePromptRef}, this is **non-throwing**: a missing default (e.g. the metadata isn't
+     * seeded, or a standalone caller) returns `undefined` and the engine falls through to its legacy
+     * auto-select path, so the default-to-stored-prompt behavior degrades gracefully and never hard-fails.
+     *
+     * @param name The stored prompt name (e.g. {@link DEFAULT_CONTROLLER_PROMPT_NAME}).
+     * @returns The prompt entity, or `undefined` when not present in metadata.
+     */
+    private async resolveDefaultPromptByName(name: string): Promise<MJAIPromptEntityExtended | undefined> {
+        await AIEngine.Instance.Config(false, this.contextUser);
+        const prompt = AIEngine.Instance.Prompts.find(p => p.Name === name && p.Status === 'Active');
+        if (!prompt) {
+            this.log(`Default stored prompt "${name}" not found/active in metadata — falling back to auto-selection.`);
+        }
         return prompt;
     }
 
