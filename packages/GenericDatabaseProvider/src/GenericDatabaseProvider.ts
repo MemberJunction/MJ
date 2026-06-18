@@ -1457,6 +1457,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // driver and have no view/sproc in the MJ DB, so delegate before any SQL
             // generation. This is a no-op for every MJ-DB entity (ExternalDataSourceID null).
             if (entityInfo.ExternalDataSourceID) {
+                // Refuse rather than silently bypass Row-Level Security — a remote system can't
+                // enforce MJ's RLS WHERE clauses, so returning unfiltered rows would be a data leak.
+                this.assertExternalReadAllowedUnderRLS(entityInfo, user);
                 const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
                 if (!externalRouter) {
                     throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
@@ -2386,6 +2389,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (!router) return 0; // external but no router resolvable — don't cache (avoid stale-forever)
         const ttlSeconds = await router.GetCacheTTLSeconds(entityInfo.ExternalDataSourceID, contextUser, this);
         return ttlSeconds > 0 ? ttlSeconds * 1000 : 0;
+    }
+
+    /**
+     * Guards external-data-source reads against silently bypassing Row-Level Security. A remote
+     * system can't enforce MJ's RLS WHERE clauses, so if RLS would filter this user's rows we
+     * refuse the read with a clear error rather than returning unfiltered data. Users exempt from
+     * RLS (e.g. admins) get an empty clause and pass through — RLS wouldn't restrict them on an
+     * MJ-DB entity either. Called from the external RunView and Load dispatch points.
+     */
+    protected assertExternalReadAllowedUnderRLS(entityInfo: EntityInfo, user: UserInfo): void {
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        if (rlsWhereClause && rlsWhereClause.length > 0) {
+            throw new Error(
+                `Entity '${entityInfo.Name}' is backed by an external data source and has Row-Level Security that applies ` +
+                `to this user. RLS cannot be enforced on a remote system, so external reads are refused for RLS-protected ` +
+                `entities to avoid returning unfiltered data. Remove the RLS filter, or do not back this entity with an external data source.`,
+            );
+        }
+    }
+
+    /**
+     * Builds a primary-key WHERE filter for an external single-record Load. Plain (unquoted)
+     * identifiers — each driver applies its own dialect quoting. Quoted values are single-quote-
+     * escaped (doubled) to prevent SQL injection / broken filters from a value containing a quote
+     * (standard SQL escaping that every external SQL driver and the Mongo filter translator
+     * understand); null values become "IS NULL".
+     */
+    protected buildExternalPrimaryKeyFilter(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
+        return compositeKey.KeyValuePairs.map(val => {
+            const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
+            if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
+            if (val.Value === null || val.Value === undefined) {
+                return `${pk.Name} IS NULL`;
+            }
+            if (!pk.NeedsQuotes) {
+                return `${pk.Name}=${String(val.Value)}`;
+            }
+            return `${pk.Name}='${String(val.Value).replace(/'/g, "''")}'`;
+        }).join(' AND ');
     }
 
     /**
@@ -3408,17 +3450,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // Relationship loading is intentionally not supported for external entities (they
         // are read-only leaf records); entityRelationshipsToLoad is ignored here.
         if (entityInfo.ExternalDataSourceID) {
+            // Refuse rather than silently bypass Row-Level Security (a remote system can't enforce it).
+            this.assertExternalReadAllowedUnderRLS(entityInfo, user);
             const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
             if (!externalRouter) {
                 throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
             }
-            // Plain (unquoted) identifiers: each driver applies its own dialect quoting/translation to the filter body.
-            const externalFilter = compositeKey.KeyValuePairs.map(val => {
-                const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
-                if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
-                const quotes = pk.NeedsQuotes ? "'" : '';
-                return `${pk.Name}=${quotes}${val.Value}${quotes}`;
-            }).join(' AND ');
+            const externalFilter = this.buildExternalPrimaryKeyFilter(entityInfo, compositeKey);
             const externalResult = await externalRouter.RunViewExternal<Record<string, unknown>>(
                 entityInfo,
                 { EntityName: entityInfo.Name, ExtraFilter: externalFilter, MaxRows: 1 },

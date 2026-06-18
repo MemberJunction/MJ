@@ -12,6 +12,8 @@ import {
     UserInfo,
     RunQueryParams,
     RunQueryResult,
+    EntityInfo,
+    CompositeKey,
 } from '@memberjunction/core';
 import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 
@@ -126,6 +128,14 @@ class TestPipelineProvider extends GenericDatabaseProvider {
         result: RunQueryResult,
     ): RunQueryResult {
         return this.warnIfExternalQueryFieldsMissing(query, result);
+    }
+
+    public testAssertExternalReadAllowedUnderRLS(entityInfo: EntityInfo, user: UserInfo): void {
+        this.assertExternalReadAllowedUnderRLS(entityInfo, user);
+    }
+
+    public testBuildExternalPrimaryKeyFilter(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
+        return this.buildExternalPrimaryKeyFilter(entityInfo, compositeKey);
     }
 }
 
@@ -935,6 +945,79 @@ ORDER BY bridge.LastName, bridge.FirstName`,
             const out = provider.testWarnIfExternalQueryFieldsMissing(makeExternalQuery('Sales', ['Region']), failed);
             expect(out.Success).toBe(false);
             expect(out.ErrorMessage).toBe('driver exploded');
+        });
+    });
+
+    // ================================================================
+    // External read security guards: RLS refusal + Load PK filter escaping
+    // ================================================================
+    describe('assertExternalReadAllowedUnderRLS', () => {
+        const entityWithRLS = (clause: string): EntityInfo =>
+            ({ Name: 'Sales', GetUserRowLevelSecurityWhereClause: () => clause } as unknown as EntityInfo);
+
+        it('throws when RLS applies to the user (non-empty clause) — refuses, never silently bypasses', () => {
+            expect(() => provider.testAssertExternalReadAllowedUnderRLS(entityWithRLS("UserID = 'u-1'"), mockUser))
+                .toThrow(/Row-Level Security/);
+        });
+
+        it('does not throw when there is no RLS clause (empty) — e.g. no RLS configured, or exempt user', () => {
+            expect(() => provider.testAssertExternalReadAllowedUnderRLS(entityWithRLS(''), mockUser)).not.toThrow();
+        });
+    });
+
+    describe('buildExternalPrimaryKeyFilter', () => {
+        const entity = (pks: { Name: string; NeedsQuotes: boolean }[]): EntityInfo =>
+            ({ Name: 'Sales', PrimaryKeys: pks } as unknown as EntityInfo);
+        const key = (pairs: { FieldName: string; Value: unknown }[]): CompositeKey =>
+            ({ KeyValuePairs: pairs } as unknown as CompositeKey);
+
+        it('quotes and emits a string primary key', () => {
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: true }]),
+                key([{ FieldName: 'ID', Value: 'abc' }]),
+            )).toBe("ID='abc'");
+        });
+
+        it('escapes single quotes (doubled) — blocks injection / broken filters', () => {
+            // A value with a quote must not break out of the literal.
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'Name', NeedsQuotes: true }]),
+                key([{ FieldName: 'Name', Value: "O'Brien" }]),
+            )).toBe("Name='O''Brien'");
+
+            // Classic injection payload is neutralized (every quote doubled).
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: true }]),
+                key([{ FieldName: 'ID', Value: "x' OR '1'='1" }]),
+            )).toBe("ID='x'' OR ''1''=''1'");
+        });
+
+        it('emits numeric (non-quoted) primary keys verbatim', () => {
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: false }]),
+                key([{ FieldName: 'ID', Value: 42 }]),
+            )).toBe('ID=42');
+        });
+
+        it('joins composite keys with AND', () => {
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'OrgID', NeedsQuotes: true }, { Name: 'Seq', NeedsQuotes: false }]),
+                key([{ FieldName: 'OrgID', Value: 'a' }, { FieldName: 'Seq', Value: 3 }]),
+            )).toBe("OrgID='a' AND Seq=3");
+        });
+
+        it('emits IS NULL for a null key value rather than broken SQL', () => {
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: true }]),
+                key([{ FieldName: 'ID', Value: null }]),
+            )).toBe('ID IS NULL');
+        });
+
+        it('throws when a key field is not a primary key of the entity', () => {
+            expect(() => provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: true }]),
+                key([{ FieldName: 'Bogus', Value: 'x' }]),
+            )).toThrow(/Primary key Bogus not found/);
         });
     });
 });
