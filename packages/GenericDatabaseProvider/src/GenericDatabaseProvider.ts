@@ -2853,7 +2853,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!externalRouter) {
                     throw new Error(`Query '${query.Name}' is bound to an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
                 }
-                return await externalRouter.RunQueryExternal(query.ExternalDataSourceID, query.ID, query.Name, finalSQL, params, contextUser, this);
+                const externalResult = await externalRouter.RunQueryExternal(query.ExternalDataSourceID, query.ID, query.Name, finalSQL, params, contextUser, this);
+                return this.validateExternalQueryResultFields(query, externalResult);
             }
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
@@ -3062,6 +3063,47 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters };
+    }
+
+    /**
+     * Validates that the columns an external-data-source query actually returned contain
+     * every field the Query *declares* (its QueryField metadata). External SQL runs against
+     * a foreign system MJ does not control, so a renamed or dropped remote column would
+     * otherwise silently yield result rows missing expected fields — breaking downstream
+     * consumers far from the cause. When declared fields are missing, this converts the
+     * result into a clear error naming them.
+     *
+     * Matching is case-insensitive because remote dialects differ in column casing (e.g.
+     * Snowflake uppercases unquoted identifiers). No-op when the query declares no fields
+     * or returned no rows (columns can't be inspected without a row, and an empty result is
+     * legitimate). Extra columns beyond the declared set are allowed.
+     */
+    protected validateExternalQueryResultFields(query: MJQueryEntityExtended, result: RunQueryResult): RunQueryResult {
+        if (!result.Success || !result.Results || result.Results.length === 0) {
+            return result;
+        }
+        const declaredFields = query.QueryFields;
+        if (!declaredFields || declaredFields.length === 0) {
+            return result;
+        }
+        const presentKeys = new Set(
+            Object.keys(result.Results[0] as Record<string, unknown>).map(k => k.trim().toLowerCase()),
+        );
+        const missing = declaredFields
+            .map(f => f.Name)
+            .filter(name => name && !presentKeys.has(name.trim().toLowerCase()));
+        if (missing.length === 0) {
+            return result;
+        }
+        return {
+            ...result,
+            Success: false,
+            Results: [],
+            RowCount: 0,
+            ErrorMessage:
+                `External query '${query.Name}' returned rows missing declared field(s): ${missing.join(', ')}. ` +
+                `The remote object's columns may have drifted from the query's field metadata.`,
+        };
     }
 
     /**

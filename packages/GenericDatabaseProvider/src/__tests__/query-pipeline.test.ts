@@ -120,6 +120,13 @@ class TestPipelineProvider extends GenericDatabaseProvider {
     ): void {
         this.auditQueryExecution(query, params, finalSQL, rowCount, totalRowCount, executionTime, contextUser);
     }
+
+    public testValidateExternalQueryResultFields(
+        query: MJQueryEntityExtended,
+        result: RunQueryResult,
+    ): RunQueryResult {
+        return this.validateExternalQueryResultFields(query, result);
+    }
 }
 
 // ---- Helpers ----
@@ -847,6 +854,85 @@ ORDER BY bridge.LastName, bridge.FirstName`,
             );
 
             expect(createAuditSpy).toHaveBeenCalled();
+        });
+    });
+
+    // ================================================================
+    // validateExternalQueryResultFields (external data source queries)
+    // ================================================================
+    describe('validateExternalQueryResultFields', () => {
+        const makeExternalQuery = (name: string, fieldNames: string[]): MJQueryEntityExtended =>
+            ({ Name: name, QueryFields: fieldNames.map(n => ({ Name: n })) } as unknown as MJQueryEntityExtended);
+
+        const makeResult = (rows: Record<string, unknown>[]): RunQueryResult => ({
+            Success: true,
+            QueryID: 'q-ext',
+            QueryName: 'Ext',
+            Results: rows,
+            RowCount: rows.length,
+            TotalRowCount: rows.length,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+        });
+
+        it('passes through when all declared fields are present', () => {
+            const out = provider.testValidateExternalQueryResultFields(
+                makeExternalQuery('Sales', ['Region', 'Amount']),
+                makeResult([{ Region: 'East', Amount: 100 }]),
+            );
+            expect(out.Success).toBe(true);
+            expect(out.Results).toHaveLength(1);
+        });
+
+        it('matches declared fields case-insensitively (e.g. Snowflake uppercased columns)', () => {
+            const out = provider.testValidateExternalQueryResultFields(
+                makeExternalQuery('Sales', ['Region', 'Amount']),
+                makeResult([{ REGION: 'East', AMOUNT: 100 }]),
+            );
+            expect(out.Success).toBe(true);
+        });
+
+        it('allows extra columns beyond the declared set', () => {
+            const out = provider.testValidateExternalQueryResultFields(
+                makeExternalQuery('Sales', ['Region']),
+                makeResult([{ Region: 'East', Amount: 100, Extra: 'x' }]),
+            );
+            expect(out.Success).toBe(true);
+        });
+
+        it('fails with a clear error naming missing declared fields', () => {
+            const out = provider.testValidateExternalQueryResultFields(
+                makeExternalQuery('Sales', ['Region', 'Amount', 'Margin']),
+                makeResult([{ Region: 'East', Amount: 100 }]),
+            );
+            expect(out.Success).toBe(false);
+            expect(out.Results).toHaveLength(0);
+            expect(out.RowCount).toBe(0);
+            expect(out.ErrorMessage).toContain('Margin');
+            expect(out.ErrorMessage).toContain('Sales');
+        });
+
+        it('no-ops when the query declares no fields', () => {
+            const out = provider.testValidateExternalQueryResultFields(
+                makeExternalQuery('Sales', []),
+                makeResult([{ Anything: 1 }]),
+            );
+            expect(out.Success).toBe(true);
+        });
+
+        it('no-ops when the result has no rows (columns cannot be inspected)', () => {
+            const out = provider.testValidateExternalQueryResultFields(
+                makeExternalQuery('Sales', ['Region']),
+                makeResult([]),
+            );
+            expect(out.Success).toBe(true);
+        });
+
+        it('passes an already-failed result through unchanged', () => {
+            const failed: RunQueryResult = { ...makeResult([]), Success: false, ErrorMessage: 'driver exploded' };
+            const out = provider.testValidateExternalQueryResultFields(makeExternalQuery('Sales', ['Region']), failed);
+            expect(out.Success).toBe(false);
+            expect(out.ErrorMessage).toBe('driver exploded');
         });
     });
 });
