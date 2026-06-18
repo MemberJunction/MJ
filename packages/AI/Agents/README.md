@@ -227,6 +227,24 @@ Optimizes agent startup by batch-loading all required metadata in parallel:
 - Sub-agent data
 - Prompt configurations
 
+> 📖 **Memory is a big topic.** For the complete architecture — the three-tier model, injection and scoping, the in-flight write pipeline, and the Memory Manager's hardening/consolidation/decay phases — see the **[Agent Memory Guide](../../../guides/AGENT_MEMORY_GUIDE.md)**. The sections below are component-level summaries.
+
+### MemoryWriteManager (In-Flight Memory Writes)
+
+Lets agents commit durable, cross-run memories mid-run — the user says "I prefer bar charts" and the agent records it the moment it's stated, via a `memoryWrites` field on the loop response (a sibling of `scratchpad` and `artifactToolCalls`, processed inline with zero turn cost). Gated per agent via `AIAgent.AllowMemoryWrite` (on by default — opt out for restricted or experimental agents); disabled agents never see the capability in their system prompt, and the turn loop independently rejects drift.
+
+The agent-facing surface is intentionally trivial ("remember this") — the framework enforces every guard:
+
+- **Type restriction** — only descriptive `Preference`/`Context` memories in-flight; behavioral/`Constraint` memories require Memory Manager or human promotion (prompt-injection defense)
+- **Scope clamp** — writes land ≤ Agent + User scope; hints can narrow but never broaden, and never global
+- **Near-duplicate guard** (vector similarity, default `0.85`) — a near-dup of a note written *earlier in the same run* is superseded in place (last write wins); a pre-existing note is reinforced (`AccessCount` bump) **only when the request exactly restates it** (normalized text equality). Any textual difference writes a new provisional note instead — a difference may be a correction ("never use pie charts" must not be absorbed into a stale "loves pie charts" note); true paraphrase duplicates are consolidated later by the Memory Manager's hardening dedupe. Fails open if the vector service is unavailable.
+- **Per-run cap** (default 5) and within-run idempotency hashing
+- **Provenance + TTL** — notes land with `Status='Provisional'`, `AuthorType='Agent'`, source run/conversation stamped, and a 7-day `ExpiresAt` safety net
+
+Provisional notes are **immediately injectable** into future runs — rendered first with `(provisional)` labels, per-note recorded dates (`[Preference, 2026-06-10] …`, so the policy's most-recent-wins tiebreaker is resolvable), and recency-wins precedence (a just-stated preference beats stale vetted memory) — and are later hardened or pruned by MemoryManagerAgent's hardening pass (below). Every write is recorded as a `Tool` run step, and outcomes are reported back to the agent in an expiring conversation message so it doesn't re-emit. Writes execute sequentially by design: each save syncs the in-memory vector store that the next write's dedupe check reads.
+
+For the full design see [`plans/agent-inflight-memory-writes.md`](../../../plans/agent-inflight-memory-writes.md); end-to-end verification harness at [`scripts/memory-write-smoke.ts`](./scripts/memory-write-smoke.ts).
+
 ### MemoryManagerAgent
 
 Handles persistent memory operations for agents:
@@ -235,6 +253,7 @@ Handles persistent memory operations for agents:
 - Managing agent examples
 - Scoped memory for multi-tenant deployments (UserScope support)
 - Consolidation, decay, and protection-tier maintenance over the agent note pool (see below)
+- **Hardening pass** over agent-authored provisional notes — runs unconditionally at the start of every cycle (before the consolidation-gated phases): LLM-dedupes each `Status='Provisional'` note against hardened notes (duplicates archived with `ConsolidatedIntoNoteID` lineage), and hardens survivors to `Status='Active'` with `ExpiresAt=NULL` so they join importance scoring, consolidation, contradiction detection, and decay in the same cycle
 
 #### Consolidation Pipeline
 
@@ -397,6 +416,14 @@ Loop agents can request multiple sub-agents to run in parallel by returning a `s
   }
 }
 ```
+
+### 5. Cache-Served Memory-Manager Maintenance Reads
+The Memory Manager runs on a schedule (every ~15 minutes). `AIEngineBase` already holds the entire `MJ: AI Agent Notes` and `MJ: AI Agent Examples` pools in memory — loaded unfiltered as entity objects and kept current via `BaseEntity` save/delete events — so the maintenance phases serve their candidate scans from that cache (`AIEngine.Instance.AgentNotes` / `AgentExamples`) instead of issuing per-cycle `RunView`/`RunViews` round-trips.
+
+* **Eliminated round-trips**: the consolidation event-trigger count, the orphan-prune candidate scan (`loadPruneCandidateNotes`), the TTL-expiry scan (`loadExpiredItems`), and the decay-candidate scan (`loadDecayCandidates`) all filter/sort/cap the in-memory arrays — removing the *“Entity Already in Engine”* redundancy-telemetry warnings these calls used to emit.
+* **Read-only projection, never aliasing**: cache scans project to plain candidate rows (`{ ID, ... }`); they never hand a cached `BaseEntity` instance into a mutate-and-save path. The actual archive/decay/harden writes still re-`Load()` a fresh, owned entity via `GetEntityObject`, so the shared cache instances are never mutated in place.
+* **Single source of truth for status**: note status filtering reuses `IsInjectableNoteStatus()` from `@memberjunction/core-entities` (Active + Provisional), the same predicate the read-path injection/scoping queries use, so the maintenance set can never drift from the injectable set.
+* **Intentional exceptions** (still hit the DB): the **hardening pass** loads `entity_object` provisional notes *specifically to mutate them*, so it reads fresh, owned entities; the resolved-source-chain loader keeps a targeted `RunView` **only** for note IDs the cache misses; and `MJ: AI Agent Runs` reads stay as queries because runs are transactional and not cached by `AIEngineBase`.
 
 ## Documentation
 

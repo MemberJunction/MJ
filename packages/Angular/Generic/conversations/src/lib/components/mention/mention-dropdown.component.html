@@ -37,6 +37,12 @@
                   class="fa-solid fa-user"
                 ></i>
               }
+              <!-- Entity icon -->
+              @if (suggestion.type === 'entity') {
+                <i
+                  [ngClass]="getIconClasses(suggestion.icon || 'fa-solid fa-table')"
+                ></i>
+              }
             </div>
             <div class="suggestion-content">
               <div class="suggestion-name">
@@ -45,6 +51,9 @@
                 }
                 @if (suggestion.type === 'user') {
                   <span class="suggestion-type-badge user">User</span>
+                }
+                @if (suggestion.type === 'entity') {
+                  <span class="suggestion-type-badge entity">Entity</span>
                 }
                 {{ suggestion.displayName }}
               </div>
@@ -62,7 +71,7 @@
     @if (suggestions.length === 0) {
       <div class="mention-empty-state">
         <i class="fa-solid fa-robot"></i>
-        <p>No agents or users available</p>
+        <p>No matches found</p>
       </div>
     }
   </div>

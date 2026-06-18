@@ -18,7 +18,7 @@
  * @module @memberjunction/encryption
  */
 
-import { IMetadataProvider, IStartupSink, Metadata, RegisterForStartup, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, IStartupSink, LogStatusEx, Metadata, RegisterForStartup, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import { EncryptionEngine } from './EncryptionEngine';
 
@@ -70,7 +70,7 @@ export class EncryptionStartupValidator extends BaseSingleton<EncryptionStartupV
                 this.logKeyValidationFailures(failures, results.length);
                 hasErrors = true;
             } else {
-                console.log(`  ✓ All ${results.length} encryption key(s) validated successfully`);
+                LogStatusEx({ message: `  ✓ All ${results.length} encryption key(s) validated successfully`, verboseOnly: true });
             }
         }
 

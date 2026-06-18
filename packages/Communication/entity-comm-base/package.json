@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/entity-communications-base",
   "type": "module",
-  "version": "5.40.2",
+  "version": "5.41.0",
   "description": "MemberJunction: Base Types for Client/Server use with Entity Communications Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,7 +11,7 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "echo \"No tests configured yet\""
+    "test": "vitest run"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -20,10 +20,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/global": "5.40.2",
-    "@memberjunction/core": "5.40.2",
-    "@memberjunction/core-entities": "5.40.2",
-    "@memberjunction/communication-types": "5.40.2"
+    "@memberjunction/global": "5.41.0",
+    "@memberjunction/core": "5.41.0",
+    "@memberjunction/core-entities": "5.41.0",
+    "@memberjunction/communication-types": "5.41.0"
   },
   "repository": {
     "type": "git",

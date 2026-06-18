@@ -285,7 +285,7 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
         // Audio-activity capability (base obligation #9): user side meters the mic stream
         // now; the agent side attaches when the remote track arrives (attachRemoteAudio's
         // ontrack). Null-safe — no-WebAudio environments leave the session un-metered.
-        this.attachInputAudioMeter(RealtimeAudioMeter.ForStream(micStream));
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
 
         await this.performSdpHandshake(pc, config.EphemeralToken);
         this.setState('connected');

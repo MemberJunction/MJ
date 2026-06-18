@@ -1737,10 +1737,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Scheduled Jobs (Owner User ID) Section -->
+    <!-- Scheduled Jobs (Owner) Section -->
     <mj-collapsible-panel
         SectionKey="mJScheduledJobsOwnerUserID"
-        SectionName="Scheduled Jobs (Owner User ID)"
+        SectionName="Scheduled Jobs (Owner)"
         Icon="fa fa-calendar"
         Variant="related-entity"
         [Form]="this"
@@ -2312,10 +2312,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Scheduled Jobs (Notify User ID) Section -->
+    <!-- Scheduled Jobs (Notify User) Section -->
     <mj-collapsible-panel
         SectionKey="mJScheduledJobsNotifyUserID"
-        SectionName="Scheduled Jobs (Notify User ID)"
+        SectionName="Scheduled Jobs (Notify User)"
         Icon="fa fa-calendar"
         Variant="related-entity"
         [Form]="this"
@@ -2781,6 +2781,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Session Bridge Participants Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSessionBridgeParticipants"
+        SectionName="AI Agent Session Bridge Participants"
+        Icon="fa fa-users"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSessionBridgeParticipants')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Bridge Participants','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridge Participants')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSessionBridgeParticipants')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionBridgeParticipants', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

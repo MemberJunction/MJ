@@ -171,6 +171,8 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
+  /* Positioning context for the first-run channel-onboarding overlay (absolute, inset:0). */
+  position: relative;
 }
 .s-pane--active {
   display: flex;

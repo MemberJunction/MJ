@@ -209,3 +209,12 @@ metadata/integrations/**/.backups/
 migrations/v*/*__RSU_*.sql
 # Local connector-e2e sweep scratch
 .sweep/
+
+# Claude Pack ships its built output in the repo: `mj install` and `mj bundle`
+# pull `dist/v{MAJOR}/` verbatim into a fresh install via the sparse-checkout
+# `DistributionAssembler`, and the claude-pack.yml CI workflow runs
+# `git diff --exit-code` against it to catch stale-relative-to-source dist
+# commits. The blanket `dist/` ignore above would silently hide both, so
+# explicitly un-ignore this one subtree.
+!/templates/claude-pack/dist/
+!/templates/claude-pack/dist/**

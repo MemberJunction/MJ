@@ -144,20 +144,31 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private pendingAppPath: string | null = null; // Store the app path we tried to access
 
   /**
-   * Get Nav Bar apps positioned to the left of the app switcher
-   * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
+   * Nav Bar apps positioned to the left of the app switcher.
+   * Backing field recomputed only when the active app or nav-app list changes
+   * (see {@link recomputeNavBarApps}) — NOT on every change-detection cycle, since
+   * this is bound directly in the shell nav template's @for/@if. Filters out apps
+   * that have HideNavBarIconWhenActive=true and are currently active.
    */
-  get leftOfSwitcherApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of App Switcher')
-      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
-  }
+  public leftOfSwitcherApps: BaseApplication[] = [];
 
   /**
-   * Get Nav Bar apps positioned to the left of the user menu
-   * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
+   * Nav Bar apps positioned to the left of the user menu.
+   * Backing field recomputed only when the active app or nav-app list changes
+   * (see {@link recomputeNavBarApps}). Filters out apps that have
+   * HideNavBarIconWhenActive=true and are currently active.
    */
-  get leftOfUserMenuApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of User Menu')
+  public leftOfUserMenuApps: BaseApplication[] = [];
+
+  /**
+   * Recompute the precomputed nav-bar app arrays. Called only when the active app
+   * changes or the underlying nav-app list (re)loads — keeping the filtered arrays
+   * (and their per-app UUIDsEqual checks) out of the per-CD-cycle hot path.
+   */
+  private recomputeNavBarApps(): void {
+    this.leftOfSwitcherApps = this.appManager.GetNavBarApps('Left of App Switcher')
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
+    this.leftOfUserMenuApps = this.appManager.GetNavBarApps('Left of User Menu')
       .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
 
@@ -311,6 +322,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.subscriptions.push(
       this.appManager.ActiveApp.subscribe(async app => {
         this.activeApp = app;
+        this.recomputeNavBarApps();
         this.cdr.detectChanges();
 
         // Create default tab when app is activated ONLY if:
@@ -345,6 +357,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         if (isLoading) {
           return;
         }
+
+        // Nav-app list is now populated/changed — refresh the precomputed arrays
+        // bound in the header template.
+        this.recomputeNavBarApps();
 
         // Handle the case where user has no apps at all (only after loading is complete)
         if (apps.length === 0) {
