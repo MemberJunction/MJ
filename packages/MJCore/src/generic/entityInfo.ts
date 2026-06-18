@@ -1856,6 +1856,25 @@ export class EntityInfo extends BaseInfo {
     get Fields(): EntityFieldInfo[] {
         return this._Fields;
     }
+
+    private _hasInactiveFields: boolean | undefined = undefined;
+    /**
+     * Returns true if ANY field on this entity is `Deprecated` or `Disabled` (i.e. not `Active`).
+     *
+     * Computed once on first access and cached for the lifetime of this EntityInfo. The value is a
+     * property of the entity definition (shared across every record instance), so the common case —
+     * an entity whose fields are all Active — is a single cached boolean.
+     *
+     * This is the fast-path gate for active-status enforcement in BaseEntity.Get/Set/SetMany: when
+     * it is false those paths skip the per-field status lookup entirely, keeping hot read/write loops
+     * free of any deprecation-check overhead.
+     */
+    get HasInactiveFields(): boolean {
+        if (this._hasInactiveFields === undefined) {
+            this._hasInactiveFields = this._Fields.some(f => f.Status === 'Deprecated' || f.Status === 'Disabled');
+        }
+        return this._hasInactiveFields;
+    }
     /**
      * Gets all relationships where other entities reference this entity.
      * @returns {EntityRelationshipInfo[]} Array of entity relationships
