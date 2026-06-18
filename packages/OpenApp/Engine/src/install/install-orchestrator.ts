@@ -1175,7 +1175,7 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
 
     // Helper: delete by filter and throw on any failure so the outer catch reports it
     // (MJ metadata FKs are NO ACTION, not CASCADE, so dependents must be removed in order).
-    const del = async (entityName: string, filter: string): Promise<void> => {
+    const deleteByFilterOrThrow = async (entityName: string, filter: string): Promise<void> => {
       const r = await DeleteEntitiesByFilter(rv, contextUser, entityName, filter);
       if (!r.Success) {
         throw new Error(r.ErrorMessage ?? `Failed to delete ${entityName} records`);
@@ -1197,7 +1197,7 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
 
     if (entityResult.Results.length === 0) {
       // No entities found — just clean up SchemaInfo
-      await del('MJ: Schema Info', `SchemaName = '${escaped}'`);
+      await deleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
       callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
       return { Success: true };
     }
@@ -1222,15 +1222,15 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
 
     // Delete FK-dependent records in dependency order.
     if (fieldIdList.length > 0) {
-      await del('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
+      await deleteByFilterOrThrow('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
     }
-    await del('MJ: Entity Permissions', `EntityID IN (${idList})`);
-    await del('MJ: Application Entities', `EntityID IN (${idList})`);
-    await del('MJ: Entity Settings', `EntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Entity Permissions', `EntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Application Entities', `EntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Entity Settings', `EntityID IN (${idList})`);
     // Entity Relationships reference EntityID on both sides
-    await del('MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
     // Entity Fields (FK on EntityID)
-    await del('MJ: Entity Fields', `EntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Entity Fields', `EntityID IN (${idList})`);
 
     // Delete Entities themselves
     for (const entity of entityResult.Results) {
@@ -1240,7 +1240,7 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
     }
 
     // Delete SchemaInfo last
-    await del('MJ: Schema Info', `SchemaName = '${escaped}'`);
+    await deleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
 
     callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
     return { Success: true };
