@@ -363,17 +363,36 @@ caller's `Signal`); a successful `GrantControl(sessionId, 'Human')` — and `End
 computer-use loop pauses **cooperatively** via `Stop()`. An `Agent` grant is unconditional and never pauses
 the agent's own goal.
 
-### 9e. Vision-model selection + production binding
+### 9e. Controller/judge prompt + model selection (the default flip)
 
-The default `ProgressComputerUseEngine` (base computer-use) has no model auto-selection, so it can't run a
-goal unsupervised. At server startup `BindRemoteBrowserGoalEngine()` (in
-`@memberjunction/server`, `agentSessions/remoteBrowserGoalEngine.ts`) binds the seam to
-**`MJProgressComputerUseEngine extends MJComputerUseEngine`** — which routes controller/judge prompts through
-`AIPromptRunner`, persists step media, forwards progress, and **auto-selects a vision-capable controller
-model**: `MJComputerUseEngine.autoSelectControllerModel` now prefers the highest-`PowerRank` LLM that
-advertises **Image input** modality (`pickHighestPowerVisionLLM`), falling back to the plain highest-power
-LLM so selection never hard-fails. The acting `ContextUser` flows base → cdp → engine so those prompts run as
-the session's user.
+The default `ProgressComputerUseEngine` (base computer-use) has no model selection, so it can't run a goal
+unsupervised. At server startup `BindRemoteBrowserGoalEngine()` (in `@memberjunction/server`,
+`agentSessions/remoteBrowserGoalEngine.ts`) binds the seam to **`MJProgressComputerUseEngine extends
+MJComputerUseEngine`** — which routes controller/judge prompts through `AIPromptRunner`, persists step
+media, forwards progress, and runs them as the session's user (the acting `ContextUser` flows base → cdp →
+engine).
+
+**The default flip (golden source of truth):** when the caller pins neither a prompt nor a model,
+`MJComputerUseEngine.Run` now **defaults the controller + judge to the stored
+`Computer Use - Controller` / `Computer Use - Judge` metadata prompts** (constants
+`DEFAULT_CONTROLLER_PROMPT_NAME` / `DEFAULT_JUDGE_PROMPT_NAME`). Those prompts carry both the prompt **text**
+*and* the **model selection** — by default **Gemini 3.1 Flash-Lite → Gemini 3.5 Flash → Claude Haiku 4.5 → GPT 5.5** (the
+prompt's `MJ: AI Prompt Models` rows, highest `Priority` first, each on two vendors for failover). So the
+goal loop runs through the full MJ prompt stack with metadata-configured models, not a code prompt. Swap the
+model by editing the prompt's bindings in metadata — **no code change**.
+
+**Resolution order:** explicit `ControllerPromptRef`/`ControllerModel` (caller override) → the stored default
+prompt (the flip) → `autoSelectControllerModel()` (legacy fallback: highest-`PowerRank` LLM advertising
+**Image input**, via `pickHighestPowerVisionLLM`, then plain highest-power LLM). The default lookup is
+**non-throwing**, so a missing stored prompt (e.g. a standalone/no-metadata caller) degrades cleanly to
+auto-selection and never hard-fails.
+
+**Single source of truth for the prompt text:** the behavioral core of the controller (the Available Actions
+catalog + Response Format/Rules) and judge prompts lives once in
+`metadata/prompts/templates/computer-use/_includes/*.md`, pulled into the Layer-2 metadata templates via the
+push-time `{@include}` directive **and** generated into the Layer-1 (`@memberjunction/computer-use`)
+standalone fallback by its `prebuild` (`scripts/generate-prompt-parts.mjs` → `prompt-parts.generated.ts`). A
+drift-guard test (`prompt-single-source.test.ts`) asserts both layers carry the same shared blocks.
 
 ### 9f. Run-step observability — one "Browser goal" step, prompt sub-steps nested under it
 
@@ -416,7 +435,7 @@ co-agent run (realtime)
 | `@memberjunction/remote-browser-cdp` | Shared CDP session kit (the DRY heart) + lossless mapper; `RunComputerUseGoal`, the `ComputerUseGoalRun` seam, model-blind `context-injection` |
 | `@memberjunction/remote-browser-{selfhost,browserbase,steel,browserless,hyperbrowser}` | The 5 backends |
 | `@memberjunction/remote-browser-server` | `RemoteBrowserEngine` (incl. `AchieveGoal` + pure `dispatchRemoteBrowserGoal`) + `RemoteBrowserChannel` |
-| `@memberjunction/computer-use-engine` | `MJComputerUseEngine` — vision-capable controller auto-selection (`pickHighestPowerVisionLLM`); `AgentRunStepTracker` (child prompt sub-steps) |
+| `@memberjunction/computer-use-engine` | `MJComputerUseEngine` — defaults controller/judge to the stored `Computer Use - Controller`/`- Judge` prompts (§9e), with `pickHighestPowerVisionLLM` auto-selection as the fallback; `AgentRunStepTracker` (child prompt sub-steps) |
 | `@memberjunction/ai-core-plus` | Shared single-source-of-truth step helpers `initAgentRunStep` / `finalizeAgentRunStep` (used by `BaseAgent` AND the Computer Use tracker) |
 | `@memberjunction/server` | `ExecuteRemoteBrowserGoal` mutation + `BindRemoteBrowserGoalEngine` (binds `MJProgressComputerUseEngine`); `beginBrowserGoalStep`/`finalizeBrowserGoalStep` (parent goal step) |
 | migration `V202606161000` | `AIRemoteBrowserProvider` registry table |

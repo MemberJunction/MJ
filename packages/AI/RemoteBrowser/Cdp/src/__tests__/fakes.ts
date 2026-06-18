@@ -53,6 +53,10 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
     public ExecuteError: Error | null = null;
     /** When set, {@link Close} rejects with this error. */
     public CloseError: Error | null = null;
+    /** Text returned from {@link GetSelectionText} (the copy-out read); defaults to a fixed selection. */
+    public SelectionTextValue = 'SELECTED TEXT';
+    /** When set, {@link GetSelectionText} rejects with this error. */
+    public GetSelectionTextError: Error | null = null;
     /** Captured `onFrame` callback from {@link StartScreencast}, so a test can drive frames. */
     public LastOnFrame: ((frame: ScreencastFrame) => void) | null = null;
     /** Count of {@link StartAudioCapture} calls. */
@@ -88,6 +92,13 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
 
     public override async CaptureScreenshot(): Promise<string> {
         return 'BASE64SCREENSHOT';
+    }
+
+    public override async GetSelectionText(): Promise<string> {
+        if (this.GetSelectionTextError) {
+            throw this.GetSelectionTextError;
+        }
+        return this.SelectionTextValue;
     }
 
     public override async Close(): Promise<void> {

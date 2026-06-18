@@ -440,6 +440,18 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     }
 
     /**
+     * Read the page's current text selection via `page.evaluate(window.getSelection())`. Returns '' when
+     * no page is open or nothing is selected (guarded, never throws on a closed adapter) — the copy-out
+     * source for the remote-browser human clipboard path.
+     */
+    public override async GetSelectionText(): Promise<string> {
+        if (!this.page) {
+            return '';
+        }
+        return this.page.evaluate(() => window.getSelection()?.toString() ?? '');
+    }
+
+    /**
      * Return the current page title. Returns '' when no page is open (guarded,
      * never throws on a closed adapter).
      */

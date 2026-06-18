@@ -158,6 +158,22 @@ export abstract class VectorDBBase {
     }
 
     /**
+     * Whether this provider requires an API key / credential to operate. Defaults to `true`
+     * for external, cloud-hosted vector services (Pinecone, Qdrant, …). Override and return
+     * `false` for in-process / local providers that authenticate via the host process or the
+     * application's own database rather than a remote credential — e.g. the in-memory
+     * `SimpleVectorServiceProvider`, which reads vectors out of `MJ: Entity Record
+     * Documents.VectorJSON` and never calls an external service.
+     *
+     * Callers that gate on a missing key (e.g. the Entity Vector Sync pipeline and the
+     * duplicate-record detector) consult this so a keyless local provider isn't rejected
+     * with a spurious "No API Key found" error.
+     */
+    public get RequiresAPIKey(): boolean {
+        return true;
+    }
+
+    /**
      * Wire in the host relational connection so this provider reuses it for colocated
      * storage and queries instead of opening its own pool. No-op semantics for providers
      * that ignore it; colocated providers require it before any operation.

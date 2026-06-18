@@ -28,7 +28,7 @@ export type RemoteBrowserModifier = 'Shift' | 'Control' | 'Alt' | 'Meta';
  */
 export interface RemoteBrowserHumanInputEvent {
   /** Which input occurred. */
-  kind: 'pointer-move' | 'pointer-click' | 'pointer-down' | 'pointer-up' | 'key' | 'scroll';
+  kind: 'pointer-move' | 'pointer-click' | 'pointer-down' | 'pointer-up' | 'key' | 'text' | 'scroll';
   /** Viewport X (pointer + scroll kinds only). */
   x?: number;
   /** Viewport Y (pointer + scroll kinds only). */
@@ -37,6 +37,8 @@ export interface RemoteBrowserHumanInputEvent {
   button?: 'left' | 'middle' | 'right';
   /** The pressed key (key kind only). */
   key?: string;
+  /** The pasted clipboard text (text kind only) — inserted into the remote page's focused element. */
+  text?: string;
   /** Horizontal wheel delta in pixels (scroll kind only; positive = right). */
   deltaX?: number;
   /** Vertical wheel delta in pixels (scroll kind only; positive = down). */
@@ -111,6 +113,14 @@ export interface RemoteBrowserSnapshotView {
  * `null` on any failure rather than throwing, so the surface keeps the last good frame.
  */
 export type RemoteBrowserSnapshotFetcher = () => Promise<RemoteBrowserSnapshotView | null>;
+
+/**
+ * Reads the remote page's CURRENT text selection for copy-out (the mirror of the `'text'` paste-in path).
+ * Supplied by the channel plugin (it owns the session id + GraphQL provider). Best-effort by contract:
+ * resolves to `''` on any failure / when nothing is selected rather than throwing, so a best-effort copy
+ * never breaks the live view.
+ */
+export type RemoteBrowserSelectionFetcher = () => Promise<string>;
 
 /**
  * LIVE REMOTE-BROWSER surface (`mj-realtime-remote-browser-surface`) — the Browser channel
@@ -333,6 +343,14 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   @Input() Fetch: RemoteBrowserSnapshotFetcher | null = null;
 
   /**
+   * Selection fetcher for copy-out, supplied by the channel plugin (closes over the session id + provider).
+   * On a local `copy` / Cmd+C over the live canvas the surface calls this to read the remote page's
+   * selection, then writes it to the local clipboard. Best-effort: when unset or it resolves to `''`, the
+   * copy is a no-op (the local clipboard is left untouched).
+   */
+  @Input() FetchSelection: RemoteBrowserSelectionFetcher | null = null;
+
+  /**
    * Whether the server is PUSHING live screencast frames for this session (the backend advertised the
    * `ScreenStreaming` capability and the start succeeded). When `true` the surface paints pushed frames
    * onto its `<canvas>` via {@link RenderFrame} and does NOT poll; when `false` it uses the snapshot
@@ -498,6 +516,8 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   private readonly onCanvasMouseUp = (e: MouseEvent): void => this.handlePointerUp(e);
   private readonly onCanvasClick = (e: MouseEvent): void => this.handlePointerClick(e);
   private readonly onCanvasKeyDown = (e: KeyboardEvent): void => this.handleKeyDown(e);
+  private readonly onCanvasPaste = (e: ClipboardEvent): void => this.handlePaste(e);
+  private readonly onCanvasCopy = (e: ClipboardEvent): void => this.handleCopy(e);
   private readonly onCanvasMouseLeave = (): void => this.handleMouseLeave();
   private readonly onCanvasWheel = (e: WheelEvent): void => this.handleWheel(e);
   private readonly onCanvasFocus = (): void => { this.surfaceFocused = true; };
@@ -679,6 +699,10 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
       canvas.addEventListener('mouseup', this.onCanvasMouseUp);
       canvas.addEventListener('click', this.onCanvasClick);
       canvas.addEventListener('keydown', this.onCanvasKeyDown);
+      // Paste-in / copy-out: the focused canvas receives the local clipboard `paste` / `copy` events; we
+      // relay paste text into the remote page and write the remote selection to the local clipboard.
+      canvas.addEventListener('paste', this.onCanvasPaste);
+      canvas.addEventListener('copy', this.onCanvasCopy);
       canvas.addEventListener('mouseleave', this.onCanvasMouseLeave);
       canvas.addEventListener('focus', this.onCanvasFocus);
       canvas.addEventListener('blur', this.onCanvasBlur);
@@ -699,6 +723,8 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     canvas.removeEventListener('mouseup', this.onCanvasMouseUp);
     canvas.removeEventListener('click', this.onCanvasClick);
     canvas.removeEventListener('keydown', this.onCanvasKeyDown);
+    canvas.removeEventListener('paste', this.onCanvasPaste);
+    canvas.removeEventListener('copy', this.onCanvasCopy);
     canvas.removeEventListener('mouseleave', this.onCanvasMouseLeave);
     canvas.removeEventListener('focus', this.onCanvasFocus);
     canvas.removeEventListener('blur', this.onCanvasBlur);
@@ -840,15 +866,62 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
     }
     const isPrintable = key.length === 1;
     const hasComboModifier = event.ctrlKey || event.metaKey || event.altKey;
-    const isForwardable = isPrintable || FORWARDED_CONTROL_KEYS.has(key) || hasComboModifier;
+    // Cmd/Ctrl+C and Cmd/Ctrl+V are handled by the dedicated `copy` / `paste` listeners (which read/write the
+    // LOCAL clipboard) — don't ALSO relay them as a keypress, or paste would double-fire and copy would send a
+    // useless Ctrl+C to the remote page. The browser fires the matching clipboard event for these chords.
+    const isClipboardChord = (event.ctrlKey || event.metaKey) && (key === 'c' || key === 'v' || key === 'C' || key === 'V');
+    const isForwardable = !isClipboardChord && (isPrintable || FORWARDED_CONTROL_KEYS.has(key) || hasComboModifier);
     if (!isForwardable) {
-      return; // leave non-forwarded keys to the host app
+      return; // leave non-forwarded keys to the host app (and clipboard chords to copy/paste handlers)
     }
     event.preventDefault();
     // Stop the keystroke from reaching document-level handlers (e.g. the overlay's T-to-type) so the user's
     // typing lands in the remote browser, not the local composer.
     event.stopPropagation();
     this.emitInput({ kind: 'key', key, modifiers: this.collectModifiers(event) });
+  }
+
+  /**
+   * Paste-in: a local `paste` (Cmd/Ctrl+V or context-menu paste) over the canvas → reads the LOCAL clipboard
+   * text and relays it as a `'text'` human input, which the server inserts into the remote page's focused
+   * element (the VNC/remote-desktop paste model — no remote-clipboard sync). `preventDefault` keeps the host
+   * app from also acting on the paste; empty/non-text clipboards are a no-op.
+   */
+  private handlePaste(event: ClipboardEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const text = event.clipboardData?.getData('text') ?? '';
+    if (text.length === 0) {
+      return; // nothing (or no text) on the clipboard — paste nothing
+    }
+    this.emitInput({ kind: 'text', text });
+  }
+
+  /**
+   * Copy-out: a local `copy` (Cmd/Ctrl+C or context-menu copy) over the canvas → reads the REMOTE page's
+   * current selection via {@link FetchSelection} and writes it to the LOCAL clipboard (the mirror of paste-in).
+   * `preventDefault` stops the host app from copying its own empty selection. Best-effort throughout: when the
+   * fetcher is unwired, resolves to `''`, or `navigator.clipboard` is unavailable / denies permission, the copy
+   * is silently a no-op — it never throws and never breaks the live view.
+   */
+  private handleCopy(event: ClipboardEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const fetchSelection = this.FetchSelection;
+    if (!fetchSelection) {
+      return;
+    }
+    void (async (): Promise<void> => {
+      try {
+        const text = await fetchSelection();
+        if (text.length > 0 && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+        }
+      } catch {
+        // Best-effort: a denied clipboard permission or a failed selection read leaves the local clipboard
+        // untouched rather than surfacing an error during takeover.
+      }
+    })();
   }
 
   /**
