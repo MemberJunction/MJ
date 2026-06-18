@@ -95,6 +95,7 @@ describe('EntityField', () => {
             const fieldInfo = createMockFieldInfo({
                 TSType: EntityFieldTSType.String,
                 Type: 'uniqueidentifier',
+                IsUniqueIdentifier: true,
                 DefaultValue: 'newsequentialid()'
             });
             const field = new EntityField(fieldInfo);
