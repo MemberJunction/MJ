@@ -54,6 +54,43 @@ function makeContext(
   };
 }
 
+/**
+ * Shrinks a channel's session-id wait (the {@link BaseRealtimeChannelClient.ResolveAgentSessionId}
+ * bounds) so the no-session / mint-race tests resolve fast instead of waiting the 8s default.
+ */
+function shrinkSessionWait(channel: RemoteBrowserChannel, timeoutMs = 80, intervalMs = 10): void {
+  const c = channel as unknown as { SessionIdWaitTimeoutMs: number; SessionIdWaitIntervalMs: number };
+  c.SessionIdWaitTimeoutMs = timeoutMs;
+  c.SessionIdWaitIntervalMs = intervalMs;
+}
+
+/**
+ * Builds a context whose `AgentSessionID` starts null and flips to `id` after `delayMs` — models the
+ * MINT RACE where the realtime model fires a tool the beat before `mintSession` binds the id. The
+ * getter (not a static field) is what {@link BaseRealtimeChannelClient.ResolveAgentSessionId} polls.
+ */
+function makeDelayedSessionContext(
+  log: CtxLog,
+  response: Record<string, JSONValue> | null,
+  id: string,
+  delayMs: number
+): RealtimeChannelContext {
+  let current: string | null = null;
+  setTimeout(() => { current = id; }, delayMs);
+  return {
+    AgentName: 'Sage',
+    SendContextNote: (text: string) => log.Notes.push(text),
+    RequestSave: () => undefined,
+    SetFocusMode: () => undefined,
+    SaveAsArtifact: async () => null,
+    get AgentSessionID() { return current; },
+    ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+      log.Calls.push({ Query: query, Variables: variables });
+      return response as T | null;
+    }
+  };
+}
+
 /** Parses a channel tool-result JSON string into a typed shape. */
 function parseResult(json: string): { success: boolean; currentUrl?: string; detail?: string; error?: string } {
   return JSON.parse(json) as { success: boolean; currentUrl?: string; detail?: string; error?: string };
@@ -206,11 +243,29 @@ describe('RemoteBrowserChannel — plugin contract + ApplyAgentTool round-trip',
 
   it('returns a failed result when no live session is available', async () => {
     channel.Initialize(makeContext(log, null, null));
+    shrinkSessionWait(channel); // null-forever session: don't wait the full 8s before failing
 
     const result = parseResult(await channel.ApplyAgentTool('browser_Back', '{}'));
     expect(result.success).toBe(false);
     expect(result.error).toContain('No live browser session');
     expect(log.Calls).toHaveLength(0);
+  });
+
+  it('WAITS for the session id (mint race) and then drives the action once it binds', async () => {
+    // Session id is null at invocation and flips live ~20ms later — the tool should wait, not fail.
+    channel.Initialize(makeDelayedSessionContext(
+      log,
+      { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://x', Detail: null } },
+      'session-late',
+      20
+    ));
+    shrinkSessionWait(channel, 500, 5);
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_Back', '{}'));
+    expect(result.success).toBe(true);
+    expect(log.Calls).toHaveLength(1);
+    // The action carried the id that arrived AFTER the tool was invoked.
+    expect(log.Calls[0].Variables.agentSessionID).toBe('session-late');
   });
 
   it('maps a null server response to a failed result (best-effort transport)', async () => {
@@ -300,6 +355,7 @@ describe('RemoteBrowserChannel — visual interpreter (browser_DescribePage / br
 
   it('keeps the null-session guard for the interpreter tools (no server call)', async () => {
     channel.Initialize(makeContext(log, null, null));
+    shrinkSessionWait(channel); // null-forever session: fail fast instead of waiting the full 8s
 
     const result = parseResult(await channel.ApplyAgentTool('browser_DescribePage', '{}'));
     expect(result.success).toBe(false);

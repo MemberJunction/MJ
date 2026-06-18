@@ -557,10 +557,12 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       return this.fail(message);
     }
 
-    const sessionId = this.Context?.AgentSessionID;
+    // Briefly WAIT for the session id rather than failing instantly: the model can fire a tool the
+    // first beat it connects, before mintSession binds the id (the "session id missing" race).
+    const sessionId = await this.ResolveAgentSessionId();
     if (!sessionId) {
-      // Diagnostic: distinguishes "channel never Initialized (no Context)" from "session id not yet
-      // set on the service" — the two distinct causes of a null id at tool-execution time.
+      // Diagnostic: distinguishes "channel never Initialized (no Context)" from "session id never
+      // resolved within the wait window" — the two distinct causes of a null id at tool-execution time.
       console.warn('[RemoteBrowser] browser tool invoked but AgentSessionID is null', {
         tool: toolName,
         hasContext: !!this.Context,
@@ -617,7 +619,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * @returns The model-readable result string.
    */
   private async achieveGoal(argsJson: string): Promise<string> {
-    const sessionId = this.Context?.AgentSessionID;
+    // Wait briefly for the session id (mint/reconnect race) before giving up — see ResolveAgentSessionId.
+    const sessionId = await this.ResolveAgentSessionId();
     if (!sessionId) {
       return this.fail('No live browser session is available yet — the realtime session may still be connecting; try again in a moment.');
     }
@@ -658,7 +661,8 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
    * @returns A JSON string describing the interpretation for the model.
    */
   private async interpretPage(query: string | undefined): Promise<string> {
-    const sessionId = this.Context?.AgentSessionID;
+    // Wait briefly for the session id (mint/reconnect race) before giving up — see ResolveAgentSessionId.
+    const sessionId = await this.ResolveAgentSessionId();
     if (!sessionId) {
       console.warn('[RemoteBrowser] interpret tool invoked but AgentSessionID is null', {
         hasContext: !!this.Context,
