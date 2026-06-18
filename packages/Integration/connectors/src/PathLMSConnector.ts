@@ -1030,7 +1030,12 @@ export class PathLMSConnector extends BaseRESTIntegrationConnector {
             GraphQLQueryName: ap?.Door ?? parsed.data.GraphQLQueryName ?? fallbackName,
             ReturnType: parsed.data.ReturnType ?? '',
             OperationArguments: parsed.data.OperationArguments ?? [],
-            Segments: ap?.Segments ?? [],
+            // Segments = the access-path AFTER the door. Explicit `Segments` wins; otherwise derive from
+            // `NestingPath` (which includes the door as element 0) by dropping the door and stripping the
+            // `[]` array-hop markers so `DescendAccessPath` can index each field key directly.
+            Segments: ap?.Segments ?? (ap?.NestingPath && ap.NestingPath.length > 1
+                ? ap.NestingPath.slice(1).map(s => s.replace(/\[\]$/, ''))
+                : []),
             Unresolved: unresolved,
         };
     }
@@ -1277,6 +1282,10 @@ const IOConfigSchema = z.object({
     AccessPath: z.object({
         Door: z.string().nullable().optional(),
         Segments: z.array(z.string()).optional(),
+        // Discovery emits NestingPath (door + field-name chain, array hops marked `field[]`) + Depth.
+        // Segments (the path AFTER the door, markers stripped) is derived from it when not explicit.
+        NestingPath: z.array(z.string()).optional(),
+        Depth: z.number().optional(),
     }).optional(),
 }).passthrough();
 

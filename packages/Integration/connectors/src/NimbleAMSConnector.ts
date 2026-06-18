@@ -54,6 +54,8 @@ import {
     type RateLimitPolicy,
     type ExternalObjectSchema,
     type ExternalFieldSchema,
+    type IntrospectSchemaOptions,
+    type SourceSchemaInfo,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -171,6 +173,28 @@ export class NimbleAMSConnector extends BaseRESTIntegrationConnector {
      * gamut for the scoped namespace.
      */
     public override get DiscoveryIsAuthoritative(): boolean { return true; }
+
+    /**
+     * Route schema introspection through the connector's LIVE SF global-describe discovery.
+     *
+     * `BaseRESTIntegrationConnector` (our parent) overrides the grandparent's real discover loop with a
+     * CACHE-DRIVEN `IntrospectSchema` that re-reads persisted ACTIVE metadata and is hard-coded
+     * non-authoritative — so it never calls our `DiscoverObjects`/`DiscoverFields` and can never drive
+     * the authoritative deactivation overlay. Nimble HAS live describe-backed discovery (and declares
+     * `DiscoveryIsAuthoritative = true`), so we invoke the grandparent `BaseIntegrationConnector`
+     * implementation directly. It calls `this.DiscoverObjects` → `this.DiscoverFields` per object and
+     * sets `IsAuthoritative` from our getter, so the full field set is discovered and absent
+     * objects/fields deactivate (reversibly) on a comprehensive refresh.
+     */
+    public override async IntrospectSchema(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo,
+        options?: IntrospectSchemaOptions
+    ): Promise<SourceSchemaInfo> {
+        return BaseIntegrationConnector.prototype.IntrospectSchema.call(
+            this, companyIntegration, contextUser, options
+        ) as Promise<SourceSchemaInfo>;
+    }
 
     // ── §7 sync-efficiency hooks ─────────────────────────────────────────────
 

@@ -1259,6 +1259,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * `<cwd>/logs/integration-runs/<runID>/progress.jsonl` artifact.
      */
     @Mutation(() => RefreshConnectorSchemaOutput)
+    @RequireSystemUser()
     async IntegrationRefreshConnectorSchema(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK convention hint (e.g. 'id' for HubSpot)" }) universalPKConvention: string | undefined,
@@ -1344,6 +1345,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * the IntegrationActionExecutor (CoreActions) is the single runtime dispatcher.
      */
     @Mutation(() => IntegrationGenerateActionOutput)
+    @RequireSystemUser()
     async IntegrationGenerateAction(
         @Arg("integrationName") integrationName: string,
         @Arg("objectName") objectName: string,
@@ -2487,6 +2489,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Creates a CompanyIntegration with a linked Credential entity for encrypted credential storage.
      */
     @Mutation(() => CreateConnectionOutput)
+    @RequireSystemUser()
     async IntegrationCreateConnection(
         @Arg("input") input: CreateConnectionInput,
         @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
@@ -2812,6 +2815,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * entities. Idempotent: already-promoted/mapped keys are skipped (safe to re-run / run alongside discovery).
      */
     @Mutation(() => PromoteCustomColumnsOutput)
+    @RequireSystemUser()
     async IntegrationPromoteCustomColumns(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("entityNames", () => [String], { nullable: true }) entityNames: string[] | undefined,
@@ -3017,6 +3021,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * pattern. Use IntegrationSchemaPreview to preview generated SQL without applying.
      */
     @Mutation(() => ApplySchemaOutput)
+    @RequireSystemUser()
     async IntegrationApplySchema(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("objects", () => [SchemaPreviewObjectInput]) objects: SchemaPreviewObjectInput[],
@@ -3107,6 +3112,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * All migrations run sequentially, then ONE CodeGen, ONE compile, ONE git PR, ONE restart.
      */
     @Mutation(() => ApplySchemaBatchOutput)
+    @RequireSystemUser()
     async IntegrationApplySchemaBatch(
         @Arg("items", () => [ApplySchemaBatchItemInput]) items: ApplySchemaBatchItemInput[],
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
@@ -3179,6 +3185,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * 6. Starts sync for the integration
      */
     @Mutation(() => ApplyAllOutput)
+    @RequireSystemUser()
     async IntegrationApplyAll(
         @Arg("input") input: ApplyAllInput,
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
@@ -3745,6 +3752,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Sends a webhook to the registered callback when complete.
      */
     @Mutation(() => StartSyncOutput)
+    @RequireSystemUser()
     async IntegrationStartSync(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("webhookURL", { nullable: true }) webhookURL: string,
@@ -3892,6 +3900,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Supports create, update, and delete operations.
      */
     @Mutation(() => WriteRecordOutput)
+    @RequireSystemUser()
     async IntegrationWriteRecord(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("objectName") objectName: string,
@@ -4779,6 +4788,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Post-pipeline: create entity/field maps and start sync for each success.
      */
     @Mutation(() => ApplyAllBatchOutput)
+    @RequireSystemUser()
     async IntegrationApplyAllBatch(
         @Arg("input") input: ApplyAllBatchInput,
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
@@ -5398,6 +5408,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Compares the current connector introspection against existing MJ entities.
      */
     @Mutation(() => SchemaEvolutionOutput)
+    @RequireSystemUser()
     async IntegrationSchemaEvolution(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
