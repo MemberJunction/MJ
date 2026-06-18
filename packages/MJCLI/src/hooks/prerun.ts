@@ -35,6 +35,13 @@ const hook: Hook<'prerun'> = async function (options) {
     return await maybeLoadBootstrap(options);
   }
 
+  // Skip banners entirely when --json is requested — the contract for --json
+  // is that stdout is parseable JSON, and any banner above it breaks
+  // `mj … --json | jq`. This early-return also skips the userAgent line below.
+  if (options.argv?.some((arg) => arg === '--json')) {
+    return;
+  }
+
   // Suppress the large figlet banner for hot-path, frequently-run commands (e.g. `mj sync *`)
   // and the agent-facing usage commands, where it's pure scrollback cost. The
   // compact userAgent line below still prints.

@@ -55,6 +55,11 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'sql-convert',
   'sql-audit',
 
+  // Claude pack commands - use only node stdlib + the lib/claude-pack/ helpers;
+  // no MJ runtime / bootstrap needed.
+  'install:claude',
+  'update:claude',
+
   // CodeGen manifest - uses @memberjunction/codegen-lib for AST scanning only, no bootstrap needed.
   // Must be light to break the circular dependency: server-bootstrap-lite's prebuild calls
   // `mj codegen manifest`, but bootstrap-lite must be built before MJCLI's prerun can import it.

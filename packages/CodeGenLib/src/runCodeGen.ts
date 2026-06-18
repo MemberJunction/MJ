@@ -11,7 +11,7 @@ import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { MSSQLConnection, sqlConfig } from './Config/db-connection';
+import { MSSQLConnection, getSqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
@@ -107,10 +107,15 @@ export class RunCodeGenBase {
     const provider: SQLServerDataProvider = await setupSQLServerClient(config);
     const conn: CodeGenConnection = new SQLServerCodeGenConnection(pool);
 
-    let connectionInfo = sqlConfig.server;
-    if (sqlConfig.port) connectionInfo += ':' + sqlConfig.port;
-    if (sqlConfig.options?.instanceName) connectionInfo += '\\' + sqlConfig.options.instanceName;
-    connectionInfo += '/' + sqlConfig.database;
+    // `getSqlConfig()` returns the config that was built lazily by
+    // MSSQLConnection() above. The non-null assertion is safe because the
+    // call to MSSQLConnection on the line above is what guarantees the
+    // accessor has a value to return.
+    const cfg = getSqlConfig()!;
+    let connectionInfo = cfg.server;
+    if (cfg.port) connectionInfo += ':' + cfg.port;
+    if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
+    connectionInfo += '/' + cfg.database;
 
     await UserCache.Instance.Refresh(pool);
     const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
