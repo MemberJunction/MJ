@@ -22,7 +22,7 @@ export default class Init extends Command {
         type: 'list',
         name: 'provider',
         message: 'Database platform:',
-        choices: ['sqlserver', 'postgresql', 'mysql', 'oracle'],
+        choices: ['sqlserver', 'postgresql'],
         default: 'sqlserver',
         loop: false
       },
