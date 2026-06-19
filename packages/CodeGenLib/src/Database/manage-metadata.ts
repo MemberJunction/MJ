@@ -2517,6 +2517,13 @@ export class ManageMetadataBase {
          const entities = <EntityInfo[]>entitiesResult.recordset;
          if (entities && entities.length > 0) {
             for (const e of entities) {
+               // External-data-source entities have no physical MJ table by design, so they always
+               // surface in vwEntitiesWithMissingBaseTables — but they must NOT be pruned (their data
+               // lives on a remote system). Skip them here: this is the analogue of the VirtualEntity
+               // exclusion the dialect filter (getEntitiesWithMissingBaseTablesFilter) already applies.
+               if (e.ExternalDataSourceID) {
+                  continue;
+               }
                // for the given entity, wipe out the entity metadata and its core deps.
                // the below could fail if there are non-core dependencies on the entity, but that's ok, we will flag that in the console
                // for the admin to handle manually
