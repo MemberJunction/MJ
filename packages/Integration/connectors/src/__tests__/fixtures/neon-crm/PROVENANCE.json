@@ -1,0 +1,36 @@
+{
+  "fixtureSet": "neon-crm",
+  "provenance": "spec-derived",
+  "rationale": "Response SHAPES are derived from the Neon CRM REST API v2 (v2.11) OAS3 spec example payloads + the developer-portal documented list/search envelope (a `pagination` object alongside a resource-named collection array, single-record GETs returning the object directly). All VALUES are synthetic / PII-scrubbed test data, not captured real responses. No live API was hit to produce these.",
+  "piiSafety": {
+    "names": "<scrubbed-name-N> placeholders",
+    "emails": "example+N@example.com (RFC 2606 reserved domain)",
+    "phones": "555-01xx (NANP fictional test range)",
+    "addresses": "123 Test St, Example, XX 00000",
+    "dates": "synthetic 2026 ISO timestamps",
+    "ids": "well-formed but synthetic integer ids (needed for FK/PK + watermark verification)"
+  },
+  "sources": [
+    {
+      "URL": "https://developer.neoncrm.com/api-v2/",
+      "UsedFor": "list/search `pagination` envelope shape, single-record GET shape, page-number pagination params (currentPage 0-based + pageSize), timestamps.lastModifiedDateTime incremental cursor",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs"
+    },
+    {
+      "URL": "Neon CRM OAS3 spec v2.11 (credential-free)",
+      "UsedFor": "account / donation / membership object field shapes, Basic auth scheme, NEON-API-VERSION header",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec"
+    }
+  ],
+  "edgeCasesCovered": [
+    "list envelope with pagination (multi-page)",
+    "last page of pagination (currentPage+1 == totalPages)",
+    "empty search result (zero rows)",
+    "single-record GET (object returned directly, no envelope)",
+    "raw array at root",
+    "record carrying timestamps.lastModifiedDateTime (watermark)",
+    "out-of-order modified dates across a batch (max-seen, not most-recent)"
+  ]
+}

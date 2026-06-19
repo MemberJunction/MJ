@@ -1,0 +1,314 @@
+[
+  {
+    "fields": {
+      "Name": "certification-components"
+    },
+    "primaryKey": {
+      "ID": "87F94685-AB36-4AB3-8649-036469F5B92F"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "event-registrations"
+    },
+    "primaryKey": {
+      "ID": "0ABBE26B-C964-472E-93CF-08F233D357A7"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "store-items"
+    },
+    "primaryKey": {
+      "ID": "E5EB774C-F85D-4760-9C2B-14EC83A02645"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "groups"
+    },
+    "primaryKey": {
+      "ID": "7A2394AE-2A76-4592-A2B2-18D6401C7AA9"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "contact-person"
+    },
+    "primaryKey": {
+      "ID": "7C795EB8-7F12-4607-9713-21C0034622A6"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "customfields-all"
+    },
+    "primaryKey": {
+      "ID": "4684108B-49FC-43B7-B611-2B70CCD93572"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "invoices"
+    },
+    "primaryKey": {
+      "ID": "34003CC7-2CBD-467A-95FF-373255FE9F58"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "orders"
+    },
+    "primaryKey": {
+      "ID": "A04A41FB-5B0C-4A63-8AE5-398118F182D4"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "contacts"
+    },
+    "primaryKey": {
+      "ID": "663A8B1E-CA71-415E-B310-5274830A424E"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "contact-org"
+    },
+    "primaryKey": {
+      "ID": "391B3980-2BAD-4D4D-B0E6-58E3F75757CD"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "billings"
+    },
+    "primaryKey": {
+      "ID": "D6D8B31E-C655-4961-8FF8-5996843EF551"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "benefit-packages"
+    },
+    "primaryKey": {
+      "ID": "646044A3-73B5-4776-85E9-8126AB6C6CA5"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "contact-sales-opportunities"
+    },
+    "primaryKey": {
+      "ID": "EE363B15-40BB-42D9-A098-91B6E22B62BC"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "custom-field-definitions"
+    },
+    "primaryKey": {
+      "ID": "1BE9A339-46E9-470D-8D7A-95916E44542F"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "contact-communications"
+    },
+    "primaryKey": {
+      "ID": "E0CE9E69-B610-4B20-861E-9B9176B92A1C"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "account-info"
+    },
+    "primaryKey": {
+      "ID": "DC7D0A8E-F78F-43BD-BF68-B2BB7B15272F"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "memberships"
+    },
+    "primaryKey": {
+      "ID": "8717A524-C2E7-46F6-AC74-B2F020734BBC"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "contact-custom-field-values"
+    },
+    "primaryKey": {
+      "ID": "DFA9EC83-92DF-4EA1-A087-B896FDFC7650"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "contact-categories"
+    },
+    "primaryKey": {
+      "ID": "D964061D-D82A-4058-8C98-C839C53542AC"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "cms-sites"
+    },
+    "primaryKey": {
+      "ID": "3803B46C-B075-4E87-90FA-CEEEEC8951C0"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "payments"
+    },
+    "primaryKey": {
+      "ID": "5F6D0C94-0731-4EF0-AAE2-D39651B568B6"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "account-modules"
+    },
+    "primaryKey": {
+      "ID": "A77AC7A2-96EC-4626-A072-D826A35D9169"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "contact-activities"
+    },
+    "primaryKey": {
+      "ID": "15D561F7-896E-415D-859C-DC44AD6D31CF"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "certifications"
+    },
+    "primaryKey": {
+      "ID": "3969D30D-6E79-40C0-81C4-ED49801ED941"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "contact-notes-fields"
+    },
+    "primaryKey": {
+      "ID": "7916D270-A612-4726-861E-F9327839CF59"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "events"
+    },
+    "primaryKey": {
+      "ID": "C24F632D-5231-4335-9E47-FEA1C3E3AEF1"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-17T00:00:00.000Z"
+    }
+  }
+]

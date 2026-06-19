@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EntityField } from '../generic/baseEntity';
 import { EntityFieldInfo, EntityFieldTSType } from '../generic/entityInfo';
-import { ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
+import { ValidationResult, ValidationErrorInfo, ValidationErrorType, WarningManager } from '@memberjunction/global';
 
 // Create minimal mock EntityFieldInfo for testing EntityField
 function createMockFieldInfo(overrides: Partial<EntityFieldInfo> = {}): EntityFieldInfo {
@@ -192,6 +192,27 @@ describe('EntityField', () => {
             const result = field.Validate();
 
             expect(result.Success).toBe(true);
+        });
+
+        // Active-status (deprecated/disabled) enforcement lives at BaseEntity.Get/Set/SetMany — NOT on
+        // the low-level EntityField accessors. So EntityField.Value / Dirty / Validate must NEVER emit a
+        // deprecation warning, even for a deprecated field: they are framework-internal value machinery.
+        // (Enforcement at the BaseEntity layer is covered in baseEntity.activeStatus.test.ts.)
+        it('does not warn for a deprecated field via EntityField.Value, Dirty, or Validate', () => {
+            const fieldInfo = createMockFieldInfo({ Status: 'Deprecated' } as Partial<EntityFieldInfo>);
+            const field = new EntityField(fieldInfo, 'initial');
+
+            const spy = vi.spyOn(WarningManager.Instance, 'RecordFieldDeprecationWarning').mockReturnValue(true);
+            try {
+                field.Value = 'changed';   // setter
+                void field.Value;          // getter
+                expect(field.Dirty).toBe(true); // dirty check reads Value
+                field.Validate();          // validation reads Value
+
+                expect(spy).not.toHaveBeenCalled();
+            } finally {
+                spy.mockRestore();
+            }
         });
     });
 });

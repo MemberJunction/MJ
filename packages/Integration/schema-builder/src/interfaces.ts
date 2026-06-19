@@ -19,6 +19,7 @@ import type {
     SourceFieldInfo as _SourceFieldInfo,
     SourceRelationshipInfo as _SourceRelationshipInfo,
 } from '@memberjunction/integration-engine';
+import type { SchemaFieldType } from '@memberjunction/sql-dialect';
 
 export type SourceSchemaInfo = _SourceSchemaInfo;
 export type SourceObjectInfo = _SourceObjectInfo;
@@ -135,8 +136,8 @@ export interface ColumnModification {
 
 /** Maps a generic source type to platform-specific SQL types. */
 export interface TypeMappingEntry {
-    /** Generic source type (e.g., "string", "integer"). */
-    SourceType: string;
+    /** Generic source type — a dialect-abstraction SchemaFieldType (e.g., "string", "integer"). */
+    SourceType: SchemaFieldType;
     /** SQL Server type template (e.g., "NVARCHAR(n)"). */
     SqlServerType: string;
     /** PostgreSQL type template (e.g., "VARCHAR(n)"). */

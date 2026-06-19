@@ -1,5 +1,7 @@
 import { configInfo } from '../config.js';
 import { LogStatus } from '@memberjunction/core';
+import ora from 'ora';
+import type { Ora } from 'ora';
 
 /**
  * Server log verbosity levels, ordered from least to most chatty.
@@ -46,6 +48,8 @@ type StartupSummaryData = {
   DbConnection?: string;
   /** Count of entities loaded into metadata. */
   EntityCount?: number;
+  /** Absolute path to the resolved config file (omitted from the block if absent). */
+  ConfigPath?: string;
   /** Names of registered auth providers. */
   AuthProviders: string[];
   /** Whether the REST API is enabled. */
@@ -82,6 +86,14 @@ export class StartupLogger {
   private readonly resolvedLevel: ServerLogLevel;
   private readonly phaseTimings: PhaseTiming[] = [];
   private readonly summary: StartupSummaryData = { AuthProviders: [] };
+  /** Transient boot spinner — active only at `standard` level on a TTY (see {@link spinnerEnabled}). */
+  private spinner: Ora | null = null;
+  /** Interval that ticks the live elapsed counter on the spinner line. */
+  private bootTimer: ReturnType<typeof setInterval> | null = null;
+  /** Wall-clock start of the boot indicator, for the live elapsed counter. */
+  private bootStartMs = 0;
+  /** Most recent phase label, shown on the spinner line. */
+  private currentPhase?: string;
 
   /**
    * @param level Optional explicit level override (primarily for tests).
@@ -141,6 +153,85 @@ export class StartupLogger {
   }
 
   /**
+   * True when the transient boot spinner should animate: only at `standard`
+   * level AND when stdout is an interactive TTY. In non-TTY contexts (Docker,
+   * systemd, piped logs) a spinner emits escape codes that pollute log
+   * aggregation, and at `verbose`+ the inline phase lines would fight it — so
+   * both fall back to plain, line-oriented output.
+   */
+  private get spinnerEnabled(): boolean {
+    return this.resolvedLevel === 'standard' && process.stdout.isTTY === true;
+  }
+
+  /** Prefix for the transient boot indicator (no rocket — we haven't launched yet). */
+  private static readonly BOOT_LABEL = 'Bootstrapping MemberJunction Server';
+
+  /** Composes the boot label, plus the current phase when known (no elapsed counter). */
+  private bootText(phase?: string): string {
+    return phase ? `${StartupLogger.BOOT_LABEL} · ${phase}` : StartupLogger.BOOT_LABEL;
+  }
+
+  /** Repaints the spinner line with the current phase and a live elapsed counter. */
+  private refreshBootText(): void {
+    if (this.spinner) {
+      const elapsed = ((performance.now() - this.bootStartMs) / 1000).toFixed(1);
+      this.spinner.text = `${this.bootText(this.currentPhase)}  ${elapsed}s`;
+    }
+  }
+
+  /**
+   * Begins the transient "Bootstrapping…" indicator, replaced by the 🚀 summary
+   * block once {@link PrintSummary} runs (so the rocket appears only after launch).
+   *
+   * - `standard` + TTY: an animated, self-clearing `ora` spinner (its glyph is the
+   *   leading "working" icon; phase status is appended inline).
+   * - `verbose`/`debug`, or non-TTY at `standard`: a single plain line with an
+   *   hourglass icon (can't be cleared, but inline phase logs / the final block
+   *   carry the detail). `minimal` stays silent.
+   */
+  public StartBoot(): void {
+    if (this.spinner) {
+      return;
+    }
+    if (this.spinnerEnabled) {
+      this.bootStartMs = performance.now();
+      this.spinner = ora({ text: this.bootText(), stream: process.stdout }).start();
+      // Tick the elapsed counter independently of ora's glyph animation. Unref'd so
+      // it never keeps the event loop alive; cleared by StopBoot before the block prints.
+      this.bootTimer = setInterval(() => this.refreshBootText(), 200);
+      this.bootTimer.unref();
+    } else if (this.resolvedLevel !== 'minimal') {
+      // eslint-disable-next-line no-console
+      console.log(`⏳ ${this.bootText()}…`);
+    }
+  }
+
+  /**
+   * Marks the beginning of a named phase: updates the spinner status (when active)
+   * and returns a start timestamp to pass to {@link EndPhase}. Pure timing helper
+   * when the spinner is disabled — equivalent to {@link StartPhase}.
+   *
+   * @param phase Friendly label for the upcoming phase, shown after the boot label.
+   */
+  public BeginPhase(phase: string): number {
+    this.currentPhase = phase;
+    this.refreshBootText();
+    return performance.now();
+  }
+
+  /** Stops and clears the boot spinner + its elapsed-counter interval. Safe to call when inactive. */
+  public StopBoot(): void {
+    if (this.bootTimer) {
+      clearInterval(this.bootTimer);
+      this.bootTimer = null;
+    }
+    if (this.spinner) {
+      this.spinner.stop();
+      this.spinner = null;
+    }
+  }
+
+  /**
    * Records the elapsed time for a phase since `startedAt`, buffering it for the
    * summary. At `verbose`+ the phase is also printed immediately (matching the
    * legacy `⏱️ [Startup] X: Yms` lines); at `standard` it is collapsed into the
@@ -161,6 +252,11 @@ export class StartupLogger {
   /** Records the server package version for the summary header. */
   public SetVersion(version: string | undefined): void {
     this.summary.Version = version;
+  }
+
+  /** Records the resolved config-file path for the summary `Config` line. */
+  public SetConfigPath(path: string | undefined): void {
+    this.summary.ConfigPath = path;
   }
 
   /** Records DB platform + connection + entity count for the summary `DB` line. */
@@ -198,6 +294,9 @@ export class StartupLogger {
    *    all detail lines were already printed inline during boot).
    */
   public PrintSummary(): void {
+    // Clear the transient spinner before any block output so the line it
+    // occupied is replaced cleanly by the summary.
+    this.StopBoot();
     if (this.resolvedLevel === 'minimal') {
       this.printReadyLineOnly();
       return;
@@ -225,6 +324,7 @@ export class StartupLogger {
     const lines: string[] = [];
     lines.push(this.buildHeaderLine());
     lines.push(this.buildDbLine());
+    lines.push(this.buildConfigLine());
     lines.push(this.buildAuthLine());
     lines.push(this.buildStartupLine());
     lines.push(this.buildReadyLine());
@@ -252,6 +352,14 @@ export class StartupLogger {
     return `   DB        ${parts.join(' · ')}`;
   }
 
+  /** `   Config    <path>` (omitted when no config file was resolved). */
+  private buildConfigLine(): string {
+    if (!this.summary.ConfigPath) {
+      return '';
+    }
+    return `   Config    ${this.summary.ConfigPath}`;
+  }
+
   /** `   Auth      <providers>          REST <on/off> · <N> scheduled jobs`. */
   private buildAuthLine(): string {
     const providers = this.summary.AuthProviders.length > 0
@@ -268,16 +376,32 @@ export class StartupLogger {
     return `   Auth      ${providers}${trailerPart}`;
   }
 
-  /** `   Startup   <total>s  (<phase> <x>s · <phase> <y>s …)`. */
+  /**
+   * `   Startup   <total>s  (<phase> <x>s · … · other <z>s)`.
+   *
+   * The headline `<total>` is the TRUE wall-clock since process start — in Node,
+   * `performance.now()` is measured from `performance.timeOrigin` (≈ process
+   * start), so it captures the entire bootstrap (module import, config load,
+   * ServerBootstrap, and `serve()`), not just the timed phases. The parenthetical
+   * lists each captured phase; `other` is the unattributed remainder (import +
+   * config + any untimed setup) shown only when it's non-trivial.
+   */
   private buildStartupLine(): string {
     if (this.phaseTimings.length === 0) {
       return '';
     }
-    const totalMs = this.phaseTimings.reduce((sum, p) => sum + p.Ms, 0);
-    const phaseParts = this.phaseTimings
-      .map((p) => `${this.shortPhaseLabel(p.Label)} ${(p.Ms / 1000).toFixed(1)}s`)
-      .join(' · ');
-    return `   Startup   ${(totalMs / 1000).toFixed(1)}s  (${phaseParts})`;
+    const totalMs = performance.now();
+    const phaseSumMs = this.phaseTimings.reduce((sum, p) => sum + p.Ms, 0);
+    const otherMs = totalMs - phaseSumMs;
+    const parts = this.phaseTimings.map(
+      (p) => `${this.shortPhaseLabel(p.Label)} ${(p.Ms / 1000).toFixed(1)}s`,
+    );
+    // Surface unattributed boot time only when it's meaningful (>50ms), so the
+    // line stays clean when phases already account for ~all of startup.
+    if (otherMs > 50) {
+      parts.push(`other ${(otherMs / 1000).toFixed(1)}s`);
+    }
+    return `   Startup   ${(totalMs / 1000).toFixed(1)}s  (${parts.join(' · ')})`;
   }
 
   /**
