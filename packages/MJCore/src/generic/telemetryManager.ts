@@ -32,6 +32,7 @@
  */
 
 import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
+import { Metadata } from './metadata.js';
 
 // ============================================================================
 // TYPES - Using union types per MJ style guide
@@ -1374,7 +1375,40 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         };
     }
 
+    /**
+     * Analyzers whose advice is "load/cache this entity in a dedicated engine". That advice is
+     * nonsensical for entities that have explicitly opted out of caching (`EntityInfo.AllowCaching`
+     * = false) — typically large, append-only tables (agent sessions, prompt runs, record changes)
+     * that should never be bulk-loaded into a process-wide engine cache.
+     */
+    private static readonly ENGINE_CACHE_SUGGESTION_ANALYZERS = new Set<string>([
+        'SameEntityMultipleCallsAnalyzer',
+        'EngineOverlapAnalyzer',
+    ]);
+
+    /**
+     * True when `insight` is an engine-caching suggestion for an entity that has caching disabled.
+     * Reuses the existing `AllowCaching` metadata flag as the single source of truth — no separate
+     * exemption list. Fails open (returns false → insight still emits) when metadata is unavailable.
+     */
+    private isCacheSuggestionForNonCachedEntity(insight: TelemetryInsight): boolean {
+        if (!insight.entityName) return false;
+        if (!TelemetryManager.ENGINE_CACHE_SUGGESTION_ANALYZERS.has(insight.analyzerName)) return false;
+        try {
+            const entity = Metadata.Provider?.EntityByName?.(insight.entityName); // global-provider-ok: telemetry aggregates RunView calls process-wide; AllowCaching is structural entity metadata and this check fails open if unavailable
+            return entity?.AllowCaching === false;
+        } catch {
+            return false;
+        }
+    }
+
     private shouldEmitInsight(insight: TelemetryInsight): boolean {
+        // Suppress "create/use a dedicated engine" suggestions for entities that have opted out of
+        // caching — the AllowCaching=false flag already declares them unsuitable for engine caching.
+        if (this.isCacheSuggestionForNonCachedEntity(insight)) {
+            return false;
+        }
+
         // Dedupe similar insights within a time window
         const dedupeKey = `${insight.analyzerName}:${insight.entityName || ''}:${insight.title}`;
         const lastEmit = this._insightDedupeWindow.get(dedupeKey);
