@@ -1,9 +1,8 @@
-import { UserInfo } from "@memberjunction/core";
+import { UserInfo, ExternalSchemaDescriptor } from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { CredentialEngine, ResolvedCredential } from "@memberjunction/credentials";
 import {
   ExternalConnectionTestResult,
-  ExternalSchemaDescriptor,
   ExternalViewParams,
   ExternalViewResult,
   ExternalQueryParameter,

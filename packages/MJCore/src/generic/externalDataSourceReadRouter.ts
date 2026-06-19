@@ -3,6 +3,7 @@ import { UserInfo } from "./securityInfo";
 import { IMetadataProvider, RunViewResult, RunQueryResult } from "./interfaces";
 import { RunViewParams } from "../views/runView";
 import { RunQueryParams } from "./runQuery";
+import { ExternalSchemaDescriptor } from "./externalDataSourceTypes";
 
 /**
  * Registration base for the External Data Sources read router — the dependency-
@@ -59,4 +60,19 @@ export abstract class ExternalDataSourceReadRouter {
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<number>;
+
+  /**
+   * Introspect the schema of an external data source (its tables/views/collections and their
+   * columns), delegating to the resolved driver's `IntrospectSchema`. Used by CodeGen to
+   * generate/sync `EntityField` metadata for external-backed entities — the remote analogue of
+   * reading `INFORMATION_SCHEMA` for an MJ-DB entity. `schemaName` narrows to a single
+   * schema/namespace when supplied. Reached via `MJGlobal.ClassFactory` so build-time consumers
+   * stay free of a hard dependency on the engine + driver SDKs.
+   */
+  public abstract IntrospectExternalSchema(
+    externalDataSourceID: string,
+    schemaName?: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<ExternalSchemaDescriptor>;
 }

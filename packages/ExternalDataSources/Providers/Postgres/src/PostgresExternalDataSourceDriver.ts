@@ -1,14 +1,16 @@
 import pg from 'pg';
 import { RegisterClass } from "@memberjunction/global";
-import { UserInfo } from "@memberjunction/core";
+import {
+  UserInfo,
+  ExternalObjectType,
+  ExternalSchemaColumn,
+  ExternalSchemaDescriptor,
+  ExternalSchemaObject,
+} from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import {
   BaseExternalDataSourceDriver,
   ExternalConnectionTestResult,
-  ExternalSchemaColumn,
-  ExternalSchemaDescriptor,
-  ExternalSchemaObject,
-  ExternalObjectType,
   ExternalViewParams,
   ExternalViewResult,
   ExternalQueryParameter,

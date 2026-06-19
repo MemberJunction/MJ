@@ -4,15 +4,17 @@
 // is loaded via dynamic import() only when this driver is actually used.
 import type { Connection, ConnectionOptions, Binds } from 'snowflake-sdk';
 import { RegisterClass } from '@memberjunction/global';
-import { UserInfo } from '@memberjunction/core';
+import {
+  UserInfo,
+  ExternalObjectType,
+  ExternalSchemaColumn,
+  ExternalSchemaDescriptor,
+  ExternalSchemaObject,
+} from '@memberjunction/core';
 import { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
 import {
   BaseExternalDataSourceDriver,
   ExternalConnectionTestResult,
-  ExternalSchemaColumn,
-  ExternalSchemaDescriptor,
-  ExternalSchemaObject,
-  ExternalObjectType,
   ExternalViewParams,
   ExternalViewResult,
   ExternalQueryParameter,

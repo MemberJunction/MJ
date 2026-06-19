@@ -2,6 +2,7 @@ import { RegisterClass } from "@memberjunction/global";
 import {
   EntityInfo,
   ExternalDataSourceReadRouter,
+  ExternalSchemaDescriptor,
   IMetadataProvider,
   RunQueryParams,
   RunQueryResult,
@@ -111,6 +112,16 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
       // transient hiccup doesn't silently change caching behavior.
       return DEFAULT_EXTERNAL_CACHE_TTL_SECONDS;
     }
+  }
+
+  public async IntrospectExternalSchema(
+    externalDataSourceID: string,
+    schemaName?: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<ExternalSchemaDescriptor> {
+    const { driver, dataSource } = await ExternalDataSourceRouter.Instance.resolve(externalDataSourceID, contextUser, provider);
+    return driver.IntrospectSchema(dataSource, schemaName, contextUser);
   }
 
   private failView<T>(errorMessage: string, executionTime: number): RunViewResult<T> {

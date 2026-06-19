@@ -1,12 +1,10 @@
 import { MongoClient, MongoClientOptions, Db, Document, FindOptions, Sort } from 'mongodb';
 import { RegisterClass } from '@memberjunction/global';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, ExternalSchemaColumn, ExternalSchemaDescriptor } from '@memberjunction/core';
 import { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
 import {
   BaseExternalDataSourceDriver,
   ExternalConnectionTestResult,
-  ExternalSchemaColumn,
-  ExternalSchemaDescriptor,
   ExternalViewParams,
   ExternalViewResult,
   ExternalQueryParameter,

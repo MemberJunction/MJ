@@ -16,6 +16,7 @@ export * from "./generic/baseEntity";
 export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
 export * from "./generic/entityInfo";
+export * from "./generic/externalDataSourceTypes";
 export * from "./generic/externalDataSourceReadRouter";
 export * from "./generic/securityInfo";
 export * from "./generic/transactionGroup";
