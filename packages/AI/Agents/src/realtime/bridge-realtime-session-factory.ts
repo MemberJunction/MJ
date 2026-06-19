@@ -17,7 +17,7 @@
  * @author MemberJunction.com
  */
 
-import { IRealtimeSession, ChatMessage } from '@memberjunction/ai';
+import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, GetAIAPIKey } from '@memberjunction/ai';
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -42,6 +42,16 @@ export interface BridgeRealtimeSessionContext {
     TargetAgentID?: string;
     /** The transport endpoint being joined (room/meeting/number) — informational here; not required. */
     RoomName?: string;
+    /**
+     * Optional per-session Realtime MODEL override (an `MJ: AI Models` Name or ID) — a dev choosing a
+     * specific realtime model for THIS agent in the room. Wins over the co-agent config's modelPreference.
+     */
+    RealtimeModelID?: string;
+    /**
+     * Optional per-session VOICE override (a provider-native voice id, e.g. OpenAI `echo`/`shimmer`) — how
+     * two agents in the same room are given distinct voices. Replaces the config's per-provider voice.
+     */
+    RealtimeVoice?: string;
     /** The user the session runs as (scopes memory + DB ops). */
     ContextUser?: UserInfo;
     /** The request-scoped metadata provider (multi-provider safe). Falls back to the global default. */
@@ -87,10 +97,87 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
         provider,
         // A fresh bridge session starts with no prior turns; memory context degrades gracefully to empty.
         conversationMessages: [] as ChatMessage[],
-        // The TARGET agent the co-agent voices via `invoke-target-agent` (BaseAgent reads
-        // params.data.targetAgentID). Without it the co-agent has nobody to speak for and stays idle.
-        data: ctx.TargetAgentID ? { targetAgentID: ctx.TargetAgentID } : undefined,
+        // Realtime extras ride params.data: the TARGET agent the co-agent voices via `invoke-target-agent`
+        // (without it the co-agent stays idle), plus optional per-session dev overrides for the model/voice
+        // so two agents in the same room can sound distinct. Omitted keys are simply absent.
+        data: buildRealtimeData(ctx),
     });
+}
+
+/**
+ * Builds the `params.data` bag from the bridge context — the realtime extras BaseAgent reads at session
+ * start. Returns `undefined` when nothing is set so the param stays cleanly absent.
+ */
+function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, unknown> | undefined {
+    const data: Record<string, unknown> = {};
+    if (ctx.TargetAgentID) {
+        data.targetAgentID = ctx.TargetAgentID;
+    }
+    if (ctx.RealtimeModelID && ctx.RealtimeModelID.trim().length > 0) {
+        data.realtimeModelID = ctx.RealtimeModelID.trim();
+    }
+    if (ctx.RealtimeVoice && ctx.RealtimeVoice.trim().length > 0) {
+        data.realtimeVoice = ctx.RealtimeVoice.trim();
+    }
+    return Object.keys(data).length > 0 ? data : undefined;
+}
+
+/** An active Realtime model paired with the voices its driver supports — for the dev model/voice picker. */
+export interface RealtimeModelVoices {
+    /** The `MJ: AI Models` row id. */
+    ModelID: string;
+    /** The model's display name. */
+    ModelName: string;
+    /** The provider-native voices the model's driver declares (empty when it declares none). */
+    Voices: RealtimeVoiceOption[];
+}
+
+/**
+ * Enumerates the active Realtime models with each driver's supported voices — the source for the dev
+ * model/voice picker. Only models with an Active vendor + resolvable API key + ClassFactory driver are
+ * returned (a model you can't actually run isn't worth offering). Voices come from the driver
+ * ({@link BaseRealtimeModel.SupportedVoices}) — the near-term, driver-owned source of truth.
+ *
+ * @param contextUser The user the engine config runs as (server-side).
+ * @param provider The request-scoped metadata provider (multi-provider safe).
+ * @returns Active realtime models, each with its driver's voices.
+ */
+export async function GetRealtimeModelVoices(
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+): Promise<RealtimeModelVoices[]> {
+    await AIEngine.Instance.Config(false, contextUser, provider);
+    const isRealtime = (t: string | null | undefined): boolean =>
+        typeof t === 'string' && t.trim().toLowerCase() === 'realtime';
+    const models = AIEngine.Instance.Models
+        .filter((m) => m.IsActive && isRealtime(m.AIModelType))
+        .sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
+
+    const out: RealtimeModelVoices[] = [];
+    for (const model of models) {
+        const driverClass = resolveRealtimeDriverClass(model.ID);
+        if (!driverClass) {
+            continue; // no active vendor with a resolvable key — not runnable, so omit
+        }
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
+            BaseRealtimeModel, driverClass, GetAIAPIKey(driverClass),
+        );
+        out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: instance?.SupportedVoices ?? [] });
+    }
+    return out;
+}
+
+/** The DriverClass of the highest-priority Active vendor (with a resolvable API key) for a model, or null. */
+function resolveRealtimeDriverClass(modelID: string): string | null {
+    const vendors = AIEngine.Instance.ModelVendors
+        .filter((mv) => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
+        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+    for (const v of vendors) {
+        if (GetAIAPIKey(v.DriverClass!)) {
+            return v.DriverClass!;
+        }
+    }
+    return null;
 }
 
 /** Resolves the agent entity from the engine cache by id (preferred), then by case-insensitive name. */

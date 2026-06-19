@@ -8,6 +8,7 @@ import {
     RealtimeToolCall,
     RealtimeUsage,
     RealtimeSessionError,
+    RealtimeVoiceOption,
     JSONObject,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
@@ -159,6 +160,23 @@ export class OpenAIRealtime extends BaseRealtimeModel {
      */
     public override get SupportsClientDirect(): boolean {
         return true;
+    }
+
+    /**
+     * The voices the OpenAI Realtime API can speak with — used to populate the dev voice picker so two
+     * agents in one room can be given distinct voices. Kept in sync with OpenAI's realtime voice set.
+     */
+    public override get SupportedVoices(): RealtimeVoiceOption[] {
+        return [
+            { ID: 'alloy', Name: 'Alloy' },
+            { ID: 'ash', Name: 'Ash' },
+            { ID: 'ballad', Name: 'Ballad' },
+            { ID: 'coral', Name: 'Coral' },
+            { ID: 'echo', Name: 'Echo' },
+            { ID: 'sage', Name: 'Sage' },
+            { ID: 'shimmer', Name: 'Shimmer' },
+            { ID: 'verse', Name: 'Verse' },
+        ];
     }
 
     /**

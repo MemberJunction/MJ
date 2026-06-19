@@ -341,7 +341,13 @@ describe('AIBridgeEngine — lifecycle and status transitions', () => {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe('AIBridgeEngine — turn-taking integration (Passive)', () => {
-    it('Passive: requests a spoken update only when the agent is addressed', async () => {
+    it('does NOT force a spoken update — relies on the model auto-response (no double-fire / overlap)', async () => {
+        // The bridged model runs with server-VAD auto-response (same config as browser-direct), so it
+        // already replies to each turn on its own — one clean stream. The engine must NOT also force a
+        // `RequestSpokenUpdate`: that second `response.create` races the auto-response and the agent
+        // answers twice, the streams overlapping/chopping. This guards against re-introducing that bug.
+        // (Turn-controlled mode — where the bridge DISABLES auto-response and becomes the sole trigger —
+        // is the multi-agent floor-control follow-up; it will assert the forced-update path separately.)
         const session = new MockRealtimeSession();
         const { provider } = makeProvider(() => makeBridgeRow());
         const active = await engine().StartBridgeSession(
@@ -351,21 +357,12 @@ describe('AIBridgeEngine — turn-taking integration (Passive)', () => {
             }),
         );
 
-        // Not addressed → silent (no spoken update).
+        // No forced spoken update on ANY turn — addressed or not — because the model auto-responds.
         session.EmitTranscript({ Role: 'user', Text: 'How is the weather today', IsFinal: true });
-        expect(session.SpokenUpdates.length).toBe(0);
-
-        // Addressed → speak.
         session.EmitTranscript({ Role: 'user', Text: 'Hey Sage, what do you think?', IsFinal: true });
-        expect(session.SpokenUpdates.length).toBe(1);
-
-        // Assistant transcripts never drive turn-taking (would self-trigger).
         session.EmitTranscript({ Role: 'assistant', Text: 'Sage here, responding', IsFinal: true });
-        expect(session.SpokenUpdates.length).toBe(1);
-
-        // Non-final user transcript ignored.
         session.EmitTranscript({ Role: 'user', Text: 'Sage', IsFinal: false });
-        expect(session.SpokenUpdates.length).toBe(1);
+        expect(session.SpokenUpdates.length).toBe(0);
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });

@@ -105,6 +105,8 @@ export interface NativeRoomClient {
     disconnect(): Promise<void>;
     /** Publishes one raw PCM frame on the bot's audio track (the agent's voice). */
     publishAudio(pcm: ArrayBuffer): void;
+    /** Drops all pending/queued outbound audio — flushes the agent's voice on barge-in. */
+    flushOutbound(): void;
     /** Publishes one raw frame on the bot's camera/video track. */
     publishVideo(frame: ArrayBuffer): void;
     /** Publishes one raw frame on the bot's screen-share track. */
@@ -376,6 +378,11 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
      */
     public publishAudioFrame(pcm: ArrayBuffer): void {
         this.client?.publishAudio(pcm);
+    }
+
+    /** Flushes the agent's queued outbound audio (barge-in). No-ops before connect. */
+    public flushOutboundAudio(): void {
+        this.client?.flushOutbound();
     }
 
     /**

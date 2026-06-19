@@ -150,6 +150,29 @@ export abstract class BaseRealtimeModel extends BaseModel {
     public get SupportsVideo(): boolean {
         return false;
     }
+
+    /**
+     * The provider-native voice ids this model can speak with (e.g. OpenAI `alloy`/`echo`/`shimmer`). The
+     * model/driver is the authoritative owner of "what voices do I support", so each driver declares its
+     * own — used to populate the dev voice picker. Default empty (a driver that hasn't declared voices
+     * yields no picker options, falling back to the configured/default voice).
+     *
+     * NOTE: this is the near-term, driver-owned source of truth. Long term this should move to metadata so
+     * providers that let users add their OWN voices (e.g. ElevenLabs) can be enumerated dynamically.
+     *
+     * @returns The supported voice ids (id + human label), or `[]` when none are declared.
+     */
+    public get SupportedVoices(): RealtimeVoiceOption[] {
+        return [];
+    }
+}
+
+/** A selectable provider-native voice — `ID` is sent to the provider, `Name` is the human label. */
+export interface RealtimeVoiceOption {
+    /** The provider-native voice id (e.g. `echo`) — what gets written to the session config. */
+    ID: string;
+    /** The human-friendly label for the picker (e.g. `Echo`). */
+    Name: string;
 }
 
 /**

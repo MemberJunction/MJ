@@ -1647,7 +1647,17 @@ export class BaseAgent {
             throw new Error(config.errorMessage ?? `Failed to load configuration for agent '${params.agent.Name}'.`);
         }
 
-        const modelResolution = await this.resolveRealtimeModel(params);
+        // Model + voice resolve via a 3-layer precedence cascade:
+        //   1. runtime override — a dev's per-session pick, ridden in on params.data (wins)
+        //   2. the TARGET agent's own realtime config — Sage / Marketing Agent / Demo Loop each persist
+        //      their own voice/model in TypeConfiguration, so they're distinct everywhere by default
+        //   3. the co-agent's config / type default — the shared fallback (applied by buildRealtimeSessionParams)
+        const runtimeModelID = (params.data?.realtimeModelID as string | undefined)?.trim() || undefined;
+        const runtimeVoice = (params.data?.realtimeVoice as string | undefined)?.trim() || undefined;
+        const targetConfig = this.resolveTargetRealtimeConfig(params);
+        const overrideModelID = runtimeModelID ?? targetConfig?.realtime?.modelPreference;
+
+        const modelResolution = await this.resolveRealtimeModel(params, overrideModelID);
         if (!modelResolution) {
             throw new Error(
                 `No usable Realtime model resolved for agent '${params.agent.Name}'. Configure an Active ` +
@@ -1659,6 +1669,14 @@ export class BaseAgent {
         const sessionParams = await this.buildRealtimeSessionParams(
             params, config, modelResolution.apiName, effectiveConfig, modelResolution.driverClass,
         );
+
+        // Voice cascade (layers 1→2; layer 3 is already baked into Config by buildRealtimeSessionParams).
+        // Shape matches GetProviderVoiceSettings (`{ voice: '…' }`).
+        const targetVoice = GetProviderVoiceSettings(targetConfig, modelResolution.driverClass ?? null)?.voice as string | undefined;
+        const overrideVoice = runtimeVoice ?? (targetVoice?.trim() || undefined);
+        if (overrideVoice) {
+            sessionParams.Config = { ...(sessionParams.Config ?? {}), voice: overrideVoice };
+        }
 
         return await modelResolution.model.StartSession(sessionParams);
     }
@@ -1681,14 +1699,15 @@ export class BaseAgent {
      * @returns The resolved model instance plus its model/vendor identifiers, or `null`.
      */
     protected async resolveRealtimeModel(
-        params: ExecuteAgentParams
+        params: ExecuteAgentParams,
+        overrideModelID?: string
     ): Promise<{ model: BaseRealtimeModel; modelID: string; vendorID: string; apiName: string; driverClass?: string } | null> {
         // Walk candidates in resolution order (preference first, then highest PowerRank), returning the
         // FIRST that FULLY resolves (active vendor + resolvable API key + ClassFactory driver). Single-pick
         // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
         // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
         // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
-        const candidates = this.selectRealtimeModelCandidates(params.agent);
+        const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
         for (const model of candidates) {
             const vendor = this.selectRealtimeVendor(model.ID);
             if (!vendor) {
@@ -1724,7 +1743,7 @@ export class BaseAgent {
      * @param agent The agent being executed.
      * @returns The candidate models in resolution order (empty when none are active).
      */
-    private selectRealtimeModelCandidates(agent: MJAIAgentEntityExtended): MJAIModelEntityExtended[] {
+    private selectRealtimeModelCandidates(agent: MJAIAgentEntityExtended, overrideModelID?: string): MJAIModelEntityExtended[] {
         const isRealtime = (m: MJAIModelEntityExtended): boolean =>
             typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'realtime';
 
@@ -1735,7 +1754,11 @@ export class BaseAgent {
 
         const byPower = [...realtimeModels].sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
 
-        const preference = this.resolveRealtimeEffectiveConfig(agent).realtime?.modelPreference;
+        // A per-session override (a dev picking a specific Realtime model for this bridged agent) wins over
+        // the config's modelPreference — same "preferred first, rest by power as fallback" semantics.
+        const preference = (overrideModelID && overrideModelID.trim().length > 0)
+            ? overrideModelID.trim()
+            : this.resolveRealtimeEffectiveConfig(agent).realtime?.modelPreference;
         if (preference) {
             const wanted = preference.trim().toLowerCase();
             const preferred = realtimeModels.find(m => UUIDsEqual(m.ID, preference))
@@ -2088,6 +2111,20 @@ export class BaseAgent {
             return null;
         }
         return AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, targetID)) ?? null;
+    }
+
+    /**
+     * Resolves the TARGET agent's effective realtime config — layer 2 of the voice/model precedence cascade
+     * ({@link StartBridgeRealtimeSession}). This is how a voiced agent (Sage, Marketing Agent, …) carries
+     * its OWN voice/model that the shared co-agent then speaks with. Returns `null` when there's no target
+     * or the target carries no realtime config.
+     *
+     * @param params The session parameters (target id rides `params.data.targetAgentID`).
+     * @returns The target's effective {@link RealtimeCoAgentConfig}, or `null`.
+     */
+    private resolveTargetRealtimeConfig(params: ExecuteAgentParams): RealtimeCoAgentConfig | null {
+        const targetAgent = this.resolveRealtimeTargetAgent(params);
+        return targetAgent ? this.resolveRealtimeEffectiveConfig(targetAgent) : null;
     }
 
     /**

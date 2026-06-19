@@ -616,6 +616,16 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             const track: BridgeMediaTrackKind = 'video-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
+
+        // Barge-in: on a TRUE interruption (the user speaks over the agent), the model stops generating —
+        // but the driver may still hold queued outbound audio that would keep playing. Flush it so the
+        // agent goes quiet immediately. Without this, interruption "doesn't work" on the bridge surface.
+        RealtimeSession.OnInterruption(() => {
+            if (this.diagOutbound.has(active.SessionBridgeID)) {
+                LogStatus(`[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`);
+            }
+            Bridge.FlushOutboundMedia();
+        });
     }
 
     /**
@@ -831,12 +841,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private applyTurnDecision(active: ActiveBridgeSession, action: 'Speak' | 'PostToChat' | 'Silent'): void {
         switch (action) {
             case 'Speak':
-                // Let the session respond. Prefer an instructed spoken update when the provider
-                // supports it; otherwise the inbound media already reached the model and it will
-                // respond on its own turn — nothing further to force.
-                if (active.RealtimeSession.RequestSpokenUpdate) {
-                    active.RealtimeSession.RequestSpokenUpdate('Respond to the participant who just addressed you.');
-                }
+                // The model is configured with server-VAD auto-response (the same config the browser
+                // client-direct path uses), so it ALREADY responds to the participant's turn on its own —
+                // one clean stream. We must NOT also force a `RequestSpokenUpdate` here: that issues a
+                // SECOND `response.create` racing the auto-response, so the agent answers twice and the
+                // two streams overlap/chop (the symptom that does not occur in browser-direct, which has
+                // only the auto-response). Rely on auto-response.
+                //
+                // NOTE: when we add multi-agent floor control, the bridge will instead DISABLE the
+                // model's auto-response (turn_detection.create_response = false) and become the sole
+                // trigger — at which point this branch forces the response. Until then, forcing here only
+                // double-fires. See the bot-vs-bot floor-control follow-up.
                 break;
             case 'PostToChat':
                 // Bridge chat is a Phase 2 channel surface; the hook is here so the wiring is complete.

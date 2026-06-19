@@ -34,6 +34,10 @@ export interface RealtimeSessionStartContext {
   AgentName?: string;
   /** The TARGET agent the co-agent voices via `invoke-target-agent` (the one being "called"). */
   TargetAgentID?: string;
+  /** Optional per-session Realtime MODEL override (Name or ID). */
+  RealtimeModelID?: string;
+  /** Optional per-session VOICE override (provider-native voice id). */
+  RealtimeVoice?: string;
   /** The room being joined. */
   RoomName: string;
   /** The user the session runs as. */
@@ -63,6 +67,10 @@ export interface StartAgentRoomSessionParams {
    * session factory so the Realtime Co-Agent has someone to delegate to via `invoke-target-agent`.
    */
   TargetAgentID?: string;
+  /** Optional per-session Realtime MODEL override (Name or ID) — wins over the co-agent config preference. */
+  RealtimeModelID?: string;
+  /** Optional per-session VOICE override (provider-native voice id) — gives this agent a distinct voice. */
+  RealtimeVoice?: string;
   /** Extra aliases the agent answers to (for Passive turn-taking). */
   AgentAliases?: string[];
   /** Turn-taking mode. Default: `'Passive'` (speak only when addressed). */
@@ -163,6 +171,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       AgentID: params.AgentID,
       AgentName: params.AgentName,
       TargetAgentID: params.TargetAgentID,
+      RealtimeModelID: params.RealtimeModelID,
+      RealtimeVoice: params.RealtimeVoice,
       RoomName: params.RoomName,
       ContextUser: params.ContextUser,
       MetadataProvider: params.MetadataProvider,

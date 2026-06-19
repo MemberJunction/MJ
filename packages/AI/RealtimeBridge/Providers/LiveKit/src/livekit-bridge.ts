@@ -200,6 +200,11 @@ export class LiveKitBridge extends BaseRealtimeBridge {
      * @param track The outbound track the frame targets.
      * @param frame The media frame to send.
      */
+    /** Flushes the agent's queued outbound voice on barge-in (the user interrupted the agent). */
+    public override FlushOutboundMedia(): void {
+        this.sdk?.flushOutboundAudio();
+    }
+
     public SendMedia(track: BridgeMediaTrackKind, frame: BridgeMediaFrame): void {
         if (!this.sdk) {
             return; // not connected — drop
