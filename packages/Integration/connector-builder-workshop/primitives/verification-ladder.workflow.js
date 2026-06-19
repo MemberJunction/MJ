@@ -261,7 +261,11 @@ for (const t of tiers) {
     // The agent has no authority to declare a verdict itself — the JS below trusts
     // only a runner-shaped object (Tier/Status/DurationMs).
     let result;
-    if (t.cred && !hasCreds && brokerPlans.length > 0) {
+    // Prefer the broker-mediated live path whenever a read-only broker plan is supplied — in broker
+    // mode credentialReference is an opaque "broker-held:<plan>" marker, NOT a real CredentialFilePath.
+    // (Was gated on !hasCreds, which mis-routed an [A] run that declares BOTH credentialReference +
+    // brokerPlans to the file path → run_tier got "broker-held:..." as a file path → live rung red.)
+    if (t.cred && brokerPlans.length > 0) {
         // BROKER-MEDIATED live rung: the credential lives ONLY in the separate-user
         // broker. The testing-agent submits a READ-ONLY job to the mailbox and reads
         // the SCRUBBED result; no credential bytes ever reach the agent or this script.
