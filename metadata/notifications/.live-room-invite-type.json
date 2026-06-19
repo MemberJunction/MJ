@@ -1,0 +1,23 @@
+{
+  "fields": {
+    "Name": "Live Room Invite",
+    "Description": "Sent when another user invites you to join a live Meet room (LiveKit). Clicking the in-app notification joins the room. In-app is on by default; to also deliver via MJ Comms (email), author a 'Live Room Invite - Email' template, set EmailTemplateID, and flip DefaultEmail to true.",
+    "DefaultInApp": true,
+    "DefaultEmail": false,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "EmailTemplateID": null,
+    "SMSTemplateID": null,
+    "Icon": "fa-video",
+    "Color": "#0076b6",
+    "AutoExpireDays": 7,
+    "Priority": 10
+  },
+  "primaryKey": {
+    "ID": "1DC129F6-4862-4308-97CE-32159759B329"
+  },
+  "sync": {
+    "lastModified": "2026-06-19T19:35:53.183Z",
+    "checksum": "adb04793319b11e011ba63a5f8c050751d5b9aedc5bbcd44fe762a0010466bc1"
+  }
+}

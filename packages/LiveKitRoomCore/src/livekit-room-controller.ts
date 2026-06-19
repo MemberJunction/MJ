@@ -354,6 +354,21 @@ export class LiveKitRoomController {
   }
 
   /**
+   * Returns the `deviceId` of the currently-active device for a given kind, or `null`
+   * when no room is connected or the active device is unknown. Used by hosts to
+   * pre-select the active device in a device-picker UI.
+   *
+   * @param kind The device kind to query.
+   * @returns The active `deviceId`, or `null` if unavailable.
+   */
+  public GetActiveDeviceId(kind: LiveKitDevice['Kind']): string | null {
+    if (!this.room) {
+      return null;
+    }
+    return this.room.getActiveDevice(kind) ?? null;
+  }
+
+  /**
    * Switches the active device for a given kind.
    *
    * @param kind The device kind to switch.

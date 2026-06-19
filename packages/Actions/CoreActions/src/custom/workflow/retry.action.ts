@@ -126,7 +126,7 @@ export class RetryAction extends BaseAction {
             };
 
             // Create action engine
-            const engine = new ActionEngineServer();
+            const engine = ActionEngineServer.Instance;
 
             // Track attempts
             const attempts: any[] = [];

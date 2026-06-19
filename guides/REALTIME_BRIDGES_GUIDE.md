@@ -760,6 +760,15 @@ are multi-party media transports — so LiveKit is "*another bridge, not a speci
 - Capabilities: on-demand join, A/V/screen in+out, diarization, data-channel chat, room-admin mute. No
   scheduled/invite/telephony — those gated base methods throw `BridgeCapabilityNotSupportedError`.
 
+> **Running LiveKit: local dev vs production (Cloud).** The LiveKit SFU runs *alongside* MJAPI — MJAPI
+> only mints join tokens (`LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`), it never proxies
+> media. For **local dev**, run a throwaway server — Docker for browser-only testing, or native
+> `livekit-server --config docker/livekit/livekit.yaml` for the agent-bot path on macOS (Docker NAT
+> breaks the bot's WebRTC media there). For **production / real-world deployments**, use
+> [**LiveKit Cloud**](https://cloud.livekit.io) — drop its `wss://…livekit.cloud` URL + key + secret into
+> `.env`, no server to run. The canonical how-to (both options, the macOS gotcha, env vars) lives in
+> [`docker/livekit/README.md`](../docker/livekit/README.md).
+
 ### Inter-agent speaking discipline — `MultiAgentRoomCoordinator`
 
 The one genuinely new problem is keeping multiple agents from **talking over each other or looping**. The

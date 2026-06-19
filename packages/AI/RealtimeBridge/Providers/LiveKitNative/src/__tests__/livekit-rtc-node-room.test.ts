@@ -36,7 +36,7 @@ class Capture {
     public captured: RtcAudioFrame[] = [];
     public audioSourceRates: Array<[number, number]> = [];
     public audioStreamRates: Array<[number, number]> = [];
-    public publishedTrackNames: string[] = [];
+    public publishedSources: number[] = [];
     public publishedData: Uint8Array[] = [];
     public disconnected = false;
 }
@@ -66,8 +66,10 @@ function makeFakeRtc(remote: RtcParticipant[] = []): {
 
     const localParticipant = {
         identity: 'agent-bot',
-        publishTrack: vi.fn(async (_t: unknown, opts?: Record<string, unknown>) => {
-            cap.publishedTrackNames.push(String(opts?.name ?? ''));
+        publishTrack: vi.fn(async (_t: unknown, opts?: { source?: number }) => {
+            // Capture the publish-options `source` — it MUST be set (SOURCE_MICROPHONE) for the native
+            // AudioSource to accept captured frames; a missing source is the `InvalidState` bug.
+            cap.publishedSources.push(Number(opts?.source ?? -1));
             return {};
         }),
         publishData: vi.fn(async (payload: Uint8Array) => {
@@ -115,6 +117,13 @@ function makeFakeRtc(remote: RtcParticipant[] = []): {
         LocalAudioTrack: { createAudioTrack: () => ({ __isLocalAudioTrack: true as const }) },
         RoomEvent: ROOM_EVENT,
         TrackKind: TRACK_KIND,
+        TrackPublishOptions: class {
+            source?: number;
+            constructor(data?: { source?: number }) {
+                this.source = data?.source;
+            }
+        } as unknown as RtcNodeModule['TrackPublishOptions'],
+        TrackSource: { SOURCE_MICROPHONE: 2 },
     };
 
     const emit = (event: string, ...args: unknown[]) => {
@@ -165,7 +174,7 @@ describe('LiveKitRtcNodeRoomClient — connect + audio', () => {
         const client = new LiveKitRtcNodeRoomClient(DEFAULT_SAMPLE_RATE, DEFAULT_SAMPLE_RATE, 1, async () => module);
         const result = await client.connect(connectArgs);
         expect(result).toEqual({ localIdentity: 'agent-bot', roomName: 'demo-room' });
-        expect(cap.publishedTrackNames).toEqual(['Agent']);
+        expect(cap.publishedSources).toEqual([2]); // SOURCE_MICROPHONE — required for captureFrame to succeed
         expect(cap.audioSourceRates).toEqual([[DEFAULT_SAMPLE_RATE, 1]]); // outbound source at model rate
     });
 

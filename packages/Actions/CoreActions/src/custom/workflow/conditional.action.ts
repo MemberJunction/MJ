@@ -134,7 +134,7 @@ export class ConditionalAction extends BaseAction {
 
             // Execute the action
             try {
-                const engine = new ActionEngineServer();
+                const engine = ActionEngineServer.Instance;
                 const actionResult = await engine.RunAction(actionConfig);
 
                 // Add output parameters from child action

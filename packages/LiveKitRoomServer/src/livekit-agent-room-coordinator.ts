@@ -16,7 +16,7 @@
 import { BaseSingleton } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { IRealtimeSession } from '@memberjunction/ai';
-import { RegexAddressedMatcher, type BridgeDisconnectReason, type BridgeTurnMode } from '@memberjunction/ai-bridge-base';
+import { AlwaysAddressedMatcher, type BridgeDisconnectReason, type BridgeTurnMode } from '@memberjunction/ai-bridge-base';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService } from './livekit-token-service';
 
@@ -32,6 +32,8 @@ export interface RealtimeSessionStartContext {
   AgentID?: string;
   /** The agent's display name (used for the bot name + turn-taking matcher). */
   AgentName?: string;
+  /** The TARGET agent the co-agent voices via `invoke-target-agent` (the one being "called"). */
+  TargetAgentID?: string;
   /** The room being joined. */
   RoomName: string;
   /** The user the session runs as. */
@@ -56,6 +58,11 @@ export interface StartAgentRoomSessionParams {
   AgentID?: string;
   /** The agent's display name (bot name + addressing). */
   AgentName?: string;
+  /**
+   * The TARGET agent the co-agent voices (the one being "called"). Passed through to the realtime
+   * session factory so the Realtime Co-Agent has someone to delegate to via `invoke-target-agent`.
+   */
+  TargetAgentID?: string;
   /** Extra aliases the agent answers to (for Passive turn-taking). */
   AgentAliases?: string[];
   /** Turn-taking mode. Default: `'Passive'` (speak only when addressed). */
@@ -155,6 +162,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     const session = await this.sessionFactory({
       AgentID: params.AgentID,
       AgentName: params.AgentName,
+      TargetAgentID: params.TargetAgentID,
       RoomName: params.RoomName,
       ContextUser: params.ContextUser,
       MetadataProvider: params.MetadataProvider,
@@ -167,7 +175,10 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       Address: botToken.ServerUrl,
       JoinMethod: 'OnDemand',
       TurnMode: params.TurnMode ?? 'Passive',
-      TurnMatcher: new RegexAddressedMatcher([botName, ...(params.AgentAliases ?? [])]),
+      // Direct "call an agent" room: respond to ALL the user's speech, not only when the agent is named
+      // (Passive's name-match left the agent silent unless you literally said its name each turn). A
+      // multi-agent room may later switch to RegexAddressedMatcher so several agents don't all answer.
+      TurnMatcher: new AlwaysAddressedMatcher(),
       // NativeModuleSpecifier tells LiveKitNativeMeetingSdk which native room-client wrapper to load — the
       // @livekit/rtc-node-backed @memberjunction/ai-bridge-livekit-native by default, overridable via env
       // (e.g. a one-line module setting Gemini's 16 kHz inbound rate). AccessToken is the pre-signed bot

@@ -49,6 +49,7 @@
     "@memberjunction/ai-bedrock": "5.41.0",
     "@memberjunction/ai-betty-bot": "5.41.0",
     "@memberjunction/ai-blackforestlabs": "5.41.0",
+    "@memberjunction/ai-bridge-livekit": "5.41.0",
     "@memberjunction/ai-bridge-server": "5.41.0",
     "@memberjunction/ai-cerebras": "5.41.0",
     "@memberjunction/ai-cohere": "5.41.0",
