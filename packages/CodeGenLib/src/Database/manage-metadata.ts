@@ -1350,9 +1350,16 @@ export class ManageMetadataBase {
       if (!externalEntities || externalEntities.length === 0) {
          return {success: true, anyUpdates: false};
       }
-      // Resolve the EDS router via the ClassFactory — keeps CodeGenLib free of a compile-time
-      // dependency on the engine/drivers. Requires the engine + the relevant driver to be loaded
-      // in the CodeGen process (see runCodeGen.ts side-effect imports).
+      // Lazily load the External Data Sources engine + drivers — ONLY now that we know external
+      // entities exist. The dynamic import is deliberate (CLAUDE.md rule #8, category 3: build-tool
+      // startup deferral): the common codegen run has no external entities and must not pay the cost
+      // of loading pg/mongodb/the engine. The packages are declared deps; importing each triggers its
+      // @RegisterClass side effects so the ClassFactory can resolve the router + drivers below.
+      // snowflake-sdk is an optional peer the Snowflake driver loads only on connect.
+      await import('@memberjunction/external-data-sources');
+      await import('@memberjunction/external-data-source-postgres');
+      await import('@memberjunction/external-data-source-snowflake');
+      await import('@memberjunction/external-data-source-mongodb');
       const router = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
       if (!router) {
          logError('   Cannot sync external entity fields: no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources (and the relevant driver) are loaded in the CodeGen process.');
