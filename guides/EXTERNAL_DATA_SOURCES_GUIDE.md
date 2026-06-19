@@ -70,7 +70,7 @@ Key points:
 - **Entity**: set `Entity.ExternalDataSourceID` and `Entity.ExternalObjectName` (the remote table/view/collection). Set `AllowCreateAPI`/`AllowUpdateAPI`/`AllowDeleteAPI` to `0` (read-only). After CodeGen runs, the generated entity class extends `ReadOnlyExternalBaseEntity` and no sprocs/views/mutations are generated.
 - **Query**: set `Query.ExternalDataSourceID`. The query's SQL is executed in the remote dialect via the driver's native-query path (full multi-table joins authored in the remote dialect are supported).
 
-> **EntityField provisioning is currently manual.** A remote object's columns must be defined as `EntityField` rows before CodeGen can generate a typed entity. The drivers expose `IntrospectSchema`, but an introspection-driven `mj codegen external-metadata` command (plan Phase 4) is not yet shipped.
+> **EntityField provisioning is automatic.** During a normal `mj codegen` run, the `manageExternalEntities` pass introspects the **remote** schema of each external-backed entity (via the driver's `IntrospectSchema`) and syncs its `EntityField` rows — the remote analogue of how CodeGen already manages view-backed `VirtualEntity` fields from `INFORMATION_SCHEMA`. You set `ExternalDataSourceID` + `ExternalObjectName` on the entity; CodeGen fills in the fields. (The engine + driver packages must be installed in the CodeGen process; they're loaded on demand only when external entities exist.)
 
 ---
 
