@@ -16,8 +16,6 @@ import {
     type ExternalRecord,
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
-    type IntegrationObjectInfo,
-    type ActionGeneratorConfig,
     type CreateRecordContext,
     type CRUDResult,
 } from '@memberjunction/integration-engine';
@@ -154,99 +152,6 @@ const DELTA_OBJECTS = new Set<string>(['Site', 'DriveItem', 'ListItem']);
  */
 const LISTITEM_CREATE_OBJECT = 'ListItem';
 
-// ─── SharePoint Object Metadata for Action Generation ─────────────────
-//
-// This list drives Action *generation* only (a capability summary for the
-// generated-action layer). It is NOT a discovery catalog and NOT the sync
-// object universe — discovery + sync read the 25 Declared IntegrationObject
-// rows from metadata. The names here are the verbatim frozen-contract object
-// names (singular), and SupportsWrite reflects the per-IO write surface the
-// contract proved: only DriveItem / List / ListItem / Subscription are writable;
-// Site / Drive and the rest are read-only.
-
-const SHAREPOINT_OBJECTS: IntegrationObjectInfo[] = [
-    {
-        Name: 'Site',
-        DisplayName: 'Site',
-        Description: 'A SharePoint site (team, communication, hub, or personal OneDrive site).',
-        SupportsWrite: false,
-        Fields: [
-            { Name: 'id', DisplayName: 'Site ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Composite site identifier (hostname,site-collection-guid,web-guid).' },
-            { Name: 'displayName', DisplayName: 'Display Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Human-readable site name.' },
-            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Internal site name.' },
-            { Name: 'webUrl', DisplayName: 'Web URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Full URL to the site.' },
-            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Site description.' },
-            { Name: 'createdDateTime', DisplayName: 'Created Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Site creation timestamp.' },
-            { Name: 'lastModifiedDateTime', DisplayName: 'Last Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Last modification timestamp.' },
-        ],
-    },
-    {
-        Name: 'Drive',
-        DisplayName: 'Drive',
-        Description: 'A SharePoint document library or OneDrive personal drive.',
-        SupportsWrite: false,
-        Fields: [
-            { Name: 'id', DisplayName: 'Drive ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Drive GUID.' },
-            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Drive name.' },
-            { Name: 'driveType', DisplayName: 'Drive Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'personal, business, or documentLibrary.' },
-            { Name: 'webUrl', DisplayName: 'Web URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'URL to the drive.' },
-        ],
-    },
-    {
-        Name: 'DriveItem',
-        DisplayName: 'Drive Item',
-        Description: 'A file or folder in a SharePoint drive.',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'id', DisplayName: 'Item ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Drive item identifier.' },
-            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'File or folder name.' },
-            { Name: 'size', DisplayName: 'Size', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'File size in bytes.' },
-            { Name: 'webUrl', DisplayName: 'Web URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Full URL to the item.' },
-            { Name: 'lastModifiedDateTime', DisplayName: 'Last Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Item modification timestamp.' },
-        ],
-    },
-    {
-        Name: 'List',
-        DisplayName: 'List',
-        Description: 'A list within a SharePoint site (custom list, document library, or calendar).',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'id', DisplayName: 'List ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'List identifier.' },
-            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Internal list name.' },
-            { Name: 'displayName', DisplayName: 'Display Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'List title shown in the UI.' },
-            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'List description.' },
-            { Name: 'webUrl', DisplayName: 'Web URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'URL to the list in SharePoint.' },
-            { Name: 'lastModifiedDateTime', DisplayName: 'Last Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Last modification timestamp.' },
-        ],
-    },
-    {
-        Name: 'ListItem',
-        DisplayName: 'List Item',
-        Description: 'A row within a SharePoint list. Dynamic custom columns live in the fields dictionary.',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'id', DisplayName: 'Item ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Per-list auto-increment integer.' },
-            { Name: 'createdDateTime', DisplayName: 'Created Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Item creation timestamp.' },
-            { Name: 'lastModifiedDateTime', DisplayName: 'Last Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Item modification timestamp.' },
-            { Name: 'webUrl', DisplayName: 'Web URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Full URL to the item.' },
-            { Name: 'fields', DisplayName: 'Fields', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Dynamic dictionary keyed by list column names.' },
-        ],
-    },
-    {
-        Name: 'Subscription',
-        DisplayName: 'Subscription',
-        Description: 'A Microsoft Graph change-notification subscription (webhook) over a SharePoint resource.',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'id', DisplayName: 'Subscription ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Subscription identifier.' },
-            { Name: 'resource', DisplayName: 'Resource', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'The resource that will be monitored for changes.' },
-            { Name: 'changeType', DisplayName: 'Change Type', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Comma-separated change types (created/updated/deleted).' },
-            { Name: 'notificationUrl', DisplayName: 'Notification URL', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Endpoint that receives change notifications.' },
-            { Name: 'expirationDateTime', DisplayName: 'Expiration', Type: 'datetime', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'When the subscription expires.' },
-        ],
-    },
-];
-
 // ─── Connector Implementation ────────────────────────────────────────
 
 /**
@@ -292,30 +197,26 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
     // a clear "not configured" error for any object whose per-operation columns are
     // null, which is the correct null-capability-honesty behavior.
 
-    /** Verbatim from the frozen contract's Integration.Name — three-way invariant. */
-    public override get IntegrationName(): string { return 'SharePoint Online'; }
+    /**
+     * Verbatim from the frozen contract's Integration.Name AND the baseline-seeded
+     * `__mj.Integration` row — both are exactly `'SharePoint'`. This is load-bearing:
+     * the three-way invariant `IntegrationName === MJ: Integrations.Name === @RegisterClass
+     * driver→ClassName` is how the engine binds this connector to its Integration row. A
+     * mismatch (e.g. 'SharePoint Online') means the engine never resolves the connector,
+     * no connection is created, and the live sync lands 0 rows. DO NOT change this string.
+     */
+    public override get IntegrationName(): string { return 'SharePoint'; }
 
     // ── Action Generation ────────────────────────────────────────────
-
-    public override GetIntegrationObjects(): IntegrationObjectInfo[] {
-        return SHAREPOINT_OBJECTS;
-    }
-
-    public override GetActionGeneratorConfig(): ActionGeneratorConfig | null {
-        const objects = this.GetIntegrationObjects();
-        if (objects.length === 0) return null;
-
-        return {
-            IntegrationName: 'SharePoint Online',
-            CategoryName: 'SharePoint',
-            IconClass: 'fa-brands fa-microsoft',
-            Objects: objects,
-            IncludeSearch: false,
-            IncludeList: false,
-            CategoryDescription: 'Microsoft SharePoint integration actions (via Graph)',
-            ParentCategoryName: 'Business Apps',
-        };
-    }
+    //
+    // We deliberately do NOT override GetIntegrationObjects / GetActionGeneratorConfig.
+    // The object/field catalog is NOT baked in connector code — it lives entirely in the
+    // 25 Declared IntegrationObject rows in metadata (case 1: credential-free Graph spec).
+    // Baking a module-level catalog constant here is the `catalog-in-code` floor-check
+    // failure (it freezes the object set AND becomes a circular source a later build reads
+    // its own output back from). The base GetIntegrationObjects() returns [] and the base
+    // GetActionGeneratorConfig() returns null when objects are empty — exactly what we want.
+    // DiscoverObjects (below) delegates to super, which reads the Declared rows at runtime.
 
     // ── Default Configuration ────────────────────────────────────────
 
@@ -594,6 +495,24 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
      * already passes `ResponseDataKey` from metadata — we default to the `value`
      * convention when responseDataKey is null.
      */
+    /**
+     * Scope filter: a SharePoint *document-library* connector enumerates SharePoint sites
+     * (team/communication sites under `<tenant>.sharepoint.com/sites/...`), NOT users' personal
+     * OneDrive sites (`<tenant>-my.sharepoint.com/personal/...`). Personal sites are a different
+     * product (OneDrive), are routinely admin-locked (Graph returns HTTP 423 `resourceLocked` on
+     * their `/drives`), and carry no SharePoint document libraries — so iterating Drive/DriveItem
+     * over them yields only errors and starves the traversal before it reaches real document sites.
+     * We drop them at the Site source so they never become parents for the second-layer objects.
+     * Only Site records carry a `webUrl` on the `-my` host, so this is a no-op for every other object.
+     */
+    private ExcludePersonalSites(records: Record<string, unknown>[]): Record<string, unknown>[] {
+        return records.filter(r => {
+            const webUrl = typeof r.webUrl === 'string' ? r.webUrl : '';
+            const isPersonal = r.isPersonalSite === true || webUrl.includes('-my.sharepoint.com');
+            return !isPersonal;
+        });
+    }
+
     protected NormalizeResponse(
         rawBody: unknown,
         responseDataKey: string | null
@@ -601,9 +520,9 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
         const body = rawBody as Record<string, unknown>;
         const key = responseDataKey ?? 'value';
         const data = body[key];
-        if (Array.isArray(data)) return data as Record<string, unknown>[];
+        if (Array.isArray(data)) return this.ExcludePersonalSites(data as Record<string, unknown>[]);
         // Single-record response fallback
-        if (body && typeof body === 'object' && 'id' in body) return [body];
+        if (body && typeof body === 'object' && 'id' in body) return this.ExcludePersonalSites([body]);
         return [];
     }
 

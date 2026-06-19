@@ -1,7 +1,7 @@
 [
   {
     "fields": {
-      "Name": "SharePoint Online",
+      "Name": "SharePoint",
       "ClassName": "SharePointConnector",
       "ImportPath": "@memberjunction/integration-connectors",
       "Description": "Microsoft SharePoint Online connector via Microsoft Graph API v1.0. Syncs Sites, Drives, DriveItems (files/folders), Lists, ListItems, ContentTypes, Columns, Permissions, and Subscriptions. Authenticates via OAuth2 Client Credentials (Azure app registr...",
@@ -521,7 +521,7 @@
             "Name": "Drive",
             "DisplayName": "Drive",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.drive record. Synced via /sites/{site-id}/drives. Access path: sites -> drives[].",
-            "APIPath": "/sites/{site-id}/drives",
+            "APIPath": "/sites/{siteId}/drives",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -892,7 +892,7 @@
             "Name": "DriveItem",
             "DisplayName": "Drive Item",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.driveItem record. Synced via /drives/{drive-id}/items. Access path: drives -> items[].",
-            "APIPath": "/drives/{drive-id}/items",
+            "APIPath": "/drives/{driveId}/items",
             "SupportsWrite": true,
             "SupportsIncrementalSync": true,
             "Source": "Declared",
@@ -1631,7 +1631,7 @@
             "Name": "DriveItemVersion",
             "DisplayName": "Drive Item Version",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.driveItemVersion record. Synced via /drives/{drive-id}/items/{item-id}/versions. Access path: drives -> items[] -> versions[].",
-            "APIPath": "/drives/{drive-id}/items/{item-id}/versions",
+            "APIPath": "/drives/{driveId}/items/{driveItemId}/versions",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -1772,6 +1772,27 @@
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "driveId",
+                  "DisplayName": "Drive Id",
+                  "Description": "Foreign key to the parent Drive (the {driveId} path segment that addresses this DriveItemVersion). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Drive&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 7,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Drive\"}"
+                }
               }
             ]
           }
@@ -1781,7 +1802,7 @@
             "Name": "List",
             "DisplayName": "List",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.list record. Synced via /sites/{site-id}/lists. Access path: sites -> lists[].",
-            "APIPath": "/sites/{site-id}/lists",
+            "APIPath": "/sites/{siteId}/lists",
             "SupportsWrite": true,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -2129,7 +2150,7 @@
             "Name": "ListItem",
             "DisplayName": "List Item",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.listItem record. Synced via /sites/{site-id}/lists/{list-id}/items. Access path: sites -> lists[] -> items[].",
-            "APIPath": "/sites/{site-id}/lists/{list-id}/items",
+            "APIPath": "/sites/{siteId}/lists/{listId}/items",
             "SupportsWrite": true,
             "SupportsIncrementalSync": true,
             "Source": "Declared",
@@ -2485,6 +2506,27 @@
                   "Sequence": 18,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "siteId",
+                  "DisplayName": "Site Id",
+                  "Description": "Foreign key to the parent Site (the {siteId} path segment that addresses this ListItem). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Site&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 19,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Site\"}"
+                }
               }
             ]
           }
@@ -2494,7 +2536,7 @@
             "Name": "ListItemVersion",
             "DisplayName": "List Item Version",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.listItemVersion record. Synced via /sites/{site-id}/lists/{list-id}/items/{item-id}/versions. Access path: sites -> lists[] -> items[] -> versions[].",
-            "APIPath": "/sites/{site-id}/lists/{list-id}/items/{item-id}/versions",
+            "APIPath": "/sites/{siteId}/lists/{listId}/items/{listItemId}/versions",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -2618,6 +2660,48 @@
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "siteId",
+                  "DisplayName": "Site Id",
+                  "Description": "Foreign key to the parent Site (the {siteId} path segment that addresses this ListItemVersion). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Site&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 6,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Site\"}"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "listId",
+                  "DisplayName": "List Id",
+                  "Description": "Foreign key to the parent List (the {listId} path segment that addresses this ListItemVersion). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=List&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 7,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"List\"}"
+                }
               }
             ]
           }
@@ -2627,7 +2711,7 @@
             "Name": "DocumentSetVersion",
             "DisplayName": "Document Set Version",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.documentSetVersion record. Synced via /sites/{site-id}/lists/{list-id}/items/{item-id}/documentSetVersions. Access path: sites -> lists[] -> items[] -> documentSetVersions[].",
-            "APIPath": "/sites/{site-id}/lists/{list-id}/items/{item-id}/documentSetVersions",
+            "APIPath": "/sites/{siteId}/lists/{listId}/items/{listItemId}/documentSetVersions",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -2836,6 +2920,48 @@
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "siteId",
+                  "DisplayName": "Site Id",
+                  "Description": "Foreign key to the parent Site (the {siteId} path segment that addresses this DocumentSetVersion). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Site&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 11,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Site\"}"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "listId",
+                  "DisplayName": "List Id",
+                  "Description": "Foreign key to the parent List (the {listId} path segment that addresses this DocumentSetVersion). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=List&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 12,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"List\"}"
+                }
               }
             ]
           }
@@ -2845,7 +2971,7 @@
             "Name": "ColumnDefinition",
             "DisplayName": "Column Definition",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.columnDefinition record. Synced via /sites/{site-id}/columns. Access path: sites -> columns[].",
-            "APIPath": "/sites/{site-id}/columns",
+            "APIPath": "/sites/{siteId}/columns",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -3454,7 +3580,7 @@
             "Name": "ContentType",
             "DisplayName": "Content Type",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.contentType record. Synced via /sites/{site-id}/contentTypes. Access path: sites -> contentTypes[].",
-            "APIPath": "/sites/{site-id}/contentTypes",
+            "APIPath": "/sites/{siteId}/contentTypes",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -3774,7 +3900,7 @@
             "Name": "Permission",
             "DisplayName": "Permission",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.permission record. Synced via /drives/{drive-id}/items/{item-id}/permissions. Access path: drives -> items[] -> permissions[].",
-            "APIPath": "/drives/{drive-id}/items/{item-id}/permissions",
+            "APIPath": "/drives/{driveId}/items/{driveItemId}/permissions",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -4016,6 +4142,27 @@
                   "IsCustom": false,
                   "Sequence": 12,
                   "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "driveId",
+                  "DisplayName": "Drive Id",
+                  "Description": "Foreign key to the parent Drive (the {driveId} path segment that addresses this Permission). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Drive&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 13,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Drive\"}"
                 }
               }
             ]
@@ -4319,7 +4466,7 @@
             "Name": "TermStoreStore",
             "DisplayName": "Term Store Store",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.termStore.store record. Synced via /sites/{site-id}/termStore. Access path: sites -> termStore.",
-            "APIPath": "/sites/{site-id}/termStore",
+            "APIPath": "/sites/{siteId}/termStore",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -4418,7 +4565,7 @@
             "Name": "TermStoreGroup",
             "DisplayName": "Term Store Group",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.termStore.group record. Synced via /sites/{site-id}/termStore/groups. Access path: sites -> termStore -> groups[].",
-            "APIPath": "/sites/{site-id}/termStore/groups",
+            "APIPath": "/sites/{siteId}/termStore/groups",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -4559,6 +4706,27 @@
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "siteId",
+                  "DisplayName": "Site Id",
+                  "Description": "Foreign key to the parent Site (the {siteId} path segment that addresses this TermStoreGroup). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Site&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 7,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Site\"}"
+                }
               }
             ]
           }
@@ -4568,7 +4736,7 @@
             "Name": "TermStoreSet",
             "DisplayName": "Term Store Set",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.termStore.set record. Synced via /sites/{site-id}/termStore/sets. Access path: sites -> termStore -> sets[].",
-            "APIPath": "/sites/{site-id}/termStore/sets",
+            "APIPath": "/sites/{siteId}/termStore/sets",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -4709,6 +4877,27 @@
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "siteId",
+                  "DisplayName": "Site Id",
+                  "Description": "Foreign key to the parent Site (the {siteId} path segment that addresses this TermStoreSet). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Site&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 7,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Site\"}"
+                }
               }
             ]
           }
@@ -4718,7 +4907,7 @@
             "Name": "TermStoreTerm",
             "DisplayName": "Term Store Term",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.termStore.term record. Synced via /sites/{site-id}/termStore/sets/{set-id}/terms. Access path: sites -> termStore -> sets[] -> terms[].",
-            "APIPath": "/sites/{site-id}/termStore/sets/{set-id}/terms",
+            "APIPath": "/sites/{siteId}/termStore/sets/{setId}/terms",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -4876,6 +5065,27 @@
                   "Sequence": 7,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "siteId",
+                  "DisplayName": "Site Id",
+                  "Description": "Foreign key to the parent Site (the {siteId} path segment that addresses this TermStoreTerm). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Site&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 8,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Site\"}"
+                }
               }
             ]
           }
@@ -4885,7 +5095,7 @@
             "Name": "TermStoreRelation",
             "DisplayName": "Term Store Relation",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.termStore.relation record. Synced via /sites/{site-id}/termStore/sets/{set-id}/terms/{term-id}/relations. Access path: sites -> termStore -> sets[] -> terms[] -> relations[].",
-            "APIPath": "/sites/{site-id}/termStore/sets/{set-id}/terms/{term-id}/relations",
+            "APIPath": "/sites/{siteId}/termStore/sets/{setId}/terms/{termId}/relations",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -5009,6 +5219,48 @@
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "siteId",
+                  "DisplayName": "Site Id",
+                  "Description": "Foreign key to the parent Site (the {siteId} path segment that addresses this TermStoreRelation). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Site&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 6,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Site\"}"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "termId",
+                  "DisplayName": "Term Id",
+                  "Description": "Foreign key to the parent TermStoreTerm (the {termId} path segment that addresses this TermStoreRelation). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TermStoreTerm&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 7,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"TermStoreTerm\"}"
+                }
               }
             ]
           }
@@ -5018,7 +5270,7 @@
             "Name": "BaseSitePage",
             "DisplayName": "Base Site Page",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.baseSitePage record. Synced via /sites/{site-id}/pages. Access path: sites -> pages[].",
-            "APIPath": "/sites/{site-id}/pages",
+            "APIPath": "/sites/{siteId}/pages",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -5321,7 +5573,7 @@
             "Name": "SitePage",
             "DisplayName": "Site Page",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.sitePage record. Synced via /sites/{site-id}/pages/microsoft.graph.sitePage. Access path: sites -> pages[].",
-            "APIPath": "/sites/{site-id}/pages/microsoft.graph.sitePage",
+            "APIPath": "/sites/{siteId}/pages/microsoft.graph.sitePage",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -5743,7 +5995,7 @@
             "Name": "ItemActivity",
             "DisplayName": "Item Activity",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.itemActivity record. Synced via /drives/{drive-id}/items/{item-id}/analytics/itemActivityStats/{stat-id}/activities. Access path: drives -> items[] -> analytics -> itemActivityStats[] -> activities[].",
-            "APIPath": "/drives/{drive-id}/items/{item-id}/analytics/itemActivityStats/{stat-id}/activities",
+            "APIPath": "/drives/{driveId}/items/{driveItemId}/analytics/itemActivityStats/{itemActivityStatId}/activities",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -5867,6 +6119,48 @@
                   "Sequence": 5,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "driveId",
+                  "DisplayName": "Drive Id",
+                  "Description": "Foreign key to the parent Drive (the {driveId} path segment that addresses this ItemActivity). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Drive&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 6,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Drive\"}"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "driveItemId",
+                  "DisplayName": "Drive Item Id",
+                  "Description": "Foreign key to the parent DriveItem (the {driveItemId} path segment that addresses this ItemActivity). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=DriveItem&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 7,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"DriveItem\"}"
+                }
               }
             ]
           }
@@ -5876,7 +6170,7 @@
             "Name": "ItemActivityStat",
             "DisplayName": "Item Activity Stat",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.itemActivityStat record. Synced via /drives/{drive-id}/items/{item-id}/analytics/itemActivityStats. Access path: drives -> items[] -> analytics -> itemActivityStats[].",
-            "APIPath": "/drives/{drive-id}/items/{item-id}/analytics/itemActivityStats",
+            "APIPath": "/drives/{driveId}/items/{driveItemId}/analytics/itemActivityStats",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -6085,6 +6379,27 @@
                   "Sequence": 10,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "driveId",
+                  "DisplayName": "Drive Id",
+                  "Description": "Foreign key to the parent Drive (the {driveId} path segment that addresses this ItemActivityStat). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Drive&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 11,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Drive\"}"
+                }
               }
             ]
           }
@@ -6094,7 +6409,7 @@
             "Name": "ItemAnalytics",
             "DisplayName": "Item Analytics",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.itemAnalytics record. Synced via /drives/{drive-id}/items/{item-id}/analytics. Access path: drives -> items[] -> analytics.",
-            "APIPath": "/drives/{drive-id}/items/{item-id}/analytics",
+            "APIPath": "/drives/{driveId}/items/{driveItemId}/analytics",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -6184,6 +6499,27 @@
                   "Sequence": 3,
                   "IntegrationObjectID": "@parent:ID"
                 }
+              },
+              {
+                "fields": {
+                  "Name": "driveId",
+                  "DisplayName": "Drive Id",
+                  "Description": "Foreign key to the parent Drive (the {driveId} path segment that addresses this ItemAnalytics). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Drive&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 4,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Drive\"}"
+                }
               }
             ]
           }
@@ -6193,7 +6529,7 @@
             "Name": "ItemRetentionLabel",
             "DisplayName": "Item Retention Label",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.itemRetentionLabel record. Synced via /drives/{drive-id}/items/{item-id}/retentionLabel. Access path: drives -> items[] -> retentionLabel.",
-            "APIPath": "/drives/{drive-id}/items/{item-id}/retentionLabel",
+            "APIPath": "/drives/{driveId}/items/{driveItemId}/retentionLabel",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -6333,6 +6669,27 @@
                   "IsCustom": false,
                   "Sequence": 6,
                   "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "driveId",
+                  "DisplayName": "Drive Id",
+                  "Description": "Foreign key to the parent Drive (the {driveId} path segment that addresses this ItemRetentionLabel). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Drive&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 7,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Drive\"}"
                 }
               }
             ]
@@ -6693,7 +7050,7 @@
             "Name": "ColumnLink",
             "DisplayName": "Column Link",
             "Description": "Microsoft Graph v1.0 SharePoint microsoft.graph.columnLink record. Synced via /sites/{site-id}/contentTypes/{contentType-id}/columnLinks. Access path: sites -> contentTypes[] -> columnLinks[].",
-            "APIPath": "/sites/{site-id}/contentTypes/{contentType-id}/columnLinks",
+            "APIPath": "/sites/{siteId}/contentTypes/{contentTypeId}/columnLinks",
             "SupportsWrite": false,
             "SupportsIncrementalSync": false,
             "Source": "Declared",
@@ -6765,6 +7122,27 @@
                   "IsCustom": false,
                   "Sequence": 2,
                   "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "siteId",
+                  "DisplayName": "Site Id",
+                  "Description": "Foreign key to the parent Site (the {siteId} path segment that addresses this ColumnLink). Derived from the Graph addressing path / navigation hierarchy.",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Site&IntegrationID=@parent:IntegrationID",
+                  "RelatedIntegrationObjectFieldName": "id",
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "IsCustom": false,
+                  "Sequence": 3,
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "Configuration": "{\"ReferencedType\": \"Site\"}"
                 }
               }
             ]
