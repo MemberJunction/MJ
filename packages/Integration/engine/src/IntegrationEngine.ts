@@ -1217,7 +1217,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (ioId) {
                 for (const parentIoId of parentsByIoId.get(ioId) ?? []) {
                     for (const pm of mapsByIoId.get(parentIoId) ?? []) {
-                        if (pm !== m.ID) parentMapIds.add(pm);
+                        if (!UUIDsEqual(pm, m.ID)) parentMapIds.add(pm);
                     }
                 }
             }

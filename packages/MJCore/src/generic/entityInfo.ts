@@ -1083,10 +1083,14 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
-     * Returns true if the field is a uniqueidentifier in the database.
+     * Returns true if the field is a GUID/UUID column in the database.
+     * Accepts both the SQL Server type name (`uniqueidentifier`) and the
+     * PostgreSQL type name (`uuid`) — on PG the metadata `Type` is reported as
+     * `uuid`, so a `uniqueidentifier`-only check would miss every UUID column.
      */
     get IsUniqueIdentifier(): boolean {
-        return this.Type.trim().toLowerCase() === 'uniqueidentifier';
+        const t = this.Type.trim().toLowerCase();
+        return t === 'uniqueidentifier' || t === 'uuid';
     }
 
     /**
