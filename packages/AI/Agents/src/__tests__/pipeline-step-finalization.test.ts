@@ -53,6 +53,10 @@ class MockStepEntity {
         this.ID = id;
     }
 
+    public NewRecord(): void {
+        // no-op: the mock already has a client-side ID from the constructor
+    }
+
     public async Save(): Promise<boolean> {
         return true;
     }

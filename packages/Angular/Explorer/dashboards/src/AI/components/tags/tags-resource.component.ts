@@ -2252,7 +2252,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     private async findAutotagActionID(): Promise<string | null> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string }>({
-            EntityName: 'Actions',
+            EntityName: 'MJ: Actions',
             ExtraFilter: `Name = 'Autotag and Vectorize Content'`,
             Fields: ['ID'],
             ResultType: 'simple',
@@ -2272,7 +2272,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         // Find the "EntityNames" action param to get its ID
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const paramResult = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'Action Params',
+            EntityName: 'MJ: Action Params',
             ExtraFilter: `ActionID = '${actionID}' AND Name = 'EntityNames'`,
             Fields: ['ID', 'Name'],
             ResultType: 'simple',

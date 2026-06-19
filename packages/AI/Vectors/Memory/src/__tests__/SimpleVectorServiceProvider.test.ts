@@ -231,4 +231,13 @@ describe('SimpleVectorServiceProvider', () => {
             expect(result.success).toBe(true);
         });
     });
+
+    describe('capability flags', () => {
+        it('is read-only (vectors come from EntityRecordDocument.VectorJSON)', () => {
+            expect(new SimpleVectorServiceProvider().IsReadOnly).toBe(true);
+        });
+        it('requires no API key (in-process provider) — so the vector-sync / dupe key guard is skipped', () => {
+            expect(new SimpleVectorServiceProvider().RequiresAPIKey).toBe(false);
+        });
+    });
 });

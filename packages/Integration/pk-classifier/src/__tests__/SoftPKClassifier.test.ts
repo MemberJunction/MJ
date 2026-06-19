@@ -113,6 +113,7 @@ describe('SoftPKClassifier', () => {
                 fields,
                 sampleRows,
                 maxCompositeKeySize: 2,
+                syntheticFallback: true, // opt in to still exercise the composite-too-small → synthetic path
             });
 
             expect(result.Strategy).toBe('synthetic');
@@ -127,11 +128,25 @@ describe('SoftPKClassifier', () => {
             { color: 'red', size: 'L' }, // exact dup → nothing is unique, even composite
         ];
 
-        it('nominates the synthetic identity-hash column when nothing is unique (default on)', async () => {
+        it('returns the honest none verdict by DEFAULT when nothing is unique (no fabrication)', async () => {
             const result = await classifier.Classify({
                 object: makeObject('Tags'),
                 fields: ambiguousFields,
                 sampleRows: ambiguousRows,
+            });
+
+            // Default is now honest 'none' — synthetic is opt-in only, never fabricated.
+            expect(result.Confident).toBe(false);
+            expect(result.Strategy).toBe('none');
+            expect(result.Nominee).toBeUndefined();
+        });
+
+        it('still nominates the synthetic key when syntheticFallback is explicitly opted in', async () => {
+            const result = await classifier.Classify({
+                object: makeObject('Tags'),
+                fields: ambiguousFields,
+                sampleRows: ambiguousRows,
+                syntheticFallback: true,
             });
 
             expect(result.Confident).toBe(true);
@@ -141,28 +156,14 @@ describe('SoftPKClassifier', () => {
             expect(result.Confidence).toBeGreaterThanOrEqual(0.7);
         });
 
-        it('returns the honest none verdict when syntheticFallback is false', async () => {
-            const result = await classifier.Classify({
-                object: makeObject('Tags'),
-                fields: ambiguousFields,
-                sampleRows: ambiguousRows,
-                syntheticFallback: false,
-            });
-
-            expect(result.Confident).toBe(false);
-            expect(result.Strategy).toBe('none');
-            expect(result.Nominee).toBeUndefined();
-            expect(result.Confidence).toBe(0);
-        });
-
-        it('falls back to synthetic with no sample rows at all (default on)', async () => {
+        it('returns honest none with no sample rows at all (default — no fabrication)', async () => {
             const result = await classifier.Classify({
                 object: makeObject('Mystery'),
                 fields: [makeField('foo'), makeField('bar')],
             });
 
-            expect(result.Strategy).toBe('synthetic');
-            expect(result.Nominee).toBe(SYNTHETIC_PK_FIELD_NAME);
+            expect(result.Strategy).toBe('none');
+            expect(result.Nominee).toBeUndefined();
         });
     });
 

@@ -1,5 +1,118 @@
 # @memberjunction/react-test-harness
 
+## 5.41.0
+
+### Patch Changes
+
+- 133dfa7: Interactive components: persist `savedUserSettings` per-user, cross-device
+
+  The existing interactive-component settings contract (`savedUserSettings` in /
+  `onSaveUserSettings` out) is now durably persisted **per-user, cross-device** via
+  `UserInfoEngine`, automatically scoped per component — with no change to the component
+  contract. The Angular host (`MJReactComponent`) seeds `savedUserSettings` from the
+  store on load and saves (debounced) on every `onSaveUserSettings` call, under the key
+  `InteractiveComponents_UserState_Root/<scope>` where scope defaults to
+  `<namespace>/<name>` (override via the new
+  `UserStateScope` input). Set the new `PersistUserSettings` input to `false` to opt out
+  and own persistence via the `userSettingsChanged` output instead.
+
+  Saves **merge, never replace**: the host overlays each `onSaveUserSettings` payload
+  onto the saved settings, so a component that passes only the changed keys (or spreads
+  a stale prop) cannot wipe other preferences. Removing a key requires explicit intent —
+  set its value to `null`.
+  - `@memberjunction/react-runtime`: new framework-agnostic `user-state` helpers
+    (`resolveUserStateScope`, `userStateStorageKey`, `parseStoredUserSettings`,
+    `mergeUserSettings`, `applyUserSettingsUpdate`) plus unit tests.
+  - `@memberjunction/react-test-harness`: `ComponentExecutionOptions.savedUserSettings`
+    seeds the prop and `onSaveUserSettings` now merges into a real in-memory snapshot
+    with the same null-removes-key semantics as the production host.
+
+  Fully additive — existing components that already use the blob gain durable
+  persistence for free.
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [133dfa7]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/core-entities-server@5.41.0
+  - @memberjunction/aiengine@5.41.0
+  - @memberjunction/react-runtime@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ai-vectors-memory@5.41.0
+  - @memberjunction/interactive-component-types@5.41.0
+  - @memberjunction/react-linter@5.41.0
+  - @memberjunction/global@5.41.0
+  - @memberjunction/sql-dialect@5.41.0
+  - @memberjunction/sql-parser@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/core-entities-server@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/aiengine@5.40.2
+  - @memberjunction/ai-vectors-memory@5.40.2
+  - @memberjunction/interactive-component-types@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/react-linter@5.40.2
+  - @memberjunction/react-runtime@5.40.2
+  - @memberjunction/sql-dialect@5.40.2
+  - @memberjunction/sql-parser@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/aiengine@5.40.1
+  - @memberjunction/ai-vectors-memory@5.40.1
+  - @memberjunction/interactive-component-types@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/core-entities-server@5.40.1
+  - @memberjunction/react-linter@5.40.1
+  - @memberjunction/react-runtime@5.40.1
+  - @memberjunction/global@5.40.1
+  - @memberjunction/sql-dialect@5.40.1
+  - @memberjunction/sql-parser@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/aiengine@5.40.0
+  - @memberjunction/ai-vectors-memory@5.40.0
+  - @memberjunction/interactive-component-types@5.40.0
+  - @memberjunction/core-entities-server@5.40.0
+  - @memberjunction/react-linter@5.40.0
+  - @memberjunction/react-runtime@5.40.0
+  - @memberjunction/global@5.40.0
+  - @memberjunction/sql-dialect@5.40.0
+  - @memberjunction/sql-parser@5.40.0
+
 ## 5.39.0
 
 ### Patch Changes

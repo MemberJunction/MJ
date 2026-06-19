@@ -10,6 +10,7 @@ import { CodeGenDatabaseProvider, CodeGenConnection } from './codeGenDatabasePro
 import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, outputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
+import { FindTrueCycles } from "./entity-level-tree-cycles";
 import { MJGlobal } from "@memberjunction/global";
 import { SQLCodeGenBase } from './sql_codegen';
 
@@ -119,15 +120,11 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
      }
 
      if (currentLevel.length === 0) {
-      // We have a cyclical dependency at this level, so we can't continue. Instead of bombing completely, throw a warning and include in the final level
-      // all of the remaining entities in the dependency map.
-      const circularDeps: string[] = [];
-      for (const [entityName, dependencies] of dependencyMap.entries()) {
-        circularDeps.push(`${entityName} depends on ${Array.from(dependencies).join(', ')}`);
-      }
-      console.warn(`      > Cyclical Dependency Detected (non-fatal), including remaining entities in final level. Details:`);
-      circularDeps.forEach(dep => console.warn(`        * ${dep}`));
-      
+      // We have a cyclical dependency at this level, so we can't continue. Instead of bombing completely, emit a focused
+      // diagnostic — the true cycles (strongly connected components) and the FK fields creating their edges — then
+      // include ALL remaining entities in the final level.
+      this.logCyclicalDependencyDiagnostics(dependencyMap, entityMap);
+
       for (const item of dependencyMap) {
         const entityName = item[0];
         currentLevel.push(entityMap.get(entityName)!);
@@ -152,6 +149,49 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
 
    return entityLevelTree;
  }
+
+/**
+ * Emits the cyclical-dependency warning for buildEntityLevelsTree's stuck branch. Rather than dumping every
+ * remaining entity's dependency list (most of which are merely downstream of a cycle), this computes the true
+ * cycles (strongly connected components) and prints, for each one, its members plus the specific FK fields
+ * creating the edges between them, followed by a single summary line for the downstream entities.
+ */
+private logCyclicalDependencyDiagnostics(dependencyMap: Map<string, Set<string>>, entityMap: Map<string, EntityInfo>): void {
+   const cycles = FindTrueCycles(dependencyMap);
+   const cycleMemberCount = cycles.reduce((sum, cycle) => sum + cycle.length, 0);
+   const downstreamCount = dependencyMap.size - cycleMemberCount;
+
+   console.warn(`      ⚠️  Cyclical Dependency Detected (non-fatal), including remaining entities in final level. Details:`);
+   cycles.forEach((cycle, index) => {
+      console.warn(`        * Cycle ${index + 1}: ${cycle.join(' ↔ ')}`);
+      this.describeCycleEdges(cycle, entityMap).forEach(edge => console.warn(`            - ${edge}`));
+   });
+   if (downstreamCount > 0) {
+      console.warn(`        * ${downstreamCount} other entities are downstream of these cycles and were included in the final level (recompile order within a level is not dependency-safe, but base-view recompilation only requires referenced views to exist, so this is non-fatal).`);
+   }
+}
+
+/**
+ * Returns one human-readable line per FK edge between members of the same cycle,
+ * e.g. `MJ: AI Agents.TypeID → MJ: AI Agent Types`. Self-referencing FKs are skipped
+ * (they are also excluded from the dependency map upstream).
+ */
+private describeCycleEdges(cycle: string[], entityMap: Map<string, EntityInfo>): string[] {
+   const members = new Set(cycle);
+   const edges: string[] = [];
+   for (const entityName of cycle) {
+      const entity = entityMap.get(entityName);
+      if (!entity) {
+         continue;
+      }
+      for (const field of entity.Fields) {
+         if (field.RelatedEntity && field.RelatedEntity !== entityName && members.has(field.RelatedEntity)) {
+            edges.push(`${entityName}.${field.Name} → ${field.RelatedEntity}`);
+         }
+      }
+   }
+   return edges;
+}
 
 public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string[], applyPermissions: boolean, excludeEntities?: string[]): Promise<boolean> {
    let bSuccess: boolean = true; // start off true

@@ -1,5 +1,104 @@
 # @memberjunction/ng-base-forms
 
+## 5.41.0
+
+### Minor Changes
+
+- 4b3fb9d: Add Skip entity-form support: #entity mentions in conversations, interactive-form host wiring, and reusable form-field components
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [133dfa7]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ng-react@5.41.0
+  - @memberjunction/ng-notifications@5.41.0
+  - @memberjunction/ng-base-types@5.41.0
+  - @memberjunction/ng-code-editor@5.41.0
+  - @memberjunction/ng-entity-viewer@5.41.0
+  - @memberjunction/ng-list-management@5.41.0
+  - @memberjunction/ng-record-changes@5.41.0
+  - @memberjunction/ng-record-tags@5.41.0
+  - @memberjunction/ng-shared-generic@5.41.0
+  - @memberjunction/interactive-component-types@5.41.0
+  - @memberjunction/ng-markdown@5.41.0
+  - @memberjunction/ng-ui-components@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-code-editor@5.40.2
+- @memberjunction/ng-entity-viewer@5.40.2
+- @memberjunction/ng-list-management@5.40.2
+- @memberjunction/ng-markdown@5.40.2
+- @memberjunction/ng-notifications@5.40.2
+- @memberjunction/ng-react@5.40.2
+- @memberjunction/ng-record-changes@5.40.2
+- @memberjunction/ng-record-tags@5.40.2
+- @memberjunction/ng-shared-generic@5.40.2
+- @memberjunction/ng-ui-components@5.40.2
+- @memberjunction/interactive-component-types@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-code-editor@5.40.1
+  - @memberjunction/ng-entity-viewer@5.40.1
+  - @memberjunction/ng-list-management@5.40.1
+  - @memberjunction/ng-notifications@5.40.1
+  - @memberjunction/ng-react@5.40.1
+  - @memberjunction/ng-record-changes@5.40.1
+  - @memberjunction/ng-record-tags@5.40.1
+  - @memberjunction/ng-shared-generic@5.40.1
+  - @memberjunction/interactive-component-types@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/ng-markdown@5.40.1
+  - @memberjunction/ng-ui-components@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/ng-entity-viewer@5.40.0
+  - @memberjunction/ng-base-types@5.40.0
+  - @memberjunction/ng-code-editor@5.40.0
+  - @memberjunction/ng-list-management@5.40.0
+  - @memberjunction/ng-notifications@5.40.0
+  - @memberjunction/ng-react@5.40.0
+  - @memberjunction/ng-record-changes@5.40.0
+  - @memberjunction/ng-record-tags@5.40.0
+  - @memberjunction/ng-shared-generic@5.40.0
+  - @memberjunction/interactive-component-types@5.40.0
+  - @memberjunction/ng-markdown@5.40.0
+  - @memberjunction/ng-ui-components@5.40.0
+  - @memberjunction/global@5.40.0
+
 ## 5.39.0
 
 ### Minor Changes

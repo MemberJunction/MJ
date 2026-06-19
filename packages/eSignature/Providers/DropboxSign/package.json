@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/esignature-dropboxsign",
-  "version": "5.39.0",
+  "version": "5.41.0",
   "description": "Dropbox Sign (formerly HelloSign) driver for the MemberJunction eSignature primitive. Registers a BaseSignatureProvider implementation via @RegisterClass(BaseSignatureProvider, 'DropboxSign') using the Dropbox Sign v3 REST API and API-key authentication.",
   "type": "module",
   "main": "dist/index.js",
@@ -21,7 +21,7 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/esignature": "5.39.0",
-    "@memberjunction/global": "5.39.0"
+    "@memberjunction/esignature": "5.41.0",
+    "@memberjunction/global": "5.41.0"
   }
 }

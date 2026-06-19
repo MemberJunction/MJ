@@ -110,6 +110,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public showAddFromViewLoader = false;
     public userViews: MJUserViewEntityExtended[] | null = null;
     public userViewsToAdd: MJUserViewEntityExtended[] = [];
+    /**
+     * Normalized-UUID set of the IDs in {@link userViewsToAdd}, kept in sync with that
+     * array. Lets {@link isViewSelected} (bound per-row in the dialog's @for, ~2x/row)
+     * do an O(1) lookup instead of scanning the array with UUIDsEqual on every check.
+     */
+    private userViewsToAddIds: Set<string> = new Set<string>();
     public addFromViewProgress = 0;
     public addFromViewTotal = 0;
     public fetchingRecordsToSave = false;
@@ -674,6 +680,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public async openAddFromViewDialog(): Promise<void> {
         this.showAddFromViewDialog = true;
         this.userViewsToAdd = [];
+        this.userViewsToAddIds.clear();
         this.cdr.markForCheck();
 
         if (!this.userViews) {
@@ -684,6 +691,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public closeAddFromViewDialog(): void {
         this.showAddFromViewDialog = false;
         this.userViewsToAdd = [];
+        this.userViewsToAddIds.clear();
         this.showAddFromViewLoader = false;
         this.addFromViewProgress = 0;
         this.addFromViewTotal = 0;
@@ -717,14 +725,16 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID));
         if (index >= 0) {
             this.userViewsToAdd.splice(index, 1);
+            this.userViewsToAddIds.delete(NormalizeUUID(view.ID));
         } else {
             this.userViewsToAdd.push(view);
+            this.userViewsToAddIds.add(NormalizeUUID(view.ID));
         }
         this.cdr.markForCheck();
     }
 
     public isViewSelected(view: MJUserViewEntityExtended): boolean {
-        return this.userViewsToAdd.some(v => UUIDsEqual(v.ID, view.ID));
+        return this.userViewsToAddIds.has(NormalizeUUID(view.ID));
     }
 
     public async confirmAddFromView(): Promise<void> {

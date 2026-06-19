@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session Detail · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+  .detail-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+  .tool-call { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--mj-border-default); border-radius: var(--mj-radius-md); background: var(--mj-bg-surface); margin-bottom:8px; font-size:13px }
+  .tool-call .ti { width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--mj-bg-surface-sunken);color:var(--mj-brand-accent) }
+  @media (max-width: 1100px){ .detail-grid{ grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Session detail</span></div>
+    <div class="topbar-spacer"></div>
+    <a href="timeline-collapsed.html" class="btn btn--sm"><i class="fa-solid fa-arrow-left"></i> Back to conversation</a>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="page-body">
+    <div class="page-header">
+      <div class="page-eyebrow">Voice session · behind the scenes</div>
+      <div class="row between center wrap">
+        <h1 class="page-title" style="margin:0">Weather lookup with Sage</h1>
+        <div class="row gap-sm">
+          <span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span>
+          <button class="btn btn--primary btn--sm"><i class="fa-solid fa-phone-volume"></i> Resume session</button>
+        </div>
+      </div>
+      <p class="page-subtitle">A 2-minute real-time session in conversation <a href="timeline-collapsed.html">Weather &amp; planning</a>. The Voice Co-Agent voiced as Sage and delegated the actual weather lookup to Sage's own agent run.</p>
+    </div>
+
+    <!-- overview stat tiles -->
+    <div class="stat-row">
+      <div class="card stat"><div class="stat-label">Agent</div><div class="stat-value" style="font-size:18px">Voice Co-Agent<br><small>speaking as Sage</small></div></div>
+      <div class="card stat"><div class="stat-label">Duration</div><div class="stat-value">2:04 <small>min</small></div></div>
+      <div class="card stat"><div class="stat-label">Channels used</div><div class="stat-value" style="font-size:20px"><i class="fa-solid fa-microphone-lines" style="color:var(--mj-brand-accent)"></i> <i class="fa-solid fa-comment" style="color:var(--mj-brand-accent)"></i> <small style="margin-left:4px">Voice · Text</small></div></div>
+      <div class="card stat"><div class="stat-label">Usage</div><div class="stat-value">$0.038 <small>· 4,210 tok</small></div></div>
+    </div>
+
+    <div class="detail-grid">
+      <!-- LEFT main: transcript + runs -->
+      <div class="col gap-lg">
+        <div class="card card-pad">
+          <div class="row between center" style="margin-bottom:14px"><span class="section-label" style="margin:0">Transcript timeline</span><span class="pill pill--ghost">5 exchanges</span></div>
+          <div class="thread">
+            <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice <span class="muted">3:40:02</span></div><div class="bubble">Yep, I'm here. What's up?</div></div></div>
+            <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice <span class="muted">3:40:09</span></div><div class="bubble">I'm the voice for Sage, the ambient helper in MJ. I help you navigate MJ, handle basic stuff, and pull in other agents when something needs real work. I keep things moving and hand off tasks instead of making up results.</div></div></div>
+            <div class="turn turn--user"><div class="turn-avatar">AM</div><div><div class="turn-meta">You <span class="muted">3:40:41</span></div><div class="bubble">what's the weather in LA, SF, and NYC?</div></div></div>
+            <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice <span class="muted">3:40:44</span></div><div class="bubble">Got it, I'll have Sage check the weather for those three cities and then I'll share what comes back.</div></div></div>
+            <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice <span class="muted">3:40:47</span></div><div class="bubble">Los Angeles is clear and about 78.5°. San Francisco is clear and about 67.8°. New York City is clear and about 76.2°.</div></div></div>
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <span class="section-label">Delegated agent runs</span>
+          <div class="run-node">
+            <div class="run-head">
+              <div class="avatar avatar--sage" style="width:30px;height:30px;font-size:12px">S</div>
+              <div style="flex:1"><div class="run-name">Sage · Weather lookup</div><div class="run-sub">AIAgentRun #a3f1c9 · ParentRunID #co-77 · 1.82s · Completed 3:40:46</div></div>
+              <span class="pill pill--active"><i class="fa-solid fa-check"></i> Completed</span>
+            </div>
+            <div style="margin-top:12px">
+              <div class="muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Tool calls</div>
+              <div class="tool-call"><div class="ti"><i class="fa-solid fa-cloud-sun"></i></div><div style="flex:1"><span class="cell-strong">Get Weather</span> <span class="muted">· city = "Los Angeles, San Francisco, New York City"</span></div><span class="pill pill--active">200</span></div>
+              <div class="tool-call"><div class="ti"><i class="fa-solid fa-table"></i></div><div style="flex:1"><span class="cell-strong">Format Result Card</span> <span class="muted">· 3 rows</span></div><span class="pill pill--active">ok</span></div>
+            </div>
+            <div style="margin-top:14px">
+              <div class="muted" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Result returned</div>
+              <div class="result-card">
+                <div class="result-card__head"><span style="color:var(--mj-color-violet-300)">Weather</span><span class="via-tag" style="margin-left:auto">via Sage</span></div>
+                <div class="weather-row"><div class="weather-city"><div class="wc-icon"><i class="fa-solid fa-sun"></i></div><div><div class="weather-name">Los Angeles</div><div class="weather-cond">Clear</div></div></div><div class="weather-temp">78.5°</div></div>
+                <div class="weather-row"><div class="weather-city"><div class="wc-icon"><i class="fa-solid fa-sun"></i></div><div><div class="weather-name">San Francisco</div><div class="weather-cond">Clear</div></div></div><div class="weather-temp">67.8°</div></div>
+                <div class="weather-row"><div class="weather-city"><div class="wc-icon"><i class="fa-solid fa-sun"></i></div><div><div class="weather-name">New York City</div><div class="weather-cond">Clear</div></div></div><div class="weather-temp">76.2°</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT sidebar: facts + lifecycle -->
+      <div class="col gap-lg">
+        <div class="card card-pad">
+          <span class="section-label">Session facts</span>
+          <div class="col" style="gap:14px">
+            <div class="kv"><span class="k">AgentSessionID</span><span class="v mono">sess_7f2a…c41</span></div>
+            <div class="kv"><span class="k">Conversation</span><span class="v"><a href="timeline-collapsed.html">Weather &amp; planning</a></span></div>
+            <div class="kv"><span class="k">Target agent</span><span class="v">Sage</span></div>
+            <div class="kv"><span class="k">Realtime model</span><span class="v">gpt-realtime-2 <span class="muted">· OpenAIRealtime</span></span></div>
+            <div class="kv"><span class="k">Prompt run</span><span class="v mono">pr_91b…02 <span class="muted">(1 run)</span></span></div>
+            <div class="kv"><span class="k">Audio retention</span><span class="v"><span class="pill pill--ghost"><i class="fa-solid fa-microphone-slash"></i> Off</span></span></div>
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <span class="section-label">Lifecycle</span>
+          <div class="timeline">
+            <div class="tl-item"><span class="tl-dot tl-dot--done"></span><div class="tl-time">3:40:00</div><div class="tl-title">Created</div><div class="tl-desc">Voice channel negotiated</div></div>
+            <div class="tl-item"><span class="tl-dot tl-dot--done"></span><div class="tl-time">3:40:01</div><div class="tl-title">Active</div><div class="tl-desc">Co-Agent prompt run started</div></div>
+            <div class="tl-item"><span class="tl-dot tl-dot--done"></span><div class="tl-time">3:40:45</div><div class="tl-title">Delegated to Sage</div><div class="tl-desc">Child run #a3f1c9</div></div>
+            <div class="tl-item"><span class="tl-dot tl-dot--end"></span><div class="tl-time">3:42:04</div><div class="tl-title">Closed</div><div class="tl-desc">User hung up · usage finalized</div></div>
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <span class="section-label">Usage &amp; cost</span>
+          <div class="col" style="gap:10px">
+            <div class="row between"><span class="sec">Input tokens</span><span class="cell-strong">2,640</span></div>
+            <div class="row between"><span class="sec">Output tokens</span><span class="cell-strong">1,570</span></div>
+            <div class="row between"><span class="sec">Delegated run</span><span class="cell-strong">$0.006</span></div>
+            <div class="divider" style="margin:6px 0"></div>
+            <div class="row between"><span class="cell-strong">Total</span><span class="cell-strong" style="color:var(--mj-brand-accent)">$0.038</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

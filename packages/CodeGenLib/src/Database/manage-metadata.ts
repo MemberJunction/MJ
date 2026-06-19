@@ -505,8 +505,25 @@ export class ManageMetadataBase {
    private static _softPKFKConfigCache: any = null;
    private static _softPKFKConfigPath: string = '';
    /**
+    * Drops the cached soft PK/FK config so the next {@link getSoftPKFKConfig} call re-reads the
+    * additionalSchemaInfo file from disk. REQUIRED for the long-lived in-process (RSU) CodeGen path:
+    * the cache is process-static (load-once), which is correct for a one-shot `mj codegen` CLI run but
+    * STALE in a long-running MJAPI where RSU rewrites additionalSchemaInfo on every ApplyAll. Without
+    * invalidation, a connector's FIRST ApplyAll writes its soft PKs to the file but CodeGen returns the
+    * pre-write cached config → "No primary key found" → the entity is never created → no entity map →
+    * 0 rows sync until an MJAPI restart. RunInProcess calls this at the start of every run (which always
+    * follows RSU's WriteAdditionalSchemaInfo step), so each in-process run sees the freshly-written file.
+    * Deterministic + event-driven (no mtime/TOCTOU race). The CLI `Run()` path does not call this, so its
+    * load-once-per-process behavior is unchanged.
+    */
+   public static invalidateSoftPKFKConfigCache(): void {
+      ManageMetadataBase._softPKFKConfigCache = null;
+      ManageMetadataBase._softPKFKConfigPath = '';
+   }
+   /**
     * Loads and caches the soft PK/FK configuration from the additionalSchemaInfo file.
-    * The file is only loaded once per session to avoid repeated I/O.
+    * Cached per process to avoid repeated I/O within a CodeGen run; the in-process (RSU) path calls
+    * {@link invalidateSoftPKFKConfigCache} at the start of each run so a rewritten file is picked up.
     */
    private static getSoftPKFKConfig(): any {
       // Return cached config if path hasn't changed
@@ -1170,6 +1187,23 @@ export class ManageMetadataBase {
          }
       }
       const excludeSchemas = configInfo.excludeSchemas ? [...configInfo.excludeSchemas] : [];
+
+      // Ensure the platform's metadata-management support objects exist and
+      // match this CodeGenLib version. These routines/views are CodeGen's own
+      // machinery — when the provider supplies DDL (PostgreSQL), we install it
+      // idempotently here rather than depending on migrations to have shipped
+      // it. Nothing below can work without them, so a failure here is fatal.
+      const supportObjectsSQL = this.dbProvider.getMetadataSupportObjectsSQL(mj_core_schema());
+      if (supportObjectsSQL) {
+         try {
+            await pool.query(supportObjectsSQL);
+            logStatus('   Ensured metadata-management support objects (views/routines) are current');
+         }
+         catch (e) {
+            logError(`   Error ensuring metadata-management support objects: ${e instanceof Error ? e.message : e}`);
+            return false;
+         }
+      }
 
       let bSuccess = true;
       let start = new Date();
@@ -4016,7 +4050,7 @@ export class ManageMetadataBase {
 
             if (ManageMetadataBase.newEntityList.length > 0) {
                // only do this if we actually created new entities
-               LogStatus(`   Done creating entities, refreshing metadata to reflect new entities...`)
+               logStatus(`   Done creating entities, refreshing metadata to reflect new entities...`)
                await md.Refresh();// refresh now since we've added some new entities
             }
          }
@@ -4349,10 +4383,10 @@ export class ManageMetadataBase {
                }
             }
 
-            LogStatus(`   Created new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`)
+            logStatus(`   Created new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`)
          }
          else {
-            LogStatus(`   Skipping new entity ${newEntity.TableName} because it doesn't qualify to be created. Reason: ${validationMessage}`)
+            logStatus(`   Skipping new entity ${newEntity.TableName} because it doesn't qualify to be created. Reason: ${validationMessage}`)
             return;
          }
       }
@@ -4401,7 +4435,7 @@ export class ManageMetadataBase {
             .replace(/^-|-$/g, '');         // trim hyphens from start/end
 
          const sSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
-                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', 1)`;
+                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)})`;
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
 
@@ -5008,7 +5042,33 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Generate SQL UPDATEs for IsNameField on the identified name fields
+    * Generate SQL UPDATEs for IsNameField — SINGLE-WINNER semantics.
+    *
+    * The LLM's `result.nameFields` is a RANKED candidate list (it may propose several
+    * fields that "together" name the record, e.g. FirstName + LastName), but every
+    * downstream consumer — `EntityInfo.NameField`, the base-view generator's FK-name
+    * virtual columns, `RelatedEntityNameFieldMap` resolution — assumes exactly ONE name
+    * field per entity. Historically this method flagged EVERY candidate and never
+    * cleared anything, so flags accumulated across runs (57 core entities ended up with
+    * 2–4 `IsNameField=1` rows) and the FK-name pick silently DRIFTED between CodeGen
+    * runs as the first-by-sequence winner changed (observed: Conversation Details
+    * flipping `Message` → `Role`, reshaping every view that joins to it).
+    *
+    * Winner selection (deterministic, mirrors `EntityInfo.NameField`'s runtime
+    * preference and the v5.41 metadata backfill):
+    *  1. **Stability** — if exactly one currently-flagged field is still eligible, it
+    *     stays the winner regardless of what the LLM proposes. An already-valid single
+    *     name field never drifts.
+    *  2. **Repair** — if several flagged fields are eligible, prefer the one literally
+    *     named `Name`, else the first in field order (fields arrive ordered by
+    *     `Sequence` from the metadata query).
+    *  3. **Fresh pick** — if no flagged field is eligible, take the first eligible LLM
+    *     candidate in ranked order.
+    *
+    * Every NON-winner with `IsNameField=1` and `AutoUpdateIsNameField=1` is CLEARED, so
+    * historical accumulation self-heals on the next analysis pass. Fields pinned with
+    * `AutoUpdateIsNameField=0` are never touched in either direction — the user owns
+    * them, and `EntityInfo.NameField`'s literal-`Name` preference arbitrates at runtime.
     */
    protected applyNameFieldUpdates(
       sqlStatements: string[],
@@ -5017,46 +5077,93 @@ export class ManageMetadataBase {
    ): void {
       const nameFieldNames: string[] = result.nameFields ?? [];
 
+      // Surface LLM candidates that don't exist on the entity (same diagnostics as before).
       for (const nfName of nameFieldNames) {
-         const nameField = fields.find(f => f.Name === nfName);
-         if (nameField && !this.isFieldEligibleForNameField(nameField)) {
-            // The LLM proposed a field that can never be a sensible display name
-            // (primary key, uniqueidentifier, non-text, or unbounded blob). Skip
-            // it silently — this is a guardrail, not a bug. Without this, a PK can
-            // be flagged IsNameField, which corrupts every FK-name virtual field
-            // that joins to this entity (it resolves to the uniqueidentifier PK
-            // instead of the real name column).
-            continue;
-         }
-         if (nameField && nameField.AutoUpdateIsNameField && nameField.ID && !nameField.IsNameField) {
-            sqlStatements.push(`
-               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-               SET IsNameField = ${this.boolLit(true)}
-               WHERE ID = '${nameField.ID}'
-               AND AutoUpdateIsNameField = ${this.boolLit(true)}
-            `);
-         } else if (!nameField) {
+         if (!fields.some(f => f.Name === nfName)) {
             logError(`Smart field identification returned invalid nameField: '${nfName}' not found in entity fields`);
          }
       }
+
+      const winner = this.selectNameFieldWinner(fields, nameFieldNames);
+
+      // Set the winner when it isn't flagged yet (and auto-update is allowed).
+      if (winner && winner.AutoUpdateIsNameField && winner.ID && !winner.IsNameField) {
+         sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               SET IsNameField = ${this.boolLit(true)}
+               WHERE ID = '${winner.ID}'
+               AND AutoUpdateIsNameField = ${this.boolLit(true)}
+            `);
+      }
+
+      // Clear every other flagged field that allows auto-update — single winner, always.
+      for (const f of fields) {
+         if (f === winner || !f.IsNameField || !f.AutoUpdateIsNameField || !f.ID) {
+            continue;
+         }
+         sqlStatements.push(`
+               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               SET IsNameField = ${this.boolLit(false)}
+               WHERE ID = '${f.ID}'
+               AND AutoUpdateIsNameField = ${this.boolLit(true)}
+            `);
+      }
+   }
+
+   /**
+    * Picks the single IsNameField winner for an entity per the rules documented on
+    * {@link applyNameFieldUpdates}: stable current winner → deterministic repair
+    * (literal `Name`, then field order) → first eligible LLM candidate. Returns null
+    * when nothing eligible exists (the entity simply has no name field — FK-name
+    * virtual columns are skipped for it, which beats pointing them at a PK or blob).
+    */
+   protected selectNameFieldWinner(
+      fields: Array<Record<string, unknown>>,
+      rankedCandidates: string[]
+   ): Record<string, unknown> | null {
+      const eligibleFlagged = fields.filter(f => f.IsNameField && this.isFieldEligibleForNameField(f));
+      if (eligibleFlagged.length === 1) {
+         return eligibleFlagged[0];
+      }
+      if (eligibleFlagged.length > 1) {
+         const literalName = eligibleFlagged.find(f => (f.Name as string | undefined)?.trim().toLowerCase() === 'name');
+         return literalName ?? eligibleFlagged[0];
+      }
+      for (const candidateName of rankedCandidates) {
+         const candidate = fields.find(f => f.Name === candidateName);
+         if (candidate && this.isFieldEligibleForNameField(candidate)) {
+            return candidate;
+         }
+      }
+      return null;
    }
 
    /**
     * Returns true if the field is a sensible target for IsNameField (i.e. could
     * serve as the entity's human-readable display name). A name field must be
-    * BOUNDED TEXT — so we reject primary keys, uniqueidentifiers, all non-text
-    * types, and unbounded (MAX) text. This stops Smart Field Identification from
-    * flagging a PK/uniqueidentifier as a name field, which would corrupt every
-    * related-entity name virtual field that joins to this entity (those resolve
-    * their SQL type from the related entity's NameField).
+    * BOUNDED TEXT ON THE BASE TABLE — so we reject primary keys, uniqueidentifiers,
+    * all non-text types, unbounded (MAX) text, and VIRTUAL fields. This stops Smart
+    * Field Identification from flagging a PK/uniqueidentifier as a name field, which
+    * would corrupt every related-entity name virtual field that joins to this entity
+    * (those resolve their SQL type from the related entity's NameField). Virtual
+    * fields are rejected because a view-only name column forces the FK-name join to
+    * target the VIEW instead of the base table — the self-referencing case is
+    * unbuildable on PostgreSQL and SQL Server (see the self-FK skip in the view
+    * generator), and a name that is itself a borrowed FK-name resolves circularly.
     */
    protected isFieldEligibleForNameField(field: Record<string, unknown>): boolean {
       if (field.IsPrimaryKey === true) return false;
+      if (field.IsVirtual === true) return false;
       const type = (field.Type as string | undefined ?? '').toLowerCase();
       const textTypes = new Set(['nvarchar', 'varchar', 'char', 'nchar']);
       if (!textTypes.has(type)) return false;
-      // Unbounded text (NVARCHAR(MAX) → Length -1) is never a good name field.
-      const length = field.Length as number | undefined;
+      // Unbounded text (NVARCHAR(MAX) → length -1) is never a good name field.
+      // NOTE: the advanced-generation metadata query aliases `ef.Length AS MaxLength`
+      // (`Length` is a reserved-ish word it quotes), so runtime records carry
+      // `MaxLength` — checking only `Length` made this rejection a silent no-op and
+      // let nvarchar(MAX) columns (e.g. Conversation Details.Message) through.
+      // Accept either key so the guardrail works for both runtime rows and tests.
+      const length = (field.Length ?? field.MaxLength) as number | undefined;
       if (length === -1) return false;
       return true;
    }

@@ -1,0 +1,5 @@
+---
+"@memberjunction/ai-agents": patch
+---
+
+Serve Memory Manager maintenance reads from the AIEngine cache instead of per-cycle `RunView`/`RunViews` calls. The scheduled Memory Manager job (every ~15 min) was re-querying `MJ: AI Agent Notes` and `MJ: AI Agent Examples` — entities `AIEngineBase` already holds fully in memory and keeps current via `BaseEntity` events — tripping the "Entity Already in Engine" redundancy telemetry on every run. The consolidation event-trigger count, the orphan-prune, TTL-expiry, and decay-candidate scans, and the **hardening pass** (the provisional-note load, `Status='Provisional' AND AuthorType='Agent'`) now filter/sort/cap the cached arrays in-memory. The scan-only paths project to plain rows (mutation re-`Load()`s fresh owned entities, so cached instances are never aliased); the hardening pass operates on the cached note entities directly and saves them — consistent with the existing dedupe-save path, which already saves cached note instances returned by `FindSimilarAgentNotes`. The cache-miss note-resolver fallback and transactional `MJ: AI Agent Runs` reads intentionally remain DB queries.

@@ -7,6 +7,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { transformCodeOnly } from './ExpressionHelpers.js';
 
 /**
  * Final cleanup pass on the complete converted SQL output.
@@ -226,10 +227,22 @@ export function postProcess(sql: string): string {
   // Quote unquoted table names after any schema prefix (PascalCase identifiers)
   // e.g., __mj.OpenApp → __mj."OpenApp"   but NOT __mj."OpenApp" (already quoted)
   // Also skip all-lowercase names like __mj.information_schema
-  sql = sql.replace(/(\b\w+)\.(?!")([A-Z][a-zA-Z_]\w*)/g, '$1."$2"');
+  //
+  // transformCodeOnly is REQUIRED here: these regexes match `<word>.<PascalCase>`,
+  // which also occurs inside single-quoted string literals that carry TypeScript
+  // code (e.g. `GeneratedCode.Code` / `Action.Code` INSERT VALUES contain
+  // `this.GranteeType`, `result.Errors`, `params.Params`). Without skipping string
+  // literals, those TS member accesses get rewritten to `this."GranteeType"` etc.,
+  // producing invalid TypeScript that breaks the build when CodeGen re-emits it.
+  // A SQL->SQL converter must treat string-literal content as opaque data.
+  sql = transformCodeOnly(sql, (code) =>
+    code.replace(/(\b\w+)\.(?!")([A-Z][a-zA-Z_]\w*)/g, '$1."$2"')
+  );
 
   // Also handle quoted schema: "schema".PascalCase → "schema"."PascalCase"
-  sql = sql.replace(/"(\w+)"\.(?!")([A-Z][a-zA-Z_]\w*)/g, '"$1"."$2"');
+  sql = transformCodeOnly(sql, (code) =>
+    code.replace(/"(\w+)"\.(?!")([A-Z][a-zA-Z_]\w*)/g, '"$1"."$2"')
+  );
 
   // ISNULL → COALESCE (SQL Server function)
   sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
@@ -447,8 +460,11 @@ function countNetQuotes(line: string): number {
 
 /**
  * Replace [bracket] identifiers with "quoted" identifiers, but skip content
- * inside dollar-quoted blocks ($$...$$, $tag$...$tag$) and single-quoted strings.
- * This prevents corrupting regex patterns like [A-Za-z0-9] inside function bodies.
+ * inside dollar-quoted blocks ($$...$$, $tag$...$tag$), single-quoted strings,
+ * and `--` line comments. This prevents corrupting regex patterns like
+ * [A-Za-z0-9] inside function bodies, and stops an apostrophe inside a comment
+ * (e.g. "the sproc's default") from being misread as a string-literal opener,
+ * which would desync quote tracking and mangle nearby ARRAY[...] / [bracket] text.
  */
 function replaceBracketsOutsideDollarBlocks(sql: string): string {
   const result: string[] = [];
@@ -468,6 +484,16 @@ function replaceBracketsOutsideDollarBlocks(sql: string): string {
           continue;
         }
       }
+    }
+
+    // Check for `--` line comment: consume through end-of-line unchanged. Comments
+    // can contain apostrophes and brackets that must not be treated as SQL tokens.
+    if (sql[i] === '-' && sql[i + 1] === '-') {
+      let j = i + 2;
+      while (j < sql.length && sql[j] !== '\n') j++;
+      result.push(sql.slice(i, j));
+      i = j;
+      continue;
     }
 
     // Check for single-quoted string start
@@ -493,7 +519,11 @@ function replaceBracketsOutsideDollarBlocks(sql: string): string {
     // Check for bracket identifier: [Name] but not [1] (array access)
     if (sql[i] === '[') {
       const bracketMatch = sql.slice(i).match(/^\[([^\]\d][^\]]*)\]/);
-      if (bracketMatch) {
+      // A real T-SQL bracket identifier never contains a single quote, and is never
+      // a PG array constructor. Skip `['x','y']` (a quoted-literal list, e.g.
+      // `ARRAY['AgentID','Status']`) — converting it to `"'x','y'"` is corruption.
+      const isArrayConstructor = /ARRAY\s*$/i.test(sql.slice(Math.max(0, i - 8), i));
+      if (bracketMatch && !bracketMatch[1].includes("'") && !isArrayConstructor) {
         result.push(`"${bracketMatch[1]}"`);
         i += bracketMatch[0].length;
         continue;

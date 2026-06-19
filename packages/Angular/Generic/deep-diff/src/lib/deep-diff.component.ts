@@ -88,10 +88,46 @@ export class DeepDiffComponent implements OnInit {
 
   diffResult: DeepDiffResult | null = null;
   diffItems: DeepDiffItem[] = [];
-  filter: string = '';
-  filterType: 'all' | 'added' | 'removed' | 'modified' | 'unchanged' = 'all';
+
+  private _filter: string = '';
+  get filter(): string {
+    return this._filter;
+  }
+  set filter(value: string) {
+    this._filter = value;
+    this.recomputeFilteredItems();
+  }
+
+  private _filterType: 'all' | 'added' | 'removed' | 'modified' | 'unchanged' = 'all';
+  get filterType(): 'all' | 'added' | 'removed' | 'modified' | 'unchanged' {
+    return this._filterType;
+  }
+  set filterType(value: 'all' | 'added' | 'removed' | 'modified' | 'unchanged') {
+    this._filterType = value;
+    this.recomputeFilteredItems();
+  }
+
+  /**
+   * Precomputed filtered diff tree. Recomputed only when the source data
+   * (`diffItems`) or the filter inputs (`filter` / `filterType`) change —
+   * never on every change-detection cycle. Bound directly by the template's
+   * `@for` and empty-state length check, which preserves `@for` referential
+   * stability between CD passes (the recursive walk no longer runs >= 2x/CD).
+   */
+  filteredItems: DeepDiffItem[] = [];
+
   expandedValuesMap: { [key: string]: boolean } = {};
-  
+
+  /**
+   * Memoization cache for {@link formatValue} / {@link isValueTruncated}. Keyed
+   * by `${path}|${expanded}` so the expensive `JSON.stringify` of object values
+   * runs at most once per (path, expansion-state) instead of on every
+   * change-detection cycle (the template binds these in a recursive `@for`).
+   * Invalidated whenever the source data is regenerated.
+   */
+  private formatValueCache = new Map<string, string>();
+  private truncatedCache = new Map<string, boolean>();
+
   private differ: DeepDiffer;
 
   constructor(private cdr: ChangeDetectorRef) {
@@ -119,17 +155,24 @@ export class DeepDiffComponent implements OnInit {
 
   private generateDiff(): void {
     if (this.oldValue === undefined && this.newValue === undefined) {
+      this.formatValueCache.clear();
+      this.truncatedCache.clear();
       this.diffResult = null;
       this.diffItems = [];
+      this.recomputeFilteredItems();
       return;
     }
 
+    this.formatValueCache.clear();
+    this.truncatedCache.clear();
     this.diffResult = this.differ.diff(this.oldValue, this.newValue);
     this.diffItems = this.buildHierarchicalItems(this.diffResult.changes);
-    
+
     if (this.expandAll) {
       this.expandAllItems();
     }
+
+    this.recomputeFilteredItems();
   }
 
   private buildHierarchicalItems(changes: DiffChange[]): DeepDiffItem[] {
@@ -200,9 +243,16 @@ export class DeepDiffComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  get filteredItems(): DeepDiffItem[] {
+  /**
+   * Recomputes {@link filteredItems} from the current `diffItems` + filter
+   * inputs. Called from `generateDiff()` (data change) and from the
+   * `filter` / `filterType` setters (filter change) — NOT per CD cycle.
+   */
+  private recomputeFilteredItems(): void {
     if (!this.filter && this.filterType === 'all') {
-      return this.diffItems;
+      this.filteredItems = this.diffItems;
+      this.cdr.markForCheck();
+      return;
     }
 
     const filterFn = (item: DeepDiffItem): boolean => {
@@ -232,7 +282,8 @@ export class DeepDiffComponent implements OnInit {
       }, [] as DeepDiffItem[]);
     };
 
-    return filterRecursive(this.diffItems);
+    this.filteredItems = filterRecursive(this.diffItems);
+    this.cdr.markForCheck();
   }
 
   getIcon(type: DiffChangeType): string {
@@ -258,10 +309,20 @@ export class DeepDiffComponent implements OnInit {
   formatValue(value: any, path: string): string {
     if (value === undefined) return 'undefined';
     if (value === null) return 'null';
-    
+
     const isExpanded = !!this.expandedValuesMap[path];
+    const cacheKey = `${path}|${isExpanded ? 1 : 0}`;
+    const cached = this.formatValueCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const formatted = this.computeFormattedValue(value, isExpanded);
+    this.formatValueCache.set(cacheKey, formatted);
+    return formatted;
+  }
+
+  private computeFormattedValue(value: any, isExpanded: boolean): string {
     const shouldTruncate = this.truncateValues && !isExpanded;
-    
+
     if (typeof value === 'string') {
       if (shouldTruncate && value.length > this.maxStringLength) {
         return `"${value.substring(0, this.maxStringLength)}..."`;
@@ -290,7 +351,17 @@ export class DeepDiffComponent implements OnInit {
     if (!this.truncateValues || this.expandedValuesMap[path]) {
       return false;
     }
-    
+
+    const cacheKey = `${path}|0`;
+    const cached = this.truncatedCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const result = this.computeValueTruncated(value);
+    this.truncatedCache.set(cacheKey, result);
+    return result;
+  }
+
+  private computeValueTruncated(value: any): boolean {
     if (typeof value === 'string') {
       return value.length > this.maxStringLength;
     }

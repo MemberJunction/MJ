@@ -1,0 +1,227 @@
+@if (ShowPreJoin && !PreJoinComplete) {
+  <mj-livekit-prejoin [InitialDisplayName]="DisplayName" [StartWithCamera]="StartWithCamera" (Join)="onPreJoinJoin($event)"></mj-livekit-prejoin>
+} @else {
+  <div class="lk-room lk-room--{{ Layout }}" [class.lk-room--panel-open]="SidePanel !== 'none'">
+    @if (ShowHeader) {
+      <header class="lk-room__header">
+        <span class="lk-room__title">
+          <i class="fa-solid fa-circle lk-room__status-dot lk-room__status-dot--{{ State.Status }}"></i>
+          {{ Title || State.RoomName || "Live Room" }}
+          @if (State.E2EEEnabled) {
+            <i class="fa-solid fa-lock lk-room__e2ee" title="End-to-end encrypted"></i>
+          }
+        </span>
+        <span class="lk-room__header-right">
+          @if (ShowAgentState && AgentParticipant) {
+            <mj-livekit-agent-state [State]="AgentState" [AgentName]="AgentParticipant.DisplayName"></mj-livekit-agent-state>
+          }
+          @if (ShowParticipantCount) {
+            <span class="lk-room__count"><i class="fa-solid fa-users"></i> {{ AllParticipants.length }}</span>
+          }
+        </span>
+      </header>
+    }
+
+    @if (State.AudioPlaybackBlocked) {
+      <button type="button" class="lk-room__sound-banner" (click)="onEnableSound()"><i class="fa-solid fa-volume-high"></i> Click to enable sound</button>
+    }
+
+    <div class="lk-room__body">
+      <section class="lk-room__stage">
+        @if (ShowWhiteboard && WhiteboardActive) {
+          <mj-livekit-whiteboard-surface
+            [AgentName]="AgentParticipant?.DisplayName || 'Agent'"
+            (BoardChanged)="onWhiteboardChanged($event)"
+          ></mj-livekit-whiteboard-surface>
+        } @else {
+          @if (Layout === "split") {
+            <div
+              class="lk-room__split"
+              #splitContainer
+              (pointermove)="onSplitDragMove($event, splitContainer)"
+              (pointerup)="onSplitDragEnd()"
+              (pointerleave)="onSplitDragEnd()"
+            >
+              <div class="lk-room__split-pane" [style.flexBasis.%]="SplitRatio * 100">
+                @if (ScreenShareParticipant) {
+                  <mj-livekit-participant-tile
+                    [Participant]="ScreenShareParticipant"
+                    [ShowActiveSpeakerRing]="false"
+                    [ShowAudioMeter]="false"
+                    [ShowConnectionQuality]="ShowConnectionQuality"
+                    [ShowNameBadge]="ShowNameBadges"
+                    [AvatarUrl]="avatarFor(ScreenShareParticipant)"
+                  ></mj-livekit-participant-tile>
+                } @else {
+                  <div class="lk-room__empty">
+                    <i class="fa-solid fa-display"></i>
+                    <p>No screen is being shared</p>
+                  </div>
+                }
+              </div>
+              <div class="lk-room__splitter" (pointerdown)="onSplitDragStart($event)" title="Drag to resize"><span></span></div>
+              <div class="lk-room__split-pane">
+                @if (SplitSpeakerParticipant) {
+                  <mj-livekit-participant-tile
+                    [Participant]="SplitSpeakerParticipant"
+                    [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
+                    [ShowAudioMeter]="ShowAudioMeters"
+                    [ShowConnectionQuality]="ShowConnectionQuality"
+                    [ShowNameBadge]="ShowNameBadges"
+                    [ShowPinButton]="EnablePinning"
+                    [IsPinned]="PinnedIdentity === SplitSpeakerParticipant.Identity"
+                    [AvatarUrl]="avatarFor(SplitSpeakerParticipant)"
+                    (TogglePin)="onTogglePin(SplitSpeakerParticipant.Identity)"
+                  ></mj-livekit-participant-tile>
+                }
+              </div>
+            </div>
+          } @else if (Layout === "spotlight") {
+            @if (SpotlightParticipant) {
+              <div class="lk-room__spotlight">
+                <mj-livekit-participant-tile
+                  [Participant]="SpotlightParticipant"
+                  [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
+                  [ShowAudioMeter]="ShowAudioMeters"
+                  [ShowConnectionQuality]="ShowConnectionQuality"
+                  [ShowNameBadge]="ShowNameBadges"
+                  [ShowPinButton]="EnablePinning"
+                  [IsPinned]="PinnedIdentity === SpotlightParticipant.Identity"
+                  [AvatarUrl]="avatarFor(SpotlightParticipant)"
+                  (TogglePin)="onTogglePin(SpotlightParticipant.Identity)"
+                ></mj-livekit-participant-tile>
+              </div>
+            }
+            @if (FilmstripParticipants.length > 0) {
+              <div class="lk-room__filmstrip">
+                @for (p of FilmstripParticipants; track p.Identity) {
+                  <div class="lk-room__filmstrip-tile">
+                    <mj-livekit-participant-tile
+                      [Participant]="p"
+                      [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
+                      [ShowAudioMeter]="ShowAudioMeters"
+                      [ShowConnectionQuality]="ShowConnectionQuality"
+                      [ShowNameBadge]="ShowNameBadges"
+                      [ShowPinButton]="EnablePinning"
+                      [IsPinned]="PinnedIdentity === p.Identity"
+                      [AvatarUrl]="avatarFor(p)"
+                      (TogglePin)="onTogglePin(p.Identity)"
+                    ></mj-livekit-participant-tile>
+                  </div>
+                }
+              </div>
+            }
+          } @else {
+            <div class="lk-room__grid" [attr.data-count]="DisplayParticipants.length">
+              @for (p of DisplayParticipants; track p.Identity) {
+                <div class="lk-room__grid-tile">
+                  <mj-livekit-participant-tile
+                    [Participant]="p"
+                    [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
+                    [ShowAudioMeter]="ShowAudioMeters"
+                    [ShowConnectionQuality]="ShowConnectionQuality"
+                    [ShowNameBadge]="ShowNameBadges"
+                    [ShowPinButton]="EnablePinning"
+                    [IsPinned]="PinnedIdentity === p.Identity"
+                    [AvatarUrl]="avatarFor(p)"
+                    (TogglePin)="onTogglePin(p.Identity)"
+                  ></mj-livekit-participant-tile>
+                </div>
+              } @empty {
+                <div class="lk-room__empty">
+                  <i class="fa-solid fa-user-group"></i>
+                  <p>Waiting for participants…</p>
+                </div>
+              }
+            </div>
+          }
+        }
+
+        @if (ShowOverlay) {
+          <mj-livekit-connection-overlay
+            [Status]="State.Status"
+            [DisconnectReason]="State.DisconnectReason ?? null"
+            [ErrorMessage]="LastErrorMessage"
+            (Retry)="Connect()"
+          ></mj-livekit-connection-overlay>
+        }
+      </section>
+
+      @if (SidePanel === "chat" && ShowChat) {
+        <aside class="lk-room__panel">
+          <mj-livekit-chat-panel [Messages]="ChatMessages" (Send)="onSendChat($event)" (Close)="onToggleChat()"></mj-livekit-chat-panel>
+        </aside>
+      }
+      @if (SidePanel === "participants" && ShowParticipantsPanel) {
+        <aside class="lk-room__panel">
+          <mj-livekit-participants-panel [Participants]="AllParticipants" (Close)="onToggleParticipants()"></mj-livekit-participants-panel>
+        </aside>
+      }
+    </div>
+
+    @if (ShowControlBar) {
+      <footer class="lk-room__footer">
+        <mj-livekit-control-bar
+          [LocalMedia]="State.LocalMedia"
+          [ChatOpen]="SidePanel === 'chat'"
+          [ParticipantsOpen]="SidePanel === 'participants'"
+          [UnreadChatCount]="UnreadChatCount"
+          [ParticipantCount]="AllParticipants.length"
+          [EnableMicrophoneControl]="EnableMicrophoneControl"
+          [EnableCameraControl]="EnableCameraControl"
+          [EnableScreenShareControl]="EnableScreenShareControl"
+          [EnableDeviceSettings]="EnableDeviceSettings"
+          [EnableChatToggle]="ShowChat"
+          [EnableParticipantsToggle]="ShowParticipantsPanel"
+          [EnableLeaveControl]="EnableLeaveControl"
+          [EnableRecordingControl]="ShowRecordingControl"
+          [IsRecording]="IsRecording"
+          [EnableLayoutSwitcher]="EnableLayoutSwitcher"
+          [EnableWhiteboard]="ShowWhiteboard"
+          [WhiteboardActive]="WhiteboardActive"
+          (ToggleMicrophone)="onToggleMicrophone()"
+          (ToggleCamera)="onToggleCamera()"
+          (ToggleScreenShare)="onToggleScreenShare()"
+          (OpenDeviceSettings)="onOpenDeviceSettings()"
+          (ToggleChat)="onToggleChat()"
+          (ToggleParticipants)="onToggleParticipants()"
+          (ToggleLayoutMenu)="onToggleLayoutMenu()"
+          (ToggleRecording)="onToggleRecording()"
+          (ToggleWhiteboard)="onToggleWhiteboard()"
+          (Leave)="Leave()"
+        ></mj-livekit-control-bar>
+
+        @if (LayoutMenuOpen && EnableLayoutSwitcher) {
+          <div class="lk-room__layout-popover">
+            @for (opt of LayoutOptions; track opt.Layout) {
+              <button
+                type="button"
+                class="lk-room__layout-option"
+                [class.lk-room__layout-option--active]="Layout === opt.Layout"
+                (click)="onSelectLayout(opt.Layout)"
+              >
+                <i class="fa-solid {{ opt.Icon }}"></i> {{ opt.Label }}
+              </button>
+            }
+          </div>
+        }
+
+        @if (DeviceMenuOpen) {
+          <div class="lk-room__device-popover">
+            <mj-livekit-device-menu
+              [Devices]="Devices"
+              [ShowNoiseFilter]="EnableNoiseFilter"
+              [NoiseFilterEnabled]="State.NoiseFilterEnabled"
+              [ShowBackgroundEffects]="EnableBackgroundEffects"
+              [BackgroundBlurEnabled]="State.BackgroundEffect.Kind !== 'none'"
+              (DeviceSelected)="onDeviceSelected($event)"
+              (NoiseFilterToggled)="onNoiseFilterToggled($event)"
+              (BackgroundBlurToggled)="onBackgroundBlurToggled($event)"
+              (Close)="onCloseDeviceMenu()"
+            ></mj-livekit-device-menu>
+          </div>
+        }
+      </footer>
+    }
+  </div>
+}

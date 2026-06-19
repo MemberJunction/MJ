@@ -685,7 +685,7 @@ export class SQLServerDataProvider
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
       const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
-      const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
       entity.Fields.filter((f) => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach((f) => {
@@ -716,7 +716,7 @@ export class SQLServerDataProvider
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
       const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
       const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
-      const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       if (sSQL.length > 0) sSQL += ' UNION ALL ';
       sSQL += `SELECT
@@ -946,7 +946,7 @@ export class SQLServerDataProvider
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
     const spName = this.GetCreateUpdateSPName(entity, payload.type === 'Create');
     const concatPKIDString = `CONCAT(${entity.EntityInfo.PrimaryKeys
-      .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',${pk.Name}`)
+      .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',[${pk.Name}]`)
       .join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
     // Build the inline `EXEC spCreateRecordChange_Internal` from the payload,
@@ -1374,41 +1374,45 @@ export class SQLServerDataProvider
   ): Promise<Record<string, unknown>[]> {
     const needsAdjustment = await this.NeedsDatetimeOffsetAdjustment();
 
-    return rows.map((row) => {
-      const processedRow = { ...row };
+    // Precompute each field's name + lowercased SQL type ONCE rather than calling
+    // field.Type.toLowerCase() up to 3x per field per row. The rows are freshly produced
+    // by the driver query and owned by this pipeline, so we adjust them in place instead
+    // of allocating a `{ ...row }` shallow copy for every row.
+    const specs = datetimeFields.map((f) => ({ name: f.Name, kind: f.Type.toLowerCase() }));
 
-      for (const field of datetimeFields) {
-        const fieldValue = processedRow[field.Name];
+    for (const row of rows) {
+      for (const spec of specs) {
+        const fieldValue = row[spec.name];
         if (fieldValue === null || fieldValue === undefined) continue;
 
-        if (field.Type.toLowerCase() === 'datetime2') {
+        if (spec.kind === 'datetime2') {
           if (typeof fieldValue === 'string') {
             if (!fieldValue.includes('Z') && !fieldValue.includes('+') && !fieldValue.includes('-')) {
-              processedRow[field.Name] = new Date(fieldValue.replace(' ', 'T') + 'Z');
+              row[spec.name] = new Date(fieldValue.replace(' ', 'T') + 'Z');
             } else {
-              processedRow[field.Name] = new Date(fieldValue);
+              row[spec.name] = new Date(fieldValue);
             }
           } else if (fieldValue instanceof Date) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
-        } else if (field.Type.toLowerCase() === 'datetimeoffset') {
+        } else if (spec.kind === 'datetimeoffset') {
           if (typeof fieldValue === 'string') {
-            processedRow[field.Name] = new Date(fieldValue);
+            row[spec.name] = new Date(fieldValue);
           } else if (fieldValue instanceof Date && needsAdjustment) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
-        } else if (field.Type.toLowerCase() === 'datetime') {
+        } else if (spec.kind === 'datetime') {
           if (fieldValue instanceof Date) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
         }
       }
+    }
 
-      return processedRow;
-    });
+    return rows;
   }
 
 

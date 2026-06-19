@@ -125,6 +125,7 @@ export class LoopAgentType extends BaseAgentType {
                     terminate: false,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
+                    memoryWrites: response.memoryWrites,
                     payloadChangeRequest: response.payloadChangeRequest,
                     reasoning: response.reasoning,
                     confidence: response.confidence
@@ -147,6 +148,7 @@ export class LoopAgentType extends BaseAgentType {
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
+                    memoryWrites: response.memoryWrites,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
                     automaticCommands: response.automaticCommands,
@@ -173,6 +175,7 @@ export class LoopAgentType extends BaseAgentType {
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
+                    memoryWrites: response.memoryWrites,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
                     automaticCommands: response.automaticCommands
@@ -189,6 +192,7 @@ export class LoopAgentType extends BaseAgentType {
                 payloadChangeRequest: response.payloadChangeRequest,
                 scratchpad: response.scratchpad,
                 artifactToolCalls: response.artifactToolCalls,
+                memoryWrites: response.memoryWrites,
                 terminate: response.taskComplete,
                 responseForm: response.responseForm,
                 actionableCommands: response.actionableCommands,

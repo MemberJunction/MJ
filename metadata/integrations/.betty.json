@@ -11,6 +11,9 @@
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key with Endpoint",
       "Icon": "fa-solid fa-robot"
     },
+    "deleteRecord": {
+      "delete": true
+    },
     "relatedEntities": {
       "MJ: Integration Objects": [
         {
@@ -35,6 +38,9 @@
             "Sequence": 1,
             "Status": "Active"
           },
+          "deleteRecord": {
+            "delete": true
+          },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
               {
@@ -52,6 +58,9 @@
                   "Description": "Betty conversation primary key. Maps to MJ: Conversations.ExternalID.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "184E9DF0-A6D0-49BF-A8BC-C92EF10DF9F7"
@@ -76,6 +85,9 @@
                   "Sequence": 2,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "73ED8994-EB0D-4FE1-85DE-DE728547E86F"
                 },
@@ -98,6 +110,9 @@
                   "Sequence": 3,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "BE9BD9B4-81DE-4DD9-BA0E-D2F3A63FF6FB"
                 },
@@ -119,6 +134,9 @@
                   "Description": "Timestamp when the conversation was closed; may be null for open sessions.",
                   "Sequence": 4,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "007D5915-5CBA-4C6C-9906-330C23EC19B4"
@@ -143,6 +161,9 @@
                   "Sequence": 5,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "60849EE4-1DAE-49EF-A6E2-D6AEE77277E8"
                 },
@@ -166,6 +187,9 @@
                   "Sequence": 6,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "6582C85B-EE1E-40F2-A97B-AA7A650F2EA0"
                 },
@@ -188,6 +212,9 @@
                   "Sequence": 7,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "E7C66392-C3E0-4A7B-970F-FB20B514BE52"
                 },
@@ -209,6 +236,9 @@
                   "Description": "Last modification timestamp — used as the incremental-sync watermark.",
                   "Sequence": 8,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "25AAD861-1310-4BFB-BACF-B9FEF3A0556C"
@@ -250,6 +280,9 @@
             "Sequence": 2,
             "Status": "Active"
           },
+          "deleteRecord": {
+            "delete": true
+          },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
               {
@@ -267,6 +300,9 @@
                   "Description": "Betty message primary key. Maps to MJ: Conversation Details.ExternalID.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "B29C576D-E735-424A-9E2B-8F2122D9831E"
@@ -291,6 +327,9 @@
                   "Sequence": 2,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "B9F23FDB-6DB2-4878-A7EB-0FDF68291F8B"
                 },
@@ -313,6 +352,9 @@
                   "Description": "Speaker role: typically 'user' or 'assistant'. Map at sync time to MJ Role enum ('User'/'AI'/'Error').",
                   "Sequence": 3,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "32B61A10-DAE8-4E61-AE60-FA782F013580"
@@ -337,6 +379,9 @@
                   "Sequence": 4,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "89825CE0-8360-441D-9FCB-0128B66D8FE4"
                 },
@@ -360,6 +405,9 @@
                   "Sequence": 5,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "74837FE4-1524-4CEA-9DB4-B2D773BEAA01"
                 },
@@ -381,6 +429,9 @@
                   "Description": "Message creation timestamp.",
                   "Sequence": 6,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "44828B91-3130-47D8-9E60-CC604BCCCB11"
@@ -405,6 +456,9 @@
                   "Sequence": 7,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "7B36899A-5771-4CC1-90BB-B1BDD89715BC"
                 },
@@ -426,6 +480,9 @@
                   "Description": "Last modification timestamp.",
                   "Sequence": 8,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "1DED1EF5-D1C3-4E20-859C-265C9E3B219E"
@@ -467,6 +524,9 @@
             "Sequence": 3,
             "Status": "Active"
           },
+          "deleteRecord": {
+            "delete": true
+          },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
               {
@@ -484,6 +544,9 @@
                   "Description": "Knowledge source primary key.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "A5F8BA1F-E4B4-4FEF-83F6-052F8F94510E"
@@ -508,6 +571,9 @@
                   "Sequence": 2,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "0605D03A-F7CD-47DF-8412-959CD3F934F3"
                 },
@@ -530,6 +596,9 @@
                   "Description": "Content format (pdf, video, webpage, podcast, presentation, etc.).",
                   "Sequence": 3,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "EF5507B9-32FB-4BAE-8864-6F1EF7194738"
@@ -554,6 +623,9 @@
                   "Sequence": 4,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "5CF50961-FFFA-4167-B901-4875DD46376D"
                 },
@@ -575,6 +647,9 @@
                   "Description": "When Betty last re-indexed this source. Watermark candidate.",
                   "Sequence": 5,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "38DD6E62-4E1C-4082-91D3-F0C4ECE9D9F9"
@@ -616,6 +691,9 @@
             "Sequence": 4,
             "Status": "Active"
           },
+          "deleteRecord": {
+            "delete": true
+          },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
               {
@@ -633,6 +711,9 @@
                   "Description": "User primary key in Betty.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "1BCD6D73-821E-4C13-92A4-410E5577FA1A"
@@ -657,6 +738,9 @@
                   "Sequence": 2,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "3BC85AAB-8D97-4CC5-A376-91AB3C8C2F13"
                 },
@@ -680,6 +764,9 @@
                   "Sequence": 3,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "FBF37917-EB24-4268-A703-00E43AC84000"
                 },
@@ -702,6 +789,9 @@
                   "Sequence": 4,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "FBF4B459-5BAB-4DB1-955F-F3C719F91EE1"
                 },
@@ -723,6 +813,9 @@
                   "Description": "Last modification timestamp — watermark candidate.",
                   "Sequence": 5,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "19271D2C-D57F-4A6D-89B0-F61AA48ACE03"
@@ -764,6 +857,9 @@
             "Sequence": 5,
             "Status": "Active"
           },
+          "deleteRecord": {
+            "delete": true
+          },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
               {
@@ -781,6 +877,9 @@
                   "Description": "Feedback record primary key.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "75762165-421C-4E92-883F-E1B75523744B"
@@ -805,6 +904,9 @@
                   "Sequence": 2,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "F937A431-D0D4-43AE-93F7-8F23D77127B9"
                 },
@@ -826,6 +928,9 @@
                   "Description": "Numeric rating (scale is per-tenant; commonly -1/+1 thumbs or 1-5 stars).",
                   "Sequence": 3,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "8FC19DD1-D2B7-4A75-B376-64419A2A0E00"
@@ -850,6 +955,9 @@
                   "Sequence": 4,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "9EDC6FD0-6C5E-49C2-A249-9FFEA21EAA14"
                 },
@@ -871,6 +979,9 @@
                   "Description": "When the feedback was submitted — watermark candidate.",
                   "Sequence": 5,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "2E7471D3-83A6-4251-9556-9B46AEE732DB"
@@ -912,6 +1023,9 @@
             "Sequence": 6,
             "Status": "Active"
           },
+          "deleteRecord": {
+            "delete": true
+          },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
               {
@@ -929,6 +1043,9 @@
                   "Description": "Content gap primary key.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "195B5188-7D6D-4401-A3A9-3FCA040DC25A"
@@ -953,6 +1070,9 @@
                   "Sequence": 2,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "6161FE2B-50AC-4F12-9C49-A5885BF0FE7D"
                 },
@@ -974,6 +1094,9 @@
                   "Description": "Timestamp of the first occurrence.",
                   "Sequence": 3,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "5053E5D9-497E-49AA-B49C-F787D87F8C70"
@@ -997,6 +1120,9 @@
                   "Sequence": 4,
                   "Status": "Active"
                 },
+                "deleteRecord": {
+                  "delete": true
+                },
                 "primaryKey": {
                   "ID": "5CB8574F-7C58-4DFD-9E64-3F18D7A28D27"
                 },
@@ -1018,6 +1144,9 @@
                   "Description": "Timestamp of the most recent occurrence — watermark candidate.",
                   "Sequence": 5,
                   "Status": "Active"
+                },
+                "deleteRecord": {
+                  "delete": true
                 },
                 "primaryKey": {
                   "ID": "063B3E70-C119-46EC-9B8E-3066A9DBB780"

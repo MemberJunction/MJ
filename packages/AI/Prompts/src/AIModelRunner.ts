@@ -70,6 +70,19 @@ export class AIModelRunner {
     private _provider: IMetadataProvider | null = null;
 
     /**
+     * Instance-keyed chain of in-flight AIPromptRun saves (fire-and-forget). Mirrors
+     * AIPromptRunner: the embedding/model run record is observability — the caller gets its
+     * vectors regardless of whether the tracking row persists — so the saves are queued, not
+     * awaited, and the embedding call is never blocked on a DB round-trip. Saves for the same
+     * run entity are chained so the initial 'Running' INSERT always completes before the
+     * 'Completed'/'Failed' UPDATE. AIModelRunner is created per-AIPromptRunner-instance, so this
+     * array is short-lived. `PromptRunID` is still returned immediately because NewRecord()
+     * client-generates the UUID.
+     */
+    private _promptRunSaveChains = new Map<MJAIPromptRunEntityExtended, Promise<boolean>>();
+    private _pendingPromptRunSaves: Promise<boolean>[] = [];
+
+    /**
      * Optional metadata provider override. Callers should set
      * `instance.Provider = providerToUse` before invoking run methods
      * in multi-provider contexts. Falls back to the global default provider when unset.
@@ -298,17 +311,47 @@ export class AIModelRunner {
                 });
             }
 
-            const saved = await promptRun.Save();
-            if (!saved) {
-                LogError('AIModelRunner: Failed to save AIPromptRun record');
-                return null;
-            }
-
+            // Fire-and-forget the initial 'Running' INSERT — ID is already assigned by NewRecord()
+            // so the returned PromptRunID is valid immediately; the UPDATE chains after this.
+            this.queuePromptRunSave(promptRun);
             return promptRun;
         } catch (error) {
             LogError(`AIModelRunner: Error creating AIPromptRun: ${error}`);
             return null;
         }
+    }
+
+    /**
+     * Queues a fire-and-forget Save() for an embedding/model run record. Saves for the same
+     * instance are chained (INSERT before UPDATE); failures are logged, never thrown (the record
+     * is observability, not part of the embedding success contract). Flushable via
+     * {@link WaitForPendingPromptRunSaves}.
+     */
+    private queuePromptRunSave(promptRun: MJAIPromptRunEntityExtended): Promise<boolean> {
+        const previous = this._promptRunSaveChains.get(promptRun) ?? Promise.resolve(true);
+        const current = previous
+            .then(async () => {
+                const ok = await promptRun.Save();
+                if (!ok) {
+                    LogError(`AIModelRunner: Failed to save AIPromptRun ${promptRun.ID || '(unsaved)'}: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`);
+                }
+                return ok;
+            })
+            .catch((err) => {
+                LogError(`AIModelRunner: Error saving AIPromptRun: ${err instanceof Error ? err.message : String(err)}`);
+                return false;
+            });
+        this._promptRunSaveChains.set(promptRun, current);
+        this._pendingPromptRunSaves.push(current);
+        return current;
+    }
+
+    /**
+     * Awaits all in-flight prompt-run saves queued by this runner. The normal path does NOT
+     * call this — persistence is intentionally fire-and-forget. For tests / durability needs.
+     */
+    public async WaitForPendingPromptRunSaves(): Promise<void> {
+        await Promise.allSettled(this._pendingPromptRunSaves);
     }
 
     private async completeRunRecord(
@@ -347,7 +390,7 @@ export class AIModelRunner {
                 dimensions: embedResult.vectors?.[0]?.length ?? 0,
             });
 
-            await promptRun.Save();
+            this.queuePromptRunSave(promptRun); // fire-and-forget; chains after the create INSERT
         } catch (error) {
             LogError(`AIModelRunner: Error completing AIPromptRun: ${error}`);
         }
@@ -365,7 +408,7 @@ export class AIModelRunner {
             promptRun.ErrorMessage = errorMessage;
             promptRun.CompletedAt = new Date();
             promptRun.ExecutionTimeMS = Date.now() - startTime;
-            await promptRun.Save();
+            this.queuePromptRunSave(promptRun); // fire-and-forget; chains after the create INSERT
         } catch (error) {
             LogError(`AIModelRunner: Error failing AIPromptRun: ${error}`);
         }

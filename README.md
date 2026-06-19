@@ -96,6 +96,7 @@ const result = await ai.ChatCompletion({
 - **Code generation** — Entity classes, stored procedures, views, and Angular forms
 - **CLI tooling** — Command-line tools for codegen, metadata sync, and AI operations
 - **Docker support** — Containerized deployment with Flyway migrations
+- **Claude Code pack** — Curated AI-assistant context (`CLAUDE.md` + slash commands + skills) ships with every install; refresh with `mj update:claude`
 
 </td>
 </tr>
@@ -709,6 +710,12 @@ Packages at the top level of the `packages/` directory, not part of a multi-pack
 | [QueryGen](./packages/QueryGen/README.md) | `@memberjunction/query-gen` | AI-powered SQL query template generation with automatic testing and refinement |
 | [SkipTypes](./packages/SkipTypes/readme.md) | `@memberjunction/skip-types` | Shared types for the Skip AI Assistant used across MJAPI, Skip API, and Explorer |
 | [VersionHistory](./packages/VersionHistory/README.md) | `@memberjunction/version-history` | Label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore |
+
+---
+
+## Code Stats
+
+Curious how big the codebase is? Lines-of-code snapshots by language — with trend charts going back to the repo's first commit — live in [stats/](./stats/README.md). To record a fresh snapshot, run `node stats/repo-stats.mjs` (requires [cloc](https://github.com/AlDanial/cloc)).
 
 ---
 

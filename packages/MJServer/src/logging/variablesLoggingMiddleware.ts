@@ -6,6 +6,22 @@ import { configInfo } from '../config.js';
 import type { AppContext } from '../types.js';
 import { redactArg } from './secretRedactor.js';
 import { hasNoLogParameter, getNoLogFields } from './NoLog.js';
+import { StartupLogger } from './StartupLogger.js';
+
+/**
+ * Memoized "is the server log level `debug`?" check. The per-resolver
+ * variables echo is gated behind BOTH `logVariables` (opt-in redaction path)
+ * AND `level === 'debug'` — it is a raw, constantly-on debug line, so it should
+ * never fire unless an operator explicitly opted into debug verbosity. Config
+ * is immutable post-boot, so caching the resolution is safe.
+ */
+let isDebugLevelCache: boolean | undefined;
+function isDebugLogLevel(): boolean {
+  if (isDebugLevelCache === undefined) {
+    isDebugLevelCache = StartupLogger.resolveLevelFromConfig() === 'debug';
+  }
+  return isDebugLevelCache;
+}
 
 /**
  * Structural shape of a type-graphql `@Arg` parameter metadata entry. Mirrors the
@@ -147,11 +163,15 @@ export const variablesLoggingMiddleware: MiddlewareFn<AppContext> = async (actio
     }
   }
 
-  // eslint-disable-next-line no-console
-  console.dir(
-    { operation: action.info.fieldName, args: redactedArgs },
-    { depth: null, breakLength: 200 },
-  );
+  // Raw per-resolver variables echo — gated to debug-only so it never streams
+  // constantly even when an operator turns on logVariables at a lower level.
+  if (isDebugLogLevel()) {
+    // eslint-disable-next-line no-console
+    console.dir(
+      { operation: action.info.fieldName, args: redactedArgs },
+      { depth: null, breakLength: 200 },
+    );
+  }
 
   if (hasUndecoratedCustomArg && resolverEntry) {
     const signature = `${resolverEntry.target.name}.${resolverEntry.methodName}`;

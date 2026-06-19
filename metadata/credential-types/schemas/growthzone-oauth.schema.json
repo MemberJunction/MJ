@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "GrowthZone OAuth2 Credentials",
+  "description": "OAuth2 credentials for GrowthZone association management system API. Supports refresh token flow (primary) with password grant fallback.",
+  "properties": {
+    "ClientId": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "OAuth2 client identifier issued by GrowthZone. Available in your GrowthZone application settings.",
+      "isSecret": false,
+      "order": 0
+    },
+    "ClientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "OAuth2 client secret issued by GrowthZone. Keep this value secure and never share it.",
+      "isSecret": true,
+      "order": 1
+    },
+    "RefreshToken": {
+      "type": "string",
+      "title": "Refresh Token",
+      "description": "OAuth2 refresh token for long-term access. Required if Username/Password are not provided. This is the preferred authentication method.",
+      "isSecret": true,
+      "order": 2
+    },
+    "BaseURL": {
+      "type": "string",
+      "title": "Base URL",
+      "description": "GrowthZone API endpoint URL (e.g., https://myassociation.growthzoneapp.com/api). The OAuth2 token endpoint is derived from this URL's origin.",
+      "format": "uri",
+      "isSecret": false,
+      "order": 3
+    },
+    "TokenURL": {
+      "type": "string",
+      "title": "Token URL",
+      "description": "OAuth2 token endpoint URL. If not specified, defaults to {BaseURL origin}/oauth/token. Only override if your GrowthZone instance uses a non-standard token endpoint.",
+      "format": "uri",
+      "isSecret": false,
+      "order": 4
+    },
+    "Username": {
+      "type": "string",
+      "title": "Username",
+      "description": "Username for password grant authentication. Required if RefreshToken is not provided. Used as fallback when refresh token is not available.",
+      "isSecret": false,
+      "order": 5
+    },
+    "Password": {
+      "type": "string",
+      "title": "Password",
+      "description": "Password for password grant authentication. Required if RefreshToken is not provided. Used as fallback when refresh token is not available.",
+      "isSecret": true,
+      "order": 6
+    },
+    "Scopes": {
+      "type": "string",
+      "title": "Scopes",
+      "description": "Space-separated OAuth2 scopes requested during authentication (e.g., 'openid profile email'). Used primarily with password grant flow.",
+      "isSecret": false,
+      "order": 7
+    },
+    "Tenant": {
+      "type": "string",
+      "title": "Tenant",
+      "description": "Optional GrowthZone tenant subdomain. If BaseURL is not fully specified, this can be used to construct it as https://{Tenant}.growthzoneapp.com/api.",
+      "isSecret": false,
+      "order": 8
+    }
+  },
+  "required": [
+    "ClientId",
+    "ClientSecret",
+    "BaseURL"
+  ],
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "required": [
+            "ClientId",
+            "ClientSecret",
+            "BaseURL",
+            "RefreshToken"
+          ]
+        },
+        {
+          "required": [
+            "ClientId",
+            "ClientSecret",
+            "BaseURL",
+            "Username",
+            "Password"
+          ]
+        }
+      ]
+    }
+  ]
+}

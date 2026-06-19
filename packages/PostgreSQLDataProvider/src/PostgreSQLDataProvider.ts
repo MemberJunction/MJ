@@ -594,6 +594,33 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * PostgreSQL per-field search predicate. The base (SQL Server) form emits
+     * `N'...'` string literals and `ESCAPE '\'` on LIKE — both invalid on PostgreSQL
+     * (`N'...'` is not a PG literal prefix, and the auto-quoting wraps the bare `ESCAPE`
+     * keyword, producing `syntax error at or near "ESCAPE"`). PostgreSQL's default
+     * backslash-escape behavior in LIKE makes the explicit ESCAPE clause unnecessary,
+     * so we emit plain quoted literals with no `N` prefix and no `ESCAPE`.
+     */
+    protected override buildPerFieldSearchPredicate(field: EntityFieldInfo, escapedTerm: string, rawSafeTerm: string): string {
+        if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
+            return field.UserSearchParamFormatAPI.replace('{0}', rawSafeTerm);
+        }
+        if (!this.isTextSearchableType(field)) return '';
+        const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
+        switch (pred) {
+            case 'Exact':
+                return ` = '${rawSafeTerm}'`;
+            case 'BeginsWith':
+                return ` LIKE '${escapedTerm}%'`;
+            case 'EndsWith':
+                return ` LIKE '%${escapedTerm}'`;
+            case 'Contains':
+            default:
+                return ` LIKE '%${escapedTerm}%'`;
+        }
+    }
+
+    /**
      * Transforms user-provided SQL clauses (ExtraFilter, OrderBy) to quote
      * mixed-case identifiers and convert [bracket] notation for PostgreSQL.
      * Also coerces SQL Server bit literals (`= 1` / `= 0`) on boolean fields
@@ -605,7 +632,130 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     protected override TransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string {
         if (!clause || clause.length === 0) return clause;
         const quoted = this.quoteIdentifiersInSQL(clause, entityInfo);
-        return this.coerceBooleanLiteralsInSQL(quoted, entityInfo);
+        // Translate SQL Server date/time functions AFTER identifier quoting so the
+        // injected PG idioms (`AT TIME ZONE`, `INTERVAL`) are not re-quoted.
+        const dialectFns = this.translateTSQLDateFunctions(quoted);
+        return this.coerceBooleanLiteralsInSQL(dialectFns, entityInfo);
+    }
+
+    /**
+     * Translates the SQL Server date/time functions that show up in hand-written
+     * `ExtraFilter` / `OrderBy` clauses across the codebase into their PostgreSQL
+     * equivalents. PG has no `GETUTCDATE`/`GETDATE`/`DATEADD` and there is no shim
+     * function, so an untranslated clause errors with
+     * `function getutcdate() does not exist`. This is the framework backstop —
+     * app-layer call sites should prefer dialect-neutral literals, but any clause
+     * that still carries these forms is rewritten here. Covers the forms actually
+     * used in MJ filters:
+     *   - `GETUTCDATE()`           -> `(NOW() AT TIME ZONE 'UTC')`
+     *   - `SYSDATETIMEOFFSET()`    -> `NOW()`
+     *   - `GETDATE()`              -> `CURRENT_TIMESTAMP`
+     *   - `DATEADD(unit, n, expr)` -> `(expr + (n) * INTERVAL '1 <pg-unit>')`
+     *
+     * Public so it can be unit-tested directly (same convention as
+     * `autoQuoteIdentifiers`).
+     */
+    public translateTSQLDateFunctions(sql: string): string {
+        if (!sql || sql.length === 0) return sql;
+        let out = sql;
+        // Zero-arg "now" variants first, so a DATEADD's inner expression is
+        // already PG-native before the DATEADD rewrite walks it.
+        out = out.replace(/\bGETUTCDATE\s*\(\s*\)/gi, "(NOW() AT TIME ZONE 'UTC')");
+        out = out.replace(/\bSYSDATETIMEOFFSET\s*\(\s*\)/gi, 'NOW()');
+        out = out.replace(/\bGETDATE\s*\(\s*\)/gi, 'CURRENT_TIMESTAMP');
+        out = this.translateDateAdd(out);
+        return out;
+    }
+
+    /**
+     * Rewrites every `DATEADD(unit, n, expr)` occurrence using balanced-paren
+     * argument parsing (the 3rd argument can itself contain parentheses and even
+     * a nested `DATEADD`). Unknown date-parts or unparseable calls are left
+     * verbatim rather than guessed.
+     */
+    private translateDateAdd(sql: string): string {
+        const re = /\bDATEADD\s*\(/gi;
+        let result = '';
+        let cursor = 0;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(sql)) !== null) {
+            const openParen = m.index + m[0].length - 1; // index of '('
+            const parsed = this.splitBalancedArgs(sql, openParen);
+            if (!parsed || parsed.args.length !== 3) {
+                continue; // can't parse — leave this occurrence verbatim
+            }
+            const pgUnit = this.mapDatePartToPGUnit(parsed.args[0]);
+            if (!pgUnit) {
+                continue; // unknown unit — leave verbatim
+            }
+            const n = parsed.args[1].trim();
+            const expr = this.translateDateAdd(parsed.args[2].trim()); // recurse for nesting
+            const replacement = `(${expr} + (${n}) * INTERVAL '1 ${pgUnit}')`;
+            result += sql.slice(cursor, m.index) + replacement;
+            cursor = parsed.end + 1;
+            re.lastIndex = parsed.end + 1;
+        }
+        result += sql.slice(cursor);
+        return result;
+    }
+
+    /**
+     * Splits the comma-separated arguments of a function call starting at the
+     * given open-paren index, respecting nested parentheses and single-quoted
+     * string literals (with `''` escaping). Returns the trimmed-by-caller arg
+     * strings and the index of the matching close paren, or null if unbalanced.
+     */
+    private splitBalancedArgs(sql: string, openParenIndex: number): { args: string[]; end: number } | null {
+        let depth = 0;
+        let inString = false;
+        const args: string[] = [];
+        let current = '';
+        for (let i = openParenIndex; i < sql.length; i++) {
+            const ch = sql[i];
+            if (inString) {
+                current += ch;
+                if (ch === "'") {
+                    if (sql[i + 1] === "'") { current += sql[i + 1]; i++; } // escaped quote
+                    else { inString = false; }
+                }
+                continue;
+            }
+            if (ch === "'") { inString = true; current += ch; continue; }
+            if (ch === '(') {
+                depth++;
+                if (depth === 1) { continue; } // skip the outer open paren
+                current += ch;
+                continue;
+            }
+            if (ch === ')') {
+                depth--;
+                if (depth === 0) { args.push(current); return { args, end: i }; }
+                current += ch;
+                continue;
+            }
+            if (ch === ',' && depth === 1) { args.push(current); current = ''; continue; }
+            current += ch;
+        }
+        return null; // unbalanced
+    }
+
+    /**
+     * Maps a SQL Server datepart token (with the common abbreviations) to the
+     * PostgreSQL interval unit. Returns null for parts PG `INTERVAL` can't
+     * express directly (e.g. quarter) so the caller leaves the call verbatim.
+     */
+    private mapDatePartToPGUnit(part: string): string | null {
+        const p = part.trim().toLowerCase().replace(/^'|'$/g, '');
+        switch (p) {
+            case 'year': case 'yy': case 'yyyy': return 'year';
+            case 'month': case 'mm': case 'm': return 'month';
+            case 'week': case 'wk': case 'ww': return 'week';
+            case 'day': case 'dd': case 'd': return 'day';
+            case 'hour': case 'hh': return 'hour';
+            case 'minute': case 'mi': case 'n': return 'minute';
+            case 'second': case 'ss': case 's': return 'second';
+            default: return null;
+        }
     }
 
     /**

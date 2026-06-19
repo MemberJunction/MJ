@@ -1,0 +1,219 @@
+:host {
+  display: block;
+  height: 100%;
+  /* sage / delegated-agent accent — same palette the rail + delegation cards use */
+  --sage: var(--mj-color-violet-400, #a78bfa);
+  --sage-bg: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 10%, transparent);
+  --sage-border: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 38%, transparent);
+}
+
+/* The surface panel fills the overlay's `.call-panel` flex item — the overlay owns
+   the width (user drag via the resize handle, persisted per-user, default tiers). */
+.surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+}
+/* Board-focus fill: the panel owns the whole overlay (the main call column is hidden). */
+.surface--fill {
+  width: 100%;
+  border-left: none;
+}
+.surface--collapsed {
+  width: 40px;
+  background: var(--mj-bg-surface-card);
+}
+
+/* ---------- collapsed slim strip ---------- */
+.surface__strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.surface__strip-icon {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+.surface__toggle {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 10px;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+.surface__toggle:hover {
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-strong);
+}
+
+/* ---------- tab strip (mirrors the whiteboard mockup's .surface-tabs) ---------- */
+.surface-tabs {
+  display: flex;
+  align-items: stretch;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.surface-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* Tabs keep their natural width while there's room; when space gets genuinely tight
+   they shrink (ellipsizing their titles) down to a readable floor (icon + ~8ch).
+   The ACTIVE tab never shrinks — inactive tabs give way first. Only when everything
+   is at its floor does the strip actually overflow (horizontal scroll). */
+.s-tab {
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-bottom: 3px solid transparent;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: calc(11px + 7px + 8ch + 28px); /* icon + gap + ~8ch + padding */
+}
+.s-tab i {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.s-tab__title {
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.s-tab:hover {
+  color: var(--mj-text-secondary);
+}
+.s-tab--active {
+  color: var(--mj-text-primary);
+  border-bottom-color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface);
+  /* the active tab stays fully readable — others shrink first */
+  flex-shrink: 0;
+}
+
+/* Brief violet flash for a just-arrived artifact tab (per the mockup's accent) */
+.s-tab--flash {
+  animation: tab-flash 1.4s ease;
+}
+@keyframes tab-flash {
+  0% {
+    background: color-mix(in srgb, var(--sage) 28%, transparent);
+    border-bottom-color: var(--sage);
+    color: var(--mj-text-primary);
+  }
+  60% {
+    background: color-mix(in srgb, var(--sage) 16%, transparent);
+    border-bottom-color: var(--sage);
+  }
+  100% {
+    background: var(--mj-bg-surface);
+  }
+}
+
+/* PERSISTENT unseen glow: content arrived without stealing focus (e.g. a finished
+   artifact) — the tab breathes violet until the user visits it. */
+.s-tab--unseen {
+  color: var(--mj-color-violet-300, var(--mj-text-secondary));
+  animation: tab-unseen 2.2s ease-in-out infinite;
+}
+@keyframes tab-unseen {
+  0%, 100% { background: color-mix(in srgb, var(--sage) 6%, transparent); }
+  50% { background: color-mix(in srgb, var(--sage) 18%, transparent); }
+}
+.s-tab__unseen-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--sage);
+  box-shadow: 0 0 6px var(--sage);
+}
+
+.tabs-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+/* ---------- panes: all alive, only the active one displayed ---------- */
+.s-pane {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  /* Positioning context for the first-run channel-onboarding overlay (absolute, inset:0). */
+  position: relative;
+}
+.s-pane--active {
+  display: flex;
+}
+
+/* Read-only embedded artifact viewer fills the pane */
+.artifact-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.artifact-pane > * {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Channel slot placeholder ("Whiteboard coming online…") */
+.channel-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--mj-text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 24px;
+  text-align: center;
+}
+.channel-placeholder i {
+  font-size: 22px;
+  color: var(--sage);
+  opacity: 0.7;
+}
+
+/* On narrow widths the panel stacks out of the way (overlay falls back to single column) */
+@media (max-width: 860px) {
+  .surface {
+    display: none;
+  }
+}

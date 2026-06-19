@@ -638,7 +638,7 @@ export class ResolverBase {
     // user has. The API key's associated user (in userPayload.userRecord) is
     // used later when the actual operation executes - their permissions are
     // the ultimate ceiling that scopes can only narrow, never expand.
-    const systemUser = UserCache.Instance.Users.find(u => u.Type === 'System');
+    const systemUser = UserCache.Instance.GetSystemUser();
     if (!systemUser) {
       throw new Error('System user not found');
     }

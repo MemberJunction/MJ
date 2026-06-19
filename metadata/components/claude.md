@@ -183,8 +183,62 @@ Root components receive these standard props:
 - `styles`: Component styling utilities
 - `components`: Registry of available child components
 - `callbacks`: Event handler registry (includes `OpenEntityRecord`)
-- `savedUserSettings`: Persisted user preferences
-- `onSaveUserSettings`: Callback to persist settings
+- `savedUserSettings`: Persisted user preferences (read your saved prefs from here)
+- `onSaveUserSettings`: Callback to persist settings (call with the full settings object)
+
+#### 7a. Remembering user preferences (`savedUserSettings` / `onSaveUserSettings`)
+
+These two props are a **durable, per-user, cross-device preference store** — the host
+persists them automatically (via MemberJunction's `UserInfoEngine`), scoped to your
+component for the signed-in user. The same user sees the same preferences on every
+device and browser they sign in from. **Use them** so your component remembers how
+each user left it.
+
+What belongs here: view mode (grid/list/chart), sort column & direction, active tab,
+collapsed/expanded panels, selected filters/date ranges, page size — any UI choice the
+user would expect to "stick".
+
+What does NOT belong here: transient interaction state (hover, in-flight form text
+before commit), fetched data, or anything derived. Keep that in normal React state.
+
+**The contract** — your component owns a single settings object across its lifetime:
+
+1. **Initialize** state from `savedUserSettings` (with sensible fallbacks), never sync
+   it back into state with `useEffect`.
+2. When a preference changes, call `onSaveUserSettings` with the **complete** updated
+   object (spread the previous settings, then override the changed key).
+
+```javascript
+function MainComponent({ savedUserSettings, onSaveUserSettings, /* ...standard props */ }) {
+  const [sortBy, setSortBy] = React.useState(savedUserSettings?.sortBy ?? 'CloseDate');
+  const [viewMode, setViewMode] = React.useState(savedUserSettings?.viewMode ?? 'grid');
+
+  const handleSort = (col) => {
+    setSortBy(col);
+    // Persist the FULL settings object — the host saves & scopes it per user.
+    onSaveUserSettings?.({ ...savedUserSettings, sortBy: col });
+  };
+
+  const handleViewMode = (mode) => {
+    setViewMode(mode);
+    onSaveUserSettings?.({ ...savedUserSettings, viewMode: mode });
+  };
+  // ...
+}
+```
+
+Notes:
+- You do **not** namespace keys — the host scopes the whole object to your component.
+- `onSaveUserSettings` is debounced and fire-and-forget; don't await it.
+- Always guard with `?.` / fallbacks: `savedUserSettings` may be `{}` on first run.
+- **The host merges, never replaces.** Whatever you pass is overlaid onto the saved
+  settings, so a partial object can't wipe other preferences. Still pass the full
+  spread (it's the contract and keeps your intent explicit), but a forgotten spread
+  degrades to a harmless no-op for the other keys instead of data loss.
+- **To remove a saved key, set it explicitly to `null`** (e.g.
+  `onSaveUserSettings?.({ ...savedUserSettings, sortBy: null })`). The host deletes
+  it from the stored object and your `?? fallback` read picks up the default again.
+  Omitting a key does NOT remove it.
 
 ### 8. Data Requirements
 Specify exactly what data the component needs:

@@ -1657,24 +1657,28 @@ export class SQLCodeGenBase {
         // that don't have native GeoLatitude/GeoLongitude fields (those get aliased directly).
         // Skip for Record Geo Codes itself to avoid circular self-reference in the view.
         if (entity.SupportsGeoCoding && !this.hasNativeGeoFields(entityFields) && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
-            const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
-            const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
+            const dialect = this._dbProvider.Dialect;
+            const qi = dialect.QuoteIdentifier.bind(dialect);
+            const qs = dialect.QuoteSchema.bind(dialect);
             sOutput += (sOutput === '' ? '' : '\n');
 
             // Build RecordID expression that handles both single and composite primary keys.
-            // Format: for single PK → CAST(e.ID AS NVARCHAR(450))
-            //         for composite PK → e.Field1 + '||' + e.Field2 (concatenated with || separator)
+            // Dialect-aware: CastToBoundedString emits NVARCHAR(N) on SQL Server and VARCHAR(N)
+            // on PostgreSQL, and ConcatOperator() is `+` on SQL Server / `||` on PostgreSQL.
+            //   single PK    → CAST(e.ID AS <string(450)>)
+            //   composite PK → CAST(e.F1 AS <string(200)>) <concat> '||' <concat> CAST(e.F2 AS <string(200)>)
             // This must match the format used by GeoCodeSyncService when storing RecordGeoCode rows.
             const pkFields = entity.PrimaryKeys;
             let recordIdExpr: string;
             if (pkFields.length === 1) {
-                recordIdExpr = `CAST(${qi(classNameFirstChar)}.${qi(pkFields[0].Name)} AS NVARCHAR(450))`;
+                recordIdExpr = dialect.CastToBoundedString(`${qi(classNameFirstChar)}.${qi(pkFields[0].Name)}`, 450);
             } else {
-                // Composite key: concatenate all PK values with || separator
+                // Composite key: concatenate all PK values with a '||' separator literal
+                const concat = dialect.ConcatOperator();
                 const parts = pkFields.map(pk =>
-                    `CAST(${qi(classNameFirstChar)}.${qi(pk.Name)} AS NVARCHAR(200))`
+                    dialect.CastToBoundedString(`${qi(classNameFirstChar)}.${qi(pk.Name)}`, 200)
                 );
-                recordIdExpr = parts.join(` + '||' + `);
+                recordIdExpr = parts.join(` ${concat} '||' ${concat} `);
             }
 
             sOutput += `LEFT OUTER JOIN\n    ${qs(mjCoreSchema, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = ${recordIdExpr}\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;

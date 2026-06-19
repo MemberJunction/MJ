@@ -228,6 +228,7 @@ describe('SchemaBuilder (integration)', () => {
                         { Name: '__mj_integration_LastSyncedSnapshot', SqlType: 'NVARCHAR(MAX)', IsNullable: true, MaxLength: null, Precision: null, Scale: null },
                         { Name: '__mj_integration_SyncMessage', SqlType: 'NVARCHAR(MAX)', IsNullable: true, MaxLength: null, Precision: null, Scale: null },
                         { Name: '__mj_integration_ContentHash', SqlType: 'NVARCHAR(64)', IsNullable: true, MaxLength: 64, Precision: null, Scale: null },
+                        { Name: '__mj_integration_CustomOverflow', SqlType: 'NVARCHAR(MAX)', IsNullable: true, MaxLength: null, Precision: null, Scale: null },
                         // Per-record sync ledger (plan §2.5)
                         { Name: '__mj_integration_ExternalVersion', SqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null },
                         { Name: '__mj_integration_LastSeenModifiedValue', SqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null },

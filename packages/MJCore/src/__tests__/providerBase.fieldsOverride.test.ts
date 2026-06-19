@@ -828,8 +828,9 @@ describe('ProviderBase Fields-Override Gate — narrow→wide cache coherence (A
             CacheLocal: true,
         });
         expect(resultA.Success).toBe(true);
-        // Cache MISS path returns whatever InternalRunView returned (wide rows, since
-        // override rewrote params.Fields). The cache-hit filter only runs on HITs.
+        // The MISS path projects the widened DB result back down to A's requested
+        // Fields (PostRunView) — the wide superset only lives in the cache entry.
+        expect(Object.keys(resultA.Results[0] as Record<string, unknown>).sort()).toEqual(['ID', 'Name']);
         // Reset captured params so we can detect that the second call is a HIT (no capture).
         provider.captured = [];
 
@@ -973,5 +974,143 @@ describe('ProviderBase Fields-Override Gate — narrow→wide cache coherence (A
         );
         // Same fingerprint → same cache slot → no poisoning, since the slot stores wide data
         expect(fp1).toBe(fp2);
+    });
+});
+
+// ===========================================================================
+// Cache MISS result projection — hit/miss shape symmetry (end-to-end)
+//
+// PreRunView/PreRunViews widen params.Fields to ALL entity fields when a query
+// is cacheable, so the cache entry is a universal superset. The caller-facing
+// contract is that the SAME columns come back regardless of cache temperature:
+//   - HIT:  PreRunView projects the cached superset down to the caller's Fields
+//   - MISS: PostRunView projects the widened DB result down to the caller's
+//           Fields, strictly AFTER the cache write (cache keeps the superset)
+//
+// ProjectRowsToFields (the shared primitive) has its own unit tests; these
+// tests pin the PIPELINE wiring — the guard conditions in PostRunView, the
+// hit-skip + index alignment in PostRunViews, and the cache write ordering —
+// which is the part a refactor is most likely to break.
+// ===========================================================================
+describe('ProviderBase Fields-Override Gate — cache MISS projection (hit/miss shape symmetry)', () => {
+    let provider: FieldsOverrideTestProvider;
+    let cacheManager: LocalCacheManager;
+    let mockStorage: MockCacheStorageProvider;
+    const originalCoalesce = ProviderBase.CoalesceWindowMs;
+    const originalDedupLinger = ProviderBase.DedupLingerMs;
+    const originalFastStartup = ProviderBase.FastStartupMode;
+
+    const WIDE_ROW: Record<string, unknown> = {
+        ID: 'row-1',
+        Name: 'Test Record',
+        Status: 'Active',
+        Description: 'Some description text',
+        CreatedAt: '2026-01-01T00:00:00Z',
+        UpdatedAt: '2026-04-01T00:00:00Z',
+    };
+
+    function rowKeys(result: RunViewResult, index = 0): string[] {
+        return Object.keys(result.Results[index] as Record<string, unknown>).sort();
+    }
+
+    beforeEach(async () => {
+        resetLocalCacheManager();
+        cacheManager = LocalCacheManager.Instance;
+        mockStorage = new MockCacheStorageProvider();
+        await cacheManager.Initialize(mockStorage);
+
+        // Server mode: single RunView uses the direct Pre → Internal → Post path,
+        // and RunViews uses the traditional (non-smart-cache) batch pipeline.
+        provider = new FieldsOverrideTestProvider();
+        provider.trustLocalCache = true;
+        provider.entities.set('Cacheable', makeEntity({ Name: 'Cacheable' }));
+        provider.mockRunViewRows = [WIDE_ROW];
+
+        ProviderBase.CoalesceWindowMs = 0;
+        ProviderBase.DedupLingerMs = 0;
+        ProviderBase.FastStartupMode = false;
+    });
+
+    afterEach(() => {
+        ProviderBase.CoalesceWindowMs = originalCoalesce;
+        ProviderBase.DedupLingerMs = originalDedupLinger;
+        ProviderBase.FastStartupMode = originalFastStartup;
+        resetLocalCacheManager();
+    });
+
+    it('Cache MISS returns ONLY the caller’s requested Fields while the cache entry keeps the wide superset', async () => {
+        const result = await provider.RunView({
+            EntityName: 'Cacheable',
+            Fields: ['ID', 'Name'],
+        });
+
+        // The DB query was widened (cache-superset invariant intact)…
+        expect(lastCapturedFields(provider)).toEqual(FULL_FIELDS);
+        // …the cache entry stored the full-width rows…
+        const fp = cacheManager.GenerateRunViewFingerprint(
+            { EntityName: 'Cacheable' } as unknown as Parameters<typeof cacheManager.GenerateRunViewFingerprint>[0],
+            provider.InstanceConnectionString
+        );
+        const stored = await cacheManager.GetRunViewResult(fp);
+        expect(Object.keys(stored!.results[0] as Record<string, unknown>).sort()).toEqual([...FULL_FIELDS].sort());
+        // …but the CALLER received exactly the columns they asked for.
+        expect(rowKeys(result)).toEqual(['ID', 'Name']);
+    });
+
+    it('MISS and subsequent HIT return byte-identical shapes for the same request (the regression this fix exists for)', async () => {
+        const missResult = await provider.RunView({
+            EntityName: 'Cacheable',
+            Fields: ['Name', 'Status'],
+        });
+        provider.reset();
+
+        const hitResult = await provider.RunView({
+            EntityName: 'Cacheable',
+            Fields: ['Name', 'Status'],
+        });
+        // Second call really was a HIT (no DB query)
+        expect(provider.captured).toHaveLength(0);
+
+        expect(missResult.Results).toEqual(hitResult.Results);
+        expect(rowKeys(missResult)).toEqual(['Name', 'Status']);
+    });
+
+    it('Cache MISS with NO Fields requested returns the full wide row (projection is a pass-through)', async () => {
+        const result = await provider.RunView({ EntityName: 'Cacheable' });
+        expect(rowKeys(result)).toEqual([...FULL_FIELDS].sort());
+    });
+
+    it('Batch RunViews: each MISS is projected to its OWN param’s Fields (per-index callerFieldsMap)', async () => {
+        const [r1, r2] = await provider.RunViews([
+            { EntityName: 'Cacheable', Fields: ['ID', 'Name'], ExtraFilter: "Status='Active'" },
+            { EntityName: 'Cacheable', Fields: ['Description'], ExtraFilter: "Status='Inactive'" },
+        ]);
+
+        // Both reached the DB widened (two distinct fingerprints → two misses)
+        expect(capturedFieldsAt(provider, 0)).toEqual(FULL_FIELDS);
+        expect(capturedFieldsAt(provider, 1)).toEqual(FULL_FIELDS);
+        // Each result narrowed to its own param's request — not its neighbor's
+        expect(rowKeys(r1)).toEqual(['ID', 'Name']);
+        expect(rowKeys(r2)).toEqual(['Description']);
+    });
+
+    it('Batch RunViews with a mixed HIT + MISS keeps per-index alignment (merge + projection agree on ordering)', async () => {
+        // Warm the unfiltered-query cache entry
+        await provider.RunView({ EntityName: 'Cacheable', Fields: ['ID'] });
+        provider.reset();
+
+        const [hit, miss] = await provider.RunViews([
+            // Same fingerprint as the warmed entry (Fields excluded from fingerprint) → HIT
+            { EntityName: 'Cacheable', Fields: ['ID', 'Status'] },
+            // Different filter → different fingerprint → MISS
+            { EntityName: 'Cacheable', Fields: ['Name'], ExtraFilter: "Status='Active'" },
+        ]);
+
+        // Only the miss reached the DB
+        expect(provider.captured).toHaveLength(1);
+        // HIT projected from the cached superset to ITS requested fields
+        expect(rowKeys(hit)).toEqual(['ID', 'Status']);
+        // MISS projected from the widened DB result to ITS requested fields
+        expect(rowKeys(miss)).toEqual(['Name']);
     });
 });
