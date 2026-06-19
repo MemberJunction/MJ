@@ -583,17 +583,26 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private wireTransportSeam(active: ActiveBridgeSession): void {
         const { Bridge, RealtimeSession } = active;
 
-        // Inbound: endpoint media → the agent hears it.
+        // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's
+        // Track tags the plane, so a human's camera (`video-in`) reaches the model as a `video` frame.
         Bridge.OnMedia((frame: BridgeMediaFrame) => {
             const chunk = this.frameToArrayBuffer(frame);
             if (chunk) {
-                RealtimeSession.SendInput(chunk);
+                RealtimeSession.SendInput(chunk, frame.Track === 'video-in' ? 'video' : 'audio');
             }
         });
 
         // Outbound: the agent speaks → into the meeting/call.
         RealtimeSession.OnOutput((chunk: ArrayBuffer) => {
             const track: BridgeMediaTrackKind = 'audio-out';
+            Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
+        });
+
+        // Outbound VIDEO: a video-capable session ALSO emits a synced avatar/video track. Optional —
+        // audio-only sessions don't implement OnVideoOutput, so call it null-safely. The bridge driver
+        // gates the actual publish on its `VideoOut` capability.
+        RealtimeSession.OnVideoOutput?.((chunk: ArrayBuffer) => {
+            const track: BridgeMediaTrackKind = 'video-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
     }
