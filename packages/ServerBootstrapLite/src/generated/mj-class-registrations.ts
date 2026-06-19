@@ -182,7 +182,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (374 classes)
+// @memberjunction/core-entities (381 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -443,6 +443,8 @@ import {
     MJOutputFormatTypeEntity,
     MJOutputTriggerTypeEntity,
     MJPermissionDomainEntity,
+    MJProcessRunDetailEntity,
+    MJProcessRunEntity,
     MJProjectEntity,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
@@ -467,6 +469,11 @@ import {
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
+    MJRecordProcessCategoryEntity,
+    MJRecordProcessEntity,
+    MJRecordProcessWatermarkEntity,
+    MJRemoteOperationCategoryEntity,
+    MJRemoteOperationEntity,
     MJReportCategoryEntity,
     MJReportEntity,
     MJReportSnapshotEntity,
@@ -1363,6 +1370,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJOutputFormatTypeEntity,
     MJOutputTriggerTypeEntity,
     MJPermissionDomainEntity,
+    MJProcessRunDetailEntity,
+    MJProcessRunEntity,
     MJProjectEntity,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
@@ -1387,6 +1396,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
+    MJRecordProcessCategoryEntity,
+    MJRecordProcessEntity,
+    MJRecordProcessWatermarkEntity,
+    MJRemoteOperationCategoryEntity,
+    MJRemoteOperationEntity,
     MJReportCategoryEntity,
     MJReportEntity,
     MJReportSnapshotEntity,
@@ -1863,7 +1877,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 800;
+export const CLASS_REGISTRATIONS_COUNT = 807;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
