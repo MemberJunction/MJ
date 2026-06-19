@@ -1,6 +1,6 @@
 # Intelligent Duplicate Detection & Merge — Implementation Spec
 
-**Status:** Finalized for build (Phase 1)
+**Status:** Implementation started (Phase 1) — migration landed; CodeGen + reasoning layer next
 **Branch:** `feature/intelligent-dupe-detection` (PR #2805)
 **Source design:** Amith's "MJ — Intelligent Duplicate Detection & Merge" design doc
 **Relationship to PR 2804:** This branch is cut from the 2804 bugfix HEAD (ghost/self-match, recursion fan-out, auto-merge abort, unsorted UI). 2804 merges on its own; this feature stacks on top.
@@ -145,7 +145,7 @@ After migration: run CodeGen, then write TS exclusively against the generated ty
 
 ### 2.6 Phase-1 task order
 
-1. Migration (both tables) → CodeGen → confirm generated types.
+1. ✅ Migration (both tables) — `migrations/v5/V202606191344__v5.43.x__Intelligent_Dupe_Detection_LLM_Reasoning.sql`. **Next:** run CodeGen → confirm generated typed properties.
 2. `RecordComparisonEngine` + resolver + GraphQL client (+ Angular wrapper, low-risk swap deferrable).
 3. `DuplicateReasoningProvider` seam + **both** `PromptReasoningProvider` (default) and `AgentReasoningProvider`; wire the per-set gate + `ReasoningMode` switch into `DuplicateRecordDetector`'s persist path.
 4. Seed the shared core instruction template + "Duplicate Resolution" prompt + "Duplicate Resolution Agent" (metadata).
