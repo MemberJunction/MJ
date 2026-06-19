@@ -51,6 +51,7 @@ function runChild(task, allowWrite, jobEnv) {
         for (const [k, v] of Object.entries(jobEnv ?? {})) {
             if (JOB_ENV_ALLOW.has(k) && typeof v === 'string') env[k] = v;
         }
+        console.log(`[broker:diag] child env — MJ_API_KEY:${'MJ_API_KEY' in env} CONNECTOR_API_KEY:${'CONNECTOR_API_KEY' in env} DB_PASSWORD:${'DB_PASSWORD' in env} (broker proc MJ_API_KEY:${'MJ_API_KEY' in process.env})`);
         const child = spawn(process.execPath, args, { cwd: __dirname, env });
         let out = '', err = '';
         child.stdout.on('data', d => { out += d; });
@@ -77,6 +78,16 @@ const JOB_ENV_ALLOW = new Set([
     'HS_LIVE_DB_HOST', 'HS_LIVE_DB_PORT', 'HS_LIVE_DB_NAME', 'HS_LIVE_DB_USER',
     'HS_LIVE_COMPANY_ID', 'HS_LIVE_CREDTYPE_ID', 'HS_LIVE_INTEGRATION_ID',
     'HS_LIVE_WRITE_OBJECT', 'HS_LIVE_RUN_ID', 'HS_LIVE_MAX_POLLS', 'HS_LIVE_MJ_SCHEMA',
+    // Connector-AGNOSTIC e2e config (NON-SECRET) — the generic connector-e2e path reads these to
+    // build the connection for ANY vendor. They MUST be allowlisted or they are silently stripped
+    // from the child env, which drops the connector's per-tenant config (e.g. AccountID via
+    // E2E_LIVE_CONFIG) + token-key name + stream list → "No AccountID found" / wrong objects.
+    // None of these is a secret (the vendor token arrives ONLY as the broker-injected CONNECTOR_API_KEY).
+    'E2E_CONNECTOR', 'E2E_INTEGRATION', 'E2E_MODE', 'E2E_PLATFORM',
+    'E2E_TOKEN_KEY', 'E2E_LIVE_CONFIG', 'E2E_OBJECTS',
+    // Cross-dialect assertion DB password override (local test DB pwd, NOT a real secret) — lets a PG
+    // job use the PG password for the rowcount-assertion client while the broker's DB_PASSWORD stays SS.
+    'E2E_DB_PASSWORD',
 ]);
 
 async function handle(job) {
@@ -96,24 +107,42 @@ async function handle(job) {
     return runChild(job.task, job.allowWrite === true, job.env);
 }
 
+/** Best-effort archive a processed job out of the jobs dir. In a SHARED STICKY mailbox (mode 1777)
+ *  the broker user often does NOT own the agent-written job file, so rename/unlink raise EPERM — that
+ *  is EXPECTED, not fatal. We swallow it; the agent cleans up its own job files. Never let this throw. */
+async function archiveJob(f) {
+    try { await fs.mkdir(DONE, { recursive: true }); } catch { /* ignore */ }
+    try { await fs.rename(join(JOBS, f), join(DONE, f)); } catch { /* sticky-dir EPERM — agent owns + cleans it */ }
+}
+
 async function processOnce() {
     let files;
     try { files = await fs.readdir(JOBS); } catch { return; }
     for (const f of files) {
         if (!f.endsWith('.json')) continue;
-        let job;
-        try { job = JSON.parse(await fs.readFile(join(JOBS, f), 'utf8')); } catch { continue; }
-        const result = await handle(job);
-        const id = job.jobId ?? f.replace(/\.json$/, '');
-        await fs.mkdir(RESULTS, { recursive: true });
-        await fs.writeFile(
-            join(RESULTS, `${id}.json`),
-            JSON.stringify({ jobId: id, task: job.task, allowWrite: job.allowWrite === true, completedAt: new Date().toISOString(), result }, null, 2),
-        );
-        await fs.mkdir(DONE, { recursive: true });
-        await fs.rename(join(JOBS, f), join(DONE, f));
-        const status = result.ok ? 'ok' : (result.refused ? 'REFUSED(write-not-authorized)' : 'FAIL');
-        console.log(`[broker] ${id} (${job.task}) → ${status}`);
+        // One bad job must never crash the whole broker — isolate every job in its own try/catch.
+        try {
+            let job;
+            try { job = JSON.parse(await fs.readFile(join(JOBS, f), 'utf8')); } catch { continue; }
+            const id = job.jobId ?? f.replace(/\.json$/, '');
+            const resultPath = join(RESULTS, `${id}.json`);
+            // Idempotency: if a result for this job already exists, do NOT re-run it (the network/plan
+            // side-effects already happened). This also prevents an un-removable sticky-dir job file
+            // from being re-executed every poll. Just try to archive it and move on.
+            try { await fs.access(resultPath); await archiveJob(f); continue; } catch { /* no result yet → run it */ }
+
+            const result = await handle(job);
+            await fs.mkdir(RESULTS, { recursive: true });
+            await fs.writeFile(
+                resultPath,
+                JSON.stringify({ jobId: id, task: job.task, allowWrite: job.allowWrite === true, completedAt: new Date().toISOString(), result }, null, 2),
+            );
+            await archiveJob(f);
+            const status = result.ok ? 'ok' : (result.refused ? 'REFUSED(write-not-authorized)' : 'FAIL');
+            console.log(`[broker] ${id} (${job.task}) → ${status}`);
+        } catch (e) {
+            console.error(`[broker] error on ${f}: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 }
 

@@ -14,8 +14,8 @@ import { runMatrixReadonly } from './gql-matrix-harness.mjs';
 import { runLifecycleOps, runDeleteCascade } from './gql-lifecycle-harness.mjs';
 import { makeGqlClient, makeHubspotTotal, makeDbClient, resolveSetupIds } from './gql-live-adapters.mjs';
 import { runConnectorE2E } from './connector-e2e-harness.mjs';
-import { runConnectorE2EHybrid } from './connector-e2e-hybrid.mjs';
-import { buildMock, deltaPassesFromManifest, objectsFromManifest } from './connector-e2e-adapters.mjs';
+import { buildMock, deltaPassesFromManifest, objectsFromManifest, matrixSpecsFromManifest } from './connector-e2e-adapters.mjs';
+import { regenerateFixturesFromDeployed } from './gen-fixture.mjs';
 import { resolve as pathResolve } from 'node:path';
 
 const HUBSPOT_API_BASE = 'https://api.hubapi.com';
@@ -192,6 +192,10 @@ export function liveCfgFromEnv() {
             user: env.HS_LIVE_DB_USER || env.DB_USERNAME,
         },
         writeObject: env.HS_LIVE_WRITE_OBJECT || 'contacts',
+        // ApplyAll scope (E7). The LIVE HubSpot harness keeps 'full' (the P0.5 at-scale full-catalog
+        // DDL test) unless overridden; the connector-e2e path defaults this to 'scoped'
+        // (connectorE2eCfgFromEnv) so it doesn't apply a giant catalog. HS_LIVE_APPLY_SCOPE overrides.
+        applyScope: env.HS_LIVE_APPLY_SCOPE === 'scoped' ? 'scoped' : 'full',
         // A recognizable, runId-stamped contact in standard fields (no custom property needed).
         // example.com is RFC-2606 reserved (never deliverable) yet a VALID email format — HubSpot rejects the
         // .invalid TLD on create, so the test contact uses a format the vendor accepts while staying obviously test.
@@ -411,10 +415,8 @@ export async function hubspotCleanData(values, scrub) {
  * Build the connector-agnostic e2e config from env + a base live cfg. NON-secret only.
  * Env vars (NEW; reuses all HS_LIVE_* DB/GQL coordinates from liveCfgFromEnv):
  *   E2E_CONNECTOR        registry connector dir name (e.g. 'propfuel') — required
- *   E2E_MODE             'mock' (credential-free, default) | 'live' (credentialed) | 'hybrid'
- *                        (limited-token: live where the token reaches, mock/fixtures where it 403s)
- *   E2E_PROBE_LIMIT      hybrid: per-object scope-probe page size (default 1 — cheap read)
- *   E2E_FIXTURES_DIR     absolute path to the connector's `fixtures/` dir (mock + hybrid-fallback).
+ *   E2E_MODE             'mock' (credential-free, default) | 'live' (credentialed)
+ *   E2E_FIXTURES_DIR     absolute path to the connector's `fixtures/` dir (mock mode).
  *                        Default: <this test dir>/fixtures/<connector>/fixtures
  *   E2E_INTEGRATION      MJ Integration NAME to resolve the IntegrationID by (e.g. 'PropFuel')
  *   E2E_SCHEMA           destination schema for verification override (else metadata-resolved)
@@ -427,20 +429,24 @@ function connectorE2eCfgFromEnv() {
     const base = liveCfgFromEnv();
     const here = pathResolve(new URL('.', import.meta.url).pathname);
     const connector = env.E2E_CONNECTOR;
-    // Tri-state today: 'live' | 'hybrid' | 'mock' (default). Anything else falls back to mock.
-    const mode = (env.E2E_MODE === 'live') ? 'live' : (env.E2E_MODE === 'hybrid') ? 'hybrid' : 'mock';
+    const mode = (env.E2E_MODE === 'live') ? 'live' : 'mock';
     const fixturesDir = env.E2E_FIXTURES_DIR || pathResolve(here, 'fixtures', String(connector || ''), 'fixtures');
     return {
         ...base,
         connector,
         mode,
-        probeLimit: Number(env.E2E_PROBE_LIMIT || 1),
         fixturesDir,
         integrationName: env.E2E_INTEGRATION || base.integrationID || connector,
         platform: env.E2E_PLATFORM || base.platform,
         schema: env.E2E_SCHEMA || undefined,
         objectsOverride: (env.E2E_OBJECTS || '').split(',').map(s => s.trim()).filter(Boolean),
         tls: { cert: env.E2E_TLS_CERT, key: env.E2E_TLS_KEY },
+        // E7 — the connector-e2e path applies ONLY the objects-under-test + their FK parents by default
+        // (NOT the full discovered catalog, which is infeasible at scale). E2E_APPLY_SCOPE=full opts back in.
+        applyScope: env.E2E_APPLY_SCOPE === 'full' ? 'full' : 'scoped',
+        // E6 — when set, regenerate fixtures from the CURRENTLY-deployed IO/IOF before the run so they
+        // never drift from a renamed/changed object set (the openwater/growthzone 0-row failure class).
+        regenFixtures: env.E2E_REGEN_FIXTURES === 'true',
     };
 }
 
@@ -462,7 +468,12 @@ async function createConnectionWithConfig(gql, ids, opts) {
         CredentialValues: JSON.stringify(opts.credentialValues ?? {}),
         ...(opts.configuration ? { Configuration: JSON.stringify(opts.configuration) } : {}),
     };
-    const conn = (await gql(GQL.createConnection, { input, testConnection: false, runSchemaRefresh: true })).IntegrationCreateConnection;
+    // runSchemaRefresh defaults ON, but a connector whose metadata is already DECLARED (and whose
+    // discovery is AUTHORITATIVE) would, on a full refresh against a partial mock, deactivate every
+    // object it can't describe. E2E_SCHEMA_REFRESH=false skips the refresh and drives the sync off the
+    // declared IOFs — correct when the objects under test already exist in the catalog. General.
+    const runSchemaRefresh = process.env.E2E_SCHEMA_REFRESH !== 'false';
+    const conn = (await gql(GQL.createConnection, { input, testConnection: false, runSchemaRefresh })).IntegrationCreateConnection;
     if (!conn?.Success || !conn.CompanyIntegrationID) {
         throw new Error(`CreateConnection failed: ${conn?.Message ?? 'no payload'}`);
     }
@@ -485,18 +496,60 @@ async function connectorE2EPlan(values, scrub, allowWrite) { // eslint-disable-l
     const db = await makeDbClient(cfg.platform, { ...cfg.db, password: values.dbPassword, mjSchema: cfg.mjSchema });
     const gql = makeGqlClient(cfg.graphqlUrl, { mjSystemKey: values.mjSystemKey, mjUserKey: values.mjUserKey, mjToken: values.mjToken });
 
+    // Resolve the IntegrationID by the EXPLICIT E2E_INTEGRATION name FIRST (before the mock loads
+    // fixtures) so the optional E6 regen can mirror the deployed schema. Do NOT route this through
+    // resolveSetupIds — that helper hardcodes a 'HubSpot' name default (it predates the generic
+    // connector-e2e path), so a non-HubSpot connector would bind to HubSpot's Integration and
+    // ApplyAll would instantiate the wrong connector class ("No HubSpot credentials found").
+    let mock = null;
+    let integrationID = cfg.integrationID || await db.resolveId(
+        cfg.platform === 'postgresql'
+            ? `SELECT "ID" FROM "${cfg.mjSchema}"."Integration" WHERE "Name" = $1 LIMIT 1`
+            : `SELECT TOP 1 ID FROM [${cfg.mjSchema}].[Integration] WHERE Name = @n`,
+        cfg.platform === 'postgresql' ? [cfg.integrationName] : { n: cfg.integrationName });
+
+    // E6 — regenerate fixtures from the CURRENTLY-DEPLOYED IO/IOF before the mock loads them, so the
+    // fixtures never drift from a renamed/changed object set. Best-effort: a regen failure logs and
+    // falls through to the existing fixtures (never silently fakes a pass). Mock mode + an integration only.
+    let fixtureRegen = null;
+    if (cfg.mode === 'mock' && cfg.regenFixtures && integrationID) {
+        try {
+            fixtureRegen = await regenerateFixturesFromDeployed({
+                db, platform: cfg.platform, mjSchema: cfg.mjSchema, integrationID,
+                fixturesDir: cfg.fixturesDir, cfgKey: process.env.E2E_CFG_URL_KEY || 'BaseURL',
+            });
+            console.log(`[connector-e2e] regen-fixtures: ${fixtureRegen.ok ? `wrote ${fixtureRegen.written} (${(fixtureRegen.objectNames || []).join(', ')})` : `skipped — ${fixtureRegen.reason}`}`);
+        } catch (e) { fixtureRegen = { ok: false, reason: String(e?.message ?? e) }; console.log(`[connector-e2e] regen-fixtures failed: ${fixtureRegen.reason}`); }
+    }
+
     // Build the mock (mock mode boots the fixtures-replaying server; live mode is inert).
-    const mock = await buildMock({ mode: cfg.mode, fixturesDir: cfg.fixturesDir, tls: cfg.tls });
+    mock = await buildMock({ mode: cfg.mode, fixturesDir: cfg.fixturesDir, tls: cfg.tls });
 
     try {
-        // Resolve the setup IDs (IntegrationID by name; Company/CredType from cfg).
-        const ids = await resolveSetupIds(db, { ...cfg, integrationID: cfg.integrationID, platform: cfg.platform });
-        const integrationID = ids.integrationID || await db.resolveId(
+        if (!integrationID) throw new Error(`connector-e2e: no Integration found by name '${cfg.integrationName}' (set E2E_INTEGRATION to the exact MJ: Integrations.Name)`);
+
+        // Resolve the CredentialTypeID. PREFER the Integration row's OWN CredentialTypeID — that is the
+        // value the connector's metadata declared (set by `mj sync push` via its @lookup), so it always
+        // matches the credential type the connector actually expects AND is always a DB-canonical,
+        // hyphenated uniqueidentifier. The env-supplied HS_LIVE_CREDTYPE_ID is only a fallback: a
+        // hand-passed env value can be wrong (a stale/placeholder type) or malformed (a 32-hex GUID with
+        // its hyphens stripped → spCreateCredential fails with "Conversion failed ... to uniqueidentifier").
+        // We accept the env value ONLY when it is a well-formed hyphenated GUID; otherwise we derive from
+        // the Integration row. This makes the credential-type resolution robust to env-construction
+        // mistakes and keeps it in lockstep with the metadata the connector was pushed with.
+        const HYPHENATED_GUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+        let credentialTypeID = cfg.credentialTypeID;
+        const integrationCredTypeID = await db.resolveId(
             cfg.platform === 'postgresql'
-                ? `SELECT "ID" FROM "${cfg.mjSchema}"."Integration" WHERE "Name" = $1 LIMIT 1`
-                : `SELECT TOP 1 ID FROM [${cfg.mjSchema}].[Integration] WHERE Name = @n`,
-            cfg.platform === 'postgresql' ? [cfg.integrationName] : { n: cfg.integrationName });
-        const setupIds = { companyID: cfg.companyID, integrationID, credentialTypeID: cfg.credentialTypeID };
+                ? `SELECT "CredentialTypeID" AS "ID" FROM "${cfg.mjSchema}"."Integration" WHERE "ID" = $1 LIMIT 1`
+                : `SELECT TOP 1 CredentialTypeID AS ID FROM [${cfg.mjSchema}].[Integration] WHERE ID = @n`,
+            cfg.platform === 'postgresql' ? [integrationID] : { n: integrationID });
+        if (integrationCredTypeID) {
+            credentialTypeID = integrationCredTypeID; // metadata-declared type wins — always correct + canonical
+        } else if (!credentialTypeID || !HYPHENATED_GUID.test(String(credentialTypeID))) {
+            throw new Error(`connector-e2e: could not resolve a valid CredentialTypeID for integration '${cfg.integrationName}' — Integration.CredentialTypeID is null and HS_LIVE_CREDTYPE_ID ('${cfg.credentialTypeID ?? ''}') is missing/malformed. Set the connector's CredentialTypeID @lookup in metadata so 'mj sync push' populates it.`);
+        }
+        const setupIds = { companyID: cfg.companyID, integrationID, credentialTypeID };
 
         // Objects: explicit override > fixtures Objects[] (mock) > cfg default list.
         const objects = cfg.objectsOverride.length ? cfg.objectsOverride
@@ -508,15 +561,33 @@ async function connectorE2EPlan(values, scrub, allowWrite) { // eslint-disable-l
         // credential. Proxy-mode (hardcoded base) gets no config patch (redirect is via the
         // MJAPI-process proxy — see proxyEnvExpected in the result). Live mode uses the real token.
         let ciid, credentialID = null;
-        if (cfg.companyIntegrationID) {
-            ciid = cfg.companyIntegrationID; // reference mode (pre-seeded; live or a prepared mock connection)
+        // Token presence forces TOKEN mode (fresh CreateConnection + schema-refresh + entity
+        // mapping that APPLIES E2E_LIVE_CONFIG, e.g. {AccountID}). Reference mode is the token-FREE
+        // path only (a pre-seeded CIID). Without this guard a STALE HS_LIVE_CIID lingering in the
+        // broker's launch env silently forces reference mode for a token run → no createConnection
+        // → E2E_LIVE_CONFIG (AccountID) never applied → connector fails credential validation →
+        // 0 discovered objects → 0 entity maps → 0 rows (a vacuous "pass"). Token wins.
+        if (cfg.companyIntegrationID && !values.token && !values.credentialValues) {
+            ciid = cfg.companyIntegrationID; // reference mode — token-free, pre-seeded connection only
         } else {
+            // Live-mode credential shape is connector-specific. Default is HubSpot-style
+            // { apiKey }, but a connector that reads a differently-named secret key (e.g.
+            // PropFuel reads { Token, AccountID }) sets E2E_TOKEN_KEY (the secret key name)
+            // + E2E_LIVE_CONFIG (non-secret config JSON merged into both credential + config,
+            // e.g. {"AccountID":"2019"}). Keeps the default working; generalizes per connector.
+            // MULTI-SECRET connectors (e.g. PheedLoop reads { ApiKey, ApiSecret, OrganizationCode };
+            // GrowthZone reads { ClientId, ClientSecret, ... }) can't fit a single token — a vendor
+            // plan pre-builds values.credentialValues (+ optional values.configuration) from MULTIPLE
+            // broker-held secrets, which wins here. Secrets stay broker-side (never in the job env).
+            const liveTokenKey = process.env.E2E_TOKEN_KEY || 'apiKey';
+            let liveExtra = {};
+            try { liveExtra = process.env.E2E_LIVE_CONFIG ? JSON.parse(process.env.E2E_LIVE_CONFIG) : {}; } catch { liveExtra = {}; }
             const credentialValues = cfg.mode === 'mock'
                 ? { ...(mock.manifest?.Configuration ?? {}), ...(mock.configPatch ?? {}) } // dummy + mock redirect
-                : { apiKey: values.token };
+                : (values.credentialValues ?? { ...liveExtra, [liveTokenKey]: values.token });
             const configuration = cfg.mode === 'mock'
                 ? { ...(mock.manifest?.Configuration ?? {}), ...(mock.configPatch ?? {}) }
-                : undefined;
+                : (values.configuration ?? (Object.keys(liveExtra).length ? liveExtra : undefined));
             const created = await createConnectionWithConfig(gql, setupIds, {
                 credentialName: `e2e-${cfg.connector}-${cfg.runId}`,
                 credentialValues, configuration,
@@ -524,13 +595,52 @@ async function connectorE2EPlan(values, scrub, allowWrite) { // eslint-disable-l
             ciid = created.ciid; credentialID = created.credentialID;
         }
 
+        // Reconcile the requested objects against what discovery ACTUALLY surfaced for this live
+        // connection. A data-export feed rotates (hourly files, acked files removed), so a hardcoded
+        // stream name may not be present right now — and an object the connector never discovers can
+        // never map. Bulletproof rule ("only the connector is the variable"): test against the LIVE
+        // surface. Intersect the request with the discovered IntegrationObjects; if the request
+        // matches nothing (or was a stale guess), fall back to the discovered set, bounded to a
+        // Goldilocks subset so we prove advancement+termination without draining a huge stream. Throw
+        // LOUDLY only when discovery genuinely found zero objects (a real connector/credential fault,
+        // not a stale object-name guess).
+        let appliedObjects = objects;
+        if (cfg.mode !== 'mock') {
+            const ioQ = cfg.platform === 'postgresql'
+                ? `SELECT "Name" FROM "${cfg.mjSchema}"."IntegrationObject" WHERE "IntegrationID" = '${integrationID}'`
+                : `SELECT Name FROM [${cfg.mjSchema}].[IntegrationObject] WHERE IntegrationID = '${integrationID}'`;
+            const discovered = (await db.rows(ioQ)).map((r) => r.Name).filter(Boolean);
+            const want = new Set(objects.map((s) => s.toLowerCase()));
+            const matched = discovered.filter((d) => want.has(d.toLowerCase()));
+            const GOLDILOCKS = 3;
+            if (matched.length) {
+                appliedObjects = matched;
+            } else if (discovered.length) {
+                appliedObjects = discovered.slice(0, GOLDILOCKS);
+                console.log(`[connector-e2e] requested [${objects.join(', ')}] not in live feed; ` +
+                    `substituting discovered [${appliedObjects.join(', ')}]` +
+                    (discovered.length > GOLDILOCKS ? ` (bounded from ${discovered.length}, Goldilocks)` : ''));
+            } else {
+                throw new Error(`connector-e2e: connection discovered 0 IntegrationObjects for ` +
+                    `'${cfg.integrationName}' — schema refresh found nothing (check credential/AccountID + DiscoverObjects).`);
+            }
+        }
+
+        // Optional matrix-cell specs from the fixture (discovery overlay, write round-trip). Absent ⇒
+        // the corresponding phases stub-with-reason; never a fake pass.
+        const matrixSpecs = cfg.mode === 'mock' ? matrixSpecsFromManifest(mock.manifest) : { discoverable: false, discoverNarrowedRoutes: null, writeRoundTrip: null };
         const fullCfg = {
             ...cfg,
             companyIntegrationID: ciid,
-            objects,
+            objects: appliedObjects,
             integrationID,
             credentialID,
+            // E7 — applyScope is carried from cfg (scoped by default for connector-e2e); phaseSetup honors it.
+            applyScope: cfg.applyScope,
             deltaPasses: cfg.mode === 'mock' ? deltaPassesFromManifest(mock.manifest) : [],
+            discoverable: matrixSpecs.discoverable,
+            discoverNarrowedRoutes: matrixSpecs.discoverNarrowedRoutes,
+            writeRoundTrip: matrixSpecs.writeRoundTrip,
         };
 
         const result = await runConnectorE2E({ gql, db, mock }, fullCfg, allowWrite);
@@ -538,6 +648,8 @@ async function connectorE2EPlan(values, scrub, allowWrite) { // eslint-disable-l
         result.mockWiring = cfg.mode === 'mock'
             ? { kind: mock.kind, baseURL: mock.baseURL ?? null, proxyURL: mock.proxyURL ?? null, tlsRequired: mock.tlsRequired ?? false, proxyEnvExpected: mock.proxyEnvExpected ?? null, fixtureWarnings: mock.warnings ?? [] }
             : { mode: 'live' };
+        result.applyScope = cfg.applyScope;       // E7 — record the scope actually used
+        if (fixtureRegen) result.fixtureRegen = fixtureRegen; // E6 — record whether/what was regenerated
         return result;
     } catch (e) {
         try { if (mock?.close) await mock.close(); } catch { /* best-effort */ }
@@ -552,73 +664,45 @@ export async function connectorE2EMock(values, scrub) { return connectorE2EPlan(
 export async function connectorE2ELive(values, scrub) { return connectorE2EPlan(values, scrub, false); }
 
 /**
- * HYBRID-mode e2e. For a LIMITED-SCOPE token: scope-probe every discovered object via the
- * read-only IntegrationPreviewData op, then verify IN-SCOPE objects against REAL live data
- * and OUT-OF-SCOPE objects (403 / object-401 / insufficient_scope) against mock/fixtures —
- * giving full per-object coverage that neither binary mode can. A non-scope probe error
- * (5xx / timeout) is a REAL failure (red), never a silent mock fallback.
- *
- * Reference mode ONLY: the broker pre-seeds the connection + ENCRYPTED credential and hands
- * us HS_LIVE_CIID; the token is used BY-REFERENCE (the server decrypts it internally) and is
- * never read here. Builds BOTH an inert live mock (for the live sub-pass) and a fixtures mock
- * (for the out-of-scope fallback sub-pass), then delegates to runConnectorE2EHybrid.
- *
- * writes:false — read-only from the vendor (probe + pull); the only DB writes are into our own
- * destination schema (the point of the test). allowWrite is hardwired false (no live mutation).
+ * PheedLoop LIVE e2e — MULTI-SECRET (X-API-KEY + X-API-SECRET + org code), which the single-token
+ * connector-e2e-live path can't carry. The broker holds PHEEDLOOP_API_KEY + PHEEDLOOP_API_SECRET
+ * (dereferenced into `values` by the runner); PHEEDLOOP_ORG_CODE (non-secret, part of the URL path)
+ * rides the broker env. Builds the connector's CredentialValues from all three and drives the full
+ * connector-e2e against the REAL PheedLoop API — non-vacuous by construction (real records). The two
+ * secrets never leave the broker process. writes:false (read/sync only; no vendor mutation).
  */
-async function connectorE2EHybridPlan(values, scrub) { // eslint-disable-line no-unused-vars -- scrub kept for signature symmetry (runner scrubs result)
-    const cfg = connectorE2eCfgFromEnv();
-    if (!cfg.connector) return { ok: false, error: 'connector-e2e-hybrid requires E2E_CONNECTOR (registry connector dir name)' };
-    if (!cfg.companyIntegrationID) {
-        return { ok: false, error: 'connector-e2e-hybrid is reference-mode ONLY — set HS_LIVE_CIID to the broker-seeded CompanyIntegrationID (the token is used by-reference, never read)' };
-    }
-
-    const db = await makeDbClient(cfg.platform, { ...cfg.db, password: values.dbPassword, mjSchema: cfg.mjSchema });
-    const gql = makeGqlClient(cfg.graphqlUrl, { mjSystemKey: values.mjSystemKey, mjUserKey: values.mjUserKey, mjToken: values.mjToken });
-
-    // Build BOTH mocks: an inert one for the live sub-pass + the fixtures-replaying one for
-    // the out-of-scope fallback sub-pass. runConnectorE2EHybrid closes db + both mocks once.
-    const mockLive = await buildMock({ mode: 'live', fixturesDir: cfg.fixturesDir, tls: cfg.tls });
-    let mockFixtures = null;
-    try {
-        try { mockFixtures = await buildMock({ mode: 'mock', fixturesDir: cfg.fixturesDir, tls: cfg.tls }); }
-        catch (e) { mockFixtures = null; /* no fixtures → out-of-scope objects surface as no-fixture warnings */ void e; }
-
-        // Objects: explicit override > fixtures Objects[] > cfg default list. The fixtures
-        // Objects[] (when present) is also the fallback-serveable set for the no-fixture warning.
-        const fixtureObjects = mockFixtures?.manifest ? objectsFromManifest(mockFixtures.manifest) : [];
-        const objects = cfg.objectsOverride.length ? cfg.objectsOverride
-            : (fixtureObjects.length ? fixtureObjects : cfg.objects);
-        if (!objects.length) {
-            try { if (mockLive?.close) await mockLive.close(); } catch { /* best-effort */ }
-            try { if (mockFixtures?.close) await mockFixtures.close(); } catch { /* best-effort */ }
-            try { if (db.close) await db.close(); } catch { /* best-effort */ }
-            return { ok: false, mode: 'hybrid', connector: cfg.connector, error: 'connector-e2e-hybrid: no objects to probe (set E2E_OBJECTS or provide fixtures Objects[])' };
-        }
-
-        const fullCfg = {
-            ...cfg,
-            objects,
-            fixtureObjects: fixtureObjects.length ? fixtureObjects : undefined,
-            deltaPasses: mockFixtures?.manifest ? deltaPassesFromManifest(mockFixtures.manifest) : [],
-        };
-
-        const result = await runConnectorE2EHybrid({ gql, db, mockLive, mockFixtures }, fullCfg, false);
-        // Surface the fixtures mock wiring (live sub-pass needs no redirect; it hits the real vendor).
-        result.mockWiring = mockFixtures
-            ? { kind: mockFixtures.kind, baseURL: mockFixtures.baseURL ?? null, proxyURL: mockFixtures.proxyURL ?? null, tlsRequired: mockFixtures.tlsRequired ?? false, proxyEnvExpected: mockFixtures.proxyEnvExpected ?? null, fixtureWarnings: mockFixtures.warnings ?? [] }
-            : { note: 'no fixtures present — out-of-scope objects (if any) surface as mock-fallback-no-fixture warnings' };
-        return result;
-    } catch (e) {
-        try { if (mockLive?.close) await mockLive.close(); } catch { /* best-effort */ }
-        try { if (mockFixtures?.close) await mockFixtures.close(); } catch { /* best-effort */ }
-        try { if (db.close) await db.close(); } catch { /* best-effort */ }
-        return { ok: false, mode: 'hybrid', connector: cfg.connector, error: String(e?.stack ?? e?.message ?? e) };
-    }
+export async function pheedloopE2ELive(values, scrub) {
+    const orgCode = (process.env.PHEEDLOOP_ORG_CODE || '').trim();
+    const cred = { ApiKey: values.apiKey, ApiSecret: values.apiSecret, OrganizationCode: orgCode };
+    return connectorE2EPlan({ ...values, credentialValues: cred, configuration: cred }, scrub, false);
 }
 
-/** Hybrid-mode e2e (reference-mode, limited-token) — writes:false; credentials only via broker. */
-export async function connectorE2EHybrid(values, scrub) { return connectorE2EHybridPlan(values, scrub); }
+/**
+ * GrowthZone LIVE e2e — MULTI-SECRET OAuth2 (ClientId + ClientSecret + Username + Password + BaseURL),
+ * password grant (the operator's refresh token is expired). clientId/clientSecret are dereferenced by
+ * the runner; BaseURL/Username/Password ride the broker env (never the job). Builds the connector's
+ * CredentialValues and drives the full connector-e2e against the REAL GrowthZone tenant — non-vacuous
+ * by construction. Secrets never leave the broker process. writes:false.
+ */
+export async function growthzoneE2ELive(values, scrub) {
+    const env = process.env;
+    const baseURL = (env.GROWTHZONE_BASE_URL || '').trim();
+    const cred = {
+        BaseURL: baseURL,
+        ClientId: values.clientId,
+        ClientSecret: values.clientSecret,
+        Username: env.GROWTHZONE_USERNAME,
+        Password: env.GROWTHZONE_PASSWORD,
+        ...(env.GROWTHZONE_REFRESH_TOKEN ? { RefreshToken: env.GROWTHZONE_REFRESH_TOKEN } : {}),
+    };
+    // For a cross-dialect run (e.g. GZ on Postgres) the assertion DB password differs from the broker's
+    // default DB_PASSWORD. Allow a per-job override — carried inside E2E_LIVE_CONFIG (already allowlisted,
+    // so no broker restart) or E2E_DB_PASSWORD. These are local test DB pwds, NOT real secrets.
+    let liveCfgPwd;
+    try { liveCfgPwd = JSON.parse(env.E2E_LIVE_CONFIG || '{}').dbPassword; } catch { /* ignore */ }
+    const dbPassword = liveCfgPwd || env.E2E_DB_PASSWORD || values.dbPassword;
+    return connectorE2EPlan({ ...values, dbPassword, credentialValues: cred, configuration: { BaseURL: baseURL } }, scrub, false);
+}
 
 /**
  * Registry: task name → { secrets (logicalName→ENV_VAR default), run, writes }.
@@ -678,7 +762,878 @@ export async function propfuelReadonly({ token }, scrub) {
     return out;
 }
 
+/**
+ * PropFuel data-export DISCOVERY — READ-ONLY, structure-only. writes:false.
+ * Purpose: this is a SPEC-LESS connector (no public OpenAPI/docs); the live demo feed is the
+ * only authoritative catalog. This plan surfaces, WITHOUT returning any record VALUES (contact
+ * PII), everything the connector build needs:
+ *   - the exact data-type tokens present in the queue + per-type file counts/microtime range
+ *   - per data type: the nested key SCHEMA (dot-path -> value TYPE set) of a sample record
+ *   - the checkin_questions IDENTITY field + UPDATE/DELETE signal, by scanning a window of files:
+ *       * which paths change presence/type when an id recurs (the "answered" update mechanism)
+ *       * distinct values of OPERATIONAL-SIGNAL fields only (status/state/deleted/action/...) —
+ *         low-cardinality enums, never free-text/PII
+ * Calls ONLY GET /list + GET /download (NEVER ack). Bounded: <= 24 downloads.
+ */
+export async function propfuelDiscover({ token }, scrub) {
+    const acct = '2019';
+    const base = `https://app.propfuel.com/dataexport/${acct}`;
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const out = { ok: false, plan: 'propfuel-discover', accountId: acct };
+
+    const getJSON = async (url) => {
+        const r = await fetch(url, { method: 'GET', headers });
+        const t = await r.text();
+        let j = null; try { j = JSON.parse(t); } catch { /* */ }
+        return { status: r.status, json: j, text: t };
+    };
+    const recordsOf = (j) => Array.isArray(j) ? j : (j?.data ?? j?.records ?? []);
+
+    // ── 1) list + group by data type ───────────────────────────────────────────────
+    const lr = await getJSON(`${base}/list`);
+    if (lr.status < 200 || lr.status >= 300) { out.list = { status: lr.status, body: scrub((lr.text || '').slice(0, 300)) }; return out; }
+    const rawFiles = (() => { const j = lr.json; const a = Array.isArray(j) ? j : (j?.files ?? j?.data ?? []); return (Array.isArray(a) ? a : []).map(f => String(typeof f === 'string' ? f : (f.file ?? f.name ?? f))); })();
+    // filename = <microtime>-<datatype>.json ; microtime sorts chronologically (numeric)
+    const parse = (name) => {
+        const m = name.match(/^([0-9]+(?:\.[0-9]+)?)-(.+)\.json$/);
+        return m ? { micro: parseFloat(m[1]), microStr: m[1], type: m[2], name } : { micro: NaN, microStr: '', type: '(unparsed)', name };
+    };
+    const parsed = rawFiles.map(parse).filter(p => p.type !== '(unparsed)').sort((a, b) => a.micro - b.micro);
+    const byType = {};
+    for (const p of parsed) (byType[p.type] ??= []).push(p);
+    out.list = {
+        status: lr.status,
+        totalFiles: rawFiles.length,
+        dataTypes: Object.fromEntries(Object.entries(byType).map(([t, arr]) => [t, {
+            fileCount: arr.length,
+            oldest: arr[0]?.microStr, newest: arr[arr.length - 1]?.microStr,
+        }])),
+    };
+
+    // ── helpers: nested schema + signal collection (NO record values returned) ──────
+    const SIGNAL = /^(status|state|deleted|is_deleted|isdeleted|removed|void|voided|action|op|operation|event|event_type|type|kind|answered|is_answered|bot|is_bot|valid|is_valid|response_count|answer_count)$/i;
+    const typeOf = (v) => v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
+    const walkSchema = (obj, schema, prefix = '') => {
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
+        for (const [k, v] of Object.entries(obj)) {
+            const path = prefix ? `${prefix}.${k}` : k;
+            (schema[path] ??= new Set()).add(typeOf(v));
+            if (v && typeof v === 'object' && !Array.isArray(v)) walkSchema(v, schema, path);
+            else if (Array.isArray(v) && v.length && typeof v[0] === 'object') walkSchema(v[0], schema, `${path}[]`);
+        }
+    };
+    const presentPaths = (obj, prefix = '', acc = new Set()) => {
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return acc;
+        for (const [k, v] of Object.entries(obj)) {
+            const path = prefix ? `${prefix}.${k}` : k;
+            const isEmpty = v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
+            if (!isEmpty) acc.add(path);
+            if (v && typeof v === 'object' && !Array.isArray(v)) presentPaths(v, path, acc);
+        }
+        return acc;
+    };
+    const collectSignals = (obj, sig, prefix = '') => {
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
+        for (const [k, v] of Object.entries(obj)) {
+            const path = prefix ? `${prefix}.${k}` : k;
+            if (SIGNAL.test(k) && (v === null || ['string', 'number', 'boolean'].includes(typeof v))) {
+                const set = (sig[path] ??= new Set());
+                if (set.size < 25) { const s = String(v); set.add(s.length > 40 ? '<long>' : s); }
+            }
+            if (v && typeof v === 'object' && !Array.isArray(v)) collectSignals(v, sig, path);
+        }
+    };
+    // candidate identity = a flat path whose last segment looks like an id and is scalar
+    const ID_HINT = /(^|[._])(id|uuid|guid|key)$/i;
+    const idCandidates = (obj, prefix = '', acc = {}) => {
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return acc;
+        for (const [k, v] of Object.entries(obj)) {
+            const path = prefix ? `${prefix}.${k}` : k;
+            if (ID_HINT.test(k) && ['string', 'number'].includes(typeof v)) acc[path] = (acc[path] ?? 0) + 1;
+            if (v && typeof v === 'object' && !Array.isArray(v)) idCandidates(v, path, acc);
+        }
+        return acc;
+    };
+    const getPath = (obj, path) => path.split('.').reduce((o, seg) => (o == null ? o : o[seg]), obj);
+
+    // ── 2) per data type: schema of a recent sample ────────────────────────────────
+    out.schemas = {};
+    let budget = 24;
+    for (const [type, arr] of Object.entries(byType)) {
+        if (budget <= 0) break;
+        const sampleFile = arr[arr.length - 1].name; // newest = most-evolved shape
+        const dr = await getJSON(`${base}/download/${encodeURIComponent(sampleFile)}`); budget--;
+        const recs = recordsOf(dr.json);
+        const schema = {}; const sig = {};
+        for (const rec of recs.slice(0, 200)) { walkSchema(rec, schema); collectSignals(rec, sig); }
+        out.schemas[type] = {
+            status: dr.status,
+            sampleFile: arr[arr.length - 1].microStr + '-' + type,
+            recordCount: Array.isArray(recs) ? recs.length : 0,
+            schema: Object.fromEntries(Object.entries(schema).map(([p, s]) => [p, [...s].sort()])),
+            signalFields: Object.fromEntries(Object.entries(sig).map(([p, s]) => [p, [...s].sort()])),
+            idCandidates: idCandidates(recs[0] ?? {}),
+        };
+    }
+
+    // ── 3) checkin_questions update/delete signal across a window ───────────────────
+    const qType = Object.keys(byType).find(t => /checkin_question|question|answer/i.test(t));
+    if (qType) {
+        const files = byType[qType];
+        const windowFiles = files.slice(-Math.min(16, files.length)); // most recent N
+        // pick the identity path: most-frequent id-candidate across the type's sample schema
+        const idc = out.schemas[qType]?.idCandidates ?? {};
+        const idPath = Object.entries(idc).sort((a, b) => b[1] - a[1])[0]?.[0]
+            ?? Object.keys(idc)[0] ?? 'checkin_question.id';
+        const seen = new Map(); // id -> { count, firstPaths:Set, lastPaths:Set, firstMicro, lastMicro, signalSeq:[] }
+        let scanned = 0, recTotal = 0;
+        for (const f of windowFiles) {
+            if (budget <= 0) break;
+            const dr = await getJSON(`${base}/download/${encodeURIComponent(f.name)}`); budget--; scanned++;
+            const recs = recordsOf(dr.json);
+            for (const rec of recs) {
+                recTotal++;
+                const idv = getPath(rec, idPath);
+                if (idv === undefined || idv === null || idv === '') continue;
+                const key = String(idv);
+                const paths = presentPaths(rec);
+                const sigSnap = {}; const sigTmp = {}; collectSignals(rec, sigTmp);
+                for (const [p, s] of Object.entries(sigTmp)) sigSnap[p] = [...s][0];
+                if (!seen.has(key)) seen.set(key, { count: 0, firstPaths: paths, lastPaths: paths, firstMicro: f.microStr, lastMicro: f.microStr, firstSig: sigSnap, lastSig: sigSnap });
+                const e = seen.get(key);
+                e.count++; e.lastPaths = paths; e.lastMicro = f.microStr; e.lastSig = sigSnap;
+            }
+        }
+        // identity recurrence + what changes when an id is seen again
+        const recurring = [...seen.values()].filter(e => e.count > 1);
+        const addedPathsTally = {}; const removedPathsTally = {}; const sigTransitions = {};
+        for (const e of recurring) {
+            for (const p of e.lastPaths) if (!e.firstPaths.has(p)) addedPathsTally[p] = (addedPathsTally[p] ?? 0) + 1;
+            for (const p of e.firstPaths) if (!e.lastPaths.has(p)) removedPathsTally[p] = (removedPathsTally[p] ?? 0) + 1;
+            for (const [p, lv] of Object.entries(e.lastSig)) {
+                const fv = e.firstSig[p];
+                if (fv !== lv) { const k = `${p}: ${fv} -> ${lv}`; sigTransitions[k] = (sigTransitions[k] ?? 0) + 1; }
+            }
+        }
+        const topN = (o, n = 15) => Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n));
+        out.mutationSignal = {
+            dataType: qType,
+            identityPath: idPath,
+            filesScanned: scanned,
+            recordsScanned: recTotal,
+            distinctIdentities: seen.size,
+            recurringIdentities: recurring.length,
+            note: 'recurring identity across files == the record was re-emitted (created->answered update, or pre-delete). Path/ signal deltas below show HOW the update manifests; absence in later files == tombstone-by-omission.',
+            pathsAppearingOnRecur: topN(addedPathsTally),   // e.g. an "answer"/"response" path that fills in
+            pathsDisappearingOnRecur: topN(removedPathsTally),
+            signalFieldTransitions: topN(sigTransitions),   // e.g. status: sent -> answered / -> deleted
+        };
+    }
+
+    out.ok = true;
+    return out;
+}
+
+/**
+ * PropFuel LIFECYCLE proof — READ-ONLY, counts+booleans only. writes:false.
+ * Confirms the checkin_questions create->answer->soft-delete lifecycle in LIVE data:
+ *   - state distribution (how many records have answered_at / deleted_at / response populated)
+ *   - identity recurrence across a time window (same checkin_question.id re-emitted = an update),
+ *     reporting only the answered_at/deleted_at PRESENCE transition (boolean), never timestamps/PII.
+ * Calls ONLY GET /list + GET /download (NEVER ack). Bounded: <= 90 downloads, <= 12000 records.
+ */
+export async function propfuelLifecycle({ token }, scrub) {
+    const acct = '2019';
+    const base = `https://app.propfuel.com/dataexport/${acct}`;
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const out = { ok: false, plan: 'propfuel-lifecycle', accountId: acct };
+    const getJSON = async (url) => { const r = await fetch(url, { method: 'GET', headers }); const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch { /* */ } return { status: r.status, json: j, text: t }; };
+    const recordsOf = (j) => Array.isArray(j) ? j : (j?.data ?? j?.records ?? []);
+
+    const lr = await getJSON(`${base}/list`);
+    if (lr.status < 200 || lr.status >= 300) { out.error = `list ${lr.status}`; return out; }
+    const rawFiles = (() => { const j = lr.json; const a = Array.isArray(j) ? j : (j?.files ?? j?.data ?? []); return (Array.isArray(a) ? a : []).map(f => String(typeof f === 'string' ? f : (f.file ?? f.name ?? f))); })();
+    const parse = (name) => { const m = name.match(/^([0-9]+(?:\.[0-9]+)?)-(.+)\.json$/); return m ? { micro: parseFloat(m[1]), type: m[2], name } : null; };
+    const q = rawFiles.map(parse).filter(Boolean).filter(p => /checkin_question/i.test(p.type)).sort((a, b) => a.micro - b.micro);
+
+    const present = (v) => v !== null && v !== undefined && v !== '';
+    const tally = { records: 0, answered: 0, deleted: 0, hasResponse: 0, hasRating: 0, hasSelection: 0, updatedDiffersCreated: 0 };
+    const seen = new Map(); // id -> { n, firstAnswered, lastAnswered, firstDeleted, lastDeleted }
+    let downloads = 0;
+
+    const scanFile = (recs) => {
+        for (const rec of recs) {
+            const cq = rec?.checkin_question; if (!cq || typeof cq !== 'object') continue;
+            tally.records++;
+            const a = present(cq.answered_at), d = present(cq.deleted_at);
+            if (a) tally.answered++; if (d) tally.deleted++;
+            if (present(cq.response)) tally.hasResponse++;
+            if (present(cq.rating)) tally.hasRating++;
+            if (present(cq.selection)) tally.hasSelection++;
+            if (present(cq.created_at) && present(cq.updated_at) && cq.created_at !== cq.updated_at) tally.updatedDiffersCreated++;
+            const id = cq.id; if (id === null || id === undefined) continue;
+            const k = String(id);
+            if (!seen.has(k)) seen.set(k, { n: 0, firstAnswered: a, lastAnswered: a, firstDeleted: d, lastDeleted: d });
+            const e = seen.get(k); e.n++; e.lastAnswered = a; e.lastDeleted = d;
+        }
+    };
+
+    // Window A — oldest 4 files (large, settled state distribution)
+    for (const f of q.slice(0, 4)) { if (downloads >= 90 || tally.records >= 12000) break; const dr = await getJSON(`${base}/download/${encodeURIComponent(f.name)}`); downloads++; scanFile(recordsOf(dr.json)); }
+    // Window B — most-recent 80 files (small, spans live-job time → recurrence)
+    for (const f of q.slice(-80)) { if (downloads >= 90 || tally.records >= 12000) break; const dr = await getJSON(`${base}/download/${encodeURIComponent(f.name)}`); downloads++; scanFile(recordsOf(dr.json)); }
+
+    const recurring = [...seen.values()].filter(e => e.n > 1);
+    const becameAnswered = recurring.filter(e => !e.firstAnswered && e.lastAnswered).length;
+    const becameDeleted = recurring.filter(e => !e.firstDeleted && e.lastDeleted).length;
+    out.ok = true;
+    out.filesAvailable = q.length;
+    out.filesDownloaded = downloads;
+    out.stateDistribution = tally;
+    out.recurrence = {
+        distinctIdentities: seen.size,
+        recurringIdentities: recurring.length,
+        recurredAndBecameAnswered: becameAnswered, // observed create -> answer update
+        recurredAndBecameDeleted: becameDeleted,   // observed soft-delete transition
+        maxOccurrencesOfOneId: recurring.reduce((m, e) => Math.max(m, e.n), 0),
+    };
+    out.interpretation = 'answered_at/deleted_at populated => update & soft-delete happen in-record; recurrence with becameAnswered/becameDeleted > 0 == the SAME checkin_question.id re-emitted across files as it transitions. Connector MUST upsert-by checkin_question.id and treat deleted_at!=null as a tombstone.';
+    return out;
+}
+
+/**
+ * GrowthZone OAuth2 — READ-ONLY live validation. writes:false.
+ * Mints a Bearer access token from the OAuth2 credential set (refresh_token grant primary,
+ * password grant fallback) against {origin}/oauth/token, then does TestConnection + a single
+ * read page (GET .../contacts?$top=2 and a delta probe) — STRICTLY read-only (no POST/PUT/DELETE,
+ * no ack). Proves the token-mint + endpoints + record shape against the LIVE GrowthZone tenant
+ * without touching client data. Secrets enter ONLY the broker process; the agent sees a scrubbed
+ * structure (token never returned; only status + COUNTS + field KEY names — never record values/PII).
+ *
+ * Required secrets (declared → must be present): baseUrl, clientId, clientSecret, refreshToken.
+ * Optional config read directly from env (NOT required, so a skipped one doesn't fail the plan):
+ *   GROWTHZONE_TOKEN_URL (else derived as {origin}/oauth/token), GROWTHZONE_SCOPES,
+ *   GROWTHZONE_USERNAME + GROWTHZONE_PASSWORD (password-grant fallback only).
+ */
+export async function growthzoneReadonly({ baseUrl, clientId, clientSecret }, scrub) {
+    const out = { ok: false, plan: 'growthzone-readonly', steps: {} };
+    // refreshToken is OPTIONAL (read from env, not a required secret) — the connector was proven via the
+    // PASSWORD grant (GROWTHZONE_USERNAME/PASSWORD), so requiring a refresh token would block that path.
+    const refreshToken = (process.env.GROWTHZONE_REFRESH_TOKEN || '').trim();
+    // Normalize the base URL → API base (…/api) + origin (for the OAuth token endpoint, which lives at root).
+    const rawBase = String(baseUrl || '').trim().replace(/\/+$/, '');
+    let origin = rawBase, apiBase = rawBase;
+    try { origin = new URL(rawBase).origin; } catch { /* leave as-is if not parseable */ }
+    if (!/\/api$/i.test(apiBase)) apiBase = `${apiBase}/api`;            // ensure …/api
+    const tokenUrl = (process.env.GROWTHZONE_TOKEN_URL || `${origin}/oauth/token`).trim();
+    const scopes = (process.env.GROWTHZONE_SCOPES || '').trim();
+    const uname = process.env.GROWTHZONE_USERNAME;
+    const pword = process.env.GROWTHZONE_PASSWORD;
+
+    // ── 1) Mint a Bearer. refresh_token grant first; password grant as fallback. ──
+    async function mint(grantBody, label) {
+        // GrowthZone rejects client creds sent in BOTH Basic header AND body
+        // ("Multiple client credentials cannot be specified"). Send them in the BODY ONLY.
+        let resp;
+        try {
+            resp = await fetch(tokenUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                body: new URLSearchParams(grantBody).toString(),
+            });
+        } catch (e) { return { grant: label, error: scrub(e instanceof Error ? e.message : String(e)) }; }
+        const text = await resp.text();
+        let tok = null, tokType = null;
+        try { const j = JSON.parse(text); tok = j.access_token ?? j.accessToken ?? null; tokType = j.token_type ?? 'Bearer'; } catch { /* non-json */ }
+        return { grant: label, status: resp.status, gotToken: !!tok, tokenType: tokType, token: tok, body: tok ? undefined : scrub(text.slice(0, 300)) };
+    }
+
+    let mintResult = await mint(
+        { grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret, ...(scopes ? { scope: scopes } : {}) },
+        'refresh_token'
+    );
+    if (!mintResult.gotToken && uname && pword) {
+        const pw = await mint(
+            { grant_type: 'password', username: uname, password: pword, client_id: clientId, client_secret: clientSecret, ...(scopes ? { scope: scopes } : {}) },
+            'password'
+        );
+        if (pw.gotToken) mintResult = pw; else out.steps.passwordGrant = { grant: pw.grant, status: pw.status, gotToken: pw.gotToken, body: pw.body };
+    }
+    out.steps.tokenMint = { grant: mintResult.grant, status: mintResult.status, gotToken: mintResult.gotToken, tokenType: mintResult.tokenType, tokenUrl: scrub(tokenUrl), ...(mintResult.body ? { body: mintResult.body } : {}), ...(mintResult.error ? { error: mintResult.error } : {}) };
+    const access = mintResult.token;
+    if (!access) { out.note = 'OAuth token mint failed — see steps.tokenMint'; return out; }
+    const authHeaders = { 'Authorization': `Bearer ${access}`, 'Accept': 'application/json' };
+
+    // ── 2) TestConnection + one read page (read-only). Try contacts list, then delta probe. ──
+    async function readGet(path, label) {
+        let resp;
+        try { resp = await fetch(`${apiBase}${path}`, { method: 'GET', headers: authHeaders }); }
+        catch (e) { return { label, error: scrub(e instanceof Error ? e.message : String(e)) }; }
+        const text = await resp.text();
+        let recs = [];
+        try { const j = JSON.parse(text); recs = Array.isArray(j) ? j : (j.Results ?? j.results ?? j.data ?? j.value ?? []); } catch { /* */ }
+        const first = (Array.isArray(recs) && recs.length && typeof recs[0] === 'object') ? recs[0] : null;
+        return {
+            label, status: resp.status, ok: resp.status >= 200 && resp.status < 300,
+            recordCount: Array.isArray(recs) ? recs.length : 0,
+            recordKeys: first ? Object.keys(first).slice(0, 50) : [],
+            ...(resp.status >= 200 && resp.status < 300 ? {} : { body: scrub(text.slice(0, 300)) }),
+        };
+    }
+
+    out.steps.contacts = await readGet('/contacts?$top=2', 'contacts-list');
+    // delta probe (read-only) — the documented incremental endpoint
+    out.steps.contactsDelta = await readGet('/contacts/delta?modifiedSince=2020-01-01T00:00:00Z&top=2', 'contacts-delta');
+    // ISOLATION: exactly what the connector sends on a full sync (IncrementalWatermarkField=NULL → NO since param)
+    out.steps.contactsDeltaNoSince = await readGet('/contacts/delta', 'contacts-delta-no-since');
+
+    out.connected = !!(out.steps.contacts?.ok || out.steps.contactsDelta?.ok);
+    out.ok = out.connected;
+    out.note = out.ok
+        ? 'OAuth2 Bearer minted; live read-only GET succeeded against GrowthZone /api (no writes/acks performed)'
+        : 'OAuth2 Bearer minted but read GET did not return 2xx — see steps.contacts/contactsDelta';
+    return out;
+}
+
+/**
+ * SharePoint (Microsoft Graph v1.0) — READ-ONLY live validation. writes:false.
+ * MULTI-SECRET OAuth2 client-credentials (app-only): mints an app token from the Microsoft identity
+ * platform token endpoint (https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token with
+ * scope=https://graph.microsoft.com/.default), then does STRICTLY read-only Graph GETs — proving the
+ * tenant+client+secret+admin-consent and the connector's read surface against the LIVE tenant without
+ * touching any data (no POST/PUT/PATCH/DELETE, no upload session, no subscription create). The token
+ * never leaves the broker process; the agent sees only status + COUNTS + field KEY names (never PII).
+ *
+ * Required secrets (declared → must be present): tenantId, clientId, clientSecret.
+ * Optional config read directly from env (NOT required — a skipped one never fails the plan):
+ *   SHAREPOINT_GRAPH_BASE (default https://graph.microsoft.com/v1.0),
+ *   SHAREPOINT_SITE (a site addressing string, e.g. contoso.sharepoint.com:/sites/Example, to also
+ *     read that site's drives + lists + a read-only driveItem /delta probe).
+ *
+ * NOTE on permission model: under least-privilege Sites.Selected with no site grant, /sites/root and
+ * /sites?search may return 403 — that is a CORRECT, honestly-reported outcome (the token minted, the
+ * app simply lacks a site grant), NOT a connector defect. A 2xx on any read confirms the live surface.
+ */
+export async function sharepointReadonly({ tenantId, clientId, clientSecret }, scrub) {
+    const out = { ok: false, plan: 'sharepoint-readonly', steps: {} };
+    const graphBase = (process.env.SHAREPOINT_GRAPH_BASE || 'https://graph.microsoft.com/v1.0').trim().replace(/\/+$/, '');
+    const site = (process.env.SHAREPOINT_SITE || '').trim();
+    const tokenUrl = `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`;
+
+    // ── 1) Mint an app-only Bearer via client_credentials (body-only client creds). ──
+    let access = null;
+    {
+        let resp;
+        try {
+            resp = await fetch(tokenUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                body: new URLSearchParams({
+                    grant_type: 'client_credentials',
+                    client_id: clientId,
+                    client_secret: clientSecret,
+                    scope: 'https://graph.microsoft.com/.default',
+                }).toString(),
+            });
+        } catch (e) {
+            out.steps.tokenMint = { error: scrub(e instanceof Error ? e.message : String(e)) };
+            out.note = 'OAuth token mint failed (network) — see steps.tokenMint';
+            return out;
+        }
+        const text = await resp.text();
+        let tok = null, tokType = null;
+        try { const j = JSON.parse(text); tok = j.access_token ?? null; tokType = j.token_type ?? 'Bearer'; } catch { /* non-json */ }
+        out.steps.tokenMint = { grant: 'client_credentials', status: resp.status, gotToken: !!tok, tokenType: tokType, tokenUrl: scrub(tokenUrl), ...(tok ? {} : { body: scrub(text.slice(0, 300)) }) };
+        access = tok;
+    }
+    if (!access) { out.note = 'OAuth client_credentials mint failed — see steps.tokenMint'; return out; }
+    const authHeaders = { 'Authorization': `Bearer ${access}`, 'Accept': 'application/json' };
+
+    // ── 2) Read-only Graph GETs. Counts + key names only; never record values. ──
+    async function readGet(path, label) {
+        let resp;
+        try { resp = await fetch(`${graphBase}${path}`, { method: 'GET', headers: authHeaders }); }
+        catch (e) { return { label, error: scrub(e instanceof Error ? e.message : String(e)) }; }
+        const text = await resp.text();
+        let j = null; try { j = JSON.parse(text); } catch { /* */ }
+        const recs = j ? (Array.isArray(j.value) ? j.value : (j.id ? [j] : [])) : [];
+        const first = (recs.length && typeof recs[0] === 'object') ? recs[0] : null;
+        const ok = resp.status >= 200 && resp.status < 300;
+        return {
+            label, status: resp.status, ok,
+            recordCount: recs.length,
+            recordKeys: first ? Object.keys(first).slice(0, 50) : [],
+            ...(j && j['@odata.nextLink'] ? { hasNextLink: true } : {}),
+            ...(j && j['@odata.deltaLink'] ? { hasDeltaLink: true } : {}),
+            ...(ok ? {} : { body: scrub(text.slice(0, 300)) }),
+        };
+    }
+
+    out.steps.rootSite = await readGet('/sites/root', 'sites-root');
+    out.steps.siteSearch = await readGet('/sites?search=*&$top=3', 'sites-search');
+
+    if (site) {
+        out.steps.site = await readGet(`/sites/${encodeURIComponent(site)}`, 'site-by-id');
+        out.steps.siteDrives = await readGet(`/sites/${encodeURIComponent(site)}/drives?$top=3`, 'site-drives');
+        out.steps.siteLists = await readGet(`/sites/${encodeURIComponent(site)}/lists?$top=3`, 'site-lists');
+        // Read-only delta probe on the site's default document library (proves the incremental cursor
+        // surface; strictly a GET, no writes).
+        out.steps.driveDeltaProbe = await readGet(`/sites/${encodeURIComponent(site)}/drive/root/delta`, 'drive-delta');
+    }
+
+    out.connected = !!(out.steps.rootSite?.ok || out.steps.siteSearch?.ok || out.steps.site?.ok || out.steps.siteDrives?.ok || out.steps.siteLists?.ok);
+    out.ok = out.connected;
+    out.note = out.ok
+        ? 'App-only Bearer minted; live read-only Graph GET succeeded (no writes/uploads/subscriptions performed)'
+        : 'Bearer minted but no read GET returned 2xx — likely Sites.Selected with no site grant (set SHAREPOINT_SITE + grant) or missing Sites.Read.All; see steps.*';
+    return out;
+}
+
+/**
+ * Dynamics 365 / Dataverse — READ-ONLY probe to answer "are the SHAREPOINT Entra app creds ALSO
+ * usable for Dynamics?". writes:false. Reuses the SAME three OAuth2 secrets (tenantId/clientId/
+ * clientSecret) because Dynamics uses the same Microsoft identity platform — only the token AUDIENCE
+ * and the granted permissions/app-user differ. STRICTLY read-only (token mint + GET only).
+ *
+ * Two checks, neither needs a pre-known org URL for step 1:
+ *   1. Global Discovery — mint scope=https://globaldisco.crm.dynamics.com/.default, GET
+ *      /api/discovery/v2.0/Instances → lists every Dataverse environment the app can reach.
+ *   2. (only if DYNAMICS365_ORG_URL env set) mint scope=<org>/.default, GET /api/data/v9.2/WhoAmI →
+ *      a 2xx with a UserId is DEFINITIVE proof the creds work for that environment; 401/403 means the
+ *      token minted but the app has no Dataverse application-user/security-role.
+ *
+ * Required secrets: tenantId, clientId, clientSecret (the SAME env vars the SharePoint plan uses).
+ * Optional env: DYNAMICS365_ORG_URL (e.g. https://yourorg.crm.dynamics.com).
+ */
+export async function dynamics365Probe({ tenantId, clientId, clientSecret }, scrub) {
+    const out = { ok: false, plan: 'dynamics365-probe', steps: {} };
+    const tokenUrl = `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`;
+    const orgUrl = (process.env.DYNAMICS365_ORG_URL || '').trim().replace(/\/+$/, '');
+
+    async function mint(resourceScope) {
+        let resp;
+        try {
+            resp = await fetch(tokenUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                body: new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret, scope: resourceScope }).toString(),
+            });
+        } catch (e) { return { error: scrub(e instanceof Error ? e.message : String(e)) }; }
+        const text = await resp.text();
+        let tok = null; try { tok = JSON.parse(text).access_token ?? null; } catch { /* */ }
+        return { status: resp.status, gotToken: !!tok, token: tok, ...(tok ? {} : { body: scrub(text.slice(0, 300)) }) };
+    }
+    async function readGet(url, token) {
+        let resp;
+        try { resp = await fetch(url, { method: 'GET', headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } }); }
+        catch (e) { return { error: scrub(e instanceof Error ? e.message : String(e)) }; }
+        const text = await resp.text();
+        let j = null; try { j = JSON.parse(text); } catch { /* */ }
+        const recs = j ? (Array.isArray(j.value) ? j.value : (j.UserId || j.BusinessUnitId ? [j] : [])) : [];
+        const first = (recs.length && typeof recs[0] === 'object') ? recs[0] : null;
+        const ok = resp.status >= 200 && resp.status < 300;
+        return { status: resp.status, ok, recordCount: recs.length, recordKeys: first ? Object.keys(first).slice(0, 40) : [], ...(ok ? {} : { body: scrub(text.slice(0, 300)) }) };
+    }
+
+    // 1) Global Discovery (no org URL needed)
+    const gdsScope = 'https://globaldisco.crm.dynamics.com/.default';
+    const gdsTok = await mint(gdsScope);
+    out.steps.globalDiscoveryToken = { scope: gdsScope, status: gdsTok.status, gotToken: gdsTok.gotToken, ...(gdsTok.body ? { body: gdsTok.body } : {}), ...(gdsTok.error ? { error: gdsTok.error } : {}) };
+    if (gdsTok.token) {
+        out.steps.instances = await readGet('https://globaldisco.crm.dynamics.com/api/discovery/v2.0/Instances', gdsTok.token);
+    }
+
+    // 2) Definitive WhoAmI against a specific org (only when provided)
+    if (orgUrl) {
+        const orgScope = `${orgUrl}/.default`;
+        const orgTok = await mint(orgScope);
+        out.steps.orgToken = { scope: scrub(orgScope), status: orgTok.status, gotToken: orgTok.gotToken, ...(orgTok.body ? { body: orgTok.body } : {}), ...(orgTok.error ? { error: orgTok.error } : {}) };
+        if (orgTok.token) out.steps.whoAmI = await readGet(`${orgUrl}/api/data/v9.2/WhoAmI`, orgTok.token);
+    }
+
+    const reachable = (out.steps.instances?.recordCount ?? 0) > 0;
+    const whoAmIok = out.steps.whoAmI?.ok === true;
+    out.ok = reachable || whoAmIok;
+    out.usableForDynamics = out.ok;
+    out.note = whoAmIok
+        ? `DEFINITIVE: WhoAmI 2xx against ${scrub(orgUrl)} — the SharePoint Entra app creds ARE usable for this Dynamics 365 environment (read-only, no writes).`
+        : reachable
+            ? `Global Discovery lists ${out.steps.instances.recordCount} reachable Dataverse environment(s) — creds appear usable for Dynamics; set DYNAMICS365_ORG_URL to one of them for a definitive WhoAmI.`
+            : (out.steps.globalDiscoveryToken?.gotToken
+                ? 'Token mints for the Dynamics audience but Global Discovery returned no environments (app likely lacks a Dataverse application-user/role) — set DYNAMICS365_ORG_URL to test a specific org directly. Not usable as-is.'
+                : 'Could not mint a Dynamics-audience token with these creds — see steps.globalDiscoveryToken. Not usable for Dynamics as configured.');
+    return out;
+}
+
+/**
+ * PheedLoop — READ-ONLY live validation. writes:false.
+ * PheedLoop uses dual STATIC headers (X-API-KEY + X-API-SECRET, NOT Bearer) against
+ * https://api.pheedloop.com/api/v3/organization/{ORG_CODE}/ — exactly the scheme + base the
+ * PheedLoopConnector builds (BuildHeaders + GetBaseURL). This replicates the connector's own
+ * TestConnection (GET /events/?page=1&page_size=1) plus one read page, STRICTLY read-only (no
+ * POST/PUT/DELETE). Proves the two secrets + org code + endpoints + record shape against the LIVE
+ * tenant without touching client data. Secrets enter ONLY the broker process; the agent receives a
+ * scrubbed structure (status + COUNTS + field KEY names only — never record values/PII).
+ *
+ * Required secrets (declared → must be present): apiKey (PHEEDLOOP_API_KEY), apiSecret (PHEEDLOOP_API_SECRET).
+ * Org code read directly from env (PHEEDLOOP_ORG_CODE) — part of the URL path, not a secret.
+ */
+export async function pheedloopReadonly({ apiKey, apiSecret }, scrub) {
+    const out = { ok: false, plan: 'pheedloop-readonly', steps: {} };
+    const orgCode = (process.env.PHEEDLOOP_ORG_CODE || '').trim();
+    if (!orgCode) { out.note = 'missing PHEEDLOOP_ORG_CODE (org code is part of the API path)'; return out; }
+    const base = `https://api.pheedloop.com/api/v3/organization/${orgCode}`;
+    const headers = { 'X-API-KEY': apiKey, 'X-API-SECRET': apiSecret, 'Accept': 'application/json' };
+
+    async function readGet(path, label) {
+        let resp;
+        try { resp = await fetch(`${base}${path}`, { method: 'GET', headers }); }
+        catch (e) { return { label, error: scrub(e instanceof Error ? e.message : String(e)) }; }
+        const text = await resp.text();
+        let recs = [], envelopeKeys = [], matchedKey = null, arrayKeyLengths = {};
+        try {
+            const j = JSON.parse(text);
+            if (Array.isArray(j)) { recs = j; matchedKey = '(bare array)'; }
+            else if (j && typeof j === 'object') {
+                envelopeKeys = Object.keys(j);
+                // STRUCTURE ONLY: which top-level keys hold arrays, and how long (no values)
+                for (const k of envelopeKeys) if (Array.isArray(j[k])) arrayKeyLengths[k] = j[k].length;
+                for (const k of ['results','Results','data','value','records','Records','items','Items']) {
+                    if (Array.isArray(j[k])) { recs = j[k]; matchedKey = k; break; }
+                }
+            }
+        } catch { /* non-json */ }
+        const first = (Array.isArray(recs) && recs.length && typeof recs[0] === 'object') ? recs[0] : null;
+        return {
+            label, status: resp.status, ok: resp.status >= 200 && resp.status < 300,
+            recordCount: Array.isArray(recs) ? recs.length : 0,
+            envelopeKeys, matchedRecordKey: matchedKey, arrayKeyLengths,
+            recordKeys: first ? Object.keys(first).slice(0, 50) : [],
+            ...(resp.status >= 200 && resp.status < 300 ? {} : { body: scrub(text.slice(0, 300)) }),
+        };
+    }
+
+    // 1) the connector's own TestConnection endpoint  2) a small read page
+    out.steps.events = await readGet('/events/?page=1&page_size=1', 'events-testconnection');
+    // page_size parity probe: the sync uses page_size=200 — does PheedLoop return the same records?
+    out.steps.events_ps200 = await readGet('/events/?page=1&page_size=200', 'events-page_size-200');
+    out.steps.attendees = await readGet('/attendees/?page=1&page_size=2', 'attendees-page');
+    out.connected = !!(out.steps.events?.ok || out.steps.attendees?.ok);
+    out.ok = out.connected;
+    out.note = out.ok
+        ? 'X-API-KEY/X-API-SECRET accepted; live read-only GET succeeded against PheedLoop /api/v3 (no writes performed)'
+        : 'headers sent but read GET did not return 2xx — see steps.events/attendees';
+    return out;
+}
+
+/**
+ * GrowthZone OAuth2 — create the CompanyIntegration with the full OAuth credential. writes:false
+ * externally (CreateConnection only reads GrowthZone to TestConnection). The OAuth secrets (clientId/
+ * clientSecret/refreshToken/baseUrl) enter ONLY this broker process; MJAPI encrypts them server-side
+ * and the agent receives ONLY the CompanyIntegrationID (token never returned). The agent then drives
+ * ApplyAll/StartSync by CIID over GraphQL with MJ_API_KEY (no vendor secret). Job env (non-secret):
+ * HS_LIVE_GRAPHQL_URL, HS_LIVE_COMPANY_ID, HS_LIVE_INTEGRATION_ID, HS_LIVE_CREDTYPE_ID.
+ */
+export async function growthzoneCreateConnection({ clientId, clientSecret, refreshToken, baseUrl, mjSystemKey }, scrub) {
+    const env = process.env;
+    const graphqlUrl = (env.HS_LIVE_GRAPHQL_URL || 'http://localhost:4013/').trim();
+    const companyID = env.HS_LIVE_COMPANY_ID, integrationID = env.HS_LIVE_INTEGRATION_ID, credentialTypeID = env.HS_LIVE_CREDTYPE_ID;
+    const scopes = (env.GROWTHZONE_SCOPES || '').trim(), tokenUrl = (env.GROWTHZONE_TOKEN_URL || '').trim();
+    const uname = env.GROWTHZONE_USERNAME, pword = env.GROWTHZONE_PASSWORD;
+    if (!companyID || !integrationID || !credentialTypeID) {
+        return { ok: false, plan: 'growthzone-create-connection', error: 'missing HS_LIVE_COMPANY_ID / HS_LIVE_INTEGRATION_ID / HS_LIVE_CREDTYPE_ID in job env' };
+    }
+    // The operator's refresh_token is expired (GrowthZone returns "invalid"); the PASSWORD grant works
+    // (proven in growthzone-readonly). The connector selects refresh_token whenever a RefreshToken is
+    // present (no fallback), so OMIT RefreshToken here to force the working password grant. Set
+    // GROWTHZONE_USE_REFRESH=1 to include it (once a fresh token is available).
+    const useRefresh = (env.GROWTHZONE_USE_REFRESH === '1') && refreshToken;
+    const credentialValues = JSON.stringify({
+        ClientId: clientId, ClientSecret: clientSecret, BaseURL: baseUrl,
+        ...(useRefresh ? { RefreshToken: refreshToken } : {}),
+        ...(scopes ? { Scopes: scopes } : {}), ...(tokenUrl ? { TokenURL: tokenUrl } : {}),
+        ...(uname ? { Username: uname } : {}), ...(pword ? { Password: pword } : {}),
+    });
+    const configuration = JSON.stringify({ BaseURL: baseUrl, ClientId: clientId, ...(scopes ? { Scopes: scopes } : {}) });
+    async function gql(query, variables) {
+        const r = await fetch(graphqlUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-mj-api-key': mjSystemKey }, body: JSON.stringify({ query, variables }) });
+        const j = await r.json();
+        if (j.errors) throw new Error('GQL: ' + scrub(JSON.stringify(j.errors).slice(0, 400)));
+        return j.data;
+    }
+    const CREATE = `mutation($input: CreateConnectionInput!, $testConnection: Boolean!, $runSchemaRefresh: Boolean!) {
+      IntegrationCreateConnection(input: $input, testConnection: $testConnection, runSchemaRefresh: $runSchemaRefresh) {
+        Success Message CompanyIntegrationID CredentialID ConnectionTestSuccess ConnectionTestMessage } }`;
+    const input = { CompanyID: companyID, IntegrationID: integrationID, CredentialTypeID: credentialTypeID, CredentialName: 'GrowthZone E2E OAuth2', CredentialValues: credentialValues, Configuration: configuration };
+    let d;
+    try { d = await gql(CREATE, { input, testConnection: true, runSchemaRefresh: false }); }
+    catch (e) { return { ok: false, plan: 'growthzone-create-connection', error: scrub(e instanceof Error ? e.message : String(e)) }; }
+    const c = d?.IntegrationCreateConnection ?? {};
+    return {
+        ok: !!c.Success, plan: 'growthzone-create-connection',
+        companyIntegrationID: c.CompanyIntegrationID ?? null,
+        connectionTest: c.ConnectionTestSuccess ?? null,
+        connectionTestMessage: scrub(c.ConnectionTestMessage || ''),
+        message: scrub(c.Message || ''),
+    };
+}
+
+/**
+ * GrowthZone path-discovery probe (READ-ONLY). Mints a Bearer, then (1) attempts one-shot endpoint
+ * enumeration via OData `$metadata` / swagger, and (2) probes candidate list paths for the doors whose
+ * seeded API path returned 404/400/405. Reports status + recordCount + top-level record keys per path so
+ * the real endpoint can be identified. NEVER writes/acks. Same OAuth secrets as growthzone-readonly.
+ */
+export async function growthzoneProbePaths({ baseUrl, clientId, clientSecret, refreshToken }, scrub) {
+    const out = { ok: false, plan: 'growthzone-probe-paths', tokenMint: {}, discovery: {}, probes: {} };
+    const rawBase = String(baseUrl || '').trim().replace(/\/+$/, '');
+    let origin = rawBase, apiBase = rawBase;
+    try { origin = new URL(rawBase).origin; } catch { /* */ }
+    if (!/\/api$/i.test(apiBase)) apiBase = `${apiBase}/api`;
+    const tokenUrl = (process.env.GROWTHZONE_TOKEN_URL || `${origin}/oauth/token`).trim();
+    const scopes = (process.env.GROWTHZONE_SCOPES || '').trim();
+    const uname = process.env.GROWTHZONE_USERNAME, pword = process.env.GROWTHZONE_PASSWORD;
+
+    async function mint(body, label) {
+        try {
+            const resp = await fetch(tokenUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' }, body: new URLSearchParams(body).toString() });
+            const text = await resp.text();
+            let tok = null; try { tok = JSON.parse(text).access_token ?? null; } catch { /* */ }
+            return { grant: label, status: resp.status, token: tok };
+        } catch (e) { return { grant: label, error: scrub(e instanceof Error ? e.message : String(e)) }; }
+    }
+    let m = await mint({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret, ...(scopes ? { scope: scopes } : {}) }, 'refresh_token');
+    if (!m.token && uname && pword) m = await mint({ grant_type: 'password', username: uname, password: pword, client_id: clientId, client_secret: clientSecret, ...(scopes ? { scope: scopes } : {}) }, 'password');
+    out.tokenMint = { grant: m.grant, status: m.status, gotToken: !!m.token };
+    if (!m.token) { out.note = 'token mint failed'; return out; }
+    const H = { 'Authorization': `Bearer ${m.token}`, 'Accept': 'application/json' };
+
+    async function get(path) {
+        try {
+            const resp = await fetch(`${apiBase}${path}`, { method: 'GET', headers: H });
+            const text = await resp.text();
+            let recs = null, keys = [];
+            try { const j = JSON.parse(text); recs = Array.isArray(j) ? j : (j.Results ?? j.value ?? null); if (Array.isArray(recs) && recs[0] && typeof recs[0] === 'object') keys = Object.keys(recs[0]).slice(0, 40); } catch { /* */ }
+            return { path, status: resp.status, recordCount: Array.isArray(recs) ? recs.length : null, keys, ...(resp.status >= 200 && resp.status < 300 ? {} : { body: scrub(text.slice(0, 160)) }) };
+        } catch (e) { return { path, error: scrub(e instanceof Error ? e.message : String(e)) }; }
+    }
+
+    // 0) DEFINITIVE Contact-door completeness: total + page-2 existence (is 100 the cap or the truth?)
+    async function getFull(path) {
+        try {
+            const resp = await fetch(`${apiBase}${path}`, { method: 'GET', headers: H });
+            const text = await resp.text();
+            let j = null; try { j = JSON.parse(text); } catch { /* */ }
+            const recs = Array.isArray(j) ? j : (j?.Results ?? null);
+            return { path, status: resp.status, count: Array.isArray(recs) ? recs.length : null, total: j?.TotalRecordAvailable ?? null };
+        } catch (e) { return { path, error: scrub(e instanceof Error ? e.message : String(e)) }; }
+    }
+    async function firstIds(path, n) {
+        try {
+            const resp = await fetch(`${apiBase}${path}`, { headers: H });
+            const j = await resp.json();
+            const recs = Array.isArray(j) ? j : (j?.Results ?? []);
+            return { path, status: resp.status, total: j?.TotalRecordAvailable ?? null, ids: recs.slice(0, n).map(r => r.ContactId ?? r.Id ?? r.ID ?? JSON.stringify(r).slice(0, 20)) };
+        } catch (e) { return { path, error: String(e).slice(0, 80) }; }
+    }
+    // Does `skip` actually advance? Compare first IDs at skip=0 vs skip=3 vs $skip=3.
+    out.skipParamTest = {
+        skip0: await firstIds('/contacts?top=3&skip=0', 3),
+        skip3: await firstIds('/contacts?top=3&skip=3', 3),
+        dollarSkip3: await firstIds('/contacts?$top=3&$skip=3', 3),
+        page2: await firstIds('/contacts?top=3&page=2', 3),
+        pageNumber2: await firstIds('/contacts?top=3&pageNumber=2', 3),
+        offset3: await firstIds('/contacts?top=3&offset=3', 3),
+    };
+    out.contactDoorTruth = {
+        page1: await getFull('/contacts?top=100'),
+        page2_skip100: await getFull('/contacts?top=100&skip=100'),
+    };
+
+    // 1) one-shot enumeration
+    for (const d of ['/$metadata', '/swagger/docs/v1', '/swagger', '/metadata', '']) out.discovery[d || '(root)'] = await get(d);
+
+    // 2) candidate list paths per broken door (probe with top=1)
+    // Round 2: `/all` door pattern (proven by /groups/all) + param-children confirmed with real IDs.
+    const memId = process.env.GZ_PROBE_MEMBERSHIP_ID || '';
+    const candidates = {
+        Event: ['/events/all', '/event/all', '/eventcalendar/all', '/eventcalendars/all', '/calendar/all', '/events/upcoming', '/eventlist', '/event'],
+        EventCalendar: ['/eventcalendars/all', '/calendars/all', '/eventcalendar/all'],
+        EventVenue: ['/eventvenues/all', '/venues/all', '/venue/all'],
+        StoreItem: ['/store/items/all', '/store/all', '/storeitems/all', '/store/products/all', '/storeitem/all', '/commerce/items/all'],
+        StoreOrder: ['/store/orders/all', '/store/order/all', '/orders/all', '/storeorders/all'],
+        StoreDigitalPurchase: ['/store/storedownloads/all', '/store/downloads/all', '/store/digitalpurchases/all'],
+        Directory: ['/directory/all', '/directories/all', '/directorylistings/all', '/directorylisting/all', '/listings/all'],
+        DirectoryListingType: ['/directory/listingtypes/all', '/directorylistingtypes/all', '/directory/types/all', '/listingtypes/all'],
+        ScheduledBillingUpdate: ['/scheduledbilling/all', '/memberships/scheduledbilling/all', '/membership/scheduledbilling/all'],
+    };
+    for (const [door, paths] of Object.entries(candidates)) {
+        out.probes[door] = [];
+        for (const p of paths) out.probes[door].push(await get(`${p}?top=1`));
+    }
+    // Chain real IDs from the working doors to confirm the param-children (read-only).
+    out.paramChildren = {};
+    const evDoor = await get('/events/all?top=1');
+    const firstEvent = evDoor.recordCount ? null : null;
+    let evId = '';
+    try { const resp = await fetch(`${apiBase}/events/all?top=1`, { headers: H }); const j = await resp.json(); evId = String((Array.isArray(j) ? j[0] : (j.Results || [])[0])?.EventId ?? ''); } catch { /* */ }
+    if (evId) {
+        out.paramChildren.eventIdUsed = evId;
+        out.paramChildren.EventCalendars = await get(`/events/calendars?eventId=${evId}&top=2`);
+        out.paramChildren.EventVenues = await get(`/events/venues?eventId=${evId}&top=2`);
+        out.paramChildren.EventList = await get(`/events/list?eventId=${evId}&top=2`);
+        out.paramChildren.EventSessions = await get(`/events/sessions?eventId=${evId}&top=2`);
+        out.paramChildren.EventRegistrationTypes = await get(`/events/registrationtypes?eventId=${evId}&top=2`);
+        out.paramChildren.EventSponsors = await get(`/events/sponsors?eventId=${evId}&top=2`);
+        out.paramChildren.EventExhibitors = await get(`/events/exhibitors?eventId=${evId}&top=2`);
+    }
+    let mId = memId;
+    if (!mId) { try { const resp = await fetch(`${apiBase}/memberships?top=1`, { headers: H }); const j = await resp.json(); mId = String((Array.isArray(j) ? j[0] : (j.Results || [])[0])?.MembershipId ?? (j.Results || [])[0]?.Id ?? ''); } catch { /* */ } }
+    if (mId) { out.paramChildren.membershipIdUsed = mId; out.paramChildren.ScheduledBilling = await get(`/memberships/scheduledbilling?membershipId=${mId}&top=2`); }
+    // ── Comprehensive child-path discovery with REAL parent IDs (path-segment vs query-param style) ──
+    async function realId(path, field) { try { const resp = await fetch(`${apiBase}${path}`, { headers: H }); const j = await resp.json(); const rec = (Array.isArray(j) ? j[0] : (j.Results || [])[0]) || {}; return String(rec[field] ?? rec.Id ?? rec.ID ?? ''); } catch { return ''; } }
+    const cid = await realId('/contacts?$top=1', 'ContactId');
+    const gid = await realId('/groups/all?$top=1', 'GroupId');
+    const mid2 = await realId('/memberships?$top=1', 'MembershipId');
+    out.childPaths = { ids: { cid, evId, gid, mid: mid2 } };
+    const tests = {
+        ContactPhone: [`/contacts/${cid}/phones`, `/contacts/${cid}/phone`, `/contacts/phones?contactId=${cid}`],
+        ContactCustomField: [`/contacts/${cid}/customfields`, `/contacts/${cid}/NotesAndFields`, `/contacts/${cid}/fields`],
+        EventSponsor_path: [`/events/${evId}/sponsors`],
+        EventSponsor_query: [`/events/sponsors?eventId=${evId}`],
+        EventSession_query: [`/events/sessions?eventId=${evId}`],
+        EventAttendee_query: [`/events/attendees?eventId=${evId}`, `/events/${evId}/attendees`],
+        GroupMember_path: [`/groups/${gid}/members`],
+        GroupMember_query: [`/groups/members?groupId=${gid}`, `/groups/all/members?groupId=${gid}`],
+        ScheduledBilling: [`/memberships/scheduledbilling?membershipId=${mid2}`],
+        MembershipChange: [`/memberships/change/${mid2}/All`, `/memberships/${mid2}/changes`, `/memberships/changes?membershipId=${mid2}`],
+    };
+    for (const [k, paths] of Object.entries(tests)) { out.childPaths[k] = []; for (const p of paths) out.childPaths[k].push(await get(p.includes('?') ? `${p}&$top=2` : `${p}?$top=2`)); }
+
+    // Round-2 unknowns: membership PK field, ContactPhone endpoint, MembershipChange shape, contact detail.
+    out.unknowns = {};
+    out.unknowns.membershipKeys = await get('/memberships?$top=1');
+    out.unknowns.contactDetail = await get(`/contacts/${cid}`);
+    out.unknowns.notesAndFields = await get(`/contacts/${cid}/NotesAndFields?$top=3`);
+    for (const p of [`/contacts/${cid}/phonenumbers`, `/contacts/${cid}/communication`, `/contacts/${cid}/phonenumber`, `/contacts/${cid}/contactphones`, `/contacts/${cid}/phonelist`]) out.unknowns['phone:' + p.split('/').pop()] = await get(`${p}?$top=2`);
+    // Membership door is /memberships/all — get a real MembershipId for the param-children.
+    const mid = await realId('/memberships/all?$top=1', 'MembershipId');
+    out.unknowns.midUsed = mid;
+    const finals = {
+        ScheduledBilling: [`/memberships/scheduledbilling?membershipId=${mid}`, `/memberships/${mid}/scheduledbilling`],
+        MembershipChange: [`/memberships/${mid}/changes`, `/memberships/change?membershipId=${mid}`, `/memberships/changes?membershipId=${mid}`],
+        Certification: [`/certifications/all`, `/certifications`, `/certification/all`, `/contacts/${cid}/certifications`],
+        MembershipStatusLookup: [`/memberships/lookup/status/Active`, `/memberships/statuses/all`, `/memberships/statuslookup/all`, `/memberships/lookup/status`],
+        ContactPhone: [`/contacts/${cid}/Phones`, `/contacts/${cid}/PhoneNumbers`, `/contacts/${cid}/phone/all`, `/contacts/phones/${cid}`],
+    };
+    for (const [k, paths] of Object.entries(finals)) { out.unknowns['F_' + k] = []; for (const p of paths) out.unknowns['F_' + k].push(await get(p.includes('?') ? `${p}&$top=2` : `${p}?$top=2`)); }
+    // DETERMINISM PROBE: fetch the same Event-child endpoint twice, diff the full records to find the
+    // field that varies between fetches (the cause of non-idempotent content-hash growth).
+    async function getRaw(path) { try { const r = await fetch(`${apiBase}${path}`, { headers: H }); const j = await r.json(); return Array.isArray(j) ? j[0] : (j.Results ? j.Results[0] : j); } catch (e) { return { error: String(e).slice(0, 60) }; } }
+    let evIdD = '';
+    try { const r = await fetch(`${apiBase}/events/all?top=1`, { headers: H }); const j = await r.json(); evIdD = String((Array.isArray(j) ? j[0] : (j.Results || [])[0])?.EventId ?? ''); } catch { /* */ }
+    if (evIdD) {
+        const a = await getRaw(`/events/sponsors?eventId=${evIdD}`);
+        const b = await getRaw(`/events/sponsors?eventId=${evIdD}`);
+        const keys = [...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])];
+        out.determinism = {
+            eventId: evIdD,
+            varyingFields: keys.filter(k => JSON.stringify(a?.[k]) !== JSON.stringify(b?.[k])).map(k => ({ field: k, a: JSON.stringify(a?.[k])?.slice(0, 50), b: JSON.stringify(b?.[k])?.slice(0, 50) })),
+            allKeys: keys,
+        };
+    }
+
+    out.ok = true;
+    out.note = 'read-only path discovery; 2xx with recordCount!=null identifies the real list endpoint';
+    return out;
+}
+
+
+/**
+ * GrowthZone CREDENTIALED RealityProbe (v2 S7 full mode — ARCHITECTURE_REFACTOR.md P2/P9).
+ * Mints a Bearer (refresh grant, password fallback — body-only client creds), then runs the
+ * DETERMINISTIC probe script as a child with the token in ITS env only (PROBE_TOKEN). The probe
+ * emits VERDICTS on declared claims (paths/pagination/PK-populated/watermark/write-surface) and
+ * never records auth headers; the scrubbed summary + verdict counts come back — never the token.
+ * READ-ONLY: GETs + OPTIONS only; write-surface evidence is OPTIONS/405/401, never a write call.
+ */
+export async function growthzoneProbeLive({ baseUrl, clientId, clientSecret, refreshToken }, scrub) {
+    const out = { ok: false, plan: 'growthzone-probe-live', steps: {} };
+    const rawBase = String(baseUrl || '').trim().replace(/\/+$/, '');
+    let origin = rawBase;
+    try { origin = new URL(rawBase).origin; } catch { /* keep */ }
+    const tokenUrl = (process.env.GROWTHZONE_TOKEN_URL || `${origin}/oauth/token`).trim();
+
+    async function mint(grantBody, label) {
+        let resp;
+        try {
+            resp = await fetch(tokenUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' }, body: new URLSearchParams(grantBody).toString() });
+        } catch (e) { return { grant: label, error: scrub(e instanceof Error ? e.message : String(e)) }; }
+        const text = await resp.text();
+        let tok = null;
+        try { const j = JSON.parse(text); tok = j.access_token ?? j.accessToken ?? null; } catch { /* */ }
+        return { grant: label, status: resp.status, gotToken: !!tok, token: tok };
+    }
+    let m = await mint({ grant_type: 'refresh_token', client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken }, 'refresh_token');
+    if (!m.gotToken && process.env.GROWTHZONE_USERNAME) {
+        m = await mint({ grant_type: 'password', client_id: clientId, client_secret: clientSecret, username: process.env.GROWTHZONE_USERNAME, password: process.env.GROWTHZONE_PASSWORD || '', scope: process.env.GROWTHZONE_SCOPES || '' }, 'password');
+    }
+    out.steps.mint = { grant: m.grant, status: m.status, gotToken: m.gotToken };
+    if (!m.gotToken) { out.error = 'token mint failed'; return out; }
+
+    const { execFileSync } = await import('node:child_process');
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { resolve, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+    const probe = resolve(repoRoot, 'packages/Integration/connector-builder-workshop/scripts/reality-probe.mjs');
+    const metadata = process.env.GZ_PROBE_METADATA || resolve(repoRoot, 'metadata/integrations/growthzone/.growthzone.integration.json');
+    const outDir = mkdtempSync(resolve(tmpdir(), 'gz-probe-live-'));
+    let stdout = '';
+    try {
+        stdout = execFileSync(process.execPath, [probe, '--metadata', metadata, '--base-url', origin, '--token-env', 'PROBE_TOKEN', '--out', outDir, '--qps', process.env.GZ_PROBE_QPS || '3'], {
+            env: { ...process.env, PROBE_TOKEN: m.token }, encoding: 'utf-8', timeout: 15 * 60 * 1000, maxBuffer: 16 * 1024 * 1024,
+        });
+    } catch (e) { out.error = scrub(`probe failed: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300)); return out; }
+    try {
+        const { readFileSync } = await import('node:fs');
+        const summary = JSON.parse(readFileSync(resolve(outDir, 'verdicts.json'), 'utf-8'));
+        // Scrubbed return: counts + per-claim verdicts (paths/field names/statuses only — no values, no headers beyond rate-limit names).
+        out.steps.probe = {
+            mode: summary.mode, claims: summary.claims, confirmed: summary.confirmed, wrong: summary.wrong, unverified: summary.unverified,
+            wrongVerdicts: summary.verdicts.filter(v => v.verdict === 'wrong').map(v => ({ object: v.object, kind: v.kind, claim: v.claim, evidence: scrub(String(v.evidence).slice(0, 160)) })),
+            unverifiedByName: summary.unverifiedByName,
+            artifactDir: outDir,
+        };
+        out.ok = true;
+    } catch (e) { out.error = scrub(`verdict read failed: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200)); }
+    return out;
+}
+
 export const PLANS = {
+    // GrowthZone CREDENTIALED RealityProbe (v2 S7 full mode) — read-only verdicts on declared claims.
+    'growthzone-probe-live': {
+        secrets: { baseUrl: 'GROWTHZONE_BASE_URL', clientId: 'GROWTHZONE_CLIENT_ID', clientSecret: 'GROWTHZONE_CLIENT_SECRET' },
+        run: growthzoneProbeLive, writes: false,
+    },
+    // GrowthZone read-only path discovery for the 404/400/405 doors. Hot-reloaded; no broker restart.
+    'growthzone-probe-paths': {
+        secrets: { baseUrl: 'GROWTHZONE_BASE_URL', clientId: 'GROWTHZONE_CLIENT_ID', clientSecret: 'GROWTHZONE_CLIENT_SECRET' },
+        run: growthzoneProbePaths, writes: false,
+    },
+    // GrowthZone OAuth2 connection creation (broker holds the OAuth secrets; returns only the CIID).
+    // refreshToken is NOT a required secret: the operator's refresh token is expired and the connector
+    // uses the working PASSWORD grant (GROWTHZONE_USERNAME/PASSWORD from the broker env). Requiring it
+    // here blocked the live connection on a token the working path never uses. Opt in via GROWTHZONE_USE_REFRESH=1.
+    'growthzone-create-connection': {
+        secrets: { clientId: 'GROWTHZONE_CLIENT_ID', clientSecret: 'GROWTHZONE_CLIENT_SECRET', baseUrl: 'GROWTHZONE_BASE_URL', mjSystemKey: 'MJ_API_KEY' },
+        run: growthzoneCreateConnection, writes: false,
+    },
+    'propfuel-create-connection': {
+        secrets: { token: 'CONNECTOR_API_KEY', mjSystemKey: 'MJ_API_KEY' },
+        run: propfuelCreateConnection, writes: false,
+    },
     // ── CONNECTOR-AGNOSTIC full e2e (real engine) — replaces per-vendor hardcoding ──────────────────
     // MOCK mode (credential-free): a local mock-vendor server replays E2E_CONNECTOR's fixtures.json;
     // the SAME real pipeline runs (CreateConnection → ApplyAll builds tables → StartSync runs the real
@@ -698,21 +1653,47 @@ export const PLANS = {
         secrets: { token: 'CONNECTOR_API_KEY', dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
         run: connectorE2ELive, writes: false,
     },
-    // HYBRID mode (LIMITED-SCOPE token, reference-mode only): scope-probe every discovered object
-    // (read-only IntegrationPreviewData), then verify IN-SCOPE objects against REAL live data and
-    // OUT-OF-SCOPE objects (403 / object-401 / insufficient_scope) against mock/fixtures — full
-    // per-object coverage where neither binary mode can. A non-scope probe error (5xx / timeout)
-    // stays RED. NO vendor token secret is declared → credentials arrive ONLY via the broker-seeded
-    // CIID (HS_LIVE_CIID); the server decrypts the credential internally (used by-reference, never
-    // read). writes:false (probe + pull are read-only; DB writes are into our OWN destination schema).
-    // Set E2E_CONNECTOR + E2E_MODE=hybrid + HS_LIVE_CIID + the HS_LIVE_* DB/GQL coordinates.
-    'connector-e2e-hybrid': {
-        secrets: { dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
-        run: connectorE2EHybrid, writes: false,
-    },
     'hubspot-tier1': { secrets: { token: 'HUBSPOT_API_KEY' }, run: hubspotTier1, writes: false },
     // PropFuel data-export feed — read-only (GET list + GET download; NEVER ack). Safe vs live data.
-    'propfuel-readonly': { secrets: { token: 'PROPFUEL_TOKEN' }, run: propfuelReadonly, writes: false },
+    'propfuel-readonly': { secrets: { token: 'CONNECTOR_API_KEY' }, run: propfuelReadonly, writes: false },
+    // GrowthZone OAuth2 — read-only live validation: mint Bearer (refresh_token grant) + GET one
+    // contacts page + delta probe. NEVER writes/acks. Only the 4 OAuth secrets are REQUIRED; optional
+    // username/password/scopes/token-url are read from env so a skipped one doesn't fail the plan.
+    'growthzone-readonly': {
+        secrets: { baseUrl: 'GROWTHZONE_BASE_URL', clientId: 'GROWTHZONE_CLIENT_ID', clientSecret: 'GROWTHZONE_CLIENT_SECRET' }, // refreshToken optional (env) — password grant works without it
+        run: growthzoneReadonly, writes: false,
+    },
+    // PropFuel structure-only discovery (spec-less connector) — GET list + GET download window;
+    // returns nested schema + identity/update/delete signal, NO record values. NEVER ack. writes:false.
+    'propfuel-discover': { secrets: { token: 'CONNECTOR_API_KEY' }, run: propfuelDiscover, writes: false },
+    // SharePoint (Microsoft Graph v1.0) — MULTI-SECRET OAuth2 client-credentials, READ-ONLY live
+    // validation: mint an app-only Bearer at login.microsoftonline.com, then read-only Graph GETs
+    // (/sites/root, /sites?search, optional SHAREPOINT_SITE drives/lists + /delta probe). NEVER writes.
+    'sharepoint-readonly': {
+        secrets: { tenantId: 'SHAREPOINT_TENANT_ID', clientId: 'SHAREPOINT_CLIENT_ID', clientSecret: 'SHAREPOINT_CLIENT_SECRET' },
+        run: sharepointReadonly, writes: false,
+    },
+    // Dynamics 365 / Dataverse — READ-ONLY probe answering "are the SAME SharePoint Entra app creds
+    // usable for Dynamics?". Reuses the SHAREPOINT_* secrets (same identity platform). Global Discovery
+    // needs no org URL; set DYNAMICS365_ORG_URL for a definitive WhoAmI. NEVER writes.
+    'dynamics365-probe': {
+        secrets: { tenantId: 'SHAREPOINT_TENANT_ID', clientId: 'SHAREPOINT_CLIENT_ID', clientSecret: 'SHAREPOINT_CLIENT_SECRET' },
+        run: dynamics365Probe, writes: false,
+    },
+    'pheedloop-readonly': {
+        secrets: { apiKey: 'PHEEDLOOP_API_KEY', apiSecret: 'PHEEDLOOP_API_SECRET' },
+        run: pheedloopReadonly, writes: false,
+    },
+    'pheedloop-e2e-live': {
+        secrets: { apiKey: 'PHEEDLOOP_API_KEY', apiSecret: 'PHEEDLOOP_API_SECRET', dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
+        run: pheedloopE2ELive, writes: false,
+    },
+    'growthzone-e2e-live': {
+        secrets: { clientId: 'GROWTHZONE_CLIENT_ID', clientSecret: 'GROWTHZONE_CLIENT_SECRET', dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
+        run: growthzoneE2ELive, writes: false,
+    },
+    // PropFuel lifecycle proof — observe answered_at/deleted_at populated + id recurrence. writes:false.
+    'propfuel-lifecycle': { secrets: { token: 'CONNECTOR_API_KEY' }, run: propfuelLifecycle, writes: false },
     // Tier-2 association read-only proof (no DB, no mutation) — real contacts/companies +
     // the v4 batch/read association endpoint. Safe against live data.
     'hubspot-tier2-assoc': { secrets: { token: 'HUBSPOT_API_KEY' }, run: hubspotTier2Assoc, writes: false },
@@ -792,3 +1773,32 @@ export const PLANS = {
         run: hubspotDeleteCascadeGQL, writes: true,
     },
 };
+
+/** PropFuel connection creation — broker holds the token; creates a real credentialed connection
+ *  with runSchemaRefresh:true so DiscoverObjects (streams via /list) + DiscoverFields (parse a sample
+ *  NDJSON file) + soft-PK classification actually run. Returns the CIID. */
+export async function propfuelCreateConnection({ token, mjSystemKey }, scrub) {
+    const env = process.env;
+    const graphqlUrl = (env.HS_LIVE_GRAPHQL_URL || 'http://localhost:4016/').trim();
+    const companyID = env.HS_LIVE_COMPANY_ID, integrationID = env.HS_LIVE_INTEGRATION_ID, credentialTypeID = env.HS_LIVE_CREDTYPE_ID;
+    let accountId; try { accountId = JSON.parse(env.E2E_LIVE_CONFIG || '{}').AccountID; } catch { accountId = env.PROPFUEL_ACCOUNT_ID; }
+    const tokenKey = env.E2E_TOKEN_KEY || 'Token';
+    if (!companyID || !integrationID || !credentialTypeID) return { ok:false, plan:'propfuel-create-connection', error:'missing HS_LIVE_COMPANY_ID / HS_LIVE_INTEGRATION_ID / HS_LIVE_CREDTYPE_ID' };
+    const credentialValues = JSON.stringify({ [tokenKey]: token, AccountID: accountId });
+    const configuration = JSON.stringify({ AccountID: accountId });
+    async function gql(query, variables) {
+        const r = await fetch(graphqlUrl, { method:'POST', headers:{'Content-Type':'application/json','x-mj-api-key':mjSystemKey}, body: JSON.stringify({ query, variables }) });
+        const j = await r.json();
+        if (j.errors) throw new Error('GQL: ' + scrub(JSON.stringify(j.errors).slice(0,500)));
+        return j.data;
+    }
+    const CREATE = `mutation($input: CreateConnectionInput!, $testConnection: Boolean!, $runSchemaRefresh: Boolean!) {
+      IntegrationCreateConnection(input:$input, testConnection:$testConnection, runSchemaRefresh:$runSchemaRefresh) {
+        Success Message CompanyIntegrationID ConnectionTestSuccess ConnectionTestMessage } }`;
+    const input = { CompanyID: companyID, IntegrationID: integrationID, CredentialTypeID: credentialTypeID, CredentialName: 'PropFuel E2E', CredentialValues: credentialValues, Configuration: configuration };
+    let d; try { d = await gql(CREATE, { input, testConnection: true, runSchemaRefresh: true }); }
+    catch (e) { return { ok:false, plan:'propfuel-create-connection', error: scrub(e instanceof Error ? e.message : String(e)) }; }
+    const c = d?.IntegrationCreateConnection ?? {};
+    return { ok: !!c.Success, plan:'propfuel-create-connection', companyIntegrationID: c.CompanyIntegrationID ?? null,
+             connectionTest: c.ConnectionTestSuccess ?? null, message: scrub(c.Message||''), connectionTestMessage: scrub(c.ConnectionTestMessage||'') };
+}
