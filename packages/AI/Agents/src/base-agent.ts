@@ -1683,60 +1683,67 @@ export class BaseAgent {
     protected async resolveRealtimeModel(
         params: ExecuteAgentParams
     ): Promise<{ model: BaseRealtimeModel; modelID: string; vendorID: string; apiName: string; driverClass?: string } | null> {
-        const model = this.selectRealtimeModelEntity(params.agent);
-        if (!model) {
-            return null;
+        // Walk candidates in resolution order (preference first, then highest PowerRank), returning the
+        // FIRST that FULLY resolves (active vendor + resolvable API key + ClassFactory driver). Single-pick
+        // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
+        // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
+        // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
+        const candidates = this.selectRealtimeModelCandidates(params.agent);
+        for (const model of candidates) {
+            const vendor = this.selectRealtimeVendor(model.ID);
+            if (!vendor) {
+                continue;
+            }
+            const apiKey = GetAIAPIKey(vendor.driverClass);
+            if (!apiKey) {
+                continue;
+            }
+            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
+                BaseRealtimeModel,
+                vendor.driverClass,
+                apiKey
+            );
+            if (!instance) {
+                continue;
+            }
+            return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
         }
-
-        const vendor = this.selectRealtimeVendor(model.ID);
-        if (!vendor) {
-            return null;
-        }
-
-        const apiKey = GetAIAPIKey(vendor.driverClass);
-        if (!apiKey) {
-            return null;
-        }
-
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-            BaseRealtimeModel,
-            vendor.driverClass,
-            apiKey
-        );
-        if (!instance) {
-            return null;
-        }
-
-        return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
+        return null;
     }
 
     /**
-     * Selects the `MJ: AI Models` row to use for a realtime session: the highest-power active
-     * model of AIModelType `Realtime`. Returns `null` when no `Realtime` model exists in metadata
-     * (expected before P4).
+     * The active `Realtime`-AIModelType models to try, in resolution order — the candidate list
+     * {@link resolveRealtimeModel} walks until one yields a usable vendor + key + driver. Returns ALL
+     * candidates (not just the top pick) so a keyless / undriveable higher-power model falls through to
+     * the next usable one instead of dead-ending the whole resolution.
      *
-     * @param agent The agent being executed (reserved for future per-agent model preference).
-     * @returns The chosen model entity, or `null`.
+     * Ordering: an effective-config model preference (`realtime.modelPreference`, an MJ: AI Models Name
+     * or ID) goes FIRST when it resolves, followed by the rest by descending PowerRank (so even a keyless
+     * preferred model degrades gracefully). An unsatisfiable preference logs and is ignored.
+     *
+     * @param agent The agent being executed.
+     * @returns The candidate models in resolution order (empty when none are active).
      */
-    private selectRealtimeModelEntity(agent: MJAIAgentEntityExtended): MJAIModelEntityExtended | null {
+    private selectRealtimeModelCandidates(agent: MJAIAgentEntityExtended): MJAIModelEntityExtended[] {
         const isRealtime = (m: MJAIModelEntityExtended): boolean =>
             typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'realtime';
 
         const realtimeModels = AIEngine.Instance.Models.filter(m => m.IsActive && isRealtime(m));
         if (realtimeModels.length === 0) {
-            return null;
+            return [];
         }
 
-        // Effective-config model preference (realtime.modelPreference, an MJ: AI Models Name or
-        // ID) participates first. METADATA preferences degrade gracefully: an unsatisfiable
-        // preference logs and falls through to the default highest-PowerRank selection.
+        const byPower = [...realtimeModels].sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
+
         const preference = this.resolveRealtimeEffectiveConfig(agent).realtime?.modelPreference;
         if (preference) {
             const wanted = preference.trim().toLowerCase();
             const preferred = realtimeModels.find(m => UUIDsEqual(m.ID, preference))
                 ?? realtimeModels.find(m => m.Name?.trim().toLowerCase() === wanted);
             if (preferred) {
-                return preferred;
+                // Preference first, the rest (by power) as fallback so a keyless preferred model still
+                // falls through to a usable one rather than dead-ending.
+                return [preferred, ...byPower.filter(m => !UUIDsEqual(m.ID, preferred.ID))];
             }
             this.logError(
                 `Realtime model preference '${preference}' for agent '${agent.Name}' matches no Active Realtime ` +
@@ -1745,7 +1752,7 @@ export class BaseAgent {
             );
         }
 
-        return realtimeModels.sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+        return byPower;
     }
 
     /**

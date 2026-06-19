@@ -289,6 +289,12 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   ];
   /** The device lists for the device menu. */
   public Devices: LiveKitDeviceLists = { Microphones: [], Cameras: [], Speakers: [] };
+  /** The active microphone `deviceId`, used to pre-select it in the device menu. */
+  public SelectedMicrophoneId: string | null = null;
+  /** The active camera `deviceId`, used to pre-select it in the device menu. */
+  public SelectedCameraId: string | null = null;
+  /** The active speaker `deviceId`, used to pre-select it in the device menu. */
+  public SelectedSpeakerId: string | null = null;
   /** The last room error message, surfaced in the overlay. */
   public LastErrorMessage: string | null = null;
   /** The identity of the pinned participant (drives spotlight when {@link EnablePinning}). */
@@ -425,7 +431,23 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   }
   /** Switches a device. */
   public onDeviceSelected(selection: LiveKitDeviceSelection): void {
-    void this.controller.SwitchDevice(selection.Kind, selection.DeviceId);
+    // Optimistically reflect the user's choice immediately, then reconcile with the
+    // controller's actual active device once the async switch resolves.
+    this.applySelectedDeviceId(selection.Kind, selection.DeviceId);
+    void this.controller.SwitchDevice(selection.Kind, selection.DeviceId).then(() => {
+      this.runInZone(() => this.refreshSelectedDeviceIds());
+    });
+  }
+
+  /** Updates the locally-tracked selected device id for a kind. */
+  private applySelectedDeviceId(kind: LiveKitDeviceSelection['Kind'], deviceId: string): void {
+    if (kind === 'audioinput') {
+      this.SelectedMicrophoneId = deviceId;
+    } else if (kind === 'videoinput') {
+      this.SelectedCameraId = deviceId;
+    } else {
+      this.SelectedSpeakerId = deviceId;
+    }
   }
   /** Toggles the Krisp noise filter. */
   public onNoiseFilterToggled(enabled: boolean): void {
@@ -670,7 +692,15 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     ]);
     this.runInZone(() => {
       this.Devices = { Microphones: mics, Cameras: cams, Speakers: speakers };
+      this.refreshSelectedDeviceIds();
     });
+  }
+
+  /** Reads the active device ids from the controller so the menu pre-selects them. */
+  private refreshSelectedDeviceIds(): void {
+    this.SelectedMicrophoneId = this.controller.GetActiveDeviceId('audioinput');
+    this.SelectedCameraId = this.controller.GetActiveDeviceId('videoinput');
+    this.SelectedSpeakerId = this.controller.GetActiveDeviceId('audiooutput');
   }
 
   /** Runs a function inside the Angular zone and marks the view for check (LiveKit fires outside the zone). */
