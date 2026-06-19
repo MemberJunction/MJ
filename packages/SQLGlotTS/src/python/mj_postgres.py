@@ -219,13 +219,20 @@ def _is_outer_join(join: exp.Join) -> bool:
     return (join.side or "").upper() in ("LEFT", "RIGHT", "FULL") or (join.kind or "").upper() == "OUTER"
 
 
+# sqlglot stores the UPDATE…FROM clause under the `from_` arg key (older versions used
+# `from`). Resolve the live key once so the self-aliased-UPDATE rewrite keeps working across
+# sqlglot upgrades — a silent miss here leaves `UPDATE alias …` which PG rejects (`relation
+# "alias" does not exist`).
+_UPDATE_FROM_KEY = "from_" if "from_" in exp.Update.arg_types else "from"
+
+
 def _update_alias_outer_join(stmt: exp.Update) -> bool:
     """True when the self-aliased `UPDATE alias … FROM Target AS alias JOIN …` shape uses
     a LEFT/RIGHT/FULL join. `_rewrite_update_from_alias` moves join ON conditions into
     WHERE, which is only sound for INNER joins — an outer-join anti-join (`LEFT JOIN o …
     WHERE o.ID IS NULL`) would silently become inner-join semantics and update zero rows.
     There is no safe mechanical PG rewrite, so these are reported as unhandled instead."""
-    frm = stmt.args.get("from")
+    frm = stmt.args.get(_UPDATE_FROM_KEY)
     tgt = stmt.this
     if not frm or not isinstance(frm.this, exp.Table) or not isinstance(tgt, exp.Table):
         return False
@@ -245,7 +252,7 @@ def _rewrite_update_from_alias(node: exp.Expression) -> exp.Expression:
     `_update_alias_outer_join`)."""
     if not isinstance(node, exp.Update):
         return node
-    frm = node.args.get("from")
+    frm = node.args.get(_UPDATE_FROM_KEY)
     tgt = node.this
     if not frm or not isinstance(frm.this, exp.Table) or not isinstance(tgt, exp.Table):
         return node
@@ -274,7 +281,7 @@ def _rewrite_update_from_alias(node: exp.Expression) -> exp.Expression:
             jc.set("kind", "CROSS")
             extra.append(jc)
         first.set("joins", extra)
-    node.set("from", exp.From(this=first))
+    node.set(_UPDATE_FROM_KEY, exp.From(this=first))
     existing = node.args["where"].this if node.args.get("where") else None
     clauses = conds + ([existing] if existing else [])
     if clauses:
@@ -459,7 +466,14 @@ def _strip_nulls_ordering(node: exp.Expression) -> exp.Expression:
 
 
 def _strip_collate(node: exp.Expression) -> exp.Expression:
-    """Drop SS collations (SQL_Latin1_…/_CI_/_CS_/_BIN) — PG doesn't have them."""
+    """Drop SS collations on COLUMN DEFINITIONS (`CREATE TABLE c … COLLATE x`) — PG doesn't have
+    them and a column's storage collation carries no comparison semantics that must be preserved.
+
+    EXPRESSION collations (`c COLLATE Latin1_General_BIN2 <> 'y'`) are deliberately NOT handled
+    here: they change comparison semantics (a `_BIN2`/`_CS_` qualifier forces case-sensitive
+    matching that the surrounding default-collation `=` does not), so naively dropping them silently
+    breaks the statement. Those are reported as unhandled upstream so the migration falls back to a
+    hand-authored PG form."""
     if isinstance(node, exp.ColumnDef):
         kept = [
             c for c in node.args.get("constraints", [])
@@ -1118,12 +1132,15 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
         # only appear as leaked imperative logic (e.g. dynamic auto-named-constraint
         # drops); real proc/function bodies are classified hand-procedural upstream and
         # never reach here. Emitting them produces invalid `$v` SQL — report, don't emit.
-        # (`@v` parses to exp.Parameter; the protected Flyway macro is an Identifier, so
-        # it never false-positives here.)
-        if isinstance(stmt, exp.Declare) or (
-            isinstance(stmt, (exp.Set, exp.If, exp.Select, exp.Update, exp.Insert, exp.Delete))
-            and stmt.find(exp.Parameter) is not None
-        ):
+        # Detect by the presence of a T-SQL `@v` (which parses to exp.Parameter) rather than
+        # by statement type: sqlglot's node type for these varies across versions (e.g. `IF …`
+        # is exp.If in some, exp.IfBlock in others), and an enumerated list silently leaks the
+        # ones it misses. The protected Flyway macro is an Identifier, not a Parameter, so this
+        # never false-positives on `${flyway:defaultSchema}`.
+        # An expression COLLATE (`c COLLATE Latin1_General_BIN2 <> 'y'`) encodes case-sensitivity
+        # that PG can't express by mechanically dropping the qualifier without changing semantics
+        # (see `_strip_collate`); report so the migration falls back to a hand-authored PG form.
+        if isinstance(stmt, exp.Declare) or stmt.find(exp.Parameter) is not None or stmt.find(exp.Collate) is not None:
             txt = stmt.sql(dialect="tsql")
             unhandled.append({"kind": _first_keyword(txt), "snippet": txt[:80]})
             continue

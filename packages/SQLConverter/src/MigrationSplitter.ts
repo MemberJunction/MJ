@@ -69,6 +69,13 @@ export interface MigrationSplitResult {
   handAuthored: string;
   /** CodeGen block text (everything from the boundary down); '' when there is no block. */
   codeGenBlock: string;
+  /**
+   * Ordered, de-duplicated entity DISPLAY names whose objects the CodeGen block regenerated
+   * — `E(M)` in `INLINE_CODEGEN_BAKING_PLAN.md` §5. This is what the inline baker regenerates
+   * natively so PG bakes exactly the entities SS baked (including cascade-only `spDelete`
+   * entities). Empty when there is no CodeGen block.
+   */
+  affectedEntities: string[];
   /** Classification of the hand-authored region (codegen block is excluded — it is always `codegen-objects`). */
   handAuthoredRegions: RegionFinding[];
   routing: FileRouting;
@@ -114,6 +121,7 @@ export function splitMigration(sql: string, fileName = '<inline>'): MigrationSpl
   const blockLines = boundary.line == null ? [] : lines.slice(boundary.line - 1);
 
   const handAuthored = handLines.join('\n');
+  const codeGenBlock = blockLines.join('\n');
   const handAuthoredRegions = classifyHandRegion(handLines);
 
   return {
@@ -122,7 +130,8 @@ export function splitMigration(sql: string, fileName = '<inline>'): MigrationSpl
     codeGenBoundaryLine: boundary.line,
     boundaryMethod: boundary.method,
     handAuthored,
-    codeGenBlock: blockLines.join('\n'),
+    codeGenBlock,
+    affectedEntities: extractAffectedEntities(codeGenBlock),
     handAuthoredRegions,
     routing: deriveRouting(handAuthoredRegions),
   };
@@ -284,4 +293,85 @@ function deriveRouting(findings: RegionFinding[]): FileRouting {
   if (has('schema-ddl')) return 'transpile-only';
   if (has('metadata-sync')) return 'transpile-plus-reseed';
   return 'transpile-only';
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Affected-entity extraction (INLINE_CODEGEN_BAKING_PLAN.md §5)
+//
+// A CodeGen block names every entity it regenerated objects for, and the inline
+// baker must regenerate exactly that set natively (`E(M)`) — no more (avoid ledger
+// bloat / SS divergence), no less (a missed cascade `spDelete` diverges from SS).
+//
+// Three comment forms carry the entity name; we union them so one format drift
+// can't drop an entity. All three carry the entity DISPLAY name ("MJ: AI Agent
+// Runs") — we deliberately exclude the `Index for Foreign Keys for AIAgentRun`
+// provenance and the `----- CREATE PROCEDURE FOR AIAgentRun` banner, which carry
+// the bare table name.
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Item provenance comment, e.g. `/* spCreate SQL for MJ: AI Agent Runs *​/` or
+ * `/* Base View Permissions for MJ: AI Agent Runs *​/`. The alternation is the
+ * allow-list of kinds whose `for <X>` carries the display name; `Index …` is
+ * intentionally absent (its `for <X>` is the table name).
+ */
+const CODEGEN_ITEM_PROVENANCE = /^\s*\/\*\s*(?:Base View|sp(?:Create|Update|Delete))\b[^*]*?\bfor\s+(.+?)\s*\*\//i;
+/** Older base-view/-table header banner: `----- BASE VIEW FOR ENTITY:      MJ: AI Agent Runs`. */
+const BASE_OBJECT_BANNER = /^\s*-{3,}\s*BASE\s+(?:VIEW|TABLE)\s+FOR\s+ENTITY:\s*(.+?)\s*$/i;
+/** SQL-Code-Generation header line `-- Entity: MJ: AI Agent Runs` (gated by a nearby `-- Item:`). */
+const ENTITY_HEADER = /^\s*--\s*Entity:\s*(.+?)\s*$/i;
+/** Its `-- Item: <object>` partner — proves the `-- Entity:` heads a generated item. */
+const ITEM_HEADER = /^\s*--\s*Item:\s*\S/i;
+
+/**
+ * Parse the ordered, de-duplicated entity display names whose objects a CodeGen
+ * block regenerated (`E(M)`). Pure — no I/O. Case-insensitive de-dup, first-seen
+ * order and casing preserved. Returns `[]` for an empty/absent block.
+ */
+export function extractAffectedEntities(codeGenBlock: string): string[] {
+  if (!codeGenBlock) return [];
+  const lines = codeGenBlock.split('\n');
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string) => {
+    const name = raw.trim();
+    const key = name.toLowerCase();
+    if (name && !seen.has(key)) {
+      seen.add(key);
+      ordered.push(name);
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const provenance = lines[i].match(CODEGEN_ITEM_PROVENANCE);
+    if (provenance) {
+      add(provenance[1]);
+      continue;
+    }
+    const banner = lines[i].match(BASE_OBJECT_BANNER);
+    if (banner) {
+      add(banner[1]);
+      continue;
+    }
+    const entity = lines[i].match(ENTITY_HEADER);
+    if (entity && headsGeneratedItem(lines, i)) {
+      add(entity[1]);
+    }
+  }
+  return ordered;
+}
+
+/**
+ * True when a `-- Entity:` line heads a generated item — its `-- Item:` partner
+ * follows within the same `--`-comment header block. This distinguishes an entity
+ * whose objects were emitted from one merely *mentioned* (e.g. an inline
+ * registration-INSERT comment, which is not part of a header block).
+ */
+function headsGeneratedItem(lines: string[], entityIdx: number): boolean {
+  for (let j = entityIdx + 1; j < lines.length && j <= entityIdx + 3; j++) {
+    if (ITEM_HEADER.test(lines[j])) return true;
+    const t = lines[j].trim();
+    if (t !== '' && !t.startsWith('--')) return false; // left the comment header block
+  }
+  return false;
 }

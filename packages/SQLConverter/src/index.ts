@@ -5,7 +5,7 @@
  */
 export { ConversionPipeline } from './ConversionPipeline.js';
 export { SQLFileSplitter } from './SQLFileSplitter.js';
-export { splitMigration } from './MigrationSplitter.js';
+export { splitMigration, extractAffectedEntities } from './MigrationSplitter.js';
 export type {
   MigrationSplitResult,
   MigrationRegionKind,
@@ -14,6 +14,13 @@ export type {
   FileRouting,
 } from './MigrationSplitter.js';
 export { convertMigration, extractKeptTSQL } from './MigrationConverter.js';
+export { IncrementalBaker, stripVolatileHeaders } from './IncrementalBaker.js';
+export type {
+  BakerWorkingDB,
+  CapturedEntitySQL,
+  IncrementalBakerOptions,
+  BakedMigrationResult,
+} from './IncrementalBaker.js';
 export type {
   MigrationConversionResult,
   ConversionStatus,
