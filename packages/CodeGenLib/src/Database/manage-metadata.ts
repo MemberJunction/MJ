@@ -6,12 +6,13 @@ import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatab
 // and the SS code path silently fails.
 import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExternalDataSourceReadRouter, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
+import { mapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
 import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
@@ -1268,6 +1269,14 @@ export class ManageMetadataBase {
          bSuccess = false;
       }
 
+      // External-data-source entities: introspect the REMOTE schema and sync their EntityField rows
+      // (the remote analogue of reading the local view's columns for a virtual entity).
+      const eeResult = await this.manageExternalEntities(pool, currentUser)
+      if (! eeResult.success) {
+         logError('   Error managing external data source entities');
+         bSuccess = false;
+      }
+
       // LLM-assisted virtual entity field decoration — identify PKs, FKs, and descriptions
       await this.decorateVirtualEntitiesWithLLM(pool, currentUser);
 
@@ -1324,6 +1333,108 @@ export class ManageMetadataBase {
          }
       }
       return {success: bSuccess, anyUpdates: anyUpdates};
+   }
+
+   /**
+    * External-data-source analogue of {@link manageVirtualEntities}. For each entity backed by an
+    * external data source, introspect the REMOTE schema (via the EDS router resolved through the
+    * ClassFactory) and sync its `EntityField` rows to match — the remote equivalent of reading the
+    * local INFORMATION_SCHEMA for a virtual/view entity. No-op when there are no external entities.
+    */
+   protected async manageExternalEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<{success: boolean, anyUpdates: boolean}> {
+      let bSuccess = true;
+      let anyUpdates = false;
+      const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE ExternalDataSourceID IS NOT NULL`;
+      const result = await this.runQuery(pool, sql);
+      const externalEntities = result.recordset;
+      if (!externalEntities || externalEntities.length === 0) {
+         return {success: true, anyUpdates: false};
+      }
+      // Resolve the EDS router via the ClassFactory — keeps CodeGenLib free of a compile-time
+      // dependency on the engine/drivers. Requires the engine + the relevant driver to be loaded
+      // in the CodeGen process (see runCodeGen.ts side-effect imports).
+      const router = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
+      if (!router) {
+         logError('   Cannot sync external entity fields: no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources (and the relevant driver) are loaded in the CodeGen process.');
+         return {success: false, anyUpdates: false};
+      }
+      for (const ee of externalEntities) {
+         const {success, updatedEntity} = await this.manageSingleExternalEntity(pool, ee, router, currentUser);
+         anyUpdates = anyUpdates || updatedEntity;
+         if (!success) {
+            logError(`   Error managing external entity ${ee.Name}`);
+            bSuccess = false;
+         }
+      }
+      return {success: bSuccess, anyUpdates};
+   }
+
+   /**
+    * Introspects the remote schema for a single external entity and syncs its `EntityField` rows.
+    * Mirrors {@link manageSingleVirtualEntity} but sources the field list from the driver's
+    * `IntrospectSchema` (mapped to MJ types via {@link mapExternalNativeTypeToMJ}) instead of the
+    * local view's columns, and reuses {@link manageSingleVirtualEntityField} for create/update.
+    */
+   protected async manageSingleExternalEntity(pool: CodeGenConnection, externalEntity: EntityInfo, router: ExternalDataSourceReadRouter, currentUser: UserInfo): Promise<{success: boolean, updatedEntity: boolean}> {
+      let bSuccess = true;
+      let bUpdated = false;
+      try {
+         const descriptor = await router.IntrospectExternalSchema(externalEntity.ExternalDataSourceID, externalEntity.SchemaName || undefined, currentUser);
+         // Find the remote object backing this entity (prefer ExternalObjectName; fall back to
+         // BaseTable/Name). Match on bare or schema-qualified name, case-insensitively.
+         const target = (externalEntity.ExternalObjectName || externalEntity.BaseTable || externalEntity.Name || '').trim().toLowerCase();
+         const obj = descriptor.objects.find(o =>
+            o.name.trim().toLowerCase() === target ||
+            `${o.schema ?? ''}.${o.name}`.trim().toLowerCase() === target);
+         if (!obj) {
+            logError(`   External entity ${externalEntity.Name}: remote object '${externalEntity.ExternalObjectName ?? externalEntity.Name}' not found in introspected schema — skipping`);
+            return {success: false, updatedEntity: false};
+         }
+
+         // Map each introspected column into the veField shape that manageSingleVirtualEntityField consumes.
+         const eeFields = obj.columns.map(c => {
+            const t = mapExternalNativeTypeToMJ(c.nativeType);
+            return { FieldName: c.name, Type: t.Type, Length: t.Length, Precision: t.Precision, Scale: t.Scale, AllowsNull: c.nullable, IsPrimaryKey: c.isPrimaryKey };
+         });
+
+         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+         const entity = md.EntityByName(externalEntity.Name);
+         if (entity) {
+            // remove EntityFields no longer present in the remote object
+            const removeList = entity.Fields
+               .filter(f => !eeFields.find(ef => ef.FieldName.trim().toLowerCase() === f.Name.trim().toLowerCase()))
+               .map(f => f.ID);
+            if (removeList.length > 0) {
+               const sqlRemove = `DELETE FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID IN (${removeList.map(id => `'${id}'`).join(',')})`;
+               await this.LogSQLAndExecute(pool, sqlRemove, `SQL text to remove fields from external entity ${externalEntity.Name}`);
+               bUpdated = true;
+            }
+
+            // create/update each remote column. Use the real PK info from introspection; fall back
+            // to "first column is the PK" when the remote reported none (e.g. a view).
+            const anyPk = eeFields.some(f => f.IsPrimaryKey);
+            for (let i = 0; i < eeFields.length; i++) {
+               const ef = eeFields[i];
+               const makePrimaryKey = ef.IsPrimaryKey || (!anyPk && i === 0);
+               const {success, updatedField} = await this.manageSingleVirtualEntityField(pool, externalEntity, ef, i + 1, makePrimaryKey);
+               bUpdated = bUpdated || updatedField;
+               if (!success) {
+                  logError(`Error managing external entity field ${ef.FieldName} for external entity ${externalEntity.Name}`);
+                  bSuccess = false;
+               }
+            }
+         }
+
+         if (bUpdated) {
+            const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${externalEntity.ID}'`;
+            await this.LogSQLAndExecute(pool, sqlUpdate, `SQL text to update external entity updated date for ${externalEntity.Name}`);
+         }
+         return {success: bSuccess, updatedEntity: bUpdated};
+      }
+      catch (e: any) {
+         logError(e);
+         return {success: false, updatedEntity: bUpdated};
+      }
    }
 
    protected async manageSingleVirtualEntity(pool: CodeGenConnection, virtualEntity: EntityInfo): Promise<{success: boolean, updatedEntity: boolean}> {
