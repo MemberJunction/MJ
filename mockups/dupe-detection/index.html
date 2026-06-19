@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dupe Detection — UX Mockups Overview</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+    .wrap { max-width:1080px; margin:0 auto; padding:34px 26px 70px; }
+    h1.title { font-size:26px; margin:0 0 6px; letter-spacing:-.4px; }
+    .lede { color:var(--mj-text-secondary); font-size:15px; max-width:760px; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin:30px 0; }
+    .pcard { display:flex; flex-direction:column; padding:0; overflow:hidden; text-decoration:none; color:inherit; }
+    .pcard:hover { box-shadow:var(--mj-shadow-md); transform:translateY(-2px); transition:.15s; }
+    .pcard .thumb { height:122px; display:flex; align-items:center; justify-content:center; font-size:40px; color:#fff; }
+    .pcard.a .thumb { background:linear-gradient(135deg,#0076b6,#0ea5e9); }
+    .pcard.b .thumb { background:linear-gradient(135deg,#7c3aed,#a855f7); }
+    .pcard.c .thumb { background:linear-gradient(135deg,#16a34a,#0d9488); }
+    .pcard .body { padding:15px 17px; }
+    .pcard h3 { margin:0 0 4px; font-size:16px; }
+    .pcard .tagline { font-size:12.5px; font-weight:700; color:var(--mj-text-link); text-transform:uppercase; letter-spacing:.4px; }
+    .pcard p { font-size:13px; color:var(--mj-text-secondary); margin:8px 0 0; }
+    .pcard .best { margin-top:11px; font-size:12px; color:var(--mj-text-muted); }
+    .pcard .best b { color:var(--mj-text-secondary); }
+
+    .panel { padding:20px 22px; margin:20px 0; }
+    .panel h2 { font-size:15px; margin:0 0 12px; display:flex; align-items:center; gap:9px; }
+    .scenario { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    .scenario .col h4 { font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--mj-text-muted); margin:0 0 8px; }
+    ul.clean { margin:0; padding-left:18px; color:var(--mj-text-secondary); font-size:13px; }
+    ul.clean li { margin:5px 0; }
+    .legend-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:6px; }
+    table.feat { width:100%; border-collapse:collapse; font-size:13px; }
+    table.feat th, table.feat td { padding:9px 11px; border-bottom:1px solid var(--mj-border-subtle); text-align:left; }
+    table.feat th { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--mj-text-muted); }
+    table.feat td.yes { color:var(--rec-merge); font-weight:700; }
+    table.feat td.partial { color:var(--rec-uncertain); font-weight:700; }
+    .note { font-size:12.5px; color:var(--mj-text-muted); margin-top:6px; }
+</style>
+</head>
+<body>
+
+<div class="mock-nav">
+    <div class="brand"><span class="dot"></span> Duplicate Detection <small>· mockups</small></div>
+    <div class="links">
+        <a href="index.html" class="active">Overview</a>
+        <a href="a-triage-queue.html">A · Triage Queue</a>
+        <a href="b-diff-reasoning.html">B · Diff + Reasoning</a>
+        <a href="c-confidence-map.html">C · Confidence Map</a>
+    </div>
+    <div class="spacer"></div>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="tlabel">Dark</span></button>
+</div>
+
+<div class="wrap">
+    <h1 class="title">Intelligent Duplicate Detection &amp; Merge — UX exploration</h1>
+    <p class="lede">Three <b>divergent</b> patterns for the LLM-reasoning layer that sits on top of MJ's existing vector duplicate-detection pipeline. Each is optimized for a different reviewer job. Same scenario, three lenses. Toggle dark mode top-right; all three are standalone and offline.</p>
+
+    <div class="grid">
+        <a class="pcard card a" href="a-triage-queue.html">
+            <div class="thumb">🗂️</div>
+            <div class="body">
+                <div class="tagline">A · Throughput</div>
+                <h3>Triage Queue</h3>
+                <p>Inbox-style, one match-set at a time. LLM verdict + reasoning front-and-center, keyboard-driven approve / override / skip, bulk-approve the agreeing high-confidence sets.</p>
+                <div class="best"><b>Best when:</b> a human must clear hundreds of decisions fast.</div>
+            </div>
+        </a>
+        <a class="pcard card b" href="b-diff-reasoning.html">
+            <div class="thumb">⚖️</div>
+            <div class="body">
+                <div class="tagline">B · Precision</div>
+                <h3>Diff + Reasoning Rail</h3>
+                <p>Full side-by-side comparison with per-field survivor radios, plus a right rail explaining the LLM's recommendation, per-field choices, provenance posture and memory notes.</p>
+                <div class="best"><b>Best when:</b> careful, field-level adjudication of a tricky set.</div>
+            </div>
+        </a>
+        <a class="pcard card c" href="c-confidence-map.html">
+            <div class="thumb">🗺️</div>
+            <div class="body">
+                <div class="tagline">C · Scale &amp; oversight</div>
+                <h3>Confidence Map</h3>
+                <p>Run-level scatter of vector score × LLM confidence. Auto-merge band and disagreement quadrant called out; drag the thresholds; triage the 12 disagreements that actually need eyes.</p>
+                <div class="best"><b>Best when:</b> overseeing a 100k-record run &amp; tuning thresholds.</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="panel card">
+        <h2>📋 Shared scenario across all three</h2>
+        <div class="scenario">
+            <div class="col">
+                <h4>The run</h4>
+                <ul class="clean">
+                    <li>Entity <b>Accounts</b>, Run #1842 — 2,317 records scanned</li>
+                    <li>184 match-sets cleared the <b>reasoning threshold (0.90)</b></li>
+                    <li>Reasoning via <b>solo prompt</b> (gemini-3-flash) — the cheap default</li>
+                    <li>Automation level: <b>LLM-Gated</b></li>
+                </ul>
+            </div>
+            <div class="col">
+                <h4>The focus match-set</h4>
+                <ul class="clean">
+                    <li><b>Acme Corporation</b> (Local, 47 deps) ← survivor</li>
+                    <li><b>Acme Corp</b> (Salesforce, 12 deps)</li>
+                    <li><b>Acme Corporation LLC</b> (HubSpot, 5 deps)</li>
+                    <li>Vector 0.96 → LLM <b>strengthens to 0.98</b>, Merge</li>
+                </ul>
+                <div class="legend-row">
+                    <span class="prov local"><span class="swatch"></span>Local</span>
+                    <span class="prov sf"><span class="swatch"></span>Salesforce</span>
+                    <span class="prov hubspot"><span class="swatch"></span>HubSpot</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel card">
+        <h2>🔍 What each pattern surfaces from the reasoning layer</h2>
+        <table class="feat">
+            <thead><tr><th>Capability</th><th>A · Queue</th><th>B · Diff</th><th>C · Map</th></tr></thead>
+            <tbody>
+                <tr><td>LLM recommendation + reasoning text</td><td class="yes">Primary</td><td class="yes">Rail</td><td class="partial">On drill-in</td></tr>
+                <tr><td>Vector ↔ LLM disagreement badge</td><td class="yes">Per item</td><td class="yes">Prominent</td><td class="yes">Whole quadrant</td></tr>
+                <tr><td>Per-field survivor override UI</td><td class="partial">Inline</td><td class="yes">Full radios</td><td>—</td></tr>
+                <tr><td>Provenance / merge posture</td><td class="partial">Badges</td><td class="yes">Rail section</td><td class="partial">Aggregate</td></tr>
+                <tr><td>Bulk approve / auto-merge</td><td class="yes">Top-N agreeing</td><td>—</td><td class="yes">Whole band</td></tr>
+                <tr><td>Threshold tuning</td><td>—</td><td>—</td><td class="yes">Live sliders</td></tr>
+                <tr><td>Learning-loop note proposals</td><td class="partial">Applied note</td><td class="partial">Applied note</td><td class="yes">Run distillation</td></tr>
+            </tbody>
+        </table>
+        <p class="note">These aren't mutually exclusive — a likely real build is <b>C as the run dashboard</b>, drilling into <b>A for bulk human review</b>, with <b>B as the deep-dive panel</b> for a single tricky set. The mockups deliberately push each to its extreme so we can react to the strong forms before blending.</p>
+    </div>
+
+    <div class="panel card">
+        <h2>🧩 Grounded in the real codebase</h2>
+        <ul class="clean">
+            <li>Builds on <span class="mono">DuplicateRecordDetector</span> (vector pass, RRF, batch loop, auto-merge) — unchanged when reasoning is off.</li>
+            <li>New LLM fields land on <span class="mono">MJ: Duplicate Run Detail Matches</span>; config on <span class="mono">MJ: Entity Documents</span>.</li>
+            <li>Survivor + field choices resolve to the existing <span class="mono">MergeRecords</span> <span class="mono">FieldMap</span> (value-per-field, applied pre-merge, transactional).</li>
+            <li>Reasoning runs behind a pluggable seam: <b>solo prompt by default, agent for heavy entities</b> — both share one core instruction set, chosen per Entity Document.</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+function toggleTheme(){ const d=document.documentElement.classList.toggle('dark'); document.getElementById('tlabel').textContent=d?'Light':'Dark'; }
+if (matchMedia('(prefers-color-scheme: dark)').matches){ toggleTheme(); }
+</script>
+</body>
+</html>
