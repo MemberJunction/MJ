@@ -6,6 +6,7 @@ import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
+import { SessionManager } from '../agentSessions/SessionManager.js';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
@@ -128,6 +129,9 @@ export class LiveKitRecordingResult {
 
 @Resolver()
 export class RealtimeBridgeResolver extends ResolverBase {
+  /** Durable `AIAgentSession` record manager — creates the session row the bridge FK-references. */
+  private readonly sessionManager = new SessionManager();
+
   /**
    * Mints a scoped LiveKit access token for the current user to join the given room. The participant
    * identity is derived server-side from the authenticated user (never trusted from the client).
@@ -185,7 +189,23 @@ export class RealtimeBridgeResolver extends ResolverBase {
       }
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
       const roomName = input.RoomName?.trim() || `mj-${randomUUID()}`;
-      const agentSessionID = input.AgentSessionID?.trim() || randomUUID();
+
+      // Resolve the AIAgentSession the bridge will reference. The bridge row FK-references
+      // AIAgentSession(ID), so we must use an EXISTING session — either one the caller supplied, or a
+      // freshly-created one. Previously this minted a bare random UUID with no backing row, so the
+      // bridge INSERT failed the FK_AIAgentSessionBridge_Session constraint.
+      let agentSessionID = input.AgentSessionID?.trim();
+      if (!agentSessionID) {
+        if (!input.AgentID?.trim()) {
+          return failure('An AgentID is required to start an agent room session.', roomName);
+        }
+        const createdSession = await this.sessionManager.CreateSession(
+          { agentID: input.AgentID.trim(), userID: user.ID },
+          user,
+          provider,
+        );
+        agentSessionID = createdSession.ID;
+      }
 
       const session = await LiveKitAgentRoomCoordinator.Instance.StartAgentRoomSession({
         AgentSessionID: agentSessionID,

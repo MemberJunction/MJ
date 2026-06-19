@@ -234,6 +234,13 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     }
   }
 
+  /**
+   * Max time to wait for the connection to start before surfacing a retryable error, so a hung or very
+   * slow server (e.g. an agent bot that can't reach the LiveKit media path) doesn't spin forever. Set
+   * `0` to disable the client-side timeout.
+   */
+  @Input() public ConnectTimeoutMs = 25000;
+
   /** Resolves the connection (mints a token and, in agent mode, starts the agent session). */
   public async Start(): Promise<void> {
     this.loading = true;
@@ -242,17 +249,46 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     try {
       const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
       this.resolvedDisplayName = this.DisplayName;
-      if (this.Mode === 'agent') {
-        await this.startAgentSession(client);
-      } else {
-        await this.joinRoom(client);
-      }
+      const connect = this.Mode === 'agent' ? this.startAgentSession(client) : this.joinRoom(client);
+      await this.withTimeout(connect, this.ConnectTimeoutMs);
     } catch (err) {
       this.fail(err instanceof Error ? err.message : String(err));
     } finally {
       this.loading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * Races `op` against a timeout: if it hasn't settled within `ms`, rejects with a clear, retryable
+   * message (the template's "Try again" button re-runs {@link Start}). A non-positive `ms` disables it.
+   */
+  private withTimeout<T>(op: Promise<T>, ms: number): Promise<T> {
+    if (!ms || ms <= 0) {
+      return op;
+    }
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(
+        () =>
+          reject(
+            new Error(
+              'The connection is taking too long — the agent could not join the room. ' +
+                'Check that the LiveKit server is running and reachable, then try again.',
+            ),
+          ),
+        ms,
+      );
+      op.then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      );
+    });
   }
 
   /** Starts the agent room session and applies the returned client token. */

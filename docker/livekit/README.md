@@ -55,16 +55,26 @@ startup by `LiveKitTokenService`.
 Open MJ Explorer → the **Meet** app → **Live Room**. The `LiveKitTokenService is not configured`
 error means MJAPI didn't see the three vars above (check the `.env` and that you restarted MJAPI).
 
-## macOS / Docker media note
+## 🚨 macOS: run LiveKit NATIVELY for the agent (Meet) path
 
-WebRTC media over **UDP** can fail to traverse Docker Desktop's NAT on macOS. That's fine for dev:
-LiveKit automatically falls back to **TCP on `7881`**, which is mapped here and reachable, so calls
-still connect. If you want native UDP performance, run the server natively instead of in Docker:
+On **macOS**, Docker Desktop's NAT breaks the **server-side agent bot's** WebRTC media. The bot is
+`@livekit/rtc-node` running **inside MJAPI on the host**; the Dockerized LiveKit advertises its
+*container* IP (e.g. `172.x`) for media candidates, which the host bot can't reach — and the TCP
+candidate points at the same unreachable IP, so the fallback doesn't save it. Symptom: the Live Room
+spins, then **`StartLiveKitAgentRoomSession failed: ... wait_pc_connection timed out`**. (Signaling on
+`7880` is fine — only the media peer-connection fails.)
+
+**Fix: run LiveKit natively** (no Docker NAT) using THIS repo's config, so your `.env` stays unchanged
+(same `devkey` + secret):
 
 ```bash
 brew install livekit
-livekit-server --dev        # same devkey/secret, binds to localhost
+livekit-server --config docker/livekit/livekit.yaml     # binds to localhost — bot connects
 ```
+
+Stop the Docker container first (`docker compose down`) so they don't both hold port 7880. The Docker
+setup here is still handy for **browser-only** room testing (the browser can use the mapped TCP
+fallback), but the **agent bot needs native LiveKit or Cloud** on macOS.
 
 ## Production / hosted alternative
 

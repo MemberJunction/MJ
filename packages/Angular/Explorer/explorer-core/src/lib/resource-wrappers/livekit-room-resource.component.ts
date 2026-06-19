@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, inject } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
@@ -77,17 +77,21 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
   /** Set when no agent could be resolved — shown instead of the room (and instead of the cryptic server error). */
   public resolveError: string | null = null;
 
+  private readonly cdr = inject(ChangeDetectorRef);
+
   override ngOnInit(): void {
     super.ngOnInit();
-    void this.resolveAgent();
+    this.resolveAgent();
   }
 
   /**
    * Resolves the agent that joins the room: the explicit `ResourceRecordID` when present, otherwise the
-   * default active **Realtime**-type agent (the voice co-agent). Gates the room render until resolved so
-   * the child never starts an agent session with an empty AgentID.
+   * default active **Realtime**-type agent (the voice co-agent). Resolves SYNCHRONOUSLY whenever possible
+   * (explicit id, or the AI engine already loaded — the common case, it bootstraps at startup) so the
+   * first render is already settled — an async branch-flip after the view is checked throws NG0100 under
+   * the app's frequent change-detection. Only a cold engine takes the async path, which flushes the view.
    */
-  private async resolveAgent(): Promise<void> {
+  private resolveAgent(): void {
     const explicit = this.Data?.ResourceRecordID ? String(this.Data.ResourceRecordID) : null;
     if (explicit) {
       this.agentId = explicit;
@@ -95,9 +99,21 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
       return;
     }
 
-    // No explicit agent (opened from the nav) — default to the first active Realtime-type agent (the
-    // voice co-agent), read straight from the cached AI metadata. No query.
-    await AIEngineBase.Instance.Config(false, undefined, this.ProviderToUse);
+    if (AIEngineBase.Instance.Loaded) {
+      this.applyDefaultRealtimeAgent();
+      return;
+    }
+
+    // Cold engine: load the cached AI metadata, then apply + flush our view so the branch flip commits
+    // cleanly (avoids NG0100 from changing the @if after it was checked in a foreign CD cycle).
+    void AIEngineBase.Instance.Config(false, undefined, this.ProviderToUse).then(() => {
+      this.applyDefaultRealtimeAgent();
+      this.cdr.detectChanges();
+    });
+  }
+
+  /** Picks the first active Realtime-type agent from the cached AI metadata, or sets the no-agent message. */
+  private applyDefaultRealtimeAgent(): void {
     const realtimeType = AIEngineBase.Instance.AgentTypes.find((t) => t.Name?.trim().toLowerCase() === 'realtime');
     const agent = realtimeType
       ? AIEngineBase.Instance.Agents.find((a) => a.Status === 'Active' && UUIDsEqual(a.TypeID, realtimeType.ID))
