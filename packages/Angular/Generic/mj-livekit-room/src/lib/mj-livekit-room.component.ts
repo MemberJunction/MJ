@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLLiveKitClient } from '@memberjunction/graphql-dataprovider';
 import { LiveKitRoomComponent, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
 import type {
@@ -119,7 +120,7 @@ export interface AgentInRoom {
                   <select class="mj-input mj-lk-agents__select" (change)="onAddTargetChange($event)">
                     <option value="">Add an agent…</option>
                     @for (a of availableToAdd; track a.ID) {
-                      <option [value]="a.ID" [selected]="a.ID === addTargetId">{{ a.Name }}</option>
+                      <option [value]="a.ID" [selected]="UUIDsEqual(a.ID, addTargetId)">{{ a.Name }}</option>
                     }
                   </select>
                   <button type="button" class="mj-lk-agents__addbtn" [disabled]="!addTargetId || addingAgent" (click)="AddAgent()">
@@ -139,8 +140,12 @@ export interface AgentInRoom {
             @if (EnableInvite) {
               <button type="button" class="mj-lk-agents__toggle" title="Copy a link to invite someone to this room"
                 (click)="CopyInvite()">
-                <i class="fa-solid" [class.fa-user-plus]="!inviteCopied" [class.fa-check]="inviteCopied"></i>
-                {{ inviteCopied ? 'Link copied' : 'Invite' }}
+                <i class="fa-solid" [class.fa-link]="!inviteCopied" [class.fa-check]="inviteCopied"></i>
+                {{ inviteCopied ? 'Link copied' : 'Copy link' }}
+              </button>
+              <button type="button" class="mj-lk-agents__toggle" title="Invite people from this workspace"
+                (click)="InvitePeopleRequested.emit(resolvedRoomName)">
+                <i class="fa-solid fa-user-plus"></i> Invite people
               </button>
             }
           </div>
@@ -338,6 +343,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public agentsInRoom: AgentInRoom[] = [];
   /** The target id chosen in the "Add an agent" picker. */
   public addTargetId: string | null = null;
+  /** Exposed for template use — platform-safe UUID equality (SQL upper vs PG lower). */
+  public UUIDsEqual = UUIDsEqual;
   /** True while an Add request is in flight. */
   public addingAgent = false;
   /** Last add error, shown under the picker. */
@@ -402,6 +409,12 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   // ── Outputs ────────────────────────────────────────────────────────────────────
   /** Emitted once the agent room session is started (agent mode). */
   @Output() public SessionStarted = new EventEmitter<MJLiveKitSessionStartedEvent>();
+  /**
+   * Emitted (with the room name) when the user clicks "Invite people". The host (e.g. the Explorer
+   * resource) opens an MJ user-picker and calls the invite mutation — kept out of this generic
+   * component, which knows nothing about MJ users.
+   */
+  @Output() public InvitePeopleRequested = new EventEmitter<string>();
   /** Emitted when the room connects. */
   @Output() public Connected = new EventEmitter<LiveKitRoomState>();
   /** Emitted when the room disconnects. */
@@ -533,7 +546,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     if (!this.addTargetId || !this.resolvedRoomName || this.addingAgent) {
       return;
     }
-    const target = this.AvailableAgents.find((a) => a.ID === this.addTargetId);
+    const target = this.AvailableAgents.find((a) => UUIDsEqual(a.ID, this.addTargetId));
     this.addingAgent = true;
     this.addError = null;
     this.cdr.markForCheck();
