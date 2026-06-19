@@ -88,7 +88,7 @@ export function runT10TransportSmoke(connector: string, identity: ConnectorIdent
     // captured failure is credential/config-gated, Skip honestly rather than Fail.
     if ((d.requestCount ?? 0) === 0) {
         const notes: string[] = Array.isArray(d.notes) ? d.notes : [];
-        const credGated = /credential|token|configuration json|api[- ]?key|account\s?id|unauthor|auth\b|client\s?(id|secret)|base\s?url|refresh|oauth|scope/i;
+        const credGated = /credential|token|configuration json|api[- ]?key|account\s?id|unauthor|auth\b|client\s?(id|secret)|base\s?url|refresh|oauth|scope|tenant|principal|secret/i;
         // `.some` (not `.every`): a credential/config gate on the auth-requiring call (TestConnection/
         // DiscoverObjects) is the genuine reason 0 requests fired; any DOWNSTREAM crash (e.g. FetchChanges
         // called with a null objName because discovery returned nothing) is a consequence, not a transport
