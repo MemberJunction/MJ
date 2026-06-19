@@ -1278,13 +1278,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     State: {},
                 };
 
-                entityResult.OriginalValues = entity.Fields.map((f) => {
-                    const tempStatus = f.ActiveStatusAssertions;
-                    f.ActiveStatusAssertions = false;
-                    const ret = { FieldName: f.Name, Value: f.Value };
-                    f.ActiveStatusAssertions = tempStatus;
-                    return ret;
-                });
+                // Reads f.Value directly (framework-internal capture for record-change history) —
+                // EntityField.Value does not assert active status, so no suppression is needed.
+                entityResult.OriginalValues = entity.Fields.map((f) => ({ FieldName: f.Name, Value: f.Value }));
                 entity.RegisterResultHistoryEntry(entityResult);
 
                 // Step 2: Validation hook

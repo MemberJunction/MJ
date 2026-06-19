@@ -3619,11 +3619,19 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         typeList: GroupTypeListItem[],
         objectType: string
     ): FetchBatchResult {
-        const records = typeList.map(gt => ({
-            ExternalID: String(gt.Id ?? ''),
-            ObjectType: objectType,
-            Fields: { Id: gt.Id, TypeName: gt.TypeName, SortIndex: gt.SortIndex } as Record<string, unknown>,
-        }));
+        const records = typeList.map(gt => {
+            // Full-record pass-through (§0 forward-compat contract): spread the WHOLE GroupType so any
+            // custom fields YM returns reach ExternalRecord.Fields for the custom-column capture — NOT a
+            // hand-picked subset (the prior {Id,TypeName,SortIndex} dropped customs). Exclude only the
+            // nested Groups child collection, which is emitted as separate group records (FlattenGroupRecords).
+            const fields: Record<string, unknown> = { ...gt };
+            delete fields.Groups;
+            return {
+                ExternalID: String(gt.Id ?? ''),
+                ObjectType: objectType,
+                Fields: fields,
+            };
+        });
         return { Records: records, HasMore: false };
     }
 

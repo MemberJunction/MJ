@@ -505,8 +505,25 @@ export class ManageMetadataBase {
    private static _softPKFKConfigCache: any = null;
    private static _softPKFKConfigPath: string = '';
    /**
+    * Drops the cached soft PK/FK config so the next {@link getSoftPKFKConfig} call re-reads the
+    * additionalSchemaInfo file from disk. REQUIRED for the long-lived in-process (RSU) CodeGen path:
+    * the cache is process-static (load-once), which is correct for a one-shot `mj codegen` CLI run but
+    * STALE in a long-running MJAPI where RSU rewrites additionalSchemaInfo on every ApplyAll. Without
+    * invalidation, a connector's FIRST ApplyAll writes its soft PKs to the file but CodeGen returns the
+    * pre-write cached config → "No primary key found" → the entity is never created → no entity map →
+    * 0 rows sync until an MJAPI restart. RunInProcess calls this at the start of every run (which always
+    * follows RSU's WriteAdditionalSchemaInfo step), so each in-process run sees the freshly-written file.
+    * Deterministic + event-driven (no mtime/TOCTOU race). The CLI `Run()` path does not call this, so its
+    * load-once-per-process behavior is unchanged.
+    */
+   public static invalidateSoftPKFKConfigCache(): void {
+      ManageMetadataBase._softPKFKConfigCache = null;
+      ManageMetadataBase._softPKFKConfigPath = '';
+   }
+   /**
     * Loads and caches the soft PK/FK configuration from the additionalSchemaInfo file.
-    * The file is only loaded once per session to avoid repeated I/O.
+    * Cached per process to avoid repeated I/O within a CodeGen run; the in-process (RSU) path calls
+    * {@link invalidateSoftPKFKConfigCache} at the start of each run so a rewritten file is picked up.
     */
    private static getSoftPKFKConfig(): any {
       // Return cached config if path hasn't changed
@@ -4418,7 +4435,7 @@ export class ManageMetadataBase {
             .replace(/^-|-$/g, '');         // trim hyphens from start/end
 
          const sSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
-                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', 1)`;
+                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)})`;
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
 

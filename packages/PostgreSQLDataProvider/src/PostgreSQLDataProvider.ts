@@ -594,6 +594,33 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * PostgreSQL per-field search predicate. The base (SQL Server) form emits
+     * `N'...'` string literals and `ESCAPE '\'` on LIKE — both invalid on PostgreSQL
+     * (`N'...'` is not a PG literal prefix, and the auto-quoting wraps the bare `ESCAPE`
+     * keyword, producing `syntax error at or near "ESCAPE"`). PostgreSQL's default
+     * backslash-escape behavior in LIKE makes the explicit ESCAPE clause unnecessary,
+     * so we emit plain quoted literals with no `N` prefix and no `ESCAPE`.
+     */
+    protected override buildPerFieldSearchPredicate(field: EntityFieldInfo, escapedTerm: string, rawSafeTerm: string): string {
+        if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
+            return field.UserSearchParamFormatAPI.replace('{0}', rawSafeTerm);
+        }
+        if (!this.isTextSearchableType(field)) return '';
+        const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
+        switch (pred) {
+            case 'Exact':
+                return ` = '${rawSafeTerm}'`;
+            case 'BeginsWith':
+                return ` LIKE '${escapedTerm}%'`;
+            case 'EndsWith':
+                return ` LIKE '%${escapedTerm}'`;
+            case 'Contains':
+            default:
+                return ` LIKE '%${escapedTerm}%'`;
+        }
+    }
+
+    /**
      * Transforms user-provided SQL clauses (ExtraFilter, OrderBy) to quote
      * mixed-case identifiers and convert [bracket] notation for PostgreSQL.
      * Also coerces SQL Server bit literals (`= 1` / `= 0`) on boolean fields
