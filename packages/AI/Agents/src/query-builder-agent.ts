@@ -1,4 +1,4 @@
-import { BaseAgent } from './base-agent';
+import { BaseAgent, type ActionResultCrushConfig } from './base-agent';
 import { PayloadManager } from './PayloadManager';
 import { ExecuteAgentParams, BaseAgentNextStep, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
@@ -13,6 +13,22 @@ import { format as formatSQL } from 'sql-formatter';
  */
 @RegisterClass(BaseAgent, 'QueryBuilderAgent')
 export class QueryBuilderAgent extends BaseAgent {
+
+    /**
+     * Opt this agent into AST-aware SQL reduction for large code-string action results.
+     * Because the query-builder routinely moves SQL through context, non-focal SQL is
+     * collapsed via CrushCode (CodeCompressor-inspired) to save prompt tokens. Structural
+     * JSON crushing from the base resolver is preserved.
+     *
+     * token optimization via @memberjunction/context-crush (CodeCompressor-inspired)
+     */
+    protected override resolveActionResultCrush(params: ExecuteAgentParams): ActionResultCrushConfig | undefined {
+        const base = super.resolveActionResultCrush(params);
+        if (!base) {
+            return base; // agent opted out of crushing entirely
+        }
+        return { ...base, codeLang: base.codeLang ?? 'sql' };
+    }
 
     /**
      * After the base validation passes, format the SQL in the payload

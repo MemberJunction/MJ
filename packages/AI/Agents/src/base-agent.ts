@@ -21,6 +21,8 @@ import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
+// AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
+import { CrushCode, type CodeLang } from '@memberjunction/context-crush/code';
 import {
     RealtimeSessionRunner,
     RealtimeSessionRunnerDeps,
@@ -126,10 +128,16 @@ interface ActionResultSummary {
  * for the run (the agent opted out via `crushActionResults: false`).
  */
 export interface ActionResultCrushConfig {
-    /** Minimum stringified length of an object/array value before it is crushed. */
+    /** Minimum stringified length of an object/array (or code string) value before crushing. */
     threshold: number;
     /** Optional character budget passed to CrushJSON (undefined = no row truncation). */
     maxChars: number | undefined;
+    /**
+     * When set, large *string* output params are reduced with CrushCode for this language.
+     * Undefined (default) means code-string crushing is off — only structural JSON crushing
+     * applies. Opt in per agent type via the `crushCodeLang` prompt param or a subclass override.
+     */
+    codeLang: CodeLang | undefined;
 }
 
 interface BaseIterationContext {
@@ -6281,6 +6289,12 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         if (typeof value === 'string') {
+            // Large code strings (e.g. SQL/TS) are AST-reduced when the agent opted into a
+            // code language; otherwise strings pass through (optionally length-capped).
+            const crushedCode = this.crushCodeValue(value);
+            if (crushedCode !== null) {
+                return crushedCode;
+            }
             return maxLength > 0 && value.length > maxLength ? `${value.substring(0, maxLength)}…` : value;
         }
 
@@ -6310,7 +6324,38 @@ The context is now within limits. Please retry your request with the recovered c
         if (agentTypePromptParams?.crushActionResults === false) {
             return undefined;
         }
-        return { threshold: BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined };
+        const requestedLang = agentTypePromptParams?.crushCodeLang;
+        const codeLang: CodeLang | undefined =
+            requestedLang === 'sql' || requestedLang === 'typescript' ? requestedLang : undefined;
+        return { threshold: BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang };
+    }
+
+    /**
+     * AST-reduce a large code-string action-result value when the agent opted into a code
+     * language (via `crushCodeLang` or a subclass override) and the value clears the size
+     * threshold. Returns reduced code plus a one-line legend, or null to keep the string
+     * verbatim (crushing disabled, too small, or no net saving).
+     *
+     * token optimization via @memberjunction/context-crush (CodeCompressor-inspired)
+     * @private
+     */
+    private crushCodeValue(stringValue: string): string | null {
+        const config = this._actionResultCrush;
+        if (!config || !config.codeLang || stringValue.length < config.threshold) {
+            return null;
+        }
+        // Crushing is a best-effort optimization — it must never break an agent turn. Any
+        // failure falls back to the verbatim value.
+        try {
+            const result = CrushCode(stringValue, config.codeLang);
+            if (result.CrushedChars >= result.OriginalChars) {
+                return null;
+            }
+            const legend = DescribeCrush(result);
+            return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
+        } catch {
+            return null;
+        }
     }
 
     /**
