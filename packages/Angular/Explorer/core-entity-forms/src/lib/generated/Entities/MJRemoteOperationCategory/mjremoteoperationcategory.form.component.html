@@ -10,35 +10,43 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Retention & Audit Section -->
+    <!-- Category Details Section -->
     <mj-collapsible-panel
-        SectionKey="retentionAudit"
-        SectionName="Retention & Audit"
-        Icon="fa fa-cog"
+        SectionKey="categoryDetails"
+        SectionName="Category Details"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
-            FieldName="RetentionPeriod"
-            Type="number"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Associated Entities Section -->
+    <!-- Hierarchy Section -->
     <mj-collapsible-panel
-        SectionKey="associatedEntities"
-        SectionName="Associated Entities"
-        Icon="fa fa-users"
+        SectionKey="hierarchy"
+        SectionName="Hierarchy"
+        Icon="fa fa-sitemap"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ActionID"
+            FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -47,59 +55,8 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="UserID"
+            FieldName="RootParentID"
             Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Execution Details Section -->
-    <mj-collapsible-panel
-        SectionKey="executionDetails"
-        SectionName="Execution Details"
-        Icon="fa fa-tasks"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="StartedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="EndedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Params"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ResultCode"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Message"
-            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -138,25 +95,50 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Process Run Details Section -->
+    <!-- Remote Operations Section -->
     <mj-collapsible-panel
-        SectionKey="mJProcessRunDetails"
-        SectionName="Process Run Details"
-        Icon="fa fa-tasks"
+        SectionKey="mJRemoteOperations"
+        SectionName="Remote Operations"
+        Icon="fa fa-terminal"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJProcessRunDetails')"
+        [BadgeCount]="GetSectionRowCount('mJRemoteOperations')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Process Run Details','ActionExecutionLogID')"
-                [NewRecordValues]="NewRecordValues('MJ: Process Run Details')"
-                [AllowLoad]="IsSectionExpanded('mJProcessRunDetails')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Remote Operations','CategoryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Remote Operations')"
+                [AllowLoad]="IsSectionExpanded('mJRemoteOperations')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJProcessRunDetails', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRemoteOperations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Remote Operation Categories Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRemoteOperationCategories"
+        SectionName="Remote Operation Categories"
+        Icon="fa fa-folder-tree"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRemoteOperationCategories')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Remote Operation Categories','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Remote Operation Categories')"
+                [AllowLoad]="IsSectionExpanded('mJRemoteOperationCategories')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRemoteOperationCategories', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

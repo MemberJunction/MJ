@@ -128,7 +128,12 @@ erDiagram
     "MJ: Process Runs" }o--o| "MJ: Scheduled Job Runs" : "launched by"
     "MJ: Process Run Details" }o--o| "Action Execution Logs" : "traces"
     "MJ: Process Run Details" }o--o| "MJ: AI Agent Runs" : "traces"
+    "MJ: Record Process Categories" ||--o{ "MJ: Record Processes" : "organizes"
+    "MJ: Record Processes" ||--o{ "MJ: Record Process Watermarks" : "checksum tracks"
+    "MJ: Remote Operation Categories" ||--o{ "MJ: Remote Operations" : "organizes"
 ```
+
+> **Full schema is front-loaded into one migration.** All DDL for the entire PR ships in `migrations/v5/V202606191338__v5.43.x__Record_Set_Processing.sql` — **7 tables** — so it runs once and CodeGen runs once: `RecordProcess` (§4.1), `ProcessRun` (§4.2), `ProcessRunDetail` (§4.3), **`RecordProcessCategory`** (recursive `ParentID`, organizes processes), **`RecordProcessWatermark`** (§12, Checksum mode), and the Remote Operations pair **`RemoteOperation`** + **`RemoteOperationCategory`** (§16.4). A `RecordProcessType` was considered and **deferred** — the Action/Agent work axis already supplies the flexible behavior dimension. Lookup *rows* (categories, scheduled-job type, API scopes, operation rows) are seeded later via `mj sync`, not the migration.
 
 ### 4.1 `MJ: Record Processes` — the facade (definition)
 
@@ -139,6 +144,7 @@ The single declarative object a user creates. Owns the underlying Entity Action 
 | `ID` | uniqueidentifier | PK |
 | `Name` | nvarchar(255) | |
 | `Description` | nvarchar(MAX) null | |
+| `CategoryID` | uniqueidentifier null | FK → MJ: Record Process Categories; optional UI organization |
 | `EntityID` | uniqueidentifier | FK → Entities; the target entity |
 | `Status` | nvarchar(20) | `Draft` / `Active` / `Disabled` (default `Draft`) |
 | `WorkType` | nvarchar(20) | `Action` / `Agent` |
@@ -415,7 +421,7 @@ One Work definition, one facade record, three triggers — zero bespoke plumbing
 
 - **Cost guardrails.** LLM work over large views is expensive. The run header carries a budget gate (from the classifier); the facade exposes max-records/max-cost caps; `SkipUnchanged` (Checksum/UpdatedAt watermark) avoids re-billing untouched records.
 - **Idempotency & resume.** `Process Run Details` status + the run cursor make re-runs skip completed records and resume after a crash.
-- **Change detection / watermark storage (per review).** `WatermarkStrategy='UpdatedAt'` (default) stores **nothing** — it compares each row's `__mj_UpdatedAt` against the prior run's start, covering the common case. `'Checksum'` mode (for entities lacking a reliable update timestamp, or to detect *meaningful* vs. incidental change) stores a per-record content hash in a lightweight watermark table keyed `(RecordProcessID, EntityID, RecordID) → Hash + LastProcessedAt` — **not** a field on the target entity, keeping the mechanism generic with no per-entity schema. `'None'` always reprocesses.
+- **Change detection / watermark storage (per review).** `WatermarkStrategy='UpdatedAt'` (default) stores **nothing** — it compares each row's `__mj_UpdatedAt` against the prior run's start, covering the common case. `'Checksum'` mode (for entities lacking a reliable update timestamp, or to detect *meaningful* vs. incidental change) stores a per-record content hash in the **`RecordProcessWatermark`** table keyed `(RecordProcessID, EntityID, RecordID) → Hash + LastProcessedAt` (unique on those three) — **not** a field on the target entity, keeping the mechanism generic with no per-entity schema. `'None'` always reprocesses.
 - **Observability.** Every run is a first-class auditable record with drill-down into the underlying Action Execution Log / AI Agent Run. Drives the UX viewer.
 - **Security / multi-tenant.** All execution passes `contextUser`; source resolution respects view/list/RLS permissions; agent dispatch keeps the `ExposeAsAction` + sub-agent gates.
 - **Multi-provider correctness.** Engine and trackers take an explicit `IMetadataProvider` (never `new Metadata()` in per-provider paths), per the root CLAUDE.md rule.
@@ -427,7 +433,7 @@ One Work definition, one facade record, three triggers — zero bespoke plumbing
 
 | Phase | Deliverable | Gateable PR |
 |---|---|---|
-| **P0** | Migration: 3 new entities + Scheduled Job Type metadata; run CodeGen | PR 1 |
+| **P0** | **Single migration — all 7 tables for the PR** (RecordProcess + RecordProcessCategory, ProcessRun, ProcessRunDetail, RecordProcessWatermark, RemoteOperation + RemoteOperationCategory); run CodeGen once. Scheduled-Job-Type / API-Scope / operation rows seeded later via mj-sync | PR 1 |
 | **P1** | `RecordSetProcessor` base + engine; source adapters; `GenericProcessRunTracker`; `NoOpTracker`; unit tests | PR 2 |
 | **P2** | Stub fixes: `GetRecordList` (via engine) + `RunSingleFilter` (changed-fields gating) | PR 3 |
 | **P3** | `RecordProcessScheduledJobDriver` + job-type metadata | PR 4 |
@@ -453,6 +459,8 @@ Each PR builds the affected package(s) and runs their Vitest suites before merge
 ---
 
 ## 15. Illustrative DDL (P0, abbreviated)
+
+> **Authoritative DDL = the committed migration** `migrations/v5/V202606191338__v5.43.x__Record_Set_Processing.sql` (the full 7-table set with categories, watermark, and Remote Operations). The sketch below predates those additions and is kept only as a shape reference.
 
 ```sql
 -- migrations/v5/V<ts>__v5.x__Record_Set_Processing.sql
@@ -594,6 +602,7 @@ One row per operation. Columns deliberately mirror existing tables so there is n
 | Column | Mirrors | Purpose |
 |---|---|---|
 | `Name`, `OperationKey` (unique) | Action `Name` | display + stable registry key / wire token |
+| `CategoryID` (nullable) | **`RemoteOperationCategory`** (recursive `ParentID`) | optional UI organization (e.g. "Record Processes › Control") |
 | `Description` | — | human doc **and** the AI-codegen seed (§16.4.2) |
 | `InputTypeName` / `InputTypeDefinition` / `InputTypeIsArray` | **`EntityField.JSONType*`** | raw TS interface source → typed `TInput` |
 | `OutputTypeName` / `OutputTypeDefinition` / `OutputTypeIsArray` | same | typed `TOutput` |
@@ -602,6 +611,7 @@ One row per operation. Columns deliberately mirror existing tables so there is n
 | `RequiresSystemUser` | `@RequireSystemUser` | system-only flag |
 | `GenerationType` | **Action `Type`** | `Manual` (hand) / `AI` (from `Description`) / `Default` (emit standard plumbing) |
 | `Code` / `CodeApprovalStatus` / `CodeApprovedByUserID` / `CodeApprovedAt` | **Action `Code`/`CodeApprovalStatus`** | AI body + human approval gate |
+| `ContractFingerprint` | — | I/O-contract fingerprint for stale-client rejection (§16.12) |
 | `Status` | — | `Active` / `Disabled` / `Pending` (only `Active` routable) |
 | `CacheTTLSeconds`, `TimeoutMS`, `MaxConcurrency` | job fields | execution knobs |
 
@@ -712,7 +722,7 @@ Phased, each phase a gateable PR that builds the affected package(s) and runs th
 |---|---|---|---|
 | **RO-0** | `BaseRemotableOperation<I,O>` + invoke/result/progress types; the **`IRemoteOperationProvider`** interface (NOT on `IMetadataProvider`) with its `RouteOperation` base wired in **`ProviderBase`**; `ClassFactory` registration convention; unit tests for the typed-object contract | `@memberjunction/core`, `ProviderBase` | — |
 | **RO-1** | `RouteOperation` impls on both providers; the single `ExecuteRemoteOperation` resolver; the §16.5 authorization chain (reuse `CheckAPIKeyScopeAuthorization` + `GetUserPermisions`); allow-list enforcement; **POC: hand-written `RecordProcess.GetRunStatus`** (Sync, no metadata/codegen yet) proving the typed round-trip on both sides | `sqlserver-dataprovider`, `graphql-dataprovider`, `@memberjunction/server` | RO-0 |
-| **RO-2** | `MJ: Remote Operations` migration (+ `MJ: API Scopes` seed rows via mj-sync) → CodeGen; `RemoteOperationEngineBase` (`@RegisterForStartup` cache); CodeGen emitter for the concrete typed base (JSONType reuse) incl. `Manual`/`Default` modes; **extract a shared emitter/approval base from the Action codegen** (binding constraint §16.1 — one base serves both; carries Action-codegen regression risk); convert the POC to a metadata row | `codegen-lib`, `core-entities`, migration | RO-1 |
+| **RO-2** | (`RemoteOperation` + `RemoteOperationCategory` tables already created in P0) seed `MJ: API Scopes` + operation rows via mj-sync; `RemoteOperationEngineBase` (`@RegisterForStartup` cache); CodeGen emitter for the concrete typed base (JSONType reuse) incl. `Manual`/`Default` modes; **extract a shared emitter/approval base from the Action codegen** (binding constraint §16.1 — one base serves both; carries Action-codegen regression risk); convert the POC to a metadata row | `codegen-lib`, `core-entities` | RO-1 |
 | **RO-3** | **Build the generic typed `RemoteOpProgress` channel** (existing `PushStatusNotification` + `PipelineProgressResolver` are insufficient); long-running plumbing: detached (handle + status + auto-notify over push channel) **and** attached (await + `onProgress` stream); `ProcessRun`-backed handles; `RecordProcess.RunNow` + Pause/Resume/Cancel ops | `core`, `graphql-dataprovider`, `@memberjunction/server` | RO-2, P1 (`RecordSetProcessor`) |
 | **RO-4** | AI-from-`Description`: `CodeGen: Remote Operation Body Parser` prompt; `advancedGeneration.features['GenerateRemoteOperations']` gate; cache-by-source; `CodeApprovalStatus` emission/route gate | `codegen-lib`, metadata (prompt) | RO-2 |
 | **RO-5** | Showcase refactor of one existing custom system (rec. clustering) onto Remote Operations; before/after line-count in PR; delete the superseded resolver/client | target package | RO-2 (+ RO-3 if long-running) |
@@ -720,7 +730,7 @@ Phased, each phase a gateable PR that builds the affected package(s) and runs th
 
 **Interleave with the facade phases (§13):** `P0–P4 ∥ RO-0–RO-3 → P5 (uses RO ops) → P6 (Run viewer) → (P7–P8 ∥ RO-4 ∥ RO-5 ∥ RO-6)`. RO-0…RO-3 are hard prerequisites for P5/P6 — the facade has **no non-RO path**.
 
-**Open RO decisions (carry into build):** exact `MJ: Remote Operations` column finalization vs. reusing any existing catalog table; whether `Default`-plumbing generation is worth shipping in RO-2 or deferred; the final showcase-refactor target; the persisted-notification entity for detached completion (reuse existing notifications vs. new); the **contract-fingerprint** format for stale-client rejection (§16.12); and how aggressively to share the **Action emitter base** in RO-2 vs. accept documented short-term duplication.
+**Open RO decisions (carry into build):** whether `Default`-plumbing generation is worth shipping in RO-2 or deferred; the final showcase-refactor target; the persisted-notification entity for detached completion (reuse existing notifications vs. new); the **contract-fingerprint** format for stale-client rejection (§16.12); and how aggressively to share the **Action emitter base** in RO-2 vs. accept documented short-term duplication.
 
 ---
 

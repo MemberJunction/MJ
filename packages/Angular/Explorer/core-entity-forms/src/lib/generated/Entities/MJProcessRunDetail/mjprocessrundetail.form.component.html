@@ -10,35 +10,17 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Retention & Audit Section -->
+    <!-- Process Context Section -->
     <mj-collapsible-panel
-        SectionKey="retentionAudit"
-        SectionName="Retention & Audit"
-        Icon="fa fa-cog"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="RetentionPeriod"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Associated Entities Section -->
-    <mj-collapsible-panel
-        SectionKey="associatedEntities"
-        SectionName="Associated Entities"
-        Icon="fa fa-users"
+        SectionKey="processContext"
+        SectionName="Process Context"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ActionID"
+            FieldName="ProcessRunID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -47,22 +29,38 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="UserID"
+            FieldName="EntityID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RecordID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Execution Details Section -->
+    <!-- Execution Status Section -->
     <mj-collapsible-panel
-        SectionKey="executionDetails"
-        SectionName="Execution Details"
-        Icon="fa fa-tasks"
+        SectionKey="executionStatus"
+        SectionName="Execution Status"
+        Icon="fa fa-check-circle"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -74,7 +72,7 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="EndedAt"
+            FieldName="CompletedAt"
             Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -82,26 +80,72 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Params"
-            Type="textarea"
+            FieldName="DurationMs"
+            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ResultCode"
+            FieldName="AttemptCount"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Processing Output Section -->
+    <mj-collapsible-panel
+        SectionKey="processingOutput"
+        SectionName="Processing Output"
+        Icon="fa fa-file-code"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ResultPayload"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ErrorMessage"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Traceability Section -->
+    <mj-collapsible-panel
+        SectionKey="traceability"
+        SectionName="Traceability"
+        Icon="fa fa-search"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ActionExecutionLogID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Message"
-            Type="textarea"
+            FieldName="AIAgentRunID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -133,35 +177,6 @@
     </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
-
-    <!-- ========================================
-         RELATED ENTITY PANELS
-         ======================================== -->
-
-    <!-- Process Run Details Section -->
-    <mj-collapsible-panel
-        SectionKey="mJProcessRunDetails"
-        SectionName="Process Run Details"
-        Icon="fa fa-tasks"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJProcessRunDetails')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Process Run Details','ActionExecutionLogID')"
-                [NewRecordValues]="NewRecordValues('MJ: Process Run Details')"
-                [AllowLoad]="IsSectionExpanded('mJProcessRunDetails')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJProcessRunDetails', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>

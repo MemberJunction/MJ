@@ -146,6 +146,31 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
+    <!-- Process Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJProcessRuns"
+        SectionName="Process Runs"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJProcessRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Process Runs','ScheduledJobRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Process Runs')"
+                [AllowLoad]="IsSectionExpanded('mJProcessRuns')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJProcessRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Agent Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentRuns"
