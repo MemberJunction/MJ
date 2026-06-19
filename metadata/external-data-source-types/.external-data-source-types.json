@@ -19,5 +19,33 @@
       "lastModified": "2026-06-15T20:41:16.512Z",
       "checksum": "3b92dc18205802e246f1fdb381b2246970f9e679c8500ea5fca87202fb2eaaa3"
     }
+  },
+  {
+    "fields": {
+      "Name": "Snowflake (External)",
+      "Description": "Live, read-only proxied access to a Snowflake account via the official snowflake-sdk. Supports password, programmatic access token (PAT), and key-pair (SNOWFLAKE_JWT) authentication. ANSI SQL with LIMIT/OFFSET paging.",
+      "DriverClass": "SnowflakeExternalDriver",
+      "MetadataIntrospectionStrategy": "InformationSchema",
+      "FilterDialect": "ansi",
+      "PagingStrategy": "LimitOffset",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MongoDB (External)",
+      "Description": "Live, read-only proxied access to an external MongoDB database via the official mongodb driver. RunView filters use a contained SQL-WHERE -> Mongo translation; native queries run aggregation pipelines supplied as JSON. Schema is inferred by sampling documents.",
+      "DriverClass": "MongoExternalDriver",
+      "MetadataIntrospectionStrategy": "SampledDocuments",
+      "FilterDialect": "mongo-ast",
+      "PagingStrategy": "LimitOffset",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    }
   }
 ]

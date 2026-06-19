@@ -551,7 +551,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
 
     // MUTATIONS
     // First, determine if the entity has either Create/Edit allowed, if either, we need to generate a InputType
-    if (entity.AllowCreateAPI && !entity.VirtualEntity) {
+    if (entity.AllowCreateAPI && !entity.VirtualEntity && !entity.ExternalDataSourceID) {
       // generate a create mutation
       sRet += `
     @Mutation(() => ${serverGraphQLTypeName})
@@ -565,7 +565,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
     }
         `;
     }
-    if (entity.AllowUpdateAPI && !entity.VirtualEntity) {
+    if (entity.AllowUpdateAPI && !entity.VirtualEntity && !entity.ExternalDataSourceID) {
       // generate an edit mutation
       const loadParamString: string = entity.PrimaryKeys.map((f) => `input.${f.CodeName}`).join(', ');
       sRet += `
@@ -580,7 +580,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
     }
     `;
     }
-    if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
+    if (entity.AllowDeleteAPI && !entity.VirtualEntity && !entity.ExternalDataSourceID) {
       let graphQLPKEYArgs = '';
       let compositeKeyString = '';
       for (let i = 0; i < entity.PrimaryKeys.length; i++) {
