@@ -1,7 +1,7 @@
-import { BaseCommunicationProvider, CommunicationEngineBase, CreateDraftResult, Message, MessageRecipient, MessageResult, ProviderCredentialsBase } from "@memberjunction/communication-types";
-import { MJCommunicationRunEntity } from "@memberjunction/core-entities";
-import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
-import { MJGlobal } from "@memberjunction/global";
+import { BaseCommunicationProvider, CommunicationEngineBase, CreateDraftResult, Message, MessageRecipient, MessageResult, MJCommunicationProviderEntityExtended, ProviderCredentialsBase } from "@memberjunction/communication-types";
+import { MJCommunicationBaseMessageTypeEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity } from "@memberjunction/core-entities";
+import { IMetadataProvider, LogError, LogStatus, UserInfo } from "@memberjunction/core";
+import { BaseSingleton, MJGlobal } from "@memberjunction/global";
 import { ProcessedMessageServer } from "./BaseProvider";
  
 
@@ -9,10 +9,47 @@ import { ProcessedMessageServer } from "./BaseProvider";
  * Base class for communications. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
-export class CommunicationEngine extends CommunicationEngineBase {
+export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
     public static get Instance(): CommunicationEngine {
-        return super.getInstance<CommunicationEngine>();    
+        return super.getInstance<CommunicationEngine>();
     }
+
+    /**
+     * Composition over inheritance (mirrors AIEngine/AIEngineBase): CommunicationEngine is the server-side
+     * send/draft layer and caches NO metadata of its own. CommunicationEngineBase is the single cache; this
+     * proxies its collections + delegates Config to it. Previously this extended the base, so
+     * CommunicationEngine.Instance was a SECOND BaseEngine singleton issuing a duplicate RunViews batch and
+     * holding a second copy of all 5 communication arrays.
+     */
+    private get Base(): CommunicationEngineBase {
+        return CommunicationEngineBase.Instance;
+    }
+
+    /**
+     * Server-side context user, captured on Config() and settable directly (mirrors AIEngine's own
+     * _contextUser). Falls back to the base's when not explicitly set.
+     */
+    private _contextUser?: UserInfo;
+
+    /** Ensures the single CommunicationEngineBase cache is loaded. Delegates entirely to the base. */
+    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (contextUser) {
+            this._contextUser = contextUser;
+        }
+        await this.Base.Config(forceRefresh, contextUser, provider);
+    }
+
+    /** True once the underlying CommunicationEngineBase cache has loaded. */
+    public get Loaded(): boolean { return this.Base.Loaded; }
+
+    public get ContextUser(): UserInfo { return this._contextUser ?? this.Base.ContextUser; }
+    public set ContextUser(value: UserInfo) { this._contextUser = value; }
+
+    // ── Proxied cached collections (single source of truth: CommunicationEngineBase.Instance) ──
+    public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] { return this.Base.BaseMessageTypes; }
+    public get Providers(): MJCommunicationProviderEntityExtended[] { return this.Base.Providers; }
+    public get ProviderMessageTypes(): MJCommunicationProviderMessageTypeEntity[] { return this.Base.ProviderMessageTypes; }
+    public get Metadata() { return this.Base.Metadata; }
 
      /**
       * Gets an instance of the class for the specified provider. The provider must be one of the providers that are configured in the system.
@@ -62,7 +99,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
         previewOnly: boolean = false,
         credentials?: ProviderCredentialsBase
      ): Promise<MessageResult[]> {
-        const run = await this.StartRun();
+        const run = await this.Base.StartRun();
         if (!run)
             throw new Error(`Failed to start communication run.`);
 
@@ -75,7 +112,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
             results.push(result);
         }
 
-        if (!await this.EndRun(run))
+        if (!await this.Base.EndRun(run))
             throw new Error(`Failed to end communication run.`);
 
         return results;
@@ -133,7 +170,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
                 return { Success: true, Error: '', Message: processedMessage };
             }
             else {
-                const log = await this.StartLog(processedMessage, run);
+                const log = await this.Base.StartLog(processedMessage, run);
                 if (log) {
                     const sendResult = await provider.SendSingleMessage(processedMessage, credentials);
                     log.Status = sendResult.Success ? 'Complete' : 'Failed';
