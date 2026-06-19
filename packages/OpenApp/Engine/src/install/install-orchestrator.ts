@@ -643,20 +643,40 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     }
 
     // Step 6: Remove metadata (entity registrations, SchemaInfo, etc.)
+    let metadataResult: { Success: boolean; ErrorMessage?: string } = { Success: true };
     if (existingApp.SchemaName) {
       Callbacks?.OnProgress?.('Metadata', `Removing entity metadata for schema '${existingApp.SchemaName}'...`);
-      await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
+      metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
     }
 
     // Step 7: Drop schema (unless --keep-data)
+    let schemaDropError: string | undefined;
     if (!options.KeepData && existingApp.SchemaName) {
       Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
       const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
         allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
       });
       if (!dropResult.Success) {
-        Callbacks?.OnWarn?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
+        schemaDropError = dropResult.ErrorMessage;
+        Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
       }
+    }
+
+    // If metadata removal or schema drop failed, the app is NOT cleanly removed — report it
+    // as a failure (don't mark the app 'Removed') instead of silently claiming success.
+    const removalErrors = [metadataResult.Success ? undefined : metadataResult.ErrorMessage, schemaDropError]
+      .filter((e): e is string => !!e);
+    if (removalErrors.length > 0) {
+      const combined = removalErrors.join('; ');
+      await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
+        Success: false,
+        DurationSeconds: GetDurationSeconds(startTime),
+        StartedAt: new Date(startTime),
+        EndedAt: new Date(),
+        Summary: `Remove failed: ${combined}`,
+      });
+      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+      return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
     }
 
     // Step 8: Update records
@@ -1150,12 +1170,21 @@ async function ExecuteHook(command: string, cwd: string): Promise<void> {
  * Removes all MJ entity metadata associated with an app's schema.
  * Deletes in FK-dependency order to avoid constraint violations.
  */
-async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo, callbacks?: AppInstallCallbacks): Promise<void> {
+async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo, callbacks?: AppInstallCallbacks): Promise<{ Success: boolean; ErrorMessage?: string }> {
   try {
     const rv = new RunView();
     const escaped = EscapeSqlString(schemaName);
 
-    // First, find all entity IDs in this schema so we can clean FK-dependent records
+    // Helper: delete by filter and throw on any failure so the outer catch reports it
+    // (MJ metadata FKs are NO ACTION, not CASCADE, so dependents must be removed in order).
+    const deleteByFilterOrThrow = async (entityName: string, filter: string): Promise<void> => {
+      const r = await DeleteEntitiesByFilter(rv, contextUser, entityName, filter);
+      if (!r.Success) {
+        throw new Error(r.ErrorMessage ?? `Failed to delete ${entityName} records`);
+      }
+    };
+
+    // First, find all entity IDs in this schema so we can clean FK-dependent records.
     const entityResult = await rv.RunView<BaseEntity>(
       {
         EntityName: 'MJ: Entities',
@@ -1164,49 +1193,70 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
       },
       contextUser,
     );
+    if (!entityResult.Success) {
+      throw new Error(`Failed to query entities for schema '${schemaName}': ${entityResult.ErrorMessage}`);
+    }
 
-    if (!entityResult.Success || entityResult.Results.length === 0) {
+    if (entityResult.Results.length === 0) {
       // No entities found — just clean up SchemaInfo
-      await DeleteEntitiesByFilter(rv, contextUser, 'MJ: Schema Info', `SchemaName = '${escaped}'`);
+      await deleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
       callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
-      return;
+      return { Success: true };
     }
 
     const entityIds = entityResult.Results.map((e) => String(e.Get('ID')));
     const idList = entityIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
-    const entityIdFilter = `EntityID IN (${idList})`;
 
-    // Delete FK-dependent records in order (parallel where safe)
-    await Promise.all([
-      DeleteEntitiesByFilter(rv, contextUser, 'MJ: Entity Permissions', entityIdFilter),
-      DeleteEntitiesByFilter(rv, contextUser, 'MJ: Application Entities', entityIdFilter),
-    ]);
+    // Entity Field Values (FK on EntityFieldID) must go before the Entity Fields they
+    // reference — collect this schema's field IDs first.
+    const fieldResult = await rv.RunView<BaseEntity>(
+      {
+        EntityName: 'MJ: Entity Fields',
+        ExtraFilter: `EntityID IN (${idList})`,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!fieldResult.Success) {
+      throw new Error(`Failed to query entity fields for schema '${schemaName}': ${fieldResult.ErrorMessage}`);
+    }
+    const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(String(f.Get('ID')))}'`).join(',');
 
+    // Delete FK-dependent records in dependency order.
+    if (fieldIdList.length > 0) {
+      await deleteByFilterOrThrow('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
+    }
+    await deleteByFilterOrThrow('MJ: Entity Permissions', `EntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Application Entities', `EntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Entity Settings', `EntityID IN (${idList})`);
     // Entity Relationships reference EntityID on both sides
-    await DeleteEntitiesByFilter(rv, contextUser, 'MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
-
-    // Delete Entity Fields (FK on EntityID)
-    await DeleteEntitiesByFilter(rv, contextUser, 'MJ: Entity Fields', `EntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
+    // Entity Fields (FK on EntityID)
+    await deleteByFilterOrThrow('MJ: Entity Fields', `EntityID IN (${idList})`);
 
     // Delete Entities themselves
     for (const entity of entityResult.Results) {
-      await entity.Delete();
+      if (!(await entity.Delete())) {
+        throw new Error(`Failed to delete entity '${String(entity.Get('Name'))}': ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      }
     }
 
     // Delete SchemaInfo last
-    await DeleteEntitiesByFilter(rv, contextUser, 'MJ: Schema Info', `SchemaName = '${escaped}'`);
+    await deleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
 
     callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
+    return { Success: true };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    callbacks?.OnWarn?.('Metadata', `Failed to remove entity metadata: ${message}`);
+    callbacks?.OnError?.('Metadata', `Failed to remove entity metadata: ${message}`);
+    return { Success: false, ErrorMessage: `Failed to remove entity metadata for schema '${schemaName}': ${message}` };
   }
 }
 
 /**
  * Helper: loads entities by filter and deletes them one by one.
  */
-async function DeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entityName: string, filter: string): Promise<void> {
+async function DeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entityName: string, filter: string): Promise<{ Success: boolean; ErrorMessage?: string }> {
   const result = await rv.RunView<BaseEntity>(
     {
       EntityName: entityName,
@@ -1215,11 +1265,15 @@ async function DeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entity
     },
     contextUser,
   );
-  if (result.Success) {
-    for (const record of result.Results) {
-      await record.Delete();
+  if (!result.Success) {
+    return { Success: false, ErrorMessage: `Failed to query ${entityName}: ${result.ErrorMessage}` };
+  }
+  for (const record of result.Results) {
+    if (!(await record.Delete())) {
+      return { Success: false, ErrorMessage: `Failed to delete a ${entityName} record: ${record.LatestResult?.CompleteMessage ?? 'unknown error'}` };
     }
   }
+  return { Success: true };
 }
 
 /** Calculates elapsed seconds from a `Date.now()` start timestamp. */

@@ -71,6 +71,7 @@
     "@memberjunction/skyway-postgres": "^0.6.2",
     "@memberjunction/skyway-sqlserver": "^0.6.2",
     "@memberjunction/sql-converter": "5.41.0",
+    "@memberjunction/sqlglot-ts": "5.41.0",
     "@memberjunction/sqlserver-dataprovider": "5.41.0",
     "@memberjunction/testing-cli": "5.41.0",
     "@oclif/core": "^3.27.0",

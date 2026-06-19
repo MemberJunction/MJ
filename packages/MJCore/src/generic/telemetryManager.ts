@@ -1395,7 +1395,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         if (!insight.entityName) return false;
         if (!TelemetryManager.ENGINE_CACHE_SUGGESTION_ANALYZERS.has(insight.analyzerName)) return false;
         try {
-            const entity = Metadata.Provider?.EntityByName?.(insight.entityName);
+            const entity = Metadata.Provider?.EntityByName?.(insight.entityName); // global-provider-ok: telemetry aggregates RunView calls process-wide; AllowCaching is structural entity metadata and this check fails open if unavailable
             return entity?.AllowCaching === false;
         } catch {
             return false;
