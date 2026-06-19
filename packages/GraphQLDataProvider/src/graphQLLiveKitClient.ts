@@ -42,10 +42,12 @@ export interface LiveKitClientTokenResult {
 
 /** Input for {@link GraphQLLiveKitClient.StartAgentRoomSession}. */
 export interface StartLiveKitAgentRoomSessionInput {
-  /** The agent to voice in the room. */
+  /** The agent to voice in the room (the Realtime Co-Agent / voice front-end). */
   AgentID?: string;
   /** The agent's display name (bot name + addressing). */
   AgentName?: string;
+  /** The TARGET agent the co-agent voices — the one being "called". Without it the agent stays idle. */
+  TargetAgentID?: string;
   /** The room to use. When omitted, the server generates one. */
   RoomName?: string;
   /** The MJ agent-session id. When omitted, the server generates one. */

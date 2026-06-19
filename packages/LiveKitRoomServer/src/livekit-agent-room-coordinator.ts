@@ -32,6 +32,8 @@ export interface RealtimeSessionStartContext {
   AgentID?: string;
   /** The agent's display name (used for the bot name + turn-taking matcher). */
   AgentName?: string;
+  /** The TARGET agent the co-agent voices via `invoke-target-agent` (the one being "called"). */
+  TargetAgentID?: string;
   /** The room being joined. */
   RoomName: string;
   /** The user the session runs as. */
@@ -56,6 +58,11 @@ export interface StartAgentRoomSessionParams {
   AgentID?: string;
   /** The agent's display name (bot name + addressing). */
   AgentName?: string;
+  /**
+   * The TARGET agent the co-agent voices (the one being "called"). Passed through to the realtime
+   * session factory so the Realtime Co-Agent has someone to delegate to via `invoke-target-agent`.
+   */
+  TargetAgentID?: string;
   /** Extra aliases the agent answers to (for Passive turn-taking). */
   AgentAliases?: string[];
   /** Turn-taking mode. Default: `'Passive'` (speak only when addressed). */
@@ -155,6 +162,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     const session = await this.sessionFactory({
       AgentID: params.AgentID,
       AgentName: params.AgentName,
+      TargetAgentID: params.TargetAgentID,
       RoomName: params.RoomName,
       ContextUser: params.ContextUser,
       MetadataProvider: params.MetadataProvider,

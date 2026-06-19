@@ -69,6 +69,10 @@ export class StartLiveKitAgentRoomSessionInput {
   @Field(() => String, { nullable: true })
   AgentName?: string;
 
+  /** The TARGET agent the co-agent voices (the one being "called") — the Realtime Co-Agent delegates to it. */
+  @Field(() => String, { nullable: true })
+  TargetAgentID?: string;
+
   @Field(() => String, { nullable: true })
   RoomName?: string;
 
@@ -212,6 +216,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
         RoomName: roomName,
         AgentID: input.AgentID,
         AgentName: input.AgentName,
+        TargetAgentID: input.TargetAgentID,
         TurnMode: this.normalizeTurnMode(input.TurnMode),
         ContextUser: user,
         MetadataProvider: provider,

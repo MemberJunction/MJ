@@ -23,6 +23,8 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
       <mj-livekit-agent-room
         class="mj-livekit-room-resource"
         [AgentID]="agentId"
+        [TargetAgentID]="targetAgentId"
+        [AgentName]="targetAgentName"
         Mode="agent"
         [Provider]="ProviderToUse"
         [ShowAgentState]="true"
@@ -68,8 +70,14 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
   ],
 })
 export class LiveKitRoomResource extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
-  /** The target AI Agent id (explicit record, or the resolved default Realtime co-agent). */
+  /** The Realtime co-agent (voice front-end) id — explicit record, or the resolved default Realtime agent. */
   public agentId: string | null = null;
+
+  /** The TARGET agent the co-agent voices (the one being "called"); the bot is named after it. */
+  public targetAgentId: string | null = null;
+
+  /** The target agent's display name — used as the bot name + addressing word ("Sage, …"). */
+  public targetAgentName: string | null = null;
 
   /** True once {@link resolveAgent} has an agent — gates the room render so it never connects with a null id. */
   public agentResolved = false;
@@ -121,6 +129,7 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
 
     if (agent) {
       this.agentId = agent.ID;
+      this.applyDefaultTargetAgent(realtimeType?.ID);
       this.agentResolved = true;
     } else {
       this.resolveError =
@@ -128,6 +137,20 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
         'Create a Realtime-type AI Agent (e.g. "Realtime Co-Agent") and try again.';
       this.NotifyLoadComplete();
     }
+  }
+
+  /**
+   * Picks the default TARGET agent the co-agent voices: the general conversational assistant "Sage"
+   * when present, else the first active non-Realtime agent (the co-agent voices a target, never
+   * itself). Leaves the target null when none exists — the co-agent then runs without delegation.
+   */
+  private applyDefaultTargetAgent(realtimeTypeID: string | undefined): void {
+    const active = AIEngineBase.Instance.Agents.filter((a) => a.Status === 'Active');
+    const target =
+      active.find((a) => a.Name?.trim().toLowerCase() === 'sage') ??
+      active.find((a) => !realtimeTypeID || !UUIDsEqual(a.TypeID, realtimeTypeID));
+    this.targetAgentId = target?.ID ?? null;
+    this.targetAgentName = target?.Name ?? null;
   }
 
   ngAfterViewInit(): void {

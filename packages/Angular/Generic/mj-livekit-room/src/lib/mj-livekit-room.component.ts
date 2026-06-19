@@ -131,10 +131,15 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   // ── MJ connection inputs ───────────────────────────────────────────────────────
   /** Whether to start an agent in the room (`'agent'`) or just join an existing room (`'join'`). */
   @Input() public Mode: MJLiveKitConnectionMode = 'agent';
-  /** The agent to voice (agent mode). */
+  /** The agent to voice (agent mode) — the Realtime Co-Agent / voice front-end. */
   @Input() public AgentID: string | null = null;
   /** The agent's display name (bot name + addressing). */
   @Input() public AgentName: string | null = null;
+  /**
+   * The TARGET agent the co-agent voices — the one being "called". The Realtime Co-Agent delegates to
+   * it via `invoke-target-agent`; without it the agent has nobody to speak for and stays idle.
+   */
+  @Input() public TargetAgentID: string | null = null;
   /** The room name. Required for `'join'` mode; optional for `'agent'` (server generates one). */
   @Input() public RoomName: string | null = null;
   /** The display name the local user joins as. Defaults to the authenticated user server-side. */
@@ -296,6 +301,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     const result = await client.StartAgentRoomSession({
       AgentID: this.AgentID ?? undefined,
       AgentName: this.AgentName ?? undefined,
+      TargetAgentID: this.TargetAgentID ?? undefined,
       RoomName: this.RoomName ?? undefined,
       TurnMode: this.TurnMode ?? undefined,
     });
