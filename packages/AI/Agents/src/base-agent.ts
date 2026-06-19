@@ -19,6 +19,8 @@ import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
+// token optimization via @memberjunction/context-crush (SmartCrusher-inspired)
+import { CrushJSON, DescribeCrush, type JsonValue } from '@memberjunction/context-crush';
 import {
     RealtimeSessionRunner,
     RealtimeSessionRunnerDeps,
@@ -116,6 +118,18 @@ interface ActionResultSummary {
     resultCode: string;
     message: string;
     aiDirectives?: AIDirective[];
+}
+
+/**
+ * Resolved per-run configuration for structurally compressing inline action-result
+ * payloads via @memberjunction/context-crush. Undefined means crushing is disabled
+ * for the run (the agent opted out via `crushActionResults: false`).
+ */
+export interface ActionResultCrushConfig {
+    /** Minimum stringified length of an object/array value before it is crushed. */
+    threshold: number;
+    /** Optional character budget passed to CrushJSON (undefined = no row truncation). */
+    maxChars: number | undefined;
 }
 
 interface BaseIterationContext {
@@ -514,6 +528,14 @@ export class BaseAgent {
     private static readonly LARGE_BINARY_THRESHOLD = 10000;
 
     /**
+     * Minimum stringified length (chars) of an object/array action-result value before
+     * structural JSON compression (CrushJSON) is applied. Small payloads aren't worth a
+     * legend, so they pass through verbatim.
+     * @private
+     */
+    private static readonly ACTION_RESULT_CRUSH_THRESHOLD = 600;
+
+    /**
      * Inspects a set of action output params for any value matching the FileOutputRef shape
      * (an object with `fileName`, `mimeType`, and either `fileData` or `fileId`).
      * Returns all matching FileOutputRef values found across all output params.
@@ -871,6 +893,15 @@ export class BaseAgent {
      * prompt execution occurred after them.
      */
     private _promptTurnCount: number = 0;
+
+    /**
+     * Per-run config for structurally compressing inline action-result payloads.
+     * Resolved once at run start from the agent-type prompt params (default on);
+     * read by formatActionResultsAsMarkdown so both the direct and loop callers
+     * share the same setting without threading it through every signature.
+     * @private
+     */
+    private _actionResultCrush: ActionResultCrushConfig | undefined = undefined;
 
     /**
      * Execution limits for dynamically added actions.
@@ -6249,12 +6280,16 @@ The context is now within limits. Please retry your request with the recovered c
             return `\`${String(value)}\``;
         }
 
-        let stringValue: string;
         if (typeof value === 'string') {
-            stringValue = value;
-        } else {
-            // Compact JSON (no pretty-printing) for objects/arrays
-            stringValue = JSON.stringify(value);
+            return maxLength > 0 && value.length > maxLength ? `${value.substring(0, maxLength)}…` : value;
+        }
+
+        // Objects/arrays: compact JSON (no pretty-printing), optionally structurally
+        // compressed via context-crush when crushing is enabled and the value is large.
+        const stringValue = JSON.stringify(value);
+        const crushed = this.crushParamValue(stringValue);
+        if (crushed !== null) {
+            return crushed;
         }
 
         if (maxLength > 0 && stringValue.length > maxLength) {
@@ -6262,6 +6297,50 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return stringValue;
+    }
+
+    /**
+     * Resolve the per-run action-result compression config from the agent-type prompt
+     * params. Crushing is on by default and only disabled when an agent explicitly sets
+     * `crushActionResults: false`, mirroring the `includeXxxDocs` opt-out convention.
+     * @private
+     */
+    protected resolveActionResultCrush(params: ExecuteAgentParams): ActionResultCrushConfig | undefined {
+        const agentTypePromptParams = params.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        if (agentTypePromptParams?.crushActionResults === false) {
+            return undefined;
+        }
+        return { threshold: BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined };
+    }
+
+    /**
+     * Structurally compress a stringified object/array action-result value when crushing
+     * is enabled for the run and the value clears the size threshold. Returns crushed text
+     * plus a one-line legend, or null when crushing is disabled, the value is too small, or
+     * compression wouldn't actually save characters — so callers fall back to verbatim JSON.
+     *
+     * token optimization via @memberjunction/context-crush (SmartCrusher-inspired)
+     * @private
+     */
+    private crushParamValue(stringValue: string): string | null {
+        const config = this._actionResultCrush;
+        if (!config || stringValue.length < config.threshold) {
+            return null;
+        }
+        // Crushing is a best-effort optimization — it must never break an agent turn. Any
+        // failure (e.g. pathologically deep payloads) falls back to the verbatim JSON.
+        try {
+            // stringValue came from JSON.stringify, so it parses back to a plain JSON value.
+            const json = JSON.parse(stringValue) as JsonValue;
+            const result = CrushJSON(json, { MaxChars: config.maxChars });
+            if (result.CrushedChars >= result.OriginalChars) {
+                return null; // no net saving — keep the verbatim JSON
+            }
+            const legend = DescribeCrush(result);
+            return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
+        } catch {
+            return null;
+        }
     }
 
     /**
@@ -6504,6 +6583,10 @@ The context is now within limits. Please retry your request with the recovered c
         
         // Reset prompt turn counter for this execution
         this._promptTurnCount = 0;
+
+        // Resolve action-result compression config for this run (default on; opt out via
+        // crushActionResults: false in the agent-type prompt params).
+        this._actionResultCrush = this.resolveActionResultCrush(params);
 
         // Create MJAIAgentRunEntity
         this._agentRun = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
