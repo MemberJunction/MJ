@@ -75,3 +75,50 @@ jobs:
           PG_USER: eds_ci
           PG_PASSWORD: eds_ci_pass
         run: npm run test
+
+  mongo-driver-integration:
+    name: MongoDB driver (integration)
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:7
+        env:
+          MONGO_INITDB_ROOT_USERNAME: eds_ci
+          MONGO_INITDB_ROOT_PASSWORD: eds_ci_pass
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1}).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build MongoDB external driver
+        run: npx turbo build --filter=@memberjunction/external-data-source-mongodb
+
+      # The suite self-seeds the `demo` database, so we only point it at the
+      # service container (root creds authenticate against authSource=admin).
+      - name: Run MongoDB driver integration tests
+        working-directory: packages/ExternalDataSources/Providers/MongoDB
+        env:
+          RUN_MONGO_INTEGRATION: '1'
+          MONGO_HOST: localhost
+          MONGO_PORT: '27017'
+          MONGO_DATABASE: demo
+          MONGO_USER: eds_ci
+          MONGO_PASSWORD: eds_ci_pass
+          MONGO_AUTH_SOURCE: admin
+        run: npm run test
