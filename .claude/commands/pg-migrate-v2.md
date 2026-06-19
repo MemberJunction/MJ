@@ -23,15 +23,9 @@ push`. One `--split` run converts everything lacking a `.pg.sql`/`.pg-only.sql`
 counterpart; baselines already have committed `.pg.sql` counterparts and are
 **not** reconverted.
 
-**Deploys are codegen-free (Path C):** `mj migrate` + `mj sync push`, with **no
-`mj codegen` step**. This holds because (a) a one-time **cutover** migration
-(`V202606190000__v5.41.x__PG_CodeGen_Cutover.pg-only.sql`) bakes the complete
-native CodeGen object set for everything that existed at cutover time, (b) every
-new migration carries its own baked CodeGen inline, and (c) the repeatable
-`R__RefreshMetadata.pg-only.sql` self-heals `EntityField.AllowsNull` on every
-deploy — the one schema-derived metadata attribute that drifts without deploy-time
-codegen. (Earlier drafts rebaked the whole post-baseline set instead; that rewrote
-the immutable ledger and is superseded by the cutover.)
+**Deploy is `mj migrate` + `mj sync push` — never `mj codegen`.** New migrations
+carry their CodeGen baked inline (Step 1d), so applying the `.pg.sql` set yields the
+correct schema directly.
 
 The real gate is **`mj migrate` applying cleanly to a fresh PG DB**, then
 `mj sync push` completing — the converter's "0 gaps" summary is structural only
@@ -232,7 +226,7 @@ If there are zero `.needs-hand` files, skip Phase 2.
 ### Step 1d: Bake CodeGen inline into the NEW migrations (`convert --bake-codegen`)
 
 CodeGen objects are baked **inline** into each newly-converted migration so the set deploys with
-`mj migrate` alone — **no `mj codegen` at deploy** (Path C). With `--bake-codegen`, convert advances
+`mj migrate` alone — no `mj codegen` at deploy. With `--bake-codegen`, convert advances
 a working PG DB by applying the migration's hand DDL, then captures native **per-entity** CodeGen
 (base view / CRUD sprocs / triggers / grants) for the entities that migration touched and writes them
 into the `.pg.sql`. A migration with a transpile gap (hand-procedural / collation-dependent) keeps its
@@ -249,14 +243,9 @@ MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 npx mj migrate convert --split -
 '
 ```
 
-**The historical (pre-cutover) migrations are NOT rebaked** — they remain the transpiled originals
-(immutable ledger, Rule 1) and are made codegen-free by the one-time
-`V202606190000__v5.41.x__PG_CodeGen_Cutover.pg-only.sql` migration, which carries the complete CodeGen
-object set for everything that existed at cutover time (raw `mj codegen` output + CodeGen's metadata-
-support objects prepended so it replays standalone). `mj migrate rebake` exists to re-capture a single
-migration's baked block, but **never run it across the committed set** — that rewrites the immutable
-ledger (the superseded approach). The cutover + `R__RefreshMetadata.pg-only.sql` are committed once and
-then themselves immutable.
+Only bake the NEW migration(s) you just converted. **Never run `mj migrate rebake` across the
+committed set** — committed `.pg.sql` are immutable (Rule 1); `rebake` is only for re-capturing a
+single migration's baked block in place.
 
 ---
 
@@ -364,11 +353,8 @@ BOOT
 
 ### Step 3b: Deploy — THE GATE (`migrate → sync push`, NO codegen)
 
-The full set is **codegen-free** (Path C): the one-time cutover migration carries the historical
-CodeGen object set, each new migration carries its own baked CodeGen inline (Step 1d), and
-`R__RefreshMetadata.pg-only.sql` self-heals `EntityField.AllowsNull` — so `mj migrate` alone yields
-the correct schema. **The deploy-time `mj codegen` step is gone** — only `mj sync push` (metadata
-re-seed) follows.
+`mj migrate` applies the `.pg.sql` set (schema + each migration's baked CodeGen) and yields the
+correct schema directly — **no `mj codegen` step**. Only `mj sync push` (metadata re-seed) follows.
 
 `DB_PLATFORM=postgresql` triggers the PG provider and auto-swaps
 `migrations/` → `migrations-pg/`.
@@ -380,7 +366,7 @@ export DB_PLATFORM=postgresql DB_HOST=postgres-claude DB_PORT=5432 \
   DB_DATABASE=MJ_PG_Migrate_Test DB_ENCRYPT=false DB_TRUST_SERVER_CERTIFICATE=true \
   CODEGEN_DB_USERNAME=mj_admin CODEGEN_DB_PASSWORD=Claude2Pg99 MJ_CORE_SCHEMA=__mj
 
-# 1. Apply schema + cutover + inline-baked CodeGen objects (all .pg.sql, in order, via Skyway). No codegen.
+# 1. Apply schema + inline-baked CodeGen objects (all .pg.sql, in order, via Skyway). No codegen.
 npx mj migrate --verbose 2>&1 | tee /tmp/v2-migrate.log
 
 # 2. Seed metadata to current state (--ci = non-interactive)
@@ -390,7 +376,7 @@ npx mj sync push --dir metadata --ci 2>&1 | tee /tmp/v2-syncpush.log
 
 **Gate criteria — ALL must hold before proceeding:**
 1. `mj migrate` applies every migration with **no errors** (`/tmp/v2-migrate.log`) — including the
-   cutover + baked views/sprocs/triggers/grants, with **no `mj codegen` step**.
+   baked views/sprocs/triggers/grants, with **no `mj codegen` step**.
 2. `mj sync push` completes without errors.
 
 If `mj migrate` fails on a converted file: capture the exact error, then either
@@ -481,7 +467,7 @@ You are running inside the claude-dev Docker container with the MJ repo at /work
 Your job: Run FULL STACK smoke tests against the PostgreSQL database {{PG_DB_NAME}} — both API-level and browser-level.
 
 ## Database
-{{PG_DB_NAME}} on postgres-claude already has all v5 migrations applied (incl. the cutover — CodeGen objects are baked into the migrations, no separate codegen step) + metadata seed. Use it.
+{{PG_DB_NAME}} on postgres-claude already has all v5 migrations applied (CodeGen objects are baked into the migrations — no separate codegen step) + metadata seed. Use it.
 - PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99, database={{PG_DB_NAME}}
 
 ## TIER 1: API smoke
