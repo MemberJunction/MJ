@@ -705,6 +705,38 @@ export async function growthzoneE2ELive(values, scrub) {
 }
 
 /**
+ * SharePoint (Microsoft Graph v1.0) LIVE e2e — MULTI-SECRET OAuth2 client-credentials
+ * (TenantId + ClientId + ClientSecret), which the single-token connector-e2e-live path can't carry.
+ * The three Azure-Service-Principal secrets are dereferenced by the runner from the broker env
+ * (SHAREPOINT_TENANT_ID/CLIENT_ID/CLIENT_SECRET) and assembled into the connector's CredentialValues;
+ * they never leave the broker process. Drives the FULL connector-e2e (CreateConnection → discover →
+ * ApplyAll builds tables → StartSync pulls via the real IntegrationEngine → tail → SQL-Server rowcount
+ * verification incl. content-hash idempotency) against the REAL tenant — non-vacuous by construction.
+ * READ-ONLY (writes:false): SharePoint's [A] contract is read/sync only; no Graph mutation.
+ *
+ * Like growthzone-e2e-live, the assertion DB password may be overridden per-job via E2E_LIVE_CONFIG
+ * (allowlisted, no broker restart) — a LOCAL test DB pwd, not a real secret. MJ_API_KEY + DB_PASSWORD
+ * are declared secrets (standard launch-broker.sh recipe): the broker must carry all of SharePoint's
+ * three OAuth2 secrets PLUS DB_PASSWORD + MJ_API_KEY for the full live e2e (the read-only ladder rung
+ * only needs the three OAuth2 secrets).
+ */
+export async function sharepointE2ELive(values, scrub) {
+    const env = process.env;
+    const cred = {
+        TenantId: values.tenantId,
+        ClientId: values.clientId,
+        ClientSecret: values.clientSecret,
+    };
+    // Optional non-secret config (a target site) — rides the broker env or E2E_LIVE_CONFIG; never required.
+    const site = (env.SHAREPOINT_SITE || '').trim();
+    const configuration = { ...cred, ...(site ? { Site: site } : {}) };
+    let liveCfgPwd;
+    try { liveCfgPwd = JSON.parse(env.E2E_LIVE_CONFIG || '{}').dbPassword; } catch { /* ignore */ }
+    const dbPassword = liveCfgPwd || env.E2E_DB_PASSWORD || values.dbPassword;
+    return connectorE2EPlan({ ...values, dbPassword, credentialValues: cred, configuration }, scrub, false);
+}
+
+/**
  * Registry: task name → { secrets (logicalName→ENV_VAR default), run, writes }.
  *
  * `writes` is the SAFETY flag. A live test against a client's real credentials must NEVER
@@ -1691,6 +1723,13 @@ export const PLANS = {
     'growthzone-e2e-live': {
         secrets: { clientId: 'GROWTHZONE_CLIENT_ID', clientSecret: 'GROWTHZONE_CLIENT_SECRET', dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
         run: growthzoneE2ELive, writes: false,
+    },
+    // SharePoint (Microsoft Graph v1.0) — MULTI-SECRET OAuth2 client-credentials FULL live e2e.
+    // Broker must carry the 3 Azure-Service-Principal secrets PLUS DB_PASSWORD + MJ_API_KEY (standard
+    // launch-broker.sh recipe). READ-ONLY (writes:false) — pull/sync only, no Graph mutation.
+    'sharepoint-e2e-live': {
+        secrets: { tenantId: 'SHAREPOINT_TENANT_ID', clientId: 'SHAREPOINT_CLIENT_ID', clientSecret: 'SHAREPOINT_CLIENT_SECRET', dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
+        run: sharepointE2ELive, writes: false,
     },
     // PropFuel lifecycle proof — observe answered_at/deleted_at populated + id recurrence. writes:false.
     'propfuel-lifecycle': { secrets: { token: 'CONNECTOR_API_KEY' }, run: propfuelLifecycle, writes: false },
