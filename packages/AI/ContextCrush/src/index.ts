@@ -9,3 +9,4 @@
  * (@memberjunction/context-crush/code) to keep this base entry point parser-free.
  */
 export * from './crush-json';
+export * from './partition-stable-prefix';

@@ -19,8 +19,8 @@ import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
-// token optimization via @memberjunction/context-crush (SmartCrusher-inspired)
-import { CrushJSON, DescribeCrush, type JsonValue } from '@memberjunction/context-crush';
+// token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
+import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 import {
     RealtimeSessionRunner,
     RealtimeSessionRunnerDeps,
@@ -11455,6 +11455,17 @@ The context is now within limits. Please retry your request with the recovered c
         }> = [];
         const messagesToRemove: number[] = [];
 
+        // Cache-aware guard: confine pruning/compaction to the volatile tail so we don't
+        // perturb the provider's KV-cached prompt prefix. The stable prefix is the maximal
+        // contiguous leading run of non-result messages (system/RAG context, injected
+        // memory, the original user request). Expired messages that fall inside that prefix
+        // are deferred — genuine context overflow still reaches them via attemptContextRecovery.
+        // token optimization via @memberjunction/context-crush (CacheAligner-inspired)
+        const { Boundary: stablePrefixBoundary } = PartitionStablePrefix(
+            params.conversationMessages,
+            (msg) => !this.IsVolatileResultMessage(msg as ChatMessage)
+        );
+
         // Phase 1: Identify expired messages
         for (let i = 0; i < params.conversationMessages.length; i++) {
             const msg = params.conversationMessages[i] as AgentChatMessage;
@@ -11475,6 +11486,15 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Check if expired
             if (turnsAlive > msg.metadata.expirationTurns) {
+                // Defer expiry of messages inside the cache-stable prefix to preserve the
+                // provider's cached prompt prefix; overflow recovery handles them if needed.
+                if (i < stablePrefixBoundary) {
+                    if (params.verbose) {
+                        console.log(`[Turn ${currentTurn}] Deferred expiry of cache-stable prefix message at index ${i}`);
+                    }
+                    continue;
+                }
+
                 msg.metadata.isExpired = true;
 
                 if (msg.metadata.expirationMode === 'Remove') {
@@ -11785,6 +11805,22 @@ The context is now within limits. Please retry your request with the recovered c
         return messageType === 'action-result'
             || messageType === 'client-tool-result'
             || messageType === 'tool-result';
+    }
+
+    /**
+     * Returns true if the message is a turn-generated result (action, tool, client tool,
+     * sub-agent, or loop). These are the volatile, expirable messages that accumulate over
+     * turns. Everything else — system/RAG context, injected memory, the original user
+     * request — anchors the cache-stable prompt prefix and is protected from routine pruning.
+     * @protected
+     */
+    protected IsVolatileResultMessage(msg: ChatMessage): boolean {
+        const messageType = (msg as AgentChatMessage).metadata?.messageType;
+        return messageType === 'action-result'
+            || messageType === 'client-tool-result'
+            || messageType === 'tool-result'
+            || messageType === 'sub-agent-result'
+            || messageType === 'loop-result';
     }
 
     protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
