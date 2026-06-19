@@ -55,7 +55,7 @@ export class IntegrationDiscoveryScheduledJobDriver extends BaseScheduledJob {
         // Ensure the integration engine metadata is loaded (connector cache, etc.).
         await IntegrationEngine.Instance.Config(false, context.ContextUser);
 
-        const provider = Metadata.Provider as unknown as IMetadataProvider;
+        const provider = Metadata.Provider as unknown as IMetadataProvider; // global-provider-ok: scheduled discovery job is a server-global task, not per-request/per-tenant
         const ci = await provider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', context.ContextUser);
         if (!(await ci.Load(config.CompanyIntegrationID))) {
             return {

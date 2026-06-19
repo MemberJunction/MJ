@@ -163,7 +163,6 @@ export default class MigrateRebake extends Command {
     schema: string,
   ): Promise<{ baker: IncrementalBaker; dispose: () => Promise<void> }> {
     const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform } = await import('@memberjunction/codegen-lib');
-    const { Metadata } = await import('@memberjunction/core');
 
     if (dbPlatform() !== 'postgresql') {
       this.error('migrate rebake requires DB_PLATFORM=postgresql with PG_* connection env (the working DB CodeGen is captured from).');
@@ -182,14 +181,13 @@ export default class MigrateRebake extends Command {
     this.log(`  working DB: ${ds.connectionInfo}\n`);
 
     const sqlGen = new SQLCodeGenBase();
-    const md = new Metadata();
     const db: BakerWorkingDB = {
       // Committed files may still carry the `${flyway:defaultSchema}` macro (Skyway substitutes it
       // at deploy); raw pg.query can't, so substitute before applying to advance the working DB.
       apply: async (sql: string) => { await ds.connection.query(sql.replaceAll('${flyway:defaultSchema}', schema)); },
       refreshMetadata: async () => { await ds.provider.Refresh(); },
       captureEntity: async (name: string) => {
-        const entity = md.EntityByName(name);
+        const entity = ds.provider.EntityByName(name);
         if (!entity) throw new Error(`migrate rebake: entity not found in working-DB metadata: ${name}`);
         const r = await sqlGen.generateSingleEntitySQLToSeparateFiles({
           pool: ds.connection,

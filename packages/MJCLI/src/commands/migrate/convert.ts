@@ -413,7 +413,6 @@ export default class MigrateConvert extends Command {
    */
   private async buildBaker(transpiler: MJPostgresTranspiler, schema: string): Promise<IncrementalBaker> {
     const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform } = await import('@memberjunction/codegen-lib');
-    const { Metadata } = await import('@memberjunction/core');
 
     if (dbPlatform() !== 'postgresql') {
       this.error('--bake-codegen requires DB_PLATFORM=postgresql with PG_* connection env (the working DB CodeGen objects are captured from).');
@@ -431,7 +430,6 @@ export default class MigrateConvert extends Command {
     }
 
     const sqlGen = new SQLCodeGenBase();
-    const md = new Metadata();
     const db: BakerWorkingDB = {
       apply: async (sql: string) => {
         await ds.connection.query(sql);
@@ -440,7 +438,7 @@ export default class MigrateConvert extends Command {
         await ds.provider.Refresh();
       },
       captureEntity: async (name: string) => {
-        const entity = md.EntityByName(name);
+        const entity = ds.provider.EntityByName(name);
         if (!entity) throw new Error(`--bake-codegen: entity not found in working-DB metadata: ${name}`);
         const r = await sqlGen.generateSingleEntitySQLToSeparateFiles({
           pool: ds.connection,
