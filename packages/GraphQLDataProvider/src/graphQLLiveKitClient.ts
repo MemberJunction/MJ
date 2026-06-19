@@ -162,6 +162,27 @@ export class GraphQLLiveKitClient {
   }
 
   /**
+   * Removes one agent from a room (the bot leaves) — identified by the `SessionBridgeID` from
+   * {@link StartAgentRoomSession}. Returns `true` when stopped. Best-effort: any failure resolves `false`.
+   *
+   * @param sessionBridgeID The agent's bridge row id.
+   */
+  public async StopAgentRoomSession(sessionBridgeID: string): Promise<boolean> {
+    try {
+      const mutation = gql`
+        mutation StopLiveKitAgentRoomSession($sessionBridgeID: String!) {
+          StopLiveKitAgentRoomSession(sessionBridgeID: $sessionBridgeID)
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(mutation, { sessionBridgeID });
+      return result?.StopLiveKitAgentRoomSession === true;
+    } catch (e: any) {
+      LogError('GraphQLLiveKitClient.StopAgentRoomSession failed', undefined, e);
+      return false;
+    }
+  }
+
+  /**
    * Starts recording a room (server-authorized composite egress).
    *
    * @param roomName The room to record.

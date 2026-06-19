@@ -22,6 +22,18 @@ export interface MJLiveKitSessionStartedEvent {
   RoomName: string;
 }
 
+/** One agent bot bridged into the room — tracked for the in-room add/remove roster. */
+export interface AgentInRoom {
+  /** The `MJ: AI Agent Session Bridges` row id (used to stop/remove this agent). */
+  SessionBridgeID: string;
+  /** The target agent this bot voices, when known. */
+  TargetAgentID: string | null;
+  /** Display name (the target agent's name). */
+  Name: string;
+  /** True while a remove request is in flight. */
+  Removing?: boolean;
+}
+
 /**
  * `mj-livekit-agent-room` — the MemberJunction binding for the LiveKit room UI. It resolves a scoped
  * access token (and, in `'agent'` mode, starts the agent's presence in the room) via the RealtimeBridge
@@ -48,6 +60,7 @@ export interface MJLiveKitSessionStartedEvent {
         <button type="button" class="mj-lk-retry" (click)="Start()">Try again</button>
       </div>
     } @else if (serverUrl && token) {
+      <div class="mj-lk-room-wrap">
       <mj-livekit-room
         [ServerUrl]="serverUrl"
         [Token]="token"
@@ -86,6 +99,45 @@ export interface MJLiveKitSessionStartedEvent {
         (ToggleRecording)="onToggleRecording()"
         (ErrorOccurred)="ErrorOccurred.emit($event)"
       ></mj-livekit-room>
+
+      @if (Mode === 'agent' && EnableAgentManagement) {
+        <div class="mj-lk-agents">
+          <button type="button" class="mj-lk-agents__toggle" (click)="showAgentsPanel = !showAgentsPanel">
+            <i class="fa-solid fa-robot"></i> Agents ({{ agentsInRoom.length }})
+          </button>
+          @if (showAgentsPanel) {
+            <div class="mj-lk-agents__panel">
+              <div class="mj-lk-agents__head">In this room</div>
+              @for (a of agentsInRoom; track a.SessionBridgeID) {
+                <div class="mj-lk-agents__row">
+                  <span class="mj-lk-agents__name"><i class="fa-solid fa-robot"></i> {{ a.Name }}</span>
+                  <button type="button" class="mj-lk-agents__remove" title="Remove agent"
+                    [disabled]="a.Removing" (click)="RemoveAgent(a)">
+                    <i class="fa-solid" [class.fa-xmark]="!a.Removing" [class.fa-spinner]="a.Removing" [class.fa-spin]="a.Removing"></i>
+                  </button>
+                </div>
+              }
+              @if (availableToAdd.length) {
+                <div class="mj-lk-agents__add">
+                  <select class="mj-input mj-lk-agents__select" (change)="onAddTargetChange($event)">
+                    <option value="">Add an agent…</option>
+                    @for (a of availableToAdd; track a.ID) {
+                      <option [value]="a.ID" [selected]="a.ID === addTargetId">{{ a.Name }}</option>
+                    }
+                  </select>
+                  <button type="button" class="mj-lk-agents__addbtn" [disabled]="!addTargetId || addingAgent" (click)="AddAgent()">
+                    <i class="fa-solid" [class.fa-plus]="!addingAgent" [class.fa-spinner]="addingAgent" [class.fa-spin]="addingAgent"></i>
+                  </button>
+                </div>
+              }
+              @if (addError) {
+                <div class="mj-lk-agents__error">{{ addError }}</div>
+              }
+            </div>
+          }
+        </div>
+      }
+      </div>
     }
   `,
   styles: [
@@ -122,6 +174,113 @@ export interface MJLiveKitSessionStartedEvent {
         color: var(--mj-text-inverse, #fff);
         background: var(--mj-brand-primary, #0076b6);
       }
+      .mj-lk-room-wrap {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+      .mj-lk-agents {
+        position: absolute;
+        left: 16px;
+        bottom: 84px;
+        z-index: 40;
+        display: flex;
+        flex-direction: column-reverse;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .mj-lk-agents__toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 0.8125rem;
+        color: var(--mj-text-primary);
+        background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+        box-shadow: var(--mj-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.18));
+      }
+      .mj-lk-agents__panel {
+        width: 260px;
+        padding: 10px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 10px;
+        background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+        box-shadow: var(--mj-shadow-md, 0 6px 20px rgba(0, 0, 0, 0.25));
+      }
+      .mj-lk-agents__head {
+        font-size: 0.6875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--mj-text-muted);
+        margin-bottom: 6px;
+      }
+      .mj-lk-agents__row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 5px 0;
+      }
+      .mj-lk-agents__name {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 0.8125rem;
+        color: var(--mj-text-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .mj-lk-agents__name i {
+        color: var(--mj-brand-primary);
+      }
+      .mj-lk-agents__remove {
+        flex: none;
+        width: 26px;
+        height: 26px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--mj-text-muted);
+        background: transparent;
+      }
+      .mj-lk-agents__remove:hover:not(:disabled) {
+        color: var(--mj-status-error);
+        background: var(--mj-bg-surface-hover);
+      }
+      .mj-lk-agents__add {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+      }
+      .mj-lk-agents__select {
+        flex: 1;
+        min-width: 0;
+        font-size: 0.8125rem;
+      }
+      .mj-lk-agents__addbtn {
+        flex: none;
+        width: 32px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--mj-text-inverse);
+        background: var(--mj-brand-primary);
+      }
+      .mj-lk-agents__addbtn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .mj-lk-agents__error {
+        margin-top: 6px;
+        font-size: 0.75rem;
+        color: var(--mj-status-error-text, var(--mj-status-error));
+      }
     `,
   ],
 })
@@ -148,6 +307,29 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public TurnMode: 'Passive' | 'Active' | 'Hybrid' | null = null;
   /** Resolve the connection automatically on init. */
   @Input() public AutoStart = true;
+
+  // ── In-room agent management (agent mode) ─────────────────────────────────────────
+  /** Show the in-room "Agents" panel to add/remove agents (agent mode only). */
+  @Input() public EnableAgentManagement = true;
+  /** Target agents the user can ADD in-room (id + name). The host (e.g. the Explorer resource) supplies these. */
+  @Input() public AvailableAgents: { ID: string; Name: string }[] = [];
+
+  /** Whether the floating agents panel is open. */
+  public showAgentsPanel = false;
+  /** The agent bots currently bridged into the room (the first is the one started on join). */
+  public agentsInRoom: AgentInRoom[] = [];
+  /** The target id chosen in the "Add an agent" picker. */
+  public addTargetId: string | null = null;
+  /** True while an Add request is in flight. */
+  public addingAgent = false;
+  /** Last add error, shown under the picker. */
+  public addError: string | null = null;
+
+  /** Available agents not already in the room (by target id) — the "Add" picker options. */
+  public get availableToAdd(): { ID: string; Name: string }[] {
+    const present = new Set(this.agentsInRoom.map((a) => (a.TargetAgentID ?? '').toLowerCase()));
+    return this.AvailableAgents.filter((a) => !present.has(a.ID.toLowerCase()));
+  }
 
   // ── Forwarded UI gates (see LiveKitRoomComponent) ────────────────────────────────
   /** @see LiveKitRoomComponent.Layout */
@@ -312,7 +494,77 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.serverUrl = result.ServerUrl;
     this.token = result.ClientToken;
     this.resolvedRoomName = result.RoomName;
+    // Track the agent we just brought in as the first entry in the in-room roster.
+    this.agentsInRoom = [
+      { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.TargetAgentID, Name: this.AgentName ?? 'Agent' },
+    ];
     this.SessionStarted.emit({ SessionBridgeID: result.SessionBridgeID, RoomName: result.RoomName });
+  }
+
+  /** Picker selection handler for the in-room "Add an agent" control (native select; no FormsModule dep). */
+  public onAddTargetChange(event: Event): void {
+    this.addTargetId = (event.target as HTMLSelectElement).value || null;
+    this.addError = null;
+  }
+
+  /**
+   * Adds another agent to the SAME room — starts a new bridge (the co-agent voicing the chosen target)
+   * and appends it to the roster. The new bot joins the live room alongside the existing participants.
+   */
+  public async AddAgent(): Promise<void> {
+    if (!this.addTargetId || !this.resolvedRoomName || this.addingAgent) {
+      return;
+    }
+    const target = this.AvailableAgents.find((a) => a.ID === this.addTargetId);
+    this.addingAgent = true;
+    this.addError = null;
+    this.cdr.markForCheck();
+    try {
+      const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+      const result = await client.StartAgentRoomSession({
+        AgentID: this.AgentID ?? undefined,
+        AgentName: target?.Name ?? undefined,
+        TargetAgentID: this.addTargetId,
+        RoomName: this.resolvedRoomName,
+        TurnMode: this.TurnMode ?? undefined,
+      });
+      if (!result.Success) {
+        this.addError = result.ErrorMessage ?? 'Failed to add the agent.';
+        return;
+      }
+      this.agentsInRoom = [
+        ...this.agentsInRoom,
+        { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.addTargetId, Name: target?.Name ?? 'Agent' },
+      ];
+      this.addTargetId = null;
+    } catch (err) {
+      this.addError = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.addingAgent = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Removes an agent from the room — stops its bridge and drops it from the roster. */
+  public async RemoveAgent(agent: AgentInRoom): Promise<void> {
+    if (agent.Removing) {
+      return;
+    }
+    agent.Removing = true;
+    this.cdr.markForCheck();
+    try {
+      const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+      const ok = await client.StopAgentRoomSession(agent.SessionBridgeID);
+      if (ok) {
+        this.agentsInRoom = this.agentsInRoom.filter((a) => a.SessionBridgeID !== agent.SessionBridgeID);
+      } else {
+        agent.Removing = false;
+      }
+    } catch {
+      agent.Removing = false;
+    } finally {
+      this.cdr.markForCheck();
+    }
   }
 
   /** Joins an existing room by minting a client token. */

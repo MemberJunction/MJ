@@ -241,6 +241,31 @@ export class RealtimeBridgeResolver extends ResolverBase {
   }
 
   /**
+   * Stops one agent's presence in a room (the bot leaves) — the remove half of in-room agent management.
+   * Identified by the `SessionBridgeID` returned from {@link StartLiveKitAgentRoomSession}. Returns `true`
+   * when the bridge was stopped. Best-effort: a missing/already-stopped bridge or any error resolves `false`.
+   *
+   * @param sessionBridgeID The `MJ: AI Agent Session Bridges` row id of the agent to remove.
+   */
+  @Mutation(() => Boolean)
+  async StopLiveKitAgentRoomSession(
+    @Arg('sessionBridgeID', () => String) sessionBridgeID: string,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<boolean> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return false;
+      }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      return await LiveKitAgentRoomCoordinator.Instance.StopAgentRoomSession(sessionBridgeID, 'Explicit', user, provider);
+    } catch (error) {
+      LogError(`StopLiveKitAgentRoomSession failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }
+
+  /**
    * Starts recording (composite egress) of a room. Server-authorized — the browser never holds egress
    * credentials.
    */

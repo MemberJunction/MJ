@@ -34,6 +34,7 @@ interface TargetAgentChoice {
           [AgentID]="agentId"
           [TargetAgentID]="targetAgentId"
           [AgentName]="targetAgentName"
+          [AvailableAgents]="agents"
           Mode="agent"
           [Provider]="ProviderToUse"
           [ShowAgentState]="true"
