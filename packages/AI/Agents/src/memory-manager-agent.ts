@@ -41,6 +41,9 @@ const EXTRACTION_CONFIG = {
     cooldownHours: 24              // Don't re-extract from same conversation within 24h
 };
 
+/** Cap on a failed run's ErrorMessage length when summarizing it for corrective extraction. */
+const MAX_FAILURE_ERROR_CHARS = 2000;
+
 /**
  * Configuration for note consolidation.
  * Consolidation finds clusters of similar notes and synthesizes them into single comprehensive notes.
@@ -442,6 +445,25 @@ interface ExtractedNote {
      * - 'user': Specific to one user (e.g., "John prefers email")
      */
     scopeLevel?: 'global' | 'company' | 'user';
+    /**
+     * Protection tier override applied at creation. Failure-mined corrective notes set this
+     * to 'Ephemeral' so they decay fast unless reinforced by recurrence. Undefined falls back
+     * to the default tier in CreateNoteRecords.
+     */
+    protectionTierHint?: 'Immutable' | 'Protected' | 'Standard' | 'Ephemeral';
+}
+
+/**
+ * Minimal projection of a failed/cancelled agent run mined for corrective ("avoid this")
+ * memory. ID-only-plus-error shape mirrors LoadHighValueAgentRuns' lightweight projection
+ * to avoid per-run secondary RunViews.
+ */
+interface InstructiveFailedRun {
+    ID: string;
+    AgentID: string | null;
+    ConversationID: string | null;
+    Status: string;
+    ErrorMessage: string | null;
 }
 
 /**
@@ -793,6 +815,30 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
+     * Load recent failed/cancelled agent runs that carry an error, to mine corrective
+     * ("this approach didn't work") memory. Unlike LoadHighValueAgentRuns, the filter keys on
+     * the run's own status/error columns — no subquery, no inline SQL literal — so it is
+     * dialect-agnostic across SQL Server and PostgreSQL. Bounded (MaxRows 50) and cooldown-aware
+     * via the `since` window, matching the high-value loader's lightweight projection.
+     */
+    private async LoadInstructiveFailedAgentRuns(since: Date | null, contextUser: UserInfo): Promise<InstructiveFailedRun[]> {
+        const rv = new RunView();
+        const sinceFilter = since ? ` AND __mj_CreatedAt >= '${since.toISOString()}'` : '';
+        const filter = `Status IN ('Failed', 'Cancelled') AND ErrorMessage IS NOT NULL${sinceFilter}`;
+
+        const result = await rv.RunView<InstructiveFailedRun>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: filter,
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 50,
+            Fields: ['ID', 'AgentID', 'ConversationID', 'Status', 'ErrorMessage'],
+            ResultType: 'simple'
+        }, contextUser);
+
+        return result.Success ? (result.Results || []) : [];
+    }
+
+    /**
      * Extract notes from conversations with rating data using AI analysis.
      * This is the primary method that handles rated, unrated, positive, and negative feedback.
      * Uses LLM-based deduplication and applies sparsity controls.
@@ -839,6 +885,80 @@ export class MemoryManagerAgent extends BaseAgent {
         };
 
         return this.executeNoteExtraction(promptData, existingNotes, contextUser);
+    }
+
+    /**
+     * Mine corrective ("avoid this") memory from failed/cancelled agent runs. Each failed run
+     * is presented to the same extraction pipeline as a negative-outcome thread — the extraction
+     * prompt already knows how to draw lessons from negative feedback — then the output is clamped
+     * to the corrective note types (Issue/Context only, never Constraint/Preference/Example) and
+     * tagged 'Ephemeral' so a one-off transient failure decays unless reinforced by recurrence.
+     */
+    private async ExtractNotesFromFailedRuns(
+        failedRuns: InstructiveFailedRun[],
+        contextUser: UserInfo
+    ): Promise<ExtractedNote[]> {
+        if (failedRuns.length === 0) {
+            return [];
+        }
+
+        const existingNotes = AIEngine.Instance.AgentNotes.filter(n => n.Status === 'Active');
+
+        const conversationThreads = failedRuns.map(run => ({
+            conversationId: run.ConversationID || run.ID,
+            agentRunId: run.ID,
+            hasPositiveRating: false,
+            hasNegativeRating: true,
+            isUnrated: false,
+            messages: [{
+                id: run.ID,
+                role: 'system',
+                message: this.buildFailureSummary(run),
+                createdAt: new Date(),
+                rating: -1,
+                ratingComment: 'Agent run failed — mine for a corrective lesson.'
+            }]
+        }));
+
+        const promptData = {
+            conversationThreads,
+            existingNotes: existingNotes.map(n => ({
+                id: n.ID,
+                type: n.Type,
+                content: n.Note,
+                agentId: n.AgentID,
+                userId: n.UserID,
+                companyId: n.CompanyID
+            }))
+        };
+
+        const extracted = await this.executeNoteExtraction(promptData, existingNotes, contextUser);
+        return this.markCorrectiveNotes(extracted);
+    }
+
+    /**
+     * Build the negative-outcome transcript line fed to corrective extraction for a failed run.
+     * The error is capped so a large stack trace can't bloat the extraction prompt — ironic for a
+     * token-optimization feature — while still carrying enough signal for a generalizable lesson.
+     */
+    private buildFailureSummary(run: InstructiveFailedRun): string {
+        const rawError = run.ErrorMessage ?? '(none recorded)';
+        const error = rawError.length > MAX_FAILURE_ERROR_CHARS
+            ? `${rawError.slice(0, MAX_FAILURE_ERROR_CHARS)}… (truncated)`
+            : rawError;
+        return `An agent run ended with status "${run.Status}". Error: ${error}. `
+            + `Identify a generalizable lesson to avoid repeating this failure; if none generalizes, extract nothing.`;
+    }
+
+    /**
+     * Clamp failure-mined notes to the corrective types and tag them Ephemeral. Dropping
+     * non-Issue/Context notes preserves the prompt-injection defense — a mined failure can
+     * never become a behavioral Constraint without Memory-Manager/human promotion.
+     */
+    private markCorrectiveNotes(notes: ExtractedNote[]): ExtractedNote[] {
+        return notes
+            .filter(n => n.type === 'Issue' || n.type === 'Context')
+            .map(n => ({ ...n, protectionTierHint: 'Ephemeral' as const }));
     }
 
     /**
@@ -1469,7 +1589,9 @@ export class MemoryManagerAgent extends BaseAgent {
 
                     // Consolidation tracking fields
                     note.ConsolidationCount = 0; // Raw extraction, never consolidated
-                    note.ProtectionTier = note.IsAutoGenerated ? 'Standard' : 'Protected';
+                    // Failure-mined corrective notes carry an explicit tier hint (Ephemeral) so
+                    // they decay fast unless reinforced; otherwise apply the default tier.
+                    note.ProtectionTier = extracted.protectionTierHint || (note.IsAutoGenerated ? 'Standard' : 'Protected');
 
                     note.SourceConversationID = extracted.sourceConversationId || null;
                     // Only use if it's a valid UUID (LLM now sees message IDs in the prompt)
@@ -3645,9 +3767,13 @@ export class MemoryManagerAgent extends BaseAgent {
             const step2 = await this.CreateRunStep('Decision', 'Load High-Value Agent Runs', {
                 since: lastRunTime?.toISOString() || null
             });
-            const [conversations, agentRuns] = await Promise.all([
+            const step3 = await this.CreateRunStep('Decision', 'Load Instructive Failed Agent Runs', {
+                since: lastRunTime?.toISOString() || null
+            });
+            const [conversations, agentRuns, failedRuns] = await Promise.all([
                 this.LoadConversationsWithNewActivity(lastRunTime, agentsUsingMemory, params.contextUser!),
-                this.LoadHighValueAgentRuns(lastRunTime, params.contextUser!)
+                this.LoadHighValueAgentRuns(lastRunTime, params.contextUser!),
+                this.LoadInstructiveFailedAgentRuns(lastRunTime, params.contextUser!)
             ]);
             const totalMessages = conversations.reduce((sum, c) => sum + c.messages.length, 0);
             await this.FinalizeRunStep(step1, true, {
@@ -3660,12 +3786,16 @@ export class MemoryManagerAgent extends BaseAgent {
             await this.FinalizeRunStep(step2, true, {
                 runCount: agentRuns.length
             });
+            await this.FinalizeRunStep(step3, true, {
+                runCount: failedRuns.length
+            });
             if (this._verbose) {
                 LogStatus(`Memory Manager: Found ${conversations.length} conversations with new activity`);
                 LogStatus(`Memory Manager: Found ${agentRuns.length} high-value agent runs`);
+                LogStatus(`Memory Manager: Found ${failedRuns.length} instructive failed agent runs`);
             }
 
-            const hasNewData = conversations.length > 0 || agentRuns.length > 0;
+            const hasNewData = conversations.length > 0 || agentRuns.length > 0 || failedRuns.length > 0;
 
             // Initialization guard: ensure vector services exist for semantic dedup.
             // If no notes existed at server startup, _noteVectorService is null and
@@ -3682,6 +3812,12 @@ export class MemoryManagerAgent extends BaseAgent {
                 const extractedNotes = await this.ExtractNotesFromConversations(conversations, params.contextUser!);
                 if (this._verbose) {
                     LogStatus(`Memory Manager: Extracted ${extractedNotes.length} potential notes`);
+                }
+
+                // Mine corrective notes from failed runs (Issue/Context only, Ephemeral tier).
+                const correctiveNotes = await this.ExtractNotesFromFailedRuns(failedRuns, params.contextUser!);
+                if (this._verbose) {
+                    LogStatus(`Memory Manager: Extracted ${correctiveNotes.length} corrective notes from failed runs`);
                 }
 
                 // Convert conversations back to flat details for example extraction.
@@ -3736,7 +3872,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     }
                 }
 
-                notesCreated = await this.CreateNoteRecords(extractedNotes, params.contextUser!);
+                notesCreated = await this.CreateNoteRecords([...extractedNotes, ...correctiveNotes], params.contextUser!);
                 examplesCreated = await this.CreateExampleRecords(extractedExamples, params.contextUser!);
 
                 if (this._verbose) LogStatus(`Memory Manager: Created ${notesCreated} notes and ${examplesCreated} examples`);
