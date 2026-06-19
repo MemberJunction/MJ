@@ -1,6 +1,6 @@
 ---
 name: super-coordinator
-model: opus
+model: sonnet
 description: Top-level orchestrator for connector creation. Owns budget, workspace state, and final report emission. Now wraps the per-vendor dynamic workflow (planner-emitted) rather than direct Task fanout. Spawned by the build-connector skill.
 tools: Read, Write, Bash
 context: fresh

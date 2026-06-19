@@ -17,6 +17,28 @@ Canonical references:
 
 Models are imperfect at any single step. The framework's mechanism for converging on the right answer is **iteration with reviewer + floor-check at every gate**. No phase begins until the prior phase's output is gate-satisfied. Re-dispatching with specific feedback is the default response to any concern.
 
+## CHEAPEST-DEFECT-FIRST ordering (token efficiency — REQUIRED)
+
+Find the expensive-to-miss defects with the cheapest detectors FIRST, so a high-cost defect surfaces in
+round 1 — not after the structural tiers + extraction are already paid for. The Neon run proved the cost of
+the wrong order: a connector that enumerated 5 of 119 objects passed every STRUCTURAL tier (T0–T7) green,
+and the "5/119" + the deploy-blockers were only found late, after large structural/extraction spend. The
+detectors are nearly free; run them up front:
+
+1. **`deploy-preflight.mjs`** (DB-free, no creds) right after the metadata is written, BEFORE any push —
+   catches missing `@parent` FKs / `Description>255` / bad enums / dropped fields / capability gaps in ONE
+   pass (see metadata-file-conventions Preflight). Fix all ERRORS before pushing; never discover them one
+   failed-push at a time.
+2. **Offline behavioral tiers (T5 mock-HTTP + T6 SQLite, credential-free)** EARLY — they drive the real
+   fetch path and catch "enumerates nothing / wrong listing mode / no idempotent identity" that the
+   structural tiers (which only check shape) cannot. A connector that lands rows on >1 object family offline
+   is worth more confidence than all of T0–T7 green.
+3. Only then spend on the heavier rungs (HybridE2E real-engine push, live T8).
+
+The planner (`connector-creator`) MUST order the emitted workflow this way, and `code-builder` MUST satisfy
+the one-pass completeness checklist (see that agent) so the offline tiers pass on the first build. A green
+structural ladder over a behaviorally-broken connector is the most expensive false signal in the arc.
+
 ## Invocation
 
 ```
