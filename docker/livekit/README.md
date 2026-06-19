@@ -5,6 +5,13 @@ MJ agents) is built on the **MJ-native LiveKit bridge**. LiveKit is a standalone
 SFU) that actually routes the WebRTC media between participants. This folder runs one locally, in
 Docker, for development and testing.
 
+> **Which LiveKit do I run?**
+> - **Local development** → run a throwaway server yourself: **Docker** (this folder) for browser-only
+>   room testing, or **native** `livekit-server` for the agent-bot path on macOS. See
+>   [§1](#1-start-the-server) and the [macOS section](#-macos-run-livekit-natively-for-the-agent-meet-path).
+> - **Production / real-world deployments** → use **[LiveKit Cloud](https://cloud.livekit.io)** — no
+>   server to run, just credentials in `.env`. See [Production](#production--real-world-use-livekit-cloud) below. **This is the recommended path for anything beyond local dev.**
+
 ## How it fits together
 
 ```
@@ -76,12 +83,22 @@ Stop the Docker container first (`docker compose down`) so they don't both hold 
 setup here is still handy for **browser-only** room testing (the browser can use the mapped TCP
 fallback), but the **agent bot needs native LiveKit or Cloud** on macOS.
 
-## Production / hosted alternative
+## Production / real-world: use LiveKit Cloud
 
-For anything beyond local dev, use **LiveKit Cloud** (https://cloud.livekit.io) — create a project,
-and it gives you a `wss://…livekit.cloud` URL plus an API key and secret to drop into `.env`. No
-server to run. Self-hosting for production additionally needs real keys and proper networking/TURN
-for media traversal; see the [LiveKit deployment docs](https://docs.livekit.io/home/self-hosting/deployment/).
+**For anything beyond local dev, use [LiveKit Cloud](https://cloud.livekit.io).** Create a project and
+it gives you a `wss://…livekit.cloud` URL plus an API key and secret — drop those three into the
+repo-root `.env` exactly as in [§2](#2-configure-mjapi) and restart MJAPI. There is **no server to run**
+and none of the local NAT/TURN headaches: the Docker/native steps above are *only* for local dev.
+
+```dotenv
+LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_API_KEY=APIxxxxxxxxxxxx
+LIVEKIT_API_SECRET=your-livekit-cloud-secret
+```
+
+Self-hosting for production is also possible but additionally needs real keys and proper
+networking/TURN for media traversal; see the
+[LiveKit deployment docs](https://docs.livekit.io/home/self-hosting/deployment/).
 
 ## Security
 
