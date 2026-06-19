@@ -1,0 +1,133 @@
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- Lifecycle timeline -->
+    <mj-collapsible-panel
+        SectionKey="lifecycleTimeline"
+        SectionName="Lifecycle"
+        Icon="fa fa-timeline"
+        [Form]="this"
+        [FormContext]="formContext"
+        [DefaultExpanded]="true">
+
+        <div class="sb-status-line" [class.failed]="IsFailed">
+            <i class="fa-solid {{ GetStatusIcon(record.Status) }}"></i>
+            <span class="sb-status-text">{{ record.Status }}</span>
+            @if (record.CloseReason) {
+                <span class="sb-close-reason">close reason: {{ record.CloseReason }}</span>
+            }
+        </div>
+
+        <ol class="sb-timeline">
+            @for (step of TimelineSteps; track step.status) {
+                <li class="sb-step" [class.done]="step.state === 'done'" [class.current]="step.state === 'current'" [class.pending]="step.state === 'pending'">
+                    <span class="sb-step-dot"><i class="fa-solid {{ step.icon }}"></i></span>
+                    <div class="sb-step-body">
+                        <span class="sb-step-label">{{ step.label }}</span>
+                        @if (step.timestamp) {
+                            <span class="sb-step-time">{{ step.timestamp | date:'medium' }}</span>
+                        }
+                    </div>
+                </li>
+            }
+        </ol>
+
+        @if (IsFailed) {
+            <div class="sb-failed-note">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                This bridge ended abnormally (status <strong>Failed</strong>). See the participant rows and Config for diagnostics.
+            </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Session Context -->
+    <mj-collapsible-panel
+        SectionKey="sessionContext"
+        SectionName="Session Context"
+        Icon="fa fa-info-circle"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="AgentSessionID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ProviderID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+    </mj-collapsible-panel>
+
+    <!-- Connection Details -->
+    <mj-collapsible-panel
+        SectionKey="connectionDetails"
+        SectionName="Connection Details"
+        Icon="fa fa-plug"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Direction" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="JoinMethod" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="TurnMode" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ExternalConnectionID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Address" Type="textarea" [EditMode]="EditMode" [FormContext]="formContext" LinkType="URL"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="BotParticipantID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    </mj-collapsible-panel>
+
+    <!-- Lifecycle and Timing (raw fields) -->
+    <mj-collapsible-panel
+        SectionKey="lifecycleAndTiming"
+        SectionName="Lifecycle and Timing"
+        Icon="fa fa-clock"
+        [Form]="this"
+        [FormContext]="formContext"
+        [DefaultExpanded]="false">
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Status" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ScheduledStartTime" Type="datepicker" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ConnectedAt" Type="datepicker" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="DisconnectedAt" Type="datepicker" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="CloseReason" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    </mj-collapsible-panel>
+
+    <!-- System Metadata -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext"
+        [DefaultExpanded]="false">
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="HostInstanceID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Config" Type="code" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_CreatedAt" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_UpdatedAt" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- Participants -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSessionBridgeParticipants"
+        SectionName="Participants"
+        Icon="fa fa-users"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSessionBridgeParticipants')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Bridge Participants','SessionBridgeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridge Participants')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSessionBridgeParticipants')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionBridgeParticipants', $event.totalRowCount)">
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+</mj-record-form-container>
+}

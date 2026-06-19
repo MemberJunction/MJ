@@ -73,6 +73,7 @@ vi.mock('@memberjunction/global', () => ({
         },
     },
     RegisterClass: () => (target: Function) => target,
+    UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
 }));
 
 vi.mock('@memberjunction/templates-base-types', () => ({

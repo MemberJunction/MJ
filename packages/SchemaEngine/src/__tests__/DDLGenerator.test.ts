@@ -67,11 +67,15 @@ describe('DDLGenerator', () => {
       expect(sql).toContain('[__mj_integration_LastSyncedAt]');
     });
 
-    it('generates UNIQUE constraint for SoftPrimaryKeys', () => {
+    it('generates a NON-UNIQUE index for SoftPrimaryKeys, not a hard UNIQUE constraint', () => {
       const table = makeTable({ SoftPrimaryKeys: ['ExternalId'] });
       const sql = gen.GenerateCreateTable(table, 'sqlserver');
-      expect(sql).toContain('UNIQUE');
+      // Soft PK = inferred key → indexed for lookup speed, but NOT uniqueness-enforced (a bad
+      // inference must never block a write). So: a CREATE INDEX, no UNIQUE constraint.
+      expect(sql).toContain('CREATE INDEX');
+      expect(sql).toContain('[IX_custom_TestTable_PK]');
       expect(sql).toContain('[ExternalId]');
+      expect(sql).not.toContain('UNIQUE');
     });
 
     it('generates hard FK constraint for IsSoft=false foreign keys', () => {

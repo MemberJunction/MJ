@@ -1,5 +1,109 @@
 # Change Log - @memberjunction/cli
 
+## 5.41.0
+
+### Minor Changes
+
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- a69b0fa: Fix CodeGen SP generation for PK-only entities, fix mj sync push exit code on failure, and use GetSystemUser for API Key scope checks
+- efb5381: chore(cli): bump Skyway dependencies (skyway-core, skyway-postgres, skyway-sqlserver) to ^0.6.2
+- Updated dependencies [8fd6f59]
+- Updated dependencies [a69b0fa]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/codegen-lib@5.41.0
+  - @memberjunction/metadata-sync@5.41.0
+  - @memberjunction/server-bootstrap-lite@5.41.0
+  - @memberjunction/generic-database-provider@5.41.0
+  - @memberjunction/ai-cli@5.41.0
+  - @memberjunction/db-auto-doc@5.41.0
+  - @memberjunction/open-app-engine@5.41.0
+  - @memberjunction/query-gen@5.41.0
+  - @memberjunction/sqlserver-dataprovider@5.41.0
+  - @memberjunction/testing-cli@5.41.0
+  - @memberjunction/config@5.41.0
+  - @memberjunction/installer@5.41.0
+  - @memberjunction/sql-converter@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- 3da89ef: Add configurable CORS origins and opt-in rate limiting to MJ Server, add client-side permission evaluation for component artifacts, and fix CI publish failures in light-command and db-auto-doc bootstrap
+- Updated dependencies [3da89ef]
+  - @memberjunction/db-auto-doc@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/ai-cli@5.40.2
+  - @memberjunction/codegen-lib@5.40.2
+  - @memberjunction/metadata-sync@5.40.2
+  - @memberjunction/server-bootstrap-lite@5.40.2
+  - @memberjunction/query-gen@5.40.2
+  - @memberjunction/testing-cli@5.40.2
+  - @memberjunction/config@5.40.2
+  - @memberjunction/generic-database-provider@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/installer@5.40.2
+  - @memberjunction/open-app-engine@5.40.2
+  - @memberjunction/sql-converter@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-cli@5.40.1
+  - @memberjunction/codegen-lib@5.40.1
+  - @memberjunction/db-auto-doc@5.40.1
+  - @memberjunction/generic-database-provider@5.40.1
+  - @memberjunction/metadata-sync@5.40.1
+  - @memberjunction/open-app-engine@5.40.1
+  - @memberjunction/query-gen@5.40.1
+  - @memberjunction/sqlserver-dataprovider@5.40.1
+  - @memberjunction/server-bootstrap-lite@5.40.1
+  - @memberjunction/testing-cli@5.40.1
+  - @memberjunction/config@5.40.1
+  - @memberjunction/installer@5.40.1
+  - @memberjunction/sql-converter@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- 9233802: Convert and validate the consolidated baseline in the PostgreSQL migration pipeline. GrantRule now skips `GRANT CONNECT` (no PG equivalent) and ProcedureToFunctionRule skips CRUD sprocs whose `RETURNS SETOF` view is a deprecated/orphaned entity view — both emit `-- SKIPPED (INTENTIONAL)` markers instead of apply-failing SQL. Fix the MJCLI baseline roundtrip's PG conversion (it called nonexistent `--input/--output` flags) and correct the migrate-convert baseline JSDoc.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [9233802]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/codegen-lib@5.40.0
+  - @memberjunction/generic-database-provider@5.40.0
+  - @memberjunction/sqlserver-dataprovider@5.40.0
+  - @memberjunction/server-bootstrap-lite@5.40.0
+  - @memberjunction/sql-converter@5.40.0
+  - @memberjunction/ai-cli@5.40.0
+  - @memberjunction/db-auto-doc@5.40.0
+  - @memberjunction/metadata-sync@5.40.0
+  - @memberjunction/open-app-engine@5.40.0
+  - @memberjunction/query-gen@5.40.0
+  - @memberjunction/testing-cli@5.40.0
+  - @memberjunction/config@5.40.0
+  - @memberjunction/installer@5.40.0
+
 ## 5.39.0
 
 ### Patch Changes

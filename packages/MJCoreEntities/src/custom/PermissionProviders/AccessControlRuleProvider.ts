@@ -120,7 +120,7 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
         }
         const granteeFilter = granteeClauses.join(' OR ');
 
-        let filter = `(${granteeFilter}) AND (ExpiresAt IS NULL OR ExpiresAt > GETUTCDATE())`;
+        let filter = `(${granteeFilter}) AND ${this.unexpiredClause()}`;
         if (resourceType) {
             const entityId = this.resolveEntityId(resourceType, provider);
             if (!entityId) return [];
@@ -194,7 +194,7 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
             'MJ: Access Control Rules',
             `GranteeType='User' AND GranteeID='${grantee.ID}' ` +
                 `AND GrantedByUserID <> '${grantee.ID}' ` +
-                `AND (ExpiresAt IS NULL OR ExpiresAt > GETUTCDATE())`,
+                `AND ${this.unexpiredClause()}`,
             ACR_GRANT_FIELDS,
             'GetPermissionsSharedWithUser'
         );
@@ -221,7 +221,7 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
     override async GetPermissionsGrantedByUser(grantor: UserInfo): Promise<NormalizedPermission[]> {
         const rows = await this.fetchRows<AccessControlRuleRow>(
             'MJ: Access Control Rules',
-            `GrantedByUserID='${grantor.ID}' AND (ExpiresAt IS NULL OR ExpiresAt > GETUTCDATE())`,
+            `GrantedByUserID='${grantor.ID}' AND ${this.unexpiredClause()}`,
             ACR_GRANT_FIELDS,
             'GetPermissionsGrantedByUser'
         );
@@ -244,6 +244,17 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
         return results;
     }
 
+    /**
+     * Dialect-neutral "not yet expired" predicate. Uses a JS-computed ISO-8601
+     * timestamp literal rather than a SQL function — SQL Server's `GETUTCDATE()`
+     * does not exist on PostgreSQL and would crash the underlying RunView query
+     * there. An ISO-8601 literal compares correctly against `datetimeoffset`
+     * (SQL Server) and `timestamptz` (PostgreSQL) alike.
+     */
+    private unexpiredClause(): string {
+        return `(ExpiresAt IS NULL OR ExpiresAt > '${new Date().toISOString()}')`;
+    }
+
     private resolveEntityId(entityName: string, provider?: IMetadataProvider): string | null {
         const md = provider ?? new Metadata();
         const entity = md.EntityByName(entityName);
@@ -253,7 +264,7 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
     private async fetchActiveRules(entityId: string, recordId: string): Promise<AccessControlRuleRow[]> {
         return this.fetchRows<AccessControlRuleRow>(
             'MJ: Access Control Rules',
-            `EntityID='${entityId}' AND RecordID='${recordId}' AND (ExpiresAt IS NULL OR ExpiresAt > GETUTCDATE())`,
+            `EntityID='${entityId}' AND RecordID='${recordId}' AND ${this.unexpiredClause()}`,
             ACR_GRANT_FIELDS.filter((f) => f !== 'GrantedByUserID' && f !== 'Entity'),
             'fetchActiveRules'
         );

@@ -13,6 +13,7 @@ vi.mock('@angular/core', () => ({
   Injector: class {},
 }));
 
+const __mockGlobalObjectStore: Record<string, unknown> = {};
 vi.mock('@memberjunction/global', () => ({
   MJGlobal: {
     Instance: {
@@ -23,6 +24,7 @@ vi.mock('@memberjunction/global', () => ({
       },
     }
   },
+  GetGlobalObjectStore: () => __mockGlobalObjectStore,
 }));
 
 vi.mock('@memberjunction/core', () => ({

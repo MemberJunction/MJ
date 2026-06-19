@@ -1,0 +1,36 @@
+[
+  {
+    "fields": {
+      "Name": "Whiteboard",
+      "Description": "Live shared whiteboard surface for realtime voice sessions: the user and the agent co-draw on a shared board; the agent perceives coalesced scene deltas and acts through Whiteboard.* client-executed tools. Session state of record persists on the session channel row.",
+      "ServerPluginClass": "WhiteboardChannelServer",
+      "ClientPluginClass": "RealtimeWhiteboardChannel",
+      "TransportType": "PubSub",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "F4ECB024-2B81-4257-9E5D-1F9A1B8E50B8"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:21.909Z",
+      "checksum": "660afaa0540d7f7702a6ae08b61b0c3da7a6dd94a63657cfe332fed0387e9441"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Remote Browser",
+      "Description": "Gives a realtime voice co-agent a live web browser. CLIENT-DIRECT: the agent's browser-driving tools execute client-side (RealtimeRemoteBrowserChannel) and relay each action to the server-side RemoteBrowserEngine via the ExecuteRemoteBrowserAction mutation, which lazily launches the browser on first use. The server channel plugin is lifecycle-only — it tears the browser down when the session ends and contributes no server tools.",
+      "ServerPluginClass": "RemoteBrowserChannelServer",
+      "ClientPluginClass": "RealtimeRemoteBrowserChannel",
+      "TransportType": "PubSub",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "C84FA171-663C-480C-8ED3-A91FE27BCC64"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:21.923Z",
+      "checksum": "e3bf6cd56fa1f9a72abe94c69a30e4e365979e2168c7a2a2ac737d13bf47a421"
+    }
+  }
+]

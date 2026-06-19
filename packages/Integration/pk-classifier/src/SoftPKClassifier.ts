@@ -214,13 +214,15 @@ export class SoftPKClassifier {
     }
 
     /**
-     * Terminal tier. When syntheticFallback is on (default), nominates the
-     * synthetic identity-hash column so no table is left PK-less (plan.md §4).
-     * When off, returns the honest 'none' verdict.
+     * Terminal tier. Default is the **honest 'none'** verdict — NO fabrication. A PK is emitted only
+     * on real evidence (naming + streamed-data statistics at p<0.05, with the LLM as a tiebreaker);
+     * when none of those resolve, the entity is simply not generated until a PK does (surfaced, not
+     * guessed). The synthetic identity-hash fallback is now OFF by default (opt-in only) — it was
+     * never materialized downstream, so emitting it only produced a confident-but-dropped verdict.
      */
     private finalVerdict(opts: ClassifyOptions, prefix?: string): PKClassifierResult {
         const note = prefix ? `${prefix} ` : '';
-        if (opts.syntheticFallback ?? true) {
+        if (opts.syntheticFallback ?? false) {
             return {
                 Confident: true,
                 Nominee: SYNTHETIC_PK_FIELD_NAME,

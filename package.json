@@ -9,6 +9,10 @@
     "packages/Actions/BizApps/*",
     "packages/AI/*",
     "packages/AI/Providers/*",
+    "packages/AI/RealtimeBridge/*",
+    "packages/AI/RealtimeBridge/Providers/*",
+    "packages/AI/RemoteBrowser/*",
+    "packages/AI/RemoteBrowser/Providers/*",
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
     "packages/AI/Vectors/Providers/*",
@@ -39,7 +43,7 @@
     "packages/eSignature/Providers/*"
   ],
   "scripts": {
-    "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
+    "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n\u274c Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
     "build": "npm run build:stream",
     "postbuild": "npm run mj:manifest && turbo --log-order=stream build --filter=@memberjunction/server-bootstrap-lite --filter=@memberjunction/server-bootstrap --filter=@memberjunction/ng-bootstrap --filter=@memberjunction/ng-bootstrap-lite --filter=@memberjunction/a2aserver --filter=@memberjunction/ai-mcp-server --filter=mj_codegen_api --filter=mj_api",
     "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",
@@ -67,6 +71,7 @@
     "mj:manifest:server-bootstrap-lite": "mj codegen manifest --appDir ./packages/ServerBootstrapLite --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./packages/ServerBootstrapLite/src/generated/mj-class-registrations.ts",
     "mj:manifest:ng-bootstrap-lite": "mj codegen manifest --appDir ./packages/Angular/BootstrapLite --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./packages/Angular/BootstrapLite/src/generated/mj-class-registrations.ts --scan-dist",
     "mj:manifest": "npm run mj:manifest:server-bootstrap && npm run mj:manifest:server-bootstrap-lite && npm run mj:manifest:ng-bootstrap && npm run mj:manifest:ng-bootstrap-lite && npm run mj:manifest:api && npm run mj:manifest:explorer && npm run mj:manifest:a2a-server && npm run mj:manifest:mcp-server && npm run mj:manifest:codegen-api",
+    "claude-pack:build": "node templates/claude-pack/build-pack.mjs",
     "deps:check": "syncpack list-mismatches",
     "deps:fix": "syncpack fix-mismatches",
     "deps:update": "syncpack update",
@@ -98,7 +103,8 @@
   "dependencies": {
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",
-    "simple-git": "^3.30.0"
+    "simple-git": "^3.30.0",
+    "unzipper": "^0.12.3"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.12",

@@ -73,7 +73,8 @@ export class ServerExtensionLoader {
         extensionConfigs: ServerExtensionConfig[]
     ): Promise<void> {
         if (!extensionConfigs || extensionConfigs.length === 0) {
-            LogStatus('No server extensions configured');
+            // Nothing configured — stay silent (the "Loaded 0 server extension(s)"
+            // / "No server extensions configured" chatter was pure noise).
             return;
         }
 
@@ -86,7 +87,10 @@ export class ServerExtensionLoader {
             await this.loadSingleExtension(app, config);
         }
 
-        LogStatus(`Loaded ${this._loadedExtensions.length} server extension(s)`);
+        // Only announce when something was actually loaded.
+        if (this._loadedExtensions.length > 0) {
+            LogStatus(`Loaded ${this._loadedExtensions.length} server extension(s)`);
+        }
     }
 
     /**

@@ -28,7 +28,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Signature Requests&Name=Message"
           },
           "sync": {
-            "lastModified": "2026-06-08T16:15:22.947Z",
+            "lastModified": "2026-06-09T06:32:36.632Z",
             "checksum": "80dc0f86586dc414fc05a3796b410325e722e1ec6087b9a1de8b01ce5519f7ca"
           }
         }

@@ -658,5 +658,25 @@
       "lastModified": "2026-04-11T04:11:21.769Z",
       "checksum": "9708eaa808d604bc9f29e2467b73a2f9630e50962f42c3c73005db933e60a0f5"
     }
+  },
+  {
+    "_comments": [
+      "AI Agent Sessions - high-volume, append-only realtime session log.",
+      "AllowCaching=false skips all cache ops for it and suppresses the 'create a dedicated",
+      "engine to cache this' telemetry optimization suggestion (an engine cache is unsuitable",
+      "for a table this large)."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Sessions",
+      "BaseView": "vwAIAgentSessions",
+      "AllowCaching": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Sessions"
+    },
+    "sync": {
+      "lastModified": "2026-06-18T22:30:10.278Z",
+      "checksum": "8206c1597764c3b7d4baaeca010c16d43a641d691f024b54e50304ecb196e1af"
+    }
   }
 ]

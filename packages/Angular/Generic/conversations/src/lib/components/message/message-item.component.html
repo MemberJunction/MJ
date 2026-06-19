@@ -77,6 +77,16 @@
           }
         </div>
 
+        <!-- messageExtra slot — per-message additive decoration projected by the
+             consumer via `mjChatSlot="messageExtra"`. Renders after the message
+             content, before attachments. Receives the message as $implicit. -->
+        @if (messageExtraTemplate) {
+          <ng-container *ngTemplateOutlet="messageExtraTemplate; context: {
+            $implicit: message,
+            message: message
+          }"></ng-container>
+        }
+
         <!-- Message Attachments -->
         @if (hasAttachments) {
           <div class="message-attachments">

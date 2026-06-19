@@ -19,6 +19,7 @@ export * from './AgentRunner';
 export * from './PayloadManager';
 export * from './ScratchpadManager';
 export * from './ArtifactToolManager';
+export * from './MemoryWriteManager';
 export * from './pipeline';
 export * from './file-input-resolver';
 export * from './artifact-tools/DataSnapshotToolLibrary';
@@ -35,12 +36,27 @@ export * from './PayloadFeedbackManager';
 export * from './types/payload-operations';
 export * from './AgentDataPreloader';
 export * from './agent-context-injector';
+export * from './agent-memory-context-builder';
 export * from './agent-pre-execution-rag';
 export * from './memory-manager-agent';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './KnowledgeAgent';
 export * from './ClientToolRequestManager';
+export * from './realtime/realtime-session-runner';
+export * from './realtime/bridge-realtime-session-factory';
+// Broker-unique exports. The shared tool-execution contract (INVOKE_TARGET_AGENT_TOOL_NAME,
+// DelegateToTargetRequest, DelegatedResult, ToolExecutionResult, loggers) is surfaced via the
+// runner's `export *` above, so only the broker-specific symbols are named here to avoid a
+// duplicate-export collision.
+export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, DelegatedRunArtifact } from './realtime/realtime-tool-broker';
+export * from './realtime/realtime-client-session-service';
+export * from './realtime/realtime-coagent-config';
+export * from './realtime/realtime-narration';
+export * from './realtime/realtime-channel-server-host';
+export * from './realtime/whiteboard-channel-server';
+export * from './realtime/meeting-controls-state';
+export * from './realtime/meeting-controls-channel-server';
 
 // Re-export from ai-reranker for backward compatibility
 export {

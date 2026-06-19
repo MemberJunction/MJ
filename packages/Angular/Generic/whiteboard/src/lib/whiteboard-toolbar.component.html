@@ -1,0 +1,83 @@
+<div class="board-toolbar">
+  @for (entry of Tools; track entry.Tool) {
+    <button type="button"
+            class="tool"
+            [class.active]="ActiveTool === entry.Tool"
+            [title]="entry.Title"
+            (click)="SelectTool(entry.Tool)">
+      <i [class]="entry.Icon"></i><span class="kbd">{{ entry.Kbd }}</span>
+
+      @if (entry.Tool === 'pen' && ActiveTool === 'pen') {
+        <span class="pen-flyout" (click)="$event.stopPropagation()">
+          @for (color of PenColors; track color) {
+            <span class="pen-c"
+                  [class.sel]="PenColor === color"
+                  [style.background]="color"
+                  (click)="PenColorChange.emit(color)"></span>
+          }
+          <span class="pen-w">
+            @for (width of PenWidths; track width; let i = $index) {
+              <span [class]="'w' + (i + 1)"
+                    [class.sel]="PenWidth === width"
+                    (click)="PenWidthChange.emit(width)"></span>
+            }
+          </span>
+          <span class="pen-note">violet = {{ AgentName }}'s</span>
+        </span>
+      }
+
+      @if (entry.Tool === 'text' && ActiveTool === 'text') {
+        <span class="pen-flyout text-flyout" (click)="$event.stopPropagation()">
+          @for (size of TextSizes; track size) {
+            <span class="txt-s"
+                  [class.sel]="TextSize === size"
+                  [title]="size + ' px'"
+                  (click)="PickTextSize(size)">{{ size }}</span>
+          }
+          <span class="txt-fams">
+            @for (fam of TextFamilies; track fam.Key) {
+              <span class="txt-f"
+                    [class.sel]="TextFamily === fam.Key"
+                    [title]="fam.Title"
+                    [style.fontFamily]="fam.Stack"
+                    (click)="PickTextFamily(fam.Key)">Ag</span>
+            }
+            <span class="txt-f txt-b"
+                  [class.sel]="TextBold"
+                  title="Bold"
+                  (click)="ToggleTextBold()"><i class="fa-solid fa-bold"></i></span>
+          </span>
+          <span class="txt-colors">
+            @for (color of PenColors; track color) {
+              <span class="pen-c"
+                    [class.sel]="TextColor === color"
+                    [style.background]="color"
+                    (click)="PickTextColor(color)"></span>
+            }
+          </span>
+          <span class="pen-note">violet = {{ AgentName }}'s</span>
+        </span>
+      }
+
+      @if (entry.Tool === 'shape' && ActiveTool === 'shape') {
+        <span class="pen-flyout shape-flyout" (click)="$event.stopPropagation()">
+          @for (shape of ShapeKinds; track shape.Kind) {
+            <span class="shape-c"
+                  [class.sel]="ShapeKind === shape.Kind"
+                  [title]="shape.Title"
+                  (click)="ShapeKindChange.emit(shape.Kind)"><i [class]="shape.Icon"></i></span>
+          }
+          <span class="pen-note">drag to draw</span>
+        </span>
+      }
+    </button>
+  }
+
+  <div class="tool-sep"></div>
+  <button type="button" class="tool" title="Undo" [disabled]="!CanUndo" (click)="Undo.emit()">
+    <i class="fa-solid fa-rotate-left"></i>
+  </button>
+  <button type="button" class="tool" title="Redo" [disabled]="!CanRedo" (click)="Redo.emit()">
+    <i class="fa-solid fa-rotate-right"></i>
+  </button>
+</div>

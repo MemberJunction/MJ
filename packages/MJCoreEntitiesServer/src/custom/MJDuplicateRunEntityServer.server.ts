@@ -1,4 +1,4 @@
-import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
+import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, IMetadataProvider, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
 import { RegisterClass, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJDuplicateRunEntity, MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
@@ -76,13 +76,17 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
     private async runDetectionAsync(): Promise<void> {
         const startTime = Date.now();
         try {
-            const detector = new DuplicateRecordDetector();
+            // Thread this entity's provider (request-scoped — each MJAPI call binds its own
+            // connection) down the detection stack instead of letting it fall back to the
+            // process-global default provider.
+            const provider = this.ProviderToUse as unknown as IMetadataProvider;
+            const detector = new DuplicateRecordDetector(provider);
             const request = new PotentialDuplicateRequest();
             request.EntityID = this.EntityID;
             request.ListID = this.SourceListID || undefined; // Optional — if not set, scans all entity records
 
             // Find the first active entity document for this entity to get template/thresholds
-            const rv = new RunView();
+            const rv = new RunView(this.RunViewProviderToUse);
             const edResult = await rv.RunView<MJEntityDocumentEntity>({
                 EntityName: 'MJ: Entity Documents',
                 ExtraFilter: `EntityID='${this.EntityID}' AND Status='Active'`,

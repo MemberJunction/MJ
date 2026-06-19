@@ -48,6 +48,13 @@ vi.mock('@memberjunction/core', () => {
             ToString = vi.fn().mockReturnValue('key-1');
             Values = vi.fn().mockReturnValue('key-1');
             LoadFromConcatenatedString = vi.fn();
+            // mirror the real CompositeKey.Equals semantics (case-insensitive UUID-safe compare)
+            Equals(other: { KeyValuePairs: { FieldName: string; Value: string }[] }): boolean {
+                const a = this.KeyValuePairs, b = other?.KeyValuePairs ?? [];
+                return a.length === b.length && a.every((kv, i) =>
+                    kv.FieldName.toLowerCase() === b[i].FieldName.toLowerCase() &&
+                    String(kv.Value).toLowerCase() === String(b[i].Value).toLowerCase());
+            }
         },
         UserInfo: vi.fn(),
         EntityInfo: vi.fn(),
@@ -333,77 +340,45 @@ describe('DuplicateRecordDetector', () => {
     });
 
     describe('FilterSelfMatches', () => {
-        it('should remove matches whose composite key matches the source key', () => {
-            const sourceKey = {
-                ToString: () => 'ID|abc-123',
-                Values: () => 'abc-123',
-                KeyValuePairs: [{ FieldName: 'ID', Value: 'abc-123' }],
+        /** Key fixture with the REAL CompositeKey.Equals semantics (case-insensitive KVP compare). */
+        function makeKey(id: string) {
+            return {
+                KeyValuePairs: [{ FieldName: 'ID', Value: id }],
+                ToString: () => 'ID|' + id,
+                Values: () => id,
+                Equals(other: { KeyValuePairs: { FieldName: string; Value: string }[] }): boolean {
+                    const a = this.KeyValuePairs, b = other?.KeyValuePairs ?? [];
+                    return a.length === b.length && a.every((kv, i) =>
+                        kv.FieldName.toLowerCase() === b[i].FieldName.toLowerCase() &&
+                        String(kv.Value).toLowerCase() === String(b[i].Value).toLowerCase());
+                }
             };
-            const duplicates = [
-                {
-                    ProbabilityScore: 0.95,
-                    ToString: () => 'ID|abc-123',
-                    Values: () => 'abc-123',
-                    KeyValuePairs: [{ FieldName: 'ID', Value: 'abc-123' }],
-                    LoadFromConcatenatedString: vi.fn(),
-                },
-                {
-                    ProbabilityScore: 0.88,
-                    ToString: () => 'ID|def-456',
-                    Values: () => 'def-456',
-                    KeyValuePairs: [{ FieldName: 'ID', Value: 'def-456' }],
-                    LoadFromConcatenatedString: vi.fn(),
-                },
-            ];
+        }
+        function makeDup(score: number, id: string) {
+            return { ProbabilityScore: score, LoadFromConcatenatedString: vi.fn(), ...makeKey(id) };
+        }
 
-            // Access the protected method via bracket notation
+        it('should remove matches whose composite key matches the source key', () => {
+            const sourceKey = makeKey('abc-123');
+            // self-match deliberately differs in CASE — the Equals-based filter must still catch it
+            const duplicates = [makeDup(0.95, 'ABC-123'), makeDup(0.88, 'def-456')];
+
             const result = (detector as never)['FilterSelfMatches'](duplicates, sourceKey);
             expect(result).toHaveLength(1);
             expect(result[0].ProbabilityScore).toBe(0.88);
         });
 
         it('should return all matches when none match the source key', () => {
-            const sourceKey = {
-                ToString: () => 'ID|source-1',
-                Values: () => 'source-1',
-                KeyValuePairs: [{ FieldName: 'ID', Value: 'source-1' }],
-            };
-            const duplicates = [
-                {
-                    ProbabilityScore: 0.9,
-                    ToString: () => 'ID|match-1',
-                    Values: () => 'match-1',
-                    KeyValuePairs: [],
-                    LoadFromConcatenatedString: vi.fn(),
-                },
-                {
-                    ProbabilityScore: 0.8,
-                    ToString: () => 'ID|match-2',
-                    Values: () => 'match-2',
-                    KeyValuePairs: [],
-                    LoadFromConcatenatedString: vi.fn(),
-                },
-            ];
+            const sourceKey = makeKey('source-1');
+            const duplicates = [makeDup(0.9, 'match-1'), makeDup(0.8, 'match-2')];
 
             const result = (detector as never)['FilterSelfMatches'](duplicates, sourceKey);
             expect(result).toHaveLength(2);
         });
 
         it('should return empty array when all matches are self-matches', () => {
-            const sourceKey = {
-                ToString: () => 'ID|self-1',
-                Values: () => 'self-1',
-                KeyValuePairs: [{ FieldName: 'ID', Value: 'self-1' }],
-            };
-            const duplicates = [
-                {
-                    ProbabilityScore: 0.99,
-                    ToString: () => 'ID|self-1',
-                    Values: () => 'self-1',
-                    KeyValuePairs: [],
-                    LoadFromConcatenatedString: vi.fn(),
-                },
-            ];
+            const sourceKey = makeKey('self-1');
+            const duplicates = [makeDup(0.99, 'self-1')];
 
             const result = (detector as never)['FilterSelfMatches'](duplicates, sourceKey);
             expect(result).toHaveLength(0);

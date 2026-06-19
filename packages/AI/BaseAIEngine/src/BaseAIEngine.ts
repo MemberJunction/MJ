@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
          MJAIModelActionEntity,
@@ -28,6 +28,8 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIClientToolDefinitionEntity,
          MJAIAgentClientToolEntity,
          MJAIAgentCategoryEntity,
+         MJAIAgentCoAgentEntity,
+         MJAIAgentChannelEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
@@ -111,12 +113,37 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _clientToolDefinitions: MJAIClientToolDefinitionEntity[] = [];
     private _agentClientTools: MJAIAgentClientToolEntity[] = [];
     private _agentCategories: MJAIAgentCategoryEntity[] = [];
+    private _agentCoAgents: MJAIAgentCoAgentEntity[] = [];
+    private _agentChannels: MJAIAgentChannelEntity[] = [];
 
     /**
      * Cache for configuration inheritance chains.
      * Key: configurationId, Value: array of MJAIConfigurationEntity from child to root
      */
     private _configurationChainCache: Map<string, MJAIConfigurationEntity[]> = new Map();
+
+    /**
+     * Memoized ID of the "Inference Provider" vendor-type definition. `undefined` means
+     * "not yet computed"; `null` means "computed and not found". Reset on every (re)load
+     * via {@link AdditionalLoading}. Vendor-type definitions are static seed data, so this
+     * is safe to cache for the lifetime of a loaded engine.
+     */
+    private _inferenceProviderTypeID: string | null | undefined = undefined;
+    /** Memoized ID of the "Model Developer" vendor-type definition (fallback path). */
+    private _modelDeveloperTypeID: string | null | undefined = undefined;
+
+    /**
+     * Lazily-built O(1) lookup indexes over the cached metadata arrays. These replace the
+     * repeated linear `.find()` / `.filter()` scans that previously ran on every prompt
+     * execution. All are reset in {@link AdditionalLoading} so they rebuild against fresh
+     * data after a reload. `null` = not yet built.
+     */
+    private _modelsByID: Map<string, MJAIModelEntityExtended> | null = null;
+    private _vendorsByID: Map<string, MJAIVendorEntity> | null = null;
+    private _modelTypesByID: Map<string, MJAIModelTypeEntity> | null = null;
+    private _configurationsByID: Map<string, MJAIConfigurationEntity> | null = null;
+    private _modelVendorsByModelID: Map<string, MJAIModelVendorEntity[]> | null = null;
+    private _promptModelsByPromptID: Map<string, MJAIPromptModelEntity[]> | null = null;
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
@@ -295,21 +322,78 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 PropertyName: '_agentCategories',
                 EntityName: 'MJ: AI Agent Categories',
                 CacheLocal: true
-            }
+            },
+            // NOTE: the realtime registry datasets below are CONDITIONAL — appended by
+            // appendRealtimeRegistryConfigs() only when their entities exist in metadata.
+            // They are NEW in the v5.41 schema, and CodeGen itself boots this engine for
+            // advanced generation BEFORE it has generated the new entities on a clean
+            // database — a hard reference here would deadlock the bootstrap (BaseEngine
+            // rightly throws on unknown entity names). Skipped datasets leave their
+            // getters returning [] — for pairings that means every co-agent resolves as
+            // UNIVERSAL, and for channels that no channel surfaces attach — both safe
+            // degraded defaults until the next engine refresh after CodeGen completes.
         ];
+        this.appendRealtimeRegistryConfigs(params, provider);
 
         // make sure engines we depend on downstream are loaded up before we load
         await Promise.all([
-            TemplateEngineBase.Instance.Config(false, contextUser), 
+            TemplateEngineBase.Instance.Config(false, contextUser),
             ArtifactMetadataEngine.Instance.Config(false, contextUser)
         ]);
-        
+
         return await this.Load(params, provider, forceRefresh, contextUser);
+    }
+
+    /**
+     * Appends the realtime registry datasets (interactive channels; co-agent pairings once
+     * the renamed `MJ: AI Agent Co Agents` entity ships) to the Config() dataset list — but
+     * ONLY when the entity actually exists in the provider's metadata. See the note at the
+     * call site: these entities are created by CodeGen, and CodeGen boots this engine, so a
+     * hard reference would deadlock a clean-database bootstrap.
+     */
+    private appendRealtimeRegistryConfigs(
+        params: Array<Partial<BaseEnginePropertyConfig>>,
+        provider?: IMetadataProvider
+    ): void {
+        const md = provider ?? Metadata.Provider;
+        const conditional: Array<Partial<BaseEnginePropertyConfig>> = [
+            {
+                PropertyName: '_agentChannels',
+                EntityName: 'MJ: AI Agent Channels',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentCoAgents',
+                EntityName: 'MJ: AI Agent Co Agents',
+                CacheLocal: true
+            }
+        ];
+        for (const config of conditional) {
+            if (md?.EntityByName?.(config.EntityName!)) {
+                params.push(config);
+            } else {
+                LogStatus(
+                    `AIEngineBase: entity '${config.EntityName}' not found in metadata — dataset skipped ` +
+                    `(expected only during a clean-install CodeGen bootstrap; the registry loads on the next engine refresh).`
+                );
+            }
+        }
     }
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // Clear the configuration chain cache when data is reloaded
         this._configurationChainCache.clear();
+
+        // Invalidate memoized vendor-type IDs and lazily-built lookup indexes so they
+        // rebuild against the freshly-loaded arrays. (See field declarations above.)
+        this._inferenceProviderTypeID = undefined;
+        this._modelDeveloperTypeID = undefined;
+        this._modelsByID = null;
+        this._vendorsByID = null;
+        this._modelTypesByID = null;
+        this._configurationsByID = null;
+        this._modelVendorsByModelID = null;
+        this._promptModelsByPromptID = null;
 
         // handle associating prompts with prompt categories
         //here we're using the underlying data (i.e _promptCategories and _prompts)
@@ -560,6 +644,34 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agentNoteTypes;
     }
 
+    /**
+     * All `MJ: AI Agent Co Agents` affinity rows, cached during Config(). Each row relates an
+     * owning agent (`CoAgentID` — for Type='CoAgent', a Realtime-type co-agent) to EITHER a
+     * specific paired agent (`TargetAgentID`) or a whole agent type (`TargetAgentTypeID`),
+     * with `Type` naming the relationship nature (only 'CoAgent' is implemented today; the
+     * other values are reserved). Ordered for pickers via `Sequence`; `IsDefault` marks the
+     * co-agent's default target (agent rows) or the type's default co-agent (type rows);
+     * `Status='Disabled'` rows are kept for audit but must be ignored by resolution. A
+     * co-agent with ZERO Active 'CoAgent' rows is universal (it can front any target).
+     * Small metadata table — filter client-side (e.g. `UUIDsEqual(row.CoAgentID, ...)`)
+     * rather than issuing RunViews. NOTE: the dataset is registered conditionally (see
+     * Config()); on a clean-install CodeGen bootstrap this is [] until the entity exists.
+     */
+    public get AgentCoAgents(): MJAIAgentCoAgentEntity[] {
+        return this._agentCoAgents;
+    }
+
+    /**
+     * All `MJ: AI Agent Channels` interactive-channel registry rows, cached during Config().
+     * Each row declares a realtime channel surface (e.g. Whiteboard) with its server/client
+     * plugin class keys and transport type; only rows with `IsActive` may be attached to a
+     * session. Small metadata table — filter client-side (e.g. `c => c.IsActive`) rather than
+     * issuing RunViews.
+     */
+    public get AgentChannels(): MJAIAgentChannelEntity[] {
+        return this._agentChannels;
+    }
+
     public get AgentPermissions(): MJAIAgentPermissionEntity[] {
         return this._agentPermissions;
     }
@@ -578,6 +690,129 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] {
         return this._vendorTypeDefinitions;
+    }
+
+    /**
+     * The ID of the "Inference Provider" vendor-type definition, or `undefined` if no such
+     * definition is loaded. Memoized — the underlying lookup is a linear scan of
+     * {@link VendorTypeDefinitions}, but this getter caches the result for the lifetime of a
+     * loaded engine (reset on reload). Prefer {@link IsInferenceProvider} for the common
+     * "is this model-vendor an inference provider?" check.
+     */
+    public get InferenceProviderTypeID(): string | undefined {
+        if (this._inferenceProviderTypeID === undefined) {
+            this._inferenceProviderTypeID =
+                this._vendorTypeDefinitions.find(vt => vt.Name === 'Inference Provider')?.ID ?? null;
+        }
+        return this._inferenceProviderTypeID ?? undefined;
+    }
+
+    /** Memoized ID of the "Model Developer" vendor-type definition (used only as a fallback). */
+    private get modelDeveloperTypeID(): string | undefined {
+        if (this._modelDeveloperTypeID === undefined) {
+            this._modelDeveloperTypeID =
+                this._vendorTypeDefinitions.find(vt => vt.Name === 'Model Developer')?.ID ?? null;
+        }
+        return this._modelDeveloperTypeID ?? undefined;
+    }
+
+    /**
+     * Returns true when the given model-vendor record represents an *inference provider*
+     * (a service that runs the model) rather than a *model developer* (the company that
+     * trained it). This is the canonical check — use it instead of re-scanning
+     * {@link VendorTypeDefinitions} at each call site.
+     *
+     * Resolution: compares `modelVendor.TypeID` against the memoized "Inference Provider"
+     * type ID. If that type isn't loaded (should be rare), falls back to "anything that is
+     * not explicitly a Model Developer is treated as an inference provider".
+     */
+    public IsInferenceProvider(modelVendor: MJAIModelVendorEntity): boolean {
+        const inferenceTypeID = this.InferenceProviderTypeID;
+        if (!inferenceTypeID) {
+            // Fallback: no Inference Provider type loaded — treat non-developers as inference providers.
+            return !UUIDsEqual(modelVendor.TypeID, this.modelDeveloperTypeID);
+        }
+        return UUIDsEqual(modelVendor.TypeID, inferenceTypeID);
+    }
+
+    /**
+     * O(1) lookup of a model by ID. Lazily built from {@link Models}; reset on reload.
+     * Use instead of `Models.find(m => UUIDsEqual(m.ID, id))` in hot paths.
+     */
+    public get ModelsByID(): Map<string, MJAIModelEntityExtended> {
+        if (!this._modelsByID) {
+            this._modelsByID = new Map(this._models.map(m => [NormalizeUUID(m.ID), m]));
+        }
+        return this._modelsByID;
+    }
+
+    /** O(1) lookup of a vendor by ID. Lazily built from {@link Vendors}; reset on reload. */
+    public get VendorsByID(): Map<string, MJAIVendorEntity> {
+        if (!this._vendorsByID) {
+            this._vendorsByID = new Map(this._vendors.map(v => [NormalizeUUID(v.ID), v]));
+        }
+        return this._vendorsByID;
+    }
+
+    /** O(1) lookup of a model type by ID. Lazily built from {@link ModelTypes}; reset on reload. */
+    public get ModelTypesByID(): Map<string, MJAIModelTypeEntity> {
+        if (!this._modelTypesByID) {
+            this._modelTypesByID = new Map(this._modelTypes.map(mt => [NormalizeUUID(mt.ID), mt]));
+        }
+        return this._modelTypesByID;
+    }
+
+    /** O(1) lookup of a configuration by ID. Lazily built from {@link Configurations}; reset on reload. */
+    public get ConfigurationsByID(): Map<string, MJAIConfigurationEntity> {
+        if (!this._configurationsByID) {
+            this._configurationsByID = new Map(this._configurations.map(c => [NormalizeUUID(c.ID), c]));
+        }
+        return this._configurationsByID;
+    }
+
+    /**
+     * Model-vendor records grouped by ModelID. Lazily built from {@link ModelVendors}; reset on reload.
+     * Use instead of `ModelVendors.filter(mv => UUIDsEqual(mv.ModelID, id))` in hot paths.
+     * NOTE: the per-model `MJAIModelEntityExtended.ModelVendors` property is the preferred
+     * accessor when you already hold the model entity; this index serves callers that only
+     * have a ModelID.
+     */
+    public get ModelVendorsByModelID(): Map<string, MJAIModelVendorEntity[]> {
+        if (!this._modelVendorsByModelID) {
+            const map = new Map<string, MJAIModelVendorEntity[]>();
+            for (const mv of this._modelVendors) {
+                const key = NormalizeUUID(mv.ModelID);
+                const list = map.get(key);
+                if (list) {
+                    list.push(mv);
+                } else {
+                    map.set(key, [mv]);
+                }
+            }
+            this._modelVendorsByModelID = map;
+        }
+        return this._modelVendorsByModelID;
+    }
+
+    /**
+     * Prompt-model associations grouped by PromptID. Lazily built from {@link PromptModels}; reset on reload.
+     * Use instead of `PromptModels.filter(pm => UUIDsEqual(pm.PromptID, id))` in hot paths.
+     */
+    public get PromptModelsByPromptID(): Map<string, MJAIPromptModelEntity[]> {
+        if (!this._promptModelsByPromptID) {
+            const map = new Map<string, MJAIPromptModelEntity[]>();
+            for (const pm of this._promptModels) {
+                const key = NormalizeUUID(pm.PromptID);
+                const list = map.get(key);
+                if (list) {
+                    list.push(pm);
+                } else {
+                    map.set(key, [pm]);
+                }
+            }
+            this._promptModelsByPromptID = map;
+        }
+        return this._promptModelsByPromptID;
     }
 
     public get Vendors(): MJAIVendorEntity[] {
