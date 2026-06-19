@@ -1463,11 +1463,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // Refuse params we can't honor remotely rather than silently dropping them — most
                 // importantly AfterKey, which would otherwise return the same page on every call.
                 this.assertExternalRunViewParamsSupported(params, entityInfo.Name);
+                // A saved view's stored WhereClause/OrderBy live on viewEntity, not params, and the
+                // normal SQL path that applies them runs below this early return — so fold them in
+                // here, else a UserView over an external entity silently returns unfiltered rows.
+                const externalParams = await this.mergeExternalViewParams(params, viewEntity, user);
                 const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
                 if (!externalRouter) {
                     throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
                 }
-                const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, params, user, this);
+                const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, externalParams, user, this);
                 // Apply the same row post-processing MJ-DB reads get (field decryption + datetime
                 // normalization). Without this, an Encrypt-flagged external field surfaces as ciphertext.
                 if (externalResult.Success && externalResult.Results && externalResult.Results.length > 0) {
@@ -2454,6 +2458,34 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (orderBy && !this.ValidateUserProvidedSQLClause(orderBy)) {
             throw new Error(`Invalid OrderBy clause for external-data-source entity '${entityName}': contains one or more forbidden keywords.`);
         }
+    }
+
+    /**
+     * Folds a saved view's stored WhereClause and OrderByClause into the RunView params before
+     * external dispatch. The external branch returns before the normal SQL path that applies
+     * them, so without this a UserView over an external entity would silently return unfiltered,
+     * unordered rows. The view's WhereClause is ANDed with any caller ExtraFilter; the view's
+     * OrderByClause is used only when the caller supplied no OrderBy. Returns params unchanged
+     * when there is no saved view.
+     */
+    protected async mergeExternalViewParams(
+        params: RunViewParams,
+        viewEntity: MJUserViewEntityExtended | null,
+        user: UserInfo,
+    ): Promise<RunViewParams> {
+        if (!viewEntity) return params;
+        const merged: RunViewParams = { ...params };
+        const callerFilter = (params.ExtraFilter as string) || '';
+        if (viewEntity.WhereClause && viewEntity.WhereClause.length > 0) {
+            const renderedWhere = (await this.RenderViewWhereClause(viewEntity, user))?.trim();
+            if (renderedWhere) {
+                merged.ExtraFilter = callerFilter ? `(${callerFilter}) AND (${renderedWhere})` : renderedWhere;
+            }
+        }
+        if ((!params.OrderBy || (params.OrderBy as string).length === 0) && viewEntity.OrderByClause) {
+            merged.OrderBy = viewEntity.OrderByClause;
+        }
+        return merged;
     }
 
     protected buildExternalPrimaryKeyFilter(entityInfo: EntityInfo, compositeKey: CompositeKey): string {

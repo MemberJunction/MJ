@@ -16,7 +16,7 @@ import {
     EntityInfo,
     CompositeKey,
 } from '@memberjunction/core';
-import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
+import { MJQueryEntityExtended, MJUserViewEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 
 /**
  * Test subclass exposing protected pipeline methods for testing.
@@ -141,6 +141,10 @@ class TestPipelineProvider extends GenericDatabaseProvider {
 
     public testAssertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
         this.assertExternalRunViewParamsSupported(params, entityName);
+    }
+
+    public testMergeExternalViewParams(params: RunViewParams, viewEntity: MJUserViewEntityExtended | null, user: UserInfo): Promise<RunViewParams> {
+        return this.mergeExternalViewParams(params, viewEntity, user);
     }
 }
 
@@ -1067,6 +1071,36 @@ ORDER BY bridge.LastName, bridge.FirstName`,
                 { EntityName: 'Sales', ExtraFilter: "Region='NW'", OrderBy: 'Amount DESC', MaxRows: 50, StartRow: 100, Fields: ['ID'], UserSearchString: '  ' } as RunViewParams,
                 'Sales',
             )).not.toThrow();
+        });
+    });
+
+    describe('mergeExternalViewParams', () => {
+        const user = { ID: 'u1' } as UserInfo;
+        const view = (overrides: Partial<{ WhereClause: string; OrderByClause: string }>) =>
+            ({ WhereClause: '', OrderByClause: '', ...overrides } as unknown as MJUserViewEntityExtended);
+
+        it('returns params unchanged when there is no saved view', async () => {
+            const params = { EntityName: 'Sales', ExtraFilter: "Region='NW'" } as RunViewParams;
+            const merged = await provider.testMergeExternalViewParams(params, null, user);
+            expect(merged).toBe(params);
+        });
+
+        it("ANDs the view's WhereClause with the caller's ExtraFilter", async () => {
+            const params = { EntityName: 'Sales', ExtraFilter: "Region='NW'" } as RunViewParams;
+            const merged = await provider.testMergeExternalViewParams(params, view({ WhereClause: "Status='Active'" }), user);
+            expect(merged.ExtraFilter).toBe("(Region='NW') AND (Status='Active')");
+        });
+
+        it("uses the view's WhereClause alone when the caller supplied no ExtraFilter", async () => {
+            const merged = await provider.testMergeExternalViewParams({ EntityName: 'Sales' } as RunViewParams, view({ WhereClause: "Status='Active'" }), user);
+            expect(merged.ExtraFilter).toBe("Status='Active'");
+        });
+
+        it("applies the view's OrderByClause only when the caller supplied no OrderBy", async () => {
+            const withCaller = await provider.testMergeExternalViewParams({ EntityName: 'Sales', OrderBy: 'Amount DESC' } as RunViewParams, view({ OrderByClause: 'Name ASC' }), user);
+            expect(withCaller.OrderBy).toBe('Amount DESC');
+            const noCaller = await provider.testMergeExternalViewParams({ EntityName: 'Sales' } as RunViewParams, view({ OrderByClause: 'Name ASC' }), user);
+            expect(noCaller.OrderBy).toBe('Name ASC');
         });
     });
 });
