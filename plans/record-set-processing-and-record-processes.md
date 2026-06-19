@@ -3,6 +3,8 @@
 **Status:** Proposed
 **Author:** MJ Architecture
 **Date:** 2026-06-18
+**Revised:** 2026-06-19 — incorporated code-verification review (cursor-strategy ownership, on-change-vs-scope semantics, stored `ProcessRunDetail.EntityID`, honest characterization of the §10 refactor targets)
+**Revised:** 2026-06-19 (b) — added the **Remote Operations** substrate (§16) + end-to-end WBS (§17): a typed, provider-routed, metadata-defined, optionally-AI-authored operation layer that the Record Process facade's on-demand / status / control calls are built on (the prime consumer), with a showcase refactor + guide
 **Branch:** `claude/hopeful-brown-crp09w`
 
 ---
@@ -159,6 +161,8 @@ The single declarative object a user creates. Owns the underlying Entity Action 
 | `BatchSize` | int null | default 100 |
 | `MaxConcurrency` | int null | default 1 |
 
+> **On-change vs. Scope (semantic rule).** `ScopeType`/`ScopeViewID`/`ScopeListID`/`ScopeFilter` describe the record **set** that the **Schedule** and **On-Demand** triggers iterate. The **On-Change** trigger is *always* single-record — it operates on the one record whose save fired the Entity Action and **ignores `Scope`**. A save must never re-run the whole view. `ValidateAsync` (see §9) enforces this: when `OnChangeEnabled=1`, `Scope` is interpreted only for the batch triggers, never for the on-change path.
+
 ### 4.2 `MJ: Process Runs` — generic run header
 
 Source-agnostic. Modeled on `MJContentProcessRun` (which already has resume/cancel/error fields). One row per execution of *any* set-processing job — whether launched by a Record Process, a Scheduled Job, or a direct engine consumer (geocoding, vector sync).
@@ -193,7 +197,7 @@ Your "custom detail tracking table," standardized. One row per processed record 
 |---|---|---|
 | `ID` | uniqueidentifier | PK |
 | `ProcessRunID` | uniqueidentifier | FK → MJ: Process Runs |
-| `EntityID` | uniqueidentifier | FK → Entities |
+| `EntityID` | uniqueidentifier | **stored** FK → Entities (NOT computed — a single Process Run may span entities for ad-hoc/engine-driven runs, so the detail row carries its own entity context rather than inheriting it from the parent) |
 | `RecordID` | nvarchar(450) | the processed record's PK (composite-safe) |
 | `Status` | nvarchar(20) | `Pending` / `Succeeded` / `Failed` / `Skipped` |
 | `StartedAt` / `CompletedAt` | datetimeoffset null | |
@@ -264,6 +268,8 @@ classDiagram
 - `ContentProcessRunTracker` → keeps the classifier's `MJ: Content Process Runs` + `Content Item Tags`.
 - A subclass could write to `UserViewRun` / a bespoke domain table.
 - `NoOpTracker` for fire-and-forget single-record on-change work where a full run record is overkill.
+
+> **Cursor strategy is owned by the source adapter, not the engine.** The two donor patterns resume differently: the classifier resumes by **offset** (`ProcessRun.LastProcessedOffset`), while geocoding/vector-sync resume by **keyset** (`ProcessRun.LastProcessedKey`, via `RunViewParams.AfterKey`). The run header carries *both* columns; the active `IRecordSetSource` decides which it populates. Rule: `KeysetSource` and `FilterSource` use keyset **only when the entity has a single orderable PK** (mirror `VectorBase.CanUseKeysetPagination` / `ScheduledGeocodingAction`'s composite-PK fallback to offset); `ViewSource`/`ListSource` — which may carry arbitrary `OrderBy`/filters that defeat seek pagination — default to offset. The engine treats the cursor opaquely and just round-trips it through `Checkpoint`/`LoadResumeCursor`.
 
 **Package layout** (mirrors the Scheduling package split):
 
@@ -342,7 +348,7 @@ Generalize the classifier's inference core into a reusable executor + action so 
 - Scope picker (View / List / Filter), reusing the Smart Filter UI for ad-hoc filters.
 - Input/Output mapping editor (field bindings / child-record / tags).
 - **Run history viewer** reading `MJ: Process Runs` + `Process Run Details` — status, progress %, per-record results, errors, drill into the underlying Action Execution Log / AI Agent Run. Pause/Resume/Cancel buttons wired to `CancellationRequested`.
-- "Run now" (on-demand) button → `RecordSetProcessor` directly.
+- "Run now" (on-demand), Pause/Resume/Cancel, and run-status polling are **not bespoke resolvers** — they are **Remote Operations** (§16), the prime consumer of that substrate: `RecordProcess.RunNow` (long-running, returns a `ProcessRunID`), `RecordProcess.GetRunStatus` (sync), `RecordProcess.PauseRun` / `ResumeRun` / `CancelRun` (sync, toggle `CancellationRequested`). The form calls them through the typed client with zero hand-written GraphQL.
 
 ---
 
@@ -356,9 +362,11 @@ All five rebase onto `RecordSetProcessor`, choosing the appropriate source adapt
 | 2 | `AutotagBaseEngine` (`AutotagBaseEngine.ts`) | ContentItem source | **`ContentProcessRunTracker`** (keeps `MJ: Content Process Runs` + tag write-back) | Engine donates its hardening to the substrate, then consumes it |
 | 3 | `ScheduledGeocodingAction` (`scheduled-geocoding.action.ts:180-313`) | Keyset | `GenericProcessRunTracker` | Drops bespoke keyset loop; gains audit + resume rows |
 | 4 | `VectorBase` / `EntityVectorSyncer` | Keyset | `GenericProcessRunTracker` (or custom) | Unifies partial resume logic |
-| 5 | `ListOperations.MaterializeFromView` (`ListOperations.ts:286-450`) | View | `NoOpTracker` (pure resolution) | Shares the `ViewSource` adapter; List remains the output sink |
+| 5 | `ListOperations.MaterializeFromView` (`ListOperations.ts:286-450`) | View | `NoOpTracker` (pure resolution) | **Source-resolver reuse only.** This path is *single-shot* — it loads all PKs via one `RunView` into memory and bulk-inserts List Details; it does **not** iterate a per-record loop. It should share the `ViewSource`'s view→record-ID **resolution helper**, not rebase onto the batch loop. Lowest priority; arguably leave as-is. |
 
-**Sequencing note:** the substrate must *first* absorb the classifier's hardening (so #2 is a faithful rebase, not a regression), then #1/#3/#4/#5 follow. Each refactor ships behind its own PR with the package's unit tests updated (per the CLAUDE.md testing rule).
+> **Honest heterogeneity caveat.** These targets are *not* five instances of one pattern — code verification (2026-06-19) showed only **#2 (classifier), #3 (geocoding), and #4 (vector-sync)** are genuine paginated set-processors that benefit from the full substrate. **#1** is the stub fix (it gains a real loop where today there is none). **#5** is single-shot and only shares the source-resolution helper. (For the record, two capabilities cited in §2 — the User-View *Smart Filter*, which returns a single WHERE clause, and *Execute Agent*, which dispatches one agent — are **not** set-processors at all and are intentionally **not** refactor targets.) The value of the substrate is the new capability (P0–P6) plus the three genuine rebases; do not overstate the rest.
+
+**Sequencing note:** the substrate must *first* absorb the classifier's hardening (so #2 is a faithful rebase, not a regression), then #1/#3/#4 follow. Each refactor ships behind its own PR with the package's unit tests updated (per the CLAUDE.md testing rule). Budget the classifier extraction realistically: its loop is ~68% generic, but the remaining ~32% (text rendering, prompt orchestration, tag-graph write-back) is entangled — treat #2 as a careful, test-guarded rebase, not a mechanical lift.
 
 ---
 
@@ -428,6 +436,8 @@ One Work definition, one facade record, three triggers — zero bespoke plumbing
 
 Each PR builds the affected package(s) and runs their Vitest suites before merge.
 
+> **Dependency on the Remote Operations substrate (§16/§17).** P5 (facade resolver/client) and P6 (Run viewer) consume Remote Operations rather than hand-written resolvers/clients. The foundational RO phases (**RO-0 … RO-2**, see §17) therefore land **before P5**; RO-3 (AI-from-Description) and the RO showcase refactor can follow independently. The two phase-lists interleave as: P0–P4 ∥ RO-0–RO-2 → P5 → P6 → (P7–P8 ∥ RO-3 ∥ RO-showcase).
+
 ---
 
 ## 14. Open questions / future
@@ -475,6 +485,220 @@ CREATE TABLE ${flyway:defaultSchema}.ProcessRun (
 -- sp_addextendedproperty for every business column (omitted here for brevity).
 -- NO __mj_* columns and NO FK indexes — CodeGen generates both.
 ```
+
+---
+
+## 16. Remote Operations — typed, provider-routed, metadata-defined operations
+
+> **What this is.** Automated RPC on steroids: a server-side operation defined **once** as a typed object whose identical call site runs on the client (marshalled over GraphQL) and the server (executed in-process), whose input/output types are declared in metadata, whose plumbing can be **AI-authored from a description** or hand-written, and whose authorization plugs into MJ's **existing** unified auth framework. It is the missing peer of `BaseEntity` (table-backed CRUD) and `RunView` (set reads): a first-class primitive for *typed, code-to-code capabilities the browser and server both invoke*.
+
+### 16.1 Why — the transport gap, and where it fits
+
+Today, exposing any non-CRUD server capability to the browser (cluster, classify, "run this pipeline", search) means hand-writing a TypeGraphQL resolver **and** a typed GraphQL client **and** duplicating the input/output types on both sides — the exact ceremony the Transport-Layer guide documents. The types drift; there is no single object that "is" the operation. Remote Operations collapses that into one declarative object.
+
+| Need | Tool |
+|---|---|
+| Typed, code-to-code capability the browser *and* server invoke, one type system | **`BaseRemotableOperation`** (this section — new default) |
+| Metadata/string-discoverable boundary for **agents / low-code / workflow** | **Action** (unchanged) |
+| First-class public GraphQL API surface, or a genuinely unusual transport | **bespoke typed resolver** (unchanged) |
+| Table-backed record CRUD | **`BaseEntity`** (already generated) |
+
+Every piece below **reuses an existing, shipping mechanism** — nothing here is novel infrastructure:
+- typed I/O interfaces from metadata → the **`EntityField.JSONType*`** AST-prefix-and-emit path (`entity_subclasses_codegen.ts:199-296`);
+- per-row generated class → the **Action subclass generator** (`action_subclasses_codegen.ts:102-136`);
+- generated-base ← hand subclass priority → **ClassFactory** registration order (`ClassFactory.ts:186-196,337-354`);
+- AI body from a description → the **CHECK-constraint → AI validator** pipeline (`advanced_generation.ts:591`, `manage-metadata.ts:3762`), cache-by-source + human approval gate;
+- authorization → **`ResolverBase.CheckAPIKeyScopeAuthorization`** + **`EntityInfo.GetUserPermisions`** (`ResolverBase.ts:624`, `entityInfo.ts:2138`).
+
+### 16.2 Layer A — `BaseRemotableOperation<TInput, TOutput>` (the typed object)
+
+Lives in **`@memberjunction/core`**, client-safe (no server imports) — exactly like `BaseEntity`. The same `Execute()` call site works on both sides of the wire; the provider decides whether that means in-process execution or a GraphQL round-trip.
+
+```typescript
+export type RemoteOpExecMode = 'Sync' | 'LongRunning';
+export type RemoteOpInvokeMode = 'attached' | 'detached';   // caller's choice for LongRunning
+
+export interface RemoteOpInvokeOptions {
+  mode?: RemoteOpInvokeMode;                                  // default 'attached'
+  onProgress?: (p: RemoteOpProgress) => void;                // streaming updates (attached)
+  provider?: IMetadataProvider;
+  user?: UserInfo;                                            // server-side only
+}
+
+export abstract class BaseRemotableOperation<TInput, TOutput> {
+  abstract readonly OperationKey: string;                    // stable registry key + wire token
+  readonly RequiredScope?: string;                           // optional API-key scope gate (§16.5)
+  readonly RequiresSystemUser?: boolean;
+  readonly ExecutionMode: RemoteOpExecMode = 'Sync';
+
+  /** Universal entry point — identical on client and server. */
+  async Execute(input: TInput, opts: RemoteOpInvokeOptions = {}): Promise<RemoteOpResult<TOutput>> {
+    const provider = opts.provider ?? Metadata.Provider;
+    return provider.RouteOperation(this.OperationKey, input, opts);   // §16.3
+  }
+
+  /** SERVER-side plumbing. Default throws (clear runtime error) — but the class is
+   *  NOT abstract: CodeGen may emit a functional body here (AI-authored or default
+   *  plumbing), so for many ops NO subclass is required. Override to customize. */
+  protected InternalExecute(_i: TInput, _p: IMetadataProvider, _u: UserInfo,
+                            _ctx: RemoteOpServerContext): Promise<TOutput> {
+    throw new Error(`${this.OperationKey}: no server implementation (provide AI plumbing, a default body, or a subclass)`);
+  }
+
+  /** Per-op authorization hook, composed with the framework gates (§16.5). */
+  protected async Authorize(_i: TInput, _u: UserInfo): Promise<boolean> { return true; }
+}
+```
+
+> **`InternalExecute` is concrete, never abstract** (your correction). The generated class (§16.4) is itself concrete and registered, so a row with AI-plumbing or a default body is fully executable with **no hand-written subclass**. Subclassing is *available* (override `InternalExecute`/`Authorize`) but never *forced*. The throwing default is only a runtime safety net for a row that declares neither AI code nor a subclass.
+
+### 16.3 Layer B — `RouteOperation` (the documented power tool)
+
+One method on `IMetadataProvider`, implemented once per provider. **Public, but README/JSDoc'd as an escape hatch:** *"Prefer the typed `Operation.Execute()`. `RouteOperation` is the stringly-typed seam for edge cases (dynamic dispatch, generic tooling) — not for building significant systems. Only registered + Active + Approved operations are routable, and every call is authorized (§16.5)."*
+
+```typescript
+// SQLServerDataProvider — in-process
+async RouteOperation<I,O>(key, input, opts): Promise<RemoteOpResult<O>> {
+  const op = ClassFactory.CreateInstance<BaseRemotableOperation<I,O>>(BaseRemotableOperation, key);
+  if (!op) throw new Error(`Unknown remote operation '${key}'`);
+  return executeServerSide(op, input, this, opts);   // authz + InternalExecute + progress wiring
+}
+// GraphQLDataProvider — one generic mutation + the existing push channel for progress
+async RouteOperation<I,O>(key, input, opts): Promise<RemoteOpResult<O>> {
+  // detached → returns handle; attached → subscribes to progress over the existing WS, resolves on completion
+}
+```
+
+The allow-list **is** the ClassFactory registry: a client can only name operations the server has registered, that are `Active`, and (if AI-authored) `Approved`. That is the security boundary, hardened in §16.5.
+
+### 16.4 Layer C — `MJ: Remote Operations` metadata + CodeGen
+
+One row per operation. Columns deliberately mirror existing tables so there is nothing new to learn:
+
+| Column | Mirrors | Purpose |
+|---|---|---|
+| `Name`, `OperationKey` (unique) | Action `Name` | display + stable registry key / wire token |
+| `Description` | — | human doc **and** the AI-codegen seed (§16.4.2) |
+| `InputTypeName` / `InputTypeDefinition` / `InputTypeIsArray` | **`EntityField.JSONType*`** | raw TS interface source → typed `TInput` |
+| `OutputTypeName` / `OutputTypeDefinition` / `OutputTypeIsArray` | same | typed `TOutput` |
+| `ExecutionMode` | — | `Sync` / `LongRunning` (§16.6) |
+| `RequiredScope` (nullable) | `601-mcp-oauth` scopes | optional `<family>:<verb>` API-key gate (§16.5) |
+| `RequiresSystemUser` | `@RequireSystemUser` | system-only flag |
+| `GenerationType` | **Action `Type`** | `Manual` (hand) / `AI` (from `Description`) / `Default` (emit standard plumbing) |
+| `Code` / `CodeApprovalStatus` / `CodeApprovedByUserID` / `CodeApprovedAt` | **Action `Code`/`CodeApprovalStatus`** | AI body + human approval gate |
+| `Status` | — | `Active` / `Disabled` / `Pending` (only `Active` routable) |
+| `CacheTTLSeconds`, `TimeoutMS`, `MaxConcurrency` | job fields | execution knobs |
+
+#### 16.4.1 Generated output (concrete, registered, subclassable — not abstract)
+
+```typescript
+// GENERATED CODE - DO NOT MODIFY
+export interface RecordProcessRunNow_Input  { recordProcessID: string; scopeOverride?: string; }
+export interface RecordProcessRunNow_Result { processRunID: string; }
+
+@RegisterClass(BaseRemotableOperation, 'RecordProcess.RunNow')
+export class RecordProcessRunNowOperation
+    extends BaseRemotableOperation<RecordProcessRunNow_Input, RecordProcessRunNow_Result> {
+  readonly OperationKey = 'RecordProcess.RunNow';
+  readonly RequiredScope = 'recordprocess:execute';   // optional — null ⇒ user-permission only
+  readonly ExecutionMode = 'LongRunning';
+  // GenerationType='AI' + Approved → AI Code body emitted here (functional, no subclass needed)
+  // GenerationType='Default'       → standard plumbing emitted here
+  // GenerationType='Manual'        → inherits the throwing default; a subclass supplies InternalExecute
+}
+```
+
+Improvement over the Action generator (which *skips* `Type='Custom'` rows): we emit a **typed base for every row, including `Manual`**, so hand-coded ops still inherit the generated `TInput`/`TOutput`/`OperationKey`/scope and only add their `InternalExecute`. The optional hand subclass wins by import order:
+
+```typescript
+@RegisterClass(BaseRemotableOperation, 'RecordProcess.RunNow')
+export class RecordProcessRunNowOperationExtended extends RecordProcessRunNowOperation {
+  protected async InternalExecute(i, provider, user, ctx) {
+    const run = await RecordSetProcessor.Instance.Process({ recordProcessID: i.recordProcessID,
+      contextUser: user, onProgress: ctx.emitProgress });   // long-running ⇒ ProcessRun
+    return { processRunID: run.ProcessRunID };
+  }
+}
+```
+
+#### 16.4.2 Optional AI body from `Description` (clone of the CHECK→validator pipeline)
+
+A new **`CodeGen: Remote Operation Body Parser`** AI Prompt (metadata, not hardcoded) takes `{ description, inputTypeDefinition, outputTypeDefinition, operationKey }` and returns `{ Code, Description }`, run via `AIPromptRunner`. It is:
+- **gated** by `advancedGeneration.features['GenerateRemoteOperations'].enabled` (opt-in, like `ParseCheckConstraints`);
+- **cached by verbatim `Description`** and re-run **only when the description changes** (same source-equality gate as validators);
+- **approval-gated**: an `AI` op with `CodeApprovalStatus != 'Approved'` is **neither emitted nor routable** — the same human-in-the-loop control Actions use for AI-written server code. This is the safety valve for letting a description become executing server code.
+
+### 16.5 Authorization — both API-key *and* normal-user linkage (no parallel mechanism)
+
+The generic resolver (§16.7) composes the **two existing** evaluators — an op **never requires an API key**; it supports both caller models at once:
+
+1. **Resolve the acting user** — `const user = this.GetUserFromPayload(ctx.userPayload)`. Works identically for **interactive OAuth/JWT sessions** (browser users) and **API-key/MCP sessions**.
+2. **API-key scope gate (only when present)** — `await this.CheckAPIKeyScopeAuthorization(row.RequiredScope, key, ctx.userPayload)` (`ResolverBase.ts:624`). This is a **no-op for OAuth/JWT users** and only enforces scopes for API-key callers; `RequiredScope` is itself optional (null ⇒ no scope gate at all).
+3. **Per-user ceiling** — `RequiresSystemUser` check, and/or `EntityInfo.GetUserPermisions(user).CanX` (`entityInfo.ts:2138`) for anything touching entities. User permissions are the ultimate ceiling that scopes can only narrow.
+4. **Per-op hook** — `await op.Authorize(input, user)`.
+
+So a **logged-in Explorer user** invoking `RecordProcess.RunNow` is authorized purely by their user/role/entity permissions + `Authorize()` — no key involved. An **MCP/API-key** caller of the same op additionally clears the `recordprocess:execute` scope. `RequiredScope` strings are seeded as `MJ: API Scopes` metadata via mj-sync, mirroring the existing `action:execute` / `agent:execute` scopes. **Reference to copy verbatim:** `ActionResolver.RunAction` (`ActionResolver.ts:182-198`).
+
+### 16.6 Long-running — two caller-selected modes
+
+A `LongRunning` op runs **one** server execution backed by a `ProcessRun` (§4.2); the client chooses how to consume it:
+
+- **Detached (fire-and-forget + status + auto-notify):** `Execute(input, { mode:'detached' })` returns the handle (`ProcessRunID`) immediately. Status is pollable via a sibling `…GetRunStatus` op; **completion auto-notifies** over the existing push channel (the agent-run / cache-invalidation WebSocket) and, optionally, a persisted user notification. No socket needs to stay open.
+- **Attached (await + stream):** `Execute(input, { mode:'attached', onProgress })` keeps the promise pending until completion **and** streams `onProgress` updates over the same channel in the meantime — the same shape AI agent runs already use.
+
+Both modes reuse `RecordSetProcessor`'s `onProgress` events and the `CancellationRequested` pause/cancel handshake; the long-running op's handle *is* a `ProcessRunID`, so the Run viewer (§9) and the op layer share one observable surface. `Sync` ops are plain request/response and ignore these modes.
+
+### 16.7 The single generic resolver + allow-list
+
+One server resolver, `ExecuteRemoteOperation(operationKey, inputJSON, invokeMode)`, backed by a `@RegisterForStartup` **`RemoteOperationEngineBase`** that caches the `MJ: Remote Operations` rows (scope / approval / status / exec-mode) so no per-call DB hit is needed. It: resolves the registered op + its row → rejects if not `Active` or (AI) not `Approved` → runs the §16.5 authorization chain → invokes `InternalExecute`, wiring progress to the push channel for `LongRunning`/attached. Because only registered + Active + Approved ops are reachable and every call is authorized, the public `RouteOperation` power tool is **safe by construction**.
+
+### 16.8 Packages & placement
+
+- `BaseRemotableOperation`, `IMetadataProvider.RouteOperation`, invoke/result/progress types → **`@memberjunction/core`** (first-class beside `RunView`/`BaseEntity`).
+- `RemoteOperationEngineBase` (metadata cache, client+server) → **`@memberjunction/core-entities`** (BaseEngine pattern, `@RegisterForStartup`).
+- `ExecuteRemoteOperation` resolver → **`@memberjunction/server`**.
+- `RouteOperation` impls → **`@memberjunction/sqlserver-dataprovider`** (in-process) + **`@memberjunction/graphql-dataprovider`** (marshalled).
+- CodeGen emitter + `CodeGen: Remote Operation Body Parser` prompt → **`@memberjunction/codegen-lib`**.
+
+### 16.9 Record Set Processing — the prime consumer
+
+The Record Process facade ships its on-demand/control surface entirely as Remote Operations (the showcase of the pattern in the new architecture):
+
+| Operation | Mode | I/O |
+|---|---|---|
+| `RecordProcess.RunNow` | LongRunning | `{recordProcessID, scopeOverride?}` → `{processRunID}` |
+| `RecordProcess.GetRunStatus` | Sync | `{processRunID}` → `{status, processed, total, success, error, skipped}` |
+| `RecordProcess.PauseRun` / `ResumeRun` / `CancelRun` | Sync | `{processRunID}` → `{status}` (toggles `CancellationRequested`) |
+
+These replace the hand-written resolver+client the facade (§9) would otherwise need — one typed object per operation, types declared once, zero inline `gql`.
+
+### 16.10 Showcase refactor (prove "much less code")
+
+After the substrate lands, refactor **one** existing custom request/response system off its bespoke resolver+client+duplicated-types onto Remote Operations, as a documented before/after. **Recommended target: the clustering stack** (`GraphQLClusterClient` + its resolver — the Transport-Layer guide's own reference implementation), because converting the canonical example is the most persuasive demonstration of the code reduction. Final target chosen at RO-showcase time; the PR includes a line-count before/after in its description.
+
+### 16.11 Guide + root-CLAUDE.md pointer
+
+A new **`guides/REMOTE_OPERATIONS_GUIDE.md`** documents: the decision table (§16.1), authoring an op three ways (Manual subclass / Default plumbing / AI-from-Description + approval), the two long-running modes, the auth model (API-key ∥ user), and the power-tool caveat on `RouteOperation`. A bullet is added to the root **`CLAUDE.md`** "Development Guides" list pointing to it, so AI coding systems reach for Remote Operations instead of hand-rolling resolvers. (Both are WBS deliverables — RO-6.)
+
+---
+
+## 17. Remote Operations — end-to-end WBS
+
+Phased, each phase a gateable PR that builds the affected package(s) and runs their Vitest suites (per the CLAUDE.md testing rule). RO-0…RO-2 are foundational and land **before** facade P5 (§13).
+
+| Phase | Deliverable | Key files / packages | Depends on |
+|---|---|---|---|
+| **RO-0** | `BaseRemotableOperation<I,O>` + invoke/result/progress types + `IMetadataProvider.RouteOperation` signature; `ClassFactory` registration convention; unit tests for the typed-object contract | `@memberjunction/core` | — |
+| **RO-1** | `RouteOperation` impls on both providers; the single `ExecuteRemoteOperation` resolver; the §16.5 authorization chain (reuse `CheckAPIKeyScopeAuthorization` + `GetUserPermisions`); allow-list enforcement; **POC: hand-written `RecordProcess.GetRunStatus`** (Sync, no metadata/codegen yet) proving the typed round-trip on both sides | `sqlserver-dataprovider`, `graphql-dataprovider`, `@memberjunction/server` | RO-0 |
+| **RO-2** | `MJ: Remote Operations` migration (+ `MJ: API Scopes` seed rows via mj-sync) → CodeGen; `RemoteOperationEngineBase` (`@RegisterForStartup` cache); CodeGen emitter for the concrete typed base (JSONType reuse) incl. `Manual`/`Default` modes; convert the POC to a metadata row | `codegen-lib`, `core-entities`, migration | RO-1 |
+| **RO-3** | Long-running plumbing: detached (handle + status + auto-notify over push channel) **and** attached (await + `onProgress` stream); `ProcessRun`-backed handles; `RecordProcess.RunNow` + Pause/Resume/Cancel ops | `core`, `graphql-dataprovider`, `@memberjunction/server` | RO-2, P1 (`RecordSetProcessor`) |
+| **RO-4** | AI-from-`Description`: `CodeGen: Remote Operation Body Parser` prompt; `advancedGeneration.features['GenerateRemoteOperations']` gate; cache-by-source; `CodeApprovalStatus` emission/route gate | `codegen-lib`, metadata (prompt) | RO-2 |
+| **RO-5** | Showcase refactor of one existing custom system (rec. clustering) onto Remote Operations; before/after line-count in PR; delete the superseded resolver/client | target package | RO-2 (+ RO-3 if long-running) |
+| **RO-6** | `guides/REMOTE_OPERATIONS_GUIDE.md` + root `CLAUDE.md` "Development Guides" pointer | docs | RO-2 |
+
+**Interleave with the facade phases (§13):** `P0–P4 ∥ RO-0–RO-2 → P5 (uses RO ops) → P6 (Run viewer ∥ RO-3) → (P7–P8 ∥ RO-4 ∥ RO-5 ∥ RO-6)`.
+
+**Open RO decisions (carry into build):** exact `MJ: Remote Operations` column finalization vs. reusing any existing catalog table; whether `Default`-plumbing generation is worth shipping in RO-2 or deferred; the final showcase-refactor target; and the persisted-notification entity for detached completion (reuse existing notifications vs. new).
 
 ---
 
