@@ -100,11 +100,8 @@ export interface AgentInRoom {
         (ErrorOccurred)="ErrorOccurred.emit($event)"
       ></mj-livekit-room>
 
-      @if (Mode === 'agent' && EnableAgentManagement) {
+      @if (Mode === 'agent' && EnableAgentManagement && resolvedRoomName) {
         <div class="mj-lk-agents">
-          <button type="button" class="mj-lk-agents__toggle" (click)="showAgentsPanel = !showAgentsPanel">
-            <i class="fa-solid fa-robot"></i> Agents ({{ agentsInRoom.length }})
-          </button>
           @if (showAgentsPanel) {
             <div class="mj-lk-agents__panel">
               <div class="mj-lk-agents__head">In this room</div>
@@ -135,6 +132,18 @@ export interface AgentInRoom {
               }
             </div>
           }
+          <div class="mj-lk-agents__pills">
+            <button type="button" class="mj-lk-agents__toggle" (click)="showAgentsPanel = !showAgentsPanel">
+              <i class="fa-solid fa-robot"></i> Agents ({{ agentsInRoom.length }})
+            </button>
+            @if (EnableInvite) {
+              <button type="button" class="mj-lk-agents__toggle" title="Copy a link to invite someone to this room"
+                (click)="CopyInvite()">
+                <i class="fa-solid" [class.fa-user-plus]="!inviteCopied" [class.fa-check]="inviteCopied"></i>
+                {{ inviteCopied ? 'Link copied' : 'Invite' }}
+              </button>
+            }
+          </div>
         </div>
       }
       </div>
@@ -185,8 +194,12 @@ export interface AgentInRoom {
         bottom: 84px;
         z-index: 40;
         display: flex;
-        flex-direction: column-reverse;
+        flex-direction: column;
         align-items: flex-start;
+        gap: 8px;
+      }
+      .mj-lk-agents__pills {
+        display: flex;
         gap: 8px;
       }
       .mj-lk-agents__toggle {
@@ -311,8 +324,13 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   // ── In-room agent management (agent mode) ─────────────────────────────────────────
   /** Show the in-room "Agents" panel to add/remove agents (agent mode only). */
   @Input() public EnableAgentManagement = true;
+  /** Show the "Invite" pill that copies a join link to this room. */
+  @Input() public EnableInvite = true;
   /** Target agents the user can ADD in-room (id + name). The host (e.g. the Explorer resource) supplies these. */
   @Input() public AvailableAgents: { ID: string; Name: string }[] = [];
+
+  /** True briefly after the invite link is copied (drives the "Link copied" pill state). */
+  public inviteCopied = false;
 
   /** Whether the floating agents panel is open. */
   public showAgentsPanel = false;
@@ -564,6 +582,34 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       agent.Removing = false;
     } finally {
       this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Builds the shareable invite URL for THIS room: the current page URL with a `room=<roomName>` query
+   * param. Opening it lands the invitee on the Live Room in join mode for the same room.
+   */
+  public get inviteUrl(): string {
+    const url = new URL(window.location.href);
+    url.searchParams.set('room', this.resolvedRoomName ?? '');
+    return url.toString();
+  }
+
+  /** Copies {@link inviteUrl} to the clipboard and flips the pill to "Link copied" briefly. */
+  public async CopyInvite(): Promise<void> {
+    if (!this.resolvedRoomName) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(this.inviteUrl);
+      this.inviteCopied = true;
+      this.cdr.markForCheck();
+      setTimeout(() => {
+        this.inviteCopied = false;
+        this.cdr.markForCheck();
+      }, 2000);
+    } catch {
+      // Clipboard blocked (insecure context / permissions) — leave the pill unchanged.
     }
   }
 

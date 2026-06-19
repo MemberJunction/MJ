@@ -31,11 +31,12 @@ interface TargetAgentChoice {
       @case ('live') {
         <mj-livekit-agent-room
           class="mj-livekit-room-resource"
+          [Mode]="roomMode"
+          [RoomName]="joinRoomName"
           [AgentID]="agentId"
           [TargetAgentID]="targetAgentId"
           [AgentName]="targetAgentName"
           [AvailableAgents]="agents"
-          Mode="agent"
           [Provider]="ProviderToUse"
           [ShowAgentState]="true"
           [ShowWhiteboard]="true"
@@ -185,6 +186,12 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
   /** Render phase: spinner while resolving → pre-join picker → live room (or an error message). */
   public phase: 'loading' | 'picking' | 'live' | 'error' = 'loading';
 
+  /** `'agent'` to start/voice an agent (the default), or `'join'` when opened from an invite link. */
+  public roomMode: 'agent' | 'join' = 'agent';
+
+  /** The room to JOIN when opened via an invite link (`?room=…`); null in agent mode. */
+  public joinRoomName: string | null = null;
+
   /** The Realtime co-agent (voice front-end) id — the resolved default Realtime-type agent. */
   public agentId: string | null = null;
 
@@ -221,6 +228,16 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
    * flip under the app's frequent change-detection); a cold engine takes the async path and flushes.
    */
   private resolve(): void {
+    // Invite link (?room=…): join that existing room directly — no agent resolution / picker needed.
+    const invitedRoom = this.GetQueryParams()?.['room']?.trim();
+    if (invitedRoom) {
+      this.roomMode = 'join';
+      this.joinRoomName = invitedRoom;
+      this.phase = 'live';
+      this.NotifyLoadComplete();
+      return;
+    }
+
     if (AIEngineBase.Instance.Loaded) {
       this.applyResolution();
       return;
