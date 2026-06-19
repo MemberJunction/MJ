@@ -267,6 +267,9 @@ export interface ActiveBridgeSession {
     description: 'Server-side AI Bridge Engine (realtime bridge coordination + transport seam)',
 })
 export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements IStartupSink {
+    /** Diagnostic: session ids that have already logged their first inbound / outbound media frame. */
+    private diagInbound = new Set<string>();
+    private diagOutbound = new Set<string>();
     /** In-memory registry of bridged sessions this process currently hosts, keyed by bridge id (lowercased). */
     private activeSessions = new Map<string, ActiveBridgeSession>();
 
@@ -588,12 +591,20 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         Bridge.OnMedia((frame: BridgeMediaFrame) => {
             const chunk = this.frameToArrayBuffer(frame);
             if (chunk) {
+                if (!this.diagInbound.has(active.SessionBridgeID)) {
+                    this.diagInbound.add(active.SessionBridgeID);
+                    LogStatus(`[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). The agent is HEARING you.`);
+                }
                 RealtimeSession.SendInput(chunk, frame.Track === 'video-in' ? 'video' : 'audio');
             }
         });
 
         // Outbound: the agent speaks → into the meeting/call.
         RealtimeSession.OnOutput((chunk: ArrayBuffer) => {
+            if (!this.diagOutbound.has(active.SessionBridgeID)) {
+                this.diagOutbound.add(active.SessionBridgeID);
+                LogStatus(`[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`);
+            }
             const track: BridgeMediaTrackKind = 'audio-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
@@ -792,6 +803,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      */
     private wireTurnTaking(active: ActiveBridgeSession): void {
         active.RealtimeSession.OnTranscript((t: RealtimeTranscript) => {
+            if (t.IsFinal) {
+                // Only log FINAL transcripts — partials fire per-word and flood the log.
+                LogStatus(`[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`);
+            }
             if (t.Role !== 'user' || !t.IsFinal) {
                 return; // act only on a completed human turn
             }
@@ -801,6 +816,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 EndMs: Date.now(),
             };
             const decision = active.TurnPolicy.EvaluateTurn({ Segment: segment });
+            LogStatus(`[AIBridgeEngine][diag] turn decision=${decision.Action} for user turn "${(t.Text ?? '').slice(0, 60)}" (bridge ${active.SessionBridgeID})`);
             this.applyTurnDecision(active, decision.Action);
         });
     }

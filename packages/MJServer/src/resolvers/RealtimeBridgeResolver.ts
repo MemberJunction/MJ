@@ -7,6 +7,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
 import { SessionManager } from '../agentSessions/SessionManager.js';
+import { NotificationEngine } from '@memberjunction/notifications';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
@@ -261,6 +262,56 @@ export class RealtimeBridgeResolver extends ResolverBase {
       return await LiveKitAgentRoomCoordinator.Instance.StopAgentRoomSession(sessionBridgeID, 'Explicit', user, provider);
     } catch (error) {
       LogError(`StopLiveKitAgentRoomSession failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }
+
+  /**
+   * Invites MJ users to a live room: for each user, sends a **"Live Room Invite"** notification via the
+   * unified {@link NotificationEngine} — which writes the in-app notification (clickable → joins the room
+   * via the `meet-room` ResourceConfiguration) and ALSO delivers over MJ Comms (email/SMS) when the type's
+   * channels + a provider are configured. Best-effort: Comms not being set up never blocks the in-app
+   * notification, and a missing "Live Room Invite" type (seed not yet pushed) is caught and returns false.
+   *
+   * @param roomName The LiveKit room the invitees should join.
+   * @param userIDs The `MJ: Users` ids to invite.
+   * @returns `true` when at least one invite was delivered.
+   */
+  @Mutation(() => Boolean)
+  async InviteUsersToLiveKitRoom(
+    @Arg('roomName', () => String) roomName: string,
+    @Arg('userIDs', () => [String]) userIDs: string[],
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<boolean> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return false;
+      }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      await NotificationEngine.Instance.Config(false, user, provider);
+
+      const inviter = user.Name?.trim() || user.Email || 'Someone';
+      let anyDelivered = false;
+      for (const userId of userIDs ?? []) {
+        if (!userId?.trim()) {
+          continue;
+        }
+        const result = await NotificationEngine.Instance.SendNotification(
+          {
+            userId,
+            typeNameOrId: 'Live Room Invite',
+            title: `${inviter} invited you to a live room`,
+            message: `${inviter} is inviting you to join a live Meet room. Open this notification to join.`,
+            resourceConfiguration: { type: 'meet-room', room: roomName },
+          },
+          user,
+        );
+        anyDelivered = anyDelivered || result.success;
+      }
+      return anyDelivered;
+    } catch (error) {
+      LogError(`InviteUsersToLiveKitRoom failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }

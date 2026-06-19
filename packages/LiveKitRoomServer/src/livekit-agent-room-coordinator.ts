@@ -16,7 +16,7 @@
 import { BaseSingleton } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { IRealtimeSession } from '@memberjunction/ai';
-import { RegexAddressedMatcher, type BridgeDisconnectReason, type BridgeTurnMode } from '@memberjunction/ai-bridge-base';
+import { AlwaysAddressedMatcher, type BridgeDisconnectReason, type BridgeTurnMode } from '@memberjunction/ai-bridge-base';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService } from './livekit-token-service';
 
@@ -175,7 +175,10 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       Address: botToken.ServerUrl,
       JoinMethod: 'OnDemand',
       TurnMode: params.TurnMode ?? 'Passive',
-      TurnMatcher: new RegexAddressedMatcher([botName, ...(params.AgentAliases ?? [])]),
+      // Direct "call an agent" room: respond to ALL the user's speech, not only when the agent is named
+      // (Passive's name-match left the agent silent unless you literally said its name each turn). A
+      // multi-agent room may later switch to RegexAddressedMatcher so several agents don't all answer.
+      TurnMatcher: new AlwaysAddressedMatcher(),
       // NativeModuleSpecifier tells LiveKitNativeMeetingSdk which native room-client wrapper to load — the
       // @livekit/rtc-node-backed @memberjunction/ai-bridge-livekit-native by default, overridable via env
       // (e.g. a one-line module setting Gemini's 16 kHz inbound rate). AccessToken is the pre-signed bot

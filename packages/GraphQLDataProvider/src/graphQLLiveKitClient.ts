@@ -183,6 +183,29 @@ export class GraphQLLiveKitClient {
   }
 
   /**
+   * Invites MJ users to a room — the server sends each a "Live Room Invite" notification (in-app +
+   * MJ Comms when configured) whose in-app entry joins the room when clicked. Best-effort.
+   *
+   * @param roomName The room to invite into.
+   * @param userIDs The `MJ: Users` ids to invite.
+   * @returns `true` when at least one invite was delivered.
+   */
+  public async InviteUsers(roomName: string, userIDs: string[]): Promise<boolean> {
+    try {
+      const mutation = gql`
+        mutation InviteUsersToLiveKitRoom($roomName: String!, $userIDs: [String!]!) {
+          InviteUsersToLiveKitRoom(roomName: $roomName, userIDs: $userIDs)
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(mutation, { roomName, userIDs });
+      return result?.InviteUsersToLiveKitRoom === true;
+    } catch (e: any) {
+      LogError('GraphQLLiveKitClient.InviteUsers failed', undefined, e);
+      return false;
+    }
+  }
+
+  /**
    * Starts recording a room (server-authorized composite egress).
    *
    * @param roomName The room to record.
