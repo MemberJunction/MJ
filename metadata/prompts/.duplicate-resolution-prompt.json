@@ -1,0 +1,27 @@
+{
+  "fields": {
+    "Name": "Duplicate Resolution",
+    "Description": "Shared core reasoning instructions for intelligent duplicate detection. Given a source record + vector-surfaced candidate matches and their field deltas, decides Merge / NotDuplicate / Uncertain, strengthens or weakens the vector score, picks the surviving record and per-field survivor choices, and explains why. Used directly as the cheap single-shot 'Prompt' reasoning path AND wrapped by the Duplicate Resolution Agent for the 'Agent' path, so both modes share one instruction set.",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "TemplateText": "@file:templates/Duplicate Resolution.template.md",
+    "OutputExample": "@file:output/Duplicate Resolution.example.json",
+    "ResponseFormat": "JSON",
+    "PromptRole": "System",
+    "PromptPosition": "First",
+    "Status": "Active",
+    "EffortLevel": 1
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": [
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+          "Priority": 1
+        }
+      }
+    ]
+  }
+}

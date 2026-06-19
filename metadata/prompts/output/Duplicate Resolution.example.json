@@ -1,0 +1,10 @@
+{
+  "recommendation": "Merge",
+  "confidence": 0.98,
+  "reasoning": "All three records resolve to the same legal entity: shared domain acme.com and the same primary address; \"Corp\" and \"Corporation LLC\" are formatting/legal-suffix variants. Phone digits are identical across all three (formatting only). I strengthened the 0.96 vector score to 0.98 because no field contradicts a merge. Kept Acme Corporation as survivor (most dependents) but adopted the Salesforce record's verified, more-complete phone and suite address.",
+  "survivorRecordId": "A1B2C3D4-0000-0000-0000-000000000001",
+  "fieldChoices": [
+    { "fieldName": "Phone", "sourceRecordId": "A1B2C3D4-0000-0000-0000-000000000002" },
+    { "fieldName": "BillingAddress", "sourceRecordId": "A1B2C3D4-0000-0000-0000-000000000002" }
+  ]
+}

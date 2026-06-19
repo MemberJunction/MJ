@@ -148,7 +148,7 @@ After migration: run CodeGen, then write TS exclusively against the generated ty
 1. ✅ Migration (both tables) — `migrations/v5/V202606191344__v5.43.x__Intelligent_Dupe_Detection_LLM_Reasoning.sql`. **Next:** run CodeGen → confirm generated typed properties.
 2. `RecordComparisonEngine` + resolver + GraphQL client (+ Angular wrapper, low-risk swap deferrable).
 3. `DuplicateReasoningProvider` seam + **both** `PromptReasoningProvider` (default) and `AgentReasoningProvider`; wire the per-set gate + `ReasoningMode` switch into `DuplicateRecordDetector`'s persist path.
-4. Seed the shared core instruction template + "Duplicate Resolution" prompt + "Duplicate Resolution Agent" (metadata).
+4. ✅ **Authored** — shared core instructions + "Duplicate Resolution" prompt (`metadata/prompts/.duplicate-resolution-prompt.json` + `templates/Duplicate Resolution.template.md` + `output/Duplicate Resolution.example.json`) and "Duplicate Resolution Agent" (`metadata/agents/.duplicate-resolution-agent.json`). **One prompt is shared by both reasoning modes** — the agent links to the same prompt via `MJ: AI Agent Prompts`. **Next:** `mj sync push` against a live DB; later wire `EntityDocument.ReasoningPromptID`/`ReasoningAgentID` defaults to these (after CodeGen).
 5. UI: LLM columns, disagreement badge, field-override; comparison-client swap when convenient.
 6. Tests (Vitest) for engine, RRF unchanged, gate logic (one-call-per-set), provider selection, and automation-level branching incl. the `EnableLLMReasoning=0` back-compat path.
 
