@@ -5,6 +5,7 @@
 **Date:** 2026-06-18
 **Revised:** 2026-06-19 — incorporated code-verification review (cursor-strategy ownership, on-change-vs-scope semantics, stored `ProcessRunDetail.EntityID`, honest characterization of the §10 refactor targets)
 **Revised:** 2026-06-19 (b) — added the **Remote Operations** substrate (§16) + end-to-end WBS (§17): a typed, provider-routed, metadata-defined, optionally-AI-authored operation layer that the Record Process facade's on-demand / status / control calls are built on (the prime consumer), with a showcase refactor + guide
+**Revised:** 2026-06-19 (c) — incorporated @rkihm-BC review: `RouteOperation` moves off `IMetadataProvider` to a dedicated `IRemoteOperationProvider` implemented in `ProviderBase`; honest "why not type Actions" + "shared plumbing, not a parallel stack" framing (§16.1); I/O-contract freshness via the metadata engine + additive-only defense-in-depth (§16.12); progress channel called out as a real RO-3 deliverable; on-change concurrency + self-trigger guard and checksum-watermark storage answered (§12); UX surfaces folded into §9. **The record-set work in this PR runs *only* via RO — no pre-RO bespoke resolvers.**
 **Branch:** `claude/hopeful-brown-crp09w`
 
 ---
@@ -349,6 +350,7 @@ Generalize the classifier's inference core into a reusable executor + action so 
 - Input/Output mapping editor (field bindings / child-record / tags).
 - **Run history viewer** reading `MJ: Process Runs` + `Process Run Details` — status, progress %, per-record results, errors, drill into the underlying Action Execution Log / AI Agent Run. Pause/Resume/Cancel buttons wired to `CancellationRequested`.
 - "Run now" (on-demand), Pause/Resume/Cancel, and run-status polling are **not bespoke resolvers** — they are **Remote Operations** (§16), the prime consumer of that substrate: `RecordProcess.RunNow` (long-running, returns a `ProcessRunID`), `RecordProcess.GetRunStatus` (sync), `RecordProcess.PauseRun` / `ResumeRun` / `CancelRun` (sync, toggle `CancellationRequested`). The form calls them through the typed client with zero hand-written GraphQL.
+- **UX surfaces the long-running model exposes (per review — accessibility matters):** (1) **Run-now affordance** defaults to **detached** for batch scopes (View/List) — fire + toast + the run appears in the viewer — and **attached** inline progress for `SingleRecord`/on-demand; (2) **completion notifications** for detached runs surface via the standard notification bell/toast, deep-linking back into the run viewer; (3) an **AI-code approval screen** for any `GenerationType='AI'` operation whose `CodeApprovalStatus` is pending, where an admin diffs and approves the generated body before it can execute. Guiding goal: the easier this is for non-technical users, the more accessible the whole capability becomes.
 
 ---
 
@@ -413,10 +415,11 @@ One Work definition, one facade record, three triggers — zero bespoke plumbing
 
 - **Cost guardrails.** LLM work over large views is expensive. The run header carries a budget gate (from the classifier); the facade exposes max-records/max-cost caps; `SkipUnchanged` (Checksum/UpdatedAt watermark) avoids re-billing untouched records.
 - **Idempotency & resume.** `Process Run Details` status + the run cursor make re-runs skip completed records and resume after a crash.
+- **Change detection / watermark storage (per review).** `WatermarkStrategy='UpdatedAt'` (default) stores **nothing** — it compares each row's `__mj_UpdatedAt` against the prior run's start, covering the common case. `'Checksum'` mode (for entities lacking a reliable update timestamp, or to detect *meaningful* vs. incidental change) stores a per-record content hash in a lightweight watermark table keyed `(RecordProcessID, EntityID, RecordID) → Hash + LastProcessedAt` — **not** a field on the target entity, keeping the mechanism generic with no per-entity schema. `'None'` always reprocesses.
 - **Observability.** Every run is a first-class auditable record with drill-down into the underlying Action Execution Log / AI Agent Run. Drives the UX viewer.
 - **Security / multi-tenant.** All execution passes `contextUser`; source resolution respects view/list/RLS permissions; agent dispatch keeps the `ExposeAsAction` + sub-agent gates.
 - **Multi-provider correctness.** Engine and trackers take an explicit `IMetadataProvider` (never `new Metadata()` in per-provider paths), per the root CLAUDE.md rule.
-- **On-change is async.** After-save invocations stay fire-and-forget so a slow LLM never blocks a user's save; `Validate` invocations remain synchronous and can abort.
+- **On-change is async — with concurrency control and a self-trigger guard (per review).** After-save invocations stay fire-and-forget so a slow LLM never blocks a user's save (`Validate` invocations remain synchronous and can abort). Two hazards are handled explicitly: **(1) Overlapping saves** — a record re-saved before its prior after-run finishes uses **per-record coalescing** (skip-if-in-flight, latest-wins) keyed by `(RecordProcessID, EntityID, RecordID)`, so a burst of saves collapses to one pending run per record instead of stacking. **(2) Self-trigger loops** — when a process writes back to the *same* entity, its own write-back would re-fire the `AfterUpdate` hook. The write-back save carries an **originating-process marker** on the save context; the on-change dispatcher suppresses re-entry for that marker (and the `OnChangeFilter` can additionally exclude the written-back fields). Without this, every infer-and-write-back process on its own entity is an infinite loop.
 
 ---
 
@@ -436,7 +439,7 @@ One Work definition, one facade record, three triggers — zero bespoke plumbing
 
 Each PR builds the affected package(s) and runs their Vitest suites before merge.
 
-> **Dependency on the Remote Operations substrate (§16/§17).** P5 (facade resolver/client) and P6 (Run viewer) consume Remote Operations rather than hand-written resolvers/clients. The foundational RO phases (**RO-0 … RO-2**, see §17) therefore land **before P5**; RO-3 (AI-from-Description) and the RO showcase refactor can follow independently. The two phase-lists interleave as: P0–P4 ∥ RO-0–RO-2 → P5 → P6 → (P7–P8 ∥ RO-3 ∥ RO-showcase).
+> **Hard dependency on the Remote Operations substrate (§16/§17) — no fallback.** The facade's on-demand/control surface (`RunNow` / `GetRunStatus` / `Pause` / `Resume` / `Cancel`) exists **only** as Remote Operations; there is deliberately no pre-RO bespoke resolver/client. So the foundational RO phases land **with** the facade: RO-0…RO-2 before P5, and RO-3 (long-running) before the Run-now/viewer in P5/P6. RO-4 (AI-from-Description), RO-5 (showcase refactor) and RO-6 (guide) follow independently. Interleave: `P0–P4 ∥ RO-0–RO-3 → P5 → P6 → (P7–P8 ∥ RO-4 ∥ RO-5 ∥ RO-6)`. Keeping RO and its first consumer in one effort is intentional — the abstraction is validated by a real consumer and the whole thing is tested end-to-end.
 
 ---
 
@@ -490,7 +493,7 @@ CREATE TABLE ${flyway:defaultSchema}.ProcessRun (
 
 ## 16. Remote Operations — typed, provider-routed, metadata-defined operations
 
-> **What this is.** Automated RPC on steroids: a server-side operation defined **once** as a typed object whose identical call site runs on the client (marshalled over GraphQL) and the server (executed in-process), whose input/output types are declared in metadata, whose plumbing can be **AI-authored from a description** or hand-written, and whose authorization plugs into MJ's **existing** unified auth framework. It is the missing peer of `BaseEntity` (table-backed CRUD) and `RunView` (set reads): a first-class primitive for *typed, code-to-code capabilities the browser and server both invoke*.
+> **What this is.** A server-side capability defined **once** as a typed object that a developer invokes through **one surface regardless of where their code runs** — `Operation.Execute(input)`, marshalled over GraphQL from the browser or dispatched in-process on the server. This is the same unified-developer-surface principle as `RunView`/`BaseEntity` (which also route through a provider layer server-side): the win is that devs never hand-write or branch on transport. Its input/output types are declared in metadata; its plumbing can be **AI-authored from a description** or hand-written; and its authorization plugs into MJ's **existing** unified auth framework. (See §16.1 for the honest accounting of what it does — and does not — differentiate from Actions.)
 
 ### 16.1 Why — the transport gap, and where it fits
 
@@ -503,6 +506,19 @@ Today, exposing any non-CRUD server capability to the browser (cluster, classify
 | First-class public GraphQL API surface, or a genuinely unusual transport | **bespoke typed resolver** (unchanged) |
 | Table-backed record CRUD | **`BaseEntity`** (already generated) |
 
+#### Why not just type the existing Action layer?
+
+This is the first question a reviewer asks, because Actions already share ~80% of this mechanism: a metadata row, dynamic dispatch by key, a CodeGen'd per-row subclass, a generic JSON-envelope transport (`RunAction`), the `CodeApprovalStatus` gate, and the ClassFactory generated-base/hand-subclass override. The answer is **not** the root `CLAUDE.md` "never use Actions for code-to-code" rule — that rule governs *server-side, same-process* calls (its rationale is serialization overhead, stack traces, and refactor-tool fidelity, all in-process concerns) and does **not** speak to a client→server transport, where serialization is mandatory and no shared stack exists. The justification is narrower and concrete:
+
+1. **The Action I/O model is structurally untyped.** An Action's input is a flat `ActionParam[]` bag whose `Value` is declared `any`, and the Action entity carries no input/output *type* metadata (no `JSONType*`-style columns). There is nothing for CodeGen to emit typed `TInput`/`TOutput` from. "Typed Actions" is therefore not a thin wrapper over `RunAction`: it would mean adding typed-I/O metadata to Actions, building the emitter, generating a typed base, then deserializing a structured object back out of an `any`-valued name/value bag — i.e. rebuilding the core of Remote Operations on a data model that fights it. For nested inputs the param bag collapses to a single `inputJSON` param: Remote Operations with extra steps and a worse model.
+2. **The Action catalog is the agent surface, by design.** Actions exist to be discovered and invoked by agents, workflows, and low-code builders. Folding framework control operations (`RecordProcess.PauseRun`, `CancelRun`, `GetRunStatus`) into Actions drops control-plane plumbing into the set of tools agents enumerate and call. Remote Operations keeps a separate, code-oriented registry so the agent catalog stays clean — and avoids overloading "Action" to mean both *agentic boundary* and *typed code-to-code RPC*, the one distinction `CLAUDE.md` works to preserve.
+
+**What Remote Operations adds over Actions, stated honestly:** (a) compile-time typed structured I/O declared once and shared by both sides — the central differentiator Actions structurally cannot offer; (b) a structured-object input model instead of an `any`-valued param bag; (c) a code-oriented registry distinct from the agent catalog; and (d) **a unified developer surface** — `Operation.Execute(input)` is the same call whether the dev's code runs in the browser or on the server, exactly as `RunView`/`BaseEntity` give one surface regardless of tier. That DX value is real and is a primary reason to build this (a dev never branches on transport), even though — see §16.2 — the server path is a thin in-process indirection, not a network round-trip. What is **not** a differentiator: **long-running / detached-attached / progress is a capability of the `RecordSetProcessor` + `ProcessRun` substrate (§4.2, §5), not of Remote Operations** — the `ProcessRunID` handle is identical whether the entry point is an Action or an RO. And the "missing peer of `BaseEntity`/`RunView`" line is conceptual motivation, not a mechanical capability; it does not by itself carry the decision.
+
+#### Shared plumbing, not a parallel stack (binding constraint)
+
+Because the machinery overlaps ~80% with Actions, the build **must reuse, not fork**: the same `JSONType` emit path (`entity_subclasses_codegen.ts`), the same `CodeApprovalStatus` / auto-reset-on-change logic (`MJActionEntityServer`), and the same ClassFactory registration-order override convention serve both. The deliverable is a thin Remote Operations *profile* over shared dispatch / codegen / approval / transport code — differing from the Action profile only in **input model** (typed object vs. param bag) and **consumer orientation** (code-facing vs. agent-facing). Two near-identical metadata+codegen+approval+dispatch systems drifting apart in maintenance is the explicit anti-goal: the RO-2 emitter and the Action emitter **share a common base**. *(Cost owned: extracting that shared base means refactoring the existing, working Action codegen — added RO-2 scope and a regression surface on Actions; see §17.)*
+
 Every piece below **reuses an existing, shipping mechanism** — nothing here is novel infrastructure:
 - typed I/O interfaces from metadata → the **`EntityField.JSONType*`** AST-prefix-and-emit path (`entity_subclasses_codegen.ts:199-296`);
 - per-row generated class → the **Action subclass generator** (`action_subclasses_codegen.ts:102-136`);
@@ -512,7 +528,7 @@ Every piece below **reuses an existing, shipping mechanism** — nothing here is
 
 ### 16.2 Layer A — `BaseRemotableOperation<TInput, TOutput>` (the typed object)
 
-Lives in **`@memberjunction/core`**, client-safe (no server imports) — exactly like `BaseEntity`. The same `Execute()` call site works on both sides of the wire; the provider decides whether that means in-process execution or a GraphQL round-trip.
+Lives in **`@memberjunction/core`**, client-safe (no server imports) — exactly like `BaseEntity`. The same `Execute()` call site works on both tiers: the provider dispatches in-process on the server or marshals over GraphQL on the client. **Honest note (per review):** server-side this is a thin indirection around what could be a direct engine call — but the same is already true of `RunView` server-side, and the payoff is identical: one transport-agnostic surface so a dev's code moves between tiers unchanged. We keep the unified surface as a deliberate feature, not as a claim that the server avoids a layer.
 
 ```typescript
 export type RemoteOpExecMode = 'Sync' | 'LongRunning';
@@ -533,8 +549,8 @@ export abstract class BaseRemotableOperation<TInput, TOutput> {
 
   /** Universal entry point — identical on client and server. */
   async Execute(input: TInput, opts: RemoteOpInvokeOptions = {}): Promise<RemoteOpResult<TOutput>> {
-    const provider = opts.provider ?? Metadata.Provider;
-    return provider.RouteOperation(this.OperationKey, input, opts);   // §16.3
+    const provider = (opts.provider ?? Metadata.Provider) as IRemoteOperationProvider;
+    return provider.RouteOperation(this.OperationKey, input, opts);   // §16.3 — IRemoteOperationProvider, impl in ProviderBase
   }
 
   /** SERVER-side plumbing. Default throws (clear runtime error) — but the class is
@@ -552,9 +568,9 @@ export abstract class BaseRemotableOperation<TInput, TOutput> {
 
 > **`InternalExecute` is concrete, never abstract** (your correction). The generated class (§16.4) is itself concrete and registered, so a row with AI-plumbing or a default body is fully executable with **no hand-written subclass**. Subclassing is *available* (override `InternalExecute`/`Authorize`) but never *forced*. The throwing default is only a runtime safety net for a row that declares neither AI code nor a subclass.
 
-### 16.3 Layer B — `RouteOperation` (the documented power tool)
+### 16.3 Layer B — `RouteOperation` on `IRemoteOperationProvider` (the documented power tool)
 
-One method on `IMetadataProvider`, implemented once per provider. **Public, but README/JSDoc'd as an escape hatch:** *"Prefer the typed `Operation.Execute()`. `RouteOperation` is the stringly-typed seam for edge cases (dynamic dispatch, generic tooling) — not for building significant systems. Only registered + Active + Approved operations are routable, and every call is authorized (§16.5)."*
+**Not on `IMetadataProvider`** (per review): that interface is exclusively data-retrieval / bounded mutation (`RunView`, `GetEntityObject`, `MergeRecords`), and a generic code-execution entry point doesn't belong there. Instead a dedicated **`IRemoteOperationProvider`** declares `RouteOperation`, and it is **implemented once in `ProviderBase`** so every provider inherits it for free — the client provider supplies the marshalling half, the server provider the execution half. **Public, but README/JSDoc'd as an escape hatch:** *"Prefer the typed `Operation.Execute()`. `RouteOperation` is the stringly-typed seam for edge cases (dynamic dispatch, generic tooling) — not for building significant systems. Only registered + Active + Approved operations are routable, and every call is authorized (§16.5)."*
 
 ```typescript
 // SQLServerDataProvider — in-process
@@ -648,13 +664,15 @@ A `LongRunning` op runs **one** server execution backed by a `ProcessRun` (§4.2
 
 Both modes reuse `RecordSetProcessor`'s `onProgress` events and the `CancellationRequested` pause/cancel handshake; the long-running op's handle *is* a `ProcessRunID`, so the Run viewer (§9) and the op layer share one observable surface. `Sync` ops are plain request/response and ignore these modes.
 
+> **Progress transport is a build deliverable, not free reuse (per review).** Today there is only a *per-feature* typed subscription (`PipelineProgressResolver.ts`) and an over-generic `PushStatusNotification` (message + date + sessionId) — neither is a structured, generic op-progress channel. RO-3 **builds** that channel: a typed `RemoteOpProgress` envelope delivered over the existing push transport, consumed identically by detached (notify) and attached (`onProgress`) callers. The plan does not assume it already exists.
+
 ### 16.7 The single generic resolver + allow-list
 
 One server resolver, `ExecuteRemoteOperation(operationKey, inputJSON, invokeMode)`, backed by a `@RegisterForStartup` **`RemoteOperationEngineBase`** that caches the `MJ: Remote Operations` rows (scope / approval / status / exec-mode) so no per-call DB hit is needed. It: resolves the registered op + its row → rejects if not `Active` or (AI) not `Approved` → runs the §16.5 authorization chain → invokes `InternalExecute`, wiring progress to the push channel for `LongRunning`/attached. Because only registered + Active + Approved ops are reachable and every call is authorized, the public `RouteOperation` power tool is **safe by construction**.
 
 ### 16.8 Packages & placement
 
-- `BaseRemotableOperation`, `IMetadataProvider.RouteOperation`, invoke/result/progress types → **`@memberjunction/core`** (first-class beside `RunView`/`BaseEntity`).
+- `BaseRemotableOperation`, the **`IRemoteOperationProvider`** interface, invoke/result/progress types → **`@memberjunction/core`** (first-class beside `RunView`/`BaseEntity`); `RouteOperation` is implemented in **`ProviderBase`** so all providers inherit it.
 - `RemoteOperationEngineBase` (metadata cache, client+server) → **`@memberjunction/core-entities`** (BaseEngine pattern, `@RegisterForStartup`).
 - `ExecuteRemoteOperation` resolver → **`@memberjunction/server`**.
 - `RouteOperation` impls → **`@memberjunction/sqlserver-dataprovider`** (in-process) + **`@memberjunction/graphql-dataprovider`** (marshalled).
@@ -670,7 +688,7 @@ The Record Process facade ships its on-demand/control surface entirely as Remote
 | `RecordProcess.GetRunStatus` | Sync | `{processRunID}` → `{status, processed, total, success, error, skipped}` |
 | `RecordProcess.PauseRun` / `ResumeRun` / `CancelRun` | Sync | `{processRunID}` → `{status}` (toggles `CancellationRequested`) |
 
-These replace the hand-written resolver+client the facade (§9) would otherwise need — one typed object per operation, types declared once, zero inline `gql`.
+These are the facade's **only** on-demand/control path — there is deliberately **no pre-RO bespoke resolver/client** for Record Processes. The new record-set work in this PR is wired to RO from the start, so the abstraction is built **and** exercised by a real consumer in the same effort, and the two are tested together. One typed object per operation, types declared once, zero inline `gql`.
 
 ### 16.10 Showcase refactor (prove "much less code")
 
@@ -680,6 +698,10 @@ After the substrate lands, refactor **one** existing custom request/response sys
 
 A new **`guides/REMOTE_OPERATIONS_GUIDE.md`** documents: the decision table (§16.1), authoring an op three ways (Manual subclass / Default plumbing / AI-from-Description + approval), the two long-running modes, the auth model (API-key ∥ user), and the power-tool caveat on `RouteOperation`. A bullet is added to the root **`CLAUDE.md`** "Development Guides" list pointing to it, so AI coding systems reach for Remote Operations instead of hand-rolling resolvers. (Both are WBS deliverables — RO-6.)
 
+### 16.12 I/O-contract freshness & versioning (per review)
+
+A changed `InputTypeDefinition` must never let a stale client silently send the old shape. The **primary guarantee is metadata freshness**: op definitions are served from `RemoteOperationEngineBase`, a standard MJ caching engine, so the same `BaseEngine` save / remote-invalidation flow that keeps every other metadata cache current keeps op contracts current on the client — a deployed contract change propagates like any other metadata change, not as a silently-cached stale type. As **defense-in-depth** for the deploy window: (a) published op I/O is **additive-only**, mirroring the [Publish-Then-No-Breaking-Changes policy](packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md) — no removing / renaming / narrowing fields or adding required inputs within a version; and (b) the wire envelope carries a cheap **contract fingerprint** so the server can reject a mismatched client **loudly** rather than mis-deserialize. A genuinely breaking I/O change takes a new `OperationKey` (versioned), never an in-place redefinition.
+
 ---
 
 ## 17. Remote Operations — end-to-end WBS
@@ -688,17 +710,17 @@ Phased, each phase a gateable PR that builds the affected package(s) and runs th
 
 | Phase | Deliverable | Key files / packages | Depends on |
 |---|---|---|---|
-| **RO-0** | `BaseRemotableOperation<I,O>` + invoke/result/progress types + `IMetadataProvider.RouteOperation` signature; `ClassFactory` registration convention; unit tests for the typed-object contract | `@memberjunction/core` | — |
+| **RO-0** | `BaseRemotableOperation<I,O>` + invoke/result/progress types; the **`IRemoteOperationProvider`** interface (NOT on `IMetadataProvider`) with its `RouteOperation` base wired in **`ProviderBase`**; `ClassFactory` registration convention; unit tests for the typed-object contract | `@memberjunction/core`, `ProviderBase` | — |
 | **RO-1** | `RouteOperation` impls on both providers; the single `ExecuteRemoteOperation` resolver; the §16.5 authorization chain (reuse `CheckAPIKeyScopeAuthorization` + `GetUserPermisions`); allow-list enforcement; **POC: hand-written `RecordProcess.GetRunStatus`** (Sync, no metadata/codegen yet) proving the typed round-trip on both sides | `sqlserver-dataprovider`, `graphql-dataprovider`, `@memberjunction/server` | RO-0 |
-| **RO-2** | `MJ: Remote Operations` migration (+ `MJ: API Scopes` seed rows via mj-sync) → CodeGen; `RemoteOperationEngineBase` (`@RegisterForStartup` cache); CodeGen emitter for the concrete typed base (JSONType reuse) incl. `Manual`/`Default` modes; convert the POC to a metadata row | `codegen-lib`, `core-entities`, migration | RO-1 |
-| **RO-3** | Long-running plumbing: detached (handle + status + auto-notify over push channel) **and** attached (await + `onProgress` stream); `ProcessRun`-backed handles; `RecordProcess.RunNow` + Pause/Resume/Cancel ops | `core`, `graphql-dataprovider`, `@memberjunction/server` | RO-2, P1 (`RecordSetProcessor`) |
+| **RO-2** | `MJ: Remote Operations` migration (+ `MJ: API Scopes` seed rows via mj-sync) → CodeGen; `RemoteOperationEngineBase` (`@RegisterForStartup` cache); CodeGen emitter for the concrete typed base (JSONType reuse) incl. `Manual`/`Default` modes; **extract a shared emitter/approval base from the Action codegen** (binding constraint §16.1 — one base serves both; carries Action-codegen regression risk); convert the POC to a metadata row | `codegen-lib`, `core-entities`, migration | RO-1 |
+| **RO-3** | **Build the generic typed `RemoteOpProgress` channel** (existing `PushStatusNotification` + `PipelineProgressResolver` are insufficient); long-running plumbing: detached (handle + status + auto-notify over push channel) **and** attached (await + `onProgress` stream); `ProcessRun`-backed handles; `RecordProcess.RunNow` + Pause/Resume/Cancel ops | `core`, `graphql-dataprovider`, `@memberjunction/server` | RO-2, P1 (`RecordSetProcessor`) |
 | **RO-4** | AI-from-`Description`: `CodeGen: Remote Operation Body Parser` prompt; `advancedGeneration.features['GenerateRemoteOperations']` gate; cache-by-source; `CodeApprovalStatus` emission/route gate | `codegen-lib`, metadata (prompt) | RO-2 |
 | **RO-5** | Showcase refactor of one existing custom system (rec. clustering) onto Remote Operations; before/after line-count in PR; delete the superseded resolver/client | target package | RO-2 (+ RO-3 if long-running) |
 | **RO-6** | `guides/REMOTE_OPERATIONS_GUIDE.md` + root `CLAUDE.md` "Development Guides" pointer | docs | RO-2 |
 
-**Interleave with the facade phases (§13):** `P0–P4 ∥ RO-0–RO-2 → P5 (uses RO ops) → P6 (Run viewer ∥ RO-3) → (P7–P8 ∥ RO-4 ∥ RO-5 ∥ RO-6)`.
+**Interleave with the facade phases (§13):** `P0–P4 ∥ RO-0–RO-3 → P5 (uses RO ops) → P6 (Run viewer) → (P7–P8 ∥ RO-4 ∥ RO-5 ∥ RO-6)`. RO-0…RO-3 are hard prerequisites for P5/P6 — the facade has **no non-RO path**.
 
-**Open RO decisions (carry into build):** exact `MJ: Remote Operations` column finalization vs. reusing any existing catalog table; whether `Default`-plumbing generation is worth shipping in RO-2 or deferred; the final showcase-refactor target; and the persisted-notification entity for detached completion (reuse existing notifications vs. new).
+**Open RO decisions (carry into build):** exact `MJ: Remote Operations` column finalization vs. reusing any existing catalog table; whether `Default`-plumbing generation is worth shipping in RO-2 or deferred; the final showcase-refactor target; the persisted-notification entity for detached completion (reuse existing notifications vs. new); the **contract-fingerprint** format for stale-client rejection (§16.12); and how aggressively to share the **Action emitter base** in RO-2 vs. accept documented short-term duplication.
 
 ---
 
