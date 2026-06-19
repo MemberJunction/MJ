@@ -2443,6 +2443,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (typeof params.UserSearchString === 'string' && params.UserSearchString.trim().length > 0) {
             throw new Error(`UserSearchString is not supported for external-data-source entity '${entityName}'. Use ExtraFilter instead.`);
         }
+        // Apply the same forbidden-keyword screen the MJ-DB path runs on caller-supplied SQL
+        // clauses before they're passed to the remote driver. The driver still parameterizes
+        // values, but this blocks obvious injection of statement-terminating / DDL keywords.
+        const extraFilter = (params.ExtraFilter as string) || '';
+        if (extraFilter && !this.ValidateUserProvidedSQLClause(extraFilter)) {
+            throw new Error(`Invalid ExtraFilter clause for external-data-source entity '${entityName}': contains one or more forbidden keywords.`);
+        }
+        const orderBy = (params.OrderBy as string) || '';
+        if (orderBy && !this.ValidateUserProvidedSQLClause(orderBy)) {
+            throw new Error(`Invalid OrderBy clause for external-data-source entity '${entityName}': contains one or more forbidden keywords.`);
+        }
     }
 
     protected buildExternalPrimaryKeyFilter(entityInfo: EntityInfo, compositeKey: CompositeKey): string {

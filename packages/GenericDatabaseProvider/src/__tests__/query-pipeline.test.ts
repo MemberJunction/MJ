@@ -1048,6 +1048,20 @@ ORDER BY bridge.LastName, bridge.FirstName`,
             )).toThrow(/UserSearchString is not supported/);
         });
 
+        it('throws on an ExtraFilter containing forbidden SQL keywords', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', ExtraFilter: "Region='NW'; DROP TABLE Sales" } as RunViewParams,
+                'Sales',
+            )).toThrow(/Invalid ExtraFilter clause/);
+        });
+
+        it('throws on an OrderBy containing forbidden SQL keywords', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', OrderBy: 'Amount; DELETE FROM Sales' } as RunViewParams,
+                'Sales',
+            )).toThrow(/Invalid OrderBy clause/);
+        });
+
         it('does not throw for supported params (filter/order/page/fields) or empty search', () => {
             expect(() => provider.testAssertExternalRunViewParamsSupported(
                 { EntityName: 'Sales', ExtraFilter: "Region='NW'", OrderBy: 'Amount DESC', MaxRows: 50, StartRow: 100, Fields: ['ID'], UserSearchString: '  ' } as RunViewParams,

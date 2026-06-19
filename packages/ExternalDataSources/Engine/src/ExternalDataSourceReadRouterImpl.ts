@@ -17,6 +17,12 @@ import { ExternalRow, ExternalViewParams } from "./types";
 const DEFAULT_EXTERNAL_CACHE_TTL_SECONDS = 300;
 
 /**
+ * Default upper bound on rows fetched from a remote source when a RunView supplies no MaxRows
+ * and the entity has no UserViewMaxRows. Prevents an unbounded pull from a large external table.
+ */
+const DEFAULT_EXTERNAL_MAX_ROWS = 1000;
+
+/**
  * Concrete {@link ExternalDataSourceReadRouter} registered for the ClassFactory
  * so foundational providers can reach the External Data Sources engine without a
  * compile-time dependency on it. Translates MJ's RunView/RunQuery shapes to the
@@ -24,7 +30,7 @@ const DEFAULT_EXTERNAL_CACHE_TTL_SECONDS = 300;
  * {@link ExternalDataSourceRouter} (the BaseSingleton that owns the per-source
  * driver + connection-pool cache).
  */
-@RegisterClass(ExternalDataSourceReadRouter)
+@RegisterClass(ExternalDataSourceReadRouter, 'ExternalDataSourceReadRouter')
 export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRouter {
   public async RunViewExternal<T = unknown>(
     entity: EntityInfo,
@@ -44,7 +50,14 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
         fields: params.Fields && params.Fields.length ? params.Fields : undefined,
         filter: (params.ExtraFilter as string) || undefined,
         orderBy: (params.OrderBy as string) || undefined,
-        maxRows: params.MaxRows && params.MaxRows > 0 ? params.MaxRows : undefined,
+        // Bound the fetch: explicit MaxRows wins; else the entity's UserViewMaxRows; else a
+        // sane default cap so an unbounded RunView can't stream an entire remote table.
+        maxRows:
+          params.MaxRows && params.MaxRows > 0
+            ? params.MaxRows
+            : entity.UserViewMaxRows && entity.UserViewMaxRows > 0
+              ? entity.UserViewMaxRows
+              : DEFAULT_EXTERNAL_MAX_ROWS,
         offset: params.StartRow && params.StartRow > 0 ? params.StartRow : undefined,
       };
       const res = await driver.RunView<ExternalRow>(dataSource, viewParams, contextUser);

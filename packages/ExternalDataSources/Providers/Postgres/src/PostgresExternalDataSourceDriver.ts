@@ -23,8 +23,14 @@ interface PostgresConnectionConfig {
   host?: string;
   port?: number;
   database?: string;
-  /** Enable TLS (rejectUnauthorized:false — appropriate for managed/self-signed dev endpoints). */
+  /** Enable TLS for the connection. */
   ssl?: boolean;
+  /**
+   * Whether TLS must present a trusted certificate. Defaults to TRUE (verify the server cert).
+   * Set to false only for managed/self-signed dev endpoints that you knowingly accept — doing so
+   * disables MITM protection.
+   */
+  sslRejectUnauthorized?: boolean;
   /** Max pool connections (default 5). */
   maxPoolSize?: number;
 }
@@ -60,7 +66,8 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
       database: dataSource.DefaultDatabase ?? config.database,
       user: cred?.values.username,
       password: cred?.values.password,
-      ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
+      // Secure by default: verify the server cert unless the config explicitly opts out.
+      ssl: config.ssl ? { rejectUnauthorized: config.sslRejectUnauthorized !== false } : undefined,
       max: config.maxPoolSize ?? 5,
     });
     this.pools.set(dataSource.ID, pool);

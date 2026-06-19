@@ -68,6 +68,27 @@ describe('ExternalDataSourceReadRouterImpl', () => {
       expect(viewParams.objectName).toBe('things_table');
     });
 
+    it('caps an unbounded RunView: defaults maxRows to UserViewMaxRows, then to 1000', async () => {
+      // (a) no MaxRows + no UserViewMaxRows -> default cap of 1000
+      const driver = makeFakeDriver();
+      (driver.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
+      mockResolve(driver);
+      const entity = new EntityInfo({ Name: 'Big', ExternalDataSourceID: 'ds-1', BaseTable: 'big' });
+      await impl.RunViewExternal(entity, { EntityName: 'Big' });
+      let [, viewParams] = (driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(viewParams.maxRows).toBe(1000);
+
+      // (b) no MaxRows but UserViewMaxRows set -> uses the entity's configured cap
+      vi.restoreAllMocks();
+      const driver2 = makeFakeDriver();
+      (driver2.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
+      mockResolve(driver2);
+      const entity2 = new EntityInfo({ Name: 'Big', ExternalDataSourceID: 'ds-1', BaseTable: 'big', UserViewMaxRows: 250 });
+      await impl.RunViewExternal(entity2, { EntityName: 'Big' });
+      [, viewParams] = (driver2.RunView as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(viewParams.maxRows).toBe(250);
+    });
+
     it('returns a failed RunViewResult (not a throw) when the driver reports failure', async () => {
       const driver = makeFakeDriver();
       (driver.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: false, rows: [], errorMessage: 'boom', executionTimeMs: 3 });
