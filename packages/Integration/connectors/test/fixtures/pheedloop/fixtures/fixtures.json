@@ -1,0 +1,735 @@
+{
+  "HandAuthored": true,
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "BaseURL": "http://127.0.0.1:9",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "apiKey": "mock-token",
+    "ApiKey": "mock-token",
+    "APIKey": "mock-token",
+    "Token": "mock-token",
+    "AccessToken": "mock-token",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "TokenURL": "http://127.0.0.1:9/token",
+    "LoginUrl": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "OrganizationCode": "mock-org",
+    "orgCode": "mock-org",
+    "OrgCode": "mock-org",
+    "ApiSecret": "mock-secret",
+    "apiSecret": "mock-secret",
+    "secret": "mock-secret",
+    "X-API-SECRET": "mock-secret",
+    "X-API-KEY": "mock-token",
+    "key": "mock-token"
+  },
+  "Routes": [
+    {
+      "Path": "/api/v3/organization/mock-org/contacttags/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        },
+        "results": [
+          {
+            "code": "ContactTags-1",
+            "name": "val-1"
+          },
+          {
+            "code": "ContactTags-2",
+            "name": "val-2"
+          },
+          {
+            "code": "ContactTags-3",
+            "name": "val-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v3/organization/mock-org/events/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        },
+        "results": [
+          {
+            "attendee_registration_capacity": "val-1",
+            "code": "Events-1",
+            "credit_value": "val-1",
+            "custom_fields": "val-1",
+            "date": "val-1",
+            "description": "val-1",
+            "end_date": "val-1",
+            "event_name": "val-1",
+            "formats": "val-1",
+            "id": "val-1",
+            "is_listed": false,
+            "learning_objectives": "val-1",
+            "location": "val-1",
+            "remaining_user_credits": "val-1",
+            "time_end": "val-1",
+            "time_start": "val-1",
+            "timezone": "val-1",
+            "topics": "val-1",
+            "total_registration_count": "val-1",
+            "total_user_credits": "val-1",
+            "user": "val-1",
+            "virtual_enabled": false,
+            "date_updated_gte": "2026-06-11T00:00:00Z"
+          },
+          {
+            "attendee_registration_capacity": "val-2",
+            "code": "Events-2",
+            "credit_value": "val-2",
+            "custom_fields": "val-2",
+            "date": "val-2",
+            "description": "val-2",
+            "end_date": "val-2",
+            "event_name": "val-2",
+            "formats": "val-2",
+            "id": "val-2",
+            "is_listed": true,
+            "learning_objectives": "val-2",
+            "location": "val-2",
+            "remaining_user_credits": "val-2",
+            "time_end": "val-2",
+            "time_start": "val-2",
+            "timezone": "val-2",
+            "topics": "val-2",
+            "total_registration_count": "val-2",
+            "total_user_credits": "val-2",
+            "user": "val-2",
+            "virtual_enabled": true,
+            "date_updated_gte": "2026-06-12T00:00:00Z"
+          },
+          {
+            "attendee_registration_capacity": "val-3",
+            "code": "Events-3",
+            "credit_value": "val-3",
+            "custom_fields": "val-3",
+            "date": "val-3",
+            "description": "val-3",
+            "end_date": "val-3",
+            "event_name": "val-3",
+            "formats": "val-3",
+            "id": "val-3",
+            "is_listed": false,
+            "learning_objectives": "val-3",
+            "location": "val-3",
+            "remaining_user_credits": "val-3",
+            "time_end": "val-3",
+            "time_start": "val-3",
+            "timezone": "val-3",
+            "topics": "val-3",
+            "total_registration_count": "val-3",
+            "total_user_credits": "val-3",
+            "user": "val-3",
+            "virtual_enabled": false,
+            "date_updated_gte": "2026-06-13T00:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v3/organization/mock-org/members/organization/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        },
+        "results": [
+          {
+            "address_city": "val-1",
+            "address_country": "val-1",
+            "address_line_1": "val-1",
+            "address_line_2": "val-1",
+            "address_phone_work": "val-1",
+            "address_state": "val-1",
+            "address_zip": "val-1",
+            "code": "MemberOrganization-1",
+            "extra": "val-1",
+            "id": "val-1",
+            "internal_code": "val-1",
+            "managers": "val-1",
+            "name": "val-1",
+            "notes": "val-1",
+            "payment_code_prefix": "val-1",
+            "tax": "val-1",
+            "website": "val-1"
+          },
+          {
+            "address_city": "val-2",
+            "address_country": "val-2",
+            "address_line_1": "val-2",
+            "address_line_2": "val-2",
+            "address_phone_work": "val-2",
+            "address_state": "val-2",
+            "address_zip": "val-2",
+            "code": "MemberOrganization-2",
+            "extra": "val-2",
+            "id": "val-2",
+            "internal_code": "val-2",
+            "managers": "val-2",
+            "name": "val-2",
+            "notes": "val-2",
+            "payment_code_prefix": "val-2",
+            "tax": "val-2",
+            "website": "val-2"
+          },
+          {
+            "address_city": "val-3",
+            "address_country": "val-3",
+            "address_line_1": "val-3",
+            "address_line_2": "val-3",
+            "address_phone_work": "val-3",
+            "address_state": "val-3",
+            "address_zip": "val-3",
+            "code": "MemberOrganization-3",
+            "extra": "val-3",
+            "id": "val-3",
+            "internal_code": "val-3",
+            "managers": "val-3",
+            "name": "val-3",
+            "notes": "val-3",
+            "payment_code_prefix": "val-3",
+            "tax": "val-3",
+            "website": "val-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v3/organization/mock-org/members/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        },
+        "results": [
+          {
+            "about": "val-1",
+            "accessibility_requirements": "val-1",
+            "address_city": "val-1",
+            "address_country": "val-1",
+            "address_line_1": "val-1",
+            "address_line_2": "val-1",
+            "address_phone": "val-1",
+            "address_state": "val-1",
+            "address_zip": "val-1",
+            "all_memberships": "val-1",
+            "code": "Members-1",
+            "code_badge": "val-1",
+            "code_internal": "val-1",
+            "contact_groups": "val-1",
+            "contact_organization": "val-1",
+            "designations": "val-1",
+            "dietary_restrictions": "val-1",
+            "email": "val-1",
+            "events_attended": "val-1",
+            "first_name": "val-1",
+            "last_name": "val-1",
+            "linkedin": "val-1",
+            "membership_tier": "val-1",
+            "memberships": "val-1",
+            "metadata": "val-1",
+            "organization": "val-1",
+            "title": "val-1",
+            "registration_date_updated_gte": "2026-06-11T00:00:00Z"
+          },
+          {
+            "about": "val-2",
+            "accessibility_requirements": "val-2",
+            "address_city": "val-2",
+            "address_country": "val-2",
+            "address_line_1": "val-2",
+            "address_line_2": "val-2",
+            "address_phone": "val-2",
+            "address_state": "val-2",
+            "address_zip": "val-2",
+            "all_memberships": "val-2",
+            "code": "Members-2",
+            "code_badge": "val-2",
+            "code_internal": "val-2",
+            "contact_groups": "val-2",
+            "contact_organization": "val-2",
+            "designations": "val-2",
+            "dietary_restrictions": "val-2",
+            "email": "val-2",
+            "events_attended": "val-2",
+            "first_name": "val-2",
+            "last_name": "val-2",
+            "linkedin": "val-2",
+            "membership_tier": "val-2",
+            "memberships": "val-2",
+            "metadata": "val-2",
+            "organization": "val-2",
+            "title": "val-2",
+            "registration_date_updated_gte": "2026-06-12T00:00:00Z"
+          },
+          {
+            "about": "val-3",
+            "accessibility_requirements": "val-3",
+            "address_city": "val-3",
+            "address_country": "val-3",
+            "address_line_1": "val-3",
+            "address_line_2": "val-3",
+            "address_phone": "val-3",
+            "address_state": "val-3",
+            "address_zip": "val-3",
+            "all_memberships": "val-3",
+            "code": "Members-3",
+            "code_badge": "val-3",
+            "code_internal": "val-3",
+            "contact_groups": "val-3",
+            "contact_organization": "val-3",
+            "designations": "val-3",
+            "dietary_restrictions": "val-3",
+            "email": "val-3",
+            "events_attended": "val-3",
+            "first_name": "val-3",
+            "last_name": "val-3",
+            "linkedin": "val-3",
+            "membership_tier": "val-3",
+            "memberships": "val-3",
+            "metadata": "val-3",
+            "organization": "val-3",
+            "title": "val-3",
+            "registration_date_updated_gte": "2026-06-13T00:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v3/organization/mock-org/memberships/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        },
+        "results": [
+          {
+            "additional_information": "val-1",
+            "attendee": "val-1",
+            "attendee_organization": "val-1",
+            "code": "Memberships-1",
+            "date_expiry": "val-1",
+            "date_start": "val-1",
+            "email": "val-1",
+            "first_name": "val-1",
+            "is_active": false,
+            "is_approved": false,
+            "last_name": "val-1",
+            "membership_name": "val-1",
+            "membership_order": "val-1",
+            "membership_tier": "val-1",
+            "message": "val-1",
+            "notes": "val-1",
+            "organization": "val-1",
+            "send_confirmation": false,
+            "status": "val-1",
+            "title": "val-1",
+            "unassigned": false
+          },
+          {
+            "additional_information": "val-2",
+            "attendee": "val-2",
+            "attendee_organization": "val-2",
+            "code": "Memberships-2",
+            "date_expiry": "val-2",
+            "date_start": "val-2",
+            "email": "val-2",
+            "first_name": "val-2",
+            "is_active": true,
+            "is_approved": true,
+            "last_name": "val-2",
+            "membership_name": "val-2",
+            "membership_order": "val-2",
+            "membership_tier": "val-2",
+            "message": "val-2",
+            "notes": "val-2",
+            "organization": "val-2",
+            "send_confirmation": true,
+            "status": "val-2",
+            "title": "val-2",
+            "unassigned": true
+          },
+          {
+            "additional_information": "val-3",
+            "attendee": "val-3",
+            "attendee_organization": "val-3",
+            "code": "Memberships-3",
+            "date_expiry": "val-3",
+            "date_start": "val-3",
+            "email": "val-3",
+            "first_name": "val-3",
+            "is_active": false,
+            "is_approved": false,
+            "last_name": "val-3",
+            "membership_name": "val-3",
+            "membership_order": "val-3",
+            "membership_tier": "val-3",
+            "message": "val-3",
+            "notes": "val-3",
+            "organization": "val-3",
+            "send_confirmation": false,
+            "status": "val-3",
+            "title": "val-3",
+            "unassigned": false
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v3/organization/mock-org/announcements/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        },
+        "results": [
+          {
+            "code": "OrgAnnouncements-1",
+            "contact_groups": "val-1",
+            "cta_link": "val-1",
+            "cta_text": "val-1",
+            "date": "val-1",
+            "description": "val-1",
+            "event_targets": "val-1",
+            "exclude_event_targets": "val-1",
+            "is_active": false,
+            "is_credentials_included": false,
+            "is_multiple_send_enabled": false,
+            "is_notification_mail": false,
+            "is_notification_push": false,
+            "is_released": false,
+            "is_visible_attendee": false,
+            "membership_tiers_targets": "val-1",
+            "order_num": "val-1",
+            "organization": "val-1",
+            "publish_date": "val-1",
+            "publish_time": "val-1",
+            "recipients": "val-1",
+            "release_date": "val-1",
+            "release_time": "val-1",
+            "status": "val-1",
+            "title": "val-1"
+          },
+          {
+            "code": "OrgAnnouncements-2",
+            "contact_groups": "val-2",
+            "cta_link": "val-2",
+            "cta_text": "val-2",
+            "date": "val-2",
+            "description": "val-2",
+            "event_targets": "val-2",
+            "exclude_event_targets": "val-2",
+            "is_active": true,
+            "is_credentials_included": true,
+            "is_multiple_send_enabled": true,
+            "is_notification_mail": true,
+            "is_notification_push": true,
+            "is_released": true,
+            "is_visible_attendee": true,
+            "membership_tiers_targets": "val-2",
+            "order_num": "val-2",
+            "organization": "val-2",
+            "publish_date": "val-2",
+            "publish_time": "val-2",
+            "recipients": "val-2",
+            "release_date": "val-2",
+            "release_time": "val-2",
+            "status": "val-2",
+            "title": "val-2"
+          },
+          {
+            "code": "OrgAnnouncements-3",
+            "contact_groups": "val-3",
+            "cta_link": "val-3",
+            "cta_text": "val-3",
+            "date": "val-3",
+            "description": "val-3",
+            "event_targets": "val-3",
+            "exclude_event_targets": "val-3",
+            "is_active": false,
+            "is_credentials_included": false,
+            "is_multiple_send_enabled": false,
+            "is_notification_mail": false,
+            "is_notification_push": false,
+            "is_released": false,
+            "is_visible_attendee": false,
+            "membership_tiers_targets": "val-3",
+            "order_num": "val-3",
+            "organization": "val-3",
+            "publish_date": "val-3",
+            "publish_time": "val-3",
+            "recipients": "val-3",
+            "release_date": "val-3",
+            "release_time": "val-3",
+            "status": "val-3",
+            "title": "val-3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/api/v3/organization/mock-org/tickets/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        },
+        "results": [
+          {
+            "allow_guest_purchases": false,
+            "break_1_price": "val-1",
+            "break_1_quantity": "val-1",
+            "break_2_price": "val-1",
+            "break_2_quantity": "val-1",
+            "break_3_price": "val-1",
+            "break_3_quantity": "val-1",
+            "categories_sub": "val-1",
+            "code": "Tickets-1",
+            "contact_tags": "val-1",
+            "contact_tags_exclusions": "val-1",
+            "country_blacklist": "val-1",
+            "country_whitelist": "val-1",
+            "custom_fields": "val-1",
+            "description": "val-1",
+            "enable_pdf_qr_code": false,
+            "end_date": "val-1",
+            "end_time": "val-1",
+            "enforce_unique_purchase": false,
+            "event_code": "val-1",
+            "is_active": false,
+            "is_addon": false,
+            "is_disabled_email_confirmation": false,
+            "is_group_details_required": false,
+            "is_member_only": false,
+            "is_private": false,
+            "is_protected": false,
+            "is_sold_in_app": false,
+            "is_sold_in_site": false,
+            "is_text_overflow_hidden": false,
+            "is_virtual": false,
+            "is_visible_unavailable": false,
+            "is_waitlist_enabled": false,
+            "is_waitlist_notification_enabled": false,
+            "limit_per_attendee": "val-1",
+            "limit_per_order": "val-1",
+            "minimum_per_attendee": "val-1",
+            "minimum_per_order": "val-1",
+            "name": "val-1",
+            "price": "val-1",
+            "quantity_available": "val-1",
+            "registration_categories": "val-1",
+            "sessions": "val-1",
+            "show_as_sold_out": false,
+            "start_date": "val-1",
+            "start_time": "val-1",
+            "tags": "val-1"
+          },
+          {
+            "allow_guest_purchases": true,
+            "break_1_price": "val-2",
+            "break_1_quantity": "val-2",
+            "break_2_price": "val-2",
+            "break_2_quantity": "val-2",
+            "break_3_price": "val-2",
+            "break_3_quantity": "val-2",
+            "categories_sub": "val-2",
+            "code": "Tickets-2",
+            "contact_tags": "val-2",
+            "contact_tags_exclusions": "val-2",
+            "country_blacklist": "val-2",
+            "country_whitelist": "val-2",
+            "custom_fields": "val-2",
+            "description": "val-2",
+            "enable_pdf_qr_code": true,
+            "end_date": "val-2",
+            "end_time": "val-2",
+            "enforce_unique_purchase": true,
+            "event_code": "val-2",
+            "is_active": true,
+            "is_addon": true,
+            "is_disabled_email_confirmation": true,
+            "is_group_details_required": true,
+            "is_member_only": true,
+            "is_private": true,
+            "is_protected": true,
+            "is_sold_in_app": true,
+            "is_sold_in_site": true,
+            "is_text_overflow_hidden": true,
+            "is_virtual": true,
+            "is_visible_unavailable": true,
+            "is_waitlist_enabled": true,
+            "is_waitlist_notification_enabled": true,
+            "limit_per_attendee": "val-2",
+            "limit_per_order": "val-2",
+            "minimum_per_attendee": "val-2",
+            "minimum_per_order": "val-2",
+            "name": "val-2",
+            "price": "val-2",
+            "quantity_available": "val-2",
+            "registration_categories": "val-2",
+            "sessions": "val-2",
+            "show_as_sold_out": true,
+            "start_date": "val-2",
+            "start_time": "val-2",
+            "tags": "val-2"
+          },
+          {
+            "allow_guest_purchases": false,
+            "break_1_price": "val-3",
+            "break_1_quantity": "val-3",
+            "break_2_price": "val-3",
+            "break_2_quantity": "val-3",
+            "break_3_price": "val-3",
+            "break_3_quantity": "val-3",
+            "categories_sub": "val-3",
+            "code": "Tickets-3",
+            "contact_tags": "val-3",
+            "contact_tags_exclusions": "val-3",
+            "country_blacklist": "val-3",
+            "country_whitelist": "val-3",
+            "custom_fields": "val-3",
+            "description": "val-3",
+            "enable_pdf_qr_code": false,
+            "end_date": "val-3",
+            "end_time": "val-3",
+            "enforce_unique_purchase": false,
+            "event_code": "val-3",
+            "is_active": false,
+            "is_addon": false,
+            "is_disabled_email_confirmation": false,
+            "is_group_details_required": false,
+            "is_member_only": false,
+            "is_private": false,
+            "is_protected": false,
+            "is_sold_in_app": false,
+            "is_sold_in_site": false,
+            "is_text_overflow_hidden": false,
+            "is_virtual": false,
+            "is_visible_unavailable": false,
+            "is_waitlist_enabled": false,
+            "is_waitlist_notification_enabled": false,
+            "limit_per_attendee": "val-3",
+            "limit_per_order": "val-3",
+            "minimum_per_attendee": "val-3",
+            "minimum_per_order": "val-3",
+            "name": "val-3",
+            "price": "val-3",
+            "quantity_available": "val-3",
+            "registration_categories": "val-3",
+            "sessions": "val-3",
+            "show_as_sold_out": false,
+            "start_date": "val-3",
+            "start_time": "val-3",
+            "tags": "val-3"
+          }
+        ]
+      }
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "ContactTags",
+      "OrderingField": "code"
+    },
+    {
+      "Name": "Events",
+      "OrderingField": "date_updated_gte"
+    },
+    {
+      "Name": "MemberOrganization",
+      "OrderingField": "code"
+    },
+    {
+      "Name": "Members",
+      "OrderingField": "registration_date_updated_gte"
+    },
+    {
+      "Name": "Memberships",
+      "OrderingField": "code"
+    },
+    {
+      "Name": "OrgAnnouncements",
+      "OrderingField": "code"
+    },
+    {
+      "Name": "Tickets",
+      "OrderingField": "code"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "ContactTags",
+      "Routes": [
+        {
+          "Path": "/api/v3/organization/mock-org/contacttags/",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "pagination": {
+              "currentPage": 0,
+              "totalPages": 1,
+              "totalResults": 3
+            },
+            "results": [
+              {
+                "code": "ContactTags-1",
+                "name": "updated-delta"
+              },
+              {
+                "code": "ContactTags-2",
+                "name": "val-2"
+              }
+            ]
+          }
+        }
+      ],
+      "ExpectedPresent": [
+        "ContactTags-1",
+        "ContactTags-2"
+      ],
+      "ExpectedDeletes": [
+        "ContactTags-3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "ContactTags-1",
+          "Field": "name",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ]
+}

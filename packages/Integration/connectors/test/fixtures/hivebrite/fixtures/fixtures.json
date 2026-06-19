@@ -1,0 +1,482 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "BaseURL": "http://127.0.0.1:9",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "RefreshToken": "mock-refresh-token",
+    "AdminEmail": "mock-admin@example.com",
+    "Token": "mock-token",
+    "AccessToken": "mock-token",
+    "apiKey": "mock-token",
+    "APIKey": "mock-token",
+    "ApiKey": "mock-token",
+    "TokenURL": "http://127.0.0.1:9/token",
+    "TokenEndpoint": "http://127.0.0.1:9/token",
+    "TokenUrl": "http://127.0.0.1:9/token",
+    "LoginUrl": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "InstanceUrl": "http://127.0.0.1:9",
+    "HostBaseURL": "http://127.0.0.1:9",
+    "AccountID": "mock-account",
+    "Subdomain": "mock",
+    "Scope": "all",
+    "Scopes": "all",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "ClientKey": "mock-client-key",
+    "applicationId": "mock-app-id",
+    "applicationSecret": "mock-app-secret",
+    "AuthFlow": "client_credentials",
+    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEugIBADANBgkqhkiG9w0BAQEFAASCBKQwggSgAgEAAoIBAQCyPBgCLlUxqeTm\nJTljdSIOBRBt0SBP3QB+YkdGUag+7OlR7u/hwSO460GkjP9+5N+SuTXtF6vbnAZn\n+DLRepm+G8QU4qR28wiSw/e196xdJgalGGs4XZ1nMPpXckRyhbuOzpC5+J6U4Qy2\nnl09o72E/9hm6XuSD9oEfo3iayRBGDmrpUCwGJywWM2kXUuXz4uy0Sy+XVl+lujT\neKhbwu8A35I1Nc7kh1D/YohXrXJxsHcSQtoNZV4D/Dt6uAR9/LKcolH6xUUvuMLF\nFQvI4l4Lnix/lkSL1TD9Qktef+LQlAAPZ2o9wxDnwvRY+5nTrkamBchJN4N7ZdEz\nUDgPZNDZAgMBAAECgf8VUlsM574JUumvHoTfAQQx6Skt+faDl0yX0en034/g9zZy\nNsM7nn9Hf906ciOeaoLUapOo6UwF2YRqq6ZoqOH7fBbY6MQD9s7vv8HCYv6bphDl\nbyZkd858qb9I9sJ5cMYfL1bg6H0QElwS/J7q4MurPXAF36iIsJzELN+MVoTfxHLe\n28IQLW1r7+dxZ52So0VspBE736bHrRenRcrJaPyH5cCj1jWgMm6GKiAh2TSa+RFP\nhUR0Nrb/HALbcgH02tVjW62boSKzQ06NSNA1XCSb/ChxHi+YAD4KsgK9BPF9gB5P\n1IgGUQmvr3dz0Tzf5tlfZ70cN5FN6v3y5Gg96nECgYEA5tdQYFjO081PyX0xq3lH\nWxsBfr7irU7e4FWymS5LFTqg7G3ei8M1DPIZdpMuQGz+nbNcGIniDeQCJOb9OX6+\nBlxdppOOk3Hms8OU7exJ7WhKdAGuMFz5xj8eKw7zw+g96nZlpLNvki+TeJeJs40V\nYHglR8adGJCKiDrGG26AXOkCgYEAxakDWB1QIet7UnpFQkQe6hC1oGqNZOTh2dnO\n36kqVZDhX3UXvKbOIMRh8PwYD+w3MegXNsFR1jRBE7iqKNBUR//44gWOhTCQK7ij\nuZx0EMOxne+Vgje+fCYbVBCaRois8phkQg0qOLAMxMqQs4+eV95trU/F3KHVrE4k\n6mXEnnECgYAI4E6e5ctOKZ7fyIiYZ1lvD2LHVN+yek3nomPzr+wDLPXzIWZlSWRI\n0yZXgOFOaOKBfdwUtXiTwCi08ozaIR19cR/Iv/PDh6WvU93uKB/PmSsDuuzPv0N7\ndAHc9f45kjyPP245Hw0zOdEZ2fnZhZtE0lncoK55u1UYV+o2M9GLwQKBgFpARcqh\n98jFINYUBjOvrv3pC0Vn4Y/EAmvaS99L+ox/Tqiral81OsEzahUCxmnezYT4GEFk\nG93WljBPDUL9fL4zXoy1RNIDzpBoCjnh+gz9jcgzcOy4Tz2YmLnVqtux5GYQtxaB\ntFmV6P6iD1gtp3svkJyl5A5NxqaaN7jfJtvBAoGAXZO8FX6i7NS67xv14o2BZone\n6auQKostlh5z7Jph3QPZwMIiw1Bt4TtxqyCOFNziZoNmioENMpG2FZ1A8KRhrn5j\nHdTKKhtKxi/254heVzygutjQhbiJBHajOSC+P92ys7gF4SsXBGscj8lxTHIAT7x8\nLtZh8zw3qHmqaQODOzg=\n-----END PRIVATE KEY-----\n",
+    "ConsumerKey": "mock-consumer",
+    "ConsumerSecret": "mock-consumer-secret",
+    "TokenId": "mock-token-id",
+    "TokenSecret": "mock-token-secret",
+    "TokenID": "mock-token-id"
+  },
+  "Routes": [
+    {
+      "Path": "/admin/v3/admins",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "admin_type": "val-1",
+          "created_at": "2026-06-11T00:00:00Z",
+          "email": "val-1",
+          "id": 1,
+          "name": "val-1"
+        },
+        {
+          "admin_type": "val-2",
+          "created_at": "2026-06-12T00:00:00Z",
+          "email": "val-2",
+          "id": 2,
+          "name": "val-2"
+        },
+        {
+          "admin_type": "val-3",
+          "created_at": "2026-06-13T00:00:00Z",
+          "email": "val-3",
+          "id": 3,
+          "name": "val-3"
+        }
+      ]
+    },
+    {
+      "Path": "/admin/v2/media_center/files",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "comments_count": 2,
+          "content_type": "val-1",
+          "created_at": "2026-06-11T00:00:00Z",
+          "deleted_at": "2026-06-11T00:00:00Z",
+          "description": "val-1",
+          "downloads_count": 2,
+          "external_link": false,
+          "external_url": "val-1",
+          "folder_id": 2,
+          "id": 1,
+          "is_downloadable": false,
+          "likes_count": 2,
+          "name": "val-1",
+          "network_category_ids": "val-1",
+          "owner": "val-1",
+          "pinned_on_index_page": false,
+          "popularity_score": 2,
+          "updated_at": "2026-06-11T00:00:00Z",
+          "url": "val-1",
+          "uuid": "val-1",
+          "views_count": 2
+        },
+        {
+          "comments_count": 3,
+          "content_type": "val-2",
+          "created_at": "2026-06-12T00:00:00Z",
+          "deleted_at": "2026-06-12T00:00:00Z",
+          "description": "val-2",
+          "downloads_count": 3,
+          "external_link": true,
+          "external_url": "val-2",
+          "folder_id": 3,
+          "id": 2,
+          "is_downloadable": true,
+          "likes_count": 3,
+          "name": "val-2",
+          "network_category_ids": "val-2",
+          "owner": "val-2",
+          "pinned_on_index_page": true,
+          "popularity_score": 3,
+          "updated_at": "2026-06-12T00:00:00Z",
+          "url": "val-2",
+          "uuid": "val-2",
+          "views_count": 3
+        },
+        {
+          "comments_count": 4,
+          "content_type": "val-3",
+          "created_at": "2026-06-13T00:00:00Z",
+          "deleted_at": "2026-06-13T00:00:00Z",
+          "description": "val-3",
+          "downloads_count": 4,
+          "external_link": false,
+          "external_url": "val-3",
+          "folder_id": 4,
+          "id": 3,
+          "is_downloadable": false,
+          "likes_count": 4,
+          "name": "val-3",
+          "network_category_ids": "val-3",
+          "owner": "val-3",
+          "pinned_on_index_page": false,
+          "popularity_score": 4,
+          "updated_at": "2026-06-13T00:00:00Z",
+          "url": "val-3",
+          "uuid": "val-3",
+          "views_count": 4
+        }
+      ]
+    },
+    {
+      "Path": "/admin/v2/media_center/folders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "child_files_count": 2,
+          "child_folders_count": 2,
+          "cover_picture": "val-1",
+          "created_at": "2026-06-11T00:00:00Z",
+          "deleted_at": "2026-06-11T00:00:00Z",
+          "description": "val-1",
+          "files": "val-1",
+          "folders": "val-1",
+          "id": 1,
+          "name": "val-1",
+          "owner": "val-1",
+          "parent_id": 2,
+          "updated_at": "2026-06-11T00:00:00Z",
+          "uuid": "val-1"
+        },
+        {
+          "child_files_count": 3,
+          "child_folders_count": 3,
+          "cover_picture": "val-2",
+          "created_at": "2026-06-12T00:00:00Z",
+          "deleted_at": "2026-06-12T00:00:00Z",
+          "description": "val-2",
+          "files": "val-2",
+          "folders": "val-2",
+          "id": 2,
+          "name": "val-2",
+          "owner": "val-2",
+          "parent_id": 3,
+          "updated_at": "2026-06-12T00:00:00Z",
+          "uuid": "val-2"
+        },
+        {
+          "child_files_count": 4,
+          "child_folders_count": 4,
+          "cover_picture": "val-3",
+          "created_at": "2026-06-13T00:00:00Z",
+          "deleted_at": "2026-06-13T00:00:00Z",
+          "description": "val-3",
+          "files": "val-3",
+          "folders": "val-3",
+          "id": 3,
+          "name": "val-3",
+          "owner": "val-3",
+          "parent_id": 4,
+          "updated_at": "2026-06-13T00:00:00Z",
+          "uuid": "val-3"
+        }
+      ]
+    },
+    {
+      "Path": "/admin/v2/network_events/waitlist",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "created_at": "2026-06-11T00:00:00Z",
+          "event_id": 2,
+          "id": "Admin_V2_NetworkEvents_WaitlistEntryEntity-1",
+          "ticket_id": 2,
+          "ticket_name": "val-1",
+          "user_id": 2
+        },
+        {
+          "created_at": "2026-06-12T00:00:00Z",
+          "event_id": 3,
+          "id": "Admin_V2_NetworkEvents_WaitlistEntryEntity-2",
+          "ticket_id": 3,
+          "ticket_name": "val-2",
+          "user_id": 3
+        },
+        {
+          "created_at": "2026-06-13T00:00:00Z",
+          "event_id": 4,
+          "id": "Admin_V2_NetworkEvents_WaitlistEntryEntity-3",
+          "ticket_id": 4,
+          "ticket_name": "val-3",
+          "user_id": 4
+        }
+      ]
+    },
+    {
+      "Path": "/admin/v2/current_locations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "address": "val-1",
+          "administrative_area_level_1": "val-1",
+          "administrative_area_level_2": "val-1",
+          "city": "val-1",
+          "content": "val-1",
+          "country": "val-1",
+          "country_code": "val-1",
+          "created_at": "2026-06-11T00:00:00Z",
+          "feedable_at": "2026-06-11T00:00:00Z",
+          "id": "Admin_V2_Users_CurrentLocationEntity-1",
+          "location_type": "val-1",
+          "timezone": "val-1",
+          "updated_at": "2026-06-11T00:00:00Z",
+          "user_id": "val-1",
+          "updated_since": "2026-06-11T00:00:00Z"
+        },
+        {
+          "address": "val-2",
+          "administrative_area_level_1": "val-2",
+          "administrative_area_level_2": "val-2",
+          "city": "val-2",
+          "content": "val-2",
+          "country": "val-2",
+          "country_code": "val-2",
+          "created_at": "2026-06-12T00:00:00Z",
+          "feedable_at": "2026-06-12T00:00:00Z",
+          "id": "Admin_V2_Users_CurrentLocationEntity-2",
+          "location_type": "val-2",
+          "timezone": "val-2",
+          "updated_at": "2026-06-12T00:00:00Z",
+          "user_id": "val-2",
+          "updated_since": "2026-06-12T00:00:00Z"
+        },
+        {
+          "address": "val-3",
+          "administrative_area_level_1": "val-3",
+          "administrative_area_level_2": "val-3",
+          "city": "val-3",
+          "content": "val-3",
+          "country": "val-3",
+          "country_code": "val-3",
+          "created_at": "2026-06-13T00:00:00Z",
+          "feedable_at": "2026-06-13T00:00:00Z",
+          "id": "Admin_V2_Users_CurrentLocationEntity-3",
+          "location_type": "val-3",
+          "timezone": "val-3",
+          "updated_at": "2026-06-13T00:00:00Z",
+          "user_id": "val-3",
+          "updated_since": "2026-06-13T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/admin/v3/comments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "attachments": "val-1",
+          "content": "val-1",
+          "created_at": "val-1",
+          "embed": "val-1",
+          "id": "Admin_V3_Comments_CommentEntity-1",
+          "likes": "val-1",
+          "likes_count": "val-1",
+          "parent_id": "val-1",
+          "parent_type": "val-1",
+          "replies_count": "val-1",
+          "updated_at": "val-1",
+          "uploads": "val-1",
+          "user_id": "val-1",
+          "votes": "val-1",
+          "votes_count": "val-1"
+        },
+        {
+          "attachments": "val-2",
+          "content": "val-2",
+          "created_at": "val-2",
+          "embed": "val-2",
+          "id": "Admin_V3_Comments_CommentEntity-2",
+          "likes": "val-2",
+          "likes_count": "val-2",
+          "parent_id": "val-2",
+          "parent_type": "val-2",
+          "replies_count": "val-2",
+          "updated_at": "val-2",
+          "uploads": "val-2",
+          "user_id": "val-2",
+          "votes": "val-2",
+          "votes_count": "val-2"
+        },
+        {
+          "attachments": "val-3",
+          "content": "val-3",
+          "created_at": "val-3",
+          "embed": "val-3",
+          "id": "Admin_V3_Comments_CommentEntity-3",
+          "likes": "val-3",
+          "likes_count": "val-3",
+          "parent_id": "val-3",
+          "parent_type": "val-3",
+          "replies_count": "val-3",
+          "updated_at": "val-3",
+          "uploads": "val-3",
+          "user_id": "val-3",
+          "votes": "val-3",
+          "votes_count": "val-3"
+        }
+      ]
+    },
+    {
+      "Path": "/admin/v3/comments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "attachments": "val-1",
+          "content": "val-1",
+          "created_at": "val-1",
+          "embed": "val-1",
+          "id": "Admin_V3_Comments_CommentWithRepliesEntity-1",
+          "likes": "val-1",
+          "likes_count": "val-1",
+          "parent_id": "val-1",
+          "parent_type": "val-1",
+          "replies": "val-1",
+          "replies_count": "val-1",
+          "updated_at": "val-1",
+          "uploads": "val-1",
+          "user_id": "val-1",
+          "votes": "val-1",
+          "votes_count": "val-1"
+        },
+        {
+          "attachments": "val-2",
+          "content": "val-2",
+          "created_at": "val-2",
+          "embed": "val-2",
+          "id": "Admin_V3_Comments_CommentWithRepliesEntity-2",
+          "likes": "val-2",
+          "likes_count": "val-2",
+          "parent_id": "val-2",
+          "parent_type": "val-2",
+          "replies": "val-2",
+          "replies_count": "val-2",
+          "updated_at": "val-2",
+          "uploads": "val-2",
+          "user_id": "val-2",
+          "votes": "val-2",
+          "votes_count": "val-2"
+        },
+        {
+          "attachments": "val-3",
+          "content": "val-3",
+          "created_at": "val-3",
+          "embed": "val-3",
+          "id": "Admin_V3_Comments_CommentWithRepliesEntity-3",
+          "likes": "val-3",
+          "likes_count": "val-3",
+          "parent_id": "val-3",
+          "parent_type": "val-3",
+          "replies": "val-3",
+          "replies_count": "val-3",
+          "updated_at": "val-3",
+          "uploads": "val-3",
+          "user_id": "val-3",
+          "votes": "val-3",
+          "votes_count": "val-3"
+        }
+      ]
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "Admin",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Admin_V2_MediaCenter_FilesFullEntity",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Admin_V2_MediaCenter_FolderEntity",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Admin_V2_NetworkEvents_WaitlistEntryEntity",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Admin_V2_Users_CurrentLocationEntity",
+      "OrderingField": "updated_since"
+    },
+    {
+      "Name": "Admin_V3_Comments_CommentEntity",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Admin_V3_Comments_CommentWithRepliesEntity",
+      "OrderingField": "id"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "Admin",
+      "Routes": [
+        {
+          "Path": "/admin/v3/admins",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            {
+              "admin_type": "val-1",
+              "created_at": "2026-06-11T00:00:00Z",
+              "email": "updated-delta",
+              "id": 1,
+              "name": "val-1"
+            },
+            {
+              "admin_type": "val-2",
+              "created_at": "2026-06-12T00:00:00Z",
+              "email": "val-2",
+              "id": 2,
+              "name": "val-2"
+            }
+          ]
+        }
+      ],
+      "ExpectedPresent": [
+        "1",
+        "2"
+      ],
+      "ExpectedDeletes": [
+        "3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "1",
+          "Field": "email",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ]
+}

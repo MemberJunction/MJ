@@ -1,0 +1,753 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "HostBaseURL",
+  "Configuration": {
+    "AccountID": "mock-account-1234567",
+    "HostBaseURL": "http://127.0.0.1:9",
+    "AuthFlow": "oauth2",
+    "BearerToken": "mock-bearer-token",
+    "AccessToken": "mock-bearer-token"
+  },
+  "Objects": [
+    {
+      "Name": "Account",
+      "OrderingField": "lastModifiedDate"
+    },
+    {
+      "Name": "Contact",
+      "OrderingField": "lastModifiedDate"
+    },
+    {
+      "Name": "Customer",
+      "OrderingField": "lastModifiedDate"
+    },
+    {
+      "Name": "Invoice",
+      "OrderingField": "lastModifiedDate"
+    },
+    {
+      "Name": "Sales Order",
+      "OrderingField": "lastModifiedDate"
+    }
+  ],
+  "Routes": [
+    {
+      "Path": "/services/rest/system/v1/serverTime",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "serverTime": "2026-06-17T00:00:00.000Z"
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/metadata-catalog",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "name": "account"
+          },
+          {
+            "name": "contact"
+          },
+          {
+            "name": "customer"
+          },
+          {
+            "name": "invoice"
+          },
+          {
+            "name": "salesorder"
+          }
+        ],
+        "links": []
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/metadata-catalog/account",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "companyName"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Internal ID",
+            "readOnly": true
+          },
+          "companyName": {
+            "type": "string",
+            "title": "Company Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "subsidiary": {
+            "type": "string",
+            "title": "Subsidiary"
+          },
+          "lastModifiedDate": {
+            "type": "string",
+            "title": "Last Modified",
+            "readOnly": true,
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/metadata-catalog/contact",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "lastName"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Internal ID",
+            "readOnly": true
+          },
+          "firstName": {
+            "type": "string",
+            "title": "First Name"
+          },
+          "lastName": {
+            "type": "string",
+            "title": "Last Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "lastModifiedDate": {
+            "type": "string",
+            "title": "Last Modified",
+            "readOnly": true,
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/metadata-catalog/customer",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "companyName"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Internal ID",
+            "readOnly": true
+          },
+          "companyName": {
+            "type": "string",
+            "title": "Company Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "creditLimit": {
+            "type": "number",
+            "title": "Credit Limit"
+          },
+          "lastModifiedDate": {
+            "type": "string",
+            "title": "Last Modified",
+            "readOnly": true,
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/metadata-catalog/invoice",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Internal ID",
+            "readOnly": true
+          },
+          "entity": {
+            "type": "string",
+            "title": "Customer"
+          },
+          "tranDate": {
+            "type": "string",
+            "title": "Date",
+            "format": "date"
+          },
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "readOnly": true
+          },
+          "lastModifiedDate": {
+            "type": "string",
+            "title": "Last Modified",
+            "readOnly": true,
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/metadata-catalog/salesorder",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Internal ID",
+            "readOnly": true
+          },
+          "entity": {
+            "type": "string",
+            "title": "Customer"
+          },
+          "tranDate": {
+            "type": "string",
+            "title": "Date",
+            "format": "date"
+          },
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "readOnly": true
+          },
+          "lastModifiedDate": {
+            "type": "string",
+            "title": "Last Modified",
+            "readOnly": true,
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    {
+      "Path": "/services/rest/query/v1/suiteql",
+      "Method": "POST",
+      "Match": "from account",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "id": "account-1",
+            "companyName": "Acme Corp",
+            "email": "acme@example.com",
+            "phone": "555-0101",
+            "subsidiary": "1",
+            "lastModifiedDate": "2026-06-01T10:00:00Z"
+          },
+          {
+            "id": "account-2",
+            "companyName": "Globex Inc",
+            "email": "globex@example.com",
+            "phone": "555-0102",
+            "subsidiary": "1",
+            "lastModifiedDate": "2026-06-02T10:00:00Z"
+          },
+          {
+            "id": "account-3",
+            "companyName": "Initech LLC",
+            "email": "initech@example.com",
+            "phone": "555-0103",
+            "subsidiary": "1",
+            "lastModifiedDate": "2026-06-03T10:00:00Z"
+          }
+        ],
+        "hasMore": false,
+        "totalResults": 3,
+        "count": 3,
+        "offset": 0,
+        "links": []
+      }
+    },
+    {
+      "Path": "/services/rest/query/v1/suiteql",
+      "Method": "POST",
+      "Match": "from contact",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "id": "contact-1",
+            "firstName": "Alice",
+            "lastName": "Smith",
+            "email": "alice@example.com",
+            "phone": "555-0201",
+            "company": "Acme Corp",
+            "lastModifiedDate": "2026-06-01T11:00:00Z"
+          },
+          {
+            "id": "contact-2",
+            "firstName": "Bob",
+            "lastName": "Jones",
+            "email": "bob@example.com",
+            "phone": "555-0202",
+            "company": "Globex Inc",
+            "lastModifiedDate": "2026-06-02T11:00:00Z"
+          },
+          {
+            "id": "contact-3",
+            "firstName": "Carol",
+            "lastName": "Brown",
+            "email": "carol@example.com",
+            "phone": "555-0203",
+            "company": "Initech LLC",
+            "lastModifiedDate": "2026-06-03T11:00:00Z"
+          }
+        ],
+        "hasMore": false,
+        "totalResults": 3,
+        "count": 3,
+        "offset": 0,
+        "links": []
+      }
+    },
+    {
+      "Path": "/services/rest/query/v1/suiteql",
+      "Method": "POST",
+      "Match": "from customer",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "id": "customer-1",
+            "companyName": "Acme Corp",
+            "email": "billing@acme.com",
+            "phone": "555-0301",
+            "creditLimit": 50000,
+            "lastModifiedDate": "2026-06-01T12:00:00Z"
+          },
+          {
+            "id": "customer-2",
+            "companyName": "Globex Inc",
+            "email": "billing@globex.com",
+            "phone": "555-0302",
+            "creditLimit": 25000,
+            "lastModifiedDate": "2026-06-02T12:00:00Z"
+          },
+          {
+            "id": "customer-3",
+            "companyName": "Initech LLC",
+            "email": "billing@initech.com",
+            "phone": "555-0303",
+            "creditLimit": 10000,
+            "lastModifiedDate": "2026-06-03T12:00:00Z"
+          }
+        ],
+        "hasMore": false,
+        "totalResults": 3,
+        "count": 3,
+        "offset": 0,
+        "links": []
+      }
+    },
+    {
+      "Path": "/services/rest/query/v1/suiteql",
+      "Method": "POST",
+      "Match": "from invoice",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "id": "invoice-1",
+            "entity": "customer-1",
+            "tranDate": "2026-05-01",
+            "total": 1200,
+            "status": "Open",
+            "lastModifiedDate": "2026-06-01T13:00:00Z"
+          },
+          {
+            "id": "invoice-2",
+            "entity": "customer-2",
+            "tranDate": "2026-05-15",
+            "total": 800,
+            "status": "Paid",
+            "lastModifiedDate": "2026-06-02T13:00:00Z"
+          },
+          {
+            "id": "invoice-3",
+            "entity": "customer-3",
+            "tranDate": "2026-05-20",
+            "total": 3500,
+            "status": "Open",
+            "lastModifiedDate": "2026-06-03T13:00:00Z"
+          }
+        ],
+        "hasMore": false,
+        "totalResults": 3,
+        "count": 3,
+        "offset": 0,
+        "links": []
+      }
+    },
+    {
+      "Path": "/services/rest/query/v1/suiteql",
+      "Method": "POST",
+      "Match": "from salesorder",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "id": "salesorder-1",
+            "entity": "customer-1",
+            "tranDate": "2026-05-10",
+            "total": 2400,
+            "status": "Pending Fulfillment",
+            "lastModifiedDate": "2026-06-01T14:00:00Z"
+          },
+          {
+            "id": "salesorder-2",
+            "entity": "customer-2",
+            "tranDate": "2026-05-18",
+            "total": 900,
+            "status": "Closed",
+            "lastModifiedDate": "2026-06-02T14:00:00Z"
+          },
+          {
+            "id": "salesorder-3",
+            "entity": "customer-3",
+            "tranDate": "2026-05-25",
+            "total": 5100,
+            "status": "Pending Fulfillment",
+            "lastModifiedDate": "2026-06-03T14:00:00Z"
+          }
+        ],
+        "hasMore": false,
+        "totalResults": 3,
+        "count": 3,
+        "offset": 0,
+        "links": []
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/account",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "id": "account-1",
+            "companyName": "Acme Corp",
+            "email": "acme@example.com",
+            "phone": "555-0101",
+            "subsidiary": "1",
+            "lastModifiedDate": "2026-06-01T10:00:00Z"
+          },
+          {
+            "id": "account-2",
+            "companyName": "Globex Inc",
+            "email": "globex@example.com",
+            "phone": "555-0102",
+            "subsidiary": "1",
+            "lastModifiedDate": "2026-06-02T10:00:00Z"
+          },
+          {
+            "id": "account-3",
+            "companyName": "Initech LLC",
+            "email": "initech@example.com",
+            "phone": "555-0103",
+            "subsidiary": "1",
+            "lastModifiedDate": "2026-06-03T10:00:00Z"
+          }
+        ],
+        "hasMore": false,
+        "totalResults": 3,
+        "count": 3,
+        "offset": 0,
+        "links": []
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/contact",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "id": "contact-1",
+            "firstName": "Alice",
+            "lastName": "Smith",
+            "email": "alice@example.com",
+            "phone": "555-0201",
+            "company": "Acme Corp",
+            "lastModifiedDate": "2026-06-01T11:00:00Z"
+          },
+          {
+            "id": "contact-2",
+            "firstName": "Bob",
+            "lastName": "Jones",
+            "email": "bob@example.com",
+            "phone": "555-0202",
+            "company": "Globex Inc",
+            "lastModifiedDate": "2026-06-02T11:00:00Z"
+          },
+          {
+            "id": "contact-3",
+            "firstName": "Carol",
+            "lastName": "Brown",
+            "email": "carol@example.com",
+            "phone": "555-0203",
+            "company": "Initech LLC",
+            "lastModifiedDate": "2026-06-03T11:00:00Z"
+          }
+        ],
+        "hasMore": false,
+        "totalResults": 3,
+        "count": 3,
+        "offset": 0,
+        "links": []
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/customer",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "id": "customer-1",
+            "companyName": "Acme Corp",
+            "email": "billing@acme.com",
+            "phone": "555-0301",
+            "creditLimit": 50000,
+            "lastModifiedDate": "2026-06-01T12:00:00Z"
+          },
+          {
+            "id": "customer-2",
+            "companyName": "Globex Inc",
+            "email": "billing@globex.com",
+            "phone": "555-0302",
+            "creditLimit": 25000,
+            "lastModifiedDate": "2026-06-02T12:00:00Z"
+          },
+          {
+            "id": "customer-3",
+            "companyName": "Initech LLC",
+            "email": "billing@initech.com",
+            "phone": "555-0303",
+            "creditLimit": 10000,
+            "lastModifiedDate": "2026-06-03T12:00:00Z"
+          }
+        ],
+        "hasMore": false,
+        "totalResults": 3,
+        "count": 3,
+        "offset": 0,
+        "links": []
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/invoice",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "id": "invoice-1",
+            "entity": "customer-1",
+            "tranDate": "2026-05-01",
+            "total": 1200,
+            "status": "Open",
+            "lastModifiedDate": "2026-06-01T13:00:00Z"
+          },
+          {
+            "id": "invoice-2",
+            "entity": "customer-2",
+            "tranDate": "2026-05-15",
+            "total": 800,
+            "status": "Paid",
+            "lastModifiedDate": "2026-06-02T13:00:00Z"
+          },
+          {
+            "id": "invoice-3",
+            "entity": "customer-3",
+            "tranDate": "2026-05-20",
+            "total": 3500,
+            "status": "Open",
+            "lastModifiedDate": "2026-06-03T13:00:00Z"
+          }
+        ],
+        "hasMore": false,
+        "totalResults": 3,
+        "count": 3,
+        "offset": 0,
+        "links": []
+      }
+    },
+    {
+      "Path": "/services/rest/record/v1/salesorder",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "items": [
+          {
+            "id": "salesorder-1",
+            "entity": "customer-1",
+            "tranDate": "2026-05-10",
+            "total": 2400,
+            "status": "Pending Fulfillment",
+            "lastModifiedDate": "2026-06-01T14:00:00Z"
+          },
+          {
+            "id": "salesorder-2",
+            "entity": "customer-2",
+            "tranDate": "2026-05-18",
+            "total": 900,
+            "status": "Closed",
+            "lastModifiedDate": "2026-06-02T14:00:00Z"
+          },
+          {
+            "id": "salesorder-3",
+            "entity": "customer-3",
+            "tranDate": "2026-05-25",
+            "total": 5100,
+            "status": "Pending Fulfillment",
+            "lastModifiedDate": "2026-06-03T14:00:00Z"
+          }
+        ],
+        "hasMore": false,
+        "totalResults": 3,
+        "count": 3,
+        "offset": 0,
+        "links": []
+      }
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "Invoice",
+      "Routes": [
+        {
+          "Path": "/services/rest/query/v1/suiteql",
+          "Method": "POST",
+          "Match": "from invoice",
+          "Status": 200,
+          "Body": {
+            "items": [
+              {
+                "id": "invoice-1",
+                "entity": "customer-1",
+                "tranDate": "2026-05-01",
+                "total": "9999-DELTA",
+                "lastModifiedDate": "2099-01-01"
+              },
+              {
+                "id": "invoice-2",
+                "entity": "customer-2",
+                "tranDate": "2026-05-15",
+                "total": 800,
+                "status": "Paid",
+                "lastModifiedDate": "2026-06-02T13:00:00Z"
+              }
+            ],
+            "hasMore": false,
+            "totalResults": 2,
+            "count": 2,
+            "offset": 0,
+            "links": []
+          }
+        },
+        {
+          "Path": "/services/rest/record/v1/invoice",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "items": [
+              {
+                "id": "invoice-1",
+                "entity": "customer-1",
+                "tranDate": "2026-05-01",
+                "total": "9999-DELTA",
+                "lastModifiedDate": "2099-01-01"
+              },
+              {
+                "id": "invoice-2",
+                "entity": "customer-2",
+                "tranDate": "2026-05-15",
+                "total": 800,
+                "status": "Paid",
+                "lastModifiedDate": "2026-06-02T13:00:00Z"
+              }
+            ],
+            "hasMore": false,
+            "totalResults": 2,
+            "count": 2,
+            "offset": 0,
+            "links": []
+          }
+        }
+      ],
+      "ExpectedPresent": [
+        "invoice-1",
+        "invoice-2"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "invoice-1",
+          "Field": "total",
+          "Value": "9999-DELTA"
+        }
+      ],
+      "ExpectedDeletes": [
+        "invoice-3"
+      ]
+    }
+  ],
+  "HandAuthored": true
+}

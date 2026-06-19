@@ -1,0 +1,406 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "BaseURL": "http://127.0.0.1:9",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "RefreshToken": "mock-refresh-token",
+    "AdminEmail": "mock-admin@example.com",
+    "Token": "mock-token",
+    "AccessToken": "mock-token",
+    "apiKey": "mock-token",
+    "APIKey": "mock-token",
+    "ApiKey": "mock-token",
+    "TokenURL": "http://127.0.0.1:9/token",
+    "TokenEndpoint": "http://127.0.0.1:9/token",
+    "TokenUrl": "http://127.0.0.1:9/token",
+    "LoginUrl": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "InstanceUrl": "http://127.0.0.1:9",
+    "HostBaseURL": "http://127.0.0.1:9",
+    "AccountID": "mock-account",
+    "Subdomain": "mock",
+    "Scope": "all",
+    "Scopes": "all",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "ClientKey": "mock-client-key",
+    "applicationId": "mock-app-id",
+    "applicationSecret": "mock-app-secret",
+    "AuthFlow": "client_credentials",
+    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEugIBADANBgkqhkiG9w0BAQEFAASCBKQwggSgAgEAAoIBAQCyPBgCLlUxqeTm\nJTljdSIOBRBt0SBP3QB+YkdGUag+7OlR7u/hwSO460GkjP9+5N+SuTXtF6vbnAZn\n+DLRepm+G8QU4qR28wiSw/e196xdJgalGGs4XZ1nMPpXckRyhbuOzpC5+J6U4Qy2\nnl09o72E/9hm6XuSD9oEfo3iayRBGDmrpUCwGJywWM2kXUuXz4uy0Sy+XVl+lujT\neKhbwu8A35I1Nc7kh1D/YohXrXJxsHcSQtoNZV4D/Dt6uAR9/LKcolH6xUUvuMLF\nFQvI4l4Lnix/lkSL1TD9Qktef+LQlAAPZ2o9wxDnwvRY+5nTrkamBchJN4N7ZdEz\nUDgPZNDZAgMBAAECgf8VUlsM574JUumvHoTfAQQx6Skt+faDl0yX0en034/g9zZy\nNsM7nn9Hf906ciOeaoLUapOo6UwF2YRqq6ZoqOH7fBbY6MQD9s7vv8HCYv6bphDl\nbyZkd858qb9I9sJ5cMYfL1bg6H0QElwS/J7q4MurPXAF36iIsJzELN+MVoTfxHLe\n28IQLW1r7+dxZ52So0VspBE736bHrRenRcrJaPyH5cCj1jWgMm6GKiAh2TSa+RFP\nhUR0Nrb/HALbcgH02tVjW62boSKzQ06NSNA1XCSb/ChxHi+YAD4KsgK9BPF9gB5P\n1IgGUQmvr3dz0Tzf5tlfZ70cN5FN6v3y5Gg96nECgYEA5tdQYFjO081PyX0xq3lH\nWxsBfr7irU7e4FWymS5LFTqg7G3ei8M1DPIZdpMuQGz+nbNcGIniDeQCJOb9OX6+\nBlxdppOOk3Hms8OU7exJ7WhKdAGuMFz5xj8eKw7zw+g96nZlpLNvki+TeJeJs40V\nYHglR8adGJCKiDrGG26AXOkCgYEAxakDWB1QIet7UnpFQkQe6hC1oGqNZOTh2dnO\n36kqVZDhX3UXvKbOIMRh8PwYD+w3MegXNsFR1jRBE7iqKNBUR//44gWOhTCQK7ij\nuZx0EMOxne+Vgje+fCYbVBCaRois8phkQg0qOLAMxMqQs4+eV95trU/F3KHVrE4k\n6mXEnnECgYAI4E6e5ctOKZ7fyIiYZ1lvD2LHVN+yek3nomPzr+wDLPXzIWZlSWRI\n0yZXgOFOaOKBfdwUtXiTwCi08ozaIR19cR/Iv/PDh6WvU93uKB/PmSsDuuzPv0N7\ndAHc9f45kjyPP245Hw0zOdEZ2fnZhZtE0lncoK55u1UYV+o2M9GLwQKBgFpARcqh\n98jFINYUBjOvrv3pC0Vn4Y/EAmvaS99L+ox/Tqiral81OsEzahUCxmnezYT4GEFk\nG93WljBPDUL9fL4zXoy1RNIDzpBoCjnh+gz9jcgzcOy4Tz2YmLnVqtux5GYQtxaB\ntFmV6P6iD1gtp3svkJyl5A5NxqaaN7jfJtvBAoGAXZO8FX6i7NS67xv14o2BZone\n6auQKostlh5z7Jph3QPZwMIiw1Bt4TtxqyCOFNziZoNmioENMpG2FZ1A8KRhrn5j\nHdTKKhtKxi/254heVzygutjQhbiJBHajOSC+P92ys7gF4SsXBGscj8lxTHIAT7x8\nLtZh8zw3qHmqaQODOzg=\n-----END PRIVATE KEY-----\n",
+    "ConsumerKey": "mock-consumer",
+    "ConsumerSecret": "mock-consumer-secret",
+    "TokenId": "mock-token-id",
+    "TokenSecret": "mock-token-secret",
+    "TokenID": "mock-token-id"
+  },
+  "Routes": [
+    {
+      "Path": "/v2/Applications",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "categoryFriendlyPath": "val-1",
+          "categoryName": "val-1",
+          "code": "val-1",
+          "id": 1,
+          "lastModifiedUtc": "2026-06-11T00:00:00Z",
+          "name": "val-1",
+          "programId": 2,
+          "userId": 2,
+          "lastModifiedSinceUtc": "2026-06-11T00:00:00Z"
+        },
+        {
+          "categoryFriendlyPath": "val-2",
+          "categoryName": "val-2",
+          "code": "val-2",
+          "id": 2,
+          "lastModifiedUtc": "2026-06-12T00:00:00Z",
+          "name": "val-2",
+          "programId": 3,
+          "userId": 3,
+          "lastModifiedSinceUtc": "2026-06-12T00:00:00Z"
+        },
+        {
+          "categoryFriendlyPath": "val-3",
+          "categoryName": "val-3",
+          "code": "val-3",
+          "id": 3,
+          "lastModifiedUtc": "2026-06-13T00:00:00Z",
+          "name": "val-3",
+          "programId": 4,
+          "userId": 4,
+          "lastModifiedSinceUtc": "2026-06-13T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Invoices/BillingLineItems",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "amount": 2,
+          "applicationId": 2,
+          "createdAtUtc": "2026-06-11T00:00:00Z",
+          "deletedApplicationId": 2,
+          "details": "val-1",
+          "id": 1,
+          "invoiceId": 2,
+          "isManualAdjustment": false,
+          "isVat": false,
+          "notes": "val-1",
+          "targetType": "val-1",
+          "lastModifiedUtc": "2026-06-11T00:00:00Z"
+        },
+        {
+          "amount": 3,
+          "applicationId": 3,
+          "createdAtUtc": "2026-06-12T00:00:00Z",
+          "deletedApplicationId": 3,
+          "details": "val-2",
+          "id": 2,
+          "invoiceId": 3,
+          "isManualAdjustment": true,
+          "isVat": true,
+          "notes": "val-2",
+          "targetType": "val-2",
+          "lastModifiedUtc": "2026-06-12T00:00:00Z"
+        },
+        {
+          "amount": 4,
+          "applicationId": 4,
+          "createdAtUtc": "2026-06-13T00:00:00Z",
+          "deletedApplicationId": 4,
+          "details": "val-3",
+          "id": 3,
+          "invoiceId": 4,
+          "isManualAdjustment": false,
+          "isVat": false,
+          "notes": "val-3",
+          "targetType": "val-3",
+          "lastModifiedUtc": "2026-06-13T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Applications/DeletedData",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "applicationCode": "val-1",
+          "applicationId": 2,
+          "applicationName": "val-1",
+          "deletedAtUtc": "2026-06-11T00:00:00Z",
+          "email": "val-1",
+          "firstName": "val-1",
+          "id": 1,
+          "lastName": "val-1",
+          "programId": 2,
+          "userId": 2,
+          "deletedSinceUtc": "2026-06-11T00:00:00Z"
+        },
+        {
+          "applicationCode": "val-2",
+          "applicationId": 3,
+          "applicationName": "val-2",
+          "deletedAtUtc": "2026-06-12T00:00:00Z",
+          "email": "val-2",
+          "firstName": "val-2",
+          "id": 2,
+          "lastName": "val-2",
+          "programId": 3,
+          "userId": 3,
+          "deletedSinceUtc": "2026-06-12T00:00:00Z"
+        },
+        {
+          "applicationCode": "val-3",
+          "applicationId": 4,
+          "applicationName": "val-3",
+          "deletedAtUtc": "2026-06-13T00:00:00Z",
+          "email": "val-3",
+          "firstName": "val-3",
+          "id": 3,
+          "lastName": "val-3",
+          "programId": 4,
+          "userId": 4,
+          "deletedSinceUtc": "2026-06-13T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Sessions/DeletedData",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "deletedAtUtc": "2026-06-11T00:00:00Z",
+          "deletedByUserId": 2,
+          "id": 1,
+          "programId": 2,
+          "sessionId": 2,
+          "sessionName": "val-1",
+          "typeName": "val-1",
+          "deletedSinceUtc": "2026-06-11T00:00:00Z"
+        },
+        {
+          "deletedAtUtc": "2026-06-12T00:00:00Z",
+          "deletedByUserId": 3,
+          "id": 2,
+          "programId": 3,
+          "sessionId": 3,
+          "sessionName": "val-2",
+          "typeName": "val-2",
+          "deletedSinceUtc": "2026-06-12T00:00:00Z"
+        },
+        {
+          "deletedAtUtc": "2026-06-13T00:00:00Z",
+          "deletedByUserId": 4,
+          "id": 3,
+          "programId": 4,
+          "sessionId": 4,
+          "sessionName": "val-3",
+          "typeName": "val-3",
+          "deletedSinceUtc": "2026-06-13T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Evaluations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "applicationCode": "val-1",
+          "applicationId": 2,
+          "evaluationDateUtc": "2026-06-11T00:00:00Z",
+          "id": 1,
+          "judgeUserId": 2,
+          "programId": 2,
+          "roundId": 2,
+          "startedAtUtc": "2026-06-11T00:00:00Z",
+          "status": "val-1",
+          "totalScore": 2,
+          "updatedAtUtc": "2026-06-11T00:00:00Z",
+          "lastModifiedSinceUtc": "2026-06-11T00:00:00Z"
+        },
+        {
+          "applicationCode": "val-2",
+          "applicationId": 3,
+          "evaluationDateUtc": "2026-06-12T00:00:00Z",
+          "id": 2,
+          "judgeUserId": 3,
+          "programId": 3,
+          "roundId": 3,
+          "startedAtUtc": "2026-06-12T00:00:00Z",
+          "status": "val-2",
+          "totalScore": 3,
+          "updatedAtUtc": "2026-06-12T00:00:00Z",
+          "lastModifiedSinceUtc": "2026-06-12T00:00:00Z"
+        },
+        {
+          "applicationCode": "val-3",
+          "applicationId": 4,
+          "evaluationDateUtc": "2026-06-13T00:00:00Z",
+          "id": 3,
+          "judgeUserId": 4,
+          "programId": 4,
+          "roundId": 4,
+          "startedAtUtc": "2026-06-13T00:00:00Z",
+          "status": "val-3",
+          "totalScore": 4,
+          "updatedAtUtc": "2026-06-13T00:00:00Z",
+          "lastModifiedSinceUtc": "2026-06-13T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Funds",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "currency": "val-1",
+          "id": 1,
+          "isArchived": false,
+          "name": "val-1",
+          "totalAmount": 2
+        },
+        {
+          "currency": "val-2",
+          "id": 2,
+          "isArchived": true,
+          "name": "val-2",
+          "totalAmount": 3
+        },
+        {
+          "currency": "val-3",
+          "id": 3,
+          "isArchived": false,
+          "name": "val-3",
+          "totalAmount": 4
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Invoices",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "createdAtUtc": "2026-06-11T00:00:00Z",
+          "id": 1,
+          "mostRecentTransactionDateUtc": "2026-06-11T00:00:00Z",
+          "programCode": "val-1",
+          "programId": 2,
+          "thirdPartyCorporateId": "val-1",
+          "mostRecentTransactionSinceUtc": "2026-06-11T00:00:00Z"
+        },
+        {
+          "createdAtUtc": "2026-06-12T00:00:00Z",
+          "id": 2,
+          "mostRecentTransactionDateUtc": "2026-06-12T00:00:00Z",
+          "programCode": "val-2",
+          "programId": 3,
+          "thirdPartyCorporateId": "val-2",
+          "mostRecentTransactionSinceUtc": "2026-06-12T00:00:00Z"
+        },
+        {
+          "createdAtUtc": "2026-06-13T00:00:00Z",
+          "id": 3,
+          "mostRecentTransactionDateUtc": "2026-06-13T00:00:00Z",
+          "programCode": "val-3",
+          "programId": 4,
+          "thirdPartyCorporateId": "val-3",
+          "mostRecentTransactionSinceUtc": "2026-06-13T00:00:00Z"
+        }
+      ]
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "Application",
+      "OrderingField": "lastModifiedSinceUtc"
+    },
+    {
+      "Name": "BillingLineItem",
+      "OrderingField": "lastModifiedUtc"
+    },
+    {
+      "Name": "DeletedApplication",
+      "OrderingField": "deletedSinceUtc"
+    },
+    {
+      "Name": "DeletedSession",
+      "OrderingField": "deletedSinceUtc"
+    },
+    {
+      "Name": "Evaluation",
+      "OrderingField": "lastModifiedSinceUtc"
+    },
+    {
+      "Name": "Fund",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Invoice",
+      "OrderingField": "mostRecentTransactionSinceUtc"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "Application",
+      "Routes": [
+        {
+          "Path": "/v2/Applications",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            {
+              "categoryFriendlyPath": "updated-delta",
+              "categoryName": "val-1",
+              "code": "val-1",
+              "id": 1,
+              "lastModifiedUtc": "2026-06-11T00:00:00Z",
+              "name": "val-1",
+              "programId": 2,
+              "userId": 2,
+              "lastModifiedSinceUtc": "2026-06-11T00:00:00Z"
+            },
+            {
+              "categoryFriendlyPath": "val-2",
+              "categoryName": "val-2",
+              "code": "val-2",
+              "id": 2,
+              "lastModifiedUtc": "2026-06-12T00:00:00Z",
+              "name": "val-2",
+              "programId": 3,
+              "userId": 3,
+              "lastModifiedSinceUtc": "2026-06-12T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "ExpectedPresent": [
+        "1",
+        "2"
+      ],
+      "ExpectedDeletes": [
+        "3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "1",
+          "Field": "categoryFriendlyPath",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ]
+}

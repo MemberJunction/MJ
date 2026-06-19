@@ -1,0 +1,331 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "BaseURL": "http://127.0.0.1:9",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "RefreshToken": "mock-refresh-token",
+    "AdminEmail": "mock-admin@example.com",
+    "Token": "mock-token",
+    "AccessToken": "mock-token",
+    "apiKey": "mock-token",
+    "APIKey": "mock-token",
+    "ApiKey": "mock-token",
+    "TokenURL": "http://127.0.0.1:9/token",
+    "TokenEndpoint": "http://127.0.0.1:9/token",
+    "TokenUrl": "http://127.0.0.1:9/token",
+    "LoginUrl": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "InstanceUrl": "http://127.0.0.1:9",
+    "HostBaseURL": "http://127.0.0.1:9",
+    "AccountID": "mock-account",
+    "Subdomain": "mock",
+    "Scope": "all",
+    "Scopes": "all",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "ClientKey": "mock-client-key",
+    "applicationId": "mock-app-id",
+    "applicationSecret": "mock-app-secret",
+    "AuthFlow": "client_credentials",
+    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEugIBADANBgkqhkiG9w0BAQEFAASCBKQwggSgAgEAAoIBAQCyPBgCLlUxqeTm\nJTljdSIOBRBt0SBP3QB+YkdGUag+7OlR7u/hwSO460GkjP9+5N+SuTXtF6vbnAZn\n+DLRepm+G8QU4qR28wiSw/e196xdJgalGGs4XZ1nMPpXckRyhbuOzpC5+J6U4Qy2\nnl09o72E/9hm6XuSD9oEfo3iayRBGDmrpUCwGJywWM2kXUuXz4uy0Sy+XVl+lujT\neKhbwu8A35I1Nc7kh1D/YohXrXJxsHcSQtoNZV4D/Dt6uAR9/LKcolH6xUUvuMLF\nFQvI4l4Lnix/lkSL1TD9Qktef+LQlAAPZ2o9wxDnwvRY+5nTrkamBchJN4N7ZdEz\nUDgPZNDZAgMBAAECgf8VUlsM574JUumvHoTfAQQx6Skt+faDl0yX0en034/g9zZy\nNsM7nn9Hf906ciOeaoLUapOo6UwF2YRqq6ZoqOH7fBbY6MQD9s7vv8HCYv6bphDl\nbyZkd858qb9I9sJ5cMYfL1bg6H0QElwS/J7q4MurPXAF36iIsJzELN+MVoTfxHLe\n28IQLW1r7+dxZ52So0VspBE736bHrRenRcrJaPyH5cCj1jWgMm6GKiAh2TSa+RFP\nhUR0Nrb/HALbcgH02tVjW62boSKzQ06NSNA1XCSb/ChxHi+YAD4KsgK9BPF9gB5P\n1IgGUQmvr3dz0Tzf5tlfZ70cN5FN6v3y5Gg96nECgYEA5tdQYFjO081PyX0xq3lH\nWxsBfr7irU7e4FWymS5LFTqg7G3ei8M1DPIZdpMuQGz+nbNcGIniDeQCJOb9OX6+\nBlxdppOOk3Hms8OU7exJ7WhKdAGuMFz5xj8eKw7zw+g96nZlpLNvki+TeJeJs40V\nYHglR8adGJCKiDrGG26AXOkCgYEAxakDWB1QIet7UnpFQkQe6hC1oGqNZOTh2dnO\n36kqVZDhX3UXvKbOIMRh8PwYD+w3MegXNsFR1jRBE7iqKNBUR//44gWOhTCQK7ij\nuZx0EMOxne+Vgje+fCYbVBCaRois8phkQg0qOLAMxMqQs4+eV95trU/F3KHVrE4k\n6mXEnnECgYAI4E6e5ctOKZ7fyIiYZ1lvD2LHVN+yek3nomPzr+wDLPXzIWZlSWRI\n0yZXgOFOaOKBfdwUtXiTwCi08ozaIR19cR/Iv/PDh6WvU93uKB/PmSsDuuzPv0N7\ndAHc9f45kjyPP245Hw0zOdEZ2fnZhZtE0lncoK55u1UYV+o2M9GLwQKBgFpARcqh\n98jFINYUBjOvrv3pC0Vn4Y/EAmvaS99L+ox/Tqiral81OsEzahUCxmnezYT4GEFk\nG93WljBPDUL9fL4zXoy1RNIDzpBoCjnh+gz9jcgzcOy4Tz2YmLnVqtux5GYQtxaB\ntFmV6P6iD1gtp3svkJyl5A5NxqaaN7jfJtvBAoGAXZO8FX6i7NS67xv14o2BZone\n6auQKostlh5z7Jph3QPZwMIiw1Bt4TtxqyCOFNziZoNmioENMpG2FZ1A8KRhrn5j\nHdTKKhtKxi/254heVzygutjQhbiJBHajOSC+P92ys7gF4SsXBGscj8lxTHIAT7x8\nLtZh8zw3qHmqaQODOzg=\n-----END PRIVATE KEY-----\n",
+    "ConsumerKey": "mock-consumer",
+    "ConsumerSecret": "mock-consumer-secret",
+    "TokenId": "mock-token-id",
+    "TokenSecret": "mock-token-secret",
+    "TokenID": "mock-token-id"
+  },
+  "Routes": [
+    {
+      "Path": "/AdAdjustment",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AdAdjustmentId": 1,
+          "AdAdjustmentName": "val-1",
+          "AdjustmentTarget": "val-1",
+          "AdjustmentType": "val-1",
+          "AdjustmentValue": "val-1",
+          "AdjustmentValueType": "val-1",
+          "IsActive": false,
+          "MediaAssetId": 2,
+          "ProductCode": "val-1"
+        },
+        {
+          "AdAdjustmentId": 2,
+          "AdAdjustmentName": "val-2",
+          "AdjustmentTarget": "val-2",
+          "AdjustmentType": "val-2",
+          "AdjustmentValue": "val-2",
+          "AdjustmentValueType": "val-2",
+          "IsActive": true,
+          "MediaAssetId": 3,
+          "ProductCode": "val-2"
+        },
+        {
+          "AdAdjustmentId": 3,
+          "AdAdjustmentName": "val-3",
+          "AdjustmentTarget": "val-3",
+          "AdjustmentType": "val-3",
+          "AdjustmentValue": "val-3",
+          "AdjustmentValueType": "val-3",
+          "IsActive": false,
+          "MediaAssetId": 4,
+          "ProductCode": "val-3"
+        }
+      ]
+    },
+    {
+      "Path": "/AddressFormat",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AddressFormatId": 1,
+          "Description": "val-1",
+          "Formula": "val-1",
+          "Name": "val-1"
+        },
+        {
+          "AddressFormatId": 2,
+          "Description": "val-2",
+          "Formula": "val-2",
+          "Name": "val-2"
+        },
+        {
+          "AddressFormatId": 3,
+          "Description": "val-3",
+          "Formula": "val-3",
+          "Name": "val-3"
+        }
+      ]
+    },
+    {
+      "Path": "/AddressPurpose",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AddressPurposeId": "AddressPurpose-1",
+          "AllowMultiple": false,
+          "AllowPreferred": false,
+          "Description": "val-1",
+          "IsActive": false,
+          "IsDefaultAddress": false,
+          "Name": "val-1"
+        },
+        {
+          "AddressPurposeId": "AddressPurpose-2",
+          "AllowMultiple": true,
+          "AllowPreferred": true,
+          "Description": "val-2",
+          "IsActive": true,
+          "IsDefaultAddress": true,
+          "Name": "val-2"
+        },
+        {
+          "AddressPurposeId": "AddressPurpose-3",
+          "AllowMultiple": false,
+          "AllowPreferred": false,
+          "Description": "val-3",
+          "IsActive": false,
+          "IsDefaultAddress": false,
+          "Name": "val-3"
+        }
+      ]
+    },
+    {
+      "Path": "/AdIssueDate",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AdClosingDate": "2026-06-11T00:00:00Z",
+          "CoverDate": "2026-06-11T00:00:00Z",
+          "IssueCode": "val-1",
+          "IssueDateId": 1,
+          "IssueName": "val-1",
+          "MaterialDueDate": "2026-06-11T00:00:00Z",
+          "MediaAssetId": 2
+        },
+        {
+          "AdClosingDate": "2026-06-12T00:00:00Z",
+          "CoverDate": "2026-06-12T00:00:00Z",
+          "IssueCode": "val-2",
+          "IssueDateId": 2,
+          "IssueName": "val-2",
+          "MaterialDueDate": "2026-06-12T00:00:00Z",
+          "MediaAssetId": 3
+        },
+        {
+          "AdClosingDate": "2026-06-13T00:00:00Z",
+          "CoverDate": "2026-06-13T00:00:00Z",
+          "IssueCode": "val-3",
+          "IssueDateId": 3,
+          "IssueName": "val-3",
+          "MaterialDueDate": "2026-06-13T00:00:00Z",
+          "MediaAssetId": 4
+        }
+      ]
+    },
+    {
+      "Path": "/AdSize",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "AdSizeId": 1,
+          "AdSizeName": "val-1",
+          "MediaAssetId": 2,
+          "PageFraction": "val-1"
+        },
+        {
+          "AdSizeId": 2,
+          "AdSizeName": "val-2",
+          "MediaAssetId": 3,
+          "PageFraction": "val-2"
+        },
+        {
+          "AdSizeId": 3,
+          "AdSizeName": "val-3",
+          "MediaAssetId": 4,
+          "PageFraction": "val-3"
+        }
+      ]
+    },
+    {
+      "Path": "/AdvertiserAgencyMap",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Advertiser": "val-1",
+          "AdvertiserAgencyMapId": 1,
+          "Agency": "val-1",
+          "Relation": "val-1"
+        },
+        {
+          "Advertiser": "val-2",
+          "AdvertiserAgencyMapId": 2,
+          "Agency": "val-2",
+          "Relation": "val-2"
+        },
+        {
+          "Advertiser": "val-3",
+          "AdvertiserAgencyMapId": 3,
+          "Agency": "val-3",
+          "Relation": "val-3"
+        }
+      ]
+    },
+    {
+      "Path": "/AdvertiserRepTerritoryMap",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Advertiser": "val-1",
+          "AdvertiserRepTerritoryMapId": 1,
+          "Percentage": "val-1",
+          "RepTerritory": "val-1"
+        },
+        {
+          "Advertiser": "val-2",
+          "AdvertiserRepTerritoryMapId": 2,
+          "Percentage": "val-2",
+          "RepTerritory": "val-2"
+        },
+        {
+          "Advertiser": "val-3",
+          "AdvertiserRepTerritoryMapId": 3,
+          "Percentage": "val-3",
+          "RepTerritory": "val-3"
+        }
+      ]
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "AdAdjustment",
+      "OrderingField": "AdAdjustmentId"
+    },
+    {
+      "Name": "AddressFormat",
+      "OrderingField": "AddressFormatId"
+    },
+    {
+      "Name": "AddressPurpose",
+      "OrderingField": "AddressPurposeId"
+    },
+    {
+      "Name": "AdIssueDate",
+      "OrderingField": "IssueDateId"
+    },
+    {
+      "Name": "AdSize",
+      "OrderingField": "AdSizeId"
+    },
+    {
+      "Name": "AdvertiserAgencyMap",
+      "OrderingField": "AdvertiserAgencyMapId"
+    },
+    {
+      "Name": "AdvertiserRepTerritoryMap",
+      "OrderingField": "AdvertiserRepTerritoryMapId"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "AdAdjustment",
+      "Routes": [
+        {
+          "Path": "/AdAdjustment",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            {
+              "AdAdjustmentId": 1,
+              "AdAdjustmentName": "updated-delta",
+              "AdjustmentTarget": "val-1",
+              "AdjustmentType": "val-1",
+              "AdjustmentValue": "val-1",
+              "AdjustmentValueType": "val-1",
+              "IsActive": false,
+              "MediaAssetId": 2,
+              "ProductCode": "val-1"
+            },
+            {
+              "AdAdjustmentId": 2,
+              "AdAdjustmentName": "val-2",
+              "AdjustmentTarget": "val-2",
+              "AdjustmentType": "val-2",
+              "AdjustmentValue": "val-2",
+              "AdjustmentValueType": "val-2",
+              "IsActive": true,
+              "MediaAssetId": 3,
+              "ProductCode": "val-2"
+            }
+          ]
+        }
+      ],
+      "ExpectedPresent": [
+        "1",
+        "2"
+      ],
+      "ExpectedDeletes": [
+        "3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "1",
+          "Field": "AdAdjustmentName",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ]
+}

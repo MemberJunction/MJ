@@ -1,0 +1,63 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "applicationId": "mock-app-id",
+    "applicationSecret": "mock-app-secret",
+    "Token": "mock-token",
+    "BaseURL": "http://127.0.0.1:9",
+    "ApiBaseUrl": "http://127.0.0.1:9",
+    "LoginUrl": "http://127.0.0.1:9",
+    "TokenURL": "http://127.0.0.1:9/api/v1/getToken",
+    "AccessToken": "mock-token",
+    "apiKey": "mock-token",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "AccountID": "mock",
+    "Subdomain": "mock"
+  },
+  "Objects": [
+    {
+      "Name": "User"
+    }
+  ],
+  "Routes": [
+    {
+      "Path": "/api/v1/getToken",
+      "Method": "POST",
+      "Status": 200,
+      "Body": {
+        "token": "fixture-bearer-token",
+        "expiresIn": 43200
+      }
+    },
+    {
+      "Path": "/graphql",
+      "Method": "POST",
+      "Status": 200,
+      "Body": {
+        "data": {
+          "account": {
+            "users": [
+              {
+                "id": "u-1",
+                "userId": "uid-1",
+                "email": "u1@example.com",
+                "username": "user1",
+                "firstName": "Ada"
+              },
+              {
+                "id": "u-2",
+                "userId": "uid-2",
+                "email": "u2@example.com",
+                "username": "user2",
+                "firstName": "Ben"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "HandAuthored": true
+}

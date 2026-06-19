@@ -1,0 +1,165 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "BaseURL": "http://127.0.0.1:9",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "RefreshToken": "mock-refresh-token",
+    "AdminEmail": "mock-admin@example.com",
+    "Token": "mock-token",
+    "AccessToken": "mock-token",
+    "apiKey": "mock-token",
+    "APIKey": "mock-token",
+    "ApiKey": "mock-token",
+    "TokenURL": "http://127.0.0.1:9/token",
+    "TokenEndpoint": "http://127.0.0.1:9/token",
+    "TokenUrl": "http://127.0.0.1:9/token",
+    "LoginUrl": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "InstanceUrl": "http://127.0.0.1:9",
+    "HostBaseURL": "http://127.0.0.1:9",
+    "AccountID": "mock-account",
+    "Subdomain": "mock",
+    "Scope": "all",
+    "Scopes": "all",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "ClientKey": "mock-client-key",
+    "applicationId": "mock-app-id",
+    "applicationSecret": "mock-app-secret",
+    "AuthFlow": "client_credentials",
+    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDmQcln2pQ/dZX+\nrdKuBa3VF/Kvo6DRZpw7Ffxc2SptzeihCCz5q6BqK5xM8RXx75m2ScwOt8SpYIB9\nRa5dm7PfCBfxtHtMeA0BhD4+EJe0A4gLaa4/tM11I2xvfWEQpLhbOdgSgb0vIYPW\n1FrPBp8Nde2pzpYT5NMw9+o+GrLDk2O+mi8ijflSQI7Q0CeQEROz7zQscfkH/45E\n1ZewxQnySnfJDLKbNV3rNuwRYi53rHew6AH6dUjtEKJb+KsG5/vQYYfM6CWzGi6n\naX3eeOf6WxS2GMbeAn1JRByagpqHpa2H4L3lEzLpmTbi0PtPmKEifgWOkMCFVt7E\n7Vv4rldFAgMBAAECggEABVJVP/vim+oxIpxh13kfdg1Xo+I5lUgJ1FPDFreY2MYp\nhOSWJYRnRgzmpTXtNpToYzjRaTBWGz61DtrNbNxsYSXkEnIEEisJdz+B221cFDer\nV+2EBB+USrYcNiIaXDLHuqlblRHqjWxONROIsGrhbNjiOp/LrX9cYjADT0F5YDZn\nRmNAt2UecHgJc2GhZXeTSXGnNB+pavaa0PPtaEygEJ8sCBs5YKIvtuJUBz563vcM\nfNS4/GPq0V//3r/ZNH2ALkejt6kbBmfctEwop48Z0r+lmYiD36iBp/nHUp0xiLd9\nWxvgpAry9rIghY3YdYf1Q//K8Y6DjO3S3Qk44SU3AQKBgQD+OcwDbSt2QoPCHGo4\n1K8Lecv4Tf8ztCMW4T8twAZJFNe2nXE/Fotbk2HYT2WpmAJSpKP6IxsS7K7FSYz3\nqEcUfxlA4EvqbRIR1M8Ku8DVZeJWxlIaFB+5bEZ1SVA72D8JZH6PgIWluqzZPAFB\nN1Sst+UXdgy1NQy0oGmNsRFDzwKBgQDn3Sq3bha1f1GohXRy8No+I6s8sgU26X2+\nOW8HbFhhx/GEcn5a+pjS1pXv4uoiJo0qs7khy0GOWLHg45hT/QthuIYi/HifaZmd\neMRuAA5fydtjJUcc/BM4ED3FrGCKwbTwUZj77Wk2Xr0slChmmDHnlBvQHwewI+Nw\na3x/AaA0qwKBgFwSJI/tHrtytXM8hT/Vzxtx3ewsm0tnZvnnU9FG5T/ce49Yj+YQ\nTSI6S0pi3ue/9L9nfzedNTXyYA11aMdcu3lx2nyDfxsEq3Gnx+AURW9DuehBZQSq\n2x51V0Ms7RDvbU0Ch0+DdWOjKux17eJnnpP6+c44Y7vQ3awhGHlHcoBDAoGAXUQv\nvJ1B8TwHotwb3WhYwYojhUSuqEn/1JbRvJCudJay5e4QOZR4CMdchKQoPhh3zGeC\n3r8d3Z573tRuH8q321UYT9Zyxtz5d8huazkGjy1pXFZQZq5XJMQTtQIDy4zjtY99\nFEmJet9dBSOLpMkvudFv5qW0t/uXr07tQ0FqKgUCgYB3hNutKGwKwEHxtxnb7dA3\nhb4xn9Bd7vQuv2Td1sQVlPTcqCrJTb/CetSb9I8QR+jOeShF2iTtzDXbQhmnfQID\n1iihXjL03cR1tzUv0nb0UBbg3yrySBXoR+KOXybVVb+KE3DlsuB6B8nRhuE6u/cN\nZukUhlInr3rnVucvqIWnLA==\n-----END PRIVATE KEY-----\n",
+    "ConsumerKey": "mock-consumer",
+    "ConsumerSecret": "mock-consumer-secret",
+    "TokenId": "mock-token-id",
+    "TokenSecret": "mock-token-secret",
+    "TokenID": "mock-token-id"
+  },
+  "Routes": [
+    {
+      "Path": "/shares",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "Shares-1",
+          "name": "val-1",
+          "owner": "val-1",
+          "driveItem": "val-1",
+          "listItem": "val-1",
+          "permission": "val-1"
+        },
+        {
+          "id": "Shares-2",
+          "name": "val-2",
+          "owner": "val-2",
+          "driveItem": "val-2",
+          "listItem": "val-2",
+          "permission": "val-2"
+        },
+        {
+          "id": "Shares-3",
+          "name": "val-3",
+          "owner": "val-3",
+          "driveItem": "val-3",
+          "listItem": "val-3",
+          "permission": "val-3"
+        }
+      ]
+    },
+    {
+      "Path": "/sites?search=*",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "Sites-1",
+          "displayName": "val-1",
+          "name": "val-1",
+          "webUrl": "val-1",
+          "description": "val-1",
+          "createdDateTime": "2026-06-11T00:00:00Z",
+          "lastModifiedDateTime": "2026-06-11T00:00:00Z",
+          "isPersonalSite": false
+        },
+        {
+          "id": "Sites-2",
+          "displayName": "val-2",
+          "name": "val-2",
+          "webUrl": "val-2",
+          "description": "val-2",
+          "createdDateTime": "2026-06-12T00:00:00Z",
+          "lastModifiedDateTime": "2026-06-12T00:00:00Z",
+          "isPersonalSite": true
+        },
+        {
+          "id": "Sites-3",
+          "displayName": "val-3",
+          "name": "val-3",
+          "webUrl": "val-3",
+          "description": "val-3",
+          "createdDateTime": "2026-06-13T00:00:00Z",
+          "lastModifiedDateTime": "2026-06-13T00:00:00Z",
+          "isPersonalSite": false
+        }
+      ]
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "Shares",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Sites",
+      "OrderingField": "id"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "Shares",
+      "Routes": [
+        {
+          "Path": "/shares",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            {
+              "id": "Shares-1",
+              "name": "updated-delta",
+              "owner": "val-1",
+              "driveItem": "val-1",
+              "listItem": "val-1",
+              "permission": "val-1"
+            },
+            {
+              "id": "Shares-2",
+              "name": "val-2",
+              "owner": "val-2",
+              "driveItem": "val-2",
+              "listItem": "val-2",
+              "permission": "val-2"
+            }
+          ]
+        }
+      ],
+      "ExpectedPresent": [
+        "Shares-1",
+        "Shares-2"
+      ],
+      "ExpectedDeletes": [
+        "Shares-3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "Shares-1",
+          "Field": "name",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ]
+}

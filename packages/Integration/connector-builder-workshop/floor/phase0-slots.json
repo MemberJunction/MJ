@@ -1,0 +1,663 @@
+{
+  "_doc": "Bijection slot table — every slot Phase 0 expects MUST be filled by exactly one agent producer via exactly one locked primitive, OR explicitly nullable. The floor-check iterates this universe at the end of every run and rejects builds with missing/unverified/unprovable-required slots. Source: plans/integration-agentic-local.md §0a.",
+  "_lastUpdatedFrom": "plans/integration-agentic-local.md",
+  "slots": [
+    {
+      "id": "Integration.Name",
+      "phase0Ref": "A schema",
+      "producer": "identity-establisher",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "id": "Integration.Description",
+      "phase0Ref": "A schema",
+      "producer": "identity-establisher",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "id": "Integration.ClassName",
+      "phase0Ref": "A schema",
+      "producer": "identity-establisher",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "id": "Integration.ImportPath",
+      "phase0Ref": "A schema",
+      "producer": "identity-establisher",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "id": "Integration.NavigationBaseURL",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": true,
+      "type": "string"
+    },
+    {
+      "id": "Integration.BatchMaxRequestCount",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": true,
+      "type": "integer"
+    },
+    {
+      "id": "Integration.BatchRequestWaitTime",
+      "phase0Ref": "A schema",
+      "producer": "metadata-writer",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": true,
+      "type": "integer"
+    },
+    {
+      "id": "Integration.CredentialTypeID",
+      "phase0Ref": "A schema",
+      "producer": "identity-establisher",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": false,
+      "type": "uuid"
+    },
+    {
+      "id": "Integration.Icon",
+      "phase0Ref": "A schema",
+      "producer": "identity-establisher",
+      "primitive": "audit-source -> verify-claim",
+      "nullable": true,
+      "type": "string"
+    },
+    {
+      "id": "IntegrationObject.Name",
+      "phase0Ref": "A schema; D0 discovery",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.DisplayName",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.Description",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.Category",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.APIPath",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.ResponseDataKey",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.DefaultPageSize",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.PaginationType",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.SupportsPagination",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.SupportsIncrementalSync",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.IncrementalWatermarkField",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.SupportsWrite",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.CreateAPIPath",
+      "phase0Ref": "A schema (v5.39.x write columns); C generic CRUD",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many",
+      "groupedWith": ["CreateMethod", "CreateBodyShape", "CreateBodyKey", "CreateIDLocation"]
+    },
+    {
+      "id": "IntegrationObject.CreateMethod",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.CreateBodyShape",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.CreateBodyKey",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.CreateIDLocation",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.UpdateAPIPath",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.UpdateMethod",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.UpdateBodyShape",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.UpdateBodyKey",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.UpdateIDLocation",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.DeleteAPIPath",
+      "phase0Ref": "A schema (v5.39.x); C generic CRUD",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many",
+      "groupedWith": ["DeleteMethod", "DeleteIDLocation"],
+      "_note": "When set, DeleteMethod MUST also be set — the generic DeleteRecord reads obj.DeleteMethod (verb is NOT assumed DELETE; some vendors POST/PUT soft-deletes)."
+    },
+    {
+      "id": "IntegrationObject.DeleteMethod",
+      "phase0Ref": "A schema (v5.39.x); C generic CRUD",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many",
+      "_note": "HTTP verb for delete. NON-nullable in practice whenever DeleteAPIPath is set (capability<->method bijection); the generic DeleteRecord passes it to MakeHTTPRequest."
+    },
+    {
+      "id": "IntegrationObject.DeleteIDLocation",
+      "phase0Ref": "A schema (v5.39.x)",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.MetadataSource",
+      "phase0Ref": "A schema enum (v5.39.x)",
+      "producer": "deterministic-pipeline",
+      "primitive": "(none - set by IntegrationConnectorCreationPipeline)",
+      "nullable": false,
+      "type": "enum",
+      "cardinality": "many",
+      "fixedValue": "Declared"
+    },
+    {
+      "id": "IntegrationObject.DefaultQueryParams",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.Configuration",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "json",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.Sequence",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObject.Status",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Name",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.DisplayName",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Description",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Type",
+      "phase0Ref": "A schema; B4 provable-only",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": false,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Length",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Precision",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Scale",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.AllowsNull",
+      "phase0Ref": "A schema; B4 provable-only",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": true,
+      "type": "boolean",
+      "cardinality": "many",
+      "_note": "type: [boolean, null] for unprovable per provable-only policy"
+    },
+    {
+      "id": "IntegrationObjectField.DefaultValue",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.IsRequired",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.IsReadOnly",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.IsUniqueKey",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.IsPrimaryKey",
+      "phase0Ref": "A schema; D2 PK rule",
+      "producer": "ioiof-extractor-if-declared-or-deferred-to-runtime",
+      "primitive": "extract-iiof-pipeline (declared) OR D4-SoftPKClassifier (runtime)",
+      "nullable": false,
+      "type": "boolean",
+      "cardinality": "many",
+      "_note": "Static agent emits true ONLY for explicit PK markers in docs; ambiguous cases deferred to runtime D4 classifier (Gap 10)"
+    },
+    {
+      "id": "IntegrationObjectField.RelatedIntegrationObjectID",
+      "phase0Ref": "A schema; D5 FK-graph",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": true,
+      "type": "uuid",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.RelatedIntegrationObjectFieldName",
+      "phase0Ref": "A schema; D5 FK-graph",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline + verify-claim",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Category",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "string",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Sequence",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": true,
+      "type": "integer",
+      "cardinality": "many"
+    },
+    {
+      "id": "IntegrationObjectField.Status",
+      "phase0Ref": "A schema",
+      "producer": "ioiof-extractor",
+      "primitive": "extract-iiof-pipeline",
+      "nullable": false,
+      "type": "enum",
+      "cardinality": "many"
+    },
+    {
+      "id": "MetadataFile.integration.json",
+      "phase0Ref": "E folder; D1 step 2",
+      "producer": "metadata-writer + ioiof-extractor (assembled)",
+      "primitive": "freeze-contract",
+      "nullable": false,
+      "type": "file",
+      "_note": "metadata/integrations/<vendor>/.<vendor>.integration.json"
+    },
+    {
+      "id": "Connector.Authenticate",
+      "phase0Ref": "C BaseREST; I auth helpers",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.BuildHeaders",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.MakeHTTPRequest",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.NormalizeResponse",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.ExtractPaginationInfo",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.GetBaseURL",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.TestConnection",
+      "phase0Ref": "C BaseREST methods",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": false,
+      "type": "code-block"
+    },
+    {
+      "id": "Connector.TransformRecord",
+      "phase0Ref": "C BaseREST hook (v5.39.x)",
+      "producer": "code-builder",
+      "primitive": "emit-connector-code",
+      "nullable": true,
+      "type": "code-block",
+      "_note": "Optional override; default identity inherited from base"
+    }
+  ],
+  "_e2eLivePhasesDoc": "READ-ONLY live-e2e phase skeleton the T10/T11 harness MUST run VERBATIM and IN ORDER for every connector. Live testing is READ-ONLY ONLY: NO write/push/bidirectional/delete/live-mutation cells, and NO dual-dialect (Postgres re-run) requirement — those have been removed from the floor. Source of truth = the canonical 'Integration Major Enhancement — Test Plan' read-side sections (HANDOFF.md, mirrored from plan.md §14/§15); reference implementation = packages/Integration/connectors/test/ (the HubSpot live-test framework). floor-check iterates this list exactly as it iterates `slots`: every APPLICABLE phase must appear in the ladder's T10/T11 `livePhaseLog`, in this declared `order`, with per-test NL+JSON+pass/fail evidence. Per-connector adaptation: the agent runs the applicable SUBSET (e.g. a no-watermark connector substitutes content-hash/keyset for the watermark cell), but the SKELETON + ORDERING is FIXED and any skipped phase/cell MUST carry a logged `skipReason` (no silent omission). NOTE: the source-diff completeness gate (read-side completeness, manifest.sourceDiffMustClose) is RETAINED — only write/bidirectional/dual-dialect enforcement was removed.",
+  "e2eLivePhases": [
+    {
+      "id": "E2E.Env",
+      "order": 0,
+      "phaseRef": "§1 Environment Setup & Bring-up",
+      "tier": "T10",
+      "applicability": "always",
+      "dualDialect": false,
+      "requires": "Empty DB provisioned; mj migrate -> mj sync push -> mj codegen (in order) on this branch; mjapi + mjexplorer built and started; GQL API key obtained WITHOUT reading/exposing it (§0); initial Company record created.",
+      "evidence": "Per-step NL statement + JSON (migrate/sync/codegen exit summaries, server-up confirmation, Company row id) + pass/fail."
+    },
+    {
+      "id": "E2E.PhaseA",
+      "order": 1,
+      "phaseRef": "§2 Phase A — Integration & Metadata",
+      "tier": "T10",
+      "applicability": "always",
+      "dualDialect": false,
+      "requires": "Create CompanyIntegration record; link credential + connection-test via the broker (never expose the value, §0); RefreshMetadata pulls all custom tables, custom columns (on existing + custom tables), absent table metadata, and watermark info; LLM/statistics PK-inference runs per hard-key IO with results in additionalSchemaInfo.json; ApplyAllBatch over all selectable tables; subscription output inspected; structured end-of-phase report produced.",
+      "evidence": "NL + JSON for each: connection-test result, RefreshMetadata diff (tables/columns/watermark), PK-classify verdicts, ApplyAllBatch map counts, the structured Phase-A report + pass/fail."
+    },
+    {
+      "id": "E2E.PhaseB",
+      "order": 2,
+      "phaseRef": "§3 Phase B — Sync Testing (READ-ONLY / inbound-pull cells)",
+      "tier": "T10",
+      "applicability": "always-skeleton-applicable-cells",
+      "dualDialect": false,
+      "requires": "READ-ONLY inbound-pull matrix only — write/push/bidirectional/delete cells are REMOVED from the floor (live testing is read-only). Run every APPLICABLE read-side cell; never shortcut. A no-watermark connector substitutes content-hash/keyset for the watermark cell. Sub-phases run in declared order.",
+      "subPhases": [
+        { "id": "E2E.PhaseB.3_1", "order": 1, "ref": "3.1 Change detection & efficiency", "requires": "watermark-first then full/rest pass + no-watermark path; timestamp-watermark incremental; content-hash/Merkle actually avoids redundant work; keyset pagination — restart the API mid-sync and confirm from logs it resumes." },
+        { "id": "E2E.PhaseB.3_2", "order": 2, "ref": "3.2 Inbound pull & watermark persistence", "requires": "inbound pull only (READ-ONLY — bidirectional/write-back/push cells removed from the floor); watermark fallback save persisted even on the fallback path." },
+        { "id": "E2E.PhaseB.3_3", "order": 3, "ref": "3.3 Identity & idempotency", "requires": "re-run/replay stays idempotent on the read path; repeated pulls dedupe correctly (no duplicate local rows)." },
+        { "id": "E2E.PhaseB.3_5", "order": 4, "ref": "3.5 Schema drift", "requires": "source-side columns removed mid-stream handled gracefully; treat source-side mutations as possibly adversarial; exercise source-side mutations beyond column removal. (Read-side only — local-side write mutations removed.)" },
+        { "id": "E2E.PhaseB.3_6", "order": 5, "ref": "3.6 DAG", "requires": "DAG ordering follows the agreed contract — tested deeply, not superficially (second-layer/association tables non-empty when upstream has data)." },
+        { "id": "E2E.PhaseB.3_7", "order": 6, "ref": "3.7 Rate limiting & concurrency", "requires": "characterize sync vs 429s (not too frequent, not too slow regardless of ceiling); per-layer concurrency." },
+        { "id": "E2E.PhaseB.3_8", "order": 7, "ref": "3.8 Resilience", "requires": "strategy rotation mid-sync; infinite-pagination stuck -> recovery (content-hash may break the loop); generic mid-process failure at any stage; grace handling maximizes useful data that still lands despite failures." }
+      ],
+      "evidence": "Per cell: NL statement of what was proven + JSON (scrubbed IntegrationGetRun payload, DB count rows, relevant progress.jsonl events) + pass/fail. Every cell asserts OUTCOMES (ground-truth counts, second-layer non-empty, structured SyncWarnings) — never Status='Success'."
+    },
+    {
+      "id": "E2E.PhaseC",
+      "order": 3,
+      "phaseRef": "§4 Phase C — Value Handling",
+      "tier": "T10",
+      "applicability": "always",
+      "dualDialect": false,
+      "requires": "Records of different value types map and persist correctly without throwing.",
+      "evidence": "NL + JSON per value-type case + pass/fail."
+    },
+    {
+      "id": "E2E.GenAction",
+      "order": 4,
+      "phaseRef": "§5 Generation Action / Agents",
+      "tier": "T11",
+      "applicability": "when-generation-action-supported",
+      "dualDialect": false,
+      "requires": "Test the generation-action path (can agents create a generate action?); confirm `mj ai` lets us invoke agents and observe the outcome. If the connector/build doesn't expose a generation action, log skip-with-reason.",
+      "evidence": "NL + JSON (agent invocation result) + pass/fail."
+    },
+    {
+      "id": "E2E.Observability",
+      "order": 5,
+      "phaseRef": "§6 Observability & Reporting (continuous)",
+      "tier": "T10",
+      "applicability": "always-continuous",
+      "dualDialect": false,
+      "requires": "Structured logs captured throughout EVERY phase (not at the end). The final report carries, per test: NL statement of what was tested + result, corresponding JSON payloads, clear pass/fail. This is the per-test evidence contract every other phase's cells must satisfy.",
+      "evidence": "The livePhaseLog itself: each entry { phaseId, order, nl, json, status:'pass'|'fail'|'skip', skipReason? }."
+    }
+  ]
+}

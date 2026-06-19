@@ -1,0 +1,1679 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "LoginUrl",
+  "HandAuthored": true,
+  "Configuration": {
+    "AuthFlow": "client_credentials",
+    "authFlow": "client_credentials",
+    "clientId": "mock-client",
+    "clientSecret": "mock-secret",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "apiVersion": "61.0",
+    "ApiVersion": "61.0"
+  },
+  "Objects": [
+    {
+      "Name": "AcceptedEventRelation"
+    },
+    {
+      "Name": "AccountContactRelation"
+    },
+    {
+      "Name": "AccountContactRole"
+    },
+    {
+      "Name": "AbnExperiment"
+    }
+  ],
+  "Routes": [
+    {
+      "Path": "/services/oauth2/token",
+      "Method": "POST",
+      "Status": 200,
+      "Body": {
+        "access_token": "mock-access-token",
+        "instance_url": "{{MOCK_ORIGIN}}",
+        "token_type": "Bearer",
+        "issued_at": "1700000000000",
+        "id": "https://mock.local/id/00Dxx/005xx"
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "sobjects": "/services/data/v61.0/sobjects",
+        "identity": "https://mock.local/id"
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/sobjects/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "encoding": "UTF-8",
+        "maxBatchSize": 200,
+        "sobjects": [
+          {
+            "name": "AcceptedEventRelation",
+            "label": "AcceptedEventRelation",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": false
+          },
+          {
+            "name": "AccountContactRelation",
+            "label": "AccountContactRelation",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": false
+          },
+          {
+            "name": "AccountContactRole",
+            "label": "AccountContactRole",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": false
+          },
+          {
+            "name": "AbnExperiment",
+            "label": "AbnExperiment",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": false
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/sobjects/AcceptedEventRelation/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "AcceptedEventRelation",
+        "label": "AcceptedEventRelation",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": true,
+        "fields": [
+          {
+            "name": "CreatedById",
+            "label": "CreatedById",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "CreatedDate",
+            "label": "CreatedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "EventId",
+            "label": "EventId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Id",
+            "label": "Id",
+            "type": "id",
+            "length": 255,
+            "nillable": false,
+            "defaultedOnCreate": true,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "IsDeleted",
+            "type": "boolean",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedById",
+            "label": "LastModifiedById",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedDate",
+            "label": "LastModifiedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "RelationId",
+            "label": "RelationId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "RespondedDate",
+            "label": "RespondedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Response",
+            "label": "Response",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "SystemModstamp",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Type",
+            "label": "Type",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/queryAll",
+      "Method": "GET",
+      "Match": "FROM AcceptedEventRelation",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "AcceptedEventRelation"
+            },
+            "CreatedById": "r00000000000000001",
+            "CreatedDate": "2026-03-02T10:00:00.000Z",
+            "EventId": "r00000000000000001",
+            "Id": "x00000000000000001",
+            "IsDeleted": false,
+            "LastModifiedById": "r00000000000000001",
+            "LastModifiedDate": "2026-03-01T10:00:00.000Z",
+            "RelationId": "r00000000000000001",
+            "RespondedDate": "2026-03-02T10:00:00.000Z",
+            "Response": "Fixture Response 1",
+            "SystemModstamp": "2026-03-01T10:00:00.000Z",
+            "Type": "Fixture Type 1"
+          },
+          {
+            "attributes": {
+              "type": "AcceptedEventRelation"
+            },
+            "CreatedById": "r00000000000000002",
+            "CreatedDate": "2026-03-03T10:00:00.000Z",
+            "EventId": "r00000000000000002",
+            "Id": "x00000000000000002",
+            "IsDeleted": false,
+            "LastModifiedById": "r00000000000000002",
+            "LastModifiedDate": "2026-03-02T10:00:00.000Z",
+            "RelationId": "r00000000000000002",
+            "RespondedDate": "2026-03-03T10:00:00.000Z",
+            "Response": "Fixture Response 2",
+            "SystemModstamp": "2026-03-02T10:00:00.000Z",
+            "Type": "Fixture Type 2"
+          },
+          {
+            "attributes": {
+              "type": "AcceptedEventRelation"
+            },
+            "CreatedById": "r00000000000000003",
+            "CreatedDate": "2026-03-04T10:00:00.000Z",
+            "EventId": "r00000000000000003",
+            "Id": "x00000000000000003",
+            "IsDeleted": false,
+            "LastModifiedById": "r00000000000000003",
+            "LastModifiedDate": "2026-03-03T10:00:00.000Z",
+            "RelationId": "r00000000000000003",
+            "RespondedDate": "2026-03-04T10:00:00.000Z",
+            "Response": "Fixture Response 3",
+            "SystemModstamp": "2026-03-03T10:00:00.000Z",
+            "Type": "Fixture Type 3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/query",
+      "Method": "GET",
+      "Match": "FROM AcceptedEventRelation",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "AcceptedEventRelation"
+            },
+            "CreatedById": "r00000000000000001",
+            "CreatedDate": "2026-03-02T10:00:00.000Z",
+            "EventId": "r00000000000000001",
+            "Id": "x00000000000000001",
+            "IsDeleted": false,
+            "LastModifiedById": "r00000000000000001",
+            "LastModifiedDate": "2026-03-01T10:00:00.000Z",
+            "RelationId": "r00000000000000001",
+            "RespondedDate": "2026-03-02T10:00:00.000Z",
+            "Response": "Fixture Response 1",
+            "SystemModstamp": "2026-03-01T10:00:00.000Z",
+            "Type": "Fixture Type 1"
+          },
+          {
+            "attributes": {
+              "type": "AcceptedEventRelation"
+            },
+            "CreatedById": "r00000000000000002",
+            "CreatedDate": "2026-03-03T10:00:00.000Z",
+            "EventId": "r00000000000000002",
+            "Id": "x00000000000000002",
+            "IsDeleted": false,
+            "LastModifiedById": "r00000000000000002",
+            "LastModifiedDate": "2026-03-02T10:00:00.000Z",
+            "RelationId": "r00000000000000002",
+            "RespondedDate": "2026-03-03T10:00:00.000Z",
+            "Response": "Fixture Response 2",
+            "SystemModstamp": "2026-03-02T10:00:00.000Z",
+            "Type": "Fixture Type 2"
+          },
+          {
+            "attributes": {
+              "type": "AcceptedEventRelation"
+            },
+            "CreatedById": "r00000000000000003",
+            "CreatedDate": "2026-03-04T10:00:00.000Z",
+            "EventId": "r00000000000000003",
+            "Id": "x00000000000000003",
+            "IsDeleted": false,
+            "LastModifiedById": "r00000000000000003",
+            "LastModifiedDate": "2026-03-03T10:00:00.000Z",
+            "RelationId": "r00000000000000003",
+            "RespondedDate": "2026-03-04T10:00:00.000Z",
+            "Response": "Fixture Response 3",
+            "SystemModstamp": "2026-03-03T10:00:00.000Z",
+            "Type": "Fixture Type 3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/sobjects/AccountContactRelation/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "AccountContactRelation",
+        "label": "AccountContactRelation",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": true,
+        "fields": [
+          {
+            "name": "AccountContactRelationshipCurrency",
+            "label": "AccountContactRelationshipCurrency",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "AccountId",
+            "label": "AccountId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "ContactId",
+            "label": "ContactId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "CreatedById",
+            "label": "CreatedById",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "CreatedDate",
+            "label": "CreatedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "EndDate",
+            "label": "EndDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "Id",
+            "label": "Id",
+            "type": "id",
+            "length": 255,
+            "nillable": false,
+            "defaultedOnCreate": true,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsActive",
+            "label": "IsActive",
+            "type": "boolean",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "IsDeleted",
+            "type": "boolean",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDirect",
+            "label": "IsDirect",
+            "type": "boolean",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedById",
+            "label": "LastModifiedById",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedDate",
+            "label": "LastModifiedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Roles",
+            "label": "Roles",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "StartDate",
+            "label": "StartDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "SystemModstamp",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/queryAll",
+      "Method": "GET",
+      "Match": "FROM AccountContactRelation",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "AccountContactRelation"
+            },
+            "AccountContactRelationshipCurrency": "Fixture AccountContactRelationshipCurrency 1",
+            "AccountId": "r00000000000000001",
+            "ContactId": "r00000000000000001",
+            "CreatedById": "r00000000000000001",
+            "CreatedDate": "2026-03-02T10:00:00.000Z",
+            "EndDate": "2026-03-02T10:00:00.000Z",
+            "Id": "x00000000000000001",
+            "IsActive": false,
+            "IsDeleted": false,
+            "IsDirect": false,
+            "LastModifiedById": "r00000000000000001",
+            "LastModifiedDate": "2026-03-01T10:00:00.000Z",
+            "Roles": "Fixture Roles 1",
+            "StartDate": "2026-03-02T10:00:00.000Z",
+            "SystemModstamp": "2026-03-01T10:00:00.000Z"
+          },
+          {
+            "attributes": {
+              "type": "AccountContactRelation"
+            },
+            "AccountContactRelationshipCurrency": "Fixture AccountContactRelationshipCurrency 2",
+            "AccountId": "r00000000000000002",
+            "ContactId": "r00000000000000002",
+            "CreatedById": "r00000000000000002",
+            "CreatedDate": "2026-03-03T10:00:00.000Z",
+            "EndDate": "2026-03-03T10:00:00.000Z",
+            "Id": "x00000000000000002",
+            "IsActive": false,
+            "IsDeleted": false,
+            "IsDirect": false,
+            "LastModifiedById": "r00000000000000002",
+            "LastModifiedDate": "2026-03-02T10:00:00.000Z",
+            "Roles": "Fixture Roles 2",
+            "StartDate": "2026-03-03T10:00:00.000Z",
+            "SystemModstamp": "2026-03-02T10:00:00.000Z"
+          },
+          {
+            "attributes": {
+              "type": "AccountContactRelation"
+            },
+            "AccountContactRelationshipCurrency": "Fixture AccountContactRelationshipCurrency 3",
+            "AccountId": "r00000000000000003",
+            "ContactId": "r00000000000000003",
+            "CreatedById": "r00000000000000003",
+            "CreatedDate": "2026-03-04T10:00:00.000Z",
+            "EndDate": "2026-03-04T10:00:00.000Z",
+            "Id": "x00000000000000003",
+            "IsActive": false,
+            "IsDeleted": false,
+            "IsDirect": false,
+            "LastModifiedById": "r00000000000000003",
+            "LastModifiedDate": "2026-03-03T10:00:00.000Z",
+            "Roles": "Fixture Roles 3",
+            "StartDate": "2026-03-04T10:00:00.000Z",
+            "SystemModstamp": "2026-03-03T10:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/query",
+      "Method": "GET",
+      "Match": "FROM AccountContactRelation",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "AccountContactRelation"
+            },
+            "AccountContactRelationshipCurrency": "Fixture AccountContactRelationshipCurrency 1",
+            "AccountId": "r00000000000000001",
+            "ContactId": "r00000000000000001",
+            "CreatedById": "r00000000000000001",
+            "CreatedDate": "2026-03-02T10:00:00.000Z",
+            "EndDate": "2026-03-02T10:00:00.000Z",
+            "Id": "x00000000000000001",
+            "IsActive": false,
+            "IsDeleted": false,
+            "IsDirect": false,
+            "LastModifiedById": "r00000000000000001",
+            "LastModifiedDate": "2026-03-01T10:00:00.000Z",
+            "Roles": "Fixture Roles 1",
+            "StartDate": "2026-03-02T10:00:00.000Z",
+            "SystemModstamp": "2026-03-01T10:00:00.000Z"
+          },
+          {
+            "attributes": {
+              "type": "AccountContactRelation"
+            },
+            "AccountContactRelationshipCurrency": "Fixture AccountContactRelationshipCurrency 2",
+            "AccountId": "r00000000000000002",
+            "ContactId": "r00000000000000002",
+            "CreatedById": "r00000000000000002",
+            "CreatedDate": "2026-03-03T10:00:00.000Z",
+            "EndDate": "2026-03-03T10:00:00.000Z",
+            "Id": "x00000000000000002",
+            "IsActive": false,
+            "IsDeleted": false,
+            "IsDirect": false,
+            "LastModifiedById": "r00000000000000002",
+            "LastModifiedDate": "2026-03-02T10:00:00.000Z",
+            "Roles": "Fixture Roles 2",
+            "StartDate": "2026-03-03T10:00:00.000Z",
+            "SystemModstamp": "2026-03-02T10:00:00.000Z"
+          },
+          {
+            "attributes": {
+              "type": "AccountContactRelation"
+            },
+            "AccountContactRelationshipCurrency": "Fixture AccountContactRelationshipCurrency 3",
+            "AccountId": "r00000000000000003",
+            "ContactId": "r00000000000000003",
+            "CreatedById": "r00000000000000003",
+            "CreatedDate": "2026-03-04T10:00:00.000Z",
+            "EndDate": "2026-03-04T10:00:00.000Z",
+            "Id": "x00000000000000003",
+            "IsActive": false,
+            "IsDeleted": false,
+            "IsDirect": false,
+            "LastModifiedById": "r00000000000000003",
+            "LastModifiedDate": "2026-03-03T10:00:00.000Z",
+            "Roles": "Fixture Roles 3",
+            "StartDate": "2026-03-04T10:00:00.000Z",
+            "SystemModstamp": "2026-03-03T10:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/sobjects/AccountContactRole/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "AccountContactRole",
+        "label": "AccountContactRole",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": true,
+        "fields": [
+          {
+            "name": "AccountId",
+            "label": "AccountId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "ContactId",
+            "label": "ContactId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "CreatedById",
+            "label": "CreatedById",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "CreatedDate",
+            "label": "CreatedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Id",
+            "label": "Id",
+            "type": "id",
+            "length": 255,
+            "nillable": false,
+            "defaultedOnCreate": true,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "IsDeleted",
+            "type": "boolean",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsPrimary",
+            "label": "IsPrimary",
+            "type": "boolean",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedById",
+            "label": "LastModifiedById",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedDate",
+            "label": "LastModifiedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Role",
+            "label": "Role",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": true,
+            "updateable": true,
+            "referenceTo": []
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "SystemModstamp",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/queryAll",
+      "Method": "GET",
+      "Match": "FROM AccountContactRole",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "AccountContactRole"
+            },
+            "AccountId": "r00000000000000001",
+            "ContactId": "r00000000000000001",
+            "CreatedById": "r00000000000000001",
+            "CreatedDate": "2026-03-02T10:00:00.000Z",
+            "Id": "x00000000000000001",
+            "IsDeleted": false,
+            "IsPrimary": false,
+            "LastModifiedById": "r00000000000000001",
+            "LastModifiedDate": "2026-03-01T10:00:00.000Z",
+            "Role": "Fixture Role 1",
+            "SystemModstamp": "2026-03-01T10:00:00.000Z"
+          },
+          {
+            "attributes": {
+              "type": "AccountContactRole"
+            },
+            "AccountId": "r00000000000000002",
+            "ContactId": "r00000000000000002",
+            "CreatedById": "r00000000000000002",
+            "CreatedDate": "2026-03-03T10:00:00.000Z",
+            "Id": "x00000000000000002",
+            "IsDeleted": false,
+            "IsPrimary": false,
+            "LastModifiedById": "r00000000000000002",
+            "LastModifiedDate": "2026-03-02T10:00:00.000Z",
+            "Role": "Fixture Role 2",
+            "SystemModstamp": "2026-03-02T10:00:00.000Z"
+          },
+          {
+            "attributes": {
+              "type": "AccountContactRole"
+            },
+            "AccountId": "r00000000000000003",
+            "ContactId": "r00000000000000003",
+            "CreatedById": "r00000000000000003",
+            "CreatedDate": "2026-03-04T10:00:00.000Z",
+            "Id": "x00000000000000003",
+            "IsDeleted": false,
+            "IsPrimary": false,
+            "LastModifiedById": "r00000000000000003",
+            "LastModifiedDate": "2026-03-03T10:00:00.000Z",
+            "Role": "Fixture Role 3",
+            "SystemModstamp": "2026-03-03T10:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/query",
+      "Method": "GET",
+      "Match": "FROM AccountContactRole",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "AccountContactRole"
+            },
+            "AccountId": "r00000000000000001",
+            "ContactId": "r00000000000000001",
+            "CreatedById": "r00000000000000001",
+            "CreatedDate": "2026-03-02T10:00:00.000Z",
+            "Id": "x00000000000000001",
+            "IsDeleted": false,
+            "IsPrimary": false,
+            "LastModifiedById": "r00000000000000001",
+            "LastModifiedDate": "2026-03-01T10:00:00.000Z",
+            "Role": "Fixture Role 1",
+            "SystemModstamp": "2026-03-01T10:00:00.000Z"
+          },
+          {
+            "attributes": {
+              "type": "AccountContactRole"
+            },
+            "AccountId": "r00000000000000002",
+            "ContactId": "r00000000000000002",
+            "CreatedById": "r00000000000000002",
+            "CreatedDate": "2026-03-03T10:00:00.000Z",
+            "Id": "x00000000000000002",
+            "IsDeleted": false,
+            "IsPrimary": false,
+            "LastModifiedById": "r00000000000000002",
+            "LastModifiedDate": "2026-03-02T10:00:00.000Z",
+            "Role": "Fixture Role 2",
+            "SystemModstamp": "2026-03-02T10:00:00.000Z"
+          },
+          {
+            "attributes": {
+              "type": "AccountContactRole"
+            },
+            "AccountId": "r00000000000000003",
+            "ContactId": "r00000000000000003",
+            "CreatedById": "r00000000000000003",
+            "CreatedDate": "2026-03-04T10:00:00.000Z",
+            "Id": "x00000000000000003",
+            "IsDeleted": false,
+            "IsPrimary": false,
+            "LastModifiedById": "r00000000000000003",
+            "LastModifiedDate": "2026-03-03T10:00:00.000Z",
+            "Role": "Fixture Role 3",
+            "SystemModstamp": "2026-03-03T10:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/sobjects/AbnExperiment/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "AbnExperiment",
+        "label": "AbnExperiment",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": true,
+        "fields": [
+          {
+            "name": "CreatedById",
+            "label": "CreatedById",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "CreatedDate",
+            "label": "CreatedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "DataSpaceId",
+            "label": "DataSpaceId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Description",
+            "label": "Description",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "DeveloperName",
+            "label": "DeveloperName",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Id",
+            "label": "Id",
+            "type": "id",
+            "length": 255,
+            "nillable": false,
+            "defaultedOnCreate": true,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "IsDeleted",
+            "type": "boolean",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastAnalyzed",
+            "label": "LastAnalyzed",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedById",
+            "label": "LastModifiedById",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedDate",
+            "label": "LastModifiedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastReferencedDate",
+            "label": "LastReferencedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastViewedDate",
+            "label": "LastViewedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Name",
+            "label": "Name",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "PersonalizationSchemaEnum",
+            "label": "PersonalizationSchemaEnum",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "PersonalizationSchemaId",
+            "label": "PersonalizationSchemaId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "PrimaryMetricId",
+            "label": "PrimaryMetricId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "ProfileDataGraphId",
+            "label": "ProfileDataGraphId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "ScheduleFrequencyInMinutes",
+            "label": "ScheduleFrequencyInMinutes",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Source",
+            "label": "Source",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "SourceRecordId",
+            "label": "SourceRecordId",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "StartedDate",
+            "label": "StartedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "State",
+            "label": "State",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Status",
+            "label": "Status",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "StoppedDate",
+            "label": "StoppedDate",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "SystemModstamp",
+            "type": "datetime",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          },
+          {
+            "name": "WinnerSelectionMode",
+            "label": "WinnerSelectionMode",
+            "type": "string",
+            "length": 255,
+            "nillable": true,
+            "defaultedOnCreate": false,
+            "createable": false,
+            "updateable": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/queryAll",
+      "Method": "GET",
+      "Match": "FROM AbnExperiment",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "AbnExperiment"
+            },
+            "CreatedById": "r00000000000000001",
+            "CreatedDate": "2026-03-02T10:00:00.000Z",
+            "DataSpaceId": "r00000000000000001",
+            "Description": "Fixture Description 1",
+            "DeveloperName": "Fixture DeveloperName 1",
+            "Id": "x00000000000000001",
+            "IsDeleted": false,
+            "LastAnalyzed": "2026-03-02T10:00:00.000Z",
+            "LastModifiedById": "r00000000000000001",
+            "LastModifiedDate": "2026-03-01T10:00:00.000Z",
+            "LastReferencedDate": "2026-03-02T10:00:00.000Z",
+            "LastViewedDate": "2026-03-02T10:00:00.000Z",
+            "Name": "Fixture Name 1",
+            "PersonalizationSchemaEnum": "Fixture PersonalizationSchemaEnum 1",
+            "PersonalizationSchemaId": "r00000000000000001",
+            "PrimaryMetricId": "r00000000000000001",
+            "ProfileDataGraphId": "r00000000000000001",
+            "ScheduleFrequencyInMinutes": "Fixture ScheduleFrequencyInMinutes 1",
+            "Source": "Fixture Source 1",
+            "SourceRecordId": "r00000000000000001",
+            "StartedDate": "2026-03-02T10:00:00.000Z",
+            "State": "Fixture State 1",
+            "Status": "Fixture Status 1",
+            "StoppedDate": "2026-03-02T10:00:00.000Z",
+            "SystemModstamp": "2026-03-01T10:00:00.000Z",
+            "WinnerSelectionMode": "Fixture WinnerSelectionMode 1"
+          },
+          {
+            "attributes": {
+              "type": "AbnExperiment"
+            },
+            "CreatedById": "r00000000000000002",
+            "CreatedDate": "2026-03-03T10:00:00.000Z",
+            "DataSpaceId": "r00000000000000002",
+            "Description": "Fixture Description 2",
+            "DeveloperName": "Fixture DeveloperName 2",
+            "Id": "x00000000000000002",
+            "IsDeleted": false,
+            "LastAnalyzed": "2026-03-03T10:00:00.000Z",
+            "LastModifiedById": "r00000000000000002",
+            "LastModifiedDate": "2026-03-02T10:00:00.000Z",
+            "LastReferencedDate": "2026-03-03T10:00:00.000Z",
+            "LastViewedDate": "2026-03-03T10:00:00.000Z",
+            "Name": "Fixture Name 2",
+            "PersonalizationSchemaEnum": "Fixture PersonalizationSchemaEnum 2",
+            "PersonalizationSchemaId": "r00000000000000002",
+            "PrimaryMetricId": "r00000000000000002",
+            "ProfileDataGraphId": "r00000000000000002",
+            "ScheduleFrequencyInMinutes": "Fixture ScheduleFrequencyInMinutes 2",
+            "Source": "Fixture Source 2",
+            "SourceRecordId": "r00000000000000002",
+            "StartedDate": "2026-03-03T10:00:00.000Z",
+            "State": "Fixture State 2",
+            "Status": "Fixture Status 2",
+            "StoppedDate": "2026-03-03T10:00:00.000Z",
+            "SystemModstamp": "2026-03-02T10:00:00.000Z",
+            "WinnerSelectionMode": "Fixture WinnerSelectionMode 2"
+          },
+          {
+            "attributes": {
+              "type": "AbnExperiment"
+            },
+            "CreatedById": "r00000000000000003",
+            "CreatedDate": "2026-03-04T10:00:00.000Z",
+            "DataSpaceId": "r00000000000000003",
+            "Description": "Fixture Description 3",
+            "DeveloperName": "Fixture DeveloperName 3",
+            "Id": "x00000000000000003",
+            "IsDeleted": false,
+            "LastAnalyzed": "2026-03-04T10:00:00.000Z",
+            "LastModifiedById": "r00000000000000003",
+            "LastModifiedDate": "2026-03-03T10:00:00.000Z",
+            "LastReferencedDate": "2026-03-04T10:00:00.000Z",
+            "LastViewedDate": "2026-03-04T10:00:00.000Z",
+            "Name": "Fixture Name 3",
+            "PersonalizationSchemaEnum": "Fixture PersonalizationSchemaEnum 3",
+            "PersonalizationSchemaId": "r00000000000000003",
+            "PrimaryMetricId": "r00000000000000003",
+            "ProfileDataGraphId": "r00000000000000003",
+            "ScheduleFrequencyInMinutes": "Fixture ScheduleFrequencyInMinutes 3",
+            "Source": "Fixture Source 3",
+            "SourceRecordId": "r00000000000000003",
+            "StartedDate": "2026-03-04T10:00:00.000Z",
+            "State": "Fixture State 3",
+            "Status": "Fixture Status 3",
+            "StoppedDate": "2026-03-04T10:00:00.000Z",
+            "SystemModstamp": "2026-03-03T10:00:00.000Z",
+            "WinnerSelectionMode": "Fixture WinnerSelectionMode 3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/query",
+      "Method": "GET",
+      "Match": "FROM AbnExperiment",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "AbnExperiment"
+            },
+            "CreatedById": "r00000000000000001",
+            "CreatedDate": "2026-03-02T10:00:00.000Z",
+            "DataSpaceId": "r00000000000000001",
+            "Description": "Fixture Description 1",
+            "DeveloperName": "Fixture DeveloperName 1",
+            "Id": "x00000000000000001",
+            "IsDeleted": false,
+            "LastAnalyzed": "2026-03-02T10:00:00.000Z",
+            "LastModifiedById": "r00000000000000001",
+            "LastModifiedDate": "2026-03-01T10:00:00.000Z",
+            "LastReferencedDate": "2026-03-02T10:00:00.000Z",
+            "LastViewedDate": "2026-03-02T10:00:00.000Z",
+            "Name": "Fixture Name 1",
+            "PersonalizationSchemaEnum": "Fixture PersonalizationSchemaEnum 1",
+            "PersonalizationSchemaId": "r00000000000000001",
+            "PrimaryMetricId": "r00000000000000001",
+            "ProfileDataGraphId": "r00000000000000001",
+            "ScheduleFrequencyInMinutes": "Fixture ScheduleFrequencyInMinutes 1",
+            "Source": "Fixture Source 1",
+            "SourceRecordId": "r00000000000000001",
+            "StartedDate": "2026-03-02T10:00:00.000Z",
+            "State": "Fixture State 1",
+            "Status": "Fixture Status 1",
+            "StoppedDate": "2026-03-02T10:00:00.000Z",
+            "SystemModstamp": "2026-03-01T10:00:00.000Z",
+            "WinnerSelectionMode": "Fixture WinnerSelectionMode 1"
+          },
+          {
+            "attributes": {
+              "type": "AbnExperiment"
+            },
+            "CreatedById": "r00000000000000002",
+            "CreatedDate": "2026-03-03T10:00:00.000Z",
+            "DataSpaceId": "r00000000000000002",
+            "Description": "Fixture Description 2",
+            "DeveloperName": "Fixture DeveloperName 2",
+            "Id": "x00000000000000002",
+            "IsDeleted": false,
+            "LastAnalyzed": "2026-03-03T10:00:00.000Z",
+            "LastModifiedById": "r00000000000000002",
+            "LastModifiedDate": "2026-03-02T10:00:00.000Z",
+            "LastReferencedDate": "2026-03-03T10:00:00.000Z",
+            "LastViewedDate": "2026-03-03T10:00:00.000Z",
+            "Name": "Fixture Name 2",
+            "PersonalizationSchemaEnum": "Fixture PersonalizationSchemaEnum 2",
+            "PersonalizationSchemaId": "r00000000000000002",
+            "PrimaryMetricId": "r00000000000000002",
+            "ProfileDataGraphId": "r00000000000000002",
+            "ScheduleFrequencyInMinutes": "Fixture ScheduleFrequencyInMinutes 2",
+            "Source": "Fixture Source 2",
+            "SourceRecordId": "r00000000000000002",
+            "StartedDate": "2026-03-03T10:00:00.000Z",
+            "State": "Fixture State 2",
+            "Status": "Fixture Status 2",
+            "StoppedDate": "2026-03-03T10:00:00.000Z",
+            "SystemModstamp": "2026-03-02T10:00:00.000Z",
+            "WinnerSelectionMode": "Fixture WinnerSelectionMode 2"
+          },
+          {
+            "attributes": {
+              "type": "AbnExperiment"
+            },
+            "CreatedById": "r00000000000000003",
+            "CreatedDate": "2026-03-04T10:00:00.000Z",
+            "DataSpaceId": "r00000000000000003",
+            "Description": "Fixture Description 3",
+            "DeveloperName": "Fixture DeveloperName 3",
+            "Id": "x00000000000000003",
+            "IsDeleted": false,
+            "LastAnalyzed": "2026-03-04T10:00:00.000Z",
+            "LastModifiedById": "r00000000000000003",
+            "LastModifiedDate": "2026-03-03T10:00:00.000Z",
+            "LastReferencedDate": "2026-03-04T10:00:00.000Z",
+            "LastViewedDate": "2026-03-04T10:00:00.000Z",
+            "Name": "Fixture Name 3",
+            "PersonalizationSchemaEnum": "Fixture PersonalizationSchemaEnum 3",
+            "PersonalizationSchemaId": "r00000000000000003",
+            "PrimaryMetricId": "r00000000000000003",
+            "ProfileDataGraphId": "r00000000000000003",
+            "ScheduleFrequencyInMinutes": "Fixture ScheduleFrequencyInMinutes 3",
+            "Source": "Fixture Source 3",
+            "SourceRecordId": "r00000000000000003",
+            "StartedDate": "2026-03-04T10:00:00.000Z",
+            "State": "Fixture State 3",
+            "Status": "Fixture Status 3",
+            "StoppedDate": "2026-03-04T10:00:00.000Z",
+            "SystemModstamp": "2026-03-03T10:00:00.000Z",
+            "WinnerSelectionMode": "Fixture WinnerSelectionMode 3"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "totalSize": 0,
+        "done": true,
+        "records": []
+      }
+    },
+    {
+      "Path": "/services/data/v61.0/queryAll",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "totalSize": 0,
+        "done": true,
+        "records": []
+      }
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "AcceptedEventRelation",
+      "Description": "update AcceptedEventRelation rec1 CreatedById",
+      "Routes": [
+        {
+          "Path": "/services/oauth2/token",
+          "Method": "POST",
+          "Status": 200,
+          "Body": {
+            "access_token": "mock-access-token",
+            "instance_url": "{{MOCK_ORIGIN}}",
+            "token_type": "Bearer",
+            "issued_at": "1700000000000",
+            "id": "https://mock.local/id/00Dxx/005xx"
+          }
+        },
+        {
+          "Path": "/services/data/v61.0/sobjects/AcceptedEventRelation/describe",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "name": "AcceptedEventRelation",
+            "label": "AcceptedEventRelation",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "fields": [
+              {
+                "name": "CreatedById",
+                "label": "CreatedById",
+                "type": "string",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "CreatedDate",
+                "label": "CreatedDate",
+                "type": "datetime",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "EventId",
+                "label": "EventId",
+                "type": "string",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "Id",
+                "label": "Id",
+                "type": "id",
+                "length": 255,
+                "nillable": false,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "IsDeleted",
+                "label": "IsDeleted",
+                "type": "boolean",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "LastModifiedById",
+                "label": "LastModifiedById",
+                "type": "string",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "LastModifiedDate",
+                "label": "LastModifiedDate",
+                "type": "datetime",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "RelationId",
+                "label": "RelationId",
+                "type": "string",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "RespondedDate",
+                "label": "RespondedDate",
+                "type": "datetime",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "Response",
+                "label": "Response",
+                "type": "string",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "SystemModstamp",
+                "label": "SystemModstamp",
+                "type": "datetime",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              },
+              {
+                "name": "Type",
+                "label": "Type",
+                "type": "string",
+                "length": 255,
+                "nillable": true,
+                "createable": false,
+                "updateable": false,
+                "referenceTo": []
+              }
+            ]
+          }
+        },
+        {
+          "Path": "/services/data/v61.0/queryAll",
+          "Method": "GET",
+          "Match": "FROM AcceptedEventRelation",
+          "Status": 200,
+          "Body": {
+            "totalSize": 1,
+            "done": true,
+            "records": [
+              {
+                "attributes": {
+                  "type": "AcceptedEventRelation"
+                },
+                "CreatedById": "DELTA-UPDATED",
+                "CreatedDate": "2026-03-02T10:00:00.000Z",
+                "EventId": "r00000000000000001",
+                "Id": "x00000000000000001",
+                "IsDeleted": false,
+                "LastModifiedById": "r00000000000000001",
+                "LastModifiedDate": "2026-04-01T10:00:00.000Z",
+                "RelationId": "r00000000000000001",
+                "RespondedDate": "2026-03-02T10:00:00.000Z",
+                "Response": "Fixture Response 1",
+                "SystemModstamp": "2026-04-01T10:00:00.000Z",
+                "Type": "Fixture Type 1"
+              }
+            ]
+          }
+        }
+      ],
+      "ExpectedPresent": [
+        "x00000000000000001",
+        "x00000000000000002",
+        "x00000000000000003"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "x00000000000000001",
+          "Field": "CreatedById",
+          "Value": "DELTA-UPDATED"
+        }
+      ]
+    }
+  ]
+}

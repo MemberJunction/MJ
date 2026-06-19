@@ -1,0 +1,582 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "BaseURL": "http://127.0.0.1:9",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "RefreshToken": "mock-refresh-token",
+    "AdminEmail": "mock-admin@example.com",
+    "Token": "mock-token",
+    "AccessToken": "mock-token",
+    "apiKey": "mock-token",
+    "APIKey": "mock-token",
+    "ApiKey": "mock-token",
+    "TokenURL": "http://127.0.0.1:9/token",
+    "TokenEndpoint": "http://127.0.0.1:9/token",
+    "TokenUrl": "http://127.0.0.1:9/token",
+    "LoginUrl": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "InstanceUrl": "http://127.0.0.1:9",
+    "HostBaseURL": "http://127.0.0.1:9",
+    "AccountID": "mock-account",
+    "Subdomain": "mock",
+    "Scope": "all",
+    "Scopes": "all",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "ClientKey": "mock-client-key",
+    "applicationId": "mock-app-id",
+    "applicationSecret": "mock-app-secret",
+    "AuthFlow": "client_credentials",
+    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEugIBADANBgkqhkiG9w0BAQEFAASCBKQwggSgAgEAAoIBAQCyPBgCLlUxqeTm\nJTljdSIOBRBt0SBP3QB+YkdGUag+7OlR7u/hwSO460GkjP9+5N+SuTXtF6vbnAZn\n+DLRepm+G8QU4qR28wiSw/e196xdJgalGGs4XZ1nMPpXckRyhbuOzpC5+J6U4Qy2\nnl09o72E/9hm6XuSD9oEfo3iayRBGDmrpUCwGJywWM2kXUuXz4uy0Sy+XVl+lujT\neKhbwu8A35I1Nc7kh1D/YohXrXJxsHcSQtoNZV4D/Dt6uAR9/LKcolH6xUUvuMLF\nFQvI4l4Lnix/lkSL1TD9Qktef+LQlAAPZ2o9wxDnwvRY+5nTrkamBchJN4N7ZdEz\nUDgPZNDZAgMBAAECgf8VUlsM574JUumvHoTfAQQx6Skt+faDl0yX0en034/g9zZy\nNsM7nn9Hf906ciOeaoLUapOo6UwF2YRqq6ZoqOH7fBbY6MQD9s7vv8HCYv6bphDl\nbyZkd858qb9I9sJ5cMYfL1bg6H0QElwS/J7q4MurPXAF36iIsJzELN+MVoTfxHLe\n28IQLW1r7+dxZ52So0VspBE736bHrRenRcrJaPyH5cCj1jWgMm6GKiAh2TSa+RFP\nhUR0Nrb/HALbcgH02tVjW62boSKzQ06NSNA1XCSb/ChxHi+YAD4KsgK9BPF9gB5P\n1IgGUQmvr3dz0Tzf5tlfZ70cN5FN6v3y5Gg96nECgYEA5tdQYFjO081PyX0xq3lH\nWxsBfr7irU7e4FWymS5LFTqg7G3ei8M1DPIZdpMuQGz+nbNcGIniDeQCJOb9OX6+\nBlxdppOOk3Hms8OU7exJ7WhKdAGuMFz5xj8eKw7zw+g96nZlpLNvki+TeJeJs40V\nYHglR8adGJCKiDrGG26AXOkCgYEAxakDWB1QIet7UnpFQkQe6hC1oGqNZOTh2dnO\n36kqVZDhX3UXvKbOIMRh8PwYD+w3MegXNsFR1jRBE7iqKNBUR//44gWOhTCQK7ij\nuZx0EMOxne+Vgje+fCYbVBCaRois8phkQg0qOLAMxMqQs4+eV95trU/F3KHVrE4k\n6mXEnnECgYAI4E6e5ctOKZ7fyIiYZ1lvD2LHVN+yek3nomPzr+wDLPXzIWZlSWRI\n0yZXgOFOaOKBfdwUtXiTwCi08ozaIR19cR/Iv/PDh6WvU93uKB/PmSsDuuzPv0N7\ndAHc9f45kjyPP245Hw0zOdEZ2fnZhZtE0lncoK55u1UYV+o2M9GLwQKBgFpARcqh\n98jFINYUBjOvrv3pC0Vn4Y/EAmvaS99L+ox/Tqiral81OsEzahUCxmnezYT4GEFk\nG93WljBPDUL9fL4zXoy1RNIDzpBoCjnh+gz9jcgzcOy4Tz2YmLnVqtux5GYQtxaB\ntFmV6P6iD1gtp3svkJyl5A5NxqaaN7jfJtvBAoGAXZO8FX6i7NS67xv14o2BZone\n6auQKostlh5z7Jph3QPZwMIiw1Bt4TtxqyCOFNziZoNmioENMpG2FZ1A8KRhrn5j\nHdTKKhtKxi/254heVzygutjQhbiJBHajOSC+P92ys7gF4SsXBGscj8lxTHIAT7x8\nLtZh8zw3qHmqaQODOzg=\n-----END PRIVATE KEY-----\n",
+    "ConsumerKey": "mock-consumer",
+    "ConsumerSecret": "mock-consumer-secret",
+    "TokenId": "mock-token-id",
+    "TokenSecret": "mock-token-secret",
+    "TokenID": "mock-token-id"
+  },
+  "Routes": [
+    {
+      "Path": "/budget-items",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "budgetVersion": "[]",
+          "category": "[]",
+          "code": "val-1",
+          "created": "val-1",
+          "createdBy": "val-1",
+          "deleted": "val-1",
+          "event": "val-1",
+          "id": "account-budget-item-list-response.json-1",
+          "lastModified": "2026-06-11T00:00:00Z",
+          "lastModifiedBy": "val-1",
+          "name": "val-1",
+          "rfp": "val-1",
+          "subCategory": "[]"
+        },
+        {
+          "budgetVersion": "[]",
+          "category": "[]",
+          "code": "val-2",
+          "created": "val-2",
+          "createdBy": "val-2",
+          "deleted": "val-2",
+          "event": "val-2",
+          "id": "account-budget-item-list-response.json-2",
+          "lastModified": "2026-06-12T00:00:00Z",
+          "lastModifiedBy": "val-2",
+          "name": "val-2",
+          "rfp": "val-2",
+          "subCategory": "[]"
+        },
+        {
+          "budgetVersion": "[]",
+          "category": "[]",
+          "code": "val-3",
+          "created": "val-3",
+          "createdBy": "val-3",
+          "deleted": "val-3",
+          "event": "val-3",
+          "id": "account-budget-item-list-response.json-3",
+          "lastModified": "2026-06-13T00:00:00Z",
+          "lastModifiedBy": "val-3",
+          "name": "val-3",
+          "rfp": "val-3",
+          "subCategory": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/attendees/activities",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "attendee": "val-1",
+          "created": "val-1",
+          "data": "[]",
+          "event": "[]",
+          "id": "activity.json-1",
+          "name": "val-1",
+          "time": "val-1",
+          "type": "val-1"
+        },
+        {
+          "attendee": "val-2",
+          "created": "val-2",
+          "data": "[]",
+          "event": "[]",
+          "id": "activity.json-2",
+          "name": "val-2",
+          "time": "val-2",
+          "type": "val-2"
+        },
+        {
+          "attendee": "val-3",
+          "created": "val-3",
+          "data": "[]",
+          "event": "[]",
+          "id": "activity.json-3",
+          "name": "val-3",
+          "time": "val-3",
+          "type": "val-3"
+        }
+      ]
+    },
+    {
+      "Path": "/appointment-attendees",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "appointmentEvent": "val-1",
+          "code": "val-1",
+          "contact": "val-1",
+          "created": "val-1",
+          "deleted": "val-1",
+          "id": "appointment-attendee-1",
+          "modified": "2026-06-11T00:00:00Z",
+          "registration": "[]"
+        },
+        {
+          "appointmentEvent": "val-2",
+          "code": "val-2",
+          "contact": "val-2",
+          "created": "val-2",
+          "deleted": "val-2",
+          "id": "appointment-attendee-2",
+          "modified": "2026-06-12T00:00:00Z",
+          "registration": "[]"
+        },
+        {
+          "appointmentEvent": "val-3",
+          "code": "val-3",
+          "contact": "val-3",
+          "created": "val-3",
+          "deleted": "val-3",
+          "id": "appointment-attendee-3",
+          "modified": "2026-06-13T00:00:00Z",
+          "registration": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/appointment-availability-times",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "appointmentEvent": "val-1",
+          "attendee": "[]",
+          "created": "val-1",
+          "deleted": "val-1",
+          "id": "appointment-availability-1",
+          "lastModified": "2026-06-11T00:00:00Z",
+          "timeRanges": "[]"
+        },
+        {
+          "appointmentEvent": "val-2",
+          "attendee": "[]",
+          "created": "val-2",
+          "deleted": "val-2",
+          "id": "appointment-availability-2",
+          "lastModified": "2026-06-12T00:00:00Z",
+          "timeRanges": "[]"
+        },
+        {
+          "appointmentEvent": "val-3",
+          "attendee": "[]",
+          "created": "val-3",
+          "deleted": "val-3",
+          "id": "appointment-availability-3",
+          "lastModified": "2026-06-13T00:00:00Z",
+          "timeRanges": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/appointment-events",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "apptEventType": "val-1",
+          "archived": "val-1",
+          "code": "val-1",
+          "created": "val-1",
+          "createdBy": "val-1",
+          "defaultLocale": "val-1",
+          "deleted": "val-1",
+          "description": "val-1",
+          "end": "val-1",
+          "event": "val-1",
+          "id": "appointment-event-1",
+          "lastModified": "2026-06-11T00:00:00Z",
+          "lastModifiedBy": "val-1",
+          "phone": "val-1",
+          "planners": "[]",
+          "start": "val-1",
+          "status": "val-1",
+          "timezone": "val-1",
+          "title": "val-1",
+          "venues": "[]"
+        },
+        {
+          "apptEventType": "val-2",
+          "archived": "val-2",
+          "code": "val-2",
+          "created": "val-2",
+          "createdBy": "val-2",
+          "defaultLocale": "val-2",
+          "deleted": "val-2",
+          "description": "val-2",
+          "end": "val-2",
+          "event": "val-2",
+          "id": "appointment-event-2",
+          "lastModified": "2026-06-12T00:00:00Z",
+          "lastModifiedBy": "val-2",
+          "phone": "val-2",
+          "planners": "[]",
+          "start": "val-2",
+          "status": "val-2",
+          "timezone": "val-2",
+          "title": "val-2",
+          "venues": "[]"
+        },
+        {
+          "apptEventType": "val-3",
+          "archived": "val-3",
+          "code": "val-3",
+          "created": "val-3",
+          "createdBy": "val-3",
+          "defaultLocale": "val-3",
+          "deleted": "val-3",
+          "description": "val-3",
+          "end": "val-3",
+          "event": "val-3",
+          "id": "appointment-event-3",
+          "lastModified": "2026-06-13T00:00:00Z",
+          "lastModifiedBy": "val-3",
+          "phone": "val-3",
+          "planners": "[]",
+          "start": "val-3",
+          "status": "val-3",
+          "timezone": "val-3",
+          "title": "val-3",
+          "venues": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/appointments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "appointmentEvent": "val-1",
+          "autoAcceptAttendees": "val-1",
+          "code": "val-1",
+          "created": "val-1",
+          "createdBy": "val-1",
+          "deleted": "val-1",
+          "description": "val-1",
+          "end": "val-1",
+          "enforceScheduleRules": "val-1",
+          "id": "appointment-with-questions-1",
+          "lastModified": "2026-06-11T00:00:00Z",
+          "lastModifiedBy": "val-1",
+          "location": "[]",
+          "modified": "val-1",
+          "name": "val-1",
+          "participants": "[]",
+          "questions": "[]",
+          "start": "val-1",
+          "status": "val-1",
+          "type": "[]"
+        },
+        {
+          "appointmentEvent": "val-2",
+          "autoAcceptAttendees": "val-2",
+          "code": "val-2",
+          "created": "val-2",
+          "createdBy": "val-2",
+          "deleted": "val-2",
+          "description": "val-2",
+          "end": "val-2",
+          "enforceScheduleRules": "val-2",
+          "id": "appointment-with-questions-2",
+          "lastModified": "2026-06-12T00:00:00Z",
+          "lastModifiedBy": "val-2",
+          "location": "[]",
+          "modified": "val-2",
+          "name": "val-2",
+          "participants": "[]",
+          "questions": "[]",
+          "start": "val-2",
+          "status": "val-2",
+          "type": "[]"
+        },
+        {
+          "appointmentEvent": "val-3",
+          "autoAcceptAttendees": "val-3",
+          "code": "val-3",
+          "created": "val-3",
+          "createdBy": "val-3",
+          "deleted": "val-3",
+          "description": "val-3",
+          "end": "val-3",
+          "enforceScheduleRules": "val-3",
+          "id": "appointment-with-questions-3",
+          "lastModified": "2026-06-13T00:00:00Z",
+          "lastModifiedBy": "val-3",
+          "location": "[]",
+          "modified": "val-3",
+          "name": "val-3",
+          "participants": "[]",
+          "questions": "[]",
+          "start": "val-3",
+          "status": "val-3",
+          "type": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/attendees",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "administrator": "[]",
+          "admissionItem": "[]",
+          "allowAppointmentPushNotifications": "val-1",
+          "allowPushNotifications": "val-1",
+          "answers": "[]",
+          "appointmentGroups": "[]",
+          "attendeeLastModified": "val-1",
+          "bio": "val-1",
+          "checkedIn": "val-1",
+          "checkIn": "val-1",
+          "checkOut": "val-1",
+          "confirmationNumber": "val-1",
+          "contact": "[]",
+          "created": "val-1",
+          "createdBy": "val-1",
+          "credit": "val-1",
+          "deletedGuest": "val-1",
+          "duration": "val-1",
+          "event": "[]",
+          "externalReferences": "[]",
+          "group": "[]",
+          "guest": "val-1",
+          "id": "attendee-1",
+          "invitationList": "val-1",
+          "invitedBy": "val-1",
+          "lastModified": "2026-06-11T00:00:00Z",
+          "lastModifiedBy": "val-1",
+          "note": "val-1",
+          "primaryId": "val-1",
+          "questions": "[]",
+          "referenceId": "val-1",
+          "registeredAt": "val-1",
+          "registrationCancelledAt": "val-1",
+          "registrationLastModified": "val-1",
+          "registrationPath": "[]",
+          "registrationType": "[]",
+          "responseMethod": "val-1",
+          "showPopupNotification": "val-1",
+          "status": "val-1",
+          "testRecord": "val-1",
+          "unsubscribed": "val-1",
+          "visibility": "val-1",
+          "webLinks": "[]",
+          "websiteUrl": "val-1"
+        },
+        {
+          "administrator": "[]",
+          "admissionItem": "[]",
+          "allowAppointmentPushNotifications": "val-2",
+          "allowPushNotifications": "val-2",
+          "answers": "[]",
+          "appointmentGroups": "[]",
+          "attendeeLastModified": "val-2",
+          "bio": "val-2",
+          "checkedIn": "val-2",
+          "checkIn": "val-2",
+          "checkOut": "val-2",
+          "confirmationNumber": "val-2",
+          "contact": "[]",
+          "created": "val-2",
+          "createdBy": "val-2",
+          "credit": "val-2",
+          "deletedGuest": "val-2",
+          "duration": "val-2",
+          "event": "[]",
+          "externalReferences": "[]",
+          "group": "[]",
+          "guest": "val-2",
+          "id": "attendee-2",
+          "invitationList": "val-2",
+          "invitedBy": "val-2",
+          "lastModified": "2026-06-12T00:00:00Z",
+          "lastModifiedBy": "val-2",
+          "note": "val-2",
+          "primaryId": "val-2",
+          "questions": "[]",
+          "referenceId": "val-2",
+          "registeredAt": "val-2",
+          "registrationCancelledAt": "val-2",
+          "registrationLastModified": "val-2",
+          "registrationPath": "[]",
+          "registrationType": "[]",
+          "responseMethod": "val-2",
+          "showPopupNotification": "val-2",
+          "status": "val-2",
+          "testRecord": "val-2",
+          "unsubscribed": "val-2",
+          "visibility": "val-2",
+          "webLinks": "[]",
+          "websiteUrl": "val-2"
+        },
+        {
+          "administrator": "[]",
+          "admissionItem": "[]",
+          "allowAppointmentPushNotifications": "val-3",
+          "allowPushNotifications": "val-3",
+          "answers": "[]",
+          "appointmentGroups": "[]",
+          "attendeeLastModified": "val-3",
+          "bio": "val-3",
+          "checkedIn": "val-3",
+          "checkIn": "val-3",
+          "checkOut": "val-3",
+          "confirmationNumber": "val-3",
+          "contact": "[]",
+          "created": "val-3",
+          "createdBy": "val-3",
+          "credit": "val-3",
+          "deletedGuest": "val-3",
+          "duration": "val-3",
+          "event": "[]",
+          "externalReferences": "[]",
+          "group": "[]",
+          "guest": "val-3",
+          "id": "attendee-3",
+          "invitationList": "val-3",
+          "invitedBy": "val-3",
+          "lastModified": "2026-06-13T00:00:00Z",
+          "lastModifiedBy": "val-3",
+          "note": "val-3",
+          "primaryId": "val-3",
+          "questions": "[]",
+          "referenceId": "val-3",
+          "registeredAt": "val-3",
+          "registrationCancelledAt": "val-3",
+          "registrationLastModified": "val-3",
+          "registrationPath": "[]",
+          "registrationType": "[]",
+          "responseMethod": "val-3",
+          "showPopupNotification": "val-3",
+          "status": "val-3",
+          "testRecord": "val-3",
+          "unsubscribed": "val-3",
+          "visibility": "val-3",
+          "webLinks": "[]",
+          "websiteUrl": "val-3"
+        }
+      ]
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "account-budget-item-list-response.json",
+      "OrderingField": "lastModified"
+    },
+    {
+      "Name": "activity.json",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "appointment-attendee",
+      "OrderingField": "modified"
+    },
+    {
+      "Name": "appointment-availability",
+      "OrderingField": "lastModified"
+    },
+    {
+      "Name": "appointment-event",
+      "OrderingField": "lastModified"
+    },
+    {
+      "Name": "appointment-with-questions",
+      "OrderingField": "lastModified"
+    },
+    {
+      "Name": "attendee",
+      "OrderingField": "lastModified"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "account-budget-item-list-response.json",
+      "Routes": [
+        {
+          "Path": "/budget-items",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            {
+              "budgetVersion": "[]",
+              "category": "[]",
+              "code": "val-1",
+              "created": "updated-delta",
+              "createdBy": "val-1",
+              "deleted": "val-1",
+              "event": "val-1",
+              "id": "account-budget-item-list-response.json-1",
+              "lastModified": "2026-06-11T00:00:00Z",
+              "lastModifiedBy": "val-1",
+              "name": "val-1",
+              "rfp": "val-1",
+              "subCategory": "[]"
+            },
+            {
+              "budgetVersion": "[]",
+              "category": "[]",
+              "code": "val-2",
+              "created": "val-2",
+              "createdBy": "val-2",
+              "deleted": "val-2",
+              "event": "val-2",
+              "id": "account-budget-item-list-response.json-2",
+              "lastModified": "2026-06-12T00:00:00Z",
+              "lastModifiedBy": "val-2",
+              "name": "val-2",
+              "rfp": "val-2",
+              "subCategory": "[]"
+            }
+          ]
+        }
+      ],
+      "ExpectedPresent": [
+        "account-budget-item-list-response.json-1",
+        "account-budget-item-list-response.json-2"
+      ],
+      "ExpectedDeletes": [
+        "account-budget-item-list-response.json-3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "account-budget-item-list-response.json-1",
+          "Field": "created",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ]
+}

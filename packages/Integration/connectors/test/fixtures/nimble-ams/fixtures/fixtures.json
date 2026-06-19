@@ -1,0 +1,1318 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "LoginURL",
+  "Configuration": {
+    "LoginURL": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "InstanceUrl": "http://127.0.0.1:9",
+    "ClientID": "fixture-client-id",
+    "clientId": "fixture-client-id",
+    "ClientSecret": "fixture-client-secret",
+    "clientSecret": "fixture-client-secret",
+    "SalesforceAPIVersion": "59.0",
+    "ApiVersion": "59.0"
+  },
+  "Objects": [
+    {
+      "Name": "Account",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "Contact",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Membership__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Event__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Donation__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Order__c",
+      "OrderingField": "LastModifiedDate"
+    }
+  ],
+  "DiscoverySupported": true,
+  "Routes": [
+    {
+      "_comment": "AUTH — Salesforce OAuth2 token endpoint. Consumed by NimbleAMSConnector.ObtainToken (line 307): POST ${LoginURL}/services/oauth2/token. instance_url drives every subsequent call via SFDataBase().",
+      "Path": "/services/oauth2/token",
+      "Method": "POST",
+      "Status": 200,
+      "Body": {
+        "access_token": "mock-salesforce-token",
+        "instance_url": "{{MOCK_ORIGIN}}",
+        "token_type": "Bearer",
+        "issued_at": "1780000000000",
+        "id": "https://login.salesforce.com/id/00Dxx000001FAKE/005xx000001FAKE"
+      }
+    },
+    {
+      "_comment": "DISCOVER OBJECTS — NimbleAMSConnector.DiscoverObjects (line 212): GET ${SFDataBase}/sobjects/ scoped to NU__ / NUINT__ + Account / Contact via IsNimbleScopedObject.",
+      "Path": "/services/data/v59.0/sobjects/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "encoding": "UTF-8",
+        "maxBatchSize": 200,
+        "sobjects": [
+          {
+            "name": "Account",
+            "label": "Account",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true
+          },
+          {
+            "name": "Contact",
+            "label": "Contact",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true
+          },
+          {
+            "name": "NU__Membership__c",
+            "label": "Membership",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": false
+          },
+          {
+            "name": "NU__Event__c",
+            "label": "Event",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": false
+          },
+          {
+            "name": "NU__Donation__c",
+            "label": "Donation",
+            "queryable": true,
+            "createable": false,
+            "updateable": false,
+            "deletable": false
+          },
+          {
+            "name": "NU__Order__c",
+            "label": "Order",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": false
+          },
+          {
+            "name": "NU__Product__c",
+            "label": "Product",
+            "queryable": true,
+            "createable": false,
+            "updateable": false,
+            "deletable": false
+          },
+          {
+            "name": "NU__Committee__c",
+            "label": "Committee",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": false
+          }
+        ]
+      }
+    },
+    {
+      "_comment": "DISCOVER FIELDS — NimbleAMSConnector.DiscoverFields (line 237): GET /sobjects/{name}/describe. Each response mirrors the deployed IOF set from __mj.IntegrationObjectField. IsPrimaryKey = (type=='id') per connector line 252.",
+      "Path": "/services/data/v59.0/sobjects/Account/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "Account",
+        "label": "Account",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": true,
+        "fields": [
+          {
+            "name": "Id",
+            "label": "Record ID",
+            "type": "id",
+            "length": 18,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": true,
+            "referenceTo": []
+          },
+          {
+            "name": "Name",
+            "label": "Account Name",
+            "type": "string",
+            "length": 255,
+            "nillable": false,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "CreatedDate",
+            "label": "Created Date",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedDate",
+            "label": "Last Modified",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "System Modstamp",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "Deleted",
+            "type": "boolean",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Type",
+            "label": "Account Type",
+            "type": "picklist",
+            "length": 255,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "BillingCity",
+            "label": "Billing City",
+            "type": "string",
+            "length": 40,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/sobjects/Contact/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "Contact",
+        "label": "Contact",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": true,
+        "fields": [
+          {
+            "name": "Id",
+            "label": "Record ID",
+            "type": "id",
+            "length": 18,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": true,
+            "referenceTo": []
+          },
+          {
+            "name": "FirstName",
+            "label": "First Name",
+            "type": "string",
+            "length": 40,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastName",
+            "label": "Last Name",
+            "type": "string",
+            "length": 80,
+            "nillable": false,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "Email",
+            "label": "Email",
+            "type": "email",
+            "length": 80,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "AccountId",
+            "label": "Account ID",
+            "type": "reference",
+            "length": 18,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": [
+              "Account"
+            ]
+          },
+          {
+            "name": "CreatedDate",
+            "label": "Created Date",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedDate",
+            "label": "Last Modified",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "System Modstamp",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "Deleted",
+            "type": "boolean",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/sobjects/NU__Membership__c/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "NU__Membership__c",
+        "label": "Membership",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": false,
+        "fields": [
+          {
+            "name": "Id",
+            "label": "Record ID",
+            "type": "id",
+            "length": 18,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": true,
+            "referenceTo": []
+          },
+          {
+            "name": "Name",
+            "label": "Membership Name",
+            "type": "string",
+            "length": 80,
+            "nillable": false,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "NU__Account__c",
+            "label": "Account",
+            "type": "reference",
+            "length": 18,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": [
+              "Account"
+            ]
+          },
+          {
+            "name": "NU__Status__c",
+            "label": "Status",
+            "type": "picklist",
+            "length": 255,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "NU__Expiration_Date__c",
+            "label": "Expiration Date",
+            "type": "date",
+            "length": 0,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "CreatedDate",
+            "label": "Created Date",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedDate",
+            "label": "Last Modified",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "System Modstamp",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "Deleted",
+            "type": "boolean",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/sobjects/NU__Event__c/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "NU__Event__c",
+        "label": "Event",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": false,
+        "fields": [
+          {
+            "name": "Id",
+            "label": "Record ID",
+            "type": "id",
+            "length": 18,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": true,
+            "referenceTo": []
+          },
+          {
+            "name": "Name",
+            "label": "Event Name",
+            "type": "string",
+            "length": 255,
+            "nillable": false,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "NU__Status__c",
+            "label": "Status",
+            "type": "picklist",
+            "length": 255,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "NU__Start_Date__c",
+            "label": "Start Date",
+            "type": "datetime",
+            "length": 0,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "CreatedDate",
+            "label": "Created Date",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedDate",
+            "label": "Last Modified",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "System Modstamp",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "Deleted",
+            "type": "boolean",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/sobjects/NU__Donation__c/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "NU__Donation__c",
+        "label": "Donation",
+        "queryable": true,
+        "createable": false,
+        "updateable": false,
+        "deletable": false,
+        "fields": [
+          {
+            "name": "Id",
+            "label": "Record ID",
+            "type": "id",
+            "length": 18,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": true,
+            "referenceTo": []
+          },
+          {
+            "name": "Name",
+            "label": "Donation Name",
+            "type": "string",
+            "length": 80,
+            "nillable": true,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "NU__Amount__c",
+            "label": "Amount",
+            "type": "currency",
+            "length": 0,
+            "nillable": true,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "NU__Account__c",
+            "label": "Account",
+            "type": "reference",
+            "length": 18,
+            "nillable": true,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": [
+              "Account"
+            ]
+          },
+          {
+            "name": "CreatedDate",
+            "label": "Created Date",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedDate",
+            "label": "Last Modified",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "System Modstamp",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "Deleted",
+            "type": "boolean",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/sobjects/NU__Order__c/describe",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "name": "NU__Order__c",
+        "label": "Order",
+        "queryable": true,
+        "createable": true,
+        "updateable": true,
+        "deletable": false,
+        "fields": [
+          {
+            "name": "Id",
+            "label": "Record ID",
+            "type": "id",
+            "length": 18,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": true,
+            "referenceTo": []
+          },
+          {
+            "name": "Name",
+            "label": "Order Name",
+            "type": "string",
+            "length": 80,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "NU__Account__c",
+            "label": "Account",
+            "type": "reference",
+            "length": 18,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": [
+              "Account"
+            ]
+          },
+          {
+            "name": "NU__Total__c",
+            "label": "Total",
+            "type": "currency",
+            "length": 0,
+            "nillable": true,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "NU__Status__c",
+            "label": "Status",
+            "type": "picklist",
+            "length": 255,
+            "nillable": true,
+            "createable": true,
+            "updateable": true,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "CreatedDate",
+            "label": "Created Date",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "LastModifiedDate",
+            "label": "Last Modified",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "SystemModstamp",
+            "label": "System Modstamp",
+            "type": "datetime",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          },
+          {
+            "name": "IsDeleted",
+            "label": "Deleted",
+            "type": "boolean",
+            "length": 0,
+            "nillable": false,
+            "createable": false,
+            "updateable": false,
+            "unique": false,
+            "referenceTo": []
+          }
+        ]
+      }
+    },
+    {
+      "_comment": "SOQL QUERY — NimbleAMSConnector.FetchSOQL (line 471): GET ${SFDataBase}/query?q=SELECT+FIELDS(ALL)+FROM+Account... Route matching: matchRoute() exact-path + longest-prefix; Match field filters by query-string substring (mock-vendor-server.mjs line 151). Each object gets a distinct route sharing /services/data/v59.0/query, differentiated by Match:'FROM Account'.",
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Match": "FROM Account",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "Account",
+              "url": "/services/data/v59.0/sobjects/Account/001NIMBLE000001"
+            },
+            "Id": "001NIMBLE000001",
+            "Name": "<scrubbed-name-1>",
+            "Type": "Organization",
+            "BillingCity": "Example",
+            "CreatedDate": "2026-01-10T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
+            "SystemModstamp": "2026-06-11T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "Account",
+              "url": "/services/data/v59.0/sobjects/Account/001NIMBLE000002"
+            },
+            "Id": "001NIMBLE000002",
+            "Name": "<scrubbed-name-2>",
+            "Type": "Individual",
+            "BillingCity": "Example",
+            "CreatedDate": "2026-02-15T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
+            "SystemModstamp": "2026-06-12T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "Account",
+              "url": "/services/data/v59.0/sobjects/Account/001NIMBLE000003"
+            },
+            "Id": "001NIMBLE000003",
+            "Name": "<scrubbed-name-3>",
+            "Type": "Organization",
+            "BillingCity": "Example",
+            "CreatedDate": "2026-03-20T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
+            "SystemModstamp": "2026-06-13T00:00:00.000Z",
+            "IsDeleted": false
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Match": "FROM Contact",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "Contact",
+              "url": "/services/data/v59.0/sobjects/Contact/003NIMBLE000001"
+            },
+            "Id": "003NIMBLE000001",
+            "FirstName": "<scrubbed-name-1>",
+            "LastName": "<scrubbed-name-1>",
+            "Email": "example+1@example.com",
+            "AccountId": "001NIMBLE000001",
+            "CreatedDate": "2026-01-10T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
+            "SystemModstamp": "2026-06-11T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "Contact",
+              "url": "/services/data/v59.0/sobjects/Contact/003NIMBLE000002"
+            },
+            "Id": "003NIMBLE000002",
+            "FirstName": "<scrubbed-name-2>",
+            "LastName": "<scrubbed-name-2>",
+            "Email": "example+2@example.com",
+            "AccountId": "001NIMBLE000001",
+            "CreatedDate": "2026-02-15T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
+            "SystemModstamp": "2026-06-12T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "Contact",
+              "url": "/services/data/v59.0/sobjects/Contact/003NIMBLE000003"
+            },
+            "Id": "003NIMBLE000003",
+            "FirstName": "<scrubbed-name-3>",
+            "LastName": "<scrubbed-name-3>",
+            "Email": "example+3@example.com",
+            "AccountId": "001NIMBLE000002",
+            "CreatedDate": "2026-03-20T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
+            "SystemModstamp": "2026-06-13T00:00:00.000Z",
+            "IsDeleted": false
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Match": "FROM NU__Membership__c",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "NU__Membership__c",
+              "url": "/services/data/v59.0/sobjects/NU__Membership__c/mem0NIMBLE0001"
+            },
+            "Id": "mem0NIMBLE0001",
+            "Name": "Membership-001",
+            "NU__Account__c": "001NIMBLE000001",
+            "NU__Status__c": "Active",
+            "NU__Expiration_Date__c": "2027-01-01",
+            "CreatedDate": "2026-01-15T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
+            "SystemModstamp": "2026-06-11T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "NU__Membership__c",
+              "url": "/services/data/v59.0/sobjects/NU__Membership__c/mem0NIMBLE0002"
+            },
+            "Id": "mem0NIMBLE0002",
+            "Name": "Membership-002",
+            "NU__Account__c": "001NIMBLE000002",
+            "NU__Status__c": "Active",
+            "NU__Expiration_Date__c": "2026-12-31",
+            "CreatedDate": "2026-02-15T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
+            "SystemModstamp": "2026-06-12T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "NU__Membership__c",
+              "url": "/services/data/v59.0/sobjects/NU__Membership__c/mem0NIMBLE0003"
+            },
+            "Id": "mem0NIMBLE0003",
+            "Name": "Membership-003",
+            "NU__Account__c": "001NIMBLE000003",
+            "NU__Status__c": "Lapsed",
+            "NU__Expiration_Date__c": "2025-12-31",
+            "CreatedDate": "2026-03-01T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
+            "SystemModstamp": "2026-06-13T00:00:00.000Z",
+            "IsDeleted": false
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Match": "FROM NU__Event__c",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "NU__Event__c",
+              "url": "/services/data/v59.0/sobjects/NU__Event__c/evt0NIMBLE0001"
+            },
+            "Id": "evt0NIMBLE0001",
+            "Name": "Annual Conference 2026",
+            "NU__Status__c": "Active",
+            "NU__Start_Date__c": "2026-09-15T09:00:00.000Z",
+            "CreatedDate": "2026-01-10T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
+            "SystemModstamp": "2026-06-11T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "NU__Event__c",
+              "url": "/services/data/v59.0/sobjects/NU__Event__c/evt0NIMBLE0002"
+            },
+            "Id": "evt0NIMBLE0002",
+            "Name": "Spring Workshop 2026",
+            "NU__Status__c": "Active",
+            "NU__Start_Date__c": "2026-04-20T09:00:00.000Z",
+            "CreatedDate": "2026-02-01T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
+            "SystemModstamp": "2026-06-12T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "NU__Event__c",
+              "url": "/services/data/v59.0/sobjects/NU__Event__c/evt0NIMBLE0003"
+            },
+            "Id": "evt0NIMBLE0003",
+            "Name": "Webinar Series",
+            "NU__Status__c": "Cancelled",
+            "NU__Start_Date__c": "2026-05-01T14:00:00.000Z",
+            "CreatedDate": "2026-03-01T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
+            "SystemModstamp": "2026-06-13T00:00:00.000Z",
+            "IsDeleted": false
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Match": "FROM NU__Donation__c",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "NU__Donation__c",
+              "url": "/services/data/v59.0/sobjects/NU__Donation__c/don0NIMBLE0001"
+            },
+            "Id": "don0NIMBLE0001",
+            "Name": "Donation-001",
+            "NU__Account__c": "001NIMBLE000001",
+            "NU__Amount__c": 100,
+            "CreatedDate": "2026-01-20T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
+            "SystemModstamp": "2026-06-11T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "NU__Donation__c",
+              "url": "/services/data/v59.0/sobjects/NU__Donation__c/don0NIMBLE0002"
+            },
+            "Id": "don0NIMBLE0002",
+            "Name": "Donation-002",
+            "NU__Account__c": "001NIMBLE000002",
+            "NU__Amount__c": 250,
+            "CreatedDate": "2026-02-20T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
+            "SystemModstamp": "2026-06-12T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "NU__Donation__c",
+              "url": "/services/data/v59.0/sobjects/NU__Donation__c/don0NIMBLE0003"
+            },
+            "Id": "don0NIMBLE0003",
+            "Name": "Donation-003",
+            "NU__Account__c": "001NIMBLE000003",
+            "NU__Amount__c": 50,
+            "CreatedDate": "2026-03-10T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
+            "SystemModstamp": "2026-06-13T00:00:00.000Z",
+            "IsDeleted": false
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Match": "FROM NU__Order__c",
+      "Status": 200,
+      "Body": {
+        "totalSize": 3,
+        "done": true,
+        "records": [
+          {
+            "attributes": {
+              "type": "NU__Order__c",
+              "url": "/services/data/v59.0/sobjects/NU__Order__c/ord0NIMBLE0001"
+            },
+            "Id": "ord0NIMBLE0001",
+            "Name": "Order-001",
+            "NU__Account__c": "001NIMBLE000001",
+            "NU__Total__c": 350,
+            "NU__Status__c": "Posted",
+            "CreatedDate": "2026-01-25T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
+            "SystemModstamp": "2026-06-11T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "NU__Order__c",
+              "url": "/services/data/v59.0/sobjects/NU__Order__c/ord0NIMBLE0002"
+            },
+            "Id": "ord0NIMBLE0002",
+            "Name": "Order-002",
+            "NU__Account__c": "001NIMBLE000002",
+            "NU__Total__c": 500,
+            "NU__Status__c": "Open",
+            "CreatedDate": "2026-02-10T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
+            "SystemModstamp": "2026-06-12T00:00:00.000Z",
+            "IsDeleted": false
+          },
+          {
+            "attributes": {
+              "type": "NU__Order__c",
+              "url": "/services/data/v59.0/sobjects/NU__Order__c/ord0NIMBLE0003"
+            },
+            "Id": "ord0NIMBLE0003",
+            "Name": "Order-003",
+            "NU__Account__c": "001NIMBLE000003",
+            "NU__Total__c": 200,
+            "NU__Status__c": "Posted",
+            "CreatedDate": "2026-03-05T00:00:00.000Z",
+            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
+            "SystemModstamp": "2026-06-13T00:00:00.000Z",
+            "IsDeleted": false
+          }
+        ]
+      }
+    },
+    {
+      "_comment": "NARROWED DISCOVERY — DiscoverNarrowedRoutes: same as the main sobjects route but omits NU__Donation__c, used to test absent-object deactivation in cell E1.",
+      "Path": "/services/data/v59.0/sobjects/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "encoding": "UTF-8",
+        "maxBatchSize": 200,
+        "sobjects": [
+          {
+            "name": "Account",
+            "label": "Account",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true
+          },
+          {
+            "name": "Contact",
+            "label": "Contact",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true
+          },
+          {
+            "name": "NU__Membership__c",
+            "label": "Membership",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": false
+          },
+          {
+            "name": "NU__Event__c",
+            "label": "Event",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": false
+          },
+          {
+            "name": "NU__Order__c",
+            "label": "Order",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": false
+          }
+        ]
+      }
+    }
+  ],
+  "DiscoverNarrowedRoutes": [
+    {
+      "_comment": "Narrowed discovery omits NU__Donation__c — triggers absent-object deactivation overlay.",
+      "Path": "/services/data/v59.0/sobjects/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "encoding": "UTF-8",
+        "maxBatchSize": 200,
+        "sobjects": [
+          {
+            "name": "Account",
+            "label": "Account",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": false
+          },
+          {
+            "name": "Contact",
+            "label": "Contact",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": false
+          },
+          {
+            "name": "NU__Membership__c",
+            "label": "NU__Membership__c",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": true
+          },
+          {
+            "name": "NU__Event__c",
+            "label": "NU__Event__c",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": true
+          },
+          {
+            "name": "NU__Donation__c",
+            "label": "NU__Donation__c",
+            "queryable": true,
+            "createable": true,
+            "updateable": true,
+            "deletable": true,
+            "custom": true
+          }
+        ]
+      }
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "_comment": "DeltaPass on NU__Membership__c: row1 updated (NU__Status__c='updated-delta'), row3 deleted (IsDeleted=true), row2 unchanged. Tests watermark-advance, update detection, and delete detection via IsDeleted flag (NimbleAMSConnector.RawToExternalRecord line 717: IsDeleted===true → ExternalRecord.IsDeleted=true).",
+      "Object": "NU__Membership__c",
+      "Routes": [
+        {
+          "Path": "/services/data/v59.0/query",
+          "Method": "GET",
+          "Match": "FROM NU__Membership__c",
+          "Status": 200,
+          "Body": {
+            "totalSize": 3,
+            "done": true,
+            "records": [
+              {
+                "attributes": {
+                  "type": "NU__Membership__c",
+                  "url": "/services/data/v59.0/sobjects/NU__Membership__c/mem0NIMBLE0001"
+                },
+                "Id": "mem0NIMBLE0001",
+                "Name": "DELTA-UPDATED",
+                "NU__Account__c": "001NIMBLE000001",
+                "NU__Status__c": "updated-delta",
+                "NU__Expiration_Date__c": "2027-01-01",
+                "CreatedDate": "2026-01-15T00:00:00.000Z",
+                "LastModifiedDate": "2099-01-01T00:00:00.000Z",
+                "SystemModstamp": "2099-01-01T00:00:00.000Z",
+                "IsDeleted": false
+              },
+              {
+                "attributes": {
+                  "type": "NU__Membership__c",
+                  "url": "/services/data/v59.0/sobjects/NU__Membership__c/mem0NIMBLE0002"
+                },
+                "Id": "mem0NIMBLE0002",
+                "Name": "Membership-002",
+                "NU__Account__c": "001NIMBLE000002",
+                "NU__Status__c": "Active",
+                "NU__Expiration_Date__c": "2026-12-31",
+                "CreatedDate": "2026-02-15T00:00:00.000Z",
+                "LastModifiedDate": "2026-06-12T00:00:00.000Z",
+                "SystemModstamp": "2026-06-12T00:00:00.000Z",
+                "IsDeleted": false
+              },
+              {
+                "attributes": {
+                  "type": "NU__Membership__c",
+                  "url": "/services/data/v59.0/sobjects/NU__Membership__c/mem0NIMBLE0003"
+                },
+                "Id": "mem0NIMBLE0003",
+                "Name": "Membership-003",
+                "NU__Account__c": "001NIMBLE000003",
+                "NU__Status__c": "Lapsed",
+                "NU__Expiration_Date__c": "2025-12-31",
+                "CreatedDate": "2026-03-01T00:00:00.000Z",
+                "LastModifiedDate": "2026-06-13T00:00:00.000Z",
+                "SystemModstamp": "2026-06-13T00:00:00.000Z",
+                "IsDeleted": true
+              }
+            ]
+          }
+        }
+      ],
+      "ExpectedPresent": [
+        "mem0NIMBLE0001",
+        "mem0NIMBLE0002"
+      ],
+      "ExpectedDeletes": [
+        "mem0NIMBLE0003"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "mem0NIMBLE0001",
+          "Field": "NU__Status__c",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ],
+  "HandAuthored": true
+}

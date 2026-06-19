@@ -1,0 +1,131 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "Configuration": {
+    "BaseURL": "http://127.0.0.1:9",
+    "apiBaseUrl": "http://127.0.0.1:9",
+    "AccountID": "mock-account",
+    "Token": "mock-token",
+    "apiKey": "mock-token"
+  },
+  "Routes": [
+    {
+      "Path": "/dataexport/mock-account/list",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        "1700000001-checkin_questions.json",
+        "1700000002-checkin_questions.json",
+        "1700000003-checkin_questions.json"
+      ]
+    },
+    {
+      "Path": "/dataexport/mock-account/download/1700000001-checkin_questions.json",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "ckq-1",
+          "question": "How was the session?",
+          "response": "great",
+          "respondent_email": "example+1@example.com",
+          "submitted_at": "2026-06-11T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/dataexport/mock-account/download/1700000002-checkin_questions.json",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "ckq-2",
+          "question": "Would you recommend?",
+          "response": "yes",
+          "respondent_email": "example+2@example.com",
+          "submitted_at": "2026-06-12T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/dataexport/mock-account/download/1700000003-checkin_questions.json",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "ckq-3",
+          "question": "Any feedback?",
+          "response": "more snacks",
+          "respondent_email": "example+3@example.com",
+          "submitted_at": "2026-06-13T00:00:00Z"
+        }
+      ]
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "checkin_questions",
+      "OrderingField": "id"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "checkin_questions",
+      "FullSync": true,
+      "Routes": [
+        {
+          "Path": "/dataexport/mock-account/list",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            "1700000001-checkin_questions.json",
+            "1700000002-checkin_questions.json"
+          ]
+        },
+        {
+          "Path": "/dataexport/mock-account/download/1700000001-checkin_questions.json",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            {
+              "id": "ckq-1",
+              "question": "How was the session?",
+              "response": "AMAZING",
+              "respondent_email": "example+1@example.com",
+              "submitted_at": "2026-06-11T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "Path": "/dataexport/mock-account/download/1700000002-checkin_questions.json",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            {
+              "id": "ckq-2",
+              "question": "Would you recommend?",
+              "response": "yes",
+              "respondent_email": "example+2@example.com",
+              "submitted_at": "2026-06-12T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "ExpectedPresent": [
+        "ckq-1",
+        "ckq-2"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "ckq-1",
+          "Field": "response",
+          "Value": "AMAZING"
+        }
+      ],
+      "ExpectedDeletes": [
+        "ckq-3"
+      ]
+    }
+  ],
+  "HandAuthored": true
+}

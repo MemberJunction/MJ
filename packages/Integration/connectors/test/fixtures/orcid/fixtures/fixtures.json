@@ -1,0 +1,223 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "ApiBaseUrl",
+  "Configuration": {
+    "ApiBaseUrl": "http://127.0.0.1:9",
+    "BaseURL": "http://127.0.0.1:9",
+    "ClientID": "mock-client",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "TokenURL": "http://127.0.0.1:9/oauth/token",
+    "Scope": "/read-public",
+    "OrcidIds": [
+      "0000-0001-2345-6789",
+      "0000-0002-3456-7890"
+    ],
+    "orcidIds": [
+      "0000-0001-2345-6789",
+      "0000-0002-3456-7890"
+    ]
+  },
+  "Routes": [
+    {
+      "Path": "/0000-0001-2345-6789/record",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "orcid-identifier": {
+          "path": "0000-0001-2345-6789"
+        },
+        "history": {
+          "last-modified-date": {
+            "value": 1718064000000
+          }
+        }
+      }
+    },
+    {
+      "Path": "/0000-0002-3456-7890/record",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "orcid-identifier": {
+          "path": "0000-0002-3456-7890"
+        },
+        "history": {
+          "last-modified-date": {
+            "value": 1718150400000
+          }
+        }
+      }
+    },
+    {
+      "Path": "/0000-0001-2345-6789/educations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "affiliation-group": [
+          {
+            "summaries": [
+              {
+                "education-summary": {
+                  "put-code": 11111,
+                  "organization": {
+                    "name": "Test University"
+                  },
+                  "last-modified-date": {
+                    "value": 1718064000000
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/0000-0002-3456-7890/educations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "affiliation-group": [
+          {
+            "summaries": [
+              {
+                "education-summary": {
+                  "put-code": 22222,
+                  "organization": {
+                    "name": "Example College"
+                  },
+                  "last-modified-date": {
+                    "value": 1718150400000
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/0000-0001-2345-6789/employments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "affiliation-group": [
+          {
+            "summaries": [
+              {
+                "employment-summary": {
+                  "put-code": 33333,
+                  "organization": {
+                    "name": "Acme Research"
+                  },
+                  "last-modified-date": {
+                    "value": 1718064000000
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/0000-0002-3456-7890/employments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "affiliation-group": [
+          {
+            "summaries": [
+              {
+                "employment-summary": {
+                  "put-code": 44444,
+                  "organization": {
+                    "name": "Globex Labs"
+                  },
+                  "last-modified-date": {
+                    "value": 1718150400000
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "record",
+      "OrderingField": "orcid-id"
+    },
+    {
+      "Name": "educations",
+      "OrderingField": "put-code"
+    },
+    {
+      "Name": "employments",
+      "OrderingField": "put-code"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "educations",
+      "FullSync": false,
+      "Routes": [
+        {
+          "Path": "/0000-0001-2345-6789/educations",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "affiliation-group": [
+              {
+                "summaries": [
+                  {
+                    "education-summary": {
+                      "put-code": 11111,
+                      "organization": {
+                        "name": "Updated University"
+                      },
+                      "last-modified-date": {
+                        "value": 1718600000000
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "Path": "/0000-0002-3456-7890/educations",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "affiliation-group": [
+              {
+                "summaries": [
+                  {
+                    "education-summary": {
+                      "put-code": 22222,
+                      "organization": {
+                        "name": "Example College"
+                      },
+                      "last-modified-date": {
+                        "value": 1718150400000
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "ExpectedPresent": [
+        "11111"
+      ]
+    }
+  ],
+  "HandAuthored": true
+}
