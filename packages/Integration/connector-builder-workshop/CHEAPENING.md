@@ -27,29 +27,35 @@ caps reviewer cost **flat** regardless of catalog size.
 - **Floor:** the **count-reconcile is mandatory** and is what catches under-enumeration (the
   Salesforce/path-LMS class). Sampling rides on top of, never replaces, the count check.
 
-## 4. Adaptive fan-out by source tier ⏳
-Scale adversarial reviewer N by source quality: a Tier-1 machine-readable source (OpenAPI / GraphQL
-SDL) → N=1; docs-thin vendors → higher N. (Planner already sets `adversarialN`; make it a function of
-the audited source tier rather than a fixed constant.)
-- **Floor:** N never drops below 1, and the structural gates (floor-check, T1 invariants, §0b
-  finding-floor) run unconditionally — fan-out tunes *redundancy*, not the gate set.
+## 4. Adaptive fan-out by source tier ✅ (CORRECTNESS-WEIGHTED)
+Implemented in `connector-creator.md`. N scales **UP on risk, down only when correctness is already
+secured**: N=1 ONLY when the source is Tier-1 machine-readable **AND** the RealityProbe confirmed the
+claims live; N=2 default; **N=3 on any risk signal** (Tier-3/docs-only source, write-capable connector,
+hard-constraint-heavy emission, a probe-falsified claim, or auditor-flagged thin coverage). >3 → diverse
+LENSES over the same slim count-reconcile, never N full-schema copies.
+- **Floor:** N never below 1; structural gates run unconditionally; risk *earns* scrutiny.
 
-## 5. Empirical verdicts retire doc verification ⏳
-When the credentialed RealityProbe confirms a claim live (path / PK / pagination-advance / watermark),
-**drop** the doc-based adversarial re-litigation of that same claim. Don't pay twice for one fact.
-- **Floor:** only a *confirmed* live verdict retires a doc check; an unprobed or failed claim keeps full
-  doc verification. Empirical ≥ doc, so coverage only goes up.
+## 5. Empirical verdict retires doc-recheck; residual gets MORE scrutiny ✅
+Implemented in `connector-creator.md` (RealityProbe already does "reality outranks the contract" for
+falsified claims). A claim the probe **confirmed live** is correct by observation → no doc re-litigation;
+the saved scrutiny **redirects** onto the `gatedExists` / `format-verified-no-creds` residual the probe
+couldn't reach — exactly where a doc-only inference can still be wrong.
+- **Floor:** only a *confirmed* live verdict retires a doc check; unprobed/failed claims keep full doc
+  verification. Empirical ≥ doc — correctness only goes up.
 
-## 6. Corpus reuse for known vendor-shapes ⏳
-Cache the emitted plan per shape tuple (e.g. `REST+OpenAPI+oauth2-cc`). The next same-shape vendor
-reuses a parameterized plan and skips the full Opus planner+reviewer cycle.
-- **Floor:** the cached plan is **still run through `independent-reviewer`** for the specific vendor —
-  reuse skips authoring, never review.
+## 6. Corpus reuse for known vendor-shapes ◻︎ (review always runs)
+`corpus_lookup` exists and is NON-gating. Reuse skips plan *authoring*, never the per-vendor
+`independent-reviewer` gate. (Populating the corpus is the remaining bit; the safety invariant — reuse ≠
+skip review — is already the rule.)
+- **Floor:** the cached plan is **still reviewed** for the specific vendor; reuse never bypasses a gate.
 
-## 7. Resilient handoffs (retry/backoff) ⏳
-A transport blip that aborts a build forces a full re-run — the most expensive failure. Retry on
-`agent()` handoff; resume-from-cache (`resumeFromRunId`) already makes a killed run cheap to continue.
-- **Floor:** retries are transport-only; a real stage failure still routes to the amendment loop.
+## 7. Resilient handoffs (retry/backoff) ✅ (helper in template)
+`withRetry()` added to `_TEMPLATE.workflow.js`, wired into the code-build handoff (the most expensive
+single result to lose). Retries TRANSPORT throws (ECONN/timeout/429/5xx/overloaded) with backoff; a real
+stage failure (schema-invalid, build error) is returned by the agent and routes to the amendment loop —
+never retried as transport. Resume-from-cache covers hard process death.
+- **Floor:** transport-only retry; correctness-bearing failures still go through the amendment loop.
+- **Next:** wire `withRetry` into the remaining heavy handoffs + runtime-level retry on every `agent()`.
 
 ## Impact ranking (per effort)
 1–2 are the big, low-risk wins (model tiering already mostly in place + the ordering change here).

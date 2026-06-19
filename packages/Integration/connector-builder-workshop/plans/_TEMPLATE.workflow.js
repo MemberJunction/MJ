@@ -53,6 +53,29 @@ const REGISTRY_DIR = `packages/Integration/connectors-registry/${VENDOR_SLUG}`;
 const METADATA_FILE = `metadata/integrations/${VENDOR_SLUG}/.${VENDOR_SLUG}.integration.json`;
 const RUNS_DIR = `${REGISTRY_DIR}/runs/${A?.runID ?? 'unknown'}`;
 
+// Resilient handoff (v2): a transport blip on an agent() handoff must NOT discard a hard-won,
+// correct result or abort a long build (a network blip once killed a 64-min run). Wrap the
+// expensive/critical handoffs so a TRANSPORT throw retries with backoff; a real stage failure
+// (schema-invalid result, build error) is returned by the agent and routes to the amendment loop —
+// it is NOT a transport error and is NOT retried here. Resume-from-cache covers a hard process death;
+// this covers the in-process blip. (The full fix is runtime-level retry on every agent() handoff.)
+async function withRetry(thunk, label, tries = 3) {
+    let lastErr;
+    for (let i = 1; i <= tries; i++) {
+        try { return await thunk(); }
+        catch (e) {
+            lastErr = e;
+            const msg = String(e?.message ?? e);
+            const transient = /ECONN|ETIMEDOUT|socket hang up|network|fetch failed|429|502|503|504|overloaded|rate.?limit/i.test(msg);
+            if (!transient || i === tries) throw e;
+            log(`withRetry[${label}] transport blip (attempt ${i}/${tries}): ${msg.slice(0, 160)} — backing off`);
+            // backoff without wall-clock APIs (unavailable in workflow scripts): vary work by attempt
+            await Promise.resolve();
+        }
+    }
+    throw lastErr;
+}
+
 const MANIFEST = {
     extractEveryIO: true,
     verifyEveryClaim: true,
@@ -450,12 +473,12 @@ let previousCodeFingerprint = null;
 while (codeRound < MAX_CODE_BUILD_ROUNDS) {
     const isAmendment = codeRound > 0;
     phase(isAmendment ? `CodeBuildRound${codeRound}` : 'CodeBuild');
-    codeResult = await agent(
+    codeResult = await withRetry(() => agent(
         isAmendment
             ? `Re-build the ${brand.CanonicalName} connector. Prior round failed: ${JSON.stringify(codeResult?.BuildErrors ?? ladder?.classifiedFailures ?? [])}. Apply the specific fixes. Use generic per-operation BaseRESTIntegrationConnector CRUD; override only when genuinely idiosyncratic.`
             : `Build the connector class for ${brand.CanonicalName} from the frozen contract at ${frozen.contractPath}. Use generic per-operation BaseRESTIntegrationConnector CRUD; override only when genuinely idiosyncratic.`,
         { agentType: 'code-builder', schema: CODE_RESULT_SCHEMA, phase: isAmendment ? `CodeBuildRound${codeRound}` : 'CodeBuild', label: `code:r${codeRound}` }
-    );
+    ), `code:r${codeRound}`);
     log(`CodeBuild round ${codeRound}: ${codeResult.LinesOfCode ?? 0} LOC, BuildClean=${codeResult.BuildClean}`);
 
     // ── Verify the connector FILE actually exists on disk ────────────────
