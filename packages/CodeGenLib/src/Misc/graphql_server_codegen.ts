@@ -551,7 +551,14 @@ export class ${classPrefix}${typeNameBase}Input {`;
 
     // MUTATIONS
     // First, determine if the entity has either Create/Edit allowed, if either, we need to generate a InputType
-    if (entity.AllowCreateAPI && !entity.VirtualEntity && !entity.ExternalDataSourceID) {
+    //
+    // External-data-source entities intentionally generate mutations like any other entity (gated only
+    // by Allow*API + !VirtualEntity). The generated resolver routes through CreateRecord/UpdateRecord/
+    // DeleteRecord → entity.Save()/.Delete(), and an external entity extends ReadOnlyExternalBaseEntity
+    // whose Save/Delete reject (returning false + LatestResult) BEFORE any sproc is reached — so the
+    // mutation fails loudly with the read-only reason rather than silently not existing. (No sproc is
+    // generated for these entities, but none is ever called.)
+    if (entity.AllowCreateAPI && !entity.VirtualEntity) {
       // generate a create mutation
       sRet += `
     @Mutation(() => ${serverGraphQLTypeName})
@@ -565,7 +572,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
     }
         `;
     }
-    if (entity.AllowUpdateAPI && !entity.VirtualEntity && !entity.ExternalDataSourceID) {
+    if (entity.AllowUpdateAPI && !entity.VirtualEntity) {
       // generate an edit mutation
       const loadParamString: string = entity.PrimaryKeys.map((f) => `input.${f.CodeName}`).join(', ');
       sRet += `
@@ -580,7 +587,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
     }
     `;
     }
-    if (entity.AllowDeleteAPI && !entity.VirtualEntity && !entity.ExternalDataSourceID) {
+    if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
       let graphQLPKEYArgs = '';
       let compositeKeyString = '';
       for (let i = 0; i < entity.PrimaryKeys.length; i++) {

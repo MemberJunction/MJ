@@ -67,7 +67,7 @@ Key points:
 
 ### 3. Point an Entity or Query at it
 
-- **Entity**: set `Entity.ExternalDataSourceID` and `Entity.ExternalObjectName` (the remote table/view/collection). Set `AllowCreateAPI`/`AllowUpdateAPI`/`AllowDeleteAPI` to `0` (read-only). After CodeGen runs, the generated entity class extends `ReadOnlyExternalBaseEntity` and no sprocs/views/mutations are generated.
+- **Entity**: set `Entity.ExternalDataSourceID` and `Entity.ExternalObjectName` (the remote table/view/collection). Set `AllowCreateAPI`/`AllowUpdateAPI`/`AllowDeleteAPI` to `0` (read-only). After CodeGen runs, the generated entity class extends `ReadOnlyExternalBaseEntity` and no sprocs/views are generated. (If a write API flag is left on, the generated GraphQL mutation still rejects at runtime via `ReadOnlyExternalBaseEntity.Save()`/`.Delete()` — it fails loudly with the read-only reason, never reaching a sproc.)
 - **Query**: set `Query.ExternalDataSourceID`. The query's SQL is executed in the remote dialect via the driver's native-query path (full multi-table joins authored in the remote dialect are supported).
 
 > **EntityField provisioning is automatic.** During a normal `mj codegen` run, the `manageExternalEntities` pass introspects the **remote** schema of each external-backed entity (via the driver's `IntrospectSchema`) and syncs its `EntityField` rows — the remote analogue of how CodeGen already manages view-backed `VirtualEntity` fields from `INFORMATION_SCHEMA`. You set `ExternalDataSourceID` + `ExternalObjectName` on the entity; CodeGen fills in the fields. (The engine + driver packages must be installed in the CodeGen process; they're loaded on demand only when external entities exist.)
