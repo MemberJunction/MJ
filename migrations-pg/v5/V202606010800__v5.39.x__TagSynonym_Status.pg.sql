@@ -1,435 +1,247 @@
 -- ============================================================================
--- MemberJunction PostgreSQL Migration — V202606010800__v5.39.x__TagSynonym_Status.sql
--- Split-and-regenerate with INLINE NATIVE CodeGen baking: hand-written DDL transpiled
--- (AST dialect), metadata DML inline, and CodeGen objects (views/sprocs/triggers/grants)
--- baked natively from `mj codegen`. Applies standalone via `mj migrate` — no deploy codegen.
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
 
+-- Extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Schema
 CREATE SCHEMA IF NOT EXISTS __mj;
 SET search_path TO __mj, public;
+
+-- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
 
+-- NOTE: Earlier converter versions made INTEGER to BOOLEAN cast implicit by
+-- modifying the system catalog so SS-style INSERT INTO bool_col VALUES (1)
+-- would work. That modification required pg_catalog write privileges, which
+-- managed PG (RDS, Aurora, Cloud SQL, Azure) does not grant. As of v5.30 all
+-- bulk INSERTs are emitted with native TRUE/FALSE values directly, so the
+-- cast modification is no longer needed. Removed to support managed-PG
+-- installs out of the box.
+
+
+-- ===================== DDL: Tables, PKs, Indexes =====================
+
 ALTER TABLE __mj."TagSynonym"
-  ADD COLUMN "Status" VARCHAR(20) NOT NULL CONSTRAINT "DF_TagSynonym_Status" DEFAULT 'Active' CONSTRAINT "CK_TagSynonym_Status" CHECK ("Status" IN ('Active', 'Pending', 'Rejected'))
- /* ============================================================================ */ /* Knowledge Hub / Classify: Tag Synonym approval status */ /* ---------------------------------------------------------------------------- */ /* The classifier can propose synonyms (Source='LLM') and synonyms can be */ /* imported in bulk (Source='Imported'). Today every synonym is live the moment */ /* it exists, with no review step. Adding a Status lets the Classify "Synonyms" */ /* panel hold machine-proposed synonyms in a Pending state until a human */ /* approves them, while manually-added synonyms remain Active by default. */ /* Additive, backward-compatible: existing rows default to 'Active', preserving */ /* current behavior (every existing synonym keeps resolving). */ /* ============================================================================ */;
+ ADD COLUMN IF NOT EXISTS "Status" VARCHAR(20) NOT NULL
+        CONSTRAINT DF_TagSynonym_Status DEFAULT 'Active'
+        CONSTRAINT CK_TagSynonym_Status CHECK ("Status" IN ('Active','Pending','Rejected'));
 
-COMMENT ON COLUMN __mj."TagSynonym"."Status" IS 'Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.';
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_ConversationDetailAttachment_Conversa_cf82ff61" ON __mj."ConversationDetailAttachment" ("ConversationDetailID");
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'f4286229-e5be-4a48-b147-5ec3d3cc89a5' OR ("EntityID" = 'FE0D485E-8C3F-4FE0-BD07-EF81E8F14CE0' AND "Name" = 'Status')) THEN
-    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('f4286229-e5be-4a48-b147-5ec3d3cc89a5', 'FE0D485E-8C3F-4FE0-BD07-EF81E8F14CE0' /* Entity: MJ: Tag Synonyms */, 100014, 'Status', 'Status', 'Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.', 'nvarchar', 40, 0, 0, FALSE, 'Active', FALSE, TRUE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
-  END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_ConversationDetailAttachment_ModalityID" ON __mj."ConversationDetailAttachment" ("ModalityID");
 
-/* SQL text to insert entity field value with ID 2e4e215d-8156-4ede-b744-df072a8fe0a1 */
-INSERT INTO __mj."EntityFieldValue" (
-  "ID",
-  "EntityFieldID",
-  "Sequence",
-  "Value",
-  "Code",
-  "__mj_CreatedAt",
-  "__mj_UpdatedAt"
-)
-VALUES
-  (
-    '2e4e215d-8156-4ede-b744-df072a8fe0a1',
-    'F4286229-E5BE-4A48-B147-5EC3D3CC89A5',
-    1,
-    'Active',
-    'Active',
-    NOW(),
-    NOW()
-  );
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_ConversationDetailAttachment_FileID" ON __mj."ConversationDetailAttachment" ("FileID");
 
-/* SQL text to insert entity field value with ID 7d7dc497-6f31-4eb2-9ad3-16168aecb908 */
-INSERT INTO __mj."EntityFieldValue" (
-  "ID",
-  "EntityFieldID",
-  "Sequence",
-  "Value",
-  "Code",
-  "__mj_CreatedAt",
-  "__mj_UpdatedAt"
-)
-VALUES
-  (
-    '7d7dc497-6f31-4eb2-9ad3-16168aecb908',
-    'F4286229-E5BE-4A48-B147-5EC3D3CC89A5',
-    2,
-    'Pending',
-    'Pending',
-    NOW(),
-    NOW()
-  );
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_ConversationDetailAttachment_ArtifactVersionID" ON __mj."ConversationDetailAttachment" ("ArtifactVersionID");
 
-/* SQL text to insert entity field value with ID b567c8a1-3731-463d-8ef3-2f5285ea9346 */
-INSERT INTO __mj."EntityFieldValue" (
-  "ID",
-  "EntityFieldID",
-  "Sequence",
-  "Value",
-  "Code",
-  "__mj_CreatedAt",
-  "__mj_UpdatedAt"
-)
-VALUES
-  (
-    'b567c8a1-3731-463d-8ef3-2f5285ea9346',
-    'F4286229-E5BE-4A48-B147-5EC3D3CC89A5',
-    3,
-    'Rejected',
-    'Rejected',
-    NOW(),
-    NOW()
-  );
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_TagSynonym_TagID" ON __mj."TagSynonym" ("TagID");
 
-/* SQL text to update ValueListType for entity field ID F4286229-E5BE-4A48-B147-5EC3D3CC89A5 */
-UPDATE __mj."EntityField" SET "ValueListType" = 'List'
-WHERE
-  "ID" = 'F4286229-E5BE-4A48-B147-5EC3D3CC89A5';
 
-/* Set field properties for entity */
-UPDATE __mj."EntityField" SET "UserSearchPredicateAPI" = 'BeginsWith'
-WHERE
-  "ID" = '4C2BADF2-E72C-4497-BF1C-B624A7171BCB'
-  AND "AutoUpdateUserSearchPredicate" = TRUE;
+-- ===================== Views =====================
 
-/* Set field properties for entity */
-UPDATE __mj."EntityField" SET "DefaultInView" = TRUE
-WHERE
-  "ID" = 'F4286229-E5BE-4A48-B147-5EC3D3CC89A5'
-  AND "AutoUpdateDefaultInView" = TRUE;
-
-/* Set categories for 8 fields */ /* UPDATE Entity Field Category Info MJ: Tag Synonyms.ID */
-UPDATE __mj."EntityField" SET "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
-WHERE
-  "ID" = '6BA484DC-192C-4D78-BDA6-F05CC8FB9565' AND "AutoUpdateCategory" = TRUE;
-/* UPDATE Entity Field Category Info MJ: Tag Synonyms.__mj_CreatedAt */
-UPDATE __mj."EntityField" SET "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
-WHERE
-  "ID" = '2FBD3C83-DC1C-41B6-9BF2-BBE89DC42901' AND "AutoUpdateCategory" = TRUE;
-/* UPDATE Entity Field Category Info MJ: Tag Synonyms.__mj_UpdatedAt */
-UPDATE __mj."EntityField" SET "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
-WHERE
-  "ID" = '4AE65FCA-B822-44F1-AC56-70606E6CC190' AND "AutoUpdateCategory" = TRUE;
-/* UPDATE Entity Field Category Info MJ: Tag Synonyms.TagID */
-UPDATE __mj."EntityField" SET "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
-WHERE
-  "ID" = 'DE84807F-A1A6-40ED-A154-BC7B7F59FAD3' AND "AutoUpdateCategory" = TRUE;
-/* UPDATE Entity Field Category Info MJ: Tag Synonyms.Tag */
-UPDATE __mj."EntityField" SET "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
-WHERE
-  "ID" = '43D9E184-F855-43A3-B704-D0036172DD30' AND "AutoUpdateCategory" = TRUE;
-/* UPDATE Entity Field Category Info MJ: Tag Synonyms.Synonym */
-UPDATE __mj."EntityField" SET "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
-WHERE
-  "ID" = 'F95E7337-1169-4D05-B6EC-0A14A7626E21' AND "AutoUpdateCategory" = TRUE;
-/* UPDATE Entity Field Category Info MJ: Tag Synonyms.Source */
-UPDATE __mj."EntityField" SET "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
-WHERE
-  "ID" = 'B50A4543-D60F-4440-9587-CB61C449D06A' AND "AutoUpdateCategory" = TRUE;
-/* UPDATE Entity Field Category Info MJ: Tag Synonyms.Status */
-UPDATE __mj."EntityField" SET "Category" = 'Synonym Details', "GeneratedFormSection" = 'Category', "ExtendedType" = NULL, "CodeType" = NULL
-WHERE
-  "ID" = 'F4286229-E5BE-4A48-B147-5EC3D3CC89A5' AND "AutoUpdateCategory" = TRUE;
-
--- ===================== CodeGen (native PG, baked) =====================
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Detail Attachments
--- Item: Index for Foreign Keys
--- ============================================================
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_attachment_conversation_de"
-    ON __mj."ConversationDetailAttachment" ("ConversationDetailID");
-
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_attachment_modality_id"
-    ON __mj."ConversationDetailAttachment" ("ModalityID");
-
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_attachment_file_id"
-    ON __mj."ConversationDetailAttachment" ("FileID");
-
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_attachment_artifact_versio"
-    ON __mj."ConversationDetailAttachment" ("ArtifactVersionID");
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Detail Attachments
--- Item: vwConversationDetailAttachments
--- ============================================================
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Conversation Detail Attachments
------               SCHEMA:      __mj
------               BASE TABLE:  ConversationDetailAttachment
------               PRIMARY KEY: ID
-------------------------------------------------------------
-DO $vw_regen$
+DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwConversationDetailAttachments';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwConversationDetailAttachments"
-AS
-SELECT
+AS SELECT
     c.*,
-    MJConversationDetail_ConversationDetailID."Message" AS "ConversationDetail",
-    MJAIModality_ModalityID."Name" AS "Modality",
-    MJFile_FileID."Name" AS "File",
-    MJArtifactVersion_ArtifactVersionID."Name" AS "ArtifactVersion"
+    "MJConversationDetail_ConversationDetailID"."Message" AS "ConversationDetail",
+    "MJAIModality_ModalityID"."Name" AS "Modality",
+    "MJFile_FileID"."Name" AS "File",
+    "MJArtifactVersion_ArtifactVersionID"."Name" AS "ArtifactVersion"
 FROM
     __mj."ConversationDetailAttachment" AS c
 INNER JOIN
-    __mj."ConversationDetail" AS MJConversationDetail_ConversationDetailID
+    __mj."ConversationDetail" AS "MJConversationDetail_ConversationDetailID"
   ON
-    "c"."ConversationDetailID" = MJConversationDetail_ConversationDetailID."ID"
+    c."ConversationDetailID" = "MJConversationDetail_ConversationDetailID"."ID"
 INNER JOIN
-    __mj."AIModality" AS MJAIModality_ModalityID
+    __mj."AIModality" AS "MJAIModality_ModalityID"
   ON
-    "c"."ModalityID" = MJAIModality_ModalityID."ID"
+    c."ModalityID" = "MJAIModality_ModalityID"."ID"
 LEFT OUTER JOIN
-    __mj."File" AS MJFile_FileID
+    __mj."File" AS "MJFile_FileID"
   ON
-    "c"."FileID" = MJFile_FileID."ID"
+    c."FileID" = "MJFile_FileID"."ID"
 LEFT OUTER JOIN
-    __mj."ArtifactVersion" AS MJArtifactVersion_ArtifactVersionID
+    __mj."ArtifactVersion" AS "MJArtifactVersion_ArtifactVersionID"
   ON
-    "c"."ArtifactVersionID" = MJArtifactVersion_ArtifactVersionID."ID"
-$vsql$;
-  rec RECORD;
+    c."ArtifactVersionID" = "MJArtifactVersion_ArtifactVersionID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
-  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
-  -- every dependent view (anything that JOINs this view in its body), so we
-  -- capture each dependent's definition + grants BEFORE the drop and replay
-  -- them afterward (best-effort). Without this, on a fresh-DB replay where
-  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
-  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
-  -- that the wrapper for this entity doesn't know how to recreate, and
-  -- those views stay permanently missing.
-  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
-    schema_name TEXT,
-    view_name   TEXT,
-    relkind     CHAR(1),
-    definition  TEXT,
-    grants_sql  TEXT
-  ) ON COMMIT DROP;
-  DELETE FROM _vw_regen_deps;
-
-  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
-  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
-  -- pattern) when the target view is dropped. Without restoring them,
-  -- post-codegen CRUD validation reports those routines as missing —
-  -- e.g. "MJ: Recommendation Items → missing create routine
-  -- spCreateRecommendationItem" — even though the next codegen pass
-  -- emits them. The restored definitions are pg_get_functiondef() output
-  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
-  -- trailing semicolon; replaying them verbatim recreates the function
-  -- with its original body, parameter list, and return type.
-  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
-    schema_name TEXT,
-    fn_name     TEXT,
-    fn_oid      OID,
-    definition  TEXT
-  ) ON COMMIT DROP;
-  DELETE FROM _vw_regen_fn_deps;
-
-  -- Capture dependents. NOTES on the grants_sql build:
-  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
-  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
-  --     exists). pg_get_userbyid is a public catalog function available to
-  --     every database user, including unprivileged accounts on managed
-  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
-  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
-  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
-  --     to pg_authid which works on self-hosted PG but fails with
-  --     "permission denied for table pg_authid" on managed services.
-  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
-  --     which RETURNS the role name pre-quoted when it contains uppercase
-  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
-  --     on the already-quoted string double-wrapped and the GRANT failed at
-  --     replay with "role does not exist". Using
-  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
-  --     correctly exactly once.
-  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
-  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
-  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
-  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
-  SELECT DISTINCT
-      dn.nspname,
-      dc.relname,
-      dc.relkind,
-      pg_get_viewdef(dc.oid),
-      (SELECT string_agg(
-          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
-          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
-          E'
-')
-       FROM (
-           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
-                  (aclexplode(dc.relacl)).privilege_type AS privilege
-       ) g
-       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
-  FROM pg_depend d
-  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
-  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
-  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
-  JOIN pg_class tc ON tc.oid = d.refobjid
-  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-  WHERE tn.nspname = '__mj'
-    AND tc.relname = 'vwConversationDetailAttachments'
-    AND tc.relkind IN ('v', 'm')
-    AND dc.oid <> tc.oid;
-
-  -- Capture dependent functions. Two paths matter on PG:
-  --   1. Functions whose RETURN type references the view (RETURNS SETOF
-  --      <view>) — pg_depend records this as type=pg_type → pg_class.
-  --   2. Functions whose body references the view (used by sql functions
-  --      and by some plpgsql edge cases) — pg_depend records this as
-  --      pg_proc → pg_class.
-  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
-  -- statement that we replay verbatim. We DO include RETURNS-only
-  -- references because that's the dominant codegen pattern (sp* CRUD
-  -- functions all RETURNS SETOF the matching vwX).
-  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
-  SELECT DISTINCT
-      pn.nspname,
-      pp.proname,
-      pp.oid,
-      pg_get_functiondef(pp.oid)
-  FROM pg_depend d
-  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
-  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
-  JOIN pg_class tc ON tc.oid = d.refobjid
-  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-  WHERE tn.nspname = '__mj'
-    AND tc.relname = 'vwConversationDetailAttachments'
-    AND tc.relkind IN ('v', 'm')
-  UNION
-  SELECT DISTINCT
-      pn.nspname,
-      pp.proname,
-      pp.oid,
-      pg_get_functiondef(pp.oid)
-  FROM pg_depend d
-  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
-  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
-  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
-  WHERE EXISTS (
-      SELECT 1 FROM pg_class tc
-      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-      WHERE tc.reltype = pt.oid
-        AND tn.nspname = '__mj'
-        AND tc.relname = 'vwConversationDetailAttachments'
-        AND tc.relkind IN ('v', 'm')
-  );
-
-  DROP VIEW IF EXISTS __mj."vwConversationDetailAttachments" CASCADE;
-  EXECUTE vsql;
-
-  -- Replay captured dependents. Best-effort: log + continue on failure.
-  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
-  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
-  -- and rolls back EVERY statement in the block on any exception. If we
-  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
-  -- present in target environment), the just-recreated VIEW would also
-  -- get rolled back and stay missing — the exact failure mode this
-  -- wrapper exists to prevent.
-  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
-    BEGIN
-      IF rec.relkind = 'm' THEN
-        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
-      ELSE
-        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
-      END IF;
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
-    END;
-
-    IF rec.grants_sql IS NOT NULL THEN
-      BEGIN
-        EXECUTE rec.grants_sql;
-      EXCEPTION WHEN OTHERS THEN
-        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
-      END;
-    END IF;
-  END LOOP;
-
-  -- Replay captured dependent functions AFTER all dependent views are
-  -- restored — most codegen-emitted sp* functions reference both the
-  -- target view AND the dependent views in their bodies/return types.
-  -- Wrapped per-function in its own savepoint so a single failure
-  -- doesn't poison subsequent restores or the just-recreated target.
-  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
-    BEGIN
-      EXECUTE rec.definition;
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
-    END;
-  END LOOP;
-
-  DROP TABLE _vw_regen_deps;
-  DROP TABLE _vw_regen_fn_deps;
-END $vw_regen$;
-GRANT SELECT ON __mj."vwConversationDetailAttachments" TO "cdp_UI";
-GRANT SELECT ON __mj."vwConversationDetailAttachments" TO "cdp_Developer";
-GRANT SELECT ON __mj."vwConversationDetailAttachments" TO "cdp_Integration";
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Detail Attachments
--- Item: spCreateConversationDetailAttachment
--- ============================================================
-
-------------------------------------------------------------
------ CREATE FUNCTION FOR ConversationDetailAttachment
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
-BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spCreateConversationDetailAttachment'
-               AND pronamespace = '__mj'::regnamespace
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
     LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
     END LOOP;
-END
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
+  EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
+END;
 $do$;
 
-CREATE OR REPLACE FUNCTION __mj."spCreateConversationDetailAttachment"(
-    p_id uuid DEFAULT NULL,
-    p_conversationdetailid uuid DEFAULT NULL,
-    p_modalityid uuid DEFAULT NULL,
-    p_mimetype text DEFAULT NULL,
-    p_filename_clear boolean DEFAULT false,
-    p_filename text DEFAULT NULL,
-    p_filesizebytes integer DEFAULT NULL,
-    p_width_clear boolean DEFAULT false,
-    p_width integer DEFAULT NULL,
-    p_height_clear boolean DEFAULT false,
-    p_height integer DEFAULT NULL,
-    p_durationseconds_clear boolean DEFAULT false,
-    p_durationseconds integer DEFAULT NULL,
-    p_inlinedata_clear boolean DEFAULT false,
-    p_inlinedata text DEFAULT NULL,
-    p_fileid_clear boolean DEFAULT false,
-    p_fileid uuid DEFAULT NULL,
-    p_displayorder integer DEFAULT NULL,
-    p_thumbnailbase64_clear boolean DEFAULT false,
-    p_thumbnailbase64 text DEFAULT NULL,
-    p_description_clear boolean DEFAULT false,
-    p_description text DEFAULT NULL,
-    p_artifactversionid_clear boolean DEFAULT false,
-    p_artifactversionid uuid DEFAULT NULL
-) RETURNS SETOF __mj."vwConversationDetailAttachments" AS $$
+DO $do$
 DECLARE
-    v_new_id uuid;
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwTagSynonyms';
+  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwTagSynonyms"
+AS SELECT
+    t.*,
+    "MJTag_TagID"."Name" AS "Tag"
+FROM
+    __mj."TagSynonym" AS t
+INNER JOIN
+    __mj."Tag" AS "MJTag_TagID"
+  ON
+    t."TagID" = "MJTag_TagID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
-    v_new_id := COALESCE(p_id, gen_random_uuid());
-    INSERT INTO __mj."ConversationDetailAttachment"
-        (
-            "ID",
-            "ConversationDetailID",
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
+  EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
+END;
+$do$;
+
+
+-- ===================== Stored Procedures (sp*) =====================
+
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateConversationDetailAttachment'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
+CREATE OR REPLACE FUNCTION __mj."spCreateConversationDetailAttachment"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_ConversationDetailID UUID DEFAULT NULL,
+    IN p_ModalityID UUID DEFAULT NULL,
+    IN p_MimeType VARCHAR(100) DEFAULT NULL,
+    IN p_FileName_Clear BOOLEAN DEFAULT FALSE,
+    IN p_FileName VARCHAR(4000) DEFAULT NULL,
+    IN p_FileSizeBytes INTEGER DEFAULT NULL,
+    IN p_Width_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Width INTEGER DEFAULT NULL,
+    IN p_Height_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Height INTEGER DEFAULT NULL,
+    IN p_DurationSeconds_Clear BOOLEAN DEFAULT FALSE,
+    IN p_DurationSeconds INTEGER DEFAULT NULL,
+    IN p_InlineData_Clear BOOLEAN DEFAULT FALSE,
+    IN p_InlineData TEXT DEFAULT NULL,
+    IN p_FileID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_FileID UUID DEFAULT NULL,
+    IN p_DisplayOrder INTEGER DEFAULT NULL,
+    IN p_ThumbnailBase64_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ThumbnailBase64 TEXT DEFAULT NULL,
+    IN p_Description_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Description TEXT DEFAULT NULL,
+    IN p_ArtifactVersionID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ArtifactVersionID UUID DEFAULT NULL
+)
+RETURNS SETOF __mj."vwConversationDetailAttachments" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."ConversationDetailAttachment"
+            (
+                "ID",
+                "ConversationDetailID",
                 "ModalityID",
                 "MimeType",
                 "FileName",
@@ -443,1307 +255,1154 @@ BEGIN
                 "ThumbnailBase64",
                 "Description",
                 "ArtifactVersionID"
-        )
-    VALUES
-        (
-            v_new_id,
-            p_conversationdetailid,
-                p_modalityid,
-                p_mimetype,
-                CASE WHEN p_filename_clear = true THEN NULL ELSE COALESCE(p_filename, NULL) END,
-                p_filesizebytes,
-                CASE WHEN p_width_clear = true THEN NULL ELSE COALESCE(p_width, NULL) END,
-                CASE WHEN p_height_clear = true THEN NULL ELSE COALESCE(p_height, NULL) END,
-                CASE WHEN p_durationseconds_clear = true THEN NULL ELSE COALESCE(p_durationseconds, NULL) END,
-                CASE WHEN p_inlinedata_clear = true THEN NULL ELSE COALESCE(p_inlinedata, NULL) END,
-                CASE WHEN p_fileid_clear = true THEN NULL ELSE COALESCE(p_fileid, NULL) END,
-                COALESCE(p_displayorder, 0),
-                CASE WHEN p_thumbnailbase64_clear = true THEN NULL ELSE COALESCE(p_thumbnailbase64, NULL) END,
-                CASE WHEN p_description_clear = true THEN NULL ELSE COALESCE(p_description, NULL) END,
-                CASE WHEN p_artifactversionid_clear = true THEN NULL ELSE COALESCE(p_artifactversionid, NULL) END
-        )
-    ;
-
-    RETURN QUERY
-    SELECT * FROM __mj."vwConversationDetailAttachments"
-    WHERE "ID" = v_new_id;
-END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailAttachment" TO "cdp_UI";
-GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailAttachment" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailAttachment" TO "cdp_Integration";
-
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Detail Attachments
--- Item: spUpdateConversationDetailAttachment
--- ============================================================
-
-------------------------------------------------------------
------ UPDATE FUNCTION FOR ConversationDetailAttachment
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
-BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spUpdateConversationDetailAttachment'
-               AND pronamespace = '__mj'::regnamespace
-    LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
-    END LOOP;
-END
-$do$;
-
-CREATE OR REPLACE FUNCTION __mj."spUpdateConversationDetailAttachment"(
-    p_id uuid,
-    p_conversationdetailid uuid DEFAULT NULL,
-    p_modalityid uuid DEFAULT NULL,
-    p_mimetype text DEFAULT NULL,
-    p_filename_clear boolean DEFAULT false,
-    p_filename text DEFAULT NULL,
-    p_filesizebytes integer DEFAULT NULL,
-    p_width_clear boolean DEFAULT false,
-    p_width integer DEFAULT NULL,
-    p_height_clear boolean DEFAULT false,
-    p_height integer DEFAULT NULL,
-    p_durationseconds_clear boolean DEFAULT false,
-    p_durationseconds integer DEFAULT NULL,
-    p_inlinedata_clear boolean DEFAULT false,
-    p_inlinedata text DEFAULT NULL,
-    p_fileid_clear boolean DEFAULT false,
-    p_fileid uuid DEFAULT NULL,
-    p_displayorder integer DEFAULT NULL,
-    p_thumbnailbase64_clear boolean DEFAULT false,
-    p_thumbnailbase64 text DEFAULT NULL,
-    p_description_clear boolean DEFAULT false,
-    p_description text DEFAULT NULL,
-    p_artifactversionid_clear boolean DEFAULT false,
-    p_artifactversionid uuid DEFAULT NULL
-) RETURNS SETOF __mj."vwConversationDetailAttachments" AS $$
-DECLARE
-    v_updated_count INTEGER;
-BEGIN
-    UPDATE __mj."ConversationDetailAttachment"
-    SET
-        "ConversationDetailID" = COALESCE(p_conversationdetailid, "ConversationDetailID"),
-        "ModalityID" = COALESCE(p_modalityid, "ModalityID"),
-        "MimeType" = COALESCE(p_mimetype, "MimeType"),
-        "FileName" = CASE WHEN p_filename_clear = true THEN NULL ELSE COALESCE(p_filename, "FileName") END,
-        "FileSizeBytes" = COALESCE(p_filesizebytes, "FileSizeBytes"),
-        "Width" = CASE WHEN p_width_clear = true THEN NULL ELSE COALESCE(p_width, "Width") END,
-        "Height" = CASE WHEN p_height_clear = true THEN NULL ELSE COALESCE(p_height, "Height") END,
-        "DurationSeconds" = CASE WHEN p_durationseconds_clear = true THEN NULL ELSE COALESCE(p_durationseconds, "DurationSeconds") END,
-        "InlineData" = CASE WHEN p_inlinedata_clear = true THEN NULL ELSE COALESCE(p_inlinedata, "InlineData") END,
-        "FileID" = CASE WHEN p_fileid_clear = true THEN NULL ELSE COALESCE(p_fileid, "FileID") END,
-        "DisplayOrder" = COALESCE(p_displayorder, "DisplayOrder"),
-        "ThumbnailBase64" = CASE WHEN p_thumbnailbase64_clear = true THEN NULL ELSE COALESCE(p_thumbnailbase64, "ThumbnailBase64") END,
-        "Description" = CASE WHEN p_description_clear = true THEN NULL ELSE COALESCE(p_description, "Description") END,
-        "ArtifactVersionID" = CASE WHEN p_artifactversionid_clear = true THEN NULL ELSE COALESCE(p_artifactversionid, "ArtifactVersionID") END
-    WHERE
-        "ID" = p_id;
-
-    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
-
-    IF v_updated_count = 0 THEN
-        -- Nothing was updated, return empty result set
-        RETURN;
-    END IF;
-
-    -- Return the updated record from the base view
-    RETURN QUERY
-    SELECT * FROM __mj."vwConversationDetailAttachments"
-    WHERE "ID" = p_id;
-END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetailAttachment" TO "cdp_UI";
-GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetailAttachment" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetailAttachment" TO "cdp_Integration";
-
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the ConversationDetailAttachment table
-------------------------------------------------------------
-CREATE OR REPLACE FUNCTION __mj."fn_trg_update_conversation_detail_attachment"()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW."__mj_UpdatedAt" := NOW() AT TIME ZONE 'UTC';
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS "trg_update_conversation_detail_attachment" ON __mj."ConversationDetailAttachment";
-
-CREATE TRIGGER "trg_update_conversation_detail_attachment"
-BEFORE UPDATE ON __mj."ConversationDetailAttachment"
-FOR EACH ROW
-EXECUTE FUNCTION __mj."fn_trg_update_conversation_detail_attachment"();
-
-
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Detail Attachments
--- Item: spDeleteConversationDetailAttachment
--- ============================================================
-
-------------------------------------------------------------
------ DELETE FUNCTION FOR ConversationDetailAttachment
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
-BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spDeleteConversationDetailAttachment'
-               AND pronamespace = '__mj'::regnamespace
-    LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
-    END LOOP;
-END
-$do$;
-
-CREATE OR REPLACE FUNCTION __mj."spDeleteConversationDetailAttachment"(
-    p_id uuid
-) RETURNS TABLE("ID" uuid) AS $$
-#variable_conflict use_column
-DECLARE
-    v_affected_count INTEGER;
-BEGIN
-
-    DELETE FROM __mj."ConversationDetailAttachment"
-    WHERE "ID" = p_id;
-
-    GET DIAGNOSTICS v_affected_count = ROW_COUNT;
-
-    IF v_affected_count = 0 THEN
-        RETURN QUERY SELECT NULL::uuid AS "ID";
+            )
+        VALUES
+            (
+                p_ID,
+                p_ConversationDetailID,
+                p_ModalityID,
+                p_MimeType,
+                CASE WHEN p_FileName_Clear = TRUE THEN NULL ELSE COALESCE(p_FileName, NULL) END,
+                p_FileSizeBytes,
+                CASE WHEN p_Width_Clear = TRUE THEN NULL ELSE COALESCE(p_Width, NULL) END,
+                CASE WHEN p_Height_Clear = TRUE THEN NULL ELSE COALESCE(p_Height, NULL) END,
+                CASE WHEN p_DurationSeconds_Clear = TRUE THEN NULL ELSE COALESCE(p_DurationSeconds, NULL) END,
+                CASE WHEN p_InlineData_Clear = TRUE THEN NULL ELSE COALESCE(p_InlineData, NULL) END,
+                CASE WHEN p_FileID_Clear = TRUE THEN NULL ELSE COALESCE(p_FileID, NULL) END,
+                COALESCE(p_DisplayOrder, 0),
+                CASE WHEN p_ThumbnailBase64_Clear = TRUE THEN NULL ELSE COALESCE(p_ThumbnailBase64, NULL) END,
+                CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, NULL) END,
+                CASE WHEN p_ArtifactVersionID_Clear = TRUE THEN NULL ELSE COALESCE(p_ArtifactVersionID, NULL) END
+            );
     ELSE
-        RETURN QUERY SELECT p_id AS "ID";
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."ConversationDetailAttachment"
+            (
+                "ConversationDetailID",
+                "ModalityID",
+                "MimeType",
+                "FileName",
+                "FileSizeBytes",
+                "Width",
+                "Height",
+                "DurationSeconds",
+                "InlineData",
+                "FileID",
+                "DisplayOrder",
+                "ThumbnailBase64",
+                "Description",
+                "ArtifactVersionID"
+            )
+        VALUES
+            (
+                p_ConversationDetailID,
+                p_ModalityID,
+                p_MimeType,
+                CASE WHEN p_FileName_Clear = TRUE THEN NULL ELSE COALESCE(p_FileName, NULL) END,
+                p_FileSizeBytes,
+                CASE WHEN p_Width_Clear = TRUE THEN NULL ELSE COALESCE(p_Width, NULL) END,
+                CASE WHEN p_Height_Clear = TRUE THEN NULL ELSE COALESCE(p_Height, NULL) END,
+                CASE WHEN p_DurationSeconds_Clear = TRUE THEN NULL ELSE COALESCE(p_DurationSeconds, NULL) END,
+                CASE WHEN p_InlineData_Clear = TRUE THEN NULL ELSE COALESCE(p_InlineData, NULL) END,
+                CASE WHEN p_FileID_Clear = TRUE THEN NULL ELSE COALESCE(p_FileID, NULL) END,
+                COALESCE(p_DisplayOrder, 0),
+                CASE WHEN p_ThumbnailBase64_Clear = TRUE THEN NULL ELSE COALESCE(p_ThumbnailBase64, NULL) END,
+                CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, NULL) END,
+                CASE WHEN p_ArtifactVersionID_Clear = TRUE THEN NULL ELSE COALESCE(p_ArtifactVersionID, NULL) END
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwConversationDetailAttachments" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateConversationDetailAttachment'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
+CREATE OR REPLACE FUNCTION __mj."spUpdateConversationDetailAttachment"(
+    IN p_ID UUID,
+    IN p_ConversationDetailID UUID DEFAULT NULL,
+    IN p_ModalityID UUID DEFAULT NULL,
+    IN p_MimeType VARCHAR(100) DEFAULT NULL,
+    IN p_FileName_Clear BOOLEAN DEFAULT FALSE,
+    IN p_FileName VARCHAR(4000) DEFAULT NULL,
+    IN p_FileSizeBytes INTEGER DEFAULT NULL,
+    IN p_Width_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Width INTEGER DEFAULT NULL,
+    IN p_Height_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Height INTEGER DEFAULT NULL,
+    IN p_DurationSeconds_Clear BOOLEAN DEFAULT FALSE,
+    IN p_DurationSeconds INTEGER DEFAULT NULL,
+    IN p_InlineData_Clear BOOLEAN DEFAULT FALSE,
+    IN p_InlineData TEXT DEFAULT NULL,
+    IN p_FileID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_FileID UUID DEFAULT NULL,
+    IN p_DisplayOrder INTEGER DEFAULT NULL,
+    IN p_ThumbnailBase64_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ThumbnailBase64 TEXT DEFAULT NULL,
+    IN p_Description_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Description TEXT DEFAULT NULL,
+    IN p_ArtifactVersionID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ArtifactVersionID UUID DEFAULT NULL
+)
+RETURNS SETOF __mj."vwConversationDetailAttachments" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."ConversationDetailAttachment"
+    SET
+        "ConversationDetailID" = COALESCE(p_ConversationDetailID, "ConversationDetailID"),
+        "ModalityID" = COALESCE(p_ModalityID, "ModalityID"),
+        "MimeType" = COALESCE(p_MimeType, "MimeType"),
+        "FileName" = CASE WHEN p_FileName_Clear = TRUE THEN NULL ELSE COALESCE(p_FileName, "FileName") END,
+        "FileSizeBytes" = COALESCE(p_FileSizeBytes, "FileSizeBytes"),
+        "Width" = CASE WHEN p_Width_Clear = TRUE THEN NULL ELSE COALESCE(p_Width, "Width") END,
+        "Height" = CASE WHEN p_Height_Clear = TRUE THEN NULL ELSE COALESCE(p_Height, "Height") END,
+        "DurationSeconds" = CASE WHEN p_DurationSeconds_Clear = TRUE THEN NULL ELSE COALESCE(p_DurationSeconds, "DurationSeconds") END,
+        "InlineData" = CASE WHEN p_InlineData_Clear = TRUE THEN NULL ELSE COALESCE(p_InlineData, "InlineData") END,
+        "FileID" = CASE WHEN p_FileID_Clear = TRUE THEN NULL ELSE COALESCE(p_FileID, "FileID") END,
+        "DisplayOrder" = COALESCE(p_DisplayOrder, "DisplayOrder"),
+        "ThumbnailBase64" = CASE WHEN p_ThumbnailBase64_Clear = TRUE THEN NULL ELSE COALESCE(p_ThumbnailBase64, "ThumbnailBase64") END,
+        "Description" = CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, "Description") END,
+        "ArtifactVersionID" = CASE WHEN p_ArtifactVersionID_Clear = TRUE THEN NULL ELSE COALESCE(p_ArtifactVersionID, "ArtifactVersionID") END
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwConversationDetailAttachments" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwConversationDetailAttachments" WHERE "ID" = p_ID;
     END IF;
 END;
 $$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetailAttachment" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetailAttachment" TO "cdp_Integration";
 
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Tag Synonyms
--- Item: Index for Foreign Keys
--- ============================================================
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_tag_synonym_tag_id"
-    ON __mj."TagSynonym" ("TagID");
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Tag Synonyms
--- Item: vwTagSynonyms
--- ============================================================
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Tag Synonyms
------               SCHEMA:      __mj
------               BASE TABLE:  TagSynonym
------               PRIMARY KEY: ID
-------------------------------------------------------------
-DO $vw_regen$
-DECLARE
-  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwTagSynonyms"
-AS
-SELECT
-    t.*,
-    MJTag_TagID."Name" AS "Tag"
-FROM
-    __mj."TagSynonym" AS t
-INNER JOIN
-    __mj."Tag" AS MJTag_TagID
-  ON
-    "t"."TagID" = MJTag_TagID."ID"
-$vsql$;
-  rec RECORD;
+DO $$ DECLARE r record;
 BEGIN
-  EXECUTE vsql;
-EXCEPTION WHEN invalid_table_definition THEN
-  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
-  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
-  -- every dependent view (anything that JOINs this view in its body), so we
-  -- capture each dependent's definition + grants BEFORE the drop and replay
-  -- them afterward (best-effort). Without this, on a fresh-DB replay where
-  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
-  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
-  -- that the wrapper for this entity doesn't know how to recreate, and
-  -- those views stay permanently missing.
-  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
-    schema_name TEXT,
-    view_name   TEXT,
-    relkind     CHAR(1),
-    definition  TEXT,
-    grants_sql  TEXT
-  ) ON COMMIT DROP;
-  DELETE FROM _vw_regen_deps;
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteConversationDetailAttachment'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
+CREATE OR REPLACE FUNCTION __mj."spDeleteConversationDetailAttachment"(
+    IN p_ID UUID
+)
+RETURNS TABLE("_result_id" UUID) AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+DELETE FROM
+        __mj."ConversationDetailAttachment"
+    WHERE
+        "ID" = p_ID;
 
-  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
-  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
-  -- pattern) when the target view is dropped. Without restoring them,
-  -- post-codegen CRUD validation reports those routines as missing —
-  -- e.g. "MJ: Recommendation Items → missing create routine
-  -- spCreateRecommendationItem" — even though the next codegen pass
-  -- emits them. The restored definitions are pg_get_functiondef() output
-  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
-  -- trailing semicolon; replaying them verbatim recreates the function
-  -- with its original body, parameter list, and return type.
-  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
-    schema_name TEXT,
-    fn_name     TEXT,
-    fn_oid      OID,
-    definition  TEXT
-  ) ON COMMIT DROP;
-  DELETE FROM _vw_regen_fn_deps;
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
 
-  -- Capture dependents. NOTES on the grants_sql build:
-  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
-  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
-  --     exists). pg_get_userbyid is a public catalog function available to
-  --     every database user, including unprivileged accounts on managed
-  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
-  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
-  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
-  --     to pg_authid which works on self-hosted PG but fails with
-  --     "permission denied for table pg_authid" on managed services.
-  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
-  --     which RETURNS the role name pre-quoted when it contains uppercase
-  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
-  --     on the already-quoted string double-wrapped and the GRANT failed at
-  --     replay with "role does not exist". Using
-  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
-  --     correctly exactly once.
-  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
-  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
-  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
-  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
-  SELECT DISTINCT
-      dn.nspname,
-      dc.relname,
-      dc.relkind,
-      pg_get_viewdef(dc.oid),
-      (SELECT string_agg(
-          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
-          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
-          E'
-')
-       FROM (
-           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
-                  (aclexplode(dc.relacl)).privilege_type AS privilege
-       ) g
-       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
-  FROM pg_depend d
-  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
-  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
-  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
-  JOIN pg_class tc ON tc.oid = d.refobjid
-  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-  WHERE tn.nspname = '__mj'
-    AND tc.relname = 'vwTagSynonyms'
-    AND tc.relkind IN ('v', 'm')
-    AND dc.oid <> tc.oid;
-
-  -- Capture dependent functions. Two paths matter on PG:
-  --   1. Functions whose RETURN type references the view (RETURNS SETOF
-  --      <view>) — pg_depend records this as type=pg_type → pg_class.
-  --   2. Functions whose body references the view (used by sql functions
-  --      and by some plpgsql edge cases) — pg_depend records this as
-  --      pg_proc → pg_class.
-  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
-  -- statement that we replay verbatim. We DO include RETURNS-only
-  -- references because that's the dominant codegen pattern (sp* CRUD
-  -- functions all RETURNS SETOF the matching vwX).
-  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
-  SELECT DISTINCT
-      pn.nspname,
-      pp.proname,
-      pp.oid,
-      pg_get_functiondef(pp.oid)
-  FROM pg_depend d
-  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
-  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
-  JOIN pg_class tc ON tc.oid = d.refobjid
-  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-  WHERE tn.nspname = '__mj'
-    AND tc.relname = 'vwTagSynonyms'
-    AND tc.relkind IN ('v', 'm')
-  UNION
-  SELECT DISTINCT
-      pn.nspname,
-      pp.proname,
-      pp.oid,
-      pg_get_functiondef(pp.oid)
-  FROM pg_depend d
-  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
-  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
-  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
-  WHERE EXISTS (
-      SELECT 1 FROM pg_class tc
-      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-      WHERE tc.reltype = pt.oid
-        AND tn.nspname = '__mj'
-        AND tc.relname = 'vwTagSynonyms'
-        AND tc.relkind IN ('v', 'm')
-  );
-
-  DROP VIEW IF EXISTS __mj."vwTagSynonyms" CASCADE;
-  EXECUTE vsql;
-
-  -- Replay captured dependents. Best-effort: log + continue on failure.
-  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
-  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
-  -- and rolls back EVERY statement in the block on any exception. If we
-  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
-  -- present in target environment), the just-recreated VIEW would also
-  -- get rolled back and stay missing — the exact failure mode this
-  -- wrapper exists to prevent.
-  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
-    BEGIN
-      IF rec.relkind = 'm' THEN
-        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
-      ELSE
-        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
-      END IF;
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
-    END;
-
-    IF rec.grants_sql IS NOT NULL THEN
-      BEGIN
-        EXECUTE rec.grants_sql;
-      EXCEPTION WHEN OTHERS THEN
-        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
-      END;
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT NULL::UUID AS "_result_id";
+    ELSE
+        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
     END IF;
-  END LOOP;
+END;
+$$ LANGUAGE plpgsql;
 
-  -- Replay captured dependent functions AFTER all dependent views are
-  -- restored — most codegen-emitted sp* functions reference both the
-  -- target view AND the dependent views in their bodies/return types.
-  -- Wrapped per-function in its own savepoint so a single failure
-  -- doesn't poison subsequent restores or the just-recreated target.
-  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
-    BEGIN
-      EXECUTE rec.definition;
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
-    END;
-  END LOOP;
-
-  DROP TABLE _vw_regen_deps;
-  DROP TABLE _vw_regen_fn_deps;
-END $vw_regen$;
-GRANT SELECT ON __mj."vwTagSynonyms" TO "cdp_UI";
-GRANT SELECT ON __mj."vwTagSynonyms" TO "cdp_Developer";
-GRANT SELECT ON __mj."vwTagSynonyms" TO "cdp_Integration";
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Tag Synonyms
--- Item: spCreateTagSynonym
--- ============================================================
-
-------------------------------------------------------------
------ CREATE FUNCTION FOR TagSynonym
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
+DO $$ DECLARE r record;
 BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spCreateTagSynonym'
-               AND pronamespace = '__mj'::regnamespace
-    LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
-    END LOOP;
-END
-$do$;
-
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateTagSynonym'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateTagSynonym"(
-    p_id uuid DEFAULT NULL,
-    p_tagid uuid DEFAULT NULL,
-    p_synonym text DEFAULT NULL,
-    p_source text DEFAULT NULL,
-    p_status text DEFAULT NULL
-) RETURNS SETOF __mj."vwTagSynonyms" AS $$
-DECLARE
-    v_new_id uuid;
+    IN p_ID UUID DEFAULT NULL,
+    IN p_TagID UUID DEFAULT NULL,
+    IN p_Synonym VARCHAR(255) DEFAULT NULL,
+    IN p_Source VARCHAR(20) DEFAULT NULL,
+    IN p_Status VARCHAR(20) DEFAULT NULL
+)
+RETURNS SETOF __mj."vwTagSynonyms" AS
+$$
 BEGIN
-    v_new_id := COALESCE(p_id, gen_random_uuid());
-    INSERT INTO __mj."TagSynonym"
-        (
-            "ID",
-            "TagID",
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."TagSynonym"
+            (
+                "ID",
+                "TagID",
                 "Synonym",
                 "Source",
                 "Status"
-        )
-    VALUES
-        (
-            v_new_id,
-            p_tagid,
-                p_synonym,
-                COALESCE(p_source, 'Manual'),
-                COALESCE(p_status, 'Active')
-        )
-    ;
-
-    RETURN QUERY
-    SELECT * FROM __mj."vwTagSynonyms"
-    WHERE "ID" = v_new_id;
-END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spCreateTagSynonym" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spCreateTagSynonym" TO "cdp_Integration";
-
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Tag Synonyms
--- Item: spUpdateTagSynonym
--- ============================================================
-
-------------------------------------------------------------
------ UPDATE FUNCTION FOR TagSynonym
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
-BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spUpdateTagSynonym'
-               AND pronamespace = '__mj'::regnamespace
-    LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
-    END LOOP;
-END
-$do$;
-
-CREATE OR REPLACE FUNCTION __mj."spUpdateTagSynonym"(
-    p_id uuid,
-    p_tagid uuid DEFAULT NULL,
-    p_synonym text DEFAULT NULL,
-    p_source text DEFAULT NULL,
-    p_status text DEFAULT NULL
-) RETURNS SETOF __mj."vwTagSynonyms" AS $$
-DECLARE
-    v_updated_count INTEGER;
-BEGIN
-    UPDATE __mj."TagSynonym"
-    SET
-        "TagID" = COALESCE(p_tagid, "TagID"),
-        "Synonym" = COALESCE(p_synonym, "Synonym"),
-        "Source" = COALESCE(p_source, "Source"),
-        "Status" = COALESCE(p_status, "Status")
-    WHERE
-        "ID" = p_id;
-
-    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
-
-    IF v_updated_count = 0 THEN
-        -- Nothing was updated, return empty result set
-        RETURN;
-    END IF;
-
-    -- Return the updated record from the base view
-    RETURN QUERY
-    SELECT * FROM __mj."vwTagSynonyms"
-    WHERE "ID" = p_id;
-END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spUpdateTagSynonym" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spUpdateTagSynonym" TO "cdp_Integration";
-
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the TagSynonym table
-------------------------------------------------------------
-CREATE OR REPLACE FUNCTION __mj."fn_trg_update_tag_synonym"()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW."__mj_UpdatedAt" := NOW() AT TIME ZONE 'UTC';
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS "trg_update_tag_synonym" ON __mj."TagSynonym";
-
-CREATE TRIGGER "trg_update_tag_synonym"
-BEFORE UPDATE ON __mj."TagSynonym"
-FOR EACH ROW
-EXECUTE FUNCTION __mj."fn_trg_update_tag_synonym"();
-
-
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Tag Synonyms
--- Item: spDeleteTagSynonym
--- ============================================================
-
-------------------------------------------------------------
------ DELETE FUNCTION FOR TagSynonym
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
-BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spDeleteTagSynonym'
-               AND pronamespace = '__mj'::regnamespace
-    LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
-    END LOOP;
-END
-$do$;
-
-CREATE OR REPLACE FUNCTION __mj."spDeleteTagSynonym"(
-    p_id uuid
-) RETURNS TABLE("ID" uuid) AS $$
-#variable_conflict use_column
-DECLARE
-    v_affected_count INTEGER;
-BEGIN
-
-    DELETE FROM __mj."TagSynonym"
-    WHERE "ID" = p_id;
-
-    GET DIAGNOSTICS v_affected_count = ROW_COUNT;
-
-    IF v_affected_count = 0 THEN
-        RETURN QUERY SELECT NULL::uuid AS "ID";
+            )
+        VALUES
+            (
+                p_ID,
+                p_TagID,
+                p_Synonym,
+                COALESCE(p_Source, 'Manual'),
+                COALESCE(p_Status, 'Active')
+            );
     ELSE
-        RETURN QUERY SELECT p_id AS "ID";
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."TagSynonym"
+            (
+                "TagID",
+                "Synonym",
+                "Source",
+                "Status"
+            )
+        VALUES
+            (
+                p_TagID,
+                p_Synonym,
+                COALESCE(p_Source, 'Manual'),
+                COALESCE(p_Status, 'Active')
+            );
     END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwTagSynonyms" WHERE "ID" = p_ID;
 END;
 $$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spDeleteTagSynonym" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spDeleteTagSynonym" TO "cdp_Integration";
 
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
--- Item: Index for Foreign Keys
--- ============================================================
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_conversation_id"
-    ON __mj."ConversationDetail" ("ConversationID");
-
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_user_id"
-    ON __mj."ConversationDetail" ("UserID");
-
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_artifact_id"
-    ON __mj."ConversationDetail" ("ArtifactID");
-
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_artifact_version_id"
-    ON __mj."ConversationDetail" ("ArtifactVersionID");
-
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_parent_id"
-    ON __mj."ConversationDetail" ("ParentID");
-
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_agent_id"
-    ON __mj."ConversationDetail" ("AgentID");
-
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_conversation_detail_test_run_id"
-    ON __mj."ConversationDetail" ("TestRunID");
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
--- Item: fnConversationDetailParentID_GetRootID
--- ============================================================
-
-------------------------------------------------------------
------ ROOT ID FUNCTION FOR: ConversationDetail.ParentID
-------------------------------------------------------------
-CREATE OR REPLACE FUNCTION __mj."fn_conversation_detail_parent_id_get_root_id"(
-    p_record_id uuid,
-    p_parent_id uuid
-) RETURNS uuid AS $$
-    WITH RECURSIVE cte_root_parent AS (
-        -- Anchor: Start from p_parent_id if not null, otherwise start from p_record_id
-        SELECT
-            "ID",
-            "ParentID",
-            "ID" AS root_parent_id,
-            0 AS depth
-        FROM
-            __mj."ConversationDetail"
-        WHERE
-            "ID" = COALESCE(p_parent_id, p_record_id)
-
-        UNION ALL
-
-        -- Recursive: Keep going up the hierarchy
-        SELECT
-            c."ID",
-            c."ParentID",
-            c."ID" AS root_parent_id,
-            p.depth + 1 AS depth
-        FROM
-            __mj."ConversationDetail" c
-        INNER JOIN
-            cte_root_parent p ON c."ID" = p."ParentID"
-        WHERE
-            p.depth < 100  -- Prevent infinite loops
-    )
-    SELECT root_parent_id
-    FROM cte_root_parent
-    WHERE "ParentID" IS NULL
-    ORDER BY root_parent_id
-    LIMIT 1;
-$$ LANGUAGE sql STABLE;
-
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
--- Item: vwConversationDetails
--- ============================================================
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Conversation Details
------               SCHEMA:      __mj
------               BASE TABLE:  ConversationDetail
------               PRIMARY KEY: ID
-------------------------------------------------------------
-DO $vw_regen$
-DECLARE
-  vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwConversationDetails"
-AS
-SELECT
-    c.*,
-    MJConversation_ConversationID."Name" AS "Conversation",
-    MJUser_UserID."Name" AS "User",
-    MJConversationArtifact_ArtifactID."Name" AS "Artifact",
-    MJConversationArtifactVersion_ArtifactVersionID."ConversationArtifact" AS "ArtifactVersion",
-    MJConversationDetail_ParentID."Message" AS "Parent",
-    MJAIAgent_AgentID."Name" AS "Agent",
-    MJTestRun_TestRunID."Test" AS "TestRun",
-    root_ParentID.root_id AS "RootParentID"
-FROM
-    __mj."ConversationDetail" AS c
-INNER JOIN
-    __mj."Conversation" AS MJConversation_ConversationID
-  ON
-    "c"."ConversationID" = MJConversation_ConversationID."ID"
-LEFT OUTER JOIN
-    __mj."User" AS MJUser_UserID
-  ON
-    "c"."UserID" = MJUser_UserID."ID"
-LEFT OUTER JOIN
-    __mj."ConversationArtifact" AS MJConversationArtifact_ArtifactID
-  ON
-    "c"."ArtifactID" = MJConversationArtifact_ArtifactID."ID"
-LEFT OUTER JOIN
-    __mj."vwConversationArtifactVersions" AS MJConversationArtifactVersion_ArtifactVersionID
-  ON
-    "c"."ArtifactVersionID" = MJConversationArtifactVersion_ArtifactVersionID."ID"
-LEFT OUTER JOIN
-    __mj."ConversationDetail" AS MJConversationDetail_ParentID
-  ON
-    "c"."ParentID" = MJConversationDetail_ParentID."ID"
-LEFT OUTER JOIN
-    __mj."AIAgent" AS MJAIAgent_AgentID
-  ON
-    "c"."AgentID" = MJAIAgent_AgentID."ID"
-LEFT OUTER JOIN
-    __mj."vwTestRuns" AS MJTestRun_TestRunID
-  ON
-    "c"."TestRunID" = MJTestRun_TestRunID."ID"
-
-LEFT JOIN LATERAL (
-    SELECT __mj."fn_conversation_detail_parent_id_get_root_id"(c."ID", c."ParentID") AS root_id
-) AS root_ParentID ON true
-$vsql$;
-  rec RECORD;
+DO $$ DECLARE r record;
 BEGIN
-  EXECUTE vsql;
-EXCEPTION WHEN invalid_table_definition THEN
-  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
-  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
-  -- every dependent view (anything that JOINs this view in its body), so we
-  -- capture each dependent's definition + grants BEFORE the drop and replay
-  -- them afterward (best-effort). Without this, on a fresh-DB replay where
-  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
-  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
-  -- that the wrapper for this entity doesn't know how to recreate, and
-  -- those views stay permanently missing.
-  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
-    schema_name TEXT,
-    view_name   TEXT,
-    relkind     CHAR(1),
-    definition  TEXT,
-    grants_sql  TEXT
-  ) ON COMMIT DROP;
-  DELETE FROM _vw_regen_deps;
-
-  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
-  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
-  -- pattern) when the target view is dropped. Without restoring them,
-  -- post-codegen CRUD validation reports those routines as missing —
-  -- e.g. "MJ: Recommendation Items → missing create routine
-  -- spCreateRecommendationItem" — even though the next codegen pass
-  -- emits them. The restored definitions are pg_get_functiondef() output
-  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
-  -- trailing semicolon; replaying them verbatim recreates the function
-  -- with its original body, parameter list, and return type.
-  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
-    schema_name TEXT,
-    fn_name     TEXT,
-    fn_oid      OID,
-    definition  TEXT
-  ) ON COMMIT DROP;
-  DELETE FROM _vw_regen_fn_deps;
-
-  -- Capture dependents. NOTES on the grants_sql build:
-  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
-  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
-  --     exists). pg_get_userbyid is a public catalog function available to
-  --     every database user, including unprivileged accounts on managed
-  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
-  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
-  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
-  --     to pg_authid which works on self-hosted PG but fails with
-  --     "permission denied for table pg_authid" on managed services.
-  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
-  --     which RETURNS the role name pre-quoted when it contains uppercase
-  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
-  --     on the already-quoted string double-wrapped and the GRANT failed at
-  --     replay with "role does not exist". Using
-  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
-  --     correctly exactly once.
-  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
-  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
-  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
-  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
-  SELECT DISTINCT
-      dn.nspname,
-      dc.relname,
-      dc.relkind,
-      pg_get_viewdef(dc.oid),
-      (SELECT string_agg(
-          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
-          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
-          E'
-')
-       FROM (
-           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
-                  (aclexplode(dc.relacl)).privilege_type AS privilege
-       ) g
-       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
-  FROM pg_depend d
-  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
-  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
-  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
-  JOIN pg_class tc ON tc.oid = d.refobjid
-  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-  WHERE tn.nspname = '__mj'
-    AND tc.relname = 'vwConversationDetails'
-    AND tc.relkind IN ('v', 'm')
-    AND dc.oid <> tc.oid;
-
-  -- Capture dependent functions. Two paths matter on PG:
-  --   1. Functions whose RETURN type references the view (RETURNS SETOF
-  --      <view>) — pg_depend records this as type=pg_type → pg_class.
-  --   2. Functions whose body references the view (used by sql functions
-  --      and by some plpgsql edge cases) — pg_depend records this as
-  --      pg_proc → pg_class.
-  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
-  -- statement that we replay verbatim. We DO include RETURNS-only
-  -- references because that's the dominant codegen pattern (sp* CRUD
-  -- functions all RETURNS SETOF the matching vwX).
-  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
-  SELECT DISTINCT
-      pn.nspname,
-      pp.proname,
-      pp.oid,
-      pg_get_functiondef(pp.oid)
-  FROM pg_depend d
-  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
-  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
-  JOIN pg_class tc ON tc.oid = d.refobjid
-  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-  WHERE tn.nspname = '__mj'
-    AND tc.relname = 'vwConversationDetails'
-    AND tc.relkind IN ('v', 'm')
-  UNION
-  SELECT DISTINCT
-      pn.nspname,
-      pp.proname,
-      pp.oid,
-      pg_get_functiondef(pp.oid)
-  FROM pg_depend d
-  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
-  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
-  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
-  WHERE EXISTS (
-      SELECT 1 FROM pg_class tc
-      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-      WHERE tc.reltype = pt.oid
-        AND tn.nspname = '__mj'
-        AND tc.relname = 'vwConversationDetails'
-        AND tc.relkind IN ('v', 'm')
-  );
-
-  DROP VIEW IF EXISTS __mj."vwConversationDetails" CASCADE;
-  EXECUTE vsql;
-
-  -- Replay captured dependents. Best-effort: log + continue on failure.
-  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
-  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
-  -- and rolls back EVERY statement in the block on any exception. If we
-  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
-  -- present in target environment), the just-recreated VIEW would also
-  -- get rolled back and stay missing — the exact failure mode this
-  -- wrapper exists to prevent.
-  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
-    BEGIN
-      IF rec.relkind = 'm' THEN
-        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
-      ELSE
-        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
-      END IF;
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
-    END;
-
-    IF rec.grants_sql IS NOT NULL THEN
-      BEGIN
-        EXECUTE rec.grants_sql;
-      EXCEPTION WHEN OTHERS THEN
-        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
-      END;
-    END IF;
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateTagSynonym'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
   END LOOP;
-
-  -- Replay captured dependent functions AFTER all dependent views are
-  -- restored — most codegen-emitted sp* functions reference both the
-  -- target view AND the dependent views in their bodies/return types.
-  -- Wrapped per-function in its own savepoint so a single failure
-  -- doesn't poison subsequent restores or the just-recreated target.
-  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
-    BEGIN
-      EXECUTE rec.definition;
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
-    END;
-  END LOOP;
-
-  DROP TABLE _vw_regen_deps;
-  DROP TABLE _vw_regen_fn_deps;
-END $vw_regen$;
-GRANT SELECT ON __mj."vwConversationDetails" TO "cdp_Developer";
-GRANT SELECT ON __mj."vwConversationDetails" TO "cdp_UI";
-GRANT SELECT ON __mj."vwConversationDetails" TO "cdp_Integration";
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
--- Item: spCreateConversationDetail
--- ============================================================
-
-------------------------------------------------------------
------ CREATE FUNCTION FOR ConversationDetail
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
-BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spCreateConversationDetail'
-               AND pronamespace = '__mj'::regnamespace
-    LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
-    END LOOP;
-END
-$do$;
-
-CREATE OR REPLACE FUNCTION __mj."spCreateConversationDetail"(
-    p_id uuid DEFAULT NULL,
-    p_conversationid uuid DEFAULT NULL,
-    p_externalid_clear boolean DEFAULT false,
-    p_externalid text DEFAULT NULL,
-    p_role text DEFAULT NULL,
-    p_message text DEFAULT NULL,
-    p_error_clear boolean DEFAULT false,
-    p_error text DEFAULT NULL,
-    p_hiddentouser BOOLEAN DEFAULT NULL,
-    p_userrating_clear boolean DEFAULT false,
-    p_userrating integer DEFAULT NULL,
-    p_userfeedback_clear boolean DEFAULT false,
-    p_userfeedback text DEFAULT NULL,
-    p_reflectioninsights_clear boolean DEFAULT false,
-    p_reflectioninsights text DEFAULT NULL,
-    p_summaryofearlierconversation_clear boolean DEFAULT false,
-    p_summaryofearlierconversation text DEFAULT NULL,
-    p_userid_clear boolean DEFAULT false,
-    p_userid uuid DEFAULT NULL,
-    p_artifactid_clear boolean DEFAULT false,
-    p_artifactid uuid DEFAULT NULL,
-    p_artifactversionid_clear boolean DEFAULT false,
-    p_artifactversionid uuid DEFAULT NULL,
-    p_completiontime_clear boolean DEFAULT false,
-    p_completiontime bigint DEFAULT NULL,
-    p_ispinned BOOLEAN DEFAULT NULL,
-    p_parentid_clear boolean DEFAULT false,
-    p_parentid uuid DEFAULT NULL,
-    p_agentid_clear boolean DEFAULT false,
-    p_agentid uuid DEFAULT NULL,
-    p_status text DEFAULT NULL,
-    p_suggestedresponses_clear boolean DEFAULT false,
-    p_suggestedresponses text DEFAULT NULL,
-    p_testrunid_clear boolean DEFAULT false,
-    p_testrunid uuid DEFAULT NULL,
-    p_responseform_clear boolean DEFAULT false,
-    p_responseform text DEFAULT NULL,
-    p_actionablecommands_clear boolean DEFAULT false,
-    p_actionablecommands text DEFAULT NULL,
-    p_automaticcommands_clear boolean DEFAULT false,
-    p_automaticcommands text DEFAULT NULL,
-    p_originalmessagechanged BOOLEAN DEFAULT NULL
-) RETURNS SETOF __mj."vwConversationDetails" AS $$
+END $$;
+CREATE OR REPLACE FUNCTION __mj."spUpdateTagSynonym"(
+    IN p_ID UUID,
+    IN p_TagID UUID DEFAULT NULL,
+    IN p_Synonym VARCHAR(255) DEFAULT NULL,
+    IN p_Source VARCHAR(20) DEFAULT NULL,
+    IN p_Status VARCHAR(20) DEFAULT NULL
+)
+RETURNS SETOF __mj."vwTagSynonyms" AS
+$$
 DECLARE
-    v_new_id uuid;
+    _v_row_count INTEGER;
 BEGIN
-    v_new_id := COALESCE(p_id, gen_random_uuid());
-    INSERT INTO __mj."ConversationDetail"
-        (
-            "ID",
-            "ConversationID",
-                "ExternalID",
-                "Role",
-                "Message",
-                "Error",
-                "HiddenToUser",
-                "UserRating",
-                "UserFeedback",
-                "ReflectionInsights",
-                "SummaryOfEarlierConversation",
-                "UserID",
-                "ArtifactID",
-                "ArtifactVersionID",
-                "CompletionTime",
-                "IsPinned",
-                "ParentID",
-                "AgentID",
-                "Status",
-                "SuggestedResponses",
-                "TestRunID",
-                "ResponseForm",
-                "ActionableCommands",
-                "AutomaticCommands",
-                "OriginalMessageChanged"
-        )
-    VALUES
-        (
-            v_new_id,
-            p_conversationid,
-                CASE WHEN p_externalid_clear = true THEN NULL ELSE COALESCE(p_externalid, NULL) END,
-                COALESCE(p_role, 'current_user'),
-                p_message,
-                CASE WHEN p_error_clear = true THEN NULL ELSE COALESCE(p_error, NULL) END,
-                COALESCE(p_hiddentouser, FALSE),
-                CASE WHEN p_userrating_clear = true THEN NULL ELSE COALESCE(p_userrating, NULL) END,
-                CASE WHEN p_userfeedback_clear = true THEN NULL ELSE COALESCE(p_userfeedback, NULL) END,
-                CASE WHEN p_reflectioninsights_clear = true THEN NULL ELSE COALESCE(p_reflectioninsights, NULL) END,
-                CASE WHEN p_summaryofearlierconversation_clear = true THEN NULL ELSE COALESCE(p_summaryofearlierconversation, NULL) END,
-                CASE WHEN p_userid_clear = true THEN NULL ELSE COALESCE(p_userid, NULL) END,
-                CASE WHEN p_artifactid_clear = true THEN NULL ELSE COALESCE(p_artifactid, NULL) END,
-                CASE WHEN p_artifactversionid_clear = true THEN NULL ELSE COALESCE(p_artifactversionid, NULL) END,
-                CASE WHEN p_completiontime_clear = true THEN NULL ELSE COALESCE(p_completiontime, NULL) END,
-                COALESCE(p_ispinned, FALSE),
-                CASE WHEN p_parentid_clear = true THEN NULL ELSE COALESCE(p_parentid, NULL) END,
-                CASE WHEN p_agentid_clear = true THEN NULL ELSE COALESCE(p_agentid, NULL) END,
-                COALESCE(p_status, 'Complete'),
-                CASE WHEN p_suggestedresponses_clear = true THEN NULL ELSE COALESCE(p_suggestedresponses, NULL) END,
-                CASE WHEN p_testrunid_clear = true THEN NULL ELSE COALESCE(p_testrunid, NULL) END,
-                CASE WHEN p_responseform_clear = true THEN NULL ELSE COALESCE(p_responseform, NULL) END,
-                CASE WHEN p_actionablecommands_clear = true THEN NULL ELSE COALESCE(p_actionablecommands, NULL) END,
-                CASE WHEN p_automaticcommands_clear = true THEN NULL ELSE COALESCE(p_automaticcommands, NULL) END,
-                COALESCE(p_originalmessagechanged, FALSE)
-        )
-    ;
-
-    RETURN QUERY
-    SELECT * FROM __mj."vwConversationDetails"
-    WHERE "ID" = v_new_id;
-END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetail" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetail" TO "cdp_UI";
-GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetail" TO "cdp_Integration";
-
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
--- Item: spUpdateConversationDetail
--- ============================================================
-
-------------------------------------------------------------
------ UPDATE FUNCTION FOR ConversationDetail
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
-BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spUpdateConversationDetail'
-               AND pronamespace = '__mj'::regnamespace
-    LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
-    END LOOP;
-END
-$do$;
-
-CREATE OR REPLACE FUNCTION __mj."spUpdateConversationDetail"(
-    p_id uuid,
-    p_conversationid uuid DEFAULT NULL,
-    p_externalid_clear boolean DEFAULT false,
-    p_externalid text DEFAULT NULL,
-    p_role text DEFAULT NULL,
-    p_message text DEFAULT NULL,
-    p_error_clear boolean DEFAULT false,
-    p_error text DEFAULT NULL,
-    p_hiddentouser BOOLEAN DEFAULT NULL,
-    p_userrating_clear boolean DEFAULT false,
-    p_userrating integer DEFAULT NULL,
-    p_userfeedback_clear boolean DEFAULT false,
-    p_userfeedback text DEFAULT NULL,
-    p_reflectioninsights_clear boolean DEFAULT false,
-    p_reflectioninsights text DEFAULT NULL,
-    p_summaryofearlierconversation_clear boolean DEFAULT false,
-    p_summaryofearlierconversation text DEFAULT NULL,
-    p_userid_clear boolean DEFAULT false,
-    p_userid uuid DEFAULT NULL,
-    p_artifactid_clear boolean DEFAULT false,
-    p_artifactid uuid DEFAULT NULL,
-    p_artifactversionid_clear boolean DEFAULT false,
-    p_artifactversionid uuid DEFAULT NULL,
-    p_completiontime_clear boolean DEFAULT false,
-    p_completiontime bigint DEFAULT NULL,
-    p_ispinned BOOLEAN DEFAULT NULL,
-    p_parentid_clear boolean DEFAULT false,
-    p_parentid uuid DEFAULT NULL,
-    p_agentid_clear boolean DEFAULT false,
-    p_agentid uuid DEFAULT NULL,
-    p_status text DEFAULT NULL,
-    p_suggestedresponses_clear boolean DEFAULT false,
-    p_suggestedresponses text DEFAULT NULL,
-    p_testrunid_clear boolean DEFAULT false,
-    p_testrunid uuid DEFAULT NULL,
-    p_responseform_clear boolean DEFAULT false,
-    p_responseform text DEFAULT NULL,
-    p_actionablecommands_clear boolean DEFAULT false,
-    p_actionablecommands text DEFAULT NULL,
-    p_automaticcommands_clear boolean DEFAULT false,
-    p_automaticcommands text DEFAULT NULL,
-    p_originalmessagechanged BOOLEAN DEFAULT NULL
-) RETURNS SETOF __mj."vwConversationDetails" AS $$
-DECLARE
-    v_updated_count INTEGER;
-BEGIN
-    UPDATE __mj."ConversationDetail"
+UPDATE
+        __mj."TagSynonym"
     SET
-        "ConversationID" = COALESCE(p_conversationid, "ConversationID"),
-        "ExternalID" = CASE WHEN p_externalid_clear = true THEN NULL ELSE COALESCE(p_externalid, "ExternalID") END,
-        "Role" = COALESCE(p_role, "Role"),
-        "Message" = COALESCE(p_message, "Message"),
-        "Error" = CASE WHEN p_error_clear = true THEN NULL ELSE COALESCE(p_error, "Error") END,
-        "HiddenToUser" = COALESCE(p_hiddentouser, "HiddenToUser"),
-        "UserRating" = CASE WHEN p_userrating_clear = true THEN NULL ELSE COALESCE(p_userrating, "UserRating") END,
-        "UserFeedback" = CASE WHEN p_userfeedback_clear = true THEN NULL ELSE COALESCE(p_userfeedback, "UserFeedback") END,
-        "ReflectionInsights" = CASE WHEN p_reflectioninsights_clear = true THEN NULL ELSE COALESCE(p_reflectioninsights, "ReflectionInsights") END,
-        "SummaryOfEarlierConversation" = CASE WHEN p_summaryofearlierconversation_clear = true THEN NULL ELSE COALESCE(p_summaryofearlierconversation, "SummaryOfEarlierConversation") END,
-        "UserID" = CASE WHEN p_userid_clear = true THEN NULL ELSE COALESCE(p_userid, "UserID") END,
-        "ArtifactID" = CASE WHEN p_artifactid_clear = true THEN NULL ELSE COALESCE(p_artifactid, "ArtifactID") END,
-        "ArtifactVersionID" = CASE WHEN p_artifactversionid_clear = true THEN NULL ELSE COALESCE(p_artifactversionid, "ArtifactVersionID") END,
-        "CompletionTime" = CASE WHEN p_completiontime_clear = true THEN NULL ELSE COALESCE(p_completiontime, "CompletionTime") END,
-        "IsPinned" = COALESCE(p_ispinned, "IsPinned"),
-        "ParentID" = CASE WHEN p_parentid_clear = true THEN NULL ELSE COALESCE(p_parentid, "ParentID") END,
-        "AgentID" = CASE WHEN p_agentid_clear = true THEN NULL ELSE COALESCE(p_agentid, "AgentID") END,
-        "Status" = COALESCE(p_status, "Status"),
-        "SuggestedResponses" = CASE WHEN p_suggestedresponses_clear = true THEN NULL ELSE COALESCE(p_suggestedresponses, "SuggestedResponses") END,
-        "TestRunID" = CASE WHEN p_testrunid_clear = true THEN NULL ELSE COALESCE(p_testrunid, "TestRunID") END,
-        "ResponseForm" = CASE WHEN p_responseform_clear = true THEN NULL ELSE COALESCE(p_responseform, "ResponseForm") END,
-        "ActionableCommands" = CASE WHEN p_actionablecommands_clear = true THEN NULL ELSE COALESCE(p_actionablecommands, "ActionableCommands") END,
-        "AutomaticCommands" = CASE WHEN p_automaticcommands_clear = true THEN NULL ELSE COALESCE(p_automaticcommands, "AutomaticCommands") END,
-        "OriginalMessageChanged" = COALESCE(p_originalmessagechanged, "OriginalMessageChanged")
+        "TagID" = COALESCE(p_TagID, "TagID"),
+        "Synonym" = COALESCE(p_Synonym, "Synonym"),
+        "Source" = COALESCE(p_Source, "Source"),
+        "Status" = COALESCE(p_Status, "Status")
     WHERE
-        "ID" = p_id;
+        "ID" = p_ID;
 
-    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
 
-    IF v_updated_count = 0 THEN
-        -- Nothing was updated, return empty result set
-        RETURN;
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwTagSynonyms" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwTagSynonyms" WHERE "ID" = p_ID;
     END IF;
-
-    -- Return the updated record from the base view
-    RETURN QUERY
-    SELECT * FROM __mj."vwConversationDetails"
-    WHERE "ID" = p_id;
-END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetail" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetail" TO "cdp_UI";
-GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetail" TO "cdp_Integration";
-
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the ConversationDetail table
-------------------------------------------------------------
-CREATE OR REPLACE FUNCTION __mj."fn_trg_update_conversation_detail"()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW."__mj_UpdatedAt" := NOW() AT TIME ZONE 'UTC';
-    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS "trg_update_conversation_detail" ON __mj."ConversationDetail";
-
-CREATE TRIGGER "trg_update_conversation_detail"
-BEFORE UPDATE ON __mj."ConversationDetail"
-FOR EACH ROW
-EXECUTE FUNCTION __mj."fn_trg_update_conversation_detail"();
-
-
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: Conversation Details
--- Item: spDeleteConversationDetail
--- ============================================================
-
-------------------------------------------------------------
------ DELETE FUNCTION FOR ConversationDetail
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
+DO $$ DECLARE r record;
 BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spDeleteConversationDetail'
-               AND pronamespace = '__mj'::regnamespace
-    LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
-    END LOOP;
-END
-$do$;
-
-CREATE OR REPLACE FUNCTION __mj."spDeleteConversationDetail"(
-    p_id uuid
-) RETURNS TABLE("ID" uuid) AS $$
-#variable_conflict use_column
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteTagSynonym'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
+CREATE OR REPLACE FUNCTION __mj."spDeleteTagSynonym"(
+    IN p_ID UUID
+)
+RETURNS TABLE("_result_id" UUID) AS
+$$
 DECLARE
-    v_affected_count INTEGER;
-    v_rec RECORD;
+    _v_row_count INTEGER;
 BEGIN
-    -- Cascade: Set MJ: AI Agent Examples.SourceConversationDetailID to NULL
-    FOR v_rec IN
-        SELECT "ID"
-        FROM __mj."AIAgentExample"
-        WHERE "SourceConversationDetailID" = p_id
-    LOOP
-        -- Update related record to set FK to NULL
-        UPDATE __mj."AIAgentExample"
-        SET "SourceConversationDetailID" = NULL
-        WHERE "ID" = v_rec."ID";
-    END LOOP;
+DELETE FROM
+        __mj."TagSynonym"
+    WHERE
+        "ID" = p_ID;
 
-        -- Cascade: Set MJ: AI Agent Notes.SourceConversationDetailID to NULL
-    FOR v_rec IN
-        SELECT "ID"
-        FROM __mj."AIAgentNote"
-        WHERE "SourceConversationDetailID" = p_id
-    LOOP
-        -- Update related record to set FK to NULL
-        UPDATE __mj."AIAgentNote"
-        SET "SourceConversationDetailID" = NULL
-        WHERE "ID" = v_rec."ID";
-    END LOOP;
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
 
-        -- Cascade: Set MJ: AI Agent Runs.ConversationDetailID to NULL
-    FOR v_rec IN
-        SELECT "ID"
-        FROM __mj."AIAgentRun"
-        WHERE "ConversationDetailID" = p_id
-    LOOP
-        -- Update related record to set FK to NULL
-        UPDATE __mj."AIAgentRun"
-        SET "ConversationDetailID" = NULL
-        WHERE "ID" = v_rec."ID";
-    END LOOP;
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT NULL::UUID AS "_result_id";
+    ELSE
+        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
-        -- Cascade: Delete MJ: Conversation Detail Artifacts records via ConversationDetailID
-    FOR v_rec IN
-        SELECT "ID"
-        FROM __mj."ConversationDetailArtifact"
-        WHERE "ConversationDetailID" = p_id
-    LOOP
-        PERFORM __mj."spDeleteConversationDetailArtifact"(v_rec."ID");
-    END LOOP;
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteConversationDetail'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
+CREATE OR REPLACE FUNCTION __mj."spDeleteConversationDetail"(
+    IN p_ID UUID
+)
+RETURNS TABLE("_result_id" UUID) AS
+$$
+DECLARE
+    _rec RECORD;
+    _v_row_count INTEGER;
+    p_MJAIAgentExamples_SourceConversationDetailIDID UUID;
+    p_MJAIAgentExamples_SourceConversationDetailID_AgentID UUID;
+    p_MJAIAgentExamples_SourceConversationDetailID_UserID UUID;
+    p_MJAIAgentExamples_SourceConversationDetailID_CompanyID UUID;
+    p_MJAIAgentExamples_SourceConversationDetailID_Type VARCHAR(20);
+    p_MJAIAgentExamples_SourceConversationDetailID_ExampleInput TEXT;
+    p_MJAIAgentExamples_SourceConversationDetailID_ExampleOutput TEXT;
+    p_MJAIAgentExamples_SourceConversationDetailID_IsAutoGenerated BOOLEAN;
+    p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_b3263f UUID;
+    p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_591540 UUID;
+    p_MJAIAgentExamples_SourceConversationDetailID_SourceAIAg_987eaf UUID;
+    p_MJAIAgentExamples_SourceConversationDetailID_SuccessScore NUMERIC(5,2);
+    p_MJAIAgentExamples_SourceConversationDetailID_Comments TEXT;
+    p_MJAIAgentExamples_SourceConversationDetailID_Status VARCHAR(20);
+    p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingVector TEXT;
+    p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingModelID UUID;
+    p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_8c9509 UUID;
+    p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_da3d2d VARCHAR(100);
+    p_MJAIAgentExamples_SourceConversationDetailID_SecondaryScopes TEXT;
+    p_MJAIAgentExamples_SourceConversationDetailID_LastAccessedAt TIMESTAMPTZ;
+    p_MJAIAgentExamples_SourceConversationDetailID_AccessCount INTEGER;
+    p_MJAIAgentExamples_SourceConversationDetailID_ExpiresAt TIMESTAMPTZ;
+    p_MJAIAgentNotes_SourceConversationDetailIDID UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_AgentID UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_AgentNoteTypeID UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_Note TEXT;
+    p_MJAIAgentNotes_SourceConversationDetailID_UserID UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_Type VARCHAR(20);
+    p_MJAIAgentNotes_SourceConversationDetailID_IsAutoGenerated BOOLEAN;
+    p_MJAIAgentNotes_SourceConversationDetailID_Comments TEXT;
+    p_MJAIAgentNotes_SourceConversationDetailID_Status VARCHAR(20);
+    p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_d7e41b UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_ec3b0d UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_SourceAIAgentRunID UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_CompanyID UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingVector TEXT;
+    p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingModelID UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeE_b152e5 UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeR_fefb0a VARCHAR(100);
+    p_MJAIAgentNotes_SourceConversationDetailID_SecondaryScopes TEXT;
+    p_MJAIAgentNotes_SourceConversationDetailID_LastAccessedAt TIMESTAMPTZ;
+    p_MJAIAgentNotes_SourceConversationDetailID_AccessCount INTEGER;
+    p_MJAIAgentNotes_SourceConversationDetailID_ExpiresAt TIMESTAMPTZ;
+    p_MJAIAgentNotes_SourceConversationDetailID_ConsolidatedI_88bda0 UUID;
+    p_MJAIAgentNotes_SourceConversationDetailID_ConsolidationCount INTEGER;
+    p_MJAIAgentNotes_SourceConversationDetailID_DerivedFromNoteIDs TEXT;
+    p_MJAIAgentNotes_SourceConversationDetailID_ProtectionTier VARCHAR(20);
+    p_MJAIAgentNotes_SourceConversationDetailID_ImportanceScore NUMERIC(5,2);
+    p_MJAIAgentRuns_ConversationDetailIDID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_AgentID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_ParentRunID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_Status VARCHAR(50);
+    p_MJAIAgentRuns_ConversationDetailID_StartedAt TIMESTAMPTZ;
+    p_MJAIAgentRuns_ConversationDetailID_CompletedAt TIMESTAMPTZ;
+    p_MJAIAgentRuns_ConversationDetailID_Success BOOLEAN;
+    p_MJAIAgentRuns_ConversationDetailID_ErrorMessage TEXT;
+    p_MJAIAgentRuns_ConversationDetailID_ConversationID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_UserID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_Result TEXT;
+    p_MJAIAgentRuns_ConversationDetailID_AgentState TEXT;
+    p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsed INTEGER;
+    p_MJAIAgentRuns_ConversationDetailID_TotalCost NUMERIC(18,6);
+    p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUsed INTEGER;
+    p_MJAIAgentRuns_ConversationDetailID_TotalCompletionTokensUsed INTEGER;
+    p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsedRollup INTEGER;
+    p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUse_5ca82d INTEGER;
+    p_MJAIAgentRuns_ConversationDetailID_TotalCompletionToken_43c4ab INTEGER;
+    p_MJAIAgentRuns_ConversationDetailID_TotalCostRollup NUMERIC(19,8);
+    p_MJAIAgentRuns_ConversationDetailID_ConversationDetailID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_ConversationDetailSequence INTEGER;
+    p_MJAIAgentRuns_ConversationDetailID_CancellationReason VARCHAR(30);
+    p_MJAIAgentRuns_ConversationDetailID_FinalStep VARCHAR(30);
+    p_MJAIAgentRuns_ConversationDetailID_FinalPayload TEXT;
+    p_MJAIAgentRuns_ConversationDetailID_Message TEXT;
+    p_MJAIAgentRuns_ConversationDetailID_LastRunID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_StartingPayload TEXT;
+    p_MJAIAgentRuns_ConversationDetailID_TotalPromptIterations INTEGER;
+    p_MJAIAgentRuns_ConversationDetailID_ConfigurationID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_OverrideModelID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_OverrideVendorID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_Data TEXT;
+    p_MJAIAgentRuns_ConversationDetailID_Verbose BOOLEAN;
+    p_MJAIAgentRuns_ConversationDetailID_EffortLevel INTEGER;
+    p_MJAIAgentRuns_ConversationDetailID_RunName VARCHAR(255);
+    p_MJAIAgentRuns_ConversationDetailID_Comments TEXT;
+    p_MJAIAgentRuns_ConversationDetailID_ScheduledJobRunID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_TestRunID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeEntityID UUID;
+    p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeRecordID VARCHAR(100);
+    p_MJAIAgentRuns_ConversationDetailID_SecondaryScopes TEXT;
+    p_MJAIAgentRuns_ConversationDetailID_ExternalReferenceID VARCHAR(200);
+    p_MJAIAgentRuns_ConversationDetailID_CompanyID UUID;
+    p_MJConversationDetailArtifacts_ConversationDetailIDID UUID;
+    p_MJConversationDetailAttachments_ConversationDetailIDID UUID;
+    p_MJConversationDetailRatings_ConversationDetailIDID UUID;
+    p_MJConversationDetails_ParentIDID UUID;
+    p_MJConversationDetails_ParentID_ConversationID UUID;
+    p_MJConversationDetails_ParentID_ExternalID VARCHAR(100);
+    p_MJConversationDetails_ParentID_Role VARCHAR(20);
+    p_MJConversationDetails_ParentID_Message TEXT;
+    p_MJConversationDetails_ParentID_Error TEXT;
+    p_MJConversationDetails_ParentID_HiddenToUser BOOLEAN;
+    p_MJConversationDetails_ParentID_UserRating INTEGER;
+    p_MJConversationDetails_ParentID_UserFeedback TEXT;
+    p_MJConversationDetails_ParentID_ReflectionInsights TEXT;
+    p_MJConversationDetails_ParentID_SummaryOfEarlierConversation TEXT;
+    p_MJConversationDetails_ParentID_UserID UUID;
+    p_MJConversationDetails_ParentID_ArtifactID UUID;
+    p_MJConversationDetails_ParentID_ArtifactVersionID UUID;
+    p_MJConversationDetails_ParentID_CompletionTime BIGINT;
+    p_MJConversationDetails_ParentID_IsPinned BOOLEAN;
+    p_MJConversationDetails_ParentID_ParentID UUID;
+    p_MJConversationDetails_ParentID_AgentID UUID;
+    p_MJConversationDetails_ParentID_Status VARCHAR(20);
+    p_MJConversationDetails_ParentID_SuggestedResponses TEXT;
+    p_MJConversationDetails_ParentID_TestRunID UUID;
+    p_MJConversationDetails_ParentID_ResponseForm TEXT;
+    p_MJConversationDetails_ParentID_ActionableCommands TEXT;
+    p_MJConversationDetails_ParentID_AutomaticCommands TEXT;
+    p_MJConversationDetails_ParentID_OriginalMessageChanged BOOLEAN;
+    p_MJReports_ConversationDetailIDID UUID;
+    p_MJReports_ConversationDetailID_Name VARCHAR(255);
+    p_MJReports_ConversationDetailID_Description TEXT;
+    p_MJReports_ConversationDetailID_CategoryID UUID;
+    p_MJReports_ConversationDetailID_UserID UUID;
+    p_MJReports_ConversationDetailID_SharingScope VARCHAR(20);
+    p_MJReports_ConversationDetailID_ConversationID UUID;
+    p_MJReports_ConversationDetailID_ConversationDetailID UUID;
+    p_MJReports_ConversationDetailID_DataContextID UUID;
+    p_MJReports_ConversationDetailID_Configuration TEXT;
+    p_MJReports_ConversationDetailID_OutputTriggerTypeID UUID;
+    p_MJReports_ConversationDetailID_OutputFormatTypeID UUID;
+    p_MJReports_ConversationDetailID_OutputDeliveryTypeID UUID;
+    p_MJReports_ConversationDetailID_OutputFrequency VARCHAR(50);
+    p_MJReports_ConversationDetailID_OutputTargetEmail VARCHAR(255);
+    p_MJReports_ConversationDetailID_OutputWorkflowID UUID;
+    p_MJReports_ConversationDetailID_Thumbnail TEXT;
+    p_MJReports_ConversationDetailID_EnvironmentID UUID;
+    p_MJTasks_ConversationDetailIDID UUID;
+    p_MJTasks_ConversationDetailID_ParentID UUID;
+    p_MJTasks_ConversationDetailID_Name VARCHAR(255);
+    p_MJTasks_ConversationDetailID_Description TEXT;
+    p_MJTasks_ConversationDetailID_TypeID UUID;
+    p_MJTasks_ConversationDetailID_EnvironmentID UUID;
+    p_MJTasks_ConversationDetailID_ProjectID UUID;
+    p_MJTasks_ConversationDetailID_ConversationDetailID UUID;
+    p_MJTasks_ConversationDetailID_UserID UUID;
+    p_MJTasks_ConversationDetailID_AgentID UUID;
+    p_MJTasks_ConversationDetailID_Status VARCHAR(50);
+    p_MJTasks_ConversationDetailID_PercentComplete INTEGER;
+    p_MJTasks_ConversationDetailID_DueAt TIMESTAMPTZ;
+    p_MJTasks_ConversationDetailID_StartedAt TIMESTAMPTZ;
+    p_MJTasks_ConversationDetailID_CompletedAt TIMESTAMPTZ;
+BEGIN
+-- Cascade update on AIAgentExample using cursor to call spUpdateAIAgentExample
 
-        -- Cascade: Delete MJ: Conversation Detail Attachments records via ConversationDetailID
-    FOR v_rec IN
-        SELECT "ID"
-        FROM __mj."ConversationDetailAttachment"
-        WHERE "ConversationDetailID" = p_id
-    LOOP
-        PERFORM __mj."spDeleteConversationDetailAttachment"(v_rec."ID");
-    END LOOP;
 
-        -- Cascade: Delete MJ: Conversation Detail Ratings records via ConversationDetailID
-    FOR v_rec IN
-        SELECT "ID"
-        FROM __mj."ConversationDetailRating"
-        WHERE "ConversationDetailID" = p_id
+    FOR _rec IN SELECT "ID", "AgentID", "UserID", "CompanyID", "Type", "ExampleInput", "ExampleOutput", "IsAutoGenerated", "SourceConversationID", "SourceConversationDetailID", "SourceAIAgentRunID", "SuccessScore", "Comments", "Status", "EmbeddingVector", "EmbeddingModelID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "LastAccessedAt", "AccessCount", "ExpiresAt" FROM __mj."AIAgentExample" WHERE "SourceConversationDetailID" = p_ID
     LOOP
-        PERFORM __mj."spDeleteConversationDetailRating"(v_rec."ID");
-    END LOOP;
+        p_MJAIAgentExamples_SourceConversationDetailIDID := _rec."ID";
+        p_MJAIAgentExamples_SourceConversationDetailID_AgentID := _rec."AgentID";
+        p_MJAIAgentExamples_SourceConversationDetailID_UserID := _rec."UserID";
+        p_MJAIAgentExamples_SourceConversationDetailID_CompanyID := _rec."CompanyID";
+        p_MJAIAgentExamples_SourceConversationDetailID_Type := _rec."Type";
+        p_MJAIAgentExamples_SourceConversationDetailID_ExampleInput := _rec."ExampleInput";
+        p_MJAIAgentExamples_SourceConversationDetailID_ExampleOutput := _rec."ExampleOutput";
+        p_MJAIAgentExamples_SourceConversationDetailID_IsAutoGenerated := _rec."IsAutoGenerated";
+        p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_b3263f := _rec."SourceConversationID";
+        p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_591540 := _rec."SourceConversationDetailID";
+        p_MJAIAgentExamples_SourceConversationDetailID_SourceAIAg_987eaf := _rec."SourceAIAgentRunID";
+        p_MJAIAgentExamples_SourceConversationDetailID_SuccessScore := _rec."SuccessScore";
+        p_MJAIAgentExamples_SourceConversationDetailID_Comments := _rec."Comments";
+        p_MJAIAgentExamples_SourceConversationDetailID_Status := _rec."Status";
+        p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingVector := _rec."EmbeddingVector";
+        p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingModelID := _rec."EmbeddingModelID";
+        p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_8c9509 := _rec."PrimaryScopeEntityID";
+        p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_da3d2d := _rec."PrimaryScopeRecordID";
+        p_MJAIAgentExamples_SourceConversationDetailID_SecondaryScopes := _rec."SecondaryScopes";
+        p_MJAIAgentExamples_SourceConversationDetailID_LastAccessedAt := _rec."LastAccessedAt";
+        p_MJAIAgentExamples_SourceConversationDetailID_AccessCount := _rec."AccessCount";
+        p_MJAIAgentExamples_SourceConversationDetailID_ExpiresAt := _rec."ExpiresAt";
+        -- Set the FK field to NULL
+        p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_591540 := NULL;
+        -- Call the update SP for the related entity
+        PERFORM __mj."spUpdateAIAgentExample"(p_ID => p_MJAIAgentExamples_SourceConversationDetailIDID, p_AgentID => p_MJAIAgentExamples_SourceConversationDetailID_AgentID, p_UserID => p_MJAIAgentExamples_SourceConversationDetailID_UserID, p_CompanyID => p_MJAIAgentExamples_SourceConversationDetailID_CompanyID, p_Type => p_MJAIAgentExamples_SourceConversationDetailID_Type, p_ExampleInput => p_MJAIAgentExamples_SourceConversationDetailID_ExampleInput, p_ExampleOutput => p_MJAIAgentExamples_SourceConversationDetailID_ExampleOutput, p_IsAutoGenerated => p_MJAIAgentExamples_SourceConversationDetailID_IsAutoGenerated, p_SourceConversationID => p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_b3263f, p_SourceConversationDetailID_Clear => 1, p_SourceConversationDetailID => p_MJAIAgentExamples_SourceConversationDetailID_SourceConv_591540, p_SourceAIAgentRunID => p_MJAIAgentExamples_SourceConversationDetailID_SourceAIAg_987eaf, p_SuccessScore => p_MJAIAgentExamples_SourceConversationDetailID_SuccessScore, p_Comments => p_MJAIAgentExamples_SourceConversationDetailID_Comments, p_Status => p_MJAIAgentExamples_SourceConversationDetailID_Status, p_EmbeddingVector => p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentExamples_SourceConversationDetailID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_8c9509, p_PrimaryScopeRecordID => p_MJAIAgentExamples_SourceConversationDetailID_PrimarySco_da3d2d, p_SecondaryScopes => p_MJAIAgentExamples_SourceConversationDetailID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentExamples_SourceConversationDetailID_LastAccessedAt, p_AccessCount => p_MJAIAgentExamples_SourceConversationDetailID_AccessCount, p_ExpiresAt => p_MJAIAgentExamples_SourceConversationDetailID_ExpiresAt);
 
-        -- Cascade: Set MJ: Conversation Details.ParentID to NULL
-    FOR v_rec IN
-        SELECT "ID"
-        FROM __mj."ConversationDetail"
-        WHERE "ParentID" = p_id
-    LOOP
-        -- Update related record to set FK to NULL
-        UPDATE __mj."ConversationDetail"
-        SET "ParentID" = NULL
-        WHERE "ID" = v_rec."ID";
-    END LOOP;
-
-        -- Cascade: Set MJ: Reports.ConversationDetailID to NULL
-    FOR v_rec IN
-        SELECT "ID"
-        FROM __mj."Report"
-        WHERE "ConversationDetailID" = p_id
-    LOOP
-        -- Update related record to set FK to NULL
-        UPDATE __mj."Report"
-        SET "ConversationDetailID" = NULL
-        WHERE "ID" = v_rec."ID";
-    END LOOP;
-
-        -- Cascade: Set MJ: Tasks.ConversationDetailID to NULL
-    FOR v_rec IN
-        SELECT "ID"
-        FROM __mj."Task"
-        WHERE "ConversationDetailID" = p_id
-    LOOP
-        -- Update related record to set FK to NULL
-        UPDATE __mj."Task"
-        SET "ConversationDetailID" = NULL
-        WHERE "ID" = v_rec."ID";
     END LOOP;
 
     
-    DELETE FROM __mj."ConversationDetail"
-    WHERE "ID" = p_id;
+    -- Cascade update on AIAgentNote using cursor to call spUpdateAIAgentNote
 
-    GET DIAGNOSTICS v_affected_count = ROW_COUNT;
 
-    IF v_affected_count = 0 THEN
-        RETURN QUERY SELECT NULL::uuid AS "ID";
+    FOR _rec IN SELECT "ID", "AgentID", "AgentNoteTypeID", "Note", "UserID", "Type", "IsAutoGenerated", "Comments", "Status", "SourceConversationID", "SourceConversationDetailID", "SourceAIAgentRunID", "CompanyID", "EmbeddingVector", "EmbeddingModelID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "LastAccessedAt", "AccessCount", "ExpiresAt", "ConsolidatedIntoNoteID", "ConsolidationCount", "DerivedFromNoteIDs", "ProtectionTier", "ImportanceScore" FROM __mj."AIAgentNote" WHERE "SourceConversationDetailID" = p_ID
+    LOOP
+        p_MJAIAgentNotes_SourceConversationDetailIDID := _rec."ID";
+        p_MJAIAgentNotes_SourceConversationDetailID_AgentID := _rec."AgentID";
+        p_MJAIAgentNotes_SourceConversationDetailID_AgentNoteTypeID := _rec."AgentNoteTypeID";
+        p_MJAIAgentNotes_SourceConversationDetailID_Note := _rec."Note";
+        p_MJAIAgentNotes_SourceConversationDetailID_UserID := _rec."UserID";
+        p_MJAIAgentNotes_SourceConversationDetailID_Type := _rec."Type";
+        p_MJAIAgentNotes_SourceConversationDetailID_IsAutoGenerated := _rec."IsAutoGenerated";
+        p_MJAIAgentNotes_SourceConversationDetailID_Comments := _rec."Comments";
+        p_MJAIAgentNotes_SourceConversationDetailID_Status := _rec."Status";
+        p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_d7e41b := _rec."SourceConversationID";
+        p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_ec3b0d := _rec."SourceConversationDetailID";
+        p_MJAIAgentNotes_SourceConversationDetailID_SourceAIAgentRunID := _rec."SourceAIAgentRunID";
+        p_MJAIAgentNotes_SourceConversationDetailID_CompanyID := _rec."CompanyID";
+        p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingVector := _rec."EmbeddingVector";
+        p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingModelID := _rec."EmbeddingModelID";
+        p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeE_b152e5 := _rec."PrimaryScopeEntityID";
+        p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeR_fefb0a := _rec."PrimaryScopeRecordID";
+        p_MJAIAgentNotes_SourceConversationDetailID_SecondaryScopes := _rec."SecondaryScopes";
+        p_MJAIAgentNotes_SourceConversationDetailID_LastAccessedAt := _rec."LastAccessedAt";
+        p_MJAIAgentNotes_SourceConversationDetailID_AccessCount := _rec."AccessCount";
+        p_MJAIAgentNotes_SourceConversationDetailID_ExpiresAt := _rec."ExpiresAt";
+        p_MJAIAgentNotes_SourceConversationDetailID_ConsolidatedI_88bda0 := _rec."ConsolidatedIntoNoteID";
+        p_MJAIAgentNotes_SourceConversationDetailID_ConsolidationCount := _rec."ConsolidationCount";
+        p_MJAIAgentNotes_SourceConversationDetailID_DerivedFromNoteIDs := _rec."DerivedFromNoteIDs";
+        p_MJAIAgentNotes_SourceConversationDetailID_ProtectionTier := _rec."ProtectionTier";
+        p_MJAIAgentNotes_SourceConversationDetailID_ImportanceScore := _rec."ImportanceScore";
+        -- Set the FK field to NULL
+        p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_ec3b0d := NULL;
+        -- Call the update SP for the related entity
+        PERFORM __mj."spUpdateAIAgentNote"(p_ID => p_MJAIAgentNotes_SourceConversationDetailIDID, p_AgentID => p_MJAIAgentNotes_SourceConversationDetailID_AgentID, p_AgentNoteTypeID => p_MJAIAgentNotes_SourceConversationDetailID_AgentNoteTypeID, p_Note => p_MJAIAgentNotes_SourceConversationDetailID_Note, p_UserID => p_MJAIAgentNotes_SourceConversationDetailID_UserID, p_Type => p_MJAIAgentNotes_SourceConversationDetailID_Type, p_IsAutoGenerated => p_MJAIAgentNotes_SourceConversationDetailID_IsAutoGenerated, p_Comments => p_MJAIAgentNotes_SourceConversationDetailID_Comments, p_Status => p_MJAIAgentNotes_SourceConversationDetailID_Status, p_SourceConversationID => p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_d7e41b, p_SourceConversationDetailID_Clear => 1, p_SourceConversationDetailID => p_MJAIAgentNotes_SourceConversationDetailID_SourceConvers_ec3b0d, p_SourceAIAgentRunID => p_MJAIAgentNotes_SourceConversationDetailID_SourceAIAgentRunID, p_CompanyID => p_MJAIAgentNotes_SourceConversationDetailID_CompanyID, p_EmbeddingVector => p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentNotes_SourceConversationDetailID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeE_b152e5, p_PrimaryScopeRecordID => p_MJAIAgentNotes_SourceConversationDetailID_PrimaryScopeR_fefb0a, p_SecondaryScopes => p_MJAIAgentNotes_SourceConversationDetailID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentNotes_SourceConversationDetailID_LastAccessedAt, p_AccessCount => p_MJAIAgentNotes_SourceConversationDetailID_AccessCount, p_ExpiresAt => p_MJAIAgentNotes_SourceConversationDetailID_ExpiresAt, p_ConsolidatedIntoNoteID => p_MJAIAgentNotes_SourceConversationDetailID_ConsolidatedI_88bda0, p_ConsolidationCount => p_MJAIAgentNotes_SourceConversationDetailID_ConsolidationCount, p_DerivedFromNoteIDs => p_MJAIAgentNotes_SourceConversationDetailID_DerivedFromNoteIDs, p_ProtectionTier => p_MJAIAgentNotes_SourceConversationDetailID_ProtectionTier, p_ImportanceScore => p_MJAIAgentNotes_SourceConversationDetailID_ImportanceScore);
+
+    END LOOP;
+
+    
+    -- Cascade update on AIAgentRun using cursor to call spUpdateAIAgentRun
+
+
+    FOR _rec IN SELECT "ID", "AgentID", "ParentRunID", "Status", "StartedAt", "CompletedAt", "Success", "ErrorMessage", "ConversationID", "UserID", "Result", "AgentState", "TotalTokensUsed", "TotalCost", "TotalPromptTokensUsed", "TotalCompletionTokensUsed", "TotalTokensUsedRollup", "TotalPromptTokensUsedRollup", "TotalCompletionTokensUsedRollup", "TotalCostRollup", "ConversationDetailID", "ConversationDetailSequence", "CancellationReason", "FinalStep", "FinalPayload", "Message", "LastRunID", "StartingPayload", "TotalPromptIterations", "ConfigurationID", "OverrideModelID", "OverrideVendorID", "Data", "Verbose", "EffortLevel", "RunName", "Comments", "ScheduledJobRunID", "TestRunID", "PrimaryScopeEntityID", "PrimaryScopeRecordID", "SecondaryScopes", "ExternalReferenceID", "CompanyID" FROM __mj."AIAgentRun" WHERE "ConversationDetailID" = p_ID
+    LOOP
+        p_MJAIAgentRuns_ConversationDetailIDID := _rec."ID";
+        p_MJAIAgentRuns_ConversationDetailID_AgentID := _rec."AgentID";
+        p_MJAIAgentRuns_ConversationDetailID_ParentRunID := _rec."ParentRunID";
+        p_MJAIAgentRuns_ConversationDetailID_Status := _rec."Status";
+        p_MJAIAgentRuns_ConversationDetailID_StartedAt := _rec."StartedAt";
+        p_MJAIAgentRuns_ConversationDetailID_CompletedAt := _rec."CompletedAt";
+        p_MJAIAgentRuns_ConversationDetailID_Success := _rec."Success";
+        p_MJAIAgentRuns_ConversationDetailID_ErrorMessage := _rec."ErrorMessage";
+        p_MJAIAgentRuns_ConversationDetailID_ConversationID := _rec."ConversationID";
+        p_MJAIAgentRuns_ConversationDetailID_UserID := _rec."UserID";
+        p_MJAIAgentRuns_ConversationDetailID_Result := _rec."Result";
+        p_MJAIAgentRuns_ConversationDetailID_AgentState := _rec."AgentState";
+        p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsed := _rec."TotalTokensUsed";
+        p_MJAIAgentRuns_ConversationDetailID_TotalCost := _rec."TotalCost";
+        p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUsed := _rec."TotalPromptTokensUsed";
+        p_MJAIAgentRuns_ConversationDetailID_TotalCompletionTokensUsed := _rec."TotalCompletionTokensUsed";
+        p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsedRollup := _rec."TotalTokensUsedRollup";
+        p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUse_5ca82d := _rec."TotalPromptTokensUsedRollup";
+        p_MJAIAgentRuns_ConversationDetailID_TotalCompletionToken_43c4ab := _rec."TotalCompletionTokensUsedRollup";
+        p_MJAIAgentRuns_ConversationDetailID_TotalCostRollup := _rec."TotalCostRollup";
+        p_MJAIAgentRuns_ConversationDetailID_ConversationDetailID := _rec."ConversationDetailID";
+        p_MJAIAgentRuns_ConversationDetailID_ConversationDetailSequence := _rec."ConversationDetailSequence";
+        p_MJAIAgentRuns_ConversationDetailID_CancellationReason := _rec."CancellationReason";
+        p_MJAIAgentRuns_ConversationDetailID_FinalStep := _rec."FinalStep";
+        p_MJAIAgentRuns_ConversationDetailID_FinalPayload := _rec."FinalPayload";
+        p_MJAIAgentRuns_ConversationDetailID_Message := _rec."Message";
+        p_MJAIAgentRuns_ConversationDetailID_LastRunID := _rec."LastRunID";
+        p_MJAIAgentRuns_ConversationDetailID_StartingPayload := _rec."StartingPayload";
+        p_MJAIAgentRuns_ConversationDetailID_TotalPromptIterations := _rec."TotalPromptIterations";
+        p_MJAIAgentRuns_ConversationDetailID_ConfigurationID := _rec."ConfigurationID";
+        p_MJAIAgentRuns_ConversationDetailID_OverrideModelID := _rec."OverrideModelID";
+        p_MJAIAgentRuns_ConversationDetailID_OverrideVendorID := _rec."OverrideVendorID";
+        p_MJAIAgentRuns_ConversationDetailID_Data := _rec."Data";
+        p_MJAIAgentRuns_ConversationDetailID_Verbose := _rec."Verbose";
+        p_MJAIAgentRuns_ConversationDetailID_EffortLevel := _rec."EffortLevel";
+        p_MJAIAgentRuns_ConversationDetailID_RunName := _rec."RunName";
+        p_MJAIAgentRuns_ConversationDetailID_Comments := _rec."Comments";
+        p_MJAIAgentRuns_ConversationDetailID_ScheduledJobRunID := _rec."ScheduledJobRunID";
+        p_MJAIAgentRuns_ConversationDetailID_TestRunID := _rec."TestRunID";
+        p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeEntityID := _rec."PrimaryScopeEntityID";
+        p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeRecordID := _rec."PrimaryScopeRecordID";
+        p_MJAIAgentRuns_ConversationDetailID_SecondaryScopes := _rec."SecondaryScopes";
+        p_MJAIAgentRuns_ConversationDetailID_ExternalReferenceID := _rec."ExternalReferenceID";
+        p_MJAIAgentRuns_ConversationDetailID_CompanyID := _rec."CompanyID";
+        -- Set the FK field to NULL
+        p_MJAIAgentRuns_ConversationDetailID_ConversationDetailID := NULL;
+        -- Call the update SP for the related entity
+        PERFORM __mj."spUpdateAIAgentRun"(p_ID => p_MJAIAgentRuns_ConversationDetailIDID, p_AgentID => p_MJAIAgentRuns_ConversationDetailID_AgentID, p_ParentRunID => p_MJAIAgentRuns_ConversationDetailID_ParentRunID, p_Status => p_MJAIAgentRuns_ConversationDetailID_Status, p_StartedAt => p_MJAIAgentRuns_ConversationDetailID_StartedAt, p_CompletedAt => p_MJAIAgentRuns_ConversationDetailID_CompletedAt, p_Success => p_MJAIAgentRuns_ConversationDetailID_Success, p_ErrorMessage => p_MJAIAgentRuns_ConversationDetailID_ErrorMessage, p_ConversationID => p_MJAIAgentRuns_ConversationDetailID_ConversationID, p_UserID => p_MJAIAgentRuns_ConversationDetailID_UserID, p_Result => p_MJAIAgentRuns_ConversationDetailID_Result, p_AgentState => p_MJAIAgentRuns_ConversationDetailID_AgentState, p_TotalTokensUsed => p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsed, p_TotalCost => p_MJAIAgentRuns_ConversationDetailID_TotalCost, p_TotalPromptTokensUsed => p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUsed, p_TotalCompletionTokensUsed => p_MJAIAgentRuns_ConversationDetailID_TotalCompletionTokensUsed, p_TotalTokensUsedRollup => p_MJAIAgentRuns_ConversationDetailID_TotalTokensUsedRollup, p_TotalPromptTokensUsedRollup => p_MJAIAgentRuns_ConversationDetailID_TotalPromptTokensUse_5ca82d, p_TotalCompletionTokensUsedRollup => p_MJAIAgentRuns_ConversationDetailID_TotalCompletionToken_43c4ab, p_TotalCostRollup => p_MJAIAgentRuns_ConversationDetailID_TotalCostRollup, p_ConversationDetailID_Clear => 1, p_ConversationDetailID => p_MJAIAgentRuns_ConversationDetailID_ConversationDetailID, p_ConversationDetailSequence => p_MJAIAgentRuns_ConversationDetailID_ConversationDetailSequence, p_CancellationReason => p_MJAIAgentRuns_ConversationDetailID_CancellationReason, p_FinalStep => p_MJAIAgentRuns_ConversationDetailID_FinalStep, p_FinalPayload => p_MJAIAgentRuns_ConversationDetailID_FinalPayload, p_Message => p_MJAIAgentRuns_ConversationDetailID_Message, p_LastRunID => p_MJAIAgentRuns_ConversationDetailID_LastRunID, p_StartingPayload => p_MJAIAgentRuns_ConversationDetailID_StartingPayload, p_TotalPromptIterations => p_MJAIAgentRuns_ConversationDetailID_TotalPromptIterations, p_ConfigurationID => p_MJAIAgentRuns_ConversationDetailID_ConfigurationID, p_OverrideModelID => p_MJAIAgentRuns_ConversationDetailID_OverrideModelID, p_OverrideVendorID => p_MJAIAgentRuns_ConversationDetailID_OverrideVendorID, p_Data => p_MJAIAgentRuns_ConversationDetailID_Data, p_Verbose => p_MJAIAgentRuns_ConversationDetailID_Verbose, p_EffortLevel => p_MJAIAgentRuns_ConversationDetailID_EffortLevel, p_RunName => p_MJAIAgentRuns_ConversationDetailID_RunName, p_Comments => p_MJAIAgentRuns_ConversationDetailID_Comments, p_ScheduledJobRunID => p_MJAIAgentRuns_ConversationDetailID_ScheduledJobRunID, p_TestRunID => p_MJAIAgentRuns_ConversationDetailID_TestRunID, p_PrimaryScopeEntityID => p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentRuns_ConversationDetailID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentRuns_ConversationDetailID_SecondaryScopes, p_ExternalReferenceID => p_MJAIAgentRuns_ConversationDetailID_ExternalReferenceID, p_CompanyID => p_MJAIAgentRuns_ConversationDetailID_CompanyID);
+
+    END LOOP;
+
+    
+    -- Cascade delete from ConversationDetailArtifact using cursor to call spDeleteConversationDetailArtifact
+
+    FOR _rec IN SELECT "ID" FROM __mj."ConversationDetailArtifact" WHERE "ConversationDetailID" = p_ID
+    LOOP
+        p_MJConversationDetailArtifacts_ConversationDetailIDID := _rec."ID";
+        PERFORM __mj."spDeleteConversationDetailArtifact"(p_ID => p_MJConversationDetailArtifacts_ConversationDetailIDID);
+        
+    END LOOP;
+    
+    
+    -- Cascade delete from ConversationDetailAttachment using cursor to call spDeleteConversationDetailAttachment
+
+    FOR _rec IN SELECT "ID" FROM __mj."ConversationDetailAttachment" WHERE "ConversationDetailID" = p_ID
+    LOOP
+        p_MJConversationDetailAttachments_ConversationDetailIDID := _rec."ID";
+        PERFORM __mj."spDeleteConversationDetailAttachment"(p_ID => p_MJConversationDetailAttachments_ConversationDetailIDID);
+        
+    END LOOP;
+    
+    
+    -- Cascade delete from ConversationDetailRating using cursor to call spDeleteConversationDetailRating
+
+    FOR _rec IN SELECT "ID" FROM __mj."ConversationDetailRating" WHERE "ConversationDetailID" = p_ID
+    LOOP
+        p_MJConversationDetailRatings_ConversationDetailIDID := _rec."ID";
+        PERFORM __mj."spDeleteConversationDetailRating"(p_ID => p_MJConversationDetailRatings_ConversationDetailIDID);
+        
+    END LOOP;
+    
+    
+    -- Cascade update on ConversationDetail using cursor to call spUpdateConversationDetail
+
+
+    FOR _rec IN SELECT "ID", "ConversationID", "ExternalID", "Role", "Message", "Error", "HiddenToUser", "UserRating", "UserFeedback", "ReflectionInsights", "SummaryOfEarlierConversation", "UserID", "ArtifactID", "ArtifactVersionID", "CompletionTime", "IsPinned", "ParentID", "AgentID", "Status", "SuggestedResponses", "TestRunID", "ResponseForm", "ActionableCommands", "AutomaticCommands", "OriginalMessageChanged" FROM __mj."ConversationDetail" WHERE "ParentID" = p_ID
+    LOOP
+        p_MJConversationDetails_ParentIDID := _rec."ID";
+        p_MJConversationDetails_ParentID_ConversationID := _rec."ConversationID";
+        p_MJConversationDetails_ParentID_ExternalID := _rec."ExternalID";
+        p_MJConversationDetails_ParentID_Role := _rec."Role";
+        p_MJConversationDetails_ParentID_Message := _rec."Message";
+        p_MJConversationDetails_ParentID_Error := _rec."Error";
+        p_MJConversationDetails_ParentID_HiddenToUser := _rec."HiddenToUser";
+        p_MJConversationDetails_ParentID_UserRating := _rec."UserRating";
+        p_MJConversationDetails_ParentID_UserFeedback := _rec."UserFeedback";
+        p_MJConversationDetails_ParentID_ReflectionInsights := _rec."ReflectionInsights";
+        p_MJConversationDetails_ParentID_SummaryOfEarlierConversation := _rec."SummaryOfEarlierConversation";
+        p_MJConversationDetails_ParentID_UserID := _rec."UserID";
+        p_MJConversationDetails_ParentID_ArtifactID := _rec."ArtifactID";
+        p_MJConversationDetails_ParentID_ArtifactVersionID := _rec."ArtifactVersionID";
+        p_MJConversationDetails_ParentID_CompletionTime := _rec."CompletionTime";
+        p_MJConversationDetails_ParentID_IsPinned := _rec."IsPinned";
+        p_MJConversationDetails_ParentID_ParentID := _rec."ParentID";
+        p_MJConversationDetails_ParentID_AgentID := _rec."AgentID";
+        p_MJConversationDetails_ParentID_Status := _rec."Status";
+        p_MJConversationDetails_ParentID_SuggestedResponses := _rec."SuggestedResponses";
+        p_MJConversationDetails_ParentID_TestRunID := _rec."TestRunID";
+        p_MJConversationDetails_ParentID_ResponseForm := _rec."ResponseForm";
+        p_MJConversationDetails_ParentID_ActionableCommands := _rec."ActionableCommands";
+        p_MJConversationDetails_ParentID_AutomaticCommands := _rec."AutomaticCommands";
+        p_MJConversationDetails_ParentID_OriginalMessageChanged := _rec."OriginalMessageChanged";
+        -- Set the FK field to NULL
+        p_MJConversationDetails_ParentID_ParentID := NULL;
+        -- Call the update SP for the related entity
+        PERFORM __mj."spUpdateConversationDetail"(p_ID => p_MJConversationDetails_ParentIDID, p_ConversationID => p_MJConversationDetails_ParentID_ConversationID, p_ExternalID => p_MJConversationDetails_ParentID_ExternalID, p_Role => p_MJConversationDetails_ParentID_Role, p_Message => p_MJConversationDetails_ParentID_Message, p_Error => p_MJConversationDetails_ParentID_Error, p_HiddenToUser => p_MJConversationDetails_ParentID_HiddenToUser, p_UserRating => p_MJConversationDetails_ParentID_UserRating, p_UserFeedback => p_MJConversationDetails_ParentID_UserFeedback, p_ReflectionInsights => p_MJConversationDetails_ParentID_ReflectionInsights, p_SummaryOfEarlierConversation => p_MJConversationDetails_ParentID_SummaryOfEarlierConversation, p_UserID => p_MJConversationDetails_ParentID_UserID, p_ArtifactID => p_MJConversationDetails_ParentID_ArtifactID, p_ArtifactVersionID => p_MJConversationDetails_ParentID_ArtifactVersionID, p_CompletionTime => p_MJConversationDetails_ParentID_CompletionTime, p_IsPinned => p_MJConversationDetails_ParentID_IsPinned, p_ParentID_Clear => 1, p_ParentID => p_MJConversationDetails_ParentID_ParentID, p_AgentID => p_MJConversationDetails_ParentID_AgentID, p_Status => p_MJConversationDetails_ParentID_Status, p_SuggestedResponses => p_MJConversationDetails_ParentID_SuggestedResponses, p_TestRunID => p_MJConversationDetails_ParentID_TestRunID, p_ResponseForm => p_MJConversationDetails_ParentID_ResponseForm, p_ActionableCommands => p_MJConversationDetails_ParentID_ActionableCommands, p_AutomaticCommands => p_MJConversationDetails_ParentID_AutomaticCommands, p_OriginalMessageChanged => p_MJConversationDetails_ParentID_OriginalMessageChanged);
+
+    END LOOP;
+
+    
+    -- Cascade update on Report using cursor to call spUpdateReport
+
+
+    FOR _rec IN SELECT "ID", "Name", "Description", "CategoryID", "UserID", "SharingScope", "ConversationID", "ConversationDetailID", "DataContextID", "Configuration", "OutputTriggerTypeID", "OutputFormatTypeID", "OutputDeliveryTypeID", "OutputFrequency", "OutputTargetEmail", "OutputWorkflowID", "Thumbnail", "EnvironmentID" FROM __mj."Report" WHERE "ConversationDetailID" = p_ID
+    LOOP
+        p_MJReports_ConversationDetailIDID := _rec."ID";
+        p_MJReports_ConversationDetailID_Name := _rec."Name";
+        p_MJReports_ConversationDetailID_Description := _rec."Description";
+        p_MJReports_ConversationDetailID_CategoryID := _rec."CategoryID";
+        p_MJReports_ConversationDetailID_UserID := _rec."UserID";
+        p_MJReports_ConversationDetailID_SharingScope := _rec."SharingScope";
+        p_MJReports_ConversationDetailID_ConversationID := _rec."ConversationID";
+        p_MJReports_ConversationDetailID_ConversationDetailID := _rec."ConversationDetailID";
+        p_MJReports_ConversationDetailID_DataContextID := _rec."DataContextID";
+        p_MJReports_ConversationDetailID_Configuration := _rec."Configuration";
+        p_MJReports_ConversationDetailID_OutputTriggerTypeID := _rec."OutputTriggerTypeID";
+        p_MJReports_ConversationDetailID_OutputFormatTypeID := _rec."OutputFormatTypeID";
+        p_MJReports_ConversationDetailID_OutputDeliveryTypeID := _rec."OutputDeliveryTypeID";
+        p_MJReports_ConversationDetailID_OutputFrequency := _rec."OutputFrequency";
+        p_MJReports_ConversationDetailID_OutputTargetEmail := _rec."OutputTargetEmail";
+        p_MJReports_ConversationDetailID_OutputWorkflowID := _rec."OutputWorkflowID";
+        p_MJReports_ConversationDetailID_Thumbnail := _rec."Thumbnail";
+        p_MJReports_ConversationDetailID_EnvironmentID := _rec."EnvironmentID";
+        -- Set the FK field to NULL
+        p_MJReports_ConversationDetailID_ConversationDetailID := NULL;
+        -- Call the update SP for the related entity
+        PERFORM __mj."spUpdateReport"(p_ID => p_MJReports_ConversationDetailIDID, p_Name => p_MJReports_ConversationDetailID_Name, p_Description => p_MJReports_ConversationDetailID_Description, p_CategoryID => p_MJReports_ConversationDetailID_CategoryID, p_UserID => p_MJReports_ConversationDetailID_UserID, p_SharingScope => p_MJReports_ConversationDetailID_SharingScope, p_ConversationID => p_MJReports_ConversationDetailID_ConversationID, p_ConversationDetailID_Clear => 1, p_ConversationDetailID => p_MJReports_ConversationDetailID_ConversationDetailID, p_DataContextID => p_MJReports_ConversationDetailID_DataContextID, p_Configuration => p_MJReports_ConversationDetailID_Configuration, p_OutputTriggerTypeID => p_MJReports_ConversationDetailID_OutputTriggerTypeID, p_OutputFormatTypeID => p_MJReports_ConversationDetailID_OutputFormatTypeID, p_OutputDeliveryTypeID => p_MJReports_ConversationDetailID_OutputDeliveryTypeID, p_OutputFrequency => p_MJReports_ConversationDetailID_OutputFrequency, p_OutputTargetEmail => p_MJReports_ConversationDetailID_OutputTargetEmail, p_OutputWorkflowID => p_MJReports_ConversationDetailID_OutputWorkflowID, p_Thumbnail => p_MJReports_ConversationDetailID_Thumbnail, p_EnvironmentID => p_MJReports_ConversationDetailID_EnvironmentID);
+
+    END LOOP;
+
+    
+    -- Cascade update on Task using cursor to call spUpdateTask
+
+
+    FOR _rec IN SELECT "ID", "ParentID", "Name", "Description", "TypeID", "EnvironmentID", "ProjectID", "ConversationDetailID", "UserID", "AgentID", "Status", "PercentComplete", "DueAt", "StartedAt", "CompletedAt" FROM __mj."Task" WHERE "ConversationDetailID" = p_ID
+    LOOP
+        p_MJTasks_ConversationDetailIDID := _rec."ID";
+        p_MJTasks_ConversationDetailID_ParentID := _rec."ParentID";
+        p_MJTasks_ConversationDetailID_Name := _rec."Name";
+        p_MJTasks_ConversationDetailID_Description := _rec."Description";
+        p_MJTasks_ConversationDetailID_TypeID := _rec."TypeID";
+        p_MJTasks_ConversationDetailID_EnvironmentID := _rec."EnvironmentID";
+        p_MJTasks_ConversationDetailID_ProjectID := _rec."ProjectID";
+        p_MJTasks_ConversationDetailID_ConversationDetailID := _rec."ConversationDetailID";
+        p_MJTasks_ConversationDetailID_UserID := _rec."UserID";
+        p_MJTasks_ConversationDetailID_AgentID := _rec."AgentID";
+        p_MJTasks_ConversationDetailID_Status := _rec."Status";
+        p_MJTasks_ConversationDetailID_PercentComplete := _rec."PercentComplete";
+        p_MJTasks_ConversationDetailID_DueAt := _rec."DueAt";
+        p_MJTasks_ConversationDetailID_StartedAt := _rec."StartedAt";
+        p_MJTasks_ConversationDetailID_CompletedAt := _rec."CompletedAt";
+        -- Set the FK field to NULL
+        p_MJTasks_ConversationDetailID_ConversationDetailID := NULL;
+        -- Call the update SP for the related entity
+        PERFORM __mj."spUpdateTask"(p_ID => p_MJTasks_ConversationDetailIDID, p_ParentID => p_MJTasks_ConversationDetailID_ParentID, p_Name => p_MJTasks_ConversationDetailID_Name, p_Description => p_MJTasks_ConversationDetailID_Description, p_TypeID => p_MJTasks_ConversationDetailID_TypeID, p_EnvironmentID => p_MJTasks_ConversationDetailID_EnvironmentID, p_ProjectID => p_MJTasks_ConversationDetailID_ProjectID, p_ConversationDetailID_Clear => 1, p_ConversationDetailID => p_MJTasks_ConversationDetailID_ConversationDetailID, p_UserID => p_MJTasks_ConversationDetailID_UserID, p_AgentID => p_MJTasks_ConversationDetailID_AgentID, p_Status => p_MJTasks_ConversationDetailID_Status, p_PercentComplete => p_MJTasks_ConversationDetailID_PercentComplete, p_DueAt => p_MJTasks_ConversationDetailID_DueAt, p_StartedAt => p_MJTasks_ConversationDetailID_StartedAt, p_CompletedAt => p_MJTasks_ConversationDetailID_CompletedAt);
+
+    END LOOP;
+
+    
+
+    DELETE FROM
+        __mj."ConversationDetail"
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT NULL::UUID AS "_result_id";
     ELSE
-        RETURN QUERY SELECT p_id AS "ID";
+        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
     END IF;
 END;
 $$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_UI";
-GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_Integration";
+
+
+-- ===================== Triggers =====================
+
+CREATE OR REPLACE FUNCTION __mj."trgUpdateConversationDetailAttachment_func"()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."__mj_UpdatedAt" = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trgUpdateConversationDetailAttachment" ON __mj."ConversationDetailAttachment";
+CREATE TRIGGER "trgUpdateConversationDetailAttachment"
+    BEFORE UPDATE ON __mj."ConversationDetailAttachment"
+    FOR EACH ROW
+    EXECUTE FUNCTION __mj."trgUpdateConversationDetailAttachment_func"();
+
+CREATE OR REPLACE FUNCTION __mj."trgUpdateTagSynonym_func"()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."__mj_UpdatedAt" = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "trgUpdateTagSynonym" ON __mj."TagSynonym";
+CREATE TRIGGER "trgUpdateTagSynonym"
+    BEFORE UPDATE ON __mj."TagSynonym"
+    FOR EACH ROW
+    EXECUTE FUNCTION __mj."trgUpdateTagSynonym_func"();
+
+
+-- ===================== Data (INSERT/UPDATE/DELETE) =====================
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'f4286229-e5be-4a48-b147-5ec3d3cc89a5' OR ("EntityID" = 'FE0D485E-8C3F-4FE0-BD07-EF81E8F14CE0' AND "Name" = 'Status')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "IsComputed",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        'f4286229-e5be-4a48-b147-5ec3d3cc89a5',
+        'FE0D485E-8C3F-4FE0-BD07-EF81E8F14CE0', -- "Entity": "MJ": "Tag" "Synonyms"
+        100014,
+        'Status',
+        'Status',
+        'Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.',
+        'TEXT',
+        40,
+        0,
+        0,
+        FALSE,
+        'Active',
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        NULL,
+        NULL,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        'Search',
+        NOW(),
+        NOW()
+        );
+    END IF;
+END $$;
+
+INSERT INTO __mj."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
+                                    VALUES
+                                       ('2e4e215d-8156-4ede-b744-df072a8fe0a1', 'F4286229-E5BE-4A48-B147-5EC3D3CC89A5', 1, 'Active', 'Active', NOW(), NOW());
+
+/* SQL text to insert entity field value with ID 7d7dc497-6f31-4eb2-9ad3-16168aecb908 */
+
+INSERT INTO __mj."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
+                                    VALUES
+                                       ('7d7dc497-6f31-4eb2-9ad3-16168aecb908', 'F4286229-E5BE-4A48-B147-5EC3D3CC89A5', 2, 'Pending', 'Pending', NOW(), NOW());
+
+/* SQL text to insert entity field value with ID b567c8a1-3731-463d-8ef3-2f5285ea9346 */
+
+INSERT INTO __mj."EntityFieldValue"
+                                       ("ID", "EntityFieldID", "Sequence", "Value", "Code", "__mj_CreatedAt", "__mj_UpdatedAt")
+                                    VALUES
+                                       ('b567c8a1-3731-463d-8ef3-2f5285ea9346', 'F4286229-E5BE-4A48-B147-5EC3D3CC89A5', 3, 'Rejected', 'Rejected', NOW(), NOW());
+
+/* SQL text to update ValueListType for entity field ID F4286229-E5BE-4A48-B147-5EC3D3CC89A5 */
+
+UPDATE __mj."EntityField" SET "ValueListType"='List' WHERE "ID"='F4286229-E5BE-4A48-B147-5EC3D3CC89A5';
+
+/* Index for Foreign Keys for ConversationDetailAttachment */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Conversation Detail Attachments
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ConversationDetailID in table ConversationDetailAttachment
+
+UPDATE __mj."EntityField"
+               SET "UserSearchPredicateAPI" = 'BeginsWith'
+               WHERE "ID" = '4C2BADF2-E72C-4497-BF1C-B624A7171BCB'
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
+
+/* Set field properties for entity */
+
+UPDATE __mj."EntityField"
+               SET "DefaultInView" = TRUE
+               WHERE "ID" = 'F4286229-E5BE-4A48-B147-5EC3D3CC89A5'
+               AND "AutoUpdateDefaultInView" = TRUE;
+
+/* Set categories for 8 fields */
+
+-- UPDATE Entity Field Category Info MJ: Tag Synonyms."ID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '6BA484DC-192C-4D78-BDA6-F05CC8FB9565' AND "AutoUpdateCategory" = TRUE;
+
+-- UPDATE Entity Field Category Info MJ: Tag Synonyms.__mj_CreatedAt
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '2FBD3C83-DC1C-41B6-9BF2-BBE89DC42901' AND "AutoUpdateCategory" = TRUE;
+
+-- UPDATE Entity Field Category Info MJ: Tag Synonyms.__mj_UpdatedAt
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '4AE65FCA-B822-44F1-AC56-70606E6CC190' AND "AutoUpdateCategory" = TRUE;
+
+-- UPDATE Entity Field Category Info MJ: Tag Synonyms."TagID"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'DE84807F-A1A6-40ED-A154-BC7B7F59FAD3' AND "AutoUpdateCategory" = TRUE;
+
+-- UPDATE Entity Field Category Info MJ: Tag Synonyms."Tag"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = '43D9E184-F855-43A3-B704-D0036172DD30' AND "AutoUpdateCategory" = TRUE;
+
+-- UPDATE Entity Field Category Info MJ: Tag Synonyms."Synonym"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'F95E7337-1169-4D05-B6EC-0A14A7626E21' AND "AutoUpdateCategory" = TRUE;
+
+-- UPDATE Entity Field Category Info MJ: Tag Synonyms."Source"
+
+UPDATE __mj."EntityField"
+SET 
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'B50A4543-D60F-4440-9587-CB61C449D06A' AND "AutoUpdateCategory" = TRUE;
+
+-- UPDATE Entity Field Category Info MJ: Tag Synonyms."Status"
+
+UPDATE __mj."EntityField"
+SET 
+   "Category" = 'Synonym Details',
+   "GeneratedFormSection" = 'Category',
+   "ExtendedType" = NULL,
+   "CodeType" = NULL
+WHERE 
+   "ID" = 'F4286229-E5BE-4A48-B147-5EC3D3CC89A5' AND "AutoUpdateCategory" = TRUE;
+
+
+-- ===================== Grants =====================
+
+DO $$ BEGIN GRANT SELECT ON __mj."vwConversationDetailAttachments" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* Base View Permissions SQL for MJ: Conversation Detail Attachments */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Conversation Detail Attachments
+-- Item: Permissions for vwConversationDetailAttachments
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------;
+
+DO $$ BEGIN GRANT SELECT ON __mj."vwConversationDetailAttachments" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spCreate SQL for MJ: Conversation Detail Attachments */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Conversation Detail Attachments
+-- Item: spCreateConversationDetailAttachment
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR ConversationDetailAttachment
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailAttachment" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spCreate Permissions for MJ: Conversation Detail Attachments */
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateConversationDetailAttachment" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spUpdate SQL for MJ: Conversation Detail Attachments */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Conversation Detail Attachments
+-- Item: spUpdateConversationDetailAttachment
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ConversationDetailAttachment
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetailAttachment" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateConversationDetailAttachment" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete SQL for MJ: Conversation Detail Attachments */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Conversation Detail Attachments
+-- Item: spDeleteConversationDetailAttachment
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ConversationDetailAttachment
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetailAttachment" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete Permissions for MJ: Conversation Detail Attachments */
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetailAttachment" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* Index for Foreign Keys for TagSynonym */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tag Synonyms
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key TagID in table TagSynonym;
+
+DO $$ BEGIN GRANT SELECT ON __mj."vwTagSynonyms" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* Base View Permissions SQL for MJ: Tag Synonyms */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tag Synonyms
+-- Item: Permissions for vwTagSynonyms
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------;
+
+DO $$ BEGIN GRANT SELECT ON __mj."vwTagSynonyms" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spCreate SQL for MJ: Tag Synonyms */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tag Synonyms
+-- Item: spCreateTagSynonym
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR TagSynonym
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTagSynonym" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spCreate Permissions for MJ: Tag Synonyms */
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTagSynonym" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spUpdate SQL for MJ: Tag Synonyms */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tag Synonyms
+-- Item: spUpdateTagSynonym
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR TagSynonym
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTagSynonym" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTagSynonym" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete SQL for MJ: Tag Synonyms */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tag Synonyms
+-- Item: spDeleteTagSynonym
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR TagSynonym
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTagSynonym" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete Permissions for MJ: Tag Synonyms */
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTagSynonym" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete SQL for MJ: Conversation Details */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Conversation Details
+-- Item: spDeleteConversationDetail
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ConversationDetail
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete Permissions for MJ: Conversation Details */
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteConversationDetail" TO "cdp_Developer", "cdp_UI", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* Set field properties for entity */
+
+
+-- ===================== Comments =====================
+
+COMMENT ON COLUMN __mj."TagSynonym"."Status" IS 'Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.';
+
+
+-- ===================== Other =====================
+
+-- ============================================================================
+-- Knowledge Hub / Classify: Tag Synonym approval status
+-- ----------------------------------------------------------------------------
+-- The classifier can propose synonyms (Source='LLM') and synonyms can be
+-- imported in bulk (Source='Imported'). Today every synonym is live the moment
+-- it exists, with no review step. Adding a Status lets the Classify "Synonyms"
+-- panel hold machine-proposed synonyms in a Pending state until a human
+-- approves them, while manually-added synonyms remain Active by default.
+--
+-- Additive, backward-compatible: existing rows default to 'Active', preserving
+-- current behavior (every existing synonym keeps resolving).
+-- ============================================================================
+
+/* spUpdate Permissions for MJ: Conversation Detail Attachments */
+
+/* spUpdate Permissions for MJ: Tag Synonyms */

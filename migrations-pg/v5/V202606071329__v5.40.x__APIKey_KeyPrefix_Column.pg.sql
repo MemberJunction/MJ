@@ -1,295 +1,150 @@
 -- ============================================================================
--- MemberJunction PostgreSQL Migration — V202606071329__v5.40.x__APIKey_KeyPrefix_Column.sql
--- Split-and-regenerate with INLINE NATIVE CodeGen baking: hand-written DDL transpiled
--- (AST dialect), metadata DML inline, and CodeGen objects (views/sprocs/triggers/grants)
--- baked natively from `mj codegen`. Applies standalone via `mj migrate` — no deploy codegen.
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
 
+-- Extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Schema
 CREATE SCHEMA IF NOT EXISTS __mj;
 SET search_path TO __mj, public;
+
+-- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
 
+-- NOTE: Earlier converter versions made INTEGER to BOOLEAN cast implicit by
+-- modifying the system catalog so SS-style INSERT INTO bool_col VALUES (1)
+-- would work. That modification required pg_catalog write privileges, which
+-- managed PG (RDS, Aurora, Cloud SQL, Azure) does not grant. As of v5.30 all
+-- bulk INSERTs are emitted with native TRUE/FALSE values directly, so the
+-- cast modification is no longer needed. Removed to support managed-PG
+-- installs out of the box.
+
+
+-- ===================== DDL: Tables, PKs, Indexes =====================
+
 ALTER TABLE __mj."APIKey"
-ADD COLUMN "KeyPrefix" VARCHAR(20) NULL /* Add KeyPrefix column to APIKey table */ /* Stores the configured prefix + first 4 characters of the random body */ /* (e.g., "mj_sk_a1b2") so administrators can visually identify keys */ /* without exposing the full key. NULL for keys created before this migration */ /* since the raw key was never stored. */;
+ ADD COLUMN IF NOT EXISTS "KeyPrefix" VARCHAR(20) NULL;
 
-COMMENT ON COLUMN __mj."APIKey"."KeyPrefix" IS 'A short preview of the key shown at creation time (e.g. mj_sk_a1b2). Stores the configured prefix plus the first 4 characters of the random body for visual identification. NULL for keys created before this column was added.';
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_APIKey_UserID" ON __mj."APIKey" ("UserID");
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM __mj."EntityField" WHERE "ID" = '08336b23-33f3-49c1-8739-58528d8156ca' OR ("EntityID" = 'B56DB373-2982-4E91-AACB-075CB8BECBBB' AND "Name" = 'KeyPrefix')) THEN
-    INSERT INTO __mj."EntityField" ("ID", "EntityID", "Sequence", "Name", "DisplayName", "Description", "Type", "Length", "Precision", "Scale", "AllowsNull", "DefaultValue", "AutoIncrement", "AllowUpdateAPI", "IsVirtual", "IsComputed", "RelatedEntityID", "RelatedEntityFieldName", "IsNameField", "IncludeInUserSearchAPI", "IncludeRelatedEntityNameFieldInBaseView", "DefaultInView", "IsPrimaryKey", "IsUnique", "RelatedEntityDisplayType", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('08336b23-33f3-49c1-8739-58528d8156ca', 'B56DB373-2982-4E91-AACB-075CB8BECBBB' /* Entity: MJ: API Keys */, 100026, 'KeyPrefix', 'Key Prefix', 'A short preview of the key shown at creation time (e.g. mj_sk_a1b2). Stores the configured prefix plus the first 4 characters of the random body for visual identification. NULL for keys created before this column was added.', 'nvarchar', 40, 0, 0, TRUE, NULL, FALSE, TRUE, FALSE, FALSE, NULL, NULL, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, 'Search', NOW(), NOW());
-  END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_APIKey_CreatedByUserID" ON __mj."APIKey" ("CreatedByUserID");
 
--- ===================== CodeGen (native PG, baked) =====================
 
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: API Keys
--- Item: Index for Foreign Keys
--- ============================================================
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_api_key_user_id"
-    ON __mj."APIKey" ("UserID");
+-- ===================== Views =====================
 
-CREATE INDEX IF NOT EXISTS "idx_auto_mj_fkey_api_key_created_by_user_id"
-    ON __mj."APIKey" ("CreatedByUserID");
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: API Keys
--- Item: vwAPIKeys
--- ============================================================
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: API Keys
------               SCHEMA:      __mj
------               BASE TABLE:  APIKey
------               PRIMARY KEY: ID
-------------------------------------------------------------
-DO $vw_regen$
+DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwAPIKeys';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwAPIKeys"
-AS
-SELECT
+AS SELECT
     a.*,
-    MJUser_UserID."Name" AS "User",
-    MJUser_CreatedByUserID."Name" AS "CreatedByUser"
+    "MJUser_UserID"."Name" AS "User",
+    "MJUser_CreatedByUserID"."Name" AS "CreatedByUser"
 FROM
     __mj."APIKey" AS a
 INNER JOIN
-    __mj."User" AS MJUser_UserID
+    __mj."User" AS "MJUser_UserID"
   ON
-    "a"."UserID" = MJUser_UserID."ID"
+    a."UserID" = "MJUser_UserID"."ID"
 INNER JOIN
-    __mj."User" AS MJUser_CreatedByUserID
+    __mj."User" AS "MJUser_CreatedByUserID"
   ON
-    "a"."CreatedByUserID" = MJUser_CreatedByUserID."ID"
-$vsql$;
-  rec RECORD;
+    a."CreatedByUserID" = "MJUser_CreatedByUserID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
-  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
-  -- every dependent view (anything that JOINs this view in its body), so we
-  -- capture each dependent's definition + grants BEFORE the drop and replay
-  -- them afterward (best-effort). Without this, on a fresh-DB replay where
-  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
-  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
-  -- that the wrapper for this entity doesn't know how to recreate, and
-  -- those views stay permanently missing.
-  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
-    schema_name TEXT,
-    view_name   TEXT,
-    relkind     CHAR(1),
-    definition  TEXT,
-    grants_sql  TEXT
-  ) ON COMMIT DROP;
-  DELETE FROM _vw_regen_deps;
-
-  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
-  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
-  -- pattern) when the target view is dropped. Without restoring them,
-  -- post-codegen CRUD validation reports those routines as missing —
-  -- e.g. "MJ: Recommendation Items → missing create routine
-  -- spCreateRecommendationItem" — even though the next codegen pass
-  -- emits them. The restored definitions are pg_get_functiondef() output
-  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
-  -- trailing semicolon; replaying them verbatim recreates the function
-  -- with its original body, parameter list, and return type.
-  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
-    schema_name TEXT,
-    fn_name     TEXT,
-    fn_oid      OID,
-    definition  TEXT
-  ) ON COMMIT DROP;
-  DELETE FROM _vw_regen_fn_deps;
-
-  -- Capture dependents. NOTES on the grants_sql build:
-  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
-  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
-  --     exists). pg_get_userbyid is a public catalog function available to
-  --     every database user, including unprivileged accounts on managed
-  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
-  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
-  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
-  --     to pg_authid which works on self-hosted PG but fails with
-  --     "permission denied for table pg_authid" on managed services.
-  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
-  --     which RETURNS the role name pre-quoted when it contains uppercase
-  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
-  --     on the already-quoted string double-wrapped and the GRANT failed at
-  --     replay with "role does not exist". Using
-  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
-  --     correctly exactly once.
-  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
-  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
-  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
-  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
-  SELECT DISTINCT
-      dn.nspname,
-      dc.relname,
-      dc.relkind,
-      pg_get_viewdef(dc.oid),
-      (SELECT string_agg(
-          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
-          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
-          E'
-')
-       FROM (
-           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
-                  (aclexplode(dc.relacl)).privilege_type AS privilege
-       ) g
-       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
-  FROM pg_depend d
-  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
-  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
-  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
-  JOIN pg_class tc ON tc.oid = d.refobjid
-  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-  WHERE tn.nspname = '__mj'
-    AND tc.relname = 'vwAPIKeys'
-    AND tc.relkind IN ('v', 'm')
-    AND dc.oid <> tc.oid;
-
-  -- Capture dependent functions. Two paths matter on PG:
-  --   1. Functions whose RETURN type references the view (RETURNS SETOF
-  --      <view>) — pg_depend records this as type=pg_type → pg_class.
-  --   2. Functions whose body references the view (used by sql functions
-  --      and by some plpgsql edge cases) — pg_depend records this as
-  --      pg_proc → pg_class.
-  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
-  -- statement that we replay verbatim. We DO include RETURNS-only
-  -- references because that's the dominant codegen pattern (sp* CRUD
-  -- functions all RETURNS SETOF the matching vwX).
-  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
-  SELECT DISTINCT
-      pn.nspname,
-      pp.proname,
-      pp.oid,
-      pg_get_functiondef(pp.oid)
-  FROM pg_depend d
-  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
-  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
-  JOIN pg_class tc ON tc.oid = d.refobjid
-  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-  WHERE tn.nspname = '__mj'
-    AND tc.relname = 'vwAPIKeys'
-    AND tc.relkind IN ('v', 'm')
-  UNION
-  SELECT DISTINCT
-      pn.nspname,
-      pp.proname,
-      pp.oid,
-      pg_get_functiondef(pp.oid)
-  FROM pg_depend d
-  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
-  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
-  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
-  WHERE EXISTS (
-      SELECT 1 FROM pg_class tc
-      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-      WHERE tc.reltype = pt.oid
-        AND tn.nspname = '__mj'
-        AND tc.relname = 'vwAPIKeys'
-        AND tc.relkind IN ('v', 'm')
-  );
-
-  DROP VIEW IF EXISTS __mj."vwAPIKeys" CASCADE;
-  EXECUTE vsql;
-
-  -- Replay captured dependents. Best-effort: log + continue on failure.
-  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
-  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
-  -- and rolls back EVERY statement in the block on any exception. If we
-  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
-  -- present in target environment), the just-recreated VIEW would also
-  -- get rolled back and stay missing — the exact failure mode this
-  -- wrapper exists to prevent.
-  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
-    BEGIN
-      IF rec.relkind = 'm' THEN
-        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
-      ELSE
-        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
-      END IF;
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
-    END;
-
-    IF rec.grants_sql IS NOT NULL THEN
-      BEGIN
-        EXECUTE rec.grants_sql;
-      EXCEPTION WHEN OTHERS THEN
-        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
-      END;
-    END IF;
-  END LOOP;
-
-  -- Replay captured dependent functions AFTER all dependent views are
-  -- restored — most codegen-emitted sp* functions reference both the
-  -- target view AND the dependent views in their bodies/return types.
-  -- Wrapped per-function in its own savepoint so a single failure
-  -- doesn't poison subsequent restores or the just-recreated target.
-  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
-    BEGIN
-      EXECUTE rec.definition;
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
-    END;
-  END LOOP;
-
-  DROP TABLE _vw_regen_deps;
-  DROP TABLE _vw_regen_fn_deps;
-END $vw_regen$;
-GRANT SELECT ON __mj."vwAPIKeys" TO "cdp_UI";
-GRANT SELECT ON __mj."vwAPIKeys" TO "cdp_Developer";
-GRANT SELECT ON __mj."vwAPIKeys" TO "cdp_Integration";
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: API Keys
--- Item: spCreateAPIKey
--- ============================================================
-
-------------------------------------------------------------
------ CREATE FUNCTION FOR APIKey
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
-BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spCreateAPIKey'
-               AND pronamespace = '__mj'::regnamespace
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
     LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
     END LOOP;
-END
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
+  EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
+END;
 $do$;
 
-CREATE OR REPLACE FUNCTION __mj."spCreateAPIKey"(
-    p_id uuid DEFAULT NULL,
-    p_hash text DEFAULT NULL,
-    p_userid uuid DEFAULT NULL,
-    p_label text DEFAULT NULL,
-    p_description_clear boolean DEFAULT false,
-    p_description text DEFAULT NULL,
-    p_status text DEFAULT NULL,
-    p_expiresat_clear boolean DEFAULT false,
-    p_expiresat TIMESTAMPTZ DEFAULT NULL,
-    p_lastusedat_clear boolean DEFAULT false,
-    p_lastusedat TIMESTAMPTZ DEFAULT NULL,
-    p_createdbyuserid uuid DEFAULT NULL,
-    p_keyprefix_clear boolean DEFAULT false,
-    p_keyprefix text DEFAULT NULL
-) RETURNS SETOF __mj."vwAPIKeys" AS $$
-DECLARE
-    v_new_id uuid;
+
+-- ===================== Stored Procedures (sp*) =====================
+
+DO $$ DECLARE r record;
 BEGIN
-    v_new_id := COALESCE(p_id, gen_random_uuid());
-    INSERT INTO __mj."APIKey"
-        (
-            "ID",
-            "Hash",
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateAPIKey'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
+CREATE OR REPLACE FUNCTION __mj."spCreateAPIKey"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_Hash VARCHAR(64) DEFAULT NULL,
+    IN p_UserID UUID DEFAULT NULL,
+    IN p_Label VARCHAR(255) DEFAULT NULL,
+    IN p_Description_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Description VARCHAR(1000) DEFAULT NULL,
+    IN p_Status VARCHAR(20) DEFAULT NULL,
+    IN p_ExpiresAt_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ExpiresAt TIMESTAMPTZ DEFAULT NULL,
+    IN p_LastUsedAt_Clear BOOLEAN DEFAULT FALSE,
+    IN p_LastUsedAt TIMESTAMPTZ DEFAULT NULL,
+    IN p_CreatedByUserID UUID DEFAULT NULL,
+    IN p_KeyPrefix_Clear BOOLEAN DEFAULT FALSE,
+    IN p_KeyPrefix VARCHAR(20) DEFAULT NULL
+)
+RETURNS SETOF __mj."vwAPIKeys" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."APIKey"
+            (
+                "ID",
+                "Hash",
                 "UserID",
                 "Label",
                 "Description",
@@ -298,162 +153,303 @@ BEGIN
                 "LastUsedAt",
                 "CreatedByUserID",
                 "KeyPrefix"
-        )
-    VALUES
-        (
-            v_new_id,
-            p_hash,
-                p_userid,
-                p_label,
-                CASE WHEN p_description_clear = true THEN NULL ELSE COALESCE(p_description, NULL) END,
-                COALESCE(p_status, 'Active'),
-                CASE WHEN p_expiresat_clear = true THEN NULL ELSE COALESCE(p_expiresat, NULL) END,
-                CASE WHEN p_lastusedat_clear = true THEN NULL ELSE COALESCE(p_lastusedat, NULL) END,
-                p_createdbyuserid,
-                CASE WHEN p_keyprefix_clear = true THEN NULL ELSE COALESCE(p_keyprefix, NULL) END
-        )
-    ;
-
-    RETURN QUERY
-    SELECT * FROM __mj."vwAPIKeys"
-    WHERE "ID" = v_new_id;
-END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKey" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKey" TO "cdp_Integration";
-
-
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: API Keys
--- Item: spUpdateAPIKey
--- ============================================================
-
-------------------------------------------------------------
------ UPDATE FUNCTION FOR APIKey
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
-BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spUpdateAPIKey'
-               AND pronamespace = '__mj'::regnamespace
-    LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
-    END LOOP;
-END
-$do$;
-
-CREATE OR REPLACE FUNCTION __mj."spUpdateAPIKey"(
-    p_id uuid,
-    p_hash text DEFAULT NULL,
-    p_userid uuid DEFAULT NULL,
-    p_label text DEFAULT NULL,
-    p_description_clear boolean DEFAULT false,
-    p_description text DEFAULT NULL,
-    p_status text DEFAULT NULL,
-    p_expiresat_clear boolean DEFAULT false,
-    p_expiresat TIMESTAMPTZ DEFAULT NULL,
-    p_lastusedat_clear boolean DEFAULT false,
-    p_lastusedat TIMESTAMPTZ DEFAULT NULL,
-    p_createdbyuserid uuid DEFAULT NULL,
-    p_keyprefix_clear boolean DEFAULT false,
-    p_keyprefix text DEFAULT NULL
-) RETURNS SETOF __mj."vwAPIKeys" AS $$
-DECLARE
-    v_updated_count INTEGER;
-BEGIN
-    UPDATE __mj."APIKey"
-    SET
-        "Hash" = COALESCE(p_hash, "Hash"),
-        "UserID" = COALESCE(p_userid, "UserID"),
-        "Label" = COALESCE(p_label, "Label"),
-        "Description" = CASE WHEN p_description_clear = true THEN NULL ELSE COALESCE(p_description, "Description") END,
-        "Status" = COALESCE(p_status, "Status"),
-        "ExpiresAt" = CASE WHEN p_expiresat_clear = true THEN NULL ELSE COALESCE(p_expiresat, "ExpiresAt") END,
-        "LastUsedAt" = CASE WHEN p_lastusedat_clear = true THEN NULL ELSE COALESCE(p_lastusedat, "LastUsedAt") END,
-        "CreatedByUserID" = COALESCE(p_createdbyuserid, "CreatedByUserID"),
-        "KeyPrefix" = CASE WHEN p_keyprefix_clear = true THEN NULL ELSE COALESCE(p_keyprefix, "KeyPrefix") END
-    WHERE
-        "ID" = p_id;
-
-    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
-
-    IF v_updated_count = 0 THEN
-        -- Nothing was updated, return empty result set
-        RETURN;
+            )
+        VALUES
+            (
+                p_ID,
+                p_Hash,
+                p_UserID,
+                p_Label,
+                CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, NULL) END,
+                COALESCE(p_Status, 'Active'),
+                CASE WHEN p_ExpiresAt_Clear = TRUE THEN NULL ELSE COALESCE(p_ExpiresAt, NULL) END,
+                CASE WHEN p_LastUsedAt_Clear = TRUE THEN NULL ELSE COALESCE(p_LastUsedAt, NULL) END,
+                p_CreatedByUserID,
+                CASE WHEN p_KeyPrefix_Clear = TRUE THEN NULL ELSE COALESCE(p_KeyPrefix, NULL) END
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."APIKey"
+            (
+                "Hash",
+                "UserID",
+                "Label",
+                "Description",
+                "Status",
+                "ExpiresAt",
+                "LastUsedAt",
+                "CreatedByUserID",
+                "KeyPrefix"
+            )
+        VALUES
+            (
+                p_Hash,
+                p_UserID,
+                p_Label,
+                CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, NULL) END,
+                COALESCE(p_Status, 'Active'),
+                CASE WHEN p_ExpiresAt_Clear = TRUE THEN NULL ELSE COALESCE(p_ExpiresAt, NULL) END,
+                CASE WHEN p_LastUsedAt_Clear = TRUE THEN NULL ELSE COALESCE(p_LastUsedAt, NULL) END,
+                p_CreatedByUserID,
+                CASE WHEN p_KeyPrefix_Clear = TRUE THEN NULL ELSE COALESCE(p_KeyPrefix, NULL) END
+            );
     END IF;
-
-    -- Return the updated record from the base view
-    RETURN QUERY
-    SELECT * FROM __mj."vwAPIKeys"
-    WHERE "ID" = p_id;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwAPIKeys" WHERE "ID" = p_ID;
 END;
 $$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spUpdateAPIKey" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spUpdateAPIKey" TO "cdp_Integration";
+
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateAPIKey'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
+CREATE OR REPLACE FUNCTION __mj."spUpdateAPIKey"(
+    IN p_ID UUID,
+    IN p_Hash VARCHAR(64) DEFAULT NULL,
+    IN p_UserID UUID DEFAULT NULL,
+    IN p_Label VARCHAR(255) DEFAULT NULL,
+    IN p_Description_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Description VARCHAR(1000) DEFAULT NULL,
+    IN p_Status VARCHAR(20) DEFAULT NULL,
+    IN p_ExpiresAt_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ExpiresAt TIMESTAMPTZ DEFAULT NULL,
+    IN p_LastUsedAt_Clear BOOLEAN DEFAULT FALSE,
+    IN p_LastUsedAt TIMESTAMPTZ DEFAULT NULL,
+    IN p_CreatedByUserID UUID DEFAULT NULL,
+    IN p_KeyPrefix_Clear BOOLEAN DEFAULT FALSE,
+    IN p_KeyPrefix VARCHAR(20) DEFAULT NULL
+)
+RETURNS SETOF __mj."vwAPIKeys" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."APIKey"
+    SET
+        "Hash" = COALESCE(p_Hash, "Hash"),
+        "UserID" = COALESCE(p_UserID, "UserID"),
+        "Label" = COALESCE(p_Label, "Label"),
+        "Description" = CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, "Description") END,
+        "Status" = COALESCE(p_Status, "Status"),
+        "ExpiresAt" = CASE WHEN p_ExpiresAt_Clear = TRUE THEN NULL ELSE COALESCE(p_ExpiresAt, "ExpiresAt") END,
+        "LastUsedAt" = CASE WHEN p_LastUsedAt_Clear = TRUE THEN NULL ELSE COALESCE(p_LastUsedAt, "LastUsedAt") END,
+        "CreatedByUserID" = COALESCE(p_CreatedByUserID, "CreatedByUserID"),
+        "KeyPrefix" = CASE WHEN p_KeyPrefix_Clear = TRUE THEN NULL ELSE COALESCE(p_KeyPrefix, "KeyPrefix") END
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwAPIKeys" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwAPIKeys" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAPIKey'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
+CREATE OR REPLACE FUNCTION __mj."spDeleteAPIKey"(
+    IN p_ID UUID
+)
+RETURNS TABLE("_result_id" UUID) AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+DELETE FROM
+        __mj."APIKey"
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT NULL::UUID AS "_result_id";
+    ELSE
+        RETURN QUERY SELECT p_ID::UUID AS "_result_id";
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the APIKey table
-------------------------------------------------------------
-CREATE OR REPLACE FUNCTION __mj."fn_trg_update_api_key"()
+-- ===================== Triggers =====================
+
+CREATE OR REPLACE FUNCTION __mj."trgUpdateAPIKey_func"()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW."__mj_UpdatedAt" := NOW() AT TIME ZONE 'UTC';
+    NEW."__mj_UpdatedAt" = NOW();
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS "trg_update_api_key" ON __mj."APIKey";
-
-CREATE TRIGGER "trg_update_api_key"
-BEFORE UPDATE ON __mj."APIKey"
-FOR EACH ROW
-EXECUTE FUNCTION __mj."fn_trg_update_api_key"();
-
+DROP TRIGGER IF EXISTS "trgUpdateAPIKey" ON __mj."APIKey";
+CREATE TRIGGER "trgUpdateAPIKey"
+    BEFORE UPDATE ON __mj."APIKey"
+    FOR EACH ROW
+    EXECUTE FUNCTION __mj."trgUpdateAPIKey_func"();
 
 
--- ============================================================
--- PostgreSQL Generated SQL for Entity: MJ: API Keys
--- Item: spDeleteAPIKey
--- ============================================================
+-- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
-------------------------------------------------------------
------ DELETE FUNCTION FOR APIKey
-------------------------------------------------------------
-DO $do$
-DECLARE r RECORD;
+DO $$
 BEGIN
-    FOR r IN SELECT oid::regprocedure AS sig
-             FROM pg_proc
-             WHERE proname = 'spDeleteAPIKey'
-               AND pronamespace = '__mj'::regnamespace
-    LOOP
-        EXECUTE 'DROP FUNCTION ' || r.sig::text;
-    END LOOP;
-END
-$do$;
-
-CREATE OR REPLACE FUNCTION __mj."spDeleteAPIKey"(
-    p_id uuid
-) RETURNS TABLE("ID" uuid) AS $$
-#variable_conflict use_column
-DECLARE
-    v_affected_count INTEGER;
-BEGIN
-
-    DELETE FROM __mj."APIKey"
-    WHERE "ID" = p_id;
-
-    GET DIAGNOSTICS v_affected_count = ROW_COUNT;
-
-    IF v_affected_count = 0 THEN
-        RETURN QUERY SELECT NULL::uuid AS "ID";
-    ELSE
-        RETURN QUERY SELECT p_id AS "ID";
+    IF NOT EXISTS (
+        SELECT 1 FROM __mj."EntityField" WHERE "ID" = '08336b23-33f3-49c1-8739-58528d8156ca' OR ("EntityID" = 'B56DB373-2982-4E91-AACB-075CB8BECBBB' AND "Name" = 'KeyPrefix')
+    ) THEN
+        INSERT INTO __mj."EntityField"
+        (
+        "ID",
+        "EntityID",
+        "Sequence",
+        "Name",
+        "DisplayName",
+        "Description",
+        "Type",
+        "Length",
+        "Precision",
+        "Scale",
+        "AllowsNull",
+        "DefaultValue",
+        "AutoIncrement",
+        "AllowUpdateAPI",
+        "IsVirtual",
+        "IsComputed",
+        "RelatedEntityID",
+        "RelatedEntityFieldName",
+        "IsNameField",
+        "IncludeInUserSearchAPI",
+        "IncludeRelatedEntityNameFieldInBaseView",
+        "DefaultInView",
+        "IsPrimaryKey",
+        "IsUnique",
+        "RelatedEntityDisplayType",
+        "__mj_CreatedAt",
+        "__mj_UpdatedAt"
+        )
+        VALUES
+        (
+        '08336b23-33f3-49c1-8739-58528d8156ca',
+        'B56DB373-2982-4E91-AACB-075CB8BECBBB', -- "Entity": "MJ": "API" "Keys"
+        100026,
+        'KeyPrefix',
+        'Key Prefix',
+        'A short preview of the key shown at creation time (e.g. mj_sk_a1b2). Stores the configured prefix plus the first 4 characters of the random body for visual identification. NULL for keys created before this column was added.',
+        'TEXT',
+        40,
+        0,
+        0,
+        TRUE,
+        NULL,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        NULL,
+        NULL,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        'Search',
+        NOW(),
+        NOW()
+        );
     END IF;
-END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKey" TO "cdp_Developer";
-GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKey" TO "cdp_Integration";
+END $$;
+
+
+-- ===================== Grants =====================
+
+DO $$ BEGIN GRANT SELECT ON __mj."vwAPIKeys" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* Base View Permissions SQL for MJ: API Keys */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: API Keys
+-- Item: Permissions for vwAPIKeys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------;
+
+DO $$ BEGIN GRANT SELECT ON __mj."vwAPIKeys" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spCreate SQL for MJ: API Keys */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: API Keys
+-- Item: spCreateAPIKey
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR APIKey
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKey" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spCreate Permissions for MJ: API Keys */
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateAPIKey" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spUpdate SQL for MJ: API Keys */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: API Keys
+-- Item: spUpdateAPIKey
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR APIKey
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAPIKey" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateAPIKey" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete SQL for MJ: API Keys */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: API Keys
+-- Item: spDeleteAPIKey
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR APIKey
+------------------------------------------------------------;
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKey" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+/* spDelete Permissions for MJ: API Keys */
+
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteAPIKey" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+-- ===================== Comments =====================
+
+COMMENT ON COLUMN __mj."APIKey"."KeyPrefix" IS 'A short preview of the key shown at creation time (e.g. mj_sk_a1b2). Stores the configured prefix plus the first 4 characters of the random body for visual identification. NULL for keys created before this column was added.';
+
+
+-- ===================== Other =====================
+
+-- Add KeyPrefix column to APIKey table
+-- Stores the configured prefix + first 4 characters of the random body
+-- (e.g., "mj_sk_a1b2") so administrators can visually identify keys
+-- without exposing the full key. NULL for keys created before this migration
+-- since the raw key was never stored.
+
+/* spUpdate Permissions for MJ: API Keys */

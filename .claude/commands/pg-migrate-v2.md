@@ -16,15 +16,26 @@ are delegated to Claude Code running inside the container.
 ## How the pipeline works
 
 `mj migrate convert --split` classifies each migration and transpiles only the
-~2% hand-written DDL via the sqlglot AST dialect; the ~98% (CodeGen objects +
-mj-sync metadata) is **regenerated** natively by `mj codegen` + `mj sync push`.
-One `--split` run converts everything lacking a `.pg.sql`/`.pg-only.sql`
+~2% hand-written DDL via the sqlglot AST dialect. CodeGen objects (views / sprocs
+/ triggers / grants) are **baked inline** into each new migration at conversion
+time (`--bake-codegen`, see Step 1d); mj-sync metadata is re-seeded by `mj sync
+push`. One `--split` run converts everything lacking a `.pg.sql`/`.pg-only.sql`
 counterpart; baselines already have committed `.pg.sql` counterparts and are
 **not** reconverted.
 
-The real gate is **`mj migrate` applying cleanly to a fresh PG DB**, then CodeGen
-+ sync push completing — the converter's "0 gaps" summary is structural only and
-does NOT prove the SQL applies. Hand-authoring the procedural residue
+**Deploys are codegen-free (Path C):** `mj migrate` + `mj sync push`, with **no
+`mj codegen` step**. This holds because (a) a one-time **cutover** migration
+(`V202606190000__v5.41.x__PG_CodeGen_Cutover.pg-only.sql`) bakes the complete
+native CodeGen object set for everything that existed at cutover time, (b) every
+new migration carries its own baked CodeGen inline, and (c) the repeatable
+`R__RefreshMetadata.pg-only.sql` self-heals `EntityField.AllowsNull` on every
+deploy — the one schema-derived metadata attribute that drifts without deploy-time
+codegen. (Earlier drafts rebaked the whole post-baseline set instead; that rewrote
+the immutable ledger and is superseded by the cutover.)
+
+The real gate is **`mj migrate` applying cleanly to a fresh PG DB**, then
+`mj sync push` completing — the converter's "0 gaps" summary is structural only
+and does NOT prove the SQL applies. Hand-authoring the procedural residue
 (`.needs-hand` files) is the **expected, supported** last mile; only fix the AST
 dialect when a gap is a genuine transpiler limitation affecting many files.
 
@@ -218,31 +229,34 @@ are NOT blockers. Genuine blockers are the `needs-hand-authoring` routines.
 
 If there are zero `.needs-hand` files, skip Phase 2.
 
-### Step 1d: Inline-bake the post-baseline set (`mj migrate rebake`)
+### Step 1d: Bake CodeGen inline into the NEW migrations (`convert --bake-codegen`)
 
-After `--split` (and any Phase 2 hand-authoring), bake native PG CodeGen **inline** into each
-post-baseline migration so the set deploys with `mj migrate` alone — **no `mj codegen` at deploy**
-(Path C). `mj migrate rebake` advances a fresh-baseline working DB by applying each migration's
-committed `.pg.sql` in order, captures native CodeGen **read-only** for the entities that migration
-touched, and rewrites the file as `hand DDL + metadata DML + native CodeGen objects`. A migration
-with a transpile gap (hand-procedural / collation-dependent) or mj-sync metadata keeps its committed
-file unchanged.
+CodeGen objects are baked **inline** into each newly-converted migration so the set deploys with
+`mj migrate` alone — **no `mj codegen` at deploy** (Path C). With `--bake-codegen`, convert advances
+a working PG DB by applying the migration's hand DDL, then captures native **per-entity** CodeGen
+(base view / CRUD sprocs / triggers / grants) for the entities that migration touched and writes them
+into the `.pg.sql`. A migration with a transpile gap (hand-procedural / collation-dependent) keeps its
+hand-authored form and bakes CodeGen around it.
 
 ```bash
 docker exec claude-dev bash -lc '
 cd /workspace/MJ
-# working DB MUST already be seeded to the latest baseline (it is advanced via each committed file)
+# working DB seeded to the latest committed state; bakes only the NEW migration(s)
 export DB_PLATFORM=postgresql PG_HOST=postgres-claude PG_PORT=5432 \
   PG_DATABASE=MJ_PG_Rebake PG_USERNAME=mj_admin PG_PASSWORD=Claude2Pg99 \
   CODEGEN_DB_USERNAME=mj_admin CODEGEN_DB_PASSWORD=Claude2Pg99 MJ_CORE_SCHEMA=__mj
-MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 npx mj migrate rebake --verbose
+MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 npx mj migrate convert --split --bake-codegen --verbose
 '
 ```
 
-Reports `baked native / preserved committed / skipped`. Validate standalone via the Step 3b gate
-(`mj migrate` with **no codegen**). NOTE: a brand-new migration with no committed `.pg.sql` yet is
-not re-baked here — bake it forward with `convert --split --bake-codegen`, or commit its first
-`.pg.sql` and re-bake.
+**The historical (pre-cutover) migrations are NOT rebaked** — they remain the transpiled originals
+(immutable ledger, Rule 1) and are made codegen-free by the one-time
+`V202606190000__v5.41.x__PG_CodeGen_Cutover.pg-only.sql` migration, which carries the complete CodeGen
+object set for everything that existed at cutover time (raw `mj codegen` output + CodeGen's metadata-
+support objects prepended so it replays standalone). `mj migrate rebake` exists to re-capture a single
+migration's baked block, but **never run it across the committed set** — that rewrites the immutable
+ledger (the superseded approach). The cutover + `R__RefreshMetadata.pg-only.sql` are committed once and
+then themselves immutable.
 
 ---
 
@@ -350,10 +364,11 @@ BOOT
 
 ### Step 3b: Deploy — THE GATE (`migrate → sync push`, NO codegen)
 
-The post-baseline set is **inline-native-baked** (Path C — `mj migrate rebake`, see Step 1d):
-each migration carries its own natively-regenerated PG CodeGen objects (views / sprocs / triggers
-/ grants), so `mj migrate` alone yields the correct schema. **The deploy-time `mj codegen` step is
-gone** — only `mj sync push` (metadata re-seed) follows.
+The full set is **codegen-free** (Path C): the one-time cutover migration carries the historical
+CodeGen object set, each new migration carries its own baked CodeGen inline (Step 1d), and
+`R__RefreshMetadata.pg-only.sql` self-heals `EntityField.AllowsNull` — so `mj migrate` alone yields
+the correct schema. **The deploy-time `mj codegen` step is gone** — only `mj sync push` (metadata
+re-seed) follows.
 
 `DB_PLATFORM=postgresql` triggers the PG provider and auto-swaps
 `migrations/` → `migrations-pg/`.
@@ -365,7 +380,7 @@ export DB_PLATFORM=postgresql DB_HOST=postgres-claude DB_PORT=5432 \
   DB_DATABASE=MJ_PG_Migrate_Test DB_ENCRYPT=false DB_TRUST_SERVER_CERTIFICATE=true \
   CODEGEN_DB_USERNAME=mj_admin CODEGEN_DB_PASSWORD=Claude2Pg99 MJ_CORE_SCHEMA=__mj
 
-# 1. Apply schema + inline-baked CodeGen objects (all .pg.sql, in order, via Skyway). No codegen.
+# 1. Apply schema + cutover + inline-baked CodeGen objects (all .pg.sql, in order, via Skyway). No codegen.
 npx mj migrate --verbose 2>&1 | tee /tmp/v2-migrate.log
 
 # 2. Seed metadata to current state (--ci = non-interactive)
@@ -375,7 +390,7 @@ npx mj sync push --dir metadata --ci 2>&1 | tee /tmp/v2-syncpush.log
 
 **Gate criteria — ALL must hold before proceeding:**
 1. `mj migrate` applies every migration with **no errors** (`/tmp/v2-migrate.log`) — including the
-   inline-baked views/sprocs/triggers/grants, with **no `mj codegen` step**.
+   cutover + baked views/sprocs/triggers/grants, with **no `mj codegen` step**.
 2. `mj sync push` completes without errors.
 
 If `mj migrate` fails on a converted file: capture the exact error, then either
@@ -466,7 +481,7 @@ You are running inside the claude-dev Docker container with the MJ repo at /work
 Your job: Run FULL STACK smoke tests against the PostgreSQL database {{PG_DB_NAME}} — both API-level and browser-level.
 
 ## Database
-{{PG_DB_NAME}} on postgres-claude already has all v5 migrations applied + codegen + metadata seed. Use it.
+{{PG_DB_NAME}} on postgres-claude already has all v5 migrations applied (incl. the cutover — CodeGen objects are baked into the migrations, no separate codegen step) + metadata seed. Use it.
 - PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99, database={{PG_DB_NAME}}
 
 ## TIER 1: API smoke
@@ -616,7 +631,7 @@ Generated: [timestamp]   Branch: [branch]
 - New SS migrations converted this run: Z
 - Clean .pg.sql: A    Hand-authored from .needs-hand: B
 - Conversion gaps remaining: 0 (structural)
-- Fresh-DB deploy gate (migrate → codegen → sync push): PASS/FAIL
+- Fresh-DB deploy gate (migrate → sync push, NO codegen): PASS/FAIL
 - Conversion parity (check-pg-migration-parity): PASS/FAIL
 - SS↔PG schema parity: Tables X/X, Views X/X, Routines X/X (+N benign CodeGen fns), FKs X/X
 - View semantic equivalence: realDiffers=[]  (cosmeticOnly N, createFailed N benign)
@@ -655,7 +670,7 @@ files are now on the host as uncommitted changes for the user to review.
 ## Important Rules
 
 1. **Committed `.pg.sql` / `.pg-only.sql` are immutable.** Convert only NEW SS migrations. Never reconvert or hand-patch an existing clean `.pg.sql`. Baselines (`B*`) already have committed PG counterparts — never reconvert them. In Phase 1a, surface any host modification to an existing committed `.pg.sql` instead of laundering it through.
-2. **The real gate is a clean fresh-DB deploy (Phase 3b), not the "0 gaps" summary.** "0 gaps" is structural; only `migrate → codegen → sync push` on a fresh DB proves it applies.
+2. **The real gate is a clean fresh-DB deploy (Phase 3b), not the "0 gaps" summary.** "0 gaps" is structural; only `migrate → sync push` (NO codegen) on a fresh DB proves it applies.
 3. **Hand-authoring `.needs-hand` routines is expected** — the supported last mile, not a converter failure. Lift from the committed ledger first; mirror atomicity semantics exactly. Only touch the AST dialect (`mj_postgres.py`) when a gap is a genuine transpiler limitation affecting many files.
 4. **`mj codegen` await caveat** — always use `scripts/pg-codegen-await.mjs`; the bare CLI can fire-and-forget and exit-0 as a silent no-op.
 5. **Category-M metadata gaps are not blockers** — `/* Set field properties */` / `/* Set categories for N fields */` `UPDATE __mj."EntityField"` statements are re-seeded by `mj sync push`, not transpiled. Don't treat their `unhandled` report entries as failures.
