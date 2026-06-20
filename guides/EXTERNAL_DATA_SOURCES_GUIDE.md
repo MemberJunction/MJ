@@ -136,10 +136,12 @@ The class-registration manifest captures the driver automatically (no extra wiri
 
 - **No cross-source joins.** A single `RunView`/`Query` hits exactly one source; federation across sources is the agent/orchestration layer's job.
 - **MongoDB filter translation is type-blind.** The SQL-WHERE → Mongo translator preserves literal types as written, so `id = '100'` (string) won't match a numeric `100`, and date literals stay strings. `LIKE` is **case-insensitive** (matches SQL Server's default; deliberately diverges from Postgres `LIKE`). For type-sensitive filters, use a native Mongo query.
-- **EntityField provisioning is manual** (no introspection-driven CLI yet — plan Phase 4).
+- **`count_only` RunView still fetches rows.** An external `RunView` with `ResultType: 'count_only'` returns an accurate `TotalRowCount` but fetches up to `MaxRows` rows to obtain it (no remote `COUNT(*)` optimization). And `TotalRowCount` falls back to the returned page size when a driver doesn't report a separate total — so deep-pagination "are there more pages?" checks over external sources can be approximate.
+- **EntityField type/length mapping is best-effort.** The native→MJ type mapping is approximate; in particular `nvarchar` lengths are carried as the remote **character** count (not byte count), so a remote `varchar(255)` surfaces with a declared `Length` of 255.
 - **No per-end-user identity passthrough.** Drivers use the shared service-account credential bound to the data source.
+- **TLS is opt-in for the SQL drivers.** Postgres/MongoDB connect in cleartext unless TLS is enabled in `ConnectionConfig` (Postgres `ssl:true` — cert verification is then on by default via `sslRejectUnauthorized`); Snowflake's SDK is always HTTPS. Enable TLS for any non-local source.
 - **Snowflake fidelity caveats** (large `NUMBER` precision past 2^53; uppercased column identifiers) are being hardened as the Snowflake driver matures.
-- **Integration tests** for the drivers are env-gated and run against local/live instances; they are not yet containerized for CI.
+- **Integration tests** — the Postgres and MongoDB driver suites are self-seeding and run in CI against service containers (`.github/workflows/eds-integration.yml`); the Snowflake suite is opt-in (`RUN_SNOWFLAKE_INTEGRATION=1`) against your own account (no Snowflake service container).
 
 ---
 

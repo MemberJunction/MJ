@@ -2124,6 +2124,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
+                // External-data-source entities can't participate in DB-side cache validation
+                // (no MJ base view / __mj_UpdatedAt to COUNT/MAX against). Route them to the
+                // standard execution path, which dispatches to the external driver and TTL-caches
+                // correctly via runFullQueryAndCacheResult (permissions are still enforced there
+                // by InternalRunView). Mirrors the AfterKey bypass above.
+                if (entityInfo.ExternalDataSourceID) {
+                    itemsWithoutCacheCheck.push({ index: i, item });
+                    continue;
+                }
+
                 try {
                     this.CheckUserReadPermissions(entityInfo.Name, user);
                     itemsNeedingValidation.push({ index: i, item, entityInfo });
@@ -2485,6 +2495,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if ((!params.OrderBy || (params.OrderBy as string).length === 0) && viewEntity.OrderByClause) {
             merged.OrderBy = viewEntity.OrderByClause;
         }
+        // The view's WhereClause/OrderByClause weren't covered by the pre-merge screen in
+        // assertExternalRunViewParamsSupported — validate the MERGED clauses before they reach the
+        // remote driver (mirrors the MJ-DB path, which validates the post-merge OrderBy).
+        const mergedFilter = (merged.ExtraFilter as string) || '';
+        if (mergedFilter && !this.ValidateUserProvidedSQLClause(mergedFilter)) {
+            throw new Error(`Invalid effective filter for external-data-source view '${viewEntity.Name}': the saved view's WhereClause contains one or more forbidden keywords.`);
+        }
+        const mergedOrderBy = (merged.OrderBy as string) || '';
+        if (mergedOrderBy && !this.ValidateUserProvidedSQLClause(mergedOrderBy)) {
+            throw new Error(`Invalid effective OrderBy for external-data-source view '${viewEntity.Name}': the saved view's OrderByClause contains one or more forbidden keywords.`);
+        }
         return merged;
     }
 
@@ -2496,7 +2517,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return `${pk.Name} IS NULL`;
             }
             if (!pk.NeedsQuotes) {
-                return `${pk.Name}=${String(val.Value)}`;
+                // Numeric/boolean PKs interpolate unquoted — validate the value really is
+                // numeric/boolean so a string like "1 OR 1=1" can't be injected into the
+                // remote WHERE clause (string PKs go through the quote-escaped branch below).
+                const v = val.Value;
+                if (typeof v !== 'number' && typeof v !== 'boolean' && !/^-?\d+(\.\d+)?$/.test(String(v))) {
+                    throw new Error(`Invalid primary key value for '${pk.Name}' on external entity '${entityInfo.Name}': expected a numeric or boolean value.`);
+                }
+                return `${pk.Name}=${String(v)}`;
             }
             return `${pk.Name}='${String(val.Value).replace(/'/g, "''")}'`;
         }).join(' AND ');
@@ -3146,6 +3174,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Finds a query from RunQueryParams and validates user permissions.
      * Uses `resolveQuery()` for lookup and `ValidateQueryForExecution()` for permissions.
      */
+    /**
+     * A saved query is "external" when it resolves to a Query bound to an external data source.
+     * Used by the base RunQuery CacheLocal layer to defer external-query caching to
+     * InternalRunQuery's runExternalQueryWithCache. Non-throwing — resolves from cached metadata.
+     */
+    protected override IsExternalQuery(params: RunQueryParams): boolean {
+        if (params.SQL || (!params.QueryID && !params.QueryName)) return false; // ad-hoc SQL is never external-cached here
+        return !!this.resolveQuery(params)?.ExternalDataSourceID;
+    }
+
     protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): MJQueryEntityExtended {
         const query = this.resolveQuery(params);
         if (!query) {
@@ -3763,6 +3801,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const entityName = String(item['Entity']);
             const entityID = String(item['EntityID']);
             const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
+
+            // External-data-source entities have no MJ base view — their data is proxied live and
+            // can't be served through the dataset's batched MJ-DB SQL path. Fail loud for that item
+            // rather than silently querying a non-existent (or wrongly same-named) local view.
+            const itemEntity = this.EntityByName(entityName);
+            if (itemEntity?.ExternalDataSourceID) {
+                errorResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: undefined,
+                    Status: `Dataset item '${code}' references external-data-source entity '${entityName}', which is not supported in datasets (its data is proxied live, not stored in MJ).`,
+                    Success: false,
+                });
+                continue;
+            }
 
             // Build effective filter (WhereClause + optional runtime ItemFilter)
             let effectiveFilter = whereClause;

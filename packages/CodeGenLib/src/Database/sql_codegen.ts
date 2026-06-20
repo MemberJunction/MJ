@@ -757,6 +757,15 @@ export class SQLCodeGenBase {
         entity: EntityInfo,
         willRegenerate: Set<string> | undefined
     ): Promise<PhasedExecutionResult> {
+        // External-data-source entities have no physical MJ table/view/sproc — their data is
+        // proxied live. Skip all DDL generation/execution (mirrors the early-return in
+        // generateSingleEntitySQLToSeparateFiles). Without this, the view phase would
+        // CREATE VIEW against a non-existent base table and fail the entity on PostgreSQL,
+        // since this method regenerates the SQL pieces itself rather than reusing that path's output.
+        if (entity.ExternalDataSourceID) {
+            return { success: true, phase: null };
+        }
+
         // Pieces needed for the phased executor. Empty string when the entity
         // doesn't warrant that phase's DDL (e.g. virtual entities don't have
         // views; entities with AllowCreateAPI=false don't get fn_create_*).

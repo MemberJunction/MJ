@@ -1028,6 +1028,24 @@ ORDER BY bridge.LastName, bridge.FirstName`,
                 key([{ FieldName: 'Bogus', Value: 'x' }]),
             )).toThrow(/Primary key Bogus not found/);
         });
+
+        it('rejects a non-numeric string for a non-quoted (numeric) PK — blocks unquoted injection', () => {
+            expect(() => provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: false }]),
+                key([{ FieldName: 'ID', Value: '1 OR 1=1' }]),
+            )).toThrow(/expected a numeric or boolean value/);
+        });
+
+        it('accepts a numeric-looking string and a boolean for a non-quoted PK', () => {
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: false }]),
+                key([{ FieldName: 'ID', Value: '42' }]),
+            )).toBe('ID=42');
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'Flag', NeedsQuotes: false }]),
+                key([{ FieldName: 'Flag', Value: true }]),
+            )).toBe('Flag=true');
+        });
     });
 
     describe('assertExternalRunViewParamsSupported', () => {
@@ -1101,6 +1119,18 @@ ORDER BY bridge.LastName, bridge.FirstName`,
             expect(withCaller.OrderBy).toBe('Amount DESC');
             const noCaller = await provider.testMergeExternalViewParams({ EntityName: 'Sales' } as RunViewParams, view({ OrderByClause: 'Name ASC' }), user);
             expect(noCaller.OrderBy).toBe('Name ASC');
+        });
+
+        it("rejects a view WhereClause containing forbidden SQL keywords (validated post-merge)", async () => {
+            await expect(provider.testMergeExternalViewParams(
+                { EntityName: 'Sales' } as RunViewParams, view({ WhereClause: "Status='X'; DROP TABLE Sales" }), user,
+            )).rejects.toThrow(/Invalid effective filter/);
+        });
+
+        it("rejects a view OrderByClause containing forbidden SQL keywords", async () => {
+            await expect(provider.testMergeExternalViewParams(
+                { EntityName: 'Sales' } as RunViewParams, view({ OrderByClause: 'Name; DELETE FROM Sales' }), user,
+            )).rejects.toThrow(/Invalid effective OrderBy/);
         });
     });
 });

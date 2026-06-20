@@ -1438,8 +1438,8 @@ export class ManageMetadataBase {
          }
          return {success: bSuccess, updatedEntity: bUpdated};
       }
-      catch (e: any) {
-         logError(e);
+      catch (e: unknown) {
+         logError(e instanceof Error ? e.message : String(e));
          return {success: false, updatedEntity: bUpdated};
       }
    }
