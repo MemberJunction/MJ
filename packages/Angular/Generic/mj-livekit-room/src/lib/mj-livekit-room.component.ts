@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
-import { GraphQLDataProvider, GraphQLLiveKitClient } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, GraphQLLiveKitClient, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
 import { LiveKitRoomComponent, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
 import type {
   LiveKitDataMessage,
@@ -127,6 +127,24 @@ export interface AgentInRoom {
                     <i class="fa-solid" [class.fa-plus]="!addingAgent" [class.fa-spinner]="addingAgent" [class.fa-spin]="addingAgent"></i>
                   </button>
                 </div>
+                @if (CanPickModelVoice && AvailableModels.length) {
+                  <div class="mj-lk-agents__overrides">
+                    <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="onAddModelChange($event)" title="Model (dev override)">
+                      <option value="">Default model</option>
+                      @for (m of AvailableModels; track m.ModelID) {
+                        <option [value]="m.ModelID" [selected]="UUIDsEqual(m.ModelID, addModelId)">{{ m.ModelName }}</option>
+                      }
+                    </select>
+                    @if (addVoices.length) {
+                      <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="onAddVoiceChange($event)" title="Voice (dev override)">
+                        <option value="">Default voice</option>
+                        @for (v of addVoices; track v.ID) {
+                          <option [value]="v.ID" [selected]="v.ID === addVoice">{{ v.Name }}</option>
+                        }
+                      </select>
+                    }
+                  </div>
+                }
               }
               @if (addError) {
                 <div class="mj-lk-agents__error">{{ addError }}</div>
@@ -281,6 +299,14 @@ export interface AgentInRoom {
         min-width: 0;
         font-size: 0.8125rem;
       }
+      .mj-lk-agents__overrides {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .mj-lk-agents__select--sm {
+        font-size: 0.75rem;
+      }
       .mj-lk-agents__addbtn {
         flex: none;
         width: 32px;
@@ -334,6 +360,19 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   /** Target agents the user can ADD in-room (id + name). The host (e.g. the Explorer resource) supplies these. */
   @Input() public AvailableAgents: { ID: string; Name: string }[] = [];
 
+  /** Per-session Realtime MODEL override for the INITIAL agent (from the host's pre-join picker). */
+  @Input() public RealtimeModelID: string | null = null;
+  /** Per-session VOICE override for the INITIAL agent (from the host's pre-join picker). */
+  @Input() public RealtimeVoice: string | null = null;
+  /**
+   * Whether the dev model/voice pickers are shown in the in-room "Add an agent" control. The HOST
+   * computes this (the `Realtime: Advanced Session Controls` authorization) and passes it down — this
+   * generic component never evaluates authorizations itself.
+   */
+  @Input() public CanPickModelVoice = false;
+  /** Active Realtime models + their voices, supplied by the host (for the add-agent dropdowns). */
+  @Input() public AvailableModels: RealtimeModelVoices[] = [];
+
   /** True briefly after the invite link is copied (drives the "Link copied" pill state). */
   public inviteCopied = false;
 
@@ -343,6 +382,10 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public agentsInRoom: AgentInRoom[] = [];
   /** The target id chosen in the "Add an agent" picker. */
   public addTargetId: string | null = null;
+  /** The MODEL override chosen in the "Add an agent" picker (dev-only; null = co-agent/target default). */
+  public addModelId: string | null = null;
+  /** The VOICE override chosen in the "Add an agent" picker (dev-only; null = co-agent/target default). */
+  public addVoice: string | null = null;
   /** Exposed for template use — platform-safe UUID equality (SQL upper vs PG lower). */
   public UUIDsEqual = UUIDsEqual;
   /** True while an Add request is in flight. */
@@ -354,6 +397,23 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public get availableToAdd(): { ID: string; Name: string }[] {
     const present = new Set(this.agentsInRoom.map((a) => (a.TargetAgentID ?? '').toLowerCase()));
     return this.AvailableAgents.filter((a) => !present.has(a.ID.toLowerCase()));
+  }
+
+  /** Voices for the model chosen in the add-agent picker (empty when no model picked or it has none). */
+  public get addVoices(): RealtimeVoiceOption[] {
+    const model = this.AvailableModels.find((m) => UUIDsEqual(m.ModelID, this.addModelId));
+    return model?.Voices ?? [];
+  }
+
+  /** Records the add-agent MODEL choice; clears the voice so it can't outlive a model switch. */
+  public onAddModelChange(event: Event): void {
+    this.addModelId = (event.target as HTMLSelectElement).value || null;
+    this.addVoice = null;
+  }
+
+  /** Records the add-agent VOICE choice. */
+  public onAddVoiceChange(event: Event): void {
+    this.addVoice = (event.target as HTMLSelectElement).value || null;
   }
 
   // ── Forwarded UI gates (see LiveKitRoomComponent) ────────────────────────────────
@@ -515,6 +575,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       AgentID: this.AgentID ?? undefined,
       AgentName: this.AgentName ?? undefined,
       TargetAgentID: this.TargetAgentID ?? undefined,
+      RealtimeModelID: this.RealtimeModelID ?? undefined,
+      RealtimeVoice: this.RealtimeVoice ?? undefined,
       RoomName: this.RoomName ?? undefined,
       TurnMode: this.TurnMode ?? undefined,
     });
@@ -556,6 +618,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
         AgentID: this.AgentID ?? undefined,
         AgentName: target?.Name ?? undefined,
         TargetAgentID: this.addTargetId,
+        RealtimeModelID: this.addModelId ?? undefined,
+        RealtimeVoice: this.addVoice ?? undefined,
         RoomName: this.resolvedRoomName,
         TurnMode: this.TurnMode ?? undefined,
       });
@@ -568,6 +632,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
         { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.addTargetId, Name: target?.Name ?? 'Agent' },
       ];
       this.addTargetId = null;
+      this.addModelId = null;
+      this.addVoice = null;
     } catch (err) {
       this.addError = err instanceof Error ? err.message : String(err);
     } finally {

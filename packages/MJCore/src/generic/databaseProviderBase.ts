@@ -2,7 +2,8 @@ import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
 import { BaseEntity, BaseEntityResult, RecordChangePayload, RecordChangeSource, RestoreContext } from "./baseEntity";
-import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
+import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { dispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { LogError } from "./logging";
@@ -99,6 +100,21 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     protected override get TrustLocalCacheCompletely(): boolean {
         return true;
+    }
+
+    /**
+     * Server in-process transport for Remote Operations: resolves the registered operation by key
+     * and runs it via `ExecuteServer`. Inherited by both SQL Server and PostgreSQL providers. The
+     * client (GraphQL) provider overrides this to marshal over the wire instead.
+     */
+    protected override async InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
+        let fallbackUser: UserInfo | undefined;
+        try {
+            fallbackUser = this.CurrentUser;
+        } catch {
+            // CurrentUser is unavailable until the provider is configured — rely on options.user instead.
+        }
+        return dispatchRemoteOperationInProcess<TInput, TOutput>(operationKey, input, options, this, fallbackUser);
     }
 
     /**

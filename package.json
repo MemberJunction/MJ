@@ -39,6 +39,7 @@
     "packages/Archiving/*",
     "packages/geo/*",
     "packages/Lists/*",
+    "packages/RecordSetProcessor/*",
     "packages/eSignature/*",
     "packages/eSignature/Providers/*"
   ],
