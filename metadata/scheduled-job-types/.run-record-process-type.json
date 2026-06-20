@@ -8,6 +8,13 @@
       "DomainRunEntity": "MJ: Process Runs",
       "DomainRunEntityFKey": "ScheduledJobRunID",
       "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "C4C46927-C884-4E5B-B900-97537BEDFDBD"
+    },
+    "sync": {
+      "lastModified": "2026-06-20T14:56:48.473Z",
+      "checksum": "4bb7bd9090d5674663c6244135d52442b2fb91260185d86cff169861b6346811"
     }
   }
 ]
