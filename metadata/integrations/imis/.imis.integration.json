@@ -517,7 +517,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "AllowsNull": false,
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CreditInvoiceExport&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CreditInvoiceExport&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "CreditInvoiceExportId"
                 }
               },
@@ -690,7 +690,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=GLExport&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=GLExport&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "GLExportId"
                 }
               },
@@ -1703,7 +1703,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Country&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Country&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "CountryCode"
                 }
               },
@@ -3773,7 +3773,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=AdSize&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=AdSize&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "AdSizeId"
                 }
               },
@@ -5191,7 +5191,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=AdSize&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=AdSize&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "AdSizeId"
                 }
               },
@@ -5630,7 +5630,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=RateCardDetail&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=RateCardDetail&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "RateCardDetailId"
                 }
               },
@@ -5648,7 +5648,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=RateCard&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=RateCard&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "RateCardId"
                 }
               },
@@ -6437,7 +6437,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=RateCard&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=RateCard&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "RateCardId"
                 }
               }
@@ -9455,7 +9455,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CampaignSummary&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=CampaignSummary&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "CampaignId"
                 }
               },
@@ -10396,7 +10396,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=FormDefinition&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=FormDefinition&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "FormDefinitionId"
                 }
               },
@@ -10892,7 +10892,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=NotificationSet&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=NotificationSet&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "NotificationSetId"
                 }
               },
@@ -10988,7 +10988,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=AppealSummary&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=AppealSummary&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "AppealId"
                 }
               },
@@ -11130,7 +11130,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=SolicitationSummary&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=SolicitationSummary&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "SolicitationId"
                 }
               },
@@ -11319,7 +11319,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "AllowsNull": false,
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TaskLogDetail&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TaskLogDetail&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "TaskLogDetailId"
                 }
               },
@@ -11862,7 +11862,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TaskDefinition&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TaskDefinition&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "TaskDefinitionId"
                 }
               },
@@ -12050,7 +12050,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TaskLog&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TaskLog&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "TaskLogId"
                 }
               },
@@ -12116,7 +12116,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TaskDefinition&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TaskDefinition&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "TaskDefinitionId"
                 }
               },
@@ -14121,7 +14121,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "AllowsNull": false,
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TaskCommonTable&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TaskCommonTable&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "TableName"
                 }
               },
@@ -21447,7 +21447,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "AllowsNull": false,
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=GiftAdjustmentLog&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=GiftAdjustmentLog&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "GiftAdjustmentLogId"
                 }
               },
@@ -21931,7 +21931,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=GiftPremiumRule&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=GiftPremiumRule&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "GiftPremiumRuleId"
                 }
               },
@@ -22168,7 +22168,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=BillingLog&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=BillingLog&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "BillingLogKey"
                 }
               },
@@ -22310,7 +22310,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=BillingIssueNotificationLog&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=BillingIssueNotificationLog&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "BillingIssueNotificationLogKey"
                 }
               },
@@ -22832,7 +22832,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "AllowsNull": false,
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=BillingLog&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=BillingLog&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "BillingLogKey"
                 }
               },
@@ -24081,7 +24081,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduledPayment&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduledPayment&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "ScheduledPaymentId"
                 }
               }
@@ -30387,7 +30387,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=InteractionAction&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=InteractionAction&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "InteractionActionCode"
                 }
               },
@@ -30420,7 +30420,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=InteractionType&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=InteractionType&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "InteractionTypeCode"
                 }
               },
@@ -31945,7 +31945,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "AllowsNull": false,
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=InteractionAction&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=InteractionAction&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "InteractionActionCode"
                 }
               },
@@ -31964,7 +31964,7 @@
                   "IntegrationObjectID": "@parent:ID",
                   "AllowsNull": false,
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=InteractionType&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=InteractionType&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "InteractionTypeCode"
                 }
               },
@@ -32030,7 +32030,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=BOEntityDefinition&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=BOEntityDefinition&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "EntityTypeName"
                 }
               },
@@ -32530,7 +32530,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyOrderType&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyOrderType&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "OrderTypeCode"
                 }
               },
@@ -32912,7 +32912,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=SourceCodeSummary&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=SourceCodeSummary&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "SourceCodeId"
                 }
               },
@@ -33488,7 +33488,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Order&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Order&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "OrderId"
                 }
               },
@@ -33596,7 +33596,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyOrderType&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyOrderType&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "OrderTypeCode"
                 }
               },
@@ -34887,7 +34887,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=OrderStageProcessingNotificationLog&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=OrderStageProcessingNotificationLog&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "OrderStageProcessingNotificationLogKey"
                 }
               }
@@ -35212,7 +35212,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=AutoPayAccount&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=AutoPayAccount&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "AutoPayAccountId"
                 }
               },
@@ -35579,7 +35579,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=BOEntityDefinition&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=BOEntityDefinition&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "EntityTypeName"
                 }
               },
@@ -36313,7 +36313,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=GLAccount&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=GLAccount&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "GLAccountId"
                 }
               },
@@ -37872,7 +37872,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyCountryDetail&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyCountryDetail&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "CountryName"
                 }
               },
@@ -38152,7 +38152,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Country&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Country&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "CountryCode"
                 }
               },
@@ -38636,7 +38636,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyCountryDetail&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyCountryDetail&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "CountryName"
                 }
               },
@@ -39337,7 +39337,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyCountryDetail&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyCountryDetail&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "CountryName"
                 }
               },
@@ -40887,7 +40887,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyCountryDetail&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyCountryDetail&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "CountryName"
                 }
               },
@@ -41179,7 +41179,7 @@
                   "MetadataSource": "Declared",
                   "IntegrationObjectID": "@parent:ID",
                   "IsForeignKey": true,
-                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyCountryDetail&IntegrationID=@parent:ID",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=LegacyCountryDetail&IntegrationID=@parent:IntegrationID",
                   "RelatedIntegrationObjectFieldName": "CountryName"
                 }
               },
