@@ -1393,6 +1393,9 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
             try {
                 const insight = analyzer.analyze(event, context);
                 if (insight && this.shouldEmitInsight(insight)) {
+                    // Correct cache-oriented advice for entities that have caching disabled — the
+                    // finding stands, but "cache it" is replaced with a dedupe/consolidate suggestion.
+                    this.adjustSuggestionForCacheability(insight);
                     this._insights.push(insight);
                     this.emitInsightWarning(insight);
                 }
@@ -1431,18 +1434,56 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     ]);
 
     /**
-     * True when `insight` is an engine-caching suggestion for an entity that has caching disabled.
-     * Reuses the existing `AllowCaching` metadata flag as the single source of truth — no separate
-     * exemption list. Fails open (returns false → insight still emits) when metadata is unavailable.
+     * Analyzers whose FINDING is valid for any entity, but whose default suggestion recommends
+     * caching. For an `AllowCaching=false` entity we keep the finding (a real duplicate / redundant
+     * read is worth knowing) but swap the suggestion — "cache it" is not actionable when caching is
+     * deliberately disabled, so we steer the reader to dedupe/consolidate at the call site instead.
      */
-    private isCacheSuggestionForNonCachedEntity(insight: TelemetryInsight): boolean {
-        if (!insight.entityName) return false;
-        if (!TelemetryManager.ENGINE_CACHE_SUGGESTION_ANALYZERS.has(insight.analyzerName)) return false;
+    private static readonly CACHE_SUGGESTION_REWRITE_ANALYZERS = new Set<string>([
+        'DuplicateRunViewAnalyzer',
+    ]);
+
+    /** Replacement suggestion for cache-oriented findings on a non-cacheable entity. */
+    private static readonly NON_CACHEABLE_DEDUPE_SUGGESTION =
+        'This entity has caching disabled (AllowCaching=false), so caching is not an option — ' +
+        'deduplicate or consolidate the identical call at the call site (read once and reuse), or ' +
+        'mark an intentional repeat with RunView Telemetry.Exempt';
+
+    /**
+     * True when the entity has explicitly opted out of caching (`EntityInfo.AllowCaching = false`).
+     * Reuses that metadata flag as the single source of truth. Fails open (false) when metadata is
+     * unavailable, or when `entityName` isn't a single resolvable entity (e.g. a batch insight whose
+     * entityName is a comma-joined list).
+     */
+    private isNonCacheableEntity(entityName?: string): boolean {
+        if (!entityName) return false;
         try {
-            const entity = Metadata.Provider?.EntityByName?.(insight.entityName); // global-provider-ok: telemetry aggregates RunView calls process-wide; AllowCaching is structural entity metadata and this check fails open if unavailable
-            return entity?.AllowCaching === false;
+            // global-provider-ok: telemetry aggregates RunView calls process-wide; AllowCaching is
+            // structural entity metadata and this check fails open if the provider is unavailable.
+            return Metadata.Provider?.EntityByName?.(entityName)?.AllowCaching === false;
         } catch {
             return false;
+        }
+    }
+
+    /**
+     * True when `insight` is a pure engine-caching suggestion for an entity that has caching disabled.
+     * Such insights have no residual value once the cache advice is removed, so they are fully suppressed.
+     */
+    private isCacheSuggestionForNonCachedEntity(insight: TelemetryInsight): boolean {
+        return TelemetryManager.ENGINE_CACHE_SUGGESTION_ANALYZERS.has(insight.analyzerName)
+            && this.isNonCacheableEntity(insight.entityName);
+    }
+
+    /**
+     * For a non-cacheable entity, rewrite a caching-oriented suggestion (e.g. DuplicateRunView's
+     * "Cache the result or use an engine") to a dedupe/consolidate one. The finding is unchanged and
+     * still emitted — only the advice is corrected. No-op for cacheable entities and other analyzers.
+     */
+    private adjustSuggestionForCacheability(insight: TelemetryInsight): void {
+        if (TelemetryManager.CACHE_SUGGESTION_REWRITE_ANALYZERS.has(insight.analyzerName)
+            && this.isNonCacheableEntity(insight.entityName)) {
+            insight.suggestion = TelemetryManager.NON_CACHEABLE_DEDUPE_SUGGESTION;
         }
     }
 
