@@ -23,6 +23,7 @@ import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
+import { RealtimeClientSessionService } from './realtime-client-session-service';
 
 /**
  * The context a bridge passes to {@link CreateBridgeRealtimeSession}. Structurally compatible with the
@@ -144,6 +145,30 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
         data.realtimeSelfNames = ctx.SelfNames;
     }
     return Object.keys(data).length > 0 ? data : undefined;
+}
+
+/**
+ * The bridge-engine session-run finalizer (matches `BridgeSessionRunFinalizer` in
+ * `@memberjunction/ai-bridge-server`). Bind this onto `AIBridgeEngine.SetSessionRunFinalizer(...)` at
+ * startup so a bridge reaped WITHOUT a live session (a prior-boot orphan, a cross-host teardown) still
+ * finalizes its co-agent observability run — the only path where the `Close()`-wrapped finalizer can't run.
+ * Lives here (in ai-agents, which owns the realtime runtime) so the engine stays decoupled from it.
+ *
+ * @param agentSessionID The reaped session's id.
+ * @param success Whether to mark the run(s) `Completed` (true) or `Failed` (false).
+ * @param contextUser The user the writes run as (required — skipped without it).
+ * @param provider The metadata provider (required — skipped without it).
+ */
+export async function FinalizeBridgeCoAgentRuns(
+    agentSessionID: string,
+    success: boolean,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+): Promise<void> {
+    if (!contextUser || !provider) {
+        return; // a server-side finalize needs a user + provider; a later reap with context catches it
+    }
+    await new RealtimeClientSessionService().FinalizeCoAgentRunsBySession(agentSessionID, success, contextUser, provider);
 }
 
 /** An active Realtime model paired with the voices its driver supports — for the dev model/voice picker. */

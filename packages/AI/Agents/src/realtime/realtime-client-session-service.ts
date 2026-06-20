@@ -30,7 +30,7 @@
  * @author MemberJunction.com
  */
 
-import { UserInfo, IMetadataProvider, LogError, LogStatus } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -840,6 +840,79 @@ export class RealtimeClientSessionService {
         await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success);
         await this.finalizePromptRun(promptRunID, contextUser, provider, success);
         await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success);
+    }
+
+    /**
+     * Finalizes the **co-agent observability run(s)** for an agent session that were left `Running` because
+     * the session was reaped WITHOUT a live in-memory handle — a prior-boot orphan or a cross-host teardown,
+     * where the `Close()`-wrapped finalizer never ran. This is the by-`AgentSessionID` analogue of
+     * {@link FinalizeCoAgentRun}: the same-process path already knows its run ids (no query), but here that
+     * state died with the prior process, so we locate the session's TOP-LEVEL co-agent run (delegated target
+     * runs nest under it and finalize on their own runner) and finalize it + its prompt run + step via the
+     * same idempotent helpers. A clean teardown already marked them `Completed`, so this finds nothing.
+     *
+     * `MJ: AI Agent Runs` is a high-volume transactional table no engine caches, so a narrow ids-only query
+     * is the right tool (not a cache reuse). Tolerant — never throws.
+     *
+     * @param agentSessionID The agent session whose dangling co-agent runs to finalize.
+     * @param success Mark them `Completed` (true) or `Failed` (false).
+     * @param contextUser The user the writes run as.
+     * @param provider The request-scoped metadata provider.
+     * @returns The number of co-agent runs finalized (0 when none were dangling).
+     */
+    public async FinalizeCoAgentRunsBySession(
+        agentSessionID: string,
+        success: boolean,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<number> {
+        const sessionID = agentSessionID?.trim();
+        if (!sessionID) {
+            return 0;
+        }
+        const rv = new RunView();
+        const found = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `AgentSessionID='${this.escapeSqlLiteral(sessionID)}' AND Status='Running' AND ParentRunID IS NULL`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!found.Success) {
+            LogError(`RealtimeClientSessionService.FinalizeCoAgentRunsBySession RunView failed: ${found.ErrorMessage}`);
+            return 0;
+        }
+        let finalized = 0;
+        for (const row of found.Results) {
+            const child = await this.findCoAgentChildLogIds(row.ID, contextUser);
+            await this.FinalizeCoAgentRun(row.ID, child.PromptRunID, contextUser, provider, success, child.StepID);
+            finalized++;
+        }
+        if (finalized > 0) {
+            LogStatus(`RealtimeClientSessionService: finalized ${finalized} orphaned co-agent run(s) for session ${sessionID}.`);
+        }
+        return finalized;
+    }
+
+    /** Finds the still-`Running` prompt-run + run-step ids for a co-agent run (orphan finalize path). */
+    private async findCoAgentChildLogIds(
+        coAgentRunID: string,
+        contextUser: UserInfo,
+    ): Promise<{ PromptRunID: string | null; StepID: string | null }> {
+        const rv = new RunView();
+        const results = await rv.RunViews([
+            { EntityName: 'MJ: AI Prompt Runs', ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`, Fields: ['ID'], ResultType: 'simple' },
+            { EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`, Fields: ['ID'], ResultType: 'simple' },
+        ], contextUser);
+        const firstId = (r: { Success: boolean; Results: unknown[] } | undefined): string | null => {
+            const first = r?.Success ? (r.Results[0] as { ID?: string } | undefined) : undefined;
+            return first?.ID ?? null;
+        };
+        return { PromptRunID: firstId(results[0]), StepID: firstId(results[1]) };
+    }
+
+    /** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */
+    private escapeSqlLiteral(value: string): string {
+        return value.replace(/'/g, "''");
     }
 
     /** Loads + finalizes the co-agent `AIAgentRun` if still `Running`. Tolerant: logs, never throws. */

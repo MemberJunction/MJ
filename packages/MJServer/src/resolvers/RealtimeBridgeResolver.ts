@@ -5,7 +5,8 @@ import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService 
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
-import { CreateBridgeRealtimeSession, GetRealtimeModelVoices } from '@memberjunction/ai-agents';
+import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices } from '@memberjunction/ai-agents';
+import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
 
@@ -18,6 +19,14 @@ import { NotificationEngine } from '@memberjunction/notifications';
  * other. Idempotent (latest-wins).
  */
 LiveKitAgentRoomCoordinator.Instance.SetSessionFactory(CreateBridgeRealtimeSession);
+
+/**
+ * Binds the co-agent run finalizer onto the bridge engine (same module-load rationale as the factory above).
+ * Lets the engine finalize a session's dangling co-agent observability run when it reaps a bridge WITHOUT a
+ * live in-memory session (a prior-boot orphan / cross-host reap) — the one teardown path the agent layer's
+ * `Close()`-wrapped finalizer can't reach. Idempotent for clean same-process teardowns.
+ */
+AIBridgeEngine.Instance.SetSessionRunFinalizer(FinalizeBridgeCoAgentRuns);
 
 /**
  * GraphQL surface for the MJ-native LiveKit room: mints scoped client access tokens and starts an

@@ -48,6 +48,28 @@ const SESSION_BRIDGE_ENTITY = 'MJ: AI Agent Session Bridges';
 const SESSION_BRIDGE_PARTICIPANT_ENTITY = 'MJ: AI Agent Session Bridge Participants';
 
 /**
+ * Grace window after the last human leaves a room before the bot auto-leaves. Long enough that a page
+ * refresh (participant briefly drops + rejoins) does NOT kill the agent, short enough that an abandoned
+ * room frees its model session + finalizes its run promptly. See {@link AIBridgeEngine.evaluateRoomOccupancy}.
+ */
+const ROOM_EMPTY_GRACE_MS = 15000;
+
+/**
+ * Finalizes the co-agent observability run(s) for an agent session when a bridge is torn down WITHOUT a
+ * live in-memory session — a prior-boot orphan or a cross-host reap, where the agent layer's `Close()`-wrapped
+ * finalizer can't run, so the co-agent `AIAgentRun` would otherwise dangle in `Running` forever. The agent
+ * layer registers it via {@link AIBridgeEngine.SetSessionRunFinalizer} at startup (it lives in
+ * `@memberjunction/ai-agents`, not reachable from this package). **Idempotent**: for a clean same-process
+ * teardown the run is already `Completed`, so this is a harmless no-op.
+ */
+export type BridgeSessionRunFinalizer = (
+    agentSessionID: string,
+    success: boolean,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+) => Promise<void>;
+
+/**
  * The host-instance identity provider the engine uses to stamp `HostInstanceID` for node affinity
  * and orphan reconciliation. Mirrors `@memberjunction/server`'s `HostInstance` helper but is
  * **injected** so this server-tier engine has no hard dependency on MJServer (which would create a
@@ -215,6 +237,20 @@ export interface ActiveBridgeSession {
      */
     DisableAutoResponse: boolean;
 
+    /**
+     * Whether at least one HUMAN participant has been seen in the room. Auto-leave only fires after a human
+     * was present and then all humans left — so a bot that joins ahead of anyone (or a momentarily bot-only
+     * roster at startup) is never reaped prematurely. Set by the occupancy check off the driver roster.
+     */
+    HasSeenHuman: boolean;
+
+    /**
+     * Pending grace timer started when the last human leaves. If a human rejoins within the grace window
+     * (e.g. a page refresh) it is cleared; otherwise it fires {@link AIBridgeEngine.StopBridgeSession} so the
+     * bot leaves the empty room and its co-agent run finalizes. Cleared on any teardown.
+     */
+    LeaveGraceTimer?: ReturnType<typeof setTimeout>;
+
     /** The provider row backing this session. */
     Provider: MJAIBridgeProviderEntity;
 
@@ -283,6 +319,8 @@ export interface ActiveBridgeSession {
     description: 'Server-side AI Bridge Engine (realtime bridge coordination + transport seam)',
 })
 export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements IStartupSink {
+    /** Registered by the agent layer; finalizes dangling co-agent runs on orphan/cross-host teardown. */
+    private runFinalizer?: BridgeSessionRunFinalizer;
     /** Diagnostic: session ids that have already logged their first inbound / outbound media frame. */
     private diagInbound = new Set<string>();
     private diagOutbound = new Set<string>();
@@ -386,6 +424,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     /** Resolves an agent identity by its address value. @see AIBridgeEngineBase.IdentityByValue */
     public IdentityByValue(identityValue: string, providerId?: string): MJAIBridgeAgentIdentityEntity | undefined {
         return this.Base.IdentityByValue(identityValue, providerId);
+    }
+
+    /**
+     * Registers the {@link BridgeSessionRunFinalizer} this engine calls when a bridge is marked disconnected
+     * without a live in-memory session (orphan/cross-host reap) — so the co-agent run finalizes there too,
+     * not only on the same-process `Close()` path. Bound once at startup by the agent layer. Idempotent.
+     *
+     * @param finalizer The finalizer (from `@memberjunction/ai-agents`).
+     */
+    public SetSessionRunFinalizer(finalizer: BridgeSessionRunFinalizer): void {
+        this.runFinalizer = finalizer;
     }
 
     /** Returns the active identities for an agent. @see AIBridgeEngineBase.IdentitiesForAgent */
@@ -521,6 +570,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 RealtimeSession: params.RealtimeSession,
                 TurnPolicy: turnPolicy,
                 DisableAutoResponse: params.DisableAutoResponse === true,
+                HasSeenHuman: false,
                 Provider: params.Provider,
                 ContextUser: params.ContextUser,
                 MetadataProvider: params.MetadataProvider,
@@ -717,6 +767,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         try {
             active.Bridge.OnParticipantChange((participants: BridgeParticipantInfo[]) => {
                 void this.upsertParticipants(active, participants);
+                // Auto-leave an emptied room: the dominant teardown path (the user just closes the tab never
+                // calls StopBridgeSession), so without this the bot lingers Connected and its co-agent run
+                // dangles in Running forever. Routed through the normal stop, so the run finalizes cleanly.
+                this.evaluateRoomOccupancy(active, participants);
             });
         } catch (err) {
             // The driver did not actually implement roster despite the flag — log and continue.
@@ -725,6 +779,43 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                     `${err instanceof Error ? err.message : String(err)}`,
             );
         }
+    }
+
+    /**
+     * Decides whether an emptied room should auto-leave. Marks {@link ActiveBridgeSession.HasSeenHuman}
+     * once any human is present; when a human WAS present and the roster drops to agents-only, it arms a
+     * grace timer ({@link ROOM_EMPTY_GRACE_MS}) that stops the session (so a page-refresh re-join cancels
+     * it). The stop routes through {@link StopBridgeSession} → driver disconnect → realtime `Close()`, which
+     * finalizes the co-agent run — so a closed tab no longer leaves a `Connected` bridge + `Running` run.
+     *
+     * Only providers with a roster (diarization) reach here; rosterless transports rely on the host janitor.
+     *
+     * @param active The live bridged session.
+     * @param participants The current roster from the driver.
+     */
+    private evaluateRoomOccupancy(active: ActiveBridgeSession, participants: BridgeParticipantInfo[]): void {
+        const humanPresent = participants.some(p => !p.IsAgent);
+        if (humanPresent) {
+            active.HasSeenHuman = true;
+            if (active.LeaveGraceTimer) {
+                clearTimeout(active.LeaveGraceTimer);
+                active.LeaveGraceTimer = undefined;
+            }
+            return;
+        }
+        // Agents-only roster. Never reaped unless a human was actually here first (so a bot that joins ahead
+        // of anyone isn't killed), and only one countdown at a time.
+        if (!active.HasSeenHuman || active.LeaveGraceTimer) {
+            return;
+        }
+        active.LeaveGraceTimer = setTimeout(() => {
+            active.LeaveGraceTimer = undefined;
+            // A re-join cleared this timer; a prior stop removed the session. Only act if it's still live.
+            if (this.activeSessions.has(active.SessionBridgeID.toLowerCase())) {
+                LogStatus(`[AIBridgeEngine] All humans left bridge ${active.SessionBridgeID}; auto-leaving (grace elapsed).`);
+                void this.StopBridgeSession(active.SessionBridgeID, 'HostEnded', active.ContextUser, active.MetadataProvider);
+            }
+        }, ROOM_EMPTY_GRACE_MS);
     }
 
     /**
@@ -1197,6 +1288,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /** Disconnects the driver of a live session, tolerant of driver teardown errors, and closes its channels. */
     private async disconnectDriver(active: ActiveBridgeSession, reason: BridgeDisconnectReason): Promise<void> {
+        // Cancel any pending auto-leave timer so it can't fire against an already-torn-down session.
+        if (active.LeaveGraceTimer) {
+            clearTimeout(active.LeaveGraceTimer);
+            active.LeaveGraceTimer = undefined;
+        }
         // Close the channel plane first so its post-close hooks see the session still mid-teardown,
         // then release the driver's media plane.
         await this.closeChannelPlane(active);
@@ -1250,6 +1346,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         if (row.Status === 'Disconnected' || row.Status === 'Failed') {
             return true; // idempotent — already terminal, keep the original reason.
         }
+        const agentSessionID = row.AgentSessionID;
         row.Status = 'Disconnected';
         row.CloseReason = reason;
         row.DisconnectedAt = new Date();
@@ -1259,6 +1356,20 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 `[AIBridgeEngine] markBridgeDisconnected save failed for ${sessionBridgeID}: ` +
                     `${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
             );
+        }
+        // Finalize the co-agent run(s) for this session on EVERY teardown path. The same-process `Close()`
+        // already finalized them (so this is a no-op there), but the orphan/cross-host reaps reach here
+        // WITHOUT a live session — this is the only place their dangling `Running` co-agent run gets closed.
+        // Tolerant: a finalizer failure must never block the disconnect bookkeeping.
+        if (saved && this.runFinalizer && agentSessionID) {
+            try {
+                await this.runFinalizer(agentSessionID, reason !== 'Error', contextUser, provider);
+            } catch (err) {
+                LogError(
+                    `[AIBridgeEngine] session run finalizer failed for ${sessionBridgeID}: ` +
+                        `${err instanceof Error ? err.message : String(err)}`,
+                );
+            }
         }
         return saved;
     }

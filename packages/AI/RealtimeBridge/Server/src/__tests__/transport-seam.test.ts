@@ -334,6 +334,24 @@ describe('AIBridgeEngine — lifecycle and status transitions', () => {
         // Should NOT overwrite status (already terminal); Save not needed.
         expect(row.Status).toBe('Disconnected');
     });
+
+    it('invokes the registered run finalizer when reaping an orphan (no live session) so the co-agent run finalizes', async () => {
+        const row = makeBridgeRow({ Status: 'Connected', AgentSessionID: 'sess-42' });
+        const { provider } = makeProvider(() => row);
+        const finalizer = vi.fn(async () => undefined);
+        engine().SetSessionRunFinalizer(finalizer);
+        const user = makeUser();
+        try {
+            // Not in the active map → reconcile-only path → markBridgeDisconnected → finalizer.
+            const ok = await engine().StopBridgeSession('bridge-orphan-x', 'Janitor', user, provider);
+            expect(ok).toBe(true);
+            expect(row.Status).toBe('Disconnected');
+            // 'Janitor' is a non-error reason → finalize as success, scoped to the row's AgentSessionID.
+            expect(finalizer).toHaveBeenCalledWith('sess-42', true, user, provider);
+        } finally {
+            engine().SetSessionRunFinalizer(async () => undefined); // reset shared singleton state
+        }
+    });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -458,6 +476,47 @@ describe('AIBridgeEngine — participant tracking', () => {
         await new Promise((r) => setTimeout(r, 0));
 
         expect(participantRequested).toBe(false);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('arms an auto-leave grace timer when the last human leaves, and cancels it on re-join', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        await new Promise((r) => setTimeout(r, 0));
+
+        // Human present → seen, no countdown.
+        loopback.EmitParticipants([{ ExternalId: 'h1', DisplayName: 'Alice', Role: 'Host', IsAgent: false }]);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(active.HasSeenHuman).toBe(true);
+        expect(active.LeaveGraceTimer).toBeUndefined();
+
+        // Only agents remain → grace timer armed (not fired yet).
+        loopback.EmitParticipants([{ ExternalId: 'agent-x', DisplayName: 'Bot', Role: 'Participant', IsAgent: true }]);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(active.LeaveGraceTimer).toBeDefined();
+
+        // Human re-joins within the window (e.g. a refresh) → countdown cancelled.
+        loopback.EmitParticipants([{ ExternalId: 'h1', DisplayName: 'Alice', Role: 'Host', IsAgent: false }]);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(active.LeaveGraceTimer).toBeUndefined();
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('never arms auto-leave when a human was never present (bot joined ahead of anyone)', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        await new Promise((r) => setTimeout(r, 0));
+
+        loopback.EmitParticipants([{ ExternalId: 'agent-x', DisplayName: 'Bot', Role: 'Participant', IsAgent: true }]);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(active.HasSeenHuman).toBe(false);
+        expect(active.LeaveGraceTimer).toBeUndefined();
+
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 });

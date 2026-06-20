@@ -72,13 +72,25 @@ function mapParticipantRole(role: LiveKitParticipantRole, isLocal: boolean | und
     }
 }
 
+/**
+ * The bot-identity convention the LiveKit room coordinator mints (`agent-<agentSessionId>`). A bridge only
+ * knows its OWN bot via `IsLocal`; OTHER agents in a multi-agent room are REMOTE participants, so they must
+ * be recognized by this identity prefix. Without it every other agent reads as a human — breaking
+ * turn-taking's agent-exclusion (an agent treats another agent's speech as being addressed) AND the
+ * "are any humans still present?" occupancy check the engine uses to auto-leave an empty room.
+ */
+function isAgentParticipantIdentity(identity: string | undefined): boolean {
+    return typeof identity === 'string' && identity.toLowerCase().startsWith('agent-');
+}
+
 /** Maps a LiveKit participant onto the bridge's {@link BridgeParticipantInfo}. */
 function toBridgeParticipant(p: LiveKitParticipant): BridgeParticipantInfo {
     return {
         ExternalId: p.Identity,
         DisplayName: p.DisplayName,
         Role: mapParticipantRole(p.Role, p.IsLocal),
-        IsAgent: p.IsLocal === true,
+        // The local bot OR any remote agent bot (by identity convention) counts as an agent, not a human.
+        IsAgent: p.IsLocal === true || isAgentParticipantIdentity(p.Identity),
     };
 }
 
