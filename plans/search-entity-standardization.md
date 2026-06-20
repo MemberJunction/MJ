@@ -1,6 +1,6 @@
 # Search Entity Standardization Plan
 
-**Status:** Draft
+**Status:** Tier 1 implemented — #2709 merged; the Actions / AI Agents / AI Prompts (and AI Models) Search EntityDocuments landed on `next`, and this PR adds the **Queries** Search EntityDocument, rewrites the "Find Best/Candidate Action(s)/Agent(s)" + "Search Query Catalog" actions as thin `Provider.SearchEntity` wrappers, deletes `AgentEmbeddingService`/`ActionEmbeddingService` + the related `AIEngine` helpers, and removes `scripts/backfill-query-embeddings.ts`. (`Query.EmbeddingVector` column + `QueryEngineServer.FindSimilarQueries` remain — follow-up migration, per Risks table.)
 **Author:** Amith Nagarajan (with Claude)
 **Base PR:** #2709 (`entity-search-via-entitydoc-plan`) — adds `Provider.SearchEntity` / `SearchEntities`, `SimpleVectorServiceProvider`, weighted RRF, `Search Entity` action, `ScheduledJob.RunImmediatelyIfNeverRun`, and the `Vectorize Entity` action's `EntityDocumentType=Search` mode.
 **Goal:** Retire the three bespoke "find similar by description" code paths (in-memory AIEngine vector services, persistent column-stored vectors, ad-hoc backfill scripts) in favor of one uniform pattern: Search-typed EntityDocument + `Provider.SearchEntity` + the daily `Entity Vector Sync - Daily` scheduled job.

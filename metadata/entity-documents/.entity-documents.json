@@ -103,5 +103,19 @@
       "lastModified": "2026-06-20T16:51:05.986Z",
       "checksum": "80a6d308a4c3dbb9cc9381b2ccd095bd044dd679047bbe58c42dde6f1c8648af"
     }
+  },
+  {
+    "fields": {
+      "Name": "Queries Search",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queries",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-queries-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    }
   }
 ]

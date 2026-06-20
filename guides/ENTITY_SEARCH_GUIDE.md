@@ -136,8 +136,18 @@ Semantic and hybrid modes require an Active `EntityDocument` of type `Search` re
 | `Actions Search` | `MJ: Actions` |
 | `AI Prompts Search` | `MJ: AI Prompts` |
 | `AI Models Search` | `MJ: AI Models` |
+| `Queries Search` | `MJ: Queries` |
 
 Opting another entity in is purely additive metadata — no code.
+
+> **Migration note.** The `MJ: Actions`, `MJ: AI Agents`, and `MJ: Queries` Search
+> EntityDocuments are the canonical replacements for the old bespoke "find similar
+> by description" paths — the in-memory `AgentEmbeddingService` / `ActionEmbeddingService`
+> on `AIEngine`, and the `QueryEngineServer.FindSimilarQueries` vector index. The
+> "Find Best Action", "Find Candidate Actions", "Find Best Agent", "Find Candidate
+> Agents", and "Search Query Catalog" actions are now thin wrappers around
+> `Provider.SearchEntity` (semantic mode); new callers should use **Search Entity**
+> directly.
 
 ### Enabling on your own entity (3 steps)
 

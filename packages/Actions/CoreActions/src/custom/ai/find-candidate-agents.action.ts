@@ -1,241 +1,41 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
+import { RunActionParams } from "@memberjunction/actions-base";
+import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { AIEngine } from "@memberjunction/aiengine";
-import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
+import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { BaseFindAgentsAction } from "./base-find-agents.action";
+import { getActionBooleanParam } from "./semantic-entity-search.helper";
 
 /**
- * Action that finds the best-matching AI agents for a given task using embedding-based semantic search.
+ * Finds candidate AI agents for a given task using semantic search.
  *
- * This action uses local embeddings to perform fast similarity search across all available agents,
- * returning the most relevant agents based on their descriptions and capabilities.
+ * Backed by the unified `Provider.SearchEntity` pipeline (semantic mode over the
+ * daily-synced "AI Agents Search" EntityDocument). Extends the shared agent base
+ * (see {@link BaseFindAgentsAction}) to additionally surface each agent's
+ * sub-agents and default artifact type, and to optionally exclude Sub-Agents and
+ * child agents via the `ExcludeSubAgents` parameter.
+ *
+ * Inputs: `TaskDescription` (required), `MaxResults` (default 5), `MinimumSimilarityScore`
+ * (cosine 0-1, default 0.5), `IncludeInactive` (default false), `ExcludeSubAgents` (default true).
  *
  * @example
  * ```typescript
- * // Find agents for a research task
  * await runAction({
  *   ActionName: 'Find Candidate Agents',
- *   Params: [{
- *     Name: 'TaskDescription',
- *     Value: 'Research market trends and compile a comprehensive report'
- *   }, {
- *     Name: 'MaxResults',
- *     Value: 5
- *   }, {
- *     Name: 'MinimumSimilarityScore',
- *     Value: 0.7
- *   }]
+ *   Params: [{ Name: 'TaskDescription', Value: 'Research market trends' }]
  * });
  * ```
  */
 @RegisterClass(BaseAction, "Find Candidate Agents")
-export class FindBestAgentAction extends BaseAction {
-    // Singleton initialization removed - AIEngine handles embedding lifecycle
+export class FindCandidateAgentsAction extends BaseFindAgentsAction {
+    protected get actionLabel(): string { return 'find candidate agents'; }
+    protected get includeSubAgentDetails(): boolean { return true; }
 
-    /**
-     * Executes the Find Candidate Agents action.
-     *
-     * @param params - The action parameters containing:
-     *   - TaskDescription: Description of the task to find agents for (required)
-     *   - MaxResults: Maximum number of agents to return (optional, default: 5)
-     *   - MinimumSimilarityScore: Minimum similarity score 0-1 (optional, default: 0.5)
-     *   - IncludeInactive: Include inactive agents (optional, default: false)
-     *   - ExcludeSubAgents: Exclude agents with invocation mode 'Sub-Agent' (optional, default: true)
-     *
-     * @returns Action result with matched agents
-     */
-    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        try {
-            // Extract and validate input parameters
-            const taskDescription = this.getParamValue(params, 'taskdescription');
-            const maxResults = parseInt(this.getParamValue(params, 'maxresults') || '5');
-            const minimumSimilarityScore = parseFloat(this.getParamValue(params, 'minimumsimilarityscore') || '0.5');
-            const includeInactive = this.getBooleanParam(params, 'includeinactive', false);
-            const excludeSubAgents = this.getBooleanParam(params, 'excludesubagents', true);
-
-            // Validate required input
-            if (!taskDescription || taskDescription.trim().length === 0) {
-                return {
-                    Success: false,
-                    ResultCode: 'INVALID_INPUT',
-                    Message: 'TaskDescription parameter is required and cannot be empty'
-                };
-            }
-
-            // Validate numeric ranges
-            if (maxResults < 1 || maxResults > 20) {
-                return {
-                    Success: false,
-                    ResultCode: 'INVALID_INPUT',
-                    Message: 'MaxResults must be between 1 and 20'
-                };
-            }
-
-            if (minimumSimilarityScore < 0 || minimumSimilarityScore > 1) {
-                return {
-                    Success: false,
-                    ResultCode: 'INVALID_INPUT',
-                    Message: 'MinimumSimilarityScore must be between 0 and 1'
-                };
-            }
-
-            // Validate contextUser is provided for permission filtering
-            if (!params.ContextUser) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_USER_CONTEXT',
-                    Message: 'User context required for permission filtering'
-                };
-            }
-
-            // Ensure AIEngine is loaded (embeddings computed during initialization)
-            await AIEngine.Instance.Config(false, params.ContextUser);
-
-            // Find similar agents using AIEngine's built-in method - no database round trip!
-            const matchedAgents = await AIEngine.Instance.FindSimilarAgents(
-                taskDescription,
-                maxResults * 3, // Get 3x results to account for filtering
-                minimumSimilarityScore
-            );
-
-            // Filter by user permissions - user must have 'run' permission
-            const accessibleAgents = await AIAgentPermissionHelper.GetAccessibleAgents(
-                params.ContextUser,
-                'run'
-            );
-            const accessibleAgentIds = new Set(accessibleAgents.map(a => NormalizeUUID(a.ID)));
-
-            // Filter matched agents by permissions
-            let permissionFilteredAgents = matchedAgents.filter(a => accessibleAgentIds.has(NormalizeUUID(a.agentId)));
-
-            // Filter by status if not including inactive
-            if (!includeInactive) {
-                permissionFilteredAgents = permissionFilteredAgents.filter(a => a.status === 'Active');
-            }
-
-            // Filter by invocation mode and parent relationship if excludeSubAgents is true
-            // Sub-Agents and child agents are meant to be called by other agents, not typically discovered by users/tools
-            let invocationFilteredAgents = permissionFilteredAgents;
-            if (excludeSubAgents) {
-                invocationFilteredAgents = permissionFilteredAgents.filter(a =>
-                    a.invocationMode !== 'Sub-Agent' && !a.parentId
-                );
-            }
-
-            // Limit to maxResults after all filtering
-            const filteredAgents = invocationFilteredAgents.slice(0, maxResults);
-
-            if (filteredAgents.length === 0) {
-                return {
-                    Success: false,
-                    ResultCode: 'NO_AGENTS_FOUND',
-                    Message: `No accessible agents found matching the criteria (minimum similarity: ${minimumSimilarityScore}). You may not have permission to run the matching agents.`
-                };
-            }
-
-            // AIEngine already loaded above - use it to get agent actions
-            // Create map of agentId -> action names
-            const agentActionsMap = new Map<string, string[]>();
-            for (const agent of filteredAgents) {
-                const agentActions = AIEngine.Instance.AgentActions
-                    .filter(aa => UUIDsEqual(aa.AgentID, agent.agentId) && aa.Status === 'Active')
-                    .map(aa => aa.Action);  // Get action name
-                agentActionsMap.set(agent.agentId, agentActions);
-            }
-
-            // Create map of agentId -> sub-agents (name and description)
-            const agentSubAgentsMap = new Map<string, Array<{name: string, description: string}>>();
-            for (const agent of filteredAgents) {
-                const subAgents: Array<{name: string, description: string}> = [];
-
-                // Find child agents (ParentID = this agent)
-                const childAgents = AIEngine.Instance.Agents.filter(a =>
-                    UUIDsEqual(a.ParentID, agent.agentId) && a.Status === 'Active'
-                );
-                subAgents.push(...childAgents.map(a => ({
-                    name: a.Name,
-                    description: a.Description || ''
-                })));
-
-                // Find related agents (via AgentRelationships)
-                const relationships = AIEngine.Instance.AgentRelationships.filter(r =>
-                    UUIDsEqual(r.AgentID, agent.agentId) && r.Status === 'Active'
-                );
-                for (const rel of relationships) {
-                    const relatedAgent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, rel.SubAgentID));
-                    if (relatedAgent && relatedAgent.Status === 'Active') {
-                        subAgents.push({
-                            name: relatedAgent.Name,
-                            description: relatedAgent.Description || ''
-                        });
-                    }
-                }
-
-                agentSubAgentsMap.set(agent.agentId, subAgents);
-            }
-
-            // Add output parameters
-            params.Params.push({
-                Name: 'MatchedAgents',
-                Type: 'Output',
-                Value: filteredAgents
-            });
-
-            params.Params.push({
-                Name: 'MatchCount',
-                Type: 'Output',
-                Value: filteredAgents.length
-            });
-
-            // Build response message with full descriptions, actions, and sub-agents
-            const responseData = {
-                message: `Found ${filteredAgents.length} accessible agent(s)`,
-                taskDescription: taskDescription,
-                matchCount: filteredAgents.length,
-                allMatches: filteredAgents.map(a => ({
-                    agentId: a.agentId,  // Include agent ID for direct use with Load Agent Spec
-                    agentName: a.agentName,
-                    similarityScore: Math.round(a.similarityScore * 100) / 100, // Round to 2 decimal places
-                    description: a.description,  // Full description, no truncation
-                    actions: agentActionsMap.get(a.agentId) || [],
-                    subAgents: agentSubAgentsMap.get(a.agentId) || [],  // Sub-agents with name and description
-                    defaultArtifactType: a.defaultArtifactType || null  // Artifact type this agent produces
-                }))
-            };
-
-            return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: JSON.stringify(responseData, null, 2)
-            };
-
-        } catch (error) {
-            return {
-                Success: false,
-                ResultCode: 'EXECUTION_ERROR',
-                Message: `Failed to Find Candidate Agents: ${error instanceof Error ? error.message : String(error)}`
-            };
+    protected override applyInvocationFilter(agents: MJAIAgentEntityExtended[], params: RunActionParams): MJAIAgentEntityExtended[] {
+        const excludeSubAgents = getActionBooleanParam(params, 'excludesubagents', true);
+        if (excludeSubAgents) {
+            // Sub-Agents and child agents are meant to be called by other agents, not discovered directly
+            return agents.filter(a => a.InvocationMode !== 'Sub-Agent' && !a.ParentID);
         }
-    }
-
-    /**
-     * Get boolean parameter with default
-     */
-    private getBooleanParam(params: RunActionParams, name: string, defaultValue: boolean): boolean {
-        const value = this.getParamValue(params, name);
-        if (value === undefined || value === null) return defaultValue;
-        if (typeof value === 'boolean') return value;
-        if (typeof value === 'string') {
-            return value.toLowerCase() === 'true';
-        }
-        return defaultValue;
-    }
-
-    /**
-     * Get parameter value by name (case-insensitive)
-     */
-    private getParamValue(params: RunActionParams, name: string): any {
-        const param = params.Params.find(p => p.Name.toLowerCase() === name.toLowerCase());
-        return param?.Value;
+        return agents;
     }
 }
