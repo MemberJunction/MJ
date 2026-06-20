@@ -1,6 +1,6 @@
 /**
  * Integration tests for the action-result compression wiring in BaseAgent
- * (formatParamValueForResult / crushParamValue / resolveActionResultCrush).
+ * (formatParamValueForResult / crushParamValue / crushCodeValue / resolveActionResultCrush).
  *
  * Following this package's established convention (see prompt-formatting.test.ts),
  * the wiring decision logic is mirrored here as standalone functions, but the REAL
@@ -10,12 +10,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import { CrushJSON, DescribeCrush, type JsonValue } from '@memberjunction/context-crush';
+import { CrushCode, type CodeLang } from '@memberjunction/context-crush/code';
 
 const ACTION_RESULT_CRUSH_THRESHOLD = 600;
 
 interface ActionResultCrushConfig {
     threshold: number;
     maxChars: number | undefined;
+    codeLang: CodeLang | undefined;
 }
 
 /** Mirror of BaseAgent.resolveActionResultCrush — default-on, opt-out via crushActionResults:false. */
@@ -23,24 +25,60 @@ function resolveActionResultCrush(agentTypePromptParams?: Record<string, unknown
     if (agentTypePromptParams?.crushActionResults === false) {
         return undefined;
     }
-    return { threshold: ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined };
+    const requested = agentTypePromptParams?.crushCodeLang;
+    const codeLang: CodeLang | undefined = requested === 'sql' || requested === 'typescript' ? requested : undefined;
+    return { threshold: ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang };
 }
 
-/** Mirror of BaseAgent.crushParamValue. */
+/** Mirror of QueryBuilderAgent.resolveActionResultCrush — opts into SQL code crushing. */
+function resolveQueryBuilderCrush(agentTypePromptParams?: Record<string, unknown>): ActionResultCrushConfig | undefined {
+    const base = resolveActionResultCrush(agentTypePromptParams);
+    if (!base) {
+        return base;
+    }
+    return { ...base, codeLang: base.codeLang ?? 'sql' };
+}
+
+/** Mirror of BaseAgent.crushParamValue — structural JSON compression (safe no-op on non-JSON). */
 function crushParamValue(stringValue: string, config: ActionResultCrushConfig | undefined): string | null {
     if (!config || stringValue.length < config.threshold) {
         return null;
     }
-    const json = JSON.parse(stringValue) as JsonValue;
-    const result = CrushJSON(json, { MaxChars: config.maxChars });
-    if (result.CrushedChars >= result.OriginalChars) {
+    try {
+        const json = JSON.parse(stringValue) as JsonValue;
+        const result = CrushJSON(json, { MaxChars: config.maxChars });
+        if (result.CrushedChars >= result.OriginalChars) {
+            return null;
+        }
+        const legend = DescribeCrush(result);
+        return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
+    } catch {
         return null;
     }
-    const legend = DescribeCrush(result);
-    return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
 }
 
-/** Mirror of BaseAgent.formatParamValueForResult with crush wiring. */
+/** Mirror of BaseAgent.crushCodeValue — opt-in AST reduction of SQL/TS code strings. */
+function crushCodeValue(stringValue: string, config: ActionResultCrushConfig | undefined): string | null {
+    if (!config || !config.codeLang || stringValue.length < config.threshold) {
+        return null;
+    }
+    try {
+        const result = CrushCode(stringValue, config.codeLang);
+        if (result.CrushedChars >= result.OriginalChars) {
+            return null;
+        }
+        const legend = DescribeCrush(result);
+        return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Mirror of BaseAgent.formatParamValueForResult with crush wiring. For STRING values the
+ * order is: structural JSON crush (covers actions that JSON.stringify their payload) →
+ * opt-in code crush → verbatim. For object/array values: JSON.stringify → JSON crush.
+ */
 function formatParamValueForResult(value: unknown, config: ActionResultCrushConfig | undefined, maxLength = 0): string {
     if (value === null || value === undefined) {
         return '`null`';
@@ -49,6 +87,14 @@ function formatParamValueForResult(value: unknown, config: ActionResultCrushConf
         return `\`${String(value)}\``;
     }
     if (typeof value === 'string') {
+        const crushedJson = crushParamValue(value, config);
+        if (crushedJson !== null) {
+            return crushedJson;
+        }
+        const crushedCode = crushCodeValue(value, config);
+        if (crushedCode !== null) {
+            return crushedCode;
+        }
         return maxLength > 0 && value.length > maxLength ? `${value.substring(0, maxLength)}…` : value;
     }
     const stringValue = JSON.stringify(value);
@@ -70,6 +116,12 @@ function buildLargeResultSet(): JsonValue {
         status: i % 2 === 0 ? 'Active' : 'Inactive',
         category: 'StandardCategory',
     }));
+}
+
+/** A large SQL string with a long VALUES list — what a query agent moves through context. */
+function buildLargeSql(): string {
+    const rows = Array.from({ length: 40 }, (_, i) => `(${i}, 'name${i}', 'StandardCategory')`).join(', ');
+    return `-- generated insert\nINSERT INTO Users (id, name, category) VALUES ${rows};`;
 }
 
 describe('action-result crush wiring', () => {
@@ -108,7 +160,7 @@ describe('action-result crush wiring', () => {
         expect(formatted).toBe(JSON.stringify(data));
     });
 
-    it('keeps scalars and strings untouched', () => {
+    it('keeps scalars and small strings untouched', () => {
         const config = resolveActionResultCrush();
         expect(formatParamValueForResult(42, config)).toBe('`42`');
         expect(formatParamValueForResult(true, config)).toBe('`true`');
@@ -132,5 +184,52 @@ describe('action-result crush wiring', () => {
         const config = resolveActionResultCrush();
         const data = buildLargeResultSet();
         expect(formatParamValueForResult(data, config)).toBe(formatParamValueForResult(data, config));
+    });
+
+    // --- JSON-STRING action results (regression for the P1 wiring gap) ---
+    // Actions like run-adhoc-query set an output param to JSON.stringify(rows), so the
+    // value arrives as a STRING. These previously bypassed crushJSON entirely.
+
+    it('crushes a JSON-STRING result produced by actions that stringify their payload', () => {
+        const config = resolveActionResultCrush(); // default agent, codeLang undefined
+        const jsonString = JSON.stringify(buildLargeResultSet()); // e.g. Results = JSON.stringify(rows)
+
+        const formatted = formatParamValueForResult(jsonString, config);
+
+        expect(formatted).toContain('$t'); // crushed tabular form — the bug was that this never appeared
+        expect(formatted).toContain('context-crush');
+        const crushedText = formatted.split('\n')[0];
+        expect(crushedText.length).toBeLessThan(jsonString.length);
+    });
+
+    it('routes a large SQL string to code crushing — the JSON attempt is a safe no-op', () => {
+        const config = resolveQueryBuilderCrush(); // QueryBuilder opts into codeLang: 'sql'
+        const sql = buildLargeSql();
+
+        const formatted = formatParamValueForResult(sql, config);
+
+        expect(formatted).toContain('value tuples elided'); // SQL crush signature
+        expect(formatted).not.toContain('$t'); // NOT misinterpreted as JSON
+        expect(formatted.split('\n  ↳ ')[0].length).toBeLessThan(sql.length);
+    });
+
+    it('leaves a large non-JSON, non-code plain string verbatim', () => {
+        const config = resolveActionResultCrush(); // codeLang undefined
+        const plain = 'lorem ipsum dolor sit amet '.repeat(40); // >600 chars, not JSON, not code
+
+        const formatted = formatParamValueForResult(plain, config);
+
+        expect(formatted).toBe(plain);
+        expect(formatted).not.toContain('$t');
+    });
+
+    it('returns a JSON-STRING result verbatim when the agent opts out', () => {
+        const config = resolveActionResultCrush({ crushActionResults: false });
+        const jsonString = JSON.stringify(buildLargeResultSet());
+
+        const formatted = formatParamValueForResult(jsonString, config);
+
+        expect(formatted).toBe(jsonString);
+        expect(formatted).not.toContain('$t');
     });
 });

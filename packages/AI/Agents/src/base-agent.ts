@@ -6289,8 +6289,15 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         if (typeof value === 'string') {
-            // Large code strings (e.g. SQL/TS) are AST-reduced when the agent opted into a
-            // code language; otherwise strings pass through (optionally length-capped).
+            // A string param may carry JSON (many actions JSON.stringify their payloads),
+            // SQL/TS code, or plain text. Try structural JSON compression first — it is a
+            // safe no-op on non-JSON (crushParamValue's internal JSON.parse failure is
+            // caught and returns null) — then opt-in AST code reduction (SQL/TS), then pass
+            // through (optionally length-capped).
+            const crushedJson = this.crushParamValue(value);
+            if (crushedJson !== null) {
+                return crushedJson;
+            }
             const crushedCode = this.crushCodeValue(value);
             if (crushedCode !== null) {
                 return crushedCode;
@@ -6359,10 +6366,13 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Structurally compress a stringified object/array action-result value when crushing
-     * is enabled for the run and the value clears the size threshold. Returns crushed text
-     * plus a one-line legend, or null when crushing is disabled, the value is too small, or
-     * compression wouldn't actually save characters — so callers fall back to verbatim JSON.
+     * Structurally compress a JSON action-result value when crushing is enabled for the run
+     * and the value clears the size threshold. Accepts either the `JSON.stringify` of an
+     * object/array param, or a raw string param that itself contains JSON (many actions
+     * stringify their payloads, e.g. `run-adhoc-query`'s `Results`). Returns crushed text
+     * plus a one-line legend, or null when crushing is disabled, the value is too small, the
+     * value isn't valid JSON, or compression wouldn't actually save characters — so callers
+     * fall back to verbatim (and, for strings, to code crushing) behavior.
      *
      * token optimization via @memberjunction/context-crush (SmartCrusher-inspired)
      * @private
@@ -6373,9 +6383,11 @@ The context is now within limits. Please retry your request with the recovered c
             return null;
         }
         // Crushing is a best-effort optimization — it must never break an agent turn. Any
-        // failure (e.g. pathologically deep payloads) falls back to the verbatim JSON.
+        // failure (non-JSON input, pathologically deep payloads) falls back to verbatim.
         try {
-            // stringValue came from JSON.stringify, so it parses back to a plain JSON value.
+            // Parse to a plain JSON value. This is the JSON.stringify of an object/array
+            // param, or a raw string param that contains JSON; non-JSON strings throw here
+            // and are caught below (caller then tries code crushing / verbatim).
             const json = JSON.parse(stringValue) as JsonValue;
             const result = CrushJSON(json, { MaxChars: config.maxChars });
             if (result.CrushedChars >= result.OriginalChars) {

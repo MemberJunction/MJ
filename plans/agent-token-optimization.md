@@ -96,6 +96,8 @@ Port the SmartCrusher *idea*, implemented fresh in TS:
 
 `base-agent.ts` — the `ActionResultSummary` build path (around `interface ActionResultSummary` / the markdown summary builder that feeds action results into conversation messages). Apply `crushJSON` to each output param `Value` that is (a) an object/array and (b) over a size threshold, **before** it is stringified into the summary. Gate behind a new agent-level/global flag (default **on**) so it can be disabled per agent if a downstream consumer needs raw JSON.
 
+> **Implementation note (JSON-string params):** Some actions return their payload as a **JSON string** (e.g. `run-adhoc-query`'s `Results = JSON.stringify(rows)`), so the param `Value` is `typeof === 'string'`, not an object/array. `formatParamValueForResult` therefore tries `crushJSON` on **string** values too — `crushParamValue` parses the string inside a try/catch, so non-JSON strings (SQL, plain text) fall through safely to the opt-in code crusher (`crushCode`) and then verbatim. Order for strings: **crushJSON → crushCode → verbatim**. Without this, the most common large-result shape (a stringified JSON array) would bypass crushing entirely.
+
 Interaction with existing layers (ordering matters):
 1. `interceptLargeBinaryContent` runs first (pulls media out).
 2. Artifact-tool offload remains the path for recognized artifact types (unchanged).
