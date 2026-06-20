@@ -791,10 +791,26 @@ export class SQLServerDataProvider
 
 
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
+    // This builds the column list for the @ResultTable/@ResultChangesTable that captures
+    // `SELECT * FROM <BaseView>` via a POSITIONAL `INSERT INTO @table EXEC ...`. The base view
+    // is generated as `SELECT [base].*, <related joins>` — i.e. non-virtual (base-table) columns
+    // first, then virtual/related fields appended last. The capture table MUST be declared in that
+    // same order, or values mis-route by position: a base column that CodeGen sequenced AFTER a
+    // virtual field (newly-added columns get an offset of maxSequence+100000) would otherwise land
+    // its value in the virtual field's column slot, producing truncation / type-conversion errors.
+    //
+    // We therefore emit non-virtual fields first, then virtual fields, each preserving their existing
+    // relative order. This is a STABLE PARTITION: for any entity whose virtual fields already sort
+    // after all base fields (the overwhelming majority), the output is byte-for-byte identical to the
+    // prior sequence-ordered output (a no-op). It only changes — and corrects — entities where a
+    // virtual field was sequenced ahead of a base column.
+    const orderedFields = [
+      ...entityInfo.Fields.filter((f) => !f.IsVirtual),
+      ...entityInfo.Fields.filter((f) => f.IsVirtual),
+    ];
     let sRet: string = '',
       outputCount: number = 0;
-    for (let i = 0; i < entityInfo.Fields.length; i++) {
-      const f = entityInfo.Fields[i];
+    for (const f of orderedFields) {
       if (outputCount !== 0) sRet += ',\n';
       sRet += '[' + f.Name + '] ' + f.SQLFullType + ' ' + (f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL');
       outputCount++;
