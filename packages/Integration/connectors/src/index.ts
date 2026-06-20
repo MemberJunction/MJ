@@ -17,6 +17,7 @@ export { IMISConnector, LoadIMISConnector, type IMISConnectionConfig } from './I
 export { ConstantContactConnector } from './ConstantContactConnector.js';
 export { MailchimpConnector } from './MailchimpConnector.js';
 export { SharePointConnector } from './SharePointConnector.js';
+export { DynamicsDataverseConnector, LoadDynamicsDataverseConnector, type DynamicsConnectionConfig } from './DynamicsDataverseConnector.js';
 export { MagnetMailConnector } from './MagnetMailConnector.js';
 export { WildApricotConnector } from './WildApricotConnector.js';
 export { Reach360Connector } from './Reach360Connector.js';

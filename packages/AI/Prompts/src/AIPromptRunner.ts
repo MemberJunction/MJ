@@ -9,8 +9,7 @@ import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
-import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
-import { ResultSelectionConfig } from './ParallelExecution';
+import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
@@ -105,6 +104,20 @@ interface ModelSelectionResult {
   modelEffortLevel?: number;
   selectionInfo?: AIModelSelectionInfo;
   allCandidates: ModelVendorCandidate[];
+  /**
+   * Per-candidate credential-availability already computed by
+   * {@link AIPromptRunner.selectModelWithAPIKeyTracked} during selection, keyed by
+   * `driverClass:modelID:vendorId` (the same key {@link AIPromptRunner.executeModelWithFailover}
+   * uses for its own cache). Lets failover REUSE selection's credential probes instead of
+   * recomputing `hasCredentialsAvailable` for the prefix it already walked.
+   *
+   * Because selection short-circuits once the highest-priority credentialed candidate is found
+   * (see the DECISION note in {@link AIPromptRunner.selectModelWithAPIKeyTracked}), this map
+   * only contains the candidates UP TO AND INCLUDING the selected one. The not-evaluated tail is
+   * intentionally absent so failover still probes it lazily — only if it ever has to walk down
+   * there during an actual failover.
+   */
+  credentialAvailability?: Map<string, boolean>;
 }
 
 /**
@@ -171,7 +184,7 @@ export class AIPromptRunner {
   private _metadata: Metadata;
   private _templateEngine: TemplateEngineServer;
   private _executionPlanner: ExecutionPlanner;
-  private _parallelCoordinator: ParallelExecutionCoordinator;
+  private _parallelCoordinator?: IParallelExecutionCoordinator;
   private _jsonValidator: JSONValidator;
   private _modelRunner: AIModelRunner;
   private _provider: IMetadataProvider | null = null;
@@ -220,9 +233,42 @@ export class AIPromptRunner {
     this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
-    this._parallelCoordinator = new ParallelExecutionCoordinator();
     this._jsonValidator = new JSONValidator();
     this._modelRunner = new AIModelRunner();
+  }
+
+  /** ClassFactory key the parallel coordinator self-registers under (see {@link ParallelCoordinator}). */
+  private static readonly PARALLEL_COORDINATOR_KEY = 'ParallelExecutionCoordinator';
+
+  /**
+   * Lazily resolves the parallel execution coordinator.
+   *
+   * The coordinator is a SUBCLASS of AIPromptRunner — it inherits {@link executeModel} and the rest
+   * of the battle-tested execution path so there is a single source of truth for credential / driver
+   * / ChatParams / streaming resolution. That subclass relationship means the base cannot statically
+   * `new` it without a hard circular import, so we resolve it through the ClassFactory instead (the
+   * coordinator self-registers via `@RegisterClass(AIPromptRunner, PARALLEL_COORDINATOR_KEY)`).
+   * Created once per runner and reused; the runner's Provider override is propagated. Throws a clear
+   * error if the coordinator class was never loaded/registered — otherwise ClassFactory would silently
+   * fall back to a plain AIPromptRunner that lacks the parallel methods.
+   */
+  protected get ParallelCoordinator(): IParallelExecutionCoordinator {
+    if (!this._parallelCoordinator) {
+      const instance = MJGlobal.Instance.ClassFactory.CreateInstance<IParallelExecutionCoordinator>(
+        AIPromptRunner,
+        AIPromptRunner.PARALLEL_COORDINATOR_KEY,
+      );
+      if (!instance || typeof instance.executeTasksInParallel !== 'function') {
+        throw new Error(
+          `ParallelExecutionCoordinator is not registered with the ClassFactory. Ensure ` +
+          `'@memberjunction/ai-prompts' is fully loaded (it is exported from the package index and ` +
+          `picked up by the class-registration manifest).`,
+        );
+      }
+      instance.Provider = this.Provider;
+      this._parallelCoordinator = instance;
+    }
+    return this._parallelCoordinator;
   }
 
   /**
@@ -884,6 +930,9 @@ export class AIPromptRunner {
     let vendorSupportsEffortLevel = existingSelection?.vendorSupportsEffortLevel;
     let modelEffortLevel = existingSelection?.modelEffortLevel;
     let allCandidates: ModelVendorCandidate[] = existingSelection?.allCandidates ?? [];
+    // Credential probes already done during selection — reused by failover so it doesn't
+    // recompute hasCredentialsAvailable for the prefix it walks before the selected candidate.
+    let credentialAvailability = existingSelection?.credentialAvailability;
 
     if (!selectedModel) {
       // Determine which prompt to use for model selection
@@ -901,6 +950,7 @@ export class AIPromptRunner {
       modelEffortLevel = modelResult.modelEffortLevel;
       modelSelectionInfo = modelResult.selectionInfo;
       allCandidates = modelResult.allCandidates || [];
+      credentialAvailability = modelResult.credentialAvailability;
       if (!selectedModel) {
         throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
       }
@@ -930,7 +980,8 @@ export class AIPromptRunner {
       vendorDriverClass,
       vendorApiName,
       vendorSupportsEffortLevel,
-      modelEffortLevel // Pass model-specific effort level
+      modelEffortLevel, // Pass model-specific effort level
+      credentialAvailability // Reuse credential probes from selection
     );
 
     // Calculate execution metrics
@@ -1068,7 +1119,7 @@ export class AIPromptRunner {
     }
 
     // Execute tasks in parallel
-    const parallelResult = await this._parallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
+    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
 
     if (!parallelResult.success) {
       throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
@@ -1089,7 +1140,7 @@ export class AIPromptRunner {
         selectorPromptId: prompt.ResultSelectorPromptID,
       };
 
-      const aiSelectedResult = await this._parallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken);
+      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken);
       if (aiSelectedResult) {
         selectedResult = aiSelectedResult;
       }
@@ -1675,7 +1726,7 @@ export class AIPromptRunner {
       // }
 
       // Select the first candidate with available credentials and track all attempts
-      const { selected, consideredModels } = await this.selectModelWithAPIKeyTracked(candidates, prompt.ID, params);
+      const { selected, consideredModels, credentialAvailability } = await this.selectModelWithAPIKeyTracked(candidates, prompt.ID, params);
 
       // Merge considered models into our tracking
       modelsConsidered.push(...consideredModels);
@@ -1689,6 +1740,7 @@ export class AIPromptRunner {
           vendorSupportsEffortLevel: undefined,
           modelEffortLevel: undefined,
           allCandidates: candidates,
+          credentialAvailability,
           selectionInfo: this.createSelectionInfo({
             aiConfiguration: configuration,
             modelsConsidered,
@@ -1735,6 +1787,7 @@ export class AIPromptRunner {
         vendorSupportsEffortLevel: selected.supportsEffortLevel,
         modelEffortLevel: selected.effortLevel, // Pass through model-specific effort level
         allCandidates: candidates,
+        credentialAvailability,
         selectionInfo: this.createSelectionInfo({
           aiConfiguration: configuration,
           modelsConsidered,
@@ -2516,6 +2569,13 @@ export class AIPromptRunner {
       available: boolean;
       unavailableReason?: string;
     }>;
+    /**
+     * The credential-availability cache built while probing candidates, keyed by
+     * `driverClass:modelId:vendorId`. Returned so callers (failover) can reuse these probes
+     * rather than recomputing them. Contains only the candidates actually evaluated — the
+     * short-circuited tail is absent (see the DECISION note below).
+     */
+    credentialAvailability: Map<string, boolean>;
   }> {
     // Cache for credential availability checks
     // Key format: "driverClass:modelId:vendorId" to properly cache credential hierarchy
@@ -2622,7 +2682,7 @@ export class AIPromptRunner {
       });
     }
 
-    return { selected: selectedCandidate, consideredModels };
+    return { selected: selectedCandidate, consideredModels, credentialAvailability: credentialCache };
   }
 
   /**
@@ -2759,7 +2819,7 @@ export class AIPromptRunner {
       promptRun.Status = 'Running';
       promptRun.Cancelled = false;
       promptRun.CacheHit = false;
-      promptRun.StreamingEnabled = false;
+      promptRun.StreamingEnabled = !!params.onStreaming;
       promptRun.WasSelectedResult = false;
       
       // Set model selection tracking fields
@@ -3030,7 +3090,8 @@ export class AIPromptRunner {
     vendorDriverClass?: string,
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
-    modelEffortLevel?: number
+    modelEffortLevel?: number,
+    credentialAvailability?: Map<string, boolean>
   ): Promise<ChatResult> {
     // Get failover configuration (used for errorScope filtering)
     const failoverConfig = this.getFailoverConfiguration(prompt);
@@ -3048,10 +3109,47 @@ export class AIPromptRunner {
     const failoverAttempts: FailoverAttempt[] = [];
     let lastError: Error | null = null;
 
+    // Cache credential availability per driver:model:vendor for the duration of this failover
+    // scan so we don't repeat env-var / binding lookups while walking the candidate list.
+    //
+    // PERF: seed it with the probes model SELECTION already performed (same key format). Selection
+    // walks the priority list until it finds the first credentialed candidate, so this map holds
+    // the prefix it rejected (known false) PLUS the selected candidate (known true) — which is
+    // exactly the segment failover re-walks on the happy path. Reusing those results means the
+    // common case (and any caller looping failover) does ZERO redundant hasCredentialsAvailable
+    // calls. The not-evaluated tail is intentionally absent, so failover still lazily probes it
+    // only if a real failure forces it to walk down there.
+    const failoverCredentialCache = credentialAvailability
+      ? new Map<string, boolean>(credentialAvailability)
+      : new Map<string, boolean>();
+    const candidateHasCredentials = (c: ModelVendorCandidate): boolean => {
+      const key = `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
+      let has = failoverCredentialCache.get(key);
+      if (has === undefined) {
+        has = this.hasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params);
+        failoverCredentialCache.set(key, has);
+      }
+      return has;
+    };
+    let skippedForCredentials = 0;
+
     // Iterate through all candidates in priority order with instant failover
     for (let i = 0; i < allCandidates.length; i++) {
       const candidate = allCandidates[i];
       const attemptStartTime = Date.now();
+
+      // Skip candidates with no credentials configured. `allCandidates` is intentionally the
+      // FULL priority-ordered list (see the DECISION note in selectModelWithAPIKeyTracked),
+      // so it can include vendors that have no API key in this environment. Firing a live
+      // request at one of those produces a misleading "401 invalid API key" — and because an
+      // Authentication error is treated as fatal, it would halt failover before any
+      // credentialed candidate is ever reached. Skipping here makes failover land on the
+      // first candidate that can actually authenticate (mirroring model selection's own
+      // highest-priority-with-credentials rule).
+      if (!candidateHasCredentials(candidate)) {
+        skippedForCredentials++;
+        continue;
+      }
 
       try {
         // Log the attempt if not the first one
@@ -3169,6 +3267,14 @@ export class AIPromptRunner {
     // All candidates failed
     if (promptRun && failoverAttempts.length > 0) {
       this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
+    }
+
+    // If every candidate was skipped for missing credentials we never attempted a call and
+    // have no underlying error to report — surface an actionable message instead of null.
+    if (!lastError && failoverAttempts.length === 0 && skippedForCredentials > 0) {
+      lastError = new Error(
+        `No API credentials configured for any of the ${skippedForCredentials} candidate model-vendor combination(s) for prompt "${prompt.Name}".`
+      );
     }
 
     return this.createFailoverErrorResult(lastError, failoverAttempts);
@@ -3329,9 +3435,13 @@ export class AIPromptRunner {
   }
 
   /**
-   * Executes the AI model with the rendered prompt
+   * Executes the AI model with the rendered prompt.
+   *
+   * `protected` so the parallel coordinator subclass reuses this exact code path — credential
+   * resolution, driver selection, ChatParams construction, prefill, media handling, and streaming
+   * all live here ONCE. Do not duplicate this logic elsewhere.
    */
-  private async executeModel(
+  protected async executeModel(
     model: MJAIModelEntityExtended,
     renderedPrompt: string,
     prompt: MJAIPromptEntityExtended,
@@ -3494,6 +3604,19 @@ export class AIPromptRunner {
 
       // Apply assistant prefill (native or fallback) based on prompt config and provider support
       this.applyAssistantPrefill(chatParams, prompt, model, vendorId, llm);
+
+      // Streaming: wire the prompt-level onStreaming callback into the LLM call. This is the SINGLE
+      // place streaming is configured for prompt execution, so the single-model path and the parallel
+      // path (which bridges its per-task callbacks into params.onStreaming) stream through identical
+      // code — no second streaming implementation that can drift.
+      if (params.onStreaming) {
+        const onStreaming = params.onStreaming;
+        chatParams.streaming = true;
+        chatParams.streamingCallbacks = {
+          OnContent: (chunk: string, isComplete: boolean) =>
+            onStreaming({ content: chunk, isComplete, modelName: model.Name }),
+        };
+      }
 
       // Execute the model with cancellation support
       if (cancellationToken) {
@@ -3944,7 +4067,8 @@ export class AIPromptRunner {
     vendorDriverClass?: string,
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
-    modelEffortLevel?: number
+    modelEffortLevel?: number,
+    credentialAvailability?: Map<string, boolean>
   ): Promise<{
     modelResult: ChatResult;
     parsedResult: { result: unknown; validationResult?: ValidationResult };
@@ -3991,7 +4115,8 @@ export class AIPromptRunner {
           vendorDriverClass,
           vendorApiName,
           vendorSupportsEffortLevel,
-          modelEffortLevel
+          modelEffortLevel,
+          credentialAvailability // Reuse credential probes from selection
         );
 
         // Check for fatal errors - don't attempt validation/retry on these
@@ -5105,9 +5230,16 @@ export class AIPromptRunner {
     },
   ): Promise<void> {
     try {
+      // Ensure the initial 'Running' INSERT (and its BaseEntity.finalizeSave post-save reload, which does
+      // init() + SetMany(insertedRow)) has fully landed BEFORE we mutate the final state. Mutating while the
+      // INSERT is still in flight lets the reload revert these values, and the chained UPDATE then persists
+      // the stale 'Running' row (the same race fixed in the agent-run-step queue and action-execution-log).
+      // The model call between create and update almost always covers this; a fast-failing prompt could not.
+      await this._promptRunSaveChains.get(promptRun);
+
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
-      
+
       // Determine what to save as the result
       let resultToSave: string;
       const rawResult = modelResult.data?.choices?.[0]?.message?.content || '';

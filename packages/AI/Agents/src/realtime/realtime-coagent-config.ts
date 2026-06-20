@@ -233,25 +233,38 @@ export function ParseRealtimeTypeConfiguration(json: string | null | undefined):
 }
 
 /**
- * Resolves the EFFECTIVE realtime configuration from the three layers of the contract —
- * `AIAgentType.DefaultConfiguration` ← `AIAgent.TypeConfiguration` ← runtime overrides — by
- * tolerantly parsing each (see {@link ParseRealtimeTypeConfiguration}), deep-merging them
- * (later wins per key, see {@link DeepMergeConfigs}), and normalizing the result into the typed
- * {@link RealtimeCoAgentConfig} shape (wrong-typed fields dropped, never thrown on).
+ * Resolves the EFFECTIVE realtime configuration from the layers of the contract by tolerantly parsing
+ * each (see {@link ParseRealtimeTypeConfiguration}), deep-merging them (later wins per key, see
+ * {@link DeepMergeConfigs}), and normalizing into the typed {@link RealtimeCoAgentConfig} shape
+ * (wrong-typed fields dropped, never thrown on).
+ *
+ * **Precedence (lowest → highest):**
+ * `AIAgentType.DefaultConfiguration` < **co-agent** `AIAgent.TypeConfiguration` < **target agent**
+ * `AIAgent.TypeConfiguration` < runtime override. This is the single, surface-agnostic precedence cascade
+ * for model + voice + persona across EVERY realtime host (native chat, LiveKit, future Zoom/Teams) — see
+ * `plans/realtime/realtime-core-host-convergence.md`. The **target** layer is what lets a voiced agent
+ * (Sage, Marketing Agent, …) carry its own persisted voice/model that the shared co-agent then speaks with;
+ * it wins over the co-agent's defaults but yields to an explicit per-session runtime override.
  *
  * @param typeDefaultJson The agent TYPE's `DefaultConfiguration` JSON (base layer).
- * @param agentJson The agent's `TypeConfiguration` JSON (per-agent layer).
+ * @param agentJson The CO-AGENT's `TypeConfiguration` JSON (shared per-co-agent layer).
  * @param overridesJson Runtime overrides JSON (per-session layer; already authorization-gated by the caller).
+ * @param targetAgentJson Optional TARGET agent's `TypeConfiguration` JSON (per-voiced-agent layer). Merged
+ *   ABOVE the co-agent and BELOW the runtime override regardless of argument position. Omit when there is
+ *   no distinct target (e.g. the co-agent voicing itself).
  * @returns The normalized effective configuration. `realtime` is absent when no layer supplied a usable section.
  */
 export function ResolveEffectiveRealtimeConfig(
     typeDefaultJson: string | null | undefined,
     agentJson: string | null | undefined,
-    overridesJson: string | null | undefined
+    overridesJson: string | null | undefined,
+    targetAgentJson?: string | null | undefined
 ): RealtimeCoAgentConfig {
+    // Merge order = precedence (later wins): type-default < co-agent < target < runtime-override.
     const merged = DeepMergeConfigs(
         ParseRealtimeTypeConfiguration(typeDefaultJson),
         ParseRealtimeTypeConfiguration(agentJson),
+        ParseRealtimeTypeConfiguration(targetAgentJson),
         ParseRealtimeTypeConfiguration(overridesJson)
     );
     return normalizeConfig(merged);
@@ -444,6 +457,39 @@ export function BuildVoiceMannerSection(config: RealtimeCoAgentConfig | null | u
         return '';
     }
     return `Voice & manner:\n${lines.join('\n')}`;
+}
+
+/**
+ * Builds the runtime-override `ConfigOverridesJson` envelope (the highest-precedence cascade layer) from a
+ * per-session model and/or voice choice — the **single, surface-agnostic** shape every realtime host uses
+ * to carry a dev's pick into {@link ResolveEffectiveRealtimeConfig}. The native-chat picker produces the
+ * same shape client-side (`BuildRealtimeConfigOverridesJson` in `@memberjunction/ng-conversations`); the
+ * server-bridged hosts (LiveKit, Zoom/Teams) build it here so both funnel into the one override slot.
+ *
+ * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"providers":{"openai":{"voice":"<v>"}}}}}`.
+ * `openai` is the realtime provider today; add providers here when others ship realtime voices.
+ *
+ * @param modelId The `MJ: AI Models` Name or ID to prefer, or null/empty for none.
+ * @param voice The provider-native voice id (e.g. `echo`), or null/empty for none.
+ * @returns The JSON string, or `null` when nothing was overridden (keeps the cascade at its lower layers).
+ */
+export function BuildRealtimeOverridesJson(
+    modelId?: string | null,
+    voice?: string | null
+): string | null {
+    const m = modelId?.trim() ?? '';
+    const v = voice?.trim() ?? '';
+    if (m.length === 0 && v.length === 0) {
+        return null;
+    }
+    const realtime: { modelPreference?: string; voice?: { providers: Record<string, { voice: string }> } } = {};
+    if (m.length > 0) {
+        realtime.modelPreference = m;
+    }
+    if (v.length > 0) {
+        realtime.voice = { providers: { openai: { voice: v } } };
+    }
+    return JSON.stringify({ realtime });
 }
 
 /**

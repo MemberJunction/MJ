@@ -1,0 +1,40 @@
+{
+  "name": "@memberjunction/record-set-processor",
+  "type": "module",
+  "version": "5.41.0",
+  "description": "MemberJunction: Record Set Processor - server engine that batches, rate-limits, resumes, and audits processing of a record set through a pluggable source/processor/tracker pipeline.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.41.0",
+    "@memberjunction/global": "5.41.0",
+    "@memberjunction/core-entities": "5.41.0",
+    "@memberjunction/record-set-processor-base": "5.41.0",
+    "@memberjunction/actions": "5.41.0",
+    "@memberjunction/actions-base": "5.41.0",
+    "@memberjunction/ai-agents": "5.41.0",
+    "@memberjunction/aiengine": "5.41.0",
+    "@memberjunction/ai-prompts": "5.41.0",
+    "@memberjunction/ai-core-plus": "5.41.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
