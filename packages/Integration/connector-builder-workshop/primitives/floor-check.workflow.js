@@ -123,6 +123,10 @@ const FLOOR_VERDICT_SCHEMA = {
                             // while its required per-operation columns are blank -> the generic CRUD path
                             // THROWS at runtime. Capability flag set requires its required column set populated.
                             'bijection-violation',
+                            // The object dependency DAG must be complete over ALL objects: an FK to a
+                            // non-emitted object (dangling) or a hard-@lookup cycle (push rolls back) breaks
+                            // the full sync, which runs every object — a subset DAG proves nothing.
+                            'dag-incomplete',
                         ],
                     },
                     slot: { type: 'string' },
@@ -167,6 +171,7 @@ const RAW_FETCH_SCHEMA = {
         enumerateCatalogJson: { type: 'string' }, // stdout of the DETERMINISTIC record-type enumerator run over the source artifact(s) ('' if no source)
         fkLookupQualifierJson: { type: 'string' }, // stdout of fk-lookup-qualifier.mjs over the metadata file — IOF FK @lookup-qualifier check ('' if it errors)
         bijectionJson: { type: 'string' }, // stdout of graders/bijection.mjs over the metadata file — capability<->per-operation-column bijection ('' if it errors)
+        dagJson: { type: 'string' }, // stdout of graders/dag-completeness.mjs over the metadata file — dependency-DAG completeness over ALL objects ('' if it errors)
     },
     additionalProperties: false,
 };
@@ -228,7 +233,8 @@ const fetched = await agent(
             : `12. No source artifact paths available: return enumerateCatalogJson=''.\n`) +
         `13. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/fk-lookup-qualifier.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as fkLookupQualifierJson (deterministic IOF FK @lookup-qualifier check — flags &IntegrationID=@parent:ID, which must be @parent:IntegrationID; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
         `14. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/graders/bijection.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as bijectionJson (deterministic capability<->per-operation-column bijection — flags an IO whose SupportsCreate/Update/Delete/IncrementalSync is set while its required columns are blank; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
-        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, enumerateCatalogJson, fkLookupQualifierJson, bijectionJson }.`,
+        `15. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/graders/dag-completeness.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as dagJson (deterministic dependency-DAG completeness over ALL objects — flags a dangling FK to a non-emitted object or a hard-@lookup cycle that would roll the push back; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
+        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, enumerateCatalogJson, fkLookupQualifierJson, bijectionJson, dagJson }.`,
     { agentType: 'independent-reviewer', schema: RAW_FETCH_SCHEMA, phase: 'load-bijection', label: `floor-fetch:${runID}` }
 );
 
@@ -320,6 +326,25 @@ if (fetched && typeof fetched.bijectionJson === 'string' && fetched.bijectionJso
             failures.push({
                 rule: 'bijection-violation',
                 detail: `${bj.violations.length} IO(s) declare a capability flag while its required per-operation column(s) are blank — the generic CRUD path will THROW at runtime. Populate the missing column(s) or set the capability flag false. Offenders: ${sample}${bj.violations.length > 25 ? ', ...' : ''}`,
+            });
+        }
+    } catch { /* malformed script output -> not gated here; the standalone `--all` run is the hard CI gate */ }
+}
+
+// ── Dependency-DAG completeness gate (deterministic; agent ran graders/dag-completeness.mjs). ──
+// The full sync runs EVERY object in dependency order. A DAG checked on a subset proves nothing: an FK to a
+// non-emitted object (dangling) or a hard-@lookup cycle (the single-transaction push rolls back) breaks the
+// objects it skipped. So the graph is validated WHOLE here, over all objects. Soft ReferencedType cycles are
+// resolved app-side at runtime and are NOT failed (the Salesforce class). Read the script JSON (large catalogs).
+if (fetched && typeof fetched.dagJson === 'string' && fetched.dagJson.trim() !== '') {
+    try {
+        const dag = JSON.parse(fetched.dagJson);
+        const blk = Array.isArray(dag && dag.blocking) ? dag.blocking : [];
+        if (blk.length > 0) {
+            const sample = blk.slice(0, 20).map(v => v.type === 'dangling-fk' ? `${v.io}->${v.target}(dangling)` : `cycle[${(v.objects || []).join(',')}]`).join('; ');
+            failures.push({
+                rule: 'dag-incomplete',
+                detail: `${blk.length} blocking dependency-DAG violation(s) — the object graph is not whole/syncable over all objects (a dangling FK to a non-emitted object, or a hard-@lookup cycle that rolls the push back). Fix the FK target(s) or break the hard cycle (use soft ReferencedType). Offenders: ${sample}${blk.length > 20 ? ', ...' : ''}`,
             });
         }
     } catch { /* malformed script output -> not gated here; the standalone `--all` run is the hard CI gate */ }
