@@ -1,8 +1,9 @@
 # Angular DOM Unit-Testing Rollout
 
-**Status:** Foundation **shipped** (harness + pilot). Rollout in progress.
-**What's done:** the DOM-rendering harness, a 5-component / 2-package pilot, the scaffold `--dom`
-flag, and `guides/ANGULAR_TESTING_GUIDE.md`.
+**Status:** Foundation **shipped** (harness + toolkit + pilot). Rollout in progress.
+**What's done:** the DOM-rendering harness, the `@memberjunction/ng-test-utils` shared helper toolkit,
+coverage reporting, a ~11-component / 3-package leaf pilot, the scaffold `--dom` flag, and
+`guides/ANGULAR_TESTING_GUIDE.md`.
 **What's next:** per-package rollout across `Angular/Generic/**` then `Angular/Explorer/**`, then CI
 coverage gates. See [§6](#6-roadmap) and [§10](#10-handoff--how-to-continue).
 
@@ -132,15 +133,20 @@ Full patterns, the zoneless `NG0100` gotcha, and the config recipes live in
 Phase 0 (infra) and Phase 1 (pilot) were delivered **together in one PR**, because the pilot specs can't run
 without the harness. Delivered:
 
-- `vitest.dom.shared.ts` + `vitest.dom.setup.ts` + root devDeps/overrides.
-- **5 leaf components across 2 packages**, all green:
-  - `@memberjunction/ng-ui-components` (single preset): `switch` (CVA + click-toggle), `progress-bar`
-    (`@if/@else` branch), `stat-badge` (gating + host-class variants), `view-toggle` (`@for` + `@Output`).
-    Its existing class-level specs keep passing under jsdom (228 tests total).
-  - `@memberjunction/ng-pagination` (dual node+dom `projects`): `pagination` (self-hiding gating, disabled
-    no-op, `PageChange` payload) alongside its **unchanged** `@angular/core`-mocking class-level spec
-    (45 tests total).
-- `guides/ANGULAR_TESTING_GUIDE.md` + `scripts/scaffold-tests.mjs --dom`.
+- `vitest.dom.shared.ts` + `vitest.dom.setup.ts` + root devDeps/overrides, with **coverage reporting**
+  wired into the DOM preset (`coverage.include: ['src/**/*.ts']` so untested components surface as 0%).
+- **`@memberjunction/ng-test-utils`** — shared test helpers: `renderComponentFixture` (standalone/leaf
+  components) and `renderTemplate` (compound / module-declared components — host + declarations + async settle).
+- **~11 components across 3 packages**, all green:
+  - `@memberjunction/ng-ui-components` (single preset): `switch`, `progress-bar`, `stat-badge`, `view-toggle`,
+    `refresh-button`, `filter-chip`, `filter-field`, `numeric-input`, `page-header`, `page-search`. Existing
+    class-level specs keep passing under jsdom.
+  - `@memberjunction/ng-pagination` (dual node+dom `projects`): `pagination` alongside its **unchanged**
+    `@angular/core`-mocking class-level spec.
+  - `@memberjunction/ng-tabstrip` (single preset): `tab-strip` — the first **compound** component (projected
+    `<mj-tab>`/`<mj-tab-body>` children), which proved the `renderTemplate` recipe.
+- `guides/ANGULAR_TESTING_GUIDE.md`, `scripts/scaffold-tests.mjs --dom` (incl. a spaces-in-path fix), and
+  `plans/testing/dom-testing-tooling-gameplan.md` (the tooling-first strategy).
 - **Both config shapes** (single preset, node+dom `projects`) proven and documented — this resolved the
   "support both in one package?" question the original plan left open.
 
@@ -193,14 +199,16 @@ without the harness. Delivered:
 | # | Deliverable | Status |
 |---|---|---|
 | 1 | `vitest.dom.shared.ts` + `vitest.dom.setup.ts` (root) + devDeps/overrides | ✅ shipped |
-| 2 | Pilot package(s) converted with passing DOM specs | ✅ shipped (2 packages, 5 components) |
-| 3 | `guides/ANGULAR_TESTING_GUIDE.md` | ✅ shipped |
-| 4 | `scripts/scaffold-tests.mjs --dom` | ✅ shipped |
-| 5 | Both config shapes (single + node/dom `projects`) proven | ✅ shipped |
-| 6 | LiveKit leaf specs + `LiveKitRoomComponent` injectable refactor | ⏳ follow-up (gated on #2860) |
-| 7 | `Angular/Generic/**` rollout | ⏳ Phase 2 |
-| 8 | `Angular/Explorer/**` rollout | ⏳ Phase 3 |
-| 9 | CI coverage gates + live-media e2e location | ⏳ Phase 4 |
+| 2 | `@memberjunction/ng-test-utils` shared helpers (`renderComponentFixture`, `renderTemplate`) | ✅ shipped |
+| 3 | Coverage **reporting** wired into the DOM preset (gates remain Phase 4) | ✅ shipped |
+| 4 | Pilot packages converted with passing DOM specs | ✅ shipped (3 packages, ~11 components) |
+| 5 | `guides/ANGULAR_TESTING_GUIDE.md` | ✅ shipped |
+| 6 | `scripts/scaffold-tests.mjs --dom` (incl. spaces-in-path fix) | ✅ shipped |
+| 7 | Both config shapes (single + node/dom `projects`) proven | ✅ shipped |
+| 8 | LiveKit leaf specs + `LiveKitRoomComponent` injectable refactor | ⏳ follow-up (gated on #2860) |
+| 9 | `Angular/Generic/**` rollout | ⏳ Phase 2 |
+| 10 | `Angular/Explorer/**` rollout | ⏳ Phase 3 |
+| 11 | CI coverage gates + live-media e2e location | ⏳ Phase 4 |
 
 ## 9. Reference implementations (in-repo)
 
@@ -249,8 +257,10 @@ Expect first-run cost per file: ~0.3–0.8s of Angular compile/setup, then specs
 
 ### Rollout checklist
 
-- **Generic (Phase 2):** `ng-ui-components` ✅, `ng-pagination` ✅ → then `base-forms`, `conversations`,
-  `data-context`, `entity-card`, `tab-strip`, `filter-builder`, and remaining Generic leaves.
+- **Generic (Phase 2):** `ng-pagination` ✅, `ng-tabstrip` ✅, `ng-ui-components` (10 leaves done; remaining
+  are the big compound ones — `dropdown`, `combobox`, `dialog`, `window`) → then `base-forms` (first
+  **data-bound** component — will force a fake-provider helper), `conversations`, `data-context`,
+  `entity-card`, `filter-builder`, and the remaining `ng-ui-components` compound components.
 - **Explorer (Phase 3):** `explorer-core`, `dashboards`, `core-entity-forms`, `shared`, … (mock providers +
   `NavigationService` fakes for heavier components).
 - **Phase 4:** coverage gates in CI (start lenient, ratchet up); document the live-media e2e suite location.

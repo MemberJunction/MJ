@@ -19,6 +19,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, relative, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 const args = process.argv.slice(2);
 const dom = args.includes('--dom');
@@ -29,7 +30,9 @@ if (!packageDir) {
   process.exit(1);
 }
 
-const repoRoot = dirname(new URL(import.meta.url).pathname).replace('/scripts', '');
+// Use fileURLToPath (not URL.pathname) so paths with spaces / special chars and
+// Windows drive letters decode correctly — URL.pathname leaves them %20-encoded.
+const repoRoot = dirname(fileURLToPath(import.meta.url)).replace('/scripts', '');
 const fullPath = join(repoRoot, packageDir);
 
 if (!existsSync(fullPath)) {
