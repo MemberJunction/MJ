@@ -32,6 +32,16 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
             return new this();
         }
     },
+    // Bounded LRU cache backing EntityActionInvocation*._scriptCache (field initializer
+    // runs in the constructor, so the mock MUST export it or every invocation construct throws).
+    MJLruCache: class MJLruCacheMock<K, V> {
+        constructor(_maxSize?: number) {}
+        get(_key: K): V | undefined { return undefined; }
+        set(_key: K, _value: V): void {}
+        has(_key: K): boolean { return false; }
+        delete(_key: K): boolean { return false; }
+        clear(): void {}
+    },
 }));
 
 // Mock @memberjunction/core
