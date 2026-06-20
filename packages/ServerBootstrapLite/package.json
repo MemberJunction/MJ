@@ -92,6 +92,7 @@
     "@memberjunction/geo-core": "5.41.0",
     "@memberjunction/queue": "5.41.0",
     "@memberjunction/react-linter": "5.41.0",
+    "@memberjunction/record-set-processor": "5.41.0",
     "@memberjunction/scheduling-actions": "5.41.0",
     "@memberjunction/scheduling-engine": "5.41.0",
     "@memberjunction/scheduling-engine-base": "5.41.0",
