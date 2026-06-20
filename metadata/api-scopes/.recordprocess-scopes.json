@@ -1,0 +1,28 @@
+[
+  {
+    "fields": {
+      "Name": "recordprocess",
+      "FullPath": "recordprocess",
+      "ParentID": null,
+      "Category": "Record Processes",
+      "Description": "Parent scope for Record Process operations (run and run-control via Remote Operations).",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-gears",
+        "color": "#8b5cf6"
+      }
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "recordprocess:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=recordprocess",
+      "Category": "Record Processes",
+      "Description": "Run a Record Process on demand and control its runs — the RecordProcess.RunNow / PauseRun / ResumeRun / CancelRun / GetRunStatus Remote Operations.",
+      "ResourceType": null,
+      "IsActive": true
+    }
+  }
+]
