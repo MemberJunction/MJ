@@ -24,7 +24,9 @@
     "@memberjunction/actions": "5.41.0",
     "@memberjunction/actions-base": "5.41.0",
     "@memberjunction/ai-agents": "5.41.0",
-    "@memberjunction/aiengine": "5.41.0"
+    "@memberjunction/aiengine": "5.41.0",
+    "@memberjunction/ai-prompts": "5.41.0",
+    "@memberjunction/ai-core-plus": "5.41.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

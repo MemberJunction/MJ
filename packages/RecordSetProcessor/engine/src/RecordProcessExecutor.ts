@@ -22,6 +22,7 @@ import {
 import { RecordSetProcessor } from './RecordSetProcessor';
 import { ActionRecordProcessor } from './processors/ActionRecordProcessor';
 import { AgentRecordProcessor } from './processors/AgentRecordProcessor';
+import { InferProcessor } from './processors/InferProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
 import { OutputMappingConfig } from './writeBack';
 
@@ -35,6 +36,8 @@ export interface RunRecordProcessOptions {
     triggeredBy?: TriggeredByValue;
     /** Process a single record (the on-change / on-demand single-record case) instead of the scope. */
     singleRecordID?: string;
+    /** FK to the owning `ScheduledJobRun` when launched by the scheduler (links the Process Run back). */
+    scheduledJobRunID?: string;
     /** Progress callback. */
     onProgress?: (progress: ProgressInfo) => void;
 }
@@ -61,6 +64,7 @@ export class RecordProcessExecutor {
             contextUser: options.contextUser,
             provider,
             recordProcessID: rp.ID,
+            scheduledJobRunID: options.scheduledJobRunID,
             entityID: rp.EntityID,
             triggeredBy: options.triggeredBy ?? 'OnDemand',
             batchSize: rp.BatchSize ?? undefined,
@@ -114,6 +118,11 @@ export class RecordProcessExecutor {
                 throw new Error(`Record Process '${rp.Name}': WorkType=Agent requires AgentID`);
             }
             base = new AgentRecordProcessor(rp.AgentID, inputMapping);
+        } else if (rp.WorkType === 'Infer') {
+            if (!rp.PromptID) {
+                throw new Error(`Record Process '${rp.Name}': WorkType=Infer requires PromptID`);
+            }
+            base = new InferProcessor(rp.PromptID, inputMapping);
         } else {
             throw new Error(`Record Process '${rp.Name}': unsupported WorkType '${rp.WorkType}'`);
         }

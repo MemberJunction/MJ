@@ -17,8 +17,8 @@ export class MJProcessRunDetailFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'processContext', sectionName: 'Process Context', isExpanded: true },
             { sectionKey: 'executionStatus', sectionName: 'Execution Status', isExpanded: true },
-            { sectionKey: 'processingOutput', sectionName: 'Processing Output', isExpanded: true },
-            { sectionKey: 'traceability', sectionName: 'Traceability', isExpanded: true },
+            { sectionKey: 'executionResults', sectionName: 'Execution Results', isExpanded: true },
+            { sectionKey: 'tracingAndLogs', sectionName: 'Tracing and Logs', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

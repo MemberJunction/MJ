@@ -221,6 +221,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
 
     const active = await this.bridgeOps.StartBridgeSession({
       AgentSessionID: params.AgentSessionID,
+      AgentID: params.AgentID,
       Provider: provider,
       RealtimeSession: session,
       Address: botToken.ServerUrl,

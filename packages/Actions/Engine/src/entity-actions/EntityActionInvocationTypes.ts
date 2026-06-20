@@ -256,7 +256,7 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
 
     /** Loads all members of a List as entity objects (single-primary-key entities). */
     protected async loadRecordsForList(params: EntityActionInvocationParams): Promise<BaseEntity[]> {
-        const entity = new Metadata().EntityByID(params.EntityAction.EntityID);
+        const entity = new Metadata().EntityByID(params.EntityAction.EntityID); // global-provider-ok: entity-definition lookup (structural metadata, not per-user/per-provider data); this invocation class isn't provider-threaded yet (multi-provider migration debt), consistent with the new RunView() above
         if (!entity) {
             throw new Error(`Entity '${params.EntityAction.EntityID}' for this entity action was not found in metadata`);
         }
