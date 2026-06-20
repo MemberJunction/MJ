@@ -715,7 +715,14 @@ export class RealtimeClientSessionService {
         run.AgentID = coAgent.ID;
         run.Status = 'Running';
         run.StartedAt = new Date();
-        run.AgentSessionID = agentSessionID;
+        // Only stamp AgentSessionID when we actually have one — `AgentSessionID` is a `uniqueidentifier` FK,
+        // so assigning '' (a surface that didn't thread a session id) makes the WHOLE run save fail and the
+        // co-agent observability silently vanishes. Degrade gracefully: log the run without session grouping
+        // rather than not at all. This keeps the core logging identical across surfaces regardless of input.
+        const sessionID = agentSessionID?.trim();
+        if (sessionID) {
+            run.AgentSessionID = sessionID;
+        }
         if (conversationID) {
             run.ConversationID = conversationID;
         }

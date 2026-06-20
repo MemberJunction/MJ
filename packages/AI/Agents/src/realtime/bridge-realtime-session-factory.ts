@@ -57,6 +57,12 @@ export interface BridgeRealtimeSessionContext {
     /** The request-scoped metadata provider (multi-provider safe). Falls back to the global default. */
     MetadataProvider?: IMetadataProvider;
     /**
+     * The `MJ: AI Agent Sessions` id this bridge belongs to. Threaded into the co-agent observability run so
+     * the voice session's runs (and the target-agent runs delegated under it) group under the same session —
+     * **identically to the native-chat surface**. Without it the co-agent run can't record its session.
+     */
+    AgentSessionID?: string;
+    /**
      * **Multi-agent meeting mode.** Set `true` when the agent joins a room that already has other agents,
      * so it disables blind auto-response and speaks only when addressed (the room coordinator decides this).
      * Flows to `params.data.realtimeMeetingMode`. See `plans/realtime/multi-agent-meeting-turn-taking.md`.
@@ -120,6 +126,10 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
     const data: Record<string, unknown> = {};
     if (ctx.TargetAgentID) {
         data.targetAgentID = ctx.TargetAgentID;
+    }
+    if (ctx.AgentSessionID && ctx.AgentSessionID.trim().length > 0) {
+        // Drives the co-agent observability run's session grouping (see WireBridgeRealtimeSession).
+        data.agentSessionId = ctx.AgentSessionID.trim();
     }
     if (ctx.RealtimeModelID && ctx.RealtimeModelID.trim().length > 0) {
         data.realtimeModelID = ctx.RealtimeModelID.trim();

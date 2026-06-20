@@ -99,6 +99,8 @@ describe('LiveKitAgentRoomCoordinator', () => {
     await coordinator.StartAgentRoomSession({ AgentSessionID: 'm1', RoomName: room, AgentName: 'Sage' });
     expect(startCalls[0].DisableAutoResponse).toBeUndefined();
     expect(factoryCtx[0].MeetingMode).toBeUndefined();
+    // The agent-session id must reach the realtime factory so the co-agent observability run can group by it.
+    expect(factoryCtx[0].AgentSessionID).toBe('m1');
     expect((startCalls[0].TurnMatcher as object).constructor.name).toBe('AlwaysAddressedMatcher');
 
     // Second agent into the SAME room → meeting mode: auto-response disabled + addressed-only matcher.

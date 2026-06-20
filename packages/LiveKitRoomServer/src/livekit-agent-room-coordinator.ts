@@ -44,6 +44,8 @@ export interface RealtimeSessionStartContext {
   ContextUser?: UserInfo;
   /** The metadata provider for the session. */
   MetadataProvider?: IMetadataProvider;
+  /** The MJ agent-session id — threaded into the co-agent observability run for session grouping. */
+  AgentSessionID?: string;
   /**
    * Multi-agent meeting mode — set when the agent joins a room that already has agents. Flows to the
    * realtime session so its model's auto-response is disabled (speaks only when addressed).
@@ -211,6 +213,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       RoomName: params.RoomName,
       ContextUser: params.ContextUser,
       MetadataProvider: params.MetadataProvider,
+      // So the co-agent observability run groups under THIS agent session (parity with native chat).
+      AgentSessionID: params.AgentSessionID,
       MeetingMode: isMeeting || undefined,
       SelfNames: isMeeting ? selfNames : undefined,
     });
