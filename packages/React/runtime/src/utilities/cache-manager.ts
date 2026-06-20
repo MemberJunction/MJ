@@ -20,10 +20,11 @@ export interface CacheOptions {
  * Cache manager with TTL and size limits.
  * Provides automatic cleanup and memory management.
  */
-export class CacheManager<T = any> {
+export class CacheManager<T = unknown> {
   private cache = new Map<string, CacheEntry<T>>();
+  private timers = new Map<string, ReturnType<typeof setTimeout>>();
   private memoryUsage = 0;
-  private cleanupTimer?: number;
+  private cleanupTimer?: ReturnType<typeof setInterval>;
   private readonly options: Required<CacheOptions>;
 
   constructor(options: CacheOptions = {}) {
@@ -66,13 +67,25 @@ export class CacheManager<T = any> {
       this.memoryUsage -= oldEntry.size || 0;
     }
 
+    // Cancel any existing TTL timer for this key so overwriting an entry doesn't
+    // leave a dangling timer that deletes the new value when it fires.
+    const oldTimer = this.timers.get(key);
+    if (oldTimer !== undefined) {
+      clearTimeout(oldTimer);
+      this.timers.delete(key);
+    }
+
     this.cache.set(key, entry);
     this.memoryUsage += size;
 
     // Schedule removal if TTL is set
     if (ttl || this.options.defaultTTL) {
       const timeout = ttl || this.options.defaultTTL;
-      setTimeout(() => this.delete(key), timeout);
+      const timerId = setTimeout(() => {
+        this.timers.delete(key);
+        this.delete(key);
+      }, timeout);
+      this.timers.set(key, timerId);
     }
   }
 
@@ -113,6 +126,11 @@ export class CacheManager<T = any> {
    * Delete a key from the cache
    */
   delete(key: string): boolean {
+    const timer = this.timers.get(key);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.timers.delete(key);
+    }
     const entry = this.cache.get(key);
     if (entry) {
       this.memoryUsage -= entry.size || 0;
@@ -125,6 +143,10 @@ export class CacheManager<T = any> {
    * Clear all entries
    */
   clear(): void {
+    for (const timer of this.timers.values()) {
+      clearTimeout(timer);
+    }
+    this.timers.clear();
     this.cache.clear();
     this.memoryUsage = 0;
   }
@@ -164,7 +186,7 @@ export class CacheManager<T = any> {
   }
 
   /**
-   * Destroy the cache and stop cleanup timer
+   * Destroy the cache, cancel all entry timers, and stop the cleanup timer.
    */
   destroy(): void {
     this.stopCleanupTimer();
