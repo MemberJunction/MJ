@@ -123,6 +123,32 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
   }
 
   /**
+   * Secure-transport gate for SQL-style drivers. Refuses to connect to a NON-LOCAL host over an
+   * unencrypted connection unless the caller explicitly opted in via `allowInsecureTransport`.
+   * Local hosts (localhost / 127.0.0.1 / ::1 / empty) are exempt so dev/test against a local DB
+   * just works. Fail-loud + secure-by-default, with a conscious opt-out for the rare legitimate
+   * plaintext remote — drivers whose transport is always encrypted (e.g. Snowflake HTTPS) don't call this.
+   */
+  protected assertSecureTransport(opts: {
+    host: string | undefined;
+    tlsEnabled: boolean;
+    allowInsecure: boolean | undefined;
+    dataSourceName: string;
+  }): void {
+    if (opts.tlsEnabled || opts.allowInsecure) {
+      return;
+    }
+    const host = (opts.host ?? '').trim().toLowerCase();
+    const isLocal = host === '' || host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    if (!isLocal) {
+      throw new Error(
+        `Refusing to connect to external data source '${opts.dataSourceName}' at '${host}' over an unencrypted connection. ` +
+          `Enable TLS in ConnectionConfig, or set "allowInsecureTransport": true to explicitly accept a plaintext connection.`,
+      );
+    }
+  }
+
+  /**
    * Evict (and close) the cached connection/pool for a data source so the next operation
    * re-resolves its credential and reconnects. Called by {@link withConnectionRetry} on an auth
    * failure. Implementations must be safe to call when nothing is cached for the id.

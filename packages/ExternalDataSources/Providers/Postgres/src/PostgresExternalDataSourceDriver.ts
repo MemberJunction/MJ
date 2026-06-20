@@ -31,6 +31,12 @@ interface PostgresConnectionConfig {
    * disables MITM protection.
    */
   sslRejectUnauthorized?: boolean;
+  /**
+   * Explicitly accept an UNENCRYPTED connection to a non-local host. Default false → the driver
+   * refuses plaintext to a remote host (local hosts are always allowed). Set true only for a
+   * known-safe plaintext endpoint (e.g. a private network you trust).
+   */
+  allowInsecureTransport?: boolean;
   /** Max pool connections (default 5). */
   maxPoolSize?: number;
 }
@@ -59,6 +65,8 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
       return existing;
     }
     const config = this.parseConnectionConfig<PostgresConnectionConfig>(dataSource);
+    // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in.
+    this.assertSecureTransport({ host: config.host, tlsEnabled: !!config.ssl, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
     const cred = await this.resolveCredential<PostgresCredentialValues>(dataSource, contextUser);
     const pool = new pg.Pool({
       host: config.host,

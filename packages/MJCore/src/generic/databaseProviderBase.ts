@@ -1254,6 +1254,14 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         try {
             entity.RegisterTransactionPreprocessing();
 
+            // External-data-source entities are read-only — MJ is never the system of record for
+            // remote data. Refuse writes at the provider layer so the guarantee holds regardless of
+            // the generated base class (ReadOnlyExternalBaseEntity covers the normal path; this is the
+            // backstop for the edge case where an explicit custom subclass replaces it). No-op for
+            // MJ-DB entities (ExternalDataSourceID null).
+            if (entity.EntityInfo.ExternalDataSourceID)
+                throw new Error(`Save() not allowed for ${entity.EntityInfo.Name}: it is sourced from an external data source (read-only).`);
+
             const bNewRecord = !entity.IsSaved;
             if (!options) options = new EntitySaveOptions();
             const bReplay = !!options.ReplayOnly;
@@ -1429,6 +1437,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const entityResult = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing();
+
+            // External-data-source entities are read-only (see Save) — refuse deletes at the
+            // provider layer regardless of the generated base class. No-op for MJ-DB entities.
+            if (entity.EntityInfo.ExternalDataSourceID)
+                throw new Error(`Delete() not allowed for ${entity.EntityInfo.Name}: it is sourced from an external data source (read-only).`);
+
             if (!options) options = new EntityDeleteOptions();
             const bReplay = options.ReplayOnly;
 

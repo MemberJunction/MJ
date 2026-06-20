@@ -21,6 +21,13 @@ interface MongoConnectionConfig {
   port?: number;
   /** Auth database (default 'admin' for root users). */
   authSource?: string;
+  /** Enable TLS for a host/port connection (URIs encode TLS themselves: mongodb+srv or tls=true). */
+  tls?: boolean;
+  /**
+   * Explicitly accept an UNENCRYPTED connection to a non-local host. Default false → the driver
+   * refuses plaintext to a remote host (local hosts are always allowed).
+   */
+  allowInsecureTransport?: boolean;
 }
 
 /** Decrypted credential values expected from the Credential Engine. */
@@ -64,7 +71,19 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     // Use the configured URI (e.g. Atlas 'mongodb+srv://...') or build a host/port URL.
     // The credential is applied via options either way, so secrets stay out of ConnectionConfig.
     const url = config.uri ?? `mongodb://${config.host ?? 'localhost'}:${config.port ?? 27017}`;
+
+    // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in. TLS is
+    // encoded in the URI (mongodb+srv:// always uses TLS; tls=true / ssl=true) or set via config.tls.
+    const tlsEnabled = config.tls === true || /^mongodb\+srv:\/\//i.test(url) || /[?&](tls|ssl)=true/i.test(url);
+    const effectiveHost = config.uri
+      ? (config.uri.replace(/^mongodb(\+srv)?:\/\//i, '').split(/[/?]/)[0].split('@').pop() ?? '').split(',')[0].split(':')[0]
+      : config.host;
+    this.assertSecureTransport({ host: effectiveHost, tlsEnabled, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
+
     const options: MongoClientOptions = {};
+    if (config.tls === true) {
+      options.tls = true;
+    }
     if (cred) {
       options.auth = { username: cred.values.username, password: cred.values.password };
       options.authSource = config.authSource ?? 'admin';

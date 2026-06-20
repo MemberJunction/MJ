@@ -52,6 +52,9 @@ class TestExternalDriver extends BaseExternalDataSourceDriver<{ fake: true }> {
   public exposeIsAuthError(e: unknown): boolean {
     return this.isAuthError(e);
   }
+  public exposeAssertSecureTransport(opts: { host?: string; tlsEnabled: boolean; allowInsecure?: boolean; dataSourceName: string }) {
+    return this.assertSecureTransport(opts);
+  }
 }
 
 // Test fixture — only the fields the helpers read. Cast through unknown is the
@@ -152,6 +155,29 @@ describe('BaseExternalDataSourceDriver', () => {
         .rejects.toThrow(/authentication failed/);
       expect(calls).toBe(2); // original attempt + exactly one retry
       expect(d.invalidateCalls).toEqual(['ds-1']);
+    });
+  });
+
+  describe('assertSecureTransport (secure-by-default)', () => {
+    const call = (over: Partial<{ host: string; tlsEnabled: boolean; allowInsecure: boolean }>) =>
+      () => driver.exposeAssertSecureTransport({ host: 'db.example.com', tlsEnabled: false, allowInsecure: false, dataSourceName: 'X', ...over });
+
+    it('allows local hosts over plaintext (dev convenience)', () => {
+      for (const host of ['localhost', '127.0.0.1', '::1', '', undefined as unknown as string]) {
+        expect(call({ host })).not.toThrow();
+      }
+    });
+
+    it('refuses a non-local host over plaintext with no opt-out', () => {
+      expect(call({ host: 'db.example.com' })).toThrow(/unencrypted connection/);
+    });
+
+    it('allows a non-local host when TLS is enabled', () => {
+      expect(call({ host: 'db.example.com', tlsEnabled: true })).not.toThrow();
+    });
+
+    it('allows a non-local plaintext host only with the explicit allowInsecureTransport opt-out', () => {
+      expect(call({ host: 'db.example.com', allowInsecure: true })).not.toThrow();
     });
   });
 });

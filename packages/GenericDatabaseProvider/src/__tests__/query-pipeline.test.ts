@@ -15,6 +15,9 @@ import {
     RunViewParams,
     EntityInfo,
     CompositeKey,
+    BaseEntity,
+    EntitySaveOptions,
+    EntityDeleteOptions,
 } from '@memberjunction/core';
 import { MJQueryEntityExtended, MJUserViewEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 
@@ -1131,6 +1134,26 @@ ORDER BY bridge.LastName, bridge.FirstName`,
             await expect(provider.testMergeExternalViewParams(
                 { EntityName: 'Sales' } as RunViewParams, view({ OrderByClause: 'Name; DELETE FROM Sales' }), user,
             )).rejects.toThrow(/Invalid effective OrderBy/);
+        });
+    });
+
+    describe('provider read-only enforcement for external entities', () => {
+        // Provider-layer backstop: Save/Delete must refuse an external-data-source entity even when
+        // its generated class is NOT ReadOnlyExternalBaseEntity (e.g. an explicit custom subclass).
+        const user = { ID: 'u1' } as UserInfo;
+        const extEntity = {
+            EntityInfo: { ExternalDataSourceID: 'ds-1', Name: 'Ext Sales' },
+            RegisterTransactionPreprocessing: () => { /* no-op for the refusal path */ },
+        } as unknown as BaseEntity;
+
+        // Save (provider layer) rethrows; Delete returns false (MJ's Delete-is-boolean convention) —
+        // each matches the existing AllowCreate/AllowDelete checks right beside the new guards.
+        it('Save() refuses an external-data-source entity (throws read-only)', async () => {
+            await expect(provider.Save(extEntity, user, undefined as unknown as EntitySaveOptions)).rejects.toThrow(/read-only/);
+        });
+
+        it('Delete() refuses an external-data-source entity (returns false)', async () => {
+            await expect(provider.Delete(extEntity, undefined as unknown as EntityDeleteOptions, user)).resolves.toBe(false);
         });
     });
 });
