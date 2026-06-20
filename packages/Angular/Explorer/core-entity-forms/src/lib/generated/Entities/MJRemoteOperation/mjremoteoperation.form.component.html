@@ -50,14 +50,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -185,11 +177,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Implementation Section -->
+    <!-- Implementation and Approval Section -->
     <mj-collapsible-panel
-        SectionKey="implementation"
-        SectionName="Implementation"
-        Icon="fa fa-cogs"
+        SectionKey="implementationAndApproval"
+        SectionName="Implementation and Approval"
+        Icon="fa fa-check-double"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -233,6 +225,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -240,7 +240,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

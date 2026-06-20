@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="processContext"
         SectionName="Process Context"
-        Icon="fa fa-info-circle"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -50,7 +50,7 @@
     <mj-collapsible-panel
         SectionKey="executionStatus"
         SectionName="Execution Status"
-        Icon="fa fa-check-circle"
+        Icon="fa fa-clock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -96,11 +96,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Processing Output Section -->
+    <!-- Execution Results Section -->
     <mj-collapsible-panel
-        SectionKey="processingOutput"
-        SectionName="Processing Output"
-        Icon="fa fa-file-code"
+        SectionKey="executionResults"
+        SectionName="Execution Results"
+        Icon="fa fa-file-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -122,10 +122,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Traceability Section -->
+    <!-- Tracing and Logs Section -->
     <mj-collapsible-panel
-        SectionKey="traceability"
-        SectionName="Traceability"
+        SectionKey="tracingAndLogs"
+        SectionName="Tracing and Logs"
         Icon="fa fa-search"
         [Form]="this"
         [FormContext]="formContext">
