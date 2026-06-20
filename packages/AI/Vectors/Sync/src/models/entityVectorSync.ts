@@ -1097,13 +1097,14 @@ export class EntityVectorSyncer extends VectorBase {
   /**
    * Creates or updates Entity Record Documents for a batch of source records.
    *
-   * **Read is batched, saves are per-record.** Previously each record did its own
+   * **Reads are batched + parallel, saves are per-record.** Previously each record did its own
    * `RunView` to find its existing ERD — an N+1 read storm (~1 query per source record)
    * that dominated the upsert phase and tripped the sequential/duplicate-RunView telemetry.
-   * Here we issue ONE `RunView` per (EntityID, EntityDocumentID) group with a `RecordID IN (…)`
-   * filter, map the results by RecordID, then find-or-create + `Save()` each record (the
-   * per-record `Save()` is inherent to the BaseEntity contract). Grouping is defensive —
-   * within a single entity's pipeline the group key is constant, so it's normally one read.
+   * Here we group by (EntityID, EntityDocumentID) and issue the existence checks for ALL groups
+   * in a SINGLE `RunViews` batch (one round trip, run in parallel) with a `RecordID IN (…)` filter
+   * per group, map the results by RecordID, then find-or-create + `Save()` each record (the
+   * per-record `Save()` is inherent to the BaseEntity contract). Grouping is usually a single read
+   * within one entity's pipeline; a mixed batch produces several views, now executed together.
    */
   protected async UpsertEntityRecordDocumentBatch(batch: EmbeddingData[], contextUser: UserInfo): Promise<void> {
     if (batch.length === 0) {
@@ -1126,25 +1127,39 @@ export class EntityVectorSyncer extends VectorBase {
       }
     }
 
-    for (const [key, items] of groups) {
+    const groupList = [...groups.entries()].map(([key, items]) => {
       const sep = key.indexOf('|');
-      const entityID = key.substring(0, sep);
-      const entityDocumentID = key.substring(sep + 1);
+      return {
+        entityID: key.substring(0, sep),
+        entityDocumentID: key.substring(sep + 1),
+        items,
+      };
+    });
 
-      // Single existence-check read for every record in this group.
-      const inClause = items.map(i => `'${String(i.__mj_recordID).replace(/'/g, "''")}'`).join(',');
+    // One batched, parallel existence read covering every group — replaces the prior
+    // sequential one-RunView-per-group loop.
+    const existenceReads = await rv.RunViews(
+      groupList.map(g => {
+        const inClause = g.items.map(i => `'${String(i.__mj_recordID).replace(/'/g, "''")}'`).join(',');
+        return {
+          EntityName: 'MJ: Entity Record Documents',
+          ExtraFilter: `EntityID = '${g.entityID}' AND EntityDocumentID = '${g.entityDocumentID}' AND RecordID IN (${inClause})`,
+          ResultType: 'entity_object' as const,
+        };
+      }),
+      contextUser
+    );
+
+    for (let gi = 0; gi < groupList.length; gi++) {
+      const { items } = groupList[gi];
+      const result = existenceReads[gi] as RunViewResult<MJEntityRecordDocumentEntity>;
       const existingByRecordID = new Map<string, MJEntityRecordDocumentEntity>();
-      const result: RunViewResult<MJEntityRecordDocumentEntity> = await rv.RunView<MJEntityRecordDocumentEntity>({
-        EntityName: 'MJ: Entity Record Documents',
-        ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocumentID}' AND RecordID IN (${inClause})`,
-        ResultType: 'entity_object'
-      }, contextUser);
-      if (result.Success) {
+      if (result?.Success) {
         for (const er of result.Results) {
           existingByRecordID.set(String(er.RecordID), er);
         }
       } else {
-        LogError('Error getting existing Entity Record Documents', undefined, result.ErrorMessage);
+        LogError('Error getting existing Entity Record Documents', undefined, result?.ErrorMessage);
       }
 
       for (const item of items) {
