@@ -114,6 +114,11 @@ const FLOOR_VERDICT_SCHEMA = {
                             // The build is credential-free: the plan must not condition discovery /
                             // the object set on credential availability (live-sample-at-build).
                             'credential-used-at-build',
+                            // An IOF RelatedIntegrationObjectID @lookup must qualify the sibling-object
+                            // lookup with &IntegrationID=@parent:IntegrationID (the integration id). The
+                            // wrong &IntegrationID=@parent:ID resolves to the IO's OWN id, matches no
+                            // sibling, and rolls back mj sync push (the iMIS/GrowthZone deploy defect).
+                            'fk-lookup-qualifier-wrong',
                         ],
                     },
                     slot: { type: 'string' },
@@ -156,6 +161,7 @@ const RAW_FETCH_SCHEMA = {
         extractorScriptContent: { type: 'string' }, // all extractor scripts under connectors-registry/<vendor>/scripts/ concatenated ('' if none)
         planContent: { type: 'string' },          // the planner-emitted plans/<vendor>.workflow.js ('' if absent)
         enumerateCatalogJson: { type: 'string' }, // stdout of the DETERMINISTIC record-type enumerator run over the source artifact(s) ('' if no source)
+        fkLookupQualifierJson: { type: 'string' }, // stdout of fk-lookup-qualifier.mjs over the metadata file — IOF FK @lookup-qualifier check ('' if it errors)
     },
     additionalProperties: false,
 };
@@ -215,7 +221,8 @@ const fetched = await agent(
         (enumPathArgs
             ? `12. Run \`node packages/Integration/connector-builder-workshop/floor/enumerate-catalog.mjs ${enumPathArgs}\` -> return its stdout VERBATIM as enumerateCatalogJson (deterministic record-type enumeration; '' if it errors). This is a fixed script — run it exactly, do not edit its output.\n`
             : `12. No source artifact paths available: return enumerateCatalogJson=''.\n`) +
-        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, enumerateCatalogJson }.`,
+        `13. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/fk-lookup-qualifier.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as fkLookupQualifierJson (deterministic IOF FK @lookup-qualifier check — flags &IntegrationID=@parent:ID, which must be @parent:IntegrationID; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
+        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, enumerateCatalogJson, fkLookupQualifierJson }.`,
     { agentType: 'independent-reviewer', schema: RAW_FETCH_SCHEMA, phase: 'load-bijection', label: `floor-fetch:${runID}` }
 );
 
@@ -275,6 +282,24 @@ const ioRows = metaRoot ? pickArr(metaRoot.relatedEntities, 'MJ: Integration Obj
 const allIOFRows = ioRows
     .map(io => pickArr(io && io.relatedEntities, 'MJ: Integration Object Fields', 'Integration Object Fields'))
     .flat();
+
+// ── IOF FK @lookup-qualifier gate (deterministic; agent ran fk-lookup-qualifier.mjs over the FULL file). ──
+// An IOF RelatedIntegrationObjectID @lookup must qualify its sibling-object lookup with the INTEGRATION's id
+// (`&IntegrationID=@parent:IntegrationID`). The wrong `&IntegrationID=@parent:ID` resolves to the IO's OWN id,
+// matches no sibling object, and rolls the entire `mj sync push` back — the iMIS/GrowthZone deploy defect.
+// We read the script's JSON (not allIOFRows) because the large-catalog path strips relatedEntities to slimMeta.
+if (fetched && typeof fetched.fkLookupQualifierJson === 'string' && fetched.fkLookupQualifierJson.trim() !== '') {
+    try {
+        const fk = JSON.parse(fetched.fkLookupQualifierJson);
+        if (fk && Array.isArray(fk.violations) && fk.violations.length > 0) {
+            const sample = fk.violations.slice(0, 25).map(v => `${v.io}.${v.iof}`).join(', ');
+            failures.push({
+                rule: 'fk-lookup-qualifier-wrong',
+                detail: `${fk.violations.length} IOF RelatedIntegrationObjectID @lookup(s) use the wrong qualifier &IntegrationID=@parent:ID — that resolves to the IntegrationObject's own id (not the Integration's), matches no sibling object, and rolls back mj sync push (the iMIS/GrowthZone deploy failure). Change each to &IntegrationID=@parent:IntegrationID. Offenders: ${sample}${fk.violations.length > 25 ? ', …' : ''}`,
+            });
+        }
+    } catch { /* malformed script output -> not gated here; the standalone `--all` run is the hard CI gate */ }
+}
 
 // Evidence coverage — tolerant TargetField matcher over PROVENANCE + CODE_EVIDENCE. A field is
 // "evidenced" if any TargetField ends with `.<field>` (matches integration.<f>, io.<name>.<f>,
