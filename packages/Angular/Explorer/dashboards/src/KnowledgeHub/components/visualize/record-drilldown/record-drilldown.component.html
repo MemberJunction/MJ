@@ -1,0 +1,44 @@
+@if (Visible) {
+  <div class="drilldown-panel">
+    <div class="drilldown-header">
+      <div class="drilldown-title">
+        <i [class]="Icon"></i>
+        <div class="drilldown-title-text">
+          <span class="drilldown-title-main">{{ Title }}</span>
+          @if (Subtitle) {
+            <span class="drilldown-title-sub">{{ Subtitle }}</span>
+          }
+        </div>
+      </div>
+      <button mjButton variant="icon" size="sm" (click)="OnClose()" title="Close">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+
+    <div class="drilldown-body">
+      @if (IsLoading) {
+        <mj-loading text="Loading records..."></mj-loading>
+      } @else if (Records.length === 0) {
+        <div class="drilldown-empty">
+          <i class="fa-solid fa-inbox"></i>
+          <p>No records found</p>
+        </div>
+      } @else {
+        @for (record of Records; track TrackByRecord($index, record)) {
+          <div class="drilldown-item" (click)="OnOpen(record)">
+            <div class="drilldown-item-main">
+              <span class="drilldown-item-title">{{ record.Title }}</span>
+              @if (record.Subtitle) {
+                <span class="drilldown-item-subtitle">{{ record.Subtitle }}</span>
+              }
+            </div>
+            @if (record.Weight != null) {
+              <span class="drilldown-item-weight">{{ WeightPercent(record.Weight) }}%</span>
+            }
+            <i class="fa-solid fa-chevron-right drilldown-item-chevron"></i>
+          </div>
+        }
+      }
+    </div>
+  </div>
+}

@@ -1,4 +1,5 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, NgZone, OnDestroy, Output, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 
 /**
@@ -22,7 +23,7 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 @Component({
   selector: 'mj-filter-popover',
   standalone: true,
-  imports: [OverlayModule],
+  imports: [CommonModule, OverlayModule],
   template: `
     <button
       type="button"
@@ -34,7 +35,7 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       [attr.aria-haspopup]="true"
       (click)="Toggle()">
       <i [class]="Icon"></i>
-      <span>{{ Label }}</span>
+      <span class="mj-filter-popover-label">{{ Label }}</span>
       @if (ActiveCount > 0) {
         <span class="mj-filter-popover-badge" [attr.aria-label]="ActiveCount + ' active filters'">
           {{ ActiveCount }}
@@ -43,29 +44,49 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       <i class="fa-solid fa-chevron-down mj-filter-popover-chevron" [class.mj-filter-popover-chevron--open]="IsOpen"></i>
     </button>
 
-    <ng-template
-      cdkConnectedOverlay
-      [cdkConnectedOverlayOrigin]="overlayOrigin"
-      [cdkConnectedOverlayOpen]="IsOpen"
-      [cdkConnectedOverlayPositions]="Positions"
-      [cdkConnectedOverlayHasBackdrop]="true"
-      cdkConnectedOverlayBackdropClass="mj-filter-popover-backdrop"
-      (backdropClick)="Close()"
-      (detach)="Close()">
-      <div class="mj-filter-popover-panel" role="dialog" [attr.aria-label]="Label">
-        <div class="mj-filter-popover-header">
-          <span class="mj-filter-popover-title">{{ Label }}</span>
-          @if (ActiveCount > 0 && ShowClearAll) {
-            <button type="button" class="mj-filter-popover-clear" (click)="ClearAll()">
-              Clear all
-            </button>
-          }
-        </div>
-        <div class="mj-filter-popover-content">
-          <ng-content></ng-content>
-        </div>
+    <!-- The panel body (header + projected filter UI) is declared ONCE here and
+         stamped into whichever wrapper is active (anchored overlay on desktop,
+         docked sheet on mobile). A single <ng-content> avoids the duplicate-slot
+         bug where projected content lands in only one of two branches. -->
+    <ng-template #panelBody>
+      <div class="mj-filter-popover-header">
+        <span class="mj-filter-popover-title">{{ Label }}</span>
+        @if (ActiveCount > 0 && ShowClearAll) {
+          <button type="button" class="mj-filter-popover-clear" (click)="ClearAll()">
+            Clear all
+          </button>
+        }
+      </div>
+      <div class="mj-filter-popover-content">
+        <ng-content></ng-content>
       </div>
     </ng-template>
+
+    @if (IsMobile) {
+      <!-- Mobile: the popover docks as a bottom sheet — mirrors how mj-left-nav
+           becomes a drawer at this width. -->
+      @if (IsOpen) {
+        <div class="mj-filter-popover-scrim" (click)="Close()" aria-hidden="true"></div>
+        <div class="mj-filter-popover-sheet" role="dialog" [attr.aria-label]="Label">
+          <div class="mj-filter-popover-grab" aria-hidden="true"></div>
+          <ng-container *ngTemplateOutlet="panelBody"></ng-container>
+        </div>
+      }
+    } @else {
+      <ng-template
+        cdkConnectedOverlay
+        [cdkConnectedOverlayOrigin]="overlayOrigin"
+        [cdkConnectedOverlayOpen]="IsOpen"
+        [cdkConnectedOverlayPositions]="Positions"
+        [cdkConnectedOverlayHasBackdrop]="true"
+        cdkConnectedOverlayBackdropClass="mj-filter-popover-backdrop"
+        (backdropClick)="Close()"
+        (detach)="Close()">
+        <div class="mj-filter-popover-panel" role="dialog" [attr.aria-label]="Label">
+          <ng-container *ngTemplateOutlet="panelBody"></ng-container>
+        </div>
+      </ng-template>
+    }
   `,
   styles: [`
     :host {
@@ -184,15 +205,127 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       flex-direction: column;
       gap: var(--mj-space-2-5);
     }
+
+    /* ── Mobile bottom sheet (≤700px) ─────────────────────────────────────
+       The trigger button stays inline; tapping it docks the panel body as a
+       sheet at the bottom of the viewport over a scrim — same body, different
+       wrapper. Mirrors the mj-left-nav drawer treatment. */
+    .mj-filter-popover-scrim {
+      position: fixed;
+      inset: 0;
+      background: var(--mj-bg-overlay);
+      z-index: 9998;
+      animation: mj-fp-fade 0.2s ease;
+    }
+    .mj-filter-popover-sheet {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      max-height: 85vh;
+      background: var(--mj-bg-surface);
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      box-shadow: var(--mj-shadow-lg);
+      animation: mj-fp-slide-up 0.24s ease;
+    }
+    .mj-filter-popover-grab {
+      flex-shrink: 0;
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--mj-border-strong);
+      margin: 10px auto 2px;
+    }
+    .mj-filter-popover-sheet .mj-filter-popover-header {
+      flex-shrink: 0;
+    }
+    .mj-filter-popover-sheet .mj-filter-popover-content {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: var(--mj-space-6);
+    }
+    @keyframes mj-fp-fade {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes mj-fp-slide-up {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mj-filter-popover-scrim,
+      .mj-filter-popover-sheet {
+        animation: none;
+      }
+    }
+
+    /* On mobile the trigger collapses to icon-only (the count badge still
+       conveys active state) so the control bar — search · Filter · view —
+       stays on one line. */
+    @media (max-width: 700px) {
+      .mj-filter-popover-label,
+      .mj-filter-popover-chevron {
+        display: none;
+      }
+      .mj-filter-popover-trigger {
+        padding: 6px 10px;
+        gap: 4px;
+      }
+    }
   `]
 })
-export class MJFilterPopoverComponent {
+export class MJFilterPopoverComponent implements OnDestroy {
   @Input() Label: string = 'Filters';
   @Input() Icon: string = 'fa-solid fa-filter';
   @Input() ActiveCount: number = 0;
   @Input() ShowClearAll: boolean = false;
 
   public IsOpen: boolean = false;
+
+  /**
+   * True when the viewport is narrow enough that the popover should dock as a
+   * bottom sheet instead of an anchored overlay. Driven by matchMedia so it
+   * tracks live resize without Angular change-detection plumbing.
+   */
+  public IsMobile: boolean = false;
+
+  private readonly zone = inject(NgZone);
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  private readonly mediaQuery: MediaQueryList | null =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 700px)')
+      : null;
+
+  // matchMedia 'change' fires OUTSIDE Angular's zone, so the flip must be
+  // re-entered into the zone — otherwise the IsMobile change lands mid-CD and
+  // the @if(IsMobile) branch swap throws ExpressionChangedAfterItHasBeenChecked
+  // when crossing the breakpoint. Also close across the switch so a sheet/overlay
+  // opened in one mode doesn't linger in the other.
+  private readonly onMediaChange = (e: MediaQueryListEvent): void => {
+    this.zone.run(() => {
+      this.IsMobile = e.matches;
+      this.IsOpen = false;
+      this.cdr.markForCheck();
+    });
+  };
+
+  constructor() {
+    if (this.mediaQuery) {
+      this.IsMobile = this.mediaQuery.matches;
+      this.mediaQuery.addEventListener('change', this.onMediaChange);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.mediaQuery?.removeEventListener('change', this.onMediaChange);
+  }
 
   // Note: NO offsetY here — CDK applies offsetY as `transform: translateY(...)` on the
   // overlay pane, which creates a containing block for `position: fixed` descendants.

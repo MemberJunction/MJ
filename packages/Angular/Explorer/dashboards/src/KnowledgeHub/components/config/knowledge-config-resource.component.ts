@@ -212,7 +212,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         { Field: 'SearchProviderID', Label: 'Provider', Type: 'lookup', LookupEntityName: 'MJ: Search Providers', LookupFilter: "Status='Active'", Width: '200px' },
         { Field: 'Enabled', Label: 'Enabled', Type: 'checkbox', Width: '80px' },
         { Field: 'MaxResults', Label: 'Max Results', Type: 'number', Placeholder: 'e.g. 20', Width: '110px' },
-        { Field: 'QueryTransformTemplateID', Label: 'Query Transform', Type: 'lookup', LookupEntityName: 'Templates', Width: '180px' },
+        { Field: 'QueryTransformTemplateID', Label: 'Query Transform', Type: 'lookup', LookupEntityName: 'MJ: Templates', Width: '180px' },
         { Field: 'ProviderConfigOverride', Label: 'Config Override', Type: 'code', Placeholder: 'JSON override (optional)' },
     ];
 
@@ -232,14 +232,14 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     /** Column spec for the Entities child grid. */
     public readonly ScopeEntityColumns: SearchScopeChildGridColumn[] = [
-        { Field: 'EntityID', Label: 'Entity', Type: 'lookup', LookupEntityName: 'Entities', Width: '220px' },
+        { Field: 'EntityID', Label: 'Entity', Type: 'lookup', LookupEntityName: 'MJ: Entities', Width: '220px' },
         { Field: 'ExtraFilter', Label: 'Extra Filter (SQL + Nunjucks)', Type: 'code', Placeholder: "CategoryID = '<uuid>' AND OrganizationID = '{{ context.PrimaryScopeRecordID }}'" },
         { Field: 'UserSearchStringOverride', Label: 'Query Rewrite', Type: 'text', Placeholder: '— use raw query —' },
     ];
 
     /** Column spec for the Storage Accounts child grid. */
     public readonly ScopeStorageColumns: SearchScopeChildGridColumn[] = [
-        { Field: 'StorageAccountID', Label: 'Storage Account', Type: 'lookup', LookupEntityName: 'Storage Providers', Width: '220px' },
+        { Field: 'FileStorageAccountID', Label: 'Storage Account', Type: 'lookup', LookupEntityName: 'MJ: File Storage Accounts', Width: '220px' },
         { Field: 'FolderPath', Label: 'Folder Path (Nunjucks)', Type: 'code', Placeholder: '/tenants/{{ context.PrimaryScopeRecordID }}/hr/policies/' },
     ];
 
@@ -251,8 +251,8 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
      * lives in SearchScopePermissionResolver.
      */
     public readonly ScopePermissionColumns: SearchScopeChildGridColumn[] = [
-        { Field: 'UserID', Label: 'User', Type: 'lookup', LookupEntityName: 'Users', LookupFilter: "IsActive=1", Width: '240px' },
-        { Field: 'RoleID', Label: 'Role', Type: 'lookup', LookupEntityName: 'Roles', Width: '200px' },
+        { Field: 'UserID', Label: 'User', Type: 'lookup', LookupEntityName: 'MJ: Users', LookupFilter: "IsActive=1", Width: '240px' },
+        { Field: 'RoleID', Label: 'Role', Type: 'lookup', LookupEntityName: 'MJ: Roles', Width: '200px' },
         { Field: 'PermissionLevel', Label: 'Level', Type: 'select', Options: [
             { Label: 'None (explicit deny)', Value: 'None' },
             { Label: 'Read (view only)', Value: 'Read' },

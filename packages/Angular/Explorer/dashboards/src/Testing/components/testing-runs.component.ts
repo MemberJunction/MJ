@@ -54,7 +54,7 @@ interface FilteredStats {
           <div actions>
             <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
             <button mjButton variant="primary" size="sm" (click)="StartNewTest()">
-              <i class="fa-solid fa-play"></i> Run Test
+              <i class="fa-solid fa-play"></i> <span class="action-btn-label">Run Test</span>
             </button>
           </div>
         </mj-page-header>

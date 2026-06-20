@@ -86,7 +86,7 @@
                   <div class="edit-controls">
                     <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
                     <div class="edit-card-actions">
-                      <button class="edit-card-btn delete" (click)="RemovePin(pin.Id); $event.stopPropagation()">
+                      <button class="edit-card-btn delete" aria-label="Remove pin" title="Remove pin" (click)="RemovePin(pin.Id); $event.stopPropagation()">
                         <i class="fa-solid fa-xmark"></i>
                       </button>
                     </div>
@@ -136,7 +136,7 @@
                     <div class="pin-name" (click)="EditMode ? StartEditingPin(pin.Id, $event) : null">
                       {{ pin.DisplayName }}
                       @if (!EditMode) {
-                        <button class="more-btn" (click)="ShowPinMenu($event, pin)">
+                        <button class="more-btn" aria-label="Pin options" title="Pin options" (click)="ShowPinMenu($event, pin)">
                           <i class="fa-solid fa-ellipsis"></i>
                         </button>
                       }
@@ -194,7 +194,7 @@
                     <div class="edit-controls">
                       <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
                       <div class="edit-card-actions">
-                        <button class="edit-card-btn delete" (click)="RemovePin(pin.Id); $event.stopPropagation()">
+                        <button class="edit-card-btn delete" aria-label="Remove pin" title="Remove pin" (click)="RemovePin(pin.Id); $event.stopPropagation()">
                           <i class="fa-solid fa-xmark"></i>
                         </button>
                       </div>
@@ -242,7 +242,7 @@
                       <div class="pin-name" (click)="EditMode ? StartEditingPin(pin.Id, $event) : null">
                         {{ pin.DisplayName }}
                         @if (!EditMode) {
-                          <button class="more-btn" (click)="$event.stopPropagation()">
+                          <button class="more-btn" aria-label="Pin options" title="Pin options" (click)="$event.stopPropagation()">
                             <i class="fa-solid fa-ellipsis"></i>
                           </button>
                         }
@@ -558,6 +558,8 @@
           @for (appData of appsDisplayData; track trackByApp($index, appData)) {
             <div
               class="app-card"
+              [mjClickable]="appData.app.Name"
+              [testId]="'app-tile-' + appData.app.Name"
               [style.--app-color]="appData.color"
               (click)="onAppClick(appData.app)">
               <!-- App Icon -->
@@ -641,6 +643,8 @@
               @for (notification of unreadNotifications; track trackByNotification($index, notification)) {
                 <div
                   class="sidebar-item notification-item"
+                  [mjClickable]="notification.Title"
+                  testId="notification-item"
                   (click)="onNotificationClick(notification)">
                   <div class="sidebar-item-info">
                     <span class="sidebar-item-title">{{ notification.Title }}</span>
@@ -663,6 +667,8 @@
                 @for (favorite of favorites; track trackByFavorite($index, favorite)) {
                   <div
                     class="sidebar-item favorite-item"
+                    [mjClickable]="getFavoriteDisplayName(favorite)"
+                    testId="favorite-item"
                     (click)="onFavoriteClick(favorite)">
                     <div class="sidebar-item-icon">
                       <i [class]="getEntityIconByName(favorite.Entity)"></i>
@@ -695,6 +701,8 @@
                 @for (item of recentItems; track trackByRecent($index, item)) {
                   <div
                     class="sidebar-item recent-item"
+                    [mjClickable]="item.recordName || item.recordId"
+                    testId="recent-item"
                     (click)="onRecentClick(item)">
                     <div class="sidebar-item-icon">
                       <i [class]="getEntityIconByName(item.entityName)"></i>

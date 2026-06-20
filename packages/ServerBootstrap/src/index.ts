@@ -59,7 +59,8 @@ export interface MJServerConfig {
 async function discoverAndLoadGeneratedPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
   const codeGeneration = configResult.config?.codeGeneration as Record<string, Record<string, string>> | undefined;
   if (!codeGeneration?.packages) {
-    console.debug('No codeGeneration.packages configuration found - skipping auto-import of generated packages');
+    // Common case for app deployments that import their generated package directly —
+    // not actionable, so stay silent (was a verbose-only console.debug).
     return;
   }
 
@@ -134,12 +135,12 @@ async function discoverAndLoadGeneratedPackages(configResult: { config: Record<s
  * ```
  */
 export async function createMJServer(options: MJServerConfig = {}): Promise<void> {
-  console.log('🚀 MemberJunction Server Bootstrap');
-  console.log('=====================================\n');
+  // No banner here: serve()'s StartupLogger shows a transient "Bootstrapping…"
+  // indicator while booting and prints the 🚀 summary block once ready, so the
+  // rocket appears only after launch.
 
   // Configuration has already been loaded and merged by MJServer's config.ts at module init time
   // We just need to load the raw user config to access codeGeneration.packages setting
-  console.log('');
   const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
   const configSearchResult = explorer.search(options.configPath || process.cwd());
 
@@ -185,7 +186,6 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   // - WebSocket setup for subscriptions
   // - REST API endpoint registration
   // - Graceful shutdown handling
-  console.log('Starting MemberJunction Server...\n');
   await serve(resolverPaths, undefined, serverOptions);
 
   // Optional post-start hook

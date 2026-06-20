@@ -5,7 +5,8 @@ import {
   StandardUserInfo,
   StandardAuthToken,
   StandardAuthError,
-  TokenRefreshResult
+  TokenRefreshResult,
+  SessionScope
 } from './auth-types';
 
 /**
@@ -418,6 +419,17 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    */
   async getProfilePictureUrl(): Promise<string | null> {
     return this.getProfilePictureUrlInternal();
+  }
+
+  /**
+   * Returns any constraints this provider places on the session, or `null` for
+   * an unconstrained session. The host shell uses this to confine the UI (e.g.
+   * hide app-switching and lock to a single app for magic-link sessions).
+   *
+   * Default: unconstrained. Constrained providers override this.
+   */
+  public GetSessionScope(): SessionScope | null {
+    return null;
   }
 
   // ============================================================================

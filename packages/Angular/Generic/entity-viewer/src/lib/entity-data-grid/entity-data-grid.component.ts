@@ -1622,6 +1622,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       // Rebuild AG Grid column definitions to reflect the new view's settings
       this.buildAgColumnDefs();
 
+      // If the parent already supplied external [Data] BEFORE [Params] resolved the entity,
+      // the earlier processData() ran with a null _entityInfo and produced rows with no field
+      // values (empty cells). This happens when the grid is dynamic-mounted by the view-type
+      // plug-in host, where Angular applies the batched inputs in template order ([Data] before
+      // [Params]). Now that _entityInfo + columns exist, re-map the rows so values render.
+      if (this._useExternalData && this._entityInfo) {
+        this.processData();
+      }
+
       // Load data if auto-refresh is enabled and parent hasn't disabled loading.
       // Defer the AllowLoad check to a microtask: Angular applies @Input setters synchronously
       // in template order, and [Params] is commonly bound before [AllowLoad] (see the wrapper in

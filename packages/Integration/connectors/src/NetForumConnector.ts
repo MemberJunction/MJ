@@ -48,6 +48,7 @@ import {
     type ConnectionTestResult, type ExternalRecord, type DefaultFieldMapping,
     type FetchContext, type FetchBatchResult, type CreateRecordContext, type UpdateRecordContext,
     type DeleteRecordContext, type CRUDResult, type IntegrationObjectInfo, type ExternalObjectSchema, type ExternalFieldSchema,
+    type SourceSchemaInfo, type SourceFieldInfo,
 } from '@memberjunction/integration-engine';
 
 export interface NetForumConnectionConfig { BaseURL: string; Username: string; Password: string; }
@@ -167,6 +168,40 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
         return 'last_updated_dt';
     }
 
+    /**
+     * Resolves the PROVABLE watermark column for a NetForum facade object — i.e.
+     * a column the object's OWN static catalog declares as a datetime whose name
+     * matches last/updated/modified. Unlike ResolveWatermarkColumn(), this NEVER
+     * falls back to a guessed name: if the object declares no such field, it
+     * returns undefined so callers leave IncrementalWatermarkField unset.
+     */
+    private ResolveDeclaredWatermarkColumn(objectName: string): string | undefined {
+        const obj = NF_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+        const timestampField = obj?.Fields.find(f =>
+            /datetime/i.test(f.Type) && /last|updated|modified/i.test(f.Name)
+        );
+        return timestampField?.Name;
+    }
+
+    /**
+     * Resolves a field's declared foreign-key target to a sibling object actually
+     * declared in NF_OBJECTS. The static catalog encodes FK intent in the field
+     * Description (e.g. 'FK → Event'). This promotes that declaration into the
+     * framework's IsForeignKey/ForeignKeyTarget slots — but ONLY when the target
+     * resolves to exactly ONE declared sibling object. Polymorphic targets
+     * (e.g. 'FK → Individual/Organization') name two objects and are skipped.
+     */
+    private ResolveForeignKeyTarget(description: string | undefined): string | null {
+        if (!description) return null;
+        const match = description.match(/^FK\s*(?:→|->)\s*(.+)$/i);
+        if (!match) return null;
+        const target = match[1].trim();
+        // Polymorphic refs (e.g. 'Individual/Organization') name multiple objects — skip.
+        if (target.includes('/')) return null;
+        const sibling = NF_OBJECTS.find(o => o.Name.toLowerCase() === target.toLowerCase());
+        return sibling ? sibling.Name : null;
+    }
+
     public override GetIntegrationObjects(): IntegrationObjectInfo[] { return NF_OBJECTS; }
 
     public override GetActionGeneratorConfig() {
@@ -196,7 +231,14 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
         } catch { /* fall through to static */ }
         const obj = NF_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
         if (!obj) return [];
-        return obj.Fields.map(f => ({ Name: f.Name, Label: f.DisplayName, Description: f.Description, DataType: f.Type, IsRequired: f.IsRequired, IsUniqueKey: f.IsPrimaryKey, IsReadOnly: f.IsReadOnly }));
+        return obj.Fields.map(f => {
+            const fkTarget = this.ResolveForeignKeyTarget(f.Description);
+            return {
+                Name: f.Name, Label: f.DisplayName, Description: f.Description, DataType: f.Type,
+                IsRequired: f.IsRequired, IsUniqueKey: f.IsPrimaryKey, IsReadOnly: f.IsReadOnly,
+                IsForeignKey: fkTarget !== null, ForeignKeyTarget: fkTarget,
+            };
+        });
     }
 
     private InferFieldsFromSample(sample: Record<string, unknown>, objectName: string): ExternalFieldSchema[] {
@@ -205,10 +247,12 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
         const fields: ExternalFieldSchema[] = [];
         for (const [key, value] of Object.entries(sample)) {
             const sf = staticMap.get(key.toLowerCase());
+            const fkTarget = this.ResolveForeignKeyTarget(sf?.Description);
             fields.push({
                 Name: key, Label: sf?.DisplayName ?? key, Description: sf?.Description ?? '',
                 DataType: sf?.Type ?? this.InferType(value),
                 IsRequired: sf?.IsRequired ?? false, IsUniqueKey: sf?.IsPrimaryKey ?? false, IsReadOnly: sf?.IsReadOnly ?? false,
+                IsForeignKey: fkTarget !== null, ForeignKeyTarget: fkTarget,
             });
         }
         return fields;
@@ -219,6 +263,56 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
         if (typeof v === 'boolean') return 'boolean';
         if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return 'datetime';
         return 'string';
+    }
+
+    /**
+     * Override IntrospectSchema so the schema-builder receives the framework's
+     * provable static metadata: foreign keys (declared via each FK field's
+     * 'FK → <Sibling>' Description, resolved to a declared sibling object) and,
+     * for objects whose own catalog declares a last/updated/modified datetime
+     * column, IncrementalWatermarkField. No watermark is invented — objects
+     * without a declared timestamp leave the slot unset.
+     */
+    public override async IntrospectSchema(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<SourceSchemaInfo> {
+        const objects = await this.DiscoverObjects(companyIntegration, contextUser);
+        const result: SourceSchemaInfo = { Objects: [] };
+
+        for (const obj of objects) {
+            const fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+            const sourceFields: SourceFieldInfo[] = fields.map(f => ({
+                Name: f.Name,
+                Label: f.Label ?? f.Name,
+                Description: f.Description,
+                SourceType: f.DataType,
+                IsRequired: f.IsRequired ?? false,
+                IsPrimaryKey: f.IsUniqueKey ?? false,
+                IsForeignKey: f.IsForeignKey ?? false,
+                ForeignKeyTarget: f.ForeignKeyTarget ?? null,
+                MaxLength: null,
+                Precision: null,
+                Scale: null,
+                DefaultValue: null,
+            }));
+
+            result.Objects.push({
+                ExternalName: obj.Name,
+                ExternalLabel: obj.Label ?? obj.Name,
+                Description: obj.Description,
+                Fields: sourceFields,
+                PrimaryKeyFields: sourceFields.filter(f => f.IsPrimaryKey).map(f => f.Name),
+                Relationships: sourceFields
+                    .filter(f => f.IsForeignKey && f.ForeignKeyTarget)
+                    .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' })),
+                // Only set when the object's OWN catalog declares a last/updated/modified
+                // datetime column (provable). Undefined otherwise — never guessed.
+                IncrementalWatermarkField: this.ResolveDeclaredWatermarkColumn(obj.Name),
+            });
+        }
+
+        return result;
     }
 
     // ─── Auth (JSON mode) ──────────────────────────────────────────────
@@ -342,7 +436,8 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
         const r = await this.MakeHTTPRequest(auth, url, 'POST', headers, payload);
         if (r.Status >= 200 && r.Status < 300) {
             const body = r.Body as Record<string, unknown>;
-            return { Success: true, ExternalID: String(body['key'] ?? ''), StatusCode: r.Status };
+            const newKey = body['key'] == null ? undefined : String(body['key']);
+            return this.BuildCreatedResult(newKey, r.Status, ctx.ObjectName);
         }
         return { Success: false, ExternalID: '', StatusCode: r.Status, ErrorMessage: `Create failed: ${r.Status}` };
     }

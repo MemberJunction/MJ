@@ -286,6 +286,35 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
 
 - **[BaseEntity Server-Side Patterns](guides/BASE_ENTITY_SERVER_PATTERNS.md)**: Use **before** writing a new server-side entity subclass under `MJCoreEntitiesServer`. Covers the persisted-embedding pattern (`Save()` + `EmbedTextLocal` + engine cache sync), cross-record invariants via `ValidateAsync` (NOT DB triggers), and FK cleanup before delete. Reference implementations: `MJAIAgentNoteEntityServer`, `MJTagEntityServer`, `MJTagScopeEntityServer`. Lift the recipes from there — don't reinvent.
 
+- **[Magic Link Access Guide](guides/MAGIC_LINK_GUIDE.md)**: How to share an app-scoped, passwordless session with **external** users (MJ-issued RS256 magic links). Covers enabling the feature, the **two-layer model** (framework mechanism vs. per-deployment scenario config vs. runtime-provisioned users), and the **recipe for defining an external-access scenario** via metadata (restricted role + entity permissions + application role). Read before wiring up external/guest access — external user *accounts* are runtime-provisioned, but the role + permissions that scope them are version-controlled metadata.
+- **[Search Overview Guide](guides/SEARCH_OVERVIEW_GUIDE.md)**: Decision tree across MJ's search/lookup APIs — `EntityByName`/`EntityByID` (definition lookup), `SearchEntity`/`SearchEntities` (per-entity ranked hybrid search, see [ENTITY_SEARCH_GUIDE](guides/ENTITY_SEARCH_GUIDE.md)), `FullTextSearch` (multi-entity DB-level FTS, see [FULL_TEXT_SEARCH_GUIDE](packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)), and `SearchEngine.Search` (cross-source unified search with scopes, see [SEARCH_SCOPES_AND_RAG_GUIDE](guides/SEARCH_SCOPES_AND_RAG_GUIDE.md)). Read this first when you need to find records / definitions / cross-source matches — picking the wrong API can mean wasted round-trips or missed semantic matches.
+
+- **[Agent Memory Guide](guides/AGENT_MEMORY_GUIDE.md)**: The complete agent-memory architecture — note lifecycle (Provisional → Active → Archived), injection (strategies, recency-wins precedence, scoping), in-flight `memoryWrites` with its framework guard pipeline, and the Memory Manager's hardening/consolidation/decay phases. Read before touching anything under agent notes/examples or the `memoryWrites` capability.
+
+- **[Forms Architecture Guide](guides/FORMS_ARCHITECTURE_GUIDE.md)**: How MJ renders/edits entity records across **all** surfaces from one set of forms — full-page tabs, modal dialogs, and slide-in panels. Covers:
+  - The 4-layer architecture (`MjEntityFormHostComponent` → presentation shells → `MJFormPresenterService`), all in `@memberjunction/ng-base-forms` with zero Explorer/Router coupling
+  - How **generated**, **custom (`*Extended`)**, and **interactive (`EntityFormOverride`)** forms coexist, plus the variant picker
+  - **`EntityFormConfig`** — per-instance control over toolbar / related-entity sections / collapsibility / width / in-form navigation, applied **without regenerating** any form
+  - Imperative (`forms.open({...})`) and declarative (`<mj-form-dialog>` / `<mj-form-slide-in>`) usage
+  - **Read this before building any bespoke "edit a record in a dialog/slide-in" component** — the generic capability almost certainly covers it.
+
+- **[Transport-Layer Architecture Guide](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md)**: The canonical **engine → resolver → GraphQL client → thin UI** layering (plus the optional **Action** layer for agentic/workflow/low-code invocation) for any *custom server-side capability* the browser or an agent invokes — clustering, search, classify, LLM calls, "run this pipeline" buttons. Covers:
+  - Why business logic lives in the framework-agnostic **engine** exactly once, and what each adapter layer must NOT do
+  - Step-by-step: build the engine → thin TypeGraphQL resolver (`ResolverBase` + per-request user) → typed `GraphQL<Feature>Client` in `@memberjunction/graphql-dataprovider` → thinnest Angular wrapper (never inline `gql`) → optional Action that calls the engine *directly*
+  - A decision table for which layers you actually need (and when to just use the generated entity CRUD layer instead)
+  - JSON-string-field pattern for complex payloads, client/engine type decoupling, and reference implementations (`GraphQLClusterClient`, `SearchKnowledgeResolver`, etc.)
+  - **Read this before hand-writing any new resolver or GraphQL client.** Not for plain entity CRUD — that's already generated.
+
+- **[Remote Operations Guide](guides/REMOTE_OPERATIONS_GUIDE.md)**: The typed, provider-routed **Remote Operations** primitive — `BaseRemotableOperation<TInput,TOutput>` (in `@memberjunction/core`) invoked from one call site on both client (marshalled over GraphQL) and server (in-process), the missing peer of `BaseEntity` (CRUD) and `RunView` (set reads). Covers: when to use it vs. an Action vs. a bespoke resolver, authoring + calling an operation, the `RouteOperation` power-tool seam (`IRemoteOperationProvider` on `ProviderBase`), the auth chain (API-key scope ∥ user permissions + per-op `Authorize`), and long-running modes. **Read before hand-rolling a resolver+client for a typed capability the browser and server both invoke.** Complements (does not replace) the Transport-Layer guide and the Actions boundary.
+
+- **[Real-Time Co-Agents Guide](guides/REALTIME_CO_AGENTS_GUIDE.md)**: The live, low-latency agent stack — the `Realtime` agent type and Voice Co-Agent (one co-agent voices any target agent via the stable `invoke-target-agent` tool), the triple-registry plugin architecture (server/client realtime-model drivers + interactive-channel plugins, all ClassFactory + metadata resolved), client-direct vs server-bridged topologies, `AIAgentSession` lifecycle/janitor, interactive channels (the live Whiteboard), progress narration, observability, and the security model. **Read before touching anything realtime / voice / agent-session / channel.**
+
+- **[Realtime Bridges Guide](guides/REALTIME_BRIDGES_GUIDE.md)**: The pluggable **media-transport seam** that connects the *one* realtime agent engine to external endpoints — Zoom/Teams/Slack/Meet/Webex/Discord **meetings** and Twilio/Vonage/RingCentral **telephony** — carrying bidirectional, media-agnostic tracks (audio/video/screen, full duplex). Covers: the `AIBridgeEngineBase` (`@memberjunction/ai-bridge-base`, metadata cache) / `AIBridgeEngine` (`@memberjunction/ai-bridge-server`, composition-not-inheritance coordination + the `bridge.OnMedia → session.SendInput` / `session.OnOutput → bridge.SendMedia` transport seam) pair; the `BaseRealtimeBridge` driver family (sibling to `BaseRealtimeModel`) and **how to add a new bridge driver** (subclass + `@RegisterClass(BaseRealtimeBridge, '<X>Bridge')` + capability-gated virtuals, `LoopbackBridge` as the worked example); the `IBridgeProviderFeatures` capability model (engine gates the flag, `RequireFeature` throws as defense-in-depth via `BridgeCapabilityNotSupportedError`); the platform-agnostic `TurnTakingPolicy` (passive/active/hybrid); the 5 entities + their `*EntityServer` invariants; and the roadmap (Phase 0/1 shipped, 2+ planned). **Read before touching anything bridge / meeting / telephony / media-transport, or before adding a bridge driver.**
+
+- **[Remote Browser Channel Guide](guides/REMOTE_BROWSER_GUIDE.md)**: The in-house realtime **channel** where an agent drives a real, live browser while it talks (sales demo, support walkthrough, **trainer agent** — demonstrate then "your turn, you try"). Built on the principle that every backend exposes the same primitive (a CDP endpoint), so the browser work lives **once, generically, in `@memberjunction/computer-use`** (enriched additively with selector-aware actions, screencast, `MouseMove`, accessibility/element perception) and the Remote Browser layer just maps vocabulary + manages session lifecycle. Covers: the layer cake (`computer-use` → `remote-browser-base` universal contracts + `RemoteBrowserEngineBase` registry → `remote-browser-cdp` shared `CdpRemoteBrowserSession` kit + lossless `mapRemoteBrowserAction` → 5 thin backends → `remote-browser-server` `RemoteBrowserEngine`/`RemoteBrowserChannel`); the `AIRemoteBrowserProvider` registry + `IRemoteBrowserProviderFeatures` capability gating (two-layer, like bridges); **control modes** (`AgentOnly`/`ViewOnly`/`Collaborative`) vs **control strategies** (`ComputerUse` default vs `NativeAI`/Stagehand, capability-gated); **goal-driven control** (§9 — set a high-level goal instead of granular clicks: `browser_AchieveGoal` → `ExecuteRemoteBrowserGoal` → `RemoteBrowserEngine.AchieveGoal` → pure `dispatchRemoteBrowserGoal` strategy switch → `RunComputerUseGoal` on the session's OWN adapter; **model-blind credentials** via `{{label}}` context injection resolved at the CDP keystroke boundary; Collaborative pause-on-takeover; vision-model auto-selection + the `MJProgressComputerUseEngine` startup binding); and **how to add a backend** (subclass `BaseCdpRemoteBrowserProvider`, implement `AcquireSession` + a 3-method `ICdpSessionBackend`, `@RegisterClass(BaseRemoteBrowserProvider, '<X>RemoteBrowser')`, seed a row). **Read before touching anything under `packages/AI/RemoteBrowser/` or before adding a browser backend.**
+
+- **[Conversations UX Stack Guide](guides/CONVERSATIONS_UX_STACK_GUIDE.md)**: The 3-layer architecture for every chat surface in MJ — `@memberjunction/conversations-runtime` (pure-TS engine: agent dispatch, default-agent resolution, mentions, bridge, streaming, client tools, sessions observability) ↔ adapters (`INotificationAdapter` / `IActiveTaskTracker` / `ISessionsAdapter`) ↔ `@memberjunction/ng-conversations` (Angular widget) ↔ your app. Covers: when to use each layer, the slot system (6 slots: `header` / `agentPresence` / `emptyState` / `messageRenderer` / `messageExtra` / `demonstrationSurface` with project / wrap / subclass modes), Before/After cancelable events (`beforeAgentTurn`, `beforeToolInvoked`, `beforeResponseFormSubmitted` with `event.Cancel = true` enforced; `sessionStarted` / `sessionChannelStateChanged` / `sessionEnded` informational), persona inputs (`[showAgentCharacter]` + `agentCharacterConfig`), `--mj-chat-*` design tokens, default-agent resolution chain (explicit → app-scoped → global → code-const Sage fallback), sessions adapter bridging to PR #2787's `VoiceSessionService`, multi-provider scoping, runtime pre-warming via `@RegisterForStartup`. **Read before building any chat surface (overlay, full workspace, embedded panel) OR before forking the widget — slots + events almost certainly cover the use case.**
+
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
@@ -442,7 +471,7 @@ MemberJunction uses `@RegisterClass` decorators with a dynamic class factory (`M
 - `npm run mj:manifest:server-bootstrap` / `mj:manifest:ng-bootstrap` -- regenerate bootstrap pre-built manifests
 - `npm run mj:manifest:api` / `mj:manifest:explorer` -- regenerate app supplemental manifests
 
-**See:** [packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md](packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md) for comprehensive documentation on the manifest system, including how external consumers and MJ distribution users should configure their projects.
+**See:** [packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md](plans/complete/codegen/CLASS_MANIFEST_GUIDE.md) for comprehensive documentation on the manifest system, including how external consumers and MJ distribution users should configure their projects.
 
 ## Database Migrations
 - See `/migrations/CLAUDE.md` for comprehensive migration guidelines
@@ -904,6 +933,38 @@ Key principles:
 - **Filtered/sorted caches are invalidated (not updated)** on entity changes — we can't evaluate SQL predicates in JS, so the safe approach is to blow away the cache entry and let it repopulate on next request
 - **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
 - **`BypassCache: true`** — per-query escape hatch that skips all server-side caching (both read and write). Use for maintenance actions, scheduled jobs, or any query that needs true DB state after direct SQL operations that bypassed `BaseEntity.Save()`
+
+### Check the Registry Before You Query (MJ Convention)
+
+**Before any code bulk-loads an entity's full row set, ask `BaseEngineRegistry` whether a loaded engine already holds it in memory.** In any process that bootstraps via `StartupManager` (MJAPI, MJCLI commands, mj-sync), every `@RegisterForStartup` engine has already paid for its caches — AI Models, Prompts, Queries, Integrations, Dashboards, and dozens more are sitting in RAM before your code runs. Re-querying them doubles the DB round trips, doubles the memory, and triggers the `REDUNDANT DATA LOADING` warning.
+
+The API (see [packages/MJCore/src/generic/baseEngineRegistry.ts](packages/MJCore/src/generic/baseEngineRegistry.ts)):
+
+```typescript
+import { BaseEngineRegistry } from '@memberjunction/core';
+
+// "Best cache or null" — the common one-liner
+const rows = BaseEngineRegistry.Instance.TryGetCachedRecords<UserInfo>('Users', { unfilteredOnly: true });
+if (rows) { /* serve from memory */ } else { /* RunView fallback */ }
+
+// Full matches — when you need to vet the donor's config before trusting it
+const matches = BaseEngineRegistry.Instance.FindCachedEntity('MJ: AI Prompts', { unfilteredOnly: true });
+```
+
+**Vet the donor before reusing its cache.** A match is safe to treat as the authoritative full set only when ALL of these hold:
+
+1. **`unfilteredOnly: true`** — a `Filter` means a subset, useless as a full cache (always pass this option unless you genuinely want subsets)
+2. **No `OrderBy`** on the config — ordered configs fail `canUseImmediateMutation`, so the donor responds to entity events with a full refresh that **reassigns** the array property; if you hold the array across mutations, resolve it per-access via donor engine + `config.PropertyName` instead of capturing the reference
+3. **`ResultType` is not `'simple'`** (and `records[0] instanceof BaseEntity` when rows exist) — if your code calls `.Get()` / `.Save()` / `.PrimaryKey` on the rows
+4. **Not yourself** — guard `match.engine === this` so a prior run's own slot can't masquerade as a donor
+
+**The returned array is the donor's live array — read it, never mutate it** (unless you understand the donor's event-mutation semantics; see `SyncMetadataEngine` for a correctly-engineered exception). The donor's BaseEntity event subscription keeps unfiltered/unordered/`entity_object` arrays current on save/delete automatically, so a live reference stays fresh for free.
+
+**Why this is a convention, not an optimization**: donors are discovered dynamically at runtime, so consumers get faster automatically as new engines ship — no version coupling, no hardcoded donor lists. If no engine caches the entity, the lookup returns empty and you fall back to your own `RunView`/`Load` — graceful by construction.
+
+**Reference implementation**: `SyncMetadataEngine.delegateEntityIfCached()` in [packages/MetadataSync/src/lib/sync-metadata-engine.ts](packages/MetadataSync/src/lib/sync-metadata-engine.ts) — partitions a dynamic entity set into "delegate to donor" vs. "self-load", resolves donor arrays per-access, and documents the write-path dedup rules.
+
+**When NOT to use**: per-request user-scoped data (donor caches are typically process-wide, not per-user), entities where you need true DB state after out-of-band SQL writes (use `BypassCache: true` on a RunView instead), or one-off point lookups where a single filtered `RunView` is cheaper than vetting a cache.
 
 ### Batch Database Operations
 - Use `RunViews` (plural) instead of multiple `RunView` calls

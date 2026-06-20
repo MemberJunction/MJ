@@ -51,9 +51,13 @@ export interface MJEnvironmentConfig {
   GRAPHQL_WS_URI: string;
 
   /**
-   * Authentication provider type
+   * Authentication provider type — matches the key a provider registers with via
+   * `@RegisterClass(MJAuthBase, '<type>')`. Built-in providers are listed for
+   * autocomplete, but any string is valid so third parties can plug in their own
+   * provider without editing this union. Resolved at runtime by string key through
+   * `ClassFactory.GetRegistration(MJAuthBase, authType)`.
    */
-  AUTH_TYPE: 'msal' | 'auth0' | 'okta' | 'cognito';
+  AUTH_TYPE: 'msal' | 'auth0' | 'okta' | 'cognito' | 'magic-link' | (string & {});
 
   /**
    * MemberJunction core schema name in the database

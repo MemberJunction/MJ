@@ -435,11 +435,20 @@
 }
 
 .content-body {
-  flex: 1;
-  overflow: hidden;
-  padding: 20px 24px;
   display: flex;
-  flex-direction: column;
+  flex: 1 1 0%;
+  overflow: hidden;
+  /* Contain the body's stacking context. The view components inside (grid
+  option menus, the map's Leaflet panes/toolbar, etc.) use z-index values up
+  to ~1000; .content-header sits at z-index 2 (kept below the shell header —
+  see #2701). Without this, those body z-indices leak into the shared context
+  and paint over the header's own dropdowns (view-selector, date-field).
+  `isolation: isolate` flattens all body z-indices into one context beneath
+  the header. Safe because modals + the detail panel render at the dashboard
+  root (outside .content-body), so they still overlay everything. */
+  isolation: isolate;
+  position: relative;   /* added */
+  z-index: 3;           /* added — higher than .content-header's z-index: 2 */
 }
 
 .loading-container,

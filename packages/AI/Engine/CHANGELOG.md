@@ -1,5 +1,151 @@
 # Change Log - @memberjunction/aiengine
 
+## 5.41.0
+
+### Minor Changes
+
+- 84089ae: Add multimodal embeddings: new EmbedContent method + GetFileCapabilities on BaseEmbeddings, GeminiEmbedding2 and CohereEmbedding providers, AIEngine.EmbedContent, and the @google/genai 2.x bump (Gemini + Vertex).
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- cc604aa: Agent in-flight memory writes: agents can commit durable cross-run memories mid-run via the memoryWrites loop-response field, gated by AIAgent.AllowMemoryWrite (ON by default — opt out per agent). Writes land as immediately-injectable Provisional agent notes (new Status value, with AuthorType provenance) under framework-enforced guards (descriptive types only, scope clamp, exact-restatement dedupe with same-run supersede, per-run cap, TTL), inject with recency-wins precedence and per-note recorded dates, and are hardened or pruned by a new Memory Manager pass each cycle. Cross-run dedupe requires exact normalized restatement so corrections are never silently absorbed into a stale note; the loop-agent prompt instructs agents not to claim a memory was saved before its result message arrives.
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/ai-engine-base@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ai-vectors-memory@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/storage@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.40.2
+- @memberjunction/ai@5.40.2
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/ai-vectors-memory@5.40.2
+- @memberjunction/actions-base@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/storage@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-engine-base@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/ai-vectors-memory@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/storage@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/ai-engine-base@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/ai-vectors-memory@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/storage@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/ai-engine-base@5.39.0
+  - @memberjunction/ai-vectors-memory@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/storage@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- 6b6c321: Agent latency optimizations and parallel sub-agent execution:
+  - **Embedding cache** (`AIEngine.EmbedText`): Replaced unbounded `Map` + FIFO eviction with `MJLruCache` (5000-entry LRU). Cache key now `${modelId}|sha256(text)` so a large text doesn't pin its full string. Cache stores in-flight `Promise<EmbedTextResult>` so concurrent callers share one ONNX inference instead of racing. Failed/empty-vector results evict on settle. Empty/whitespace text short-circuits to `null` without invoking the provider. Options `{ bypassCache: true }` / `{ noCache: true }` and `ClearEmbeddingCache()` exposed.
+  - **AgentDataPreloader**: Data-source preload now runs with a bounded concurrency cap (default 10) via a new `resolveDataSources` helper so a long source list can't saturate the DB pool.
+  - **Non-blocking step saves**: New `queueStepSave` chains saves on the same step ID (UPDATE can't race INSERT) while letting saves on different steps run concurrently. Failures are logged via `LogError` with `LatestResult.CompleteMessage`. `finalizeAgentRun` drains pending saves via `Promise.allSettled` (not `Promise.all`, which swallowed failures after the first rejection), folds failure counts into `agentRun.ErrorMessage`, and clears both `_pendingSaves` and `_stepSavePromises` so reused instances don't leak settled promises.
+  - **Parallel sub-agent execution**: Loop agents can now return a `subAgents` array on `nextStep` to fan out to multiple sub-agents at once. Bounded fan-out concurrency (default 5). Each sub-agent receives a deep-cloned input payload (structuredClone with JSON fallback) so siblings can't see each other's in-flight mutations. Delegation messages + progress events are pushed synchronously in source order before any await, so transcript order is deterministic regardless of completion order. Per-sub-agent step `PayloadAtEnd` records that sub-agent's own contribution (not the cumulative merged state) for audit visibility. Termination semantics: parent terminates only when a _successful_ sub-agent requested `terminateAfter: true`; failing sub-agents fall through to `Retry` so the parent can react. Aggregated `user` summary message appended to the parent conversation.
+  - **Driver sub-class surface**: Promoted to `protected` for driver sub-classes (e.g. Skip) — the step lifecycle triad (`createStepEntity` / `finalizeStepEntity` / `queueStepSave`), hierarchy display helpers (`formatHierarchicalMessage`, `buildHierarchicalStep`), dispatch utilities (`mapWithConcurrency`, `resolveSubAgentByName`, `cloneSubAgentPayload`, `incrementExecutionCount`, `getExecutionCount`), and read-only state getters (`Depth`, `AgentHierarchy`, `ParentStepCounts`, `FileOutputs`).
+  - **Loop agent prompt template** updated to advertise the new `subAgents` array variant alongside `subAgent`, with the parallel-fan-out and success-only-terminate semantics documented so LLMs emit the new shape correctly.
+
+  Tests: `@memberjunction/ai-agents` 806 pass (was 799 — added 7), `@memberjunction/aiengine` 74 pass (was 70 — added 4).
+
+- 4ee0b06: - `@memberjunction/core`: Add `deferredDelay` configuration parameter to `@RegisterForStartup` options, allowing background engine loading to be delayed by a specified duration in milliseconds.
+  - `@memberjunction/aiengine`: Implement `IStartupSink` and annotate the server-side `AIEngine` with `@RegisterForStartup` as a deferred engine with a 15-second delay to automatically load metadata and pre-warm embedding models/vector caches in the background.
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ai-engine-base@5.38.0
+  - @memberjunction/ai-vectors-memory@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/storage@5.38.0
+  - @memberjunction/ai@5.38.0
+
 ## 5.37.0
 
 ### Patch Changes

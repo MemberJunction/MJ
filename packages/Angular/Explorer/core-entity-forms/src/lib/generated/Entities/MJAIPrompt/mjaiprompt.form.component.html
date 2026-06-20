@@ -788,10 +788,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Runs (Judge) Section -->
+    <!-- AI Prompt Runs (Judge Prompt) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunsJudgeID"
-        SectionName="AI Prompt Runs (Judge)"
+        SectionName="AI Prompt Runs (Judge Prompt)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
@@ -857,6 +857,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Record Processes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRecordProcesses"
+        SectionName="Record Processes"
+        Icon="fa fa-cogs"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRecordProcesses')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Processes','PromptID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Processes')"
+                [AllowLoad]="IsSectionExpanded('mJRecordProcesses')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordProcesses', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

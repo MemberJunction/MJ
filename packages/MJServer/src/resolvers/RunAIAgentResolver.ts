@@ -9,6 +9,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
+import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
@@ -242,6 +243,13 @@ export class RunAIAgentResolver extends ResolverBase {
      */
     private createProgressCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
         return (progress: any) => {
+            // Capture the agent run into the ref as soon as any progress event carries it (even
+            // "noise" steps), so the fire-and-forget liveness pulse can read its id/status mid-run
+            // rather than only after RunAgentInConversation returns.
+            if (progress.metadata?.agentRun) {
+                agentRunRef.current = progress.metadata.agentRun;
+            }
+
             // Only publish progress for significant steps (not initialization noise)
             const significantSteps = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
             if (!significantSteps.includes(progress.step)) {
@@ -321,15 +329,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 console.error('❌ No agent run available for streaming callback');
                 return;
             }
-            
-            console.log('💬 Publishing streaming content:', {
-                content: chunk.content.substring(0, 50) + '...',
-                isComplete: chunk.isComplete,
-                stepType: chunk.stepType,
-                sessionId,
-                agentRunId: agentRun.ID
-            });
-            
+
             // Publish streaming content with the full serialized agent run
             const streamMsg: AgentExecutionStreamMessage = {
                 sessionId,
@@ -373,7 +373,10 @@ export class RunAIAgentResolver extends ResolverBase {
         sourceArtifactId?: string,
         sourceArtifactVersionId?: string,
         /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
-        conversationId?: string
+        conversationId?: string,
+        /** Optional external ref the caller can read to observe the agent run as it becomes available
+         *  (used by the fire-and-forget liveness pulse to enrich heartbeats with the run id/status). */
+        runRef?: { current: MJAIAgentRunEntityExtended | null }
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -407,8 +410,9 @@ export class RunAIAgentResolver extends ResolverBase {
             // singleton's transaction state with concurrent requests (e.g. conversation deletes).
             const agentRunner = new AgentRunner(p);
 
-            // Track agent run for streaming (use ref to update later)
-            const agentRunRef = { current: null as any };
+            // Track agent run for streaming (use ref to update later). Reuse the caller-supplied
+            // ref when provided so the fire-and-forget liveness pulse can observe the run.
+            const agentRunRef = runRef ?? { current: null as any };
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
@@ -1225,12 +1229,23 @@ export class RunAIAgentResolver extends ResolverBase {
         /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
         conversationId?: string
     ): void {
+        // Ref the liveness pulse reads to enrich heartbeats once the run is created.
+        const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
+        const pulse = startLivenessPulse({
+            pubSub,
+            sessionId,
+            resolver: 'RunAIAgentResolver',
+            readStatus: () => runRef.current
+                ? { runId: runRef.current.ID, status: runRef.current.Status }
+                : undefined,
+        });
+
         // Execute in background - errors are handled within, not propagated
         this.executeAIAgent(
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
-            sourceArtifactId, sourceArtifactVersionId, conversationId
+            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).
@@ -1249,7 +1264,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 result: JSON.stringify({ success: false, errorMessage })
             };
             this.PublishStreamingUpdate(pubSub, errorCompletionData, userPayload);
-        });
+        }).finally(() => pulse.stop());
     }
 
     /**

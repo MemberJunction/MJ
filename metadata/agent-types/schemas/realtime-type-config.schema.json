@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Realtime Co-Agent TypeConfiguration",
+  "description": "Configuration payload for agents of the Realtime type — the agent's realtime profile. Effective config = AIAgentType.DefaultConfiguration <- AIAgent.TypeConfiguration <- runtime overrides (later layers win per key, deep-merged).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "realtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelPreference": {
+          "type": "string",
+          "description": "Preferred realtime AI model (name or ID). Used unless an authorized runtime override supplies a different model."
+        },
+        "voice": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "default": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tone": { "type": "string", "description": "Spoken tone folded into the session system prompt (e.g. 'warm, unhurried')." },
+                "speakingStyle": { "type": "string", "description": "Speaking style folded into the session system prompt (e.g. 'concise, plain language')." }
+              }
+            },
+            "providers": {
+              "type": "object",
+              "description": "Per-provider voice settings, keyed by provider key (openai, gemini, elevenlabs, assemblyai).",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "voice": { "type": "string", "description": "Provider voice name/preset (e.g. 'alloy')." },
+                  "voiceId": { "type": "string", "description": "Provider voice identifier where voices are ID-addressed (e.g. ElevenLabs)." }
+                }
+              }
+            }
+          }
+        },
+        "allowUserModelOverride": {
+          "type": "boolean",
+          "description": "When false, even authorized users cannot override the model at runtime for sessions fronted by this agent."
+        },
+        "narration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "paceMs": { "type": "number", "description": "Minimum milliseconds between spoken progress narrations while delegated work runs." }
+          }
+        }
+      }
+    }
+  }
+}

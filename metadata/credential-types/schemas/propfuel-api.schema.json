@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "PropFuel API Credentials",
+  "description": "PropFuel data-export API credentials. A per-app bearer Token authorizes the data-export feed; AccountID scopes the feed to the tenant (the feed lives at /dataexport/{AccountID}/list). Both are issued by PropFuel; the AccountID is per-tenant configuration and is never hardcoded.",
+  "properties": {
+    "Token": {
+      "type": "string",
+      "description": "Per-app bearer token issued by PropFuel. Sent as the Authorization: Bearer header on every data-export request.",
+      "title": "API Token"
+    },
+    "AccountID": {
+      "type": "string",
+      "description": "PropFuel account/tenant identifier. Scopes the data-export feed path (/dataexport/{AccountID}/list).",
+      "title": "Account ID"
+    }
+  },
+  "required": ["Token", "AccountID"],
+  "additionalProperties": false
+}

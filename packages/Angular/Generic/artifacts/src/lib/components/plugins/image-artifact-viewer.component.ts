@@ -1,8 +1,10 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, Type } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
+import { IArtifactPreviewComponent } from '../../interfaces/artifact-viewer-plugin.interface';
+import { ImageArtifactPreviewComponent } from '../previews/image-artifact-preview.component';
 
 /**
  * Lookup table for synthesizing a download filename when the artifact version
@@ -267,6 +269,23 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
         private cdr: ChangeDetectorRef,
     ) {
         super();
+    }
+
+    /**
+     * Inline-preview component for image artifacts ({@link IArtifactViewerPluginPreviewStatics}).
+     * STATIC so the resolver can read it off the registered constructor WITHOUT instantiating this
+     * Angular component. Surfaces a contained thumbnail inside conversation message cards; the full
+     * viewer (this class) remains the required `componentType`.
+     */
+    public static readonly PreviewComponentType: Type<IArtifactPreviewComponent> = ImageArtifactPreviewComponent;
+
+    /** Matches raster image artifacts by type name or `image/*` MIME. STATIC — drives preview resolution. */
+    public static CanHandlePreview(artifactTypeName: string, contentType?: string): boolean {
+        const mime = (contentType ?? '').toLowerCase();
+        if (mime.startsWith('image/')) {
+            return true;
+        }
+        return (artifactTypeName ?? '').trim().toLowerCase() === 'image';
     }
 
     /** Opt in to the wrapper's "Display" tab — without this the panel only shows Details/JSON. */

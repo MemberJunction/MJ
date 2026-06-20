@@ -23,6 +23,13 @@ vi.mock('@memberjunction/global', () => ({
         typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase(),
     NormalizeUUID: (value: unknown): string =>
         typeof value === 'string' ? value.toLowerCase() : String(value),
+    // EntityActionEngineServer now composes the base via BaseSingleton instead of extending it.
+    BaseSingleton: class BaseSingletonMock<T> {
+        protected constructor() {}
+        protected static getInstance<U>(this: new () => U): U {
+            return new this();
+        }
+    },
 }));
 
 // Mock @memberjunction/core
@@ -440,9 +447,12 @@ describe('EntityActionInvocationMultipleRecords', () => {
     });
 
     describe('GetRecordList', () => {
-        it('should return empty array by default', async () => {
+        it('should return an empty array for a non-View/List invocation type', async () => {
+            // View/List resolution is covered in EntityActionGetRecordList.test.ts; here we confirm
+            // the default fall-through for any other invocation type.
             const invocation = new EntityActionInvocationMultipleRecords();
-            const result = await (invocation as unknown as Record<string, Function>)['GetRecordList']();
+            const params = { InvocationType: { Name: 'SingleRecord' } } as unknown as Record<string, Function>;
+            const result = await (invocation as unknown as Record<string, Function>)['GetRecordList'](params);
             expect(result).toEqual([]);
         });
     });

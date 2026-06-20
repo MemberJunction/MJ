@@ -2,10 +2,10 @@ import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
-import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
-import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+import { BaseFormsModule, MjFormDialogComponent } from '@memberjunction/ng-base-forms';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
@@ -35,7 +35,6 @@ import { TestingModule } from "@memberjunction/ng-testing";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { DeepDiffModule } from "@memberjunction/ng-deep-diff";
-import { VersionsModule } from "@memberjunction/ng-versions";
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
@@ -52,7 +51,6 @@ import { AIAgentRunVisualizationComponent } from "./ai-agent-run/ai-agent-run-vi
 import { AIAgentRunStepDetailComponent } from "./ai-agent-run/ai-agent-run-step-detail.component";
 import { MJQueryFormComponentExtended } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
-import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
 import { MarkdownModule } from "@memberjunction/ng-markdown";
@@ -75,6 +73,15 @@ import { WebsiteCrawlerSettingsPanel } from "../panels/content-sources/website-c
 import { MJSearchScopeFormComponentExtended } from "./SearchScopes/searchscope-form.component";
 import { MJSearchScopeProviderFormComponentExtended } from "./SearchScopes/searchscopeprovider-form.component";
 import { SearchModule } from "@memberjunction/ng-search";
+import { MJAIAgentSessionFormComponentExtended } from "./AIAgentSessions/ai-agent-session-form.component";
+import { MJAIAgentChannelFormComponentExtended } from "./AIAgentChannels/ai-agent-channel-form.component";
+// Realtime Bridges — custom Extended forms (Pattern 2) for the three major bridge entities.
+import { MJAIBridgeProviderFormComponentExtended, LoadMJAIBridgeProviderFormComponentExtended } from "./BridgeProviders/bridge-provider-form.component";
+import { MJAIAgentSessionBridgeFormComponentExtended, LoadMJAIAgentSessionBridgeFormComponentExtended } from "./SessionBridges/session-bridge-form.component";
+import { MJAIBridgeAgentIdentityFormComponentExtended, LoadMJAIBridgeAgentIdentityFormComponentExtended } from "./BridgeAgentIdentities/bridge-agent-identity-form.component";
+// AI Agent "Realtime" panel (Pattern 1 — BaseFormPanel slot). Imported so the
+// @RegisterClassEx decorator runs at module load (Angular tree-shaking guard).
+import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/agent-realtime.panel";
 
 @NgModule({
     declarations: [
@@ -107,7 +114,6 @@ import { SearchModule } from "@memberjunction/ng-search";
         AIAgentRunStepDetailComponent,
         MJQueryFormComponentExtended,
         QueryRunDialogComponent,
-        QueryCategoryDialogComponent,
         FlowAgentFormSectionComponent,
         MJTestRunFormComponentExtended,
         MJTestFormComponentExtended,
@@ -122,6 +128,12 @@ import { SearchModule } from "@memberjunction/ng-search";
         WebsiteCrawlerSettingsPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
+        MJAIAgentSessionFormComponentExtended,
+        MJAIAgentChannelFormComponentExtended,
+        MJAIBridgeProviderFormComponentExtended,
+        MJAIAgentSessionBridgeFormComponentExtended,
+        MJAIBridgeAgentIdentityFormComponentExtended,
+        AgentRealtimePanel,
     ],
     imports: [
         CommonModule,
@@ -161,7 +173,8 @@ import { SearchModule } from "@memberjunction/ng-search";
         MarkdownModule,
         NgTreesModule,
         AngularSplitModule,
-        VersionsModule,
+        MjSlidePanelComponent,
+        MjFormDialogComponent,
         SearchModule
     ],
     exports: [
@@ -193,6 +206,12 @@ import { SearchModule } from "@memberjunction/ng-search";
         WebsiteCrawlerSettingsPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
+        MJAIAgentSessionFormComponentExtended,
+        MJAIAgentChannelFormComponentExtended,
+        MJAIBridgeProviderFormComponentExtended,
+        MJAIAgentSessionBridgeFormComponentExtended,
+        MJAIBridgeAgentIdentityFormComponentExtended,
+        AgentRealtimePanel,
         ActionsModule
     ],
     providers: [

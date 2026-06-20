@@ -650,6 +650,7 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .mobile-nav-action {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -699,6 +700,18 @@ mj-tab-container ::ng-deep .lm_stack {
   .shell-header {
     padding: 0 12px;
     gap: 8px;
+  }
+
+  /* Keep the right-edge cluster (chat/nav-bar app icons + avatar) on one row.
+     Without pinning this, the icons can wrap and the avatar drops onto a second
+     line, stacking under the chat icon. */
+  .header-actions {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+  .header-actions .user-menu,
+  .header-actions .nav-bar-apps {
+    flex-shrink: 0;
   }
 }
 
@@ -954,3 +967,80 @@ mj-tab-container ::ng-deep .lm_stack {
   color: var(--mj-text-secondary);
   white-space: nowrap;
 }
+/* ============================================================
+   Global Activity indicator (P3)
+   ============================================================ */
+.activity-wrap { position: relative; display: inline-flex; }
+.activity-btn { position: relative; }
+.activity-btn .activity-pulse { color: var(--mj-brand-primary); }
+.activity-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+}
+.activity-drawer {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 320px;
+    max-height: 420px;
+    display: flex;
+    flex-direction: column;
+    background: var(--mj-bg-surface-elevated);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    box-shadow: 0 8px 28px color-mix(in srgb, var(--mj-text-primary) 18%, transparent);
+    z-index: 1000;
+    overflow: hidden;
+}
+.activity-drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--mj-text-primary);
+    border-bottom: 1px solid var(--mj-border-default);
+}
+.activity-clear {
+    background: none;
+    border: none;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 4px 6px;
+    border-radius: 6px;
+}
+.activity-clear:hover { color: var(--mj-text-primary); background: var(--mj-bg-surface-hover); }
+.activity-list { overflow-y: auto; padding: 6px; }
+.activity-row {
+    display: flex;
+    gap: 10px;
+    padding: 9px 8px;
+    border-radius: 8px;
+}
+.activity-row:hover { background: var(--mj-bg-surface-hover); }
+.activity-row-icon { margin-top: 2px; color: var(--mj-brand-primary); font-size: 0.85rem; }
+.activity-row.is-error .activity-row-icon { color: var(--mj-status-error); }
+.activity-row-body { flex: 1; min-width: 0; }
+.activity-row-label { font-size: 0.82rem; font-weight: 600; color: var(--mj-text-primary); }
+.activity-row-detail { font-size: 0.72rem; color: var(--mj-text-muted); margin-top: 1px; }
+.activity-bar {
+    margin-top: 6px;
+    height: 4px;
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.activity-bar-fill { height: 100%; background: var(--mj-brand-primary); transition: width 0.3s ease; }

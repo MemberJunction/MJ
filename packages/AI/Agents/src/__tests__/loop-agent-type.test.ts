@@ -400,6 +400,58 @@ describe('LoopAgentType', () => {
             expect(result.errorMessage).toContain('While');
         });
 
+        // ── Pipeline ───────────────────────────────────────────────────
+
+        it('should accept nextStep.type "Pipeline" and return non-terminal Retry carrying the pipeline', async () => {
+            const pipeline = { steps: [{ tool: 'get_rows', with: {} }, { where: "Status == 'Open'" }, { count: true }] };
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Pipeline', pipeline },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            // Regression: the response validator must allow 'pipeline' so the pipeline is dispatched
+            // (returned on a non-terminal Retry for base-agent to execute), not bounced as invalid.
+            expect(result.step).toBe('Retry');
+            expect(result.terminate).toBe(false);
+            expect(result.pipeline).toEqual(pipeline);
+        });
+
+        it('should infer type "Pipeline" when type is missing but nextStep.pipeline has steps', async () => {
+            const pipeline = { steps: [{ tool: 'get_rows', with: {} }, { first: 5 }] };
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { pipeline },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.pipeline).toEqual(pipeline);
+        });
+
+        it('should return Retry when type is "Pipeline" but pipeline.steps is empty', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Pipeline', pipeline: { steps: [] } },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toContain('Pipeline');
+        });
+
         // ── Invalid / Unknown Type ─────────────────────────────────────
 
         it('should return Retry with error for unknown nextStep.type', async () => {
@@ -666,6 +718,28 @@ describe('LoopAgentType', () => {
             );
 
             expect(result.step).toBe('Retry');
+        });
+
+        it('should give a directive corrective message (not a terse one) on unparseable output', async () => {
+            // The retry feedback must explicitly steer the model back to JSON-only output and
+            // away from the prose-narration drift ("I'm executing the X action..."). A vague
+            // "couldn't parse" message gave strong in-context models nothing to correct against.
+            const result = await agent.DetermineNextStep(
+                {
+                    success: true,
+                    result: "I'm executing the Run Ad-hoc Query action with parameters: ...",
+                    chatResult: {} as AIPromptRunResult['chatResult'],
+                },
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            const msg = (result.errorMessage || '').toLowerCase();
+            expect(msg).toContain('json');
+            expect(msg).toContain('narration');
+            expect(msg).toContain('nothing else');
         });
 
         // ── Payload change request passthrough ──────────────────────────

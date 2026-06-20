@@ -1388,11 +1388,12 @@ export class BoxFileStorage extends FileStorageBase {
         throw new Error(`Failed to download file: ${params.objectId || params.fullPath}`);
       }
 
-      // Convert stream to buffer
+      // Convert stream to buffer. Destroy the stream in the error handler so its
+      // internal Node.js listeners are released immediately rather than waiting for GC.
       return new Promise((resolve, reject) => {
         const chunks: Buffer[] = [];
         stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-        stream.on('error', reject);
+        stream.on('error', (err) => { stream.destroy(); reject(err); });
         stream.on('end', () => resolve(Buffer.concat(chunks as unknown as Uint8Array[])));
       });
     } catch (error) {

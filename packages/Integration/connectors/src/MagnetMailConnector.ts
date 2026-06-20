@@ -487,7 +487,14 @@ export class MagnetMailConnector extends BaseIntegrationConnector {
             const session = await this.GetSession(companyIntegration, contextUser);
             const args = this.BuildMutationArgs(meta, attributes, externalID, obj);
             const responseXml = await this.InvokeSoapOperation(session, actionName, args);
-            const returnedId = this.ExtractMutationResultId(responseXml, actionName, obj) ?? externalID ?? '';
+            const extractedId = this.ExtractMutationResultId(responseXml, actionName, obj);
+            // CREATE-ONLY: a successful SOAP create that yields no record ID is a silent
+            // record-loss bug (duplicate creates on the next sync). Fail loudly via the base
+            // helper. Update/Delete keep their existing semantics (they echo the passed-in ID).
+            if (metaKey === 'CreateAction') {
+                return this.BuildCreatedResult(extractedId, 200, ctx.ObjectName);
+            }
+            const returnedId = extractedId ?? externalID ?? '';
             return { Success: true, ExternalID: returnedId, StatusCode: 200 };
         } catch (err: unknown) {
             return this.BuildCRUDError(err, metaKey, ctx.ObjectName);

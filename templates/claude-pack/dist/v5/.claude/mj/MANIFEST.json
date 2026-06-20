@@ -1,0 +1,142 @@
+{
+  "packVersion": "5.1.0",
+  "mjMajor": "5",
+  "remoteUrlPrefix": "https://raw.githubusercontent.com/MemberJunction/MJ/main/templates/claude-pack/dist/v5/",
+  "files": [
+    {
+      "path": ".claude/commands/add-ai-model.md",
+      "bytes": 17346,
+      "sha256": "14df23c9c7d195d41bae0825736ed085055df1c1d43d51a4bce43d37118824ca"
+    },
+    {
+      "path": ".claude/commands/clean-branch.md",
+      "bytes": 2420,
+      "sha256": "e325e39ee19bdfa5fb9dd64cf58662264c83e01e0cee05e476383579e559d5d3"
+    },
+    {
+      "path": ".claude/commands/commit.md",
+      "bytes": 302,
+      "sha256": "df5619a5ba0e438d22adac956a785a7685572b7852d1389dda0827a3462561e8"
+    },
+    {
+      "path": ".claude/commands/create-pr.md",
+      "bytes": 3316,
+      "sha256": "7f13bba755e6fe52ecbec59db715a321296e93aef56c8f8325d48273b806c269"
+    },
+    {
+      "path": ".claude/commands/debug-agent-run.md",
+      "bytes": 9332,
+      "sha256": "74756b6cefe6b85303364a7c6253dee8fc790f49174e08fc8aa6318992e8787c"
+    },
+    {
+      "path": ".claude/commands/new-branch.md",
+      "bytes": 5354,
+      "sha256": "ef2abccf510f34144cd47b0a726320d991c9545b6dd8fd256f4b5b1346fda3c7"
+    },
+    {
+      "path": ".claude/commands/refresh-pack.md",
+      "bytes": 3767,
+      "sha256": "dcd1e1da388525301f015ab2d4fb75f3bb682f7d3416e9bf5bfce72092f26ce5"
+    },
+    {
+      "path": ".claude/commands/save-plan-new-pr.md",
+      "bytes": 8238,
+      "sha256": "eff7106a02908e26944f9ed1f993ccb4588a0bd56087c059a78be86980c6cb92"
+    },
+    {
+      "path": ".claude/commands/speckit.analyze.md",
+      "bytes": 7198,
+      "sha256": "a0a4b0f0d304fa0e5cfae4c7ce4389cdcb59b0dad82ac2203bbc4abe7bd5a025"
+    },
+    {
+      "path": ".claude/commands/speckit.checklist.md",
+      "bytes": 16832,
+      "sha256": "7c10ad7d8bdbcb390fa72fa936f11014d1053db5c1e954b9d1a3b11ada7e8577"
+    },
+    {
+      "path": ".claude/commands/speckit.clarify.md",
+      "bytes": 11358,
+      "sha256": "95c3cd29d2e4f0a651e0458426c3cac12ddb334883ace6f1582fa730098b33d9"
+    },
+    {
+      "path": ".claude/commands/speckit.constitution.md",
+      "bytes": 5270,
+      "sha256": "34181de8f6e167fabbe6cff8bf121357d93aa81c5ca677fa391c6ef1def7da6c"
+    },
+    {
+      "path": ".claude/commands/speckit.implement.md",
+      "bytes": 7526,
+      "sha256": "fe3c6649b1d88828f1fd1e56e04a17cee122b01f79e563e152c3df7a2f88b83b"
+    },
+    {
+      "path": ".claude/commands/speckit.plan.md",
+      "bytes": 3143,
+      "sha256": "e08c57a91486537aca3c212366dd17b0d394c6755cea5e6332e4260fd4886f39"
+    },
+    {
+      "path": ".claude/commands/speckit.specify.md",
+      "bytes": 12861,
+      "sha256": "b059979c22c196a7c3b909af3a32b016ad7595f52857bf851199149af92446d0"
+    },
+    {
+      "path": ".claude/commands/speckit.tasks.md",
+      "bytes": 6354,
+      "sha256": "d331d0c0362820776196b226efe7bc3776a27d801d978af849a9096864eb8866"
+    },
+    {
+      "path": ".claude/commands/speckit.taskstoissues.md",
+      "bytes": 1112,
+      "sha256": "ffb84eb322232abff008d4f8cbc6eef2a1dd1ab13fd07724d196f55a85699d2a"
+    },
+    {
+      "path": ".claude/commands/update-pr.md",
+      "bytes": 792,
+      "sha256": "8fa343d4f4d91753b041960edc2fa718b0e01e4395885cad7a819733bef2835b"
+    },
+    {
+      "path": ".claude/mj/README.md",
+      "bytes": 868,
+      "sha256": "3524cbc90c0fc3ccb16193f3639fc3bd1014f34f0ccbebf763619f73fa47c058"
+    },
+    {
+      "path": ".claude/mj/REMOTE.md",
+      "bytes": 1011,
+      "sha256": "979dc049c0492adf5a2f726e7ecdef24af5b404cfcc92154111859e14d7845f4"
+    },
+    {
+      "path": ".claude/mj/VERSION",
+      "bytes": 6,
+      "sha256": "c0eacacd7e27bbf341d21e7e0e2997a363840a210d8e358d4babaebd765b5bfd"
+    },
+    {
+      "path": ".claude/mj/check-pack-version.js",
+      "bytes": 4534,
+      "sha256": "474d5f43e45e85410e797fa3c9b4ed5fa966e9c9dc97e2dff8d2d3b59e61be01"
+    },
+    {
+      "path": ".claude/mj/core.md",
+      "bytes": 123979,
+      "sha256": "2f24bad1971b1699bf52deebe775788b6b869d381f1151a52c45254782163100"
+    },
+    {
+      "path": ".claude/mj/v5.md",
+      "bytes": 10881,
+      "sha256": "05272199938bd178db9ca8b0ce033024ab01ac996842532fa56ee89229a4c5b3"
+    },
+    {
+      "path": ".claude/settings.json",
+      "bytes": 1117,
+      "sha256": "8f0c3193cfb644e15a21d58bce68718813f28bc77ef1bb37587f127f4f0c03a3"
+    },
+    {
+      "path": ".claude/skills/playwright-cli/SKILL.md",
+      "bytes": 6661,
+      "sha256": "6ead6d1a5222df93a6888fa4341a3210e8085323d6ef6e9e8515ef4ce59fdf77"
+    },
+    {
+      "path": "CLAUDE.md",
+      "bytes": 929,
+      "sha256": "2c9c1808179ba8307832394883bc2107623fbd36cfd7e65b5df4f49251432492"
+    }
+  ]
+}

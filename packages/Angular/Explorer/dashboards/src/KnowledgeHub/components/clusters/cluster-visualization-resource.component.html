@@ -1,3 +1,6 @@
+@if (Embedded) {
+  <ng-container *ngTemplateOutlet="clusterBody"></ng-container>
+} @else {
 <mj-page-layout>
   <mj-page-header
     Title="Cluster Visualization"
@@ -5,17 +8,23 @@
     Subtitle="Explore semantic clusters in your knowledge base">
     <div actions>
       <button mjButton variant="primary" size="sm" (click)="OnNewAnalysis()">
-        <i class="fa-solid fa-plus"></i> New Analysis
+        <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New Analysis</span>
       </button>
     </div>
   </mj-page-header>
 
   <mj-page-body [Flex]="true" [Padding]="false">
+    <ng-container *ngTemplateOutlet="clusterBody"></ng-container>
+  </mj-page-body>
+</mj-page-layout>
+}
+
+<ng-template #clusterBody>
 <div class="cluster-viz-container">
     <!-- Left Sidebar: Saved Visualizations -->
     <div class="sidebar">
         <div class="sidebar-header">
-            <h2><i class="fa-solid fa-circle-nodes"></i> Saved Clusters</h2>
+            <h2><i class="fa-solid fa-circle-nodes"></i> Saved Visualizations</h2>
         </div>
         <div class="saved-list">
             @for (saved of SavedVisualizations; track TrackSavedBy($index, saved)) {
@@ -79,6 +88,7 @@
                 [Points]="Result?.Points ?? []"
                 [Clusters]="Result?.Clusters ?? []"
                 [IsLoading]="IsRunning"
+                [ColorBy]="ActiveConfig.ColorBy ?? 'cluster'"
                 [EntityName]="ActiveConfig.EntityName"
                 (PointClicked)="OnPointClicked($event)"
                 (PointHovered)="OnPointHovered($event)"
@@ -86,17 +96,26 @@
                 (LabelEdited)="OnLabelEdited($event)">
             </mj-cluster-scatter>
 
+            <!-- Run error banner (e.g. multi-entity embedding mismatch) -->
+            @if (RunError) {
+                <div class="cluster-run-error">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>{{ RunError }}</span>
+                </div>
+            }
+
             <!-- Floating config panel -->
             <mj-cluster-config-panel
                 [IsRunning]="IsRunning"
                 [Metrics]="Metrics"
                 [EntityOptions]="EntityOptions"
                 [EntityDocOptions]="EntityDocOptions"
+                [AllEntityDocOptions]="AllEntityDocOptions"
                 (RunClustering)="OnRunClustering($event)"
+                (DimensionsChanged)="OnDimensionsChanged($event)"
                 (SaveVisualization)="OnSaveVisualization()">
             </mj-cluster-config-panel>
         </div>
     </div>
 </div>
-  </mj-page-body>
-</mj-page-layout>
+</ng-template>

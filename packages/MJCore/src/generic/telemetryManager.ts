@@ -32,6 +32,7 @@
  */
 
 import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
+import { Metadata } from './metadata.js';
 
 // ============================================================================
 // TYPES - Using union types per MJ style guide
@@ -107,6 +108,10 @@ export interface TelemetryRunViewParams {
     _fromEngine?: boolean;
     /** Whether result was served from cache (set after operation completes) */
     cacheHit?: boolean;
+    /** When true, this view opted out of optimization/redundancy analyzers (RunViewParams.Telemetry.Exempt). */
+    Exempt?: boolean;
+    /** Optional caller-provided justification for the exemption (RunViewParams.Telemetry.Reason). */
+    ExemptReason?: string;
 }
 
 /**
@@ -118,8 +123,25 @@ export interface TelemetryRunViewsBatchParams {
     BatchSize: number;
     /** Entity names being queried in the batch */
     Entities: string[];
+    /**
+     * Per-view SQL WHERE clause filters, parallel to {@link Entities} (one entry per view,
+     * same order). Populated where the batch event is recorded so the fingerprint can
+     * distinguish two batches over the SAME entity set but with DIFFERENT filters
+     * (e.g. an expiry sweep vs. a decay sweep both over {AI Agent Notes, AI Agent Examples}).
+     * An entry may be undefined when a view supplied no filter.
+     */
+    Filters?: (string | undefined)[];
+    /**
+     * Per-view SQL ORDER BY clauses, parallel to {@link Entities} (one entry per view,
+     * same order). See {@link Filters} for why per-view detail is needed at batch granularity.
+     */
+    OrderBys?: (string | undefined)[];
     /** Internal marker for engine-initiated calls */
     _fromEngine?: boolean;
+    /** When true, every view in the batch opted out of optimization/redundancy analyzers. */
+    Exempt?: boolean;
+    /** Optional caller-provided justification for the exemption (first non-empty across the batch). */
+    ExemptReason?: string;
 }
 
 /**
@@ -628,7 +650,23 @@ class SameEntityMultipleCallsAnalyzer implements TelemetryAnalyzer {
 }
 
 /**
- * Detects sequential RunView calls that could be batched with RunViews.
+ * Detects sequential **single** RunView calls that could be merged into one parallel RunViews batch.
+ *
+ * Two guards keep this from firing on calls that can't actually be merged — the source of the
+ * boot-time false positive where independent recovery subsystems (engine config loads, the session
+ * janitor's keyset sweep, orphaned-sync resume) happen to overlap inside the timing window:
+ *
+ * 1. **Batch events are not candidates** (all telemetry levels). An event that is already a
+ *    `RunViews` batch can't be "batched" — suggesting it is incoherent (the prior bug listed `batch`
+ *    entries and then said "Use RunViews batch"). Both the trigger event and its neighbors must be
+ *    SINGLE RunViews. This guard alone clears the reported boot trace, where the lone single RunView
+ *    (the session janitor's keyset sweep) was surrounded only by `batch` engine-config loads.
+ * 2. **Best-effort same-call-site** (verbose+ only, when stack traces are captured). When call sites
+ *    are available, neighbors must share the trigger's call site — only single RunViews issued from
+ *    the *same* caller are a real merge opportunity; calls from unrelated subsystems that merely
+ *    overlap in time are not. (A keyset-paginated loop's pages are data-dependent — page N needs
+ *    page N-1's `AfterKey` — so they're sequential by necessity and not a parallelization target.)
+ *    At `standard` and below there are no stack traces, so this guard is skipped and Guard 1 carries.
  */
 class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
     name = 'ParallelizationOpportunityAnalyzer';
@@ -639,12 +677,24 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
     analyze(event: TelemetryEvent, context: TelemetryAnalyzerContext): TelemetryInsight | null {
         if (event.category !== 'RunView') return null;
 
-        // Find RunView events that completed just before this one started
+        // Guard 1: an already-batched RunViews call is not a candidate to be batched.
+        if (!isSingleRunViewParams(event.params)) return null;
+
+        // Guard 2 (best-effort): when this event carries a stack trace, attribute it to a caller and
+        // require neighbors to match. Absent stack traces (standard level), callSite is null and the
+        // per-neighbor match is skipped — Guard 1's single-only filter still applies.
+        const callSite = event.stackTrace ? this.callSiteOf(event.stackTrace) : null;
+
+        // Find SINGLE RunView events that completed just before this one started (same caller when known).
         const recentSequential = context.recentEvents.filter(e => {
             if (e.category !== 'RunView') return false;
             if (e.id === event.id) return false;
             if (!e.endTime) return false;
-            // Check if previous event ended shortly before this one started
+            // Guard 1 (neighbors): only single RunViews can be merged into a batch.
+            if (!isSingleRunViewParams(e.params)) return false;
+            // Guard 2 (neighbors): when both sides have call sites, they must match.
+            if (callSite && e.stackTrace && this.callSiteOf(e.stackTrace) !== callSite) return false;
+            // Previous event ended shortly before this one started.
             const gap = event.startTime - e.endTime;
             return gap >= 0 && gap < this.SEQUENCE_THRESHOLD_MS;
         });
@@ -662,7 +712,7 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
                 analyzerName: this.name,
                 category: this.category,
                 title: 'Sequential Queries Could Be Parallelized',
-                message: `${allEvents.length} RunView calls executed sequentially`,
+                message: `${allEvents.length} RunView calls executed sequentially: ${entities.join(', ')}`,
                 suggestion: `Use RunViews (batch) to execute these queries in parallel for better performance`,
                 relatedEventIds: allEvents.map(e => e.id),
                 metadata: { entities },
@@ -670,6 +720,12 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
             };
         }
         return null;
+    }
+
+    /** First meaningful (already-cleaned) stack frame, used to attribute a RunView to its caller. */
+    private callSiteOf(stackTrace: string): string | null {
+        const first = stackTrace.split('\n').map(l => l.trim()).find(Boolean);
+        return first || null;
     }
 }
 
@@ -1109,6 +1165,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
     private updatePattern(event: TelemetryEvent): void {
         if (!this._settings.duplicateDetection.enabled) return;
+        // Exempt events don't form or contribute to duplicate-RunView patterns.
+        if (this.isEventExempt(event)) return;
 
         let pattern = this._patterns.get(event.fingerprint);
         const now = this.getTimestamp();
@@ -1293,8 +1351,39 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         return results;
     }
 
+    /**
+     * True when an event opted out of the optimization/redundancy analyzers via
+     * `RunViewParams.Telemetry.Exempt` (threaded into the event params as `Exempt`).
+     */
+    private isEventExempt(event: TelemetryEvent): boolean {
+        const p = event.params as { Exempt?: boolean } | undefined;
+        return p?.Exempt === true;
+    }
+
+    /**
+     * Verbose-only breadcrumb so an exempted query — and the caller's justification — is still
+     * auditable in telemetry logging even though it produced no warning.
+     */
+    private logExemptEvent(event: TelemetryEvent): void {
+        const level = this.GetLevelForCategory(event.category);
+        if (this.GetLevelValue(level) < TelemetryLevelValue['verbose']) return;
+        const p = event.params as { EntityName?: string; Entities?: string[]; ExemptReason?: string };
+        const target = p.EntityName ?? (Array.isArray(p.Entities) ? p.Entities.join(', ') : event.operation);
+        const reason = p.ExemptReason ? ` — ${p.ExemptReason}` : '';
+        // eslint-disable-next-line no-console
+        console.log(`💡 [Telemetry] Analysis exempt for ${event.category} "${target}"${reason}`);
+    }
+
     private runAnalyzers(event: TelemetryEvent): void {
         if (!this._settings.analyzers.enabled) return;
+
+        // Caller explicitly opted this query out of the optimization/redundancy analyzers. It is also
+        // excluded from the analyzer context (buildAnalyzerContext) and from duplicate-pattern counts
+        // (updatePattern), so it neither produces nor contributes to noise warnings.
+        if (this.isEventExempt(event)) {
+            this.logExemptEvent(event);
+            return;
+        }
 
         const context = this.buildAnalyzerContext();
 
@@ -1314,7 +1403,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
     private buildAnalyzerContext(): TelemetryAnalyzerContext {
         return {
-            recentEvents: this._events.slice(-1000),
+            // Exclude exempt events so they don't inflate per-entity / sequential counts for OTHER queries.
+            recentEvents: this._events.slice(-1000).filter(e => !this.isEventExempt(e)),
             patterns: this._patterns,
             getEngineLoadedEntities: () => {
                 // Integration with BaseEngineRegistry
@@ -1327,7 +1417,40 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         };
     }
 
+    /**
+     * Analyzers whose advice is "load/cache this entity in a dedicated engine". That advice is
+     * nonsensical for entities that have explicitly opted out of caching (`EntityInfo.AllowCaching`
+     * = false) — typically large, append-only tables (agent sessions, prompt runs, record changes)
+     * that should never be bulk-loaded into a process-wide engine cache.
+     */
+    private static readonly ENGINE_CACHE_SUGGESTION_ANALYZERS = new Set<string>([
+        'SameEntityMultipleCallsAnalyzer',
+        'EngineOverlapAnalyzer',
+    ]);
+
+    /**
+     * True when `insight` is an engine-caching suggestion for an entity that has caching disabled.
+     * Reuses the existing `AllowCaching` metadata flag as the single source of truth — no separate
+     * exemption list. Fails open (returns false → insight still emits) when metadata is unavailable.
+     */
+    private isCacheSuggestionForNonCachedEntity(insight: TelemetryInsight): boolean {
+        if (!insight.entityName) return false;
+        if (!TelemetryManager.ENGINE_CACHE_SUGGESTION_ANALYZERS.has(insight.analyzerName)) return false;
+        try {
+            const entity = Metadata.Provider?.EntityByName?.(insight.entityName); // global-provider-ok: telemetry aggregates RunView calls process-wide; AllowCaching is structural entity metadata and this check fails open if unavailable
+            return entity?.AllowCaching === false;
+        } catch {
+            return false;
+        }
+    }
+
     private shouldEmitInsight(insight: TelemetryInsight): boolean {
+        // Suppress "create/use a dedicated engine" suggestions for entities that have opted out of
+        // caching — the AllowCaching=false flag already declares them unsuitable for engine caching.
+        if (this.isCacheSuggestionForNonCachedEntity(insight)) {
+            return false;
+        }
+
         // Dedupe similar insights within a time window
         const dedupeKey = `${insight.analyzerName}:${insight.entityName || ''}:${insight.title}`;
         const lastEmit = this._insightDedupeWindow.get(dedupeKey);
@@ -1413,19 +1536,32 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
      */
     private generateRunViewFingerprint(params: TelemetryRunViewParams | TelemetryRunViewsBatchParams): Record<string, unknown> {
         if (isBatchRunViewParams(params)) {
-            // Batch operation - create fingerprint from sorted entity list
-            const sortedEntities = [...params.Entities]
-                .map(e => e?.toLowerCase().trim())
-                .filter(Boolean)
+            // Batch operation - fingerprint from per-view (entity, filter, orderBy) tuples.
+            // Including the per-view filter/orderBy (when recorded) means two batches over the
+            // SAME entity set but DIFFERENT filters get DISTINCT fingerprints — previously they
+            // collided on entity-set alone and were falsely flagged as duplicate RunViews.
+            // Tuples are sorted so batch ordering doesn't affect the fingerprint (parity with
+            // the prior entity-only behavior, which sorted the entity list).
+            const viewTuples = params.Entities
+                .map((entity, index) => {
+                    const e = entity?.toLowerCase().trim();
+                    if (!e) {
+                        return undefined;
+                    }
+                    const filter = params.Filters?.[index]?.toLowerCase().trim() ?? '';
+                    const orderBy = params.OrderBys?.[index]?.toLowerCase().trim() ?? '';
+                    return `${e}\x1f${filter}\x1f${orderBy}`;
+                })
+                .filter((t): t is string => Boolean(t))
                 .sort();
-            // Use a hash for long entity lists to keep fingerprint manageable
-            const entityKey = sortedEntities.length > 5
-                ? this.simpleHash(sortedEntities.join('|'))
-                : sortedEntities.join('|');
+            // Use a hash for long batches to keep the fingerprint manageable
+            const viewKey = viewTuples.length > 5
+                ? this.simpleHash(viewTuples.join('|'))
+                : viewTuples.join('|');
             return {
                 batch: true,
                 batchSize: params.BatchSize,
-                entities: entityKey
+                views: viewKey
             };
         } else {
             // Single operation

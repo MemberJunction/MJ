@@ -2456,6 +2456,6 @@ MIT - See LICENSE file
 
 ## Related Documentation
 
-- [Design Documentation](./DESIGN.md) - Architecture details
+- [Design Documentation](development/DESIGN.md) - Architecture details
 - [README.md](./README.md) - Quick overview
 - [MemberJunction Docs](https://docs.memberjunction.org) - Integration guide

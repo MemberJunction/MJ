@@ -12,6 +12,7 @@ export * from './custom/MJEnvironmentEntityExtended';
 export * from './custom/MJTemplateEntityExtended';
 export * from './custom/MJConversationDetailEntityExtended';
 export * from './custom/MJQueryEntityExtended';
+export * from './custom/AIAgentNoteStatus';
 
 export * from './custom/ResourcePermissions/ResourcePermissionEngine';
 export * from './custom/ResourcePermissions/MJResourcePermissionEntityExtended';
@@ -26,6 +27,7 @@ export * from './engines/artifact-content-storage';
 export * from './engines/dashboards';
 export * from './engines/EncryptionEngineBase';
 export * from './engines/UserInfoEngine';
+export * from './engines/ApplicationSettingEngine';
 export * from './engines/UserViewEngine';
 export * from './engines/FileStorageEngine';
 export * from './engines/MCPEngine';

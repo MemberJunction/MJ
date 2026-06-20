@@ -1,4 +1,4 @@
-import { AuthProviderConfig } from '@memberjunction/core';
+import { AuthProviderConfig, LogStatusEx } from '@memberjunction/core';
 import { IAuthProvider } from './IAuthProvider.js';
 import { BaseAuthProvider } from './BaseAuthProvider.js';
 import { MJGlobal, BaseSingleton, MJLruCache } from '@memberjunction/global';
@@ -9,6 +9,7 @@ import './providers/MSALProvider.js';
 import './providers/OktaProvider.js';
 import './providers/CognitoProvider.js';
 import './providers/GoogleProvider.js';
+import './providers/MagicLinkProvider.js';
 
 /**
  * Factory and registry for managing authentication providers
@@ -80,7 +81,10 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
     this.issuerCache.Clear();
     this.issuerMultiCache.Clear();
     
-    console.log(`Registered auth provider: ${provider.name} with issuer: ${provider.issuer}`);
+    // Verbose-only: provider NAMES are surfaced compactly in the server startup summary
+    // `Auth` line at standard level. Routes through the global verbose gate (set from the
+    // server's telemetry.level) so it's reusable by any consumer of this generic package.
+    LogStatusEx({ message: `Registered auth provider: ${provider.name} with issuer: ${provider.issuer}`, verboseOnly: true });
   }
 
   /**

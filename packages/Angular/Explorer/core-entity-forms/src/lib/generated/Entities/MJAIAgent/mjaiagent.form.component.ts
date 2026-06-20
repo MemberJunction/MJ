@@ -25,6 +25,7 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'scopeConfiguration', sectionName: 'Scope Configuration', isExpanded: true },
             { sectionKey: 'retentionArchiving', sectionName: 'Retention & Archiving', isExpanded: true },
             { sectionKey: 'retrievalRanking', sectionName: 'Retrieval & Ranking', isExpanded: true },
+            { sectionKey: 'contextMemoryManagement', sectionName: 'Context & Memory Management', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
             { sectionKey: 'mJAIAgentArtifactTypes', sectionName: 'AI Agent Artifact Types', isExpanded: false },
@@ -50,9 +51,15 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
-            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
+            { sectionKey: 'mJAIAgentsParentID', sectionName: 'AI Agents', isExpanded: false },
             { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
-            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
+            { sectionKey: 'mJAIAgentsDefaultCoAgentID', sectionName: 'AI Agents (Default Co-Agent)', isExpanded: false },
+            { sectionKey: 'mJAIAgentCoAgentsCoAgentID', sectionName: 'AI Agent Co Agents (Co-Agent)', isExpanded: false },
+            { sectionKey: 'mJAIAgentCoAgentsTargetAgentID', sectionName: 'AI Agent Co Agents (Target Agent)', isExpanded: false },
+            { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
+            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false }
         ]);
     }
 }

@@ -37,6 +37,45 @@ export interface UnifiedSubAgent {
 }
 
 /**
+ * Narrowed read-only row from 'MJ: AI Agent Sessions' (ResultType 'simple').
+ * Note: the simple shape uses the raw view column name `Config` (the entity
+ * property is `Config_` only because of the BaseEntity name-collision rename).
+ */
+interface AgentSessionListRow {
+    ID: string;
+    AgentID: string;
+    Agent: string | null;
+    UserID: string;
+    User: string;
+    Status: 'Active' | 'Closed' | 'Idle';
+    ConversationID: string | null;
+    Conversation: string | null;
+    HostInstanceID: string | null;
+    Config: string | null;
+    LastActiveAt: Date | string;
+    ClosedAt: Date | string | null;
+    __mj_CreatedAt: Date | string;
+}
+
+/**
+ * A voice/realtime session shown in the agent's Execution History section,
+ * decorated with its role relative to the open agent and display metrics.
+ */
+export interface AgentSessionHistoryItem {
+    row: AgentSessionListRow;
+    /** Config.targetAgentID parsed from the session's Config JSON, when present */
+    targetAgentID: string | null;
+    /** Resolved target agent name (via AIEngineBase agent cache) */
+    targetAgentName: string | null;
+    /** True when the open agent IS the session's co-agent (AIAgentSession.AgentID) */
+    isCoAgent: boolean;
+    /** True when the open agent is the session's delegation target (Config.targetAgentID) */
+    isTarget: boolean;
+    /** Number of channel instances attached to the session */
+    channelCount: number;
+}
+
+/**
  * Enhanced AI Agent form component that extends the auto-generated base form
  * with comprehensive agent management capabilities including test harness integration,
  * related entity management, and execution history tracking.
@@ -234,6 +273,14 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /** Search functionality for execution history */
     public executionSearchText: string = '';
     public filteredExecutions: MJAIAgentRunEntityExtended[] = [];
+
+    /** Which record type the Execution History section shows: agent runs (default) or realtime voice sessions */
+    public executionHistoryView: 'runs' | 'sessions' = 'runs';
+
+    /** Voice/realtime sessions where this agent is the co-agent or the delegation target */
+    public agentSessions: AgentSessionHistoryItem[] = [];
+    public totalSessionCount: number = 0;
+    public loadingSessions: boolean = false;
 
     /** Pagination state for execution history */
     public executionHistoryPageSize: number = 20;
@@ -572,6 +619,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         return this.checkEntityPermission('MJ: AI Agent Runs', 'Read');
     }
 
+    /** Check if user can view AI Agent Sessions (realtime voice session history) */
+    public get UserCanViewSessions(): boolean {
+        return this.checkEntityPermission('MJ: AI Agent Sessions', 'Read');
+    }
+
     /** Check if user can create AI Prompts (needed for creating new prompts) */
     public get UserCanCreateAIPrompts(): boolean {
         return this.checkEntityPermission('MJ: AI Prompts', 'Create');
@@ -761,8 +813,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
 
         try {
-            // Clear unified sub-agents array
-            this.allSubAgents = [];
+            // Build into a LOCAL array and assign this.allSubAgents ONCE at the end (after the awaits
+            // below). The synchronous child-agent population runs inside ngOnInit's await chain, which
+            // still sits within the host's CD pass — mutating this.allSubAgents incrementally there
+            // changes totalSubAgentCount 0→N mid-pass and trips NG0100. Building locally keeps the
+            // bound count stable until we swap in the final list outside the CD pass.
+            const newSubAgents: UnifiedSubAgent[] = [];
 
             // Track agent IDs we've already added so the same agent doesn't appear twice
             // when it's both a structural child (ParentID) AND has an entry in the
@@ -780,7 +836,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 const key = NormalizeUUID(agent.ID);
                 if (seenSubAgentIds.has(key)) continue;
                 seenSubAgentIds.add(key);
-                this.allSubAgents.push({
+                newSubAgents.push({
                     agent,
                     type: 'child'
                 });
@@ -809,7 +865,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     // active Relationship row pointing to the same SubAgentID.
                     if (seenSubAgentIds.has(key)) continue;
                     seenSubAgentIds.add(key);
-                    this.allSubAgents.push({
+                    newSubAgents.push({
                         agent,
                         type: 'related',
                         relationship
@@ -818,12 +874,16 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             }
 
             // Sort: child agents first, then by name
-            this.allSubAgents.sort((a, b) => {
+            newSubAgents.sort((a, b) => {
                 if (a.type !== b.type) {
                     return a.type === 'child' ? -1 : 1;
                 }
                 return (a.agent.Name || '').localeCompare(b.agent.Name || '');
             });
+
+            // Single assignment — happens AFTER the awaits above, i.e. outside the host's CD pass, so
+            // totalSubAgentCount changes exactly once against settled state (no NG0100).
+            this.allSubAgents = newSubAgents;
 
             this.agentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
                 const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
@@ -892,6 +952,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 const permissionRows = results[3]?.Results || [];
                 this.IsOpenToEveryone = permissionRows.length === 0;
             }
+
+            // Voice/realtime sessions are a peer record type in the Execution
+            // History section — loaded fire-and-forget with their own loading
+            // flag so the runs list renders immediately.
+            void this.loadAgentSessions();
 
             // Create snapshot for cancel/revert functionality
             this.createOriginalSnapshot();
@@ -1719,6 +1784,149 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             default:
                 return 'var(--mj-text-muted)';
         }
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // Voice/Realtime Sessions (Execution History peer record type)
+    // ────────────────────────────────────────────────────────────────────
+
+    /** Switches the Execution History section between agent runs and voice sessions. */
+    public setExecutionHistoryView(view: 'runs' | 'sessions'): void {
+        this.executionHistoryView = view;
+    }
+
+    /**
+     * Loads the realtime voice sessions this agent participated in — either as
+     * the session's co-agent (AIAgentSession.AgentID = this agent) or as the
+     * delegation target (Config JSON carries targetAgentID = this agent). The
+     * target side can't be expressed as a relational filter, so a pragmatic
+     * LIKE over the Config JSON narrows server-side and the parsed Config
+     * confirms client-side (false positives are filtered out).
+     */
+    private async loadAgentSessions(): Promise<void> {
+        if (!this.record?.ID || !this.UserCanViewSessions) {
+            return;
+        }
+        this.loadingSessions = true;
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const result = await rv.RunView<AgentSessionListRow>({
+                EntityName: 'MJ: AI Agent Sessions',
+                Fields: ['ID', 'AgentID', 'Agent', 'UserID', 'User', 'Status', 'ConversationID', 'Conversation',
+                         'HostInstanceID', 'Config', 'LastActiveAt', 'ClosedAt', '__mj_CreatedAt'],
+                ExtraFilter: `AgentID='${this.record.ID}' OR Config LIKE '%${this.record.ID}%'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 50,
+                ResultType: 'simple'
+            });
+            if (result.Success) {
+                const items = (result.Results ?? [])
+                    .map(row => this.buildSessionHistoryItem(row))
+                    .filter(item => item.isCoAgent || item.isTarget);
+                this.agentSessions = items;
+                this.totalSessionCount = items.length;
+                await this.loadSessionChannelCounts(items);
+            } else {
+                console.error('Failed to load agent sessions:', result.ErrorMessage);
+            }
+        } catch (error) {
+            console.error('Error loading agent sessions:', error);
+        } finally {
+            this.loadingSessions = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** Decorates a raw session row with its role relative to this agent and the resolved target-agent name. */
+    private buildSessionHistoryItem(row: AgentSessionListRow): AgentSessionHistoryItem {
+        let targetAgentID: string | null = null;
+        if (row.Config) {
+            try {
+                const parsed = JSON.parse(row.Config) as { targetAgentID?: unknown };
+                if (typeof parsed.targetAgentID === 'string' && parsed.targetAgentID.length > 0) {
+                    targetAgentID = parsed.targetAgentID;
+                }
+            } catch {
+                // malformed Config JSON — treat as no target
+            }
+        }
+        const targetAgent = targetAgentID
+            ? AIEngineBase.Instance.Agents?.find(a => UUIDsEqual(a.ID, targetAgentID)) ?? null
+            : null;
+        return {
+            row,
+            targetAgentID,
+            targetAgentName: targetAgent?.Name ?? null,
+            isCoAgent: UUIDsEqual(row.AgentID, this.record.ID),
+            isTarget: targetAgentID != null && UUIDsEqual(targetAgentID, this.record.ID),
+            channelCount: 0
+        };
+    }
+
+    /** Counts channel instances per session in one batched query (sessions list is capped at 50). */
+    private async loadSessionChannelCounts(items: AgentSessionHistoryItem[]): Promise<void> {
+        if (items.length === 0) return;
+        const idList = items.map(i => `'${i.row.ID}'`).join(',');
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<{ ID: string; AgentSessionID: string }>({
+            EntityName: 'MJ: AI Agent Session Channels',
+            Fields: ['ID', 'AgentSessionID'],
+            ExtraFilter: `AgentSessionID IN (${idList})`,
+            ResultType: 'simple'
+        });
+        if (result.Success) {
+            const counts = new Map<string, number>();
+            for (const row of result.Results ?? []) {
+                const key = NormalizeUUID(row.AgentSessionID);
+                counts.set(key, (counts.get(key) ?? 0) + 1);
+            }
+            for (const item of items) {
+                item.channelCount = counts.get(NormalizeUUID(item.row.ID)) ?? 0;
+            }
+        }
+    }
+
+    /** Status color for a session lifecycle status (Active / Idle / Closed). */
+    public getSessionStatusColor(status: string): string {
+        switch (status) {
+            case 'Active':
+                return 'var(--mj-status-success)';
+            case 'Idle':
+                return 'var(--mj-status-warning)';
+            case 'Closed':
+                return 'var(--mj-text-muted)';
+            default:
+                return 'var(--mj-text-muted)';
+        }
+    }
+
+    /** Status icon for a session lifecycle status. */
+    public getSessionStatusIcon(status: string): string {
+        switch (status) {
+            case 'Active':
+                return 'fa-solid fa-tower-broadcast';
+            case 'Idle':
+                return 'fa-solid fa-moon';
+            case 'Closed':
+                return 'fa-solid fa-circle-stop';
+            default:
+                return 'fa-solid fa-question-circle';
+        }
+    }
+
+    /** Session duration: created → closed (terminal) or last-active (still open). */
+    public formatSessionDuration(item: AgentSessionHistoryItem): string {
+        const end = item.row.ClosedAt ?? item.row.LastActiveAt;
+        if (!end) return 'N/A';
+        return this.formatExecutionTimeFromDates(
+            item.row.__mj_CreatedAt as Date,
+            end as Date
+        );
+    }
+
+    /** Opens an AI Agent Session record (renders via the custom session form). */
+    public openSessionRecord(sessionId: string): void {
+        this.sharedService.OpenEntityRecord('MJ: AI Agent Sessions', CompositeKey.FromID(sessionId));
     }
 
     public formatExecutionTimeFromDates(startDate: Date, endDate: Date): string {

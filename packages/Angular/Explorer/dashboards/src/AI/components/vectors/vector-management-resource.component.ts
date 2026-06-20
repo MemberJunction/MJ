@@ -22,7 +22,7 @@ import {
     KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -30,7 +30,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJScheduledActionEntity, MJScheduledActionParamEntity } from '@memberjunction/core-entities';
-import { CronToHumanReadable } from '../autotagging/autotagging-pipeline-resource.component';
+import { CronToHumanReadable } from '../autotagging/shared/classify.format';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {
@@ -71,6 +71,7 @@ interface DocumentSuggestionResult {
 })
 export class VectorManagementResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private activityService = inject(ActivityService);
     protected override navigationService = inject(NavigationService);
     protected override destroy$ = new Subject<void>();
 
@@ -108,6 +109,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // --- Sidebar data ---
     public VectorDBName = '';
     public VectorDBStatus: 'Healthy' | 'Degraded' | 'Offline' = 'Healthy';
+    /** Human-readable explanation of the current health status (shown as helper text / tooltip). */
+    public VectorDBStatusReason = '';
     public EmbeddingModel: EmbeddingModelInfo = { Name: '', Dimensions: null };
     public StorageUsagePercent = 0;
     public TotalVectors = 0;
@@ -391,7 +394,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private async findVectorizeActionID(): Promise<string | null> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string }>({
-            EntityName: 'Actions',
+            EntityName: 'MJ: Actions',
             ExtraFilter: `Name = '__VectorizeEntity'`,
             Fields: ['ID'],
             ResultType: 'simple',
@@ -407,7 +410,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private async createVectorizeScheduleParam(scheduledActionID: string, actionID: string, entityDocumentID: string): Promise<void> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const paramResult = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'Action Params',
+            EntityName: 'MJ: Action Params',
             ExtraFilter: `ActionID = '${actionID}' AND Name = 'entityDocumentID'`,
             Fields: ['ID', 'Name'],
             ResultType: 'simple',
@@ -628,10 +631,13 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         `;
 
         let idleTimer: ReturnType<typeof setTimeout> | null = null;
+        const activityID = this.activityService.Start('Vector sync', { icon: 'fa-solid fa-cubes', detail: entityName, progress: 0 });
 
         const finishSync = (success: boolean) => {
             if (idleTimer) clearTimeout(idleTimer);
             rxSub?.unsubscribe();
+            this.activityService.Complete(activityID, success ? 'success' : 'error',
+                success ? `${entityName} vectorized` : `Failed for ${entityName}`);
 
             // Use setTimeout to defer state changes to the next macrotask,
             // avoiding ExpressionChangedAfterItHasBeenCheckedError.
@@ -1168,12 +1174,18 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (this.vectorDatabases.length > 0) {
             const db = this.vectorDatabases[0];
             this.VectorDBName = db.Name;
-            // Determine health based on whether we have records with vectors
+            // "Degraded" here doesn't mean the database is unhealthy — it means no
+            // records have been vectorized yet. Say that plainly so users don't
+            // chase a phantom outage.
             const hasVectors = this.TotalVectors > 0;
             this.VectorDBStatus = hasVectors ? 'Healthy' : 'Degraded';
+            this.VectorDBStatusReason = hasVectors
+                ? `${this.TotalVectors.toLocaleString()} vector(s) stored and queryable.`
+                : `Connected, but no records have been vectorized yet. Run a sync below to populate the index.`;
         } else {
             this.VectorDBName = 'Not configured';
             this.VectorDBStatus = 'Offline';
+            this.VectorDBStatusReason = 'No vector database is configured for this environment.';
         }
     }
 

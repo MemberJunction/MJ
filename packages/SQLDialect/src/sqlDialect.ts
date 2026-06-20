@@ -298,6 +298,18 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract get FixedWidthStringTypeNames(): readonly string[];
 
+    /**
+     * Maximum string length usable in an INDEX KEY column (PRIMARY KEY / UNIQUE constraint) on this
+     * dialect. A PK string column wider than this can't be indexed, so callers (e.g. the integration
+     * schema builder) cap PK string columns at this value. Default: no practical declare-time cap — a
+     * dialect overrides it where one exists. SQL Server's 900-byte index-key limit = 450 NVARCHAR chars;
+     * PostgreSQL enforces its (larger) btree limit on the stored value at write time, not the declared
+     * length, so it keeps the no-cap default.
+     */
+    get MaxKeyStringLength(): number {
+        return Number.MAX_SAFE_INTEGER;
+    }
+
     /** SQL type names this dialect uses for date / time / timestamp columns. */
     abstract get DateTypeNames(): readonly string[];
 
@@ -457,6 +469,28 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: "GO", PostgreSQL: "" (none needed)
      */
     abstract BatchSeparator(): string;
+
+    /**
+     * Splits an oversized SQL batch into individual statements on `;`+EOL
+     * boundaries so a caller (e.g. the RSU migration executor) can re-group
+     * them into smaller chunks that each fit under a client request timeout.
+     *
+     * Base implementation = the naive `split(/;\s*\n/g)` semantics: split on a
+     * `;` followed by optional inline whitespace and a newline, trim each
+     * fragment, drop empties, and ensure each returned statement ends with `;`.
+     * This is correct for SQL Server (no dollar-quoted blocks).
+     *
+     * PostgreSQL overrides this with a dollar-quote-aware split that never
+     * tears apart `DO $$ … $$` / `$tag$ … $tag$` blocks whose bodies
+     * legitimately contain `;`+newline.
+     */
+    SplitStatements(batch: string): string[] {
+        return batch
+            .split(/;\s*\n/g)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+            .map((s) => (s.endsWith(';') ? s : s + ';'));
+    }
 
     /**
      * Returns SQL to check if a database object exists.
@@ -710,6 +744,46 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract CommentOnObject(objectType: string, schema: string, name: string, comment: string): string;
 
+    // ─── DDL Generation (Idempotent, single-statement) ──────────────
+    //
+    // "Create only if absent" variants that are SAFE for callers which split a migration
+    // into statements on ';' boundaries (e.g. the RSU migration executor chunks oversized
+    // batches that way). Unlike CreateTableIfNotExistsDDL — which wraps the CREATE in a
+    // BEGIN...END block that such chunking would tear apart — each method below returns a
+    // SINGLE statement. Defaults are idempotent-friendly; SQL Server overrides where its
+    // syntax differs. External dialects inherit working defaults (non-breaking).
+
+    /**
+     * A full CREATE TABLE that runs only if the table is absent, as a SINGLE statement.
+     * Default (PostgreSQL et al.): `CREATE TABLE IF NOT EXISTS <fullTable> (...);`
+     * SQL Server overrides with an `IF OBJECT_ID(...) IS NULL` guard (it has no native
+     * CREATE TABLE IF NOT EXISTS).
+     * @param fullTable - Already-quoted `schema.table` identifier
+     * @param columnsBody - The column/constraint lines that go between the parentheses
+     */
+    CreateTableIfAbsent(fullTable: string, columnsBody: string): string {
+        return `CREATE TABLE IF NOT EXISTS ${fullTable} (\n${columnsBody}\n);`;
+    }
+
+    /**
+     * CommentOnObject that is safe to re-run (no error if the description already exists).
+     * Default returns the standard statement terminated with ';' — adequate where the
+     * comment statement is inherently idempotent (PostgreSQL COMMENT ON replaces in place).
+     * SQL Server overrides to guard sp_addextendedproperty with a fn_listextendedproperty check.
+     */
+    CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
+        return this.CommentOnObject(objectType, schema, name, comment) + ';';
+    }
+
+    /**
+     * CommentOnColumn that is safe to re-run. Default returns the standard statement
+     * (PostgreSQL COMMENT ON COLUMN already includes its terminator and is idempotent).
+     * SQL Server overrides to guard sp_addextendedproperty.
+     */
+    CommentOnColumnIfAbsent(schema: string, table: string, column: string, comment: string): string {
+        return this.CommentOnColumn(schema, table, column, comment);
+    }
+
     // ─── Schema Introspection ────────────────────────────────────────
 
     /**
@@ -728,6 +802,22 @@ export abstract class SQLDialect implements SQLParserDialect {
      * implementation.
      */
     abstract IsNull(expr: string, fallback: string): string;
+
+    // ─── Error Classification ───────────────────────────────────────
+
+    /**
+     * Returns true if the given error represents an infrastructure-level
+     * connection failure (timeout, refused, pool closed, etc.) as opposed to
+     * a query-level error (bad SQL, constraint violation).
+     *
+     * Each dialect implements this using its driver's structured error types:
+     * - SQL Server (mssql): `error.name === 'ConnectionError'`
+     * - PostgreSQL (pg): Node.js network error codes on plain `Error`
+     *
+     * Used by GenericDatabaseProvider to re-throw connection errors from
+     * RunView/RunQuery instead of swallowing them into `{ Success: false }`.
+     */
+    abstract IsConnectionError(e: unknown): boolean;
 
     /**
      * Returns an IIF/CASE equivalent expression.

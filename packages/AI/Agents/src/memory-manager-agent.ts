@@ -1,13 +1,13 @@
 import { BaseAgent } from './base-agent';
 import { RegisterClass, CleanAndParseJSON } from '@memberjunction/global';
-import { UserInfo, RunView, RunQuery, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, RunView, RunQuery, LogError, LogStatus, LogStatusEx, IMetadataProvider } from '@memberjunction/core';
 import {
     MJConversationDetailEntity,
-    MJAIAgentRunEntity,
     MJAIAgentNoteEntity,
     MJAIAgentExampleEntity,
     MJConversationDetailRatingEntity,
-    MJAIAgentRunStepEntity
+    MJAIAgentRunStepEntity,
+    IsInjectableNoteStatus
 } from '@memberjunction/core-entities';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -45,6 +45,11 @@ const EXTRACTION_CONFIG = {
  * Configuration for note consolidation.
  * Consolidation finds clusters of similar notes and synthesizes them into single comprehensive notes.
  */
+const HARDENING_CONFIG = {
+    maxNotesPerRun: 200,           // Batch cap per MM run — remaining provisional notes picked up next cycle
+    dedupeSimilarity: 0.85,        // Similarity threshold for the dedupe check against hardened notes
+};
+
 const CONSOLIDATION_CONFIG = {
     /**
      * How often to run consolidation:
@@ -329,6 +334,25 @@ interface ResolvedNoteRecord {
  */
 const MAX_SOURCE_RESOLUTION_DEPTH = 10;
 
+/**
+ * Read-only projection of a source agent run used for scope inheritance when creating
+ * notes/examples. Only the scope-bearing fields are read (never mutated), so the run is
+ * loaded as a 'simple' projection rather than a full entity object — which avoids the
+ * secondary "MJ: AI Agent Run Steps" RunView that loading an MJAIAgentRunEntityExtended
+ * triggers via InnerLoad/LoadRelatedData.
+ */
+interface SourceRunScope {
+    AgentID: string | null;
+    CompanyID: string | null;
+    UserID: string | null;
+    PrimaryScopeEntityID: string | null;
+    PrimaryScopeRecordID: string | null;
+    SecondaryScopes: string | null;
+}
+
+/** Fields fetched for a SourceRunScope projection. */
+const SOURCE_RUN_SCOPE_FIELDS = ['AgentID', 'CompanyID', 'UserID', 'PrimaryScopeEntityID', 'PrimaryScopeRecordID', 'SecondaryScopes'] as const;
+
 
 /**
  * Message with rating data for extraction
@@ -555,13 +579,19 @@ export class MemoryManagerAgent extends BaseAgent {
      * For first run, returns null to process all history (limited by MaxRows).
      */
     private async GetLastRunTime(agentId: string, contextUser: UserInfo): Promise<Date | null> {
+        // Read-only: we only need StartedAt, so use a 'simple' projection with a narrow Fields
+        // list. Loading this as 'entity_object' would build a full MJAIAgentRunEntityExtended,
+        // whose InnerLoad fires a secondary "MJ: AI Agent Run Steps" RunView (LoadRelatedData) —
+        // a round-trip the redundancy telemetry flagged as a duplicate. A simple projection
+        // skips that sub-query entirely.
         const rv = new RunView();
-        const result = await rv.RunView<MJAIAgentRunEntity>({
+        const result = await rv.RunView<{ StartedAt: Date }>({
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `AgentID='${agentId}' AND Status='Completed'`,
             OrderBy: 'StartedAt DESC',
             MaxRows: 1,
-            ResultType: 'entity_object'
+            Fields: ['StartedAt'],
+            ResultType: 'simple'
         }, contextUser);
 
         if (result.Success && result.Results && result.Results.length > 0) {
@@ -572,6 +602,30 @@ export class MemoryManagerAgent extends BaseAgent {
 
         // First run - return null to process all history (with MaxRows limit)
         return null;
+    }
+
+    /**
+     * Load a source agent run's scope fields (read-only) for scope inheritance, memoized in
+     * the supplied per-cycle cache. Uses a 'simple' projection so it does not trigger the
+     * agent-run entity's LoadRelatedData steps sub-query.
+     */
+    private async loadSourceRunScope(
+        sourceAgentRunId: string,
+        runCache: Map<string, SourceRunScope | null>,
+        contextUser: UserInfo
+    ): Promise<SourceRunScope | null> {
+        if (!runCache.has(sourceAgentRunId)) {
+            const rv = new RunView();
+            const runResult = await rv.RunView<SourceRunScope>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `ID='${sourceAgentRunId}'`,
+                MaxRows: 1,
+                Fields: [...SOURCE_RUN_SCOPE_FIELDS],
+                ResultType: 'simple'
+            }, contextUser);
+            runCache.set(sourceAgentRunId, runResult.Success && runResult.Results?.length > 0 ? runResult.Results[0] : null);
+        }
+        return runCache.get(sourceAgentRunId) || null;
     }
 
     /**
@@ -635,7 +689,9 @@ export class MemoryManagerAgent extends BaseAgent {
         }, contextUser);
 
         if (!result.Success || !result.Results || result.Results.length === 0) {
-            LogStatus('Memory Manager: No conversations with new activity found');
+            // Verbose-only: the common no-op outcome. The engine's "✅ Completed (Nms)" line already
+            // signals the run finished with no work; surfacing "why" is a verbose diagnostic detail.
+            LogStatusEx({ message: 'Memory Manager: No conversations with new activity found', verboseOnly: true });
             return [];
         }
 
@@ -691,8 +747,14 @@ export class MemoryManagerAgent extends BaseAgent {
     /**
      * Load agent runs with high-usage artifacts since last run.
      * Links through: ArtifactUse -> ArtifactVersion -> ConversationDetailArtifact -> ConversationDetail -> Conversation -> AIAgentRun
+     *
+     * The caller only consumes the row count (`.length`) of the returned set, so this reads a
+     * 'simple' ID-only projection rather than full entity objects. Loading these as
+     * 'entity_object' would build up to 50 MJAIAgentRunEntityExtended instances, each firing a
+     * secondary "MJ: AI Agent Run Steps" RunView via InnerLoad/LoadRelatedData — exactly the
+     * redundant round-trips the telemetry flagged. The simple projection skips all of them.
      */
-    private async LoadHighValueAgentRuns(since: Date | null, contextUser: UserInfo): Promise<MJAIAgentRunEntity[]> {
+    private async LoadHighValueAgentRuns(since: Date | null, contextUser: UserInfo): Promise<Array<{ ID: string }>> {
         const rv = new RunView();
 
         // Use subquery to find agent runs with high-usage artifacts
@@ -720,12 +782,13 @@ export class MemoryManagerAgent extends BaseAgent {
             )
         `.trim().replace(/\s+/g, ' ');
 
-        const result = await rv.RunView<MJAIAgentRunEntity>({
+        const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: filter,
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 50, // Limit to most recent 50 high-value runs
-            ResultType: 'entity_object'
+            Fields: ['ID'],
+            ResultType: 'simple'
         }, contextUser);
 
         return result.Success ? (result.Results || []) : [];
@@ -1325,10 +1388,9 @@ export class MemoryManagerAgent extends BaseAgent {
         let merged = 0;
         let failed = 0;
         const md = this.ProviderToUse;
-        const rv = new RunView();
 
-        // Cache source agent runs to avoid repeated lookups
-        const runCache = new Map<string, MJAIAgentRunEntity | null>();
+        // Cache source agent runs (scope fields only) to avoid repeated lookups
+        const runCache = new Map<string, SourceRunScope | null>();
 
         // Get the "AI" note type ID for AI-generated notes
         const aiNoteTypeId = AIEngine.Instance.AgenteNoteTypeIDByName('AI');
@@ -1346,18 +1408,9 @@ export class MemoryManagerAgent extends BaseAgent {
             try {
 
                 // Load source agent run for scope inheritance (if available)
-                let sourceRun: MJAIAgentRunEntity | null = null;
+                let sourceRun: SourceRunScope | null = null;
                 if (extracted.sourceAgentRunId) {
-                    if (!runCache.has(extracted.sourceAgentRunId)) {
-                        const runResult = await rv.RunView<MJAIAgentRunEntity>({
-                            EntityName: 'MJ: AI Agent Runs',
-                            ExtraFilter: `ID='${extracted.sourceAgentRunId}'`,
-                            MaxRows: 1,
-                            ResultType: 'entity_object'
-                        }, contextUser);
-                        runCache.set(extracted.sourceAgentRunId, runResult.Success && runResult.Results?.length > 0 ? runResult.Results[0] : null);
-                    }
-                    sourceRun = runCache.get(extracted.sourceAgentRunId) || null;
+                    sourceRun = await this.loadSourceRunScope(extracted.sourceAgentRunId, runCache, contextUser);
                 }
 
                 // Check if we should merge with existing (revoke all targets, create one replacement)
@@ -1722,7 +1775,8 @@ export class MemoryManagerAgent extends BaseAgent {
     private async shouldRunConsolidation(
         agentId: string,
         contextUser: UserInfo,
-        forceMaintenance: boolean
+        forceMaintenance: boolean,
+        lastRun: Date | null
     ): Promise<ConsolidationTriggerDecision> {
         if (forceMaintenance) return { shouldRun: true, triggerType: 'forced' };
 
@@ -1731,7 +1785,7 @@ export class MemoryManagerAgent extends BaseAgent {
         if (freq === 'every-run') return { shouldRun: true, triggerType: 'every-run' };
 
         if (freq === 'hourly' || freq === 'daily') {
-            return this.shouldRunConsolidationByTimeWindow(agentId, contextUser, freq === 'hourly' ? 1 : 24);
+            return this.shouldRunConsolidationByTimeWindow(contextUser, freq === 'hourly' ? 1 : 24, lastRun);
         }
 
         if (typeof freq === 'number') {
@@ -1748,11 +1802,14 @@ export class MemoryManagerAgent extends BaseAgent {
      * triggerType='not-triggered' when neither condition fires.
      */
     private async shouldRunConsolidationByTimeWindow(
-        agentId: string,
         contextUser: UserInfo,
-        thresholdHours: number
+        thresholdHours: number,
+        lastRun: Date | null
     ): Promise<ConsolidationTriggerDecision> {
-        const lastRun = await this.GetLastRunTime(agentId, contextUser);
+        // `lastRun` is the same value computed once at the top of the maintenance cycle
+        // (executeAgentInternal). Threading it through here removes a second identical
+        // `MJ: AI Agent Runs` RunView (AgentID + Status='Completed', OrderBy StartedAt DESC)
+        // that the redundancy telemetry flagged as a duplicate round-trip.
         if (!lastRun) return { shouldRun: true, triggerType: 'time' };
 
         const hoursSinceLast = (Date.now() - lastRun.getTime()) / (1000 * 60 * 60);
@@ -1761,21 +1818,29 @@ export class MemoryManagerAgent extends BaseAgent {
         // Event-driven trigger: consolidate when at least `noteCountTrigger` new notes
         // have been added system-wide since the last Memory Manager run.
         //
-        // NOTE: this query intentionally does NOT filter by AgentID. The `agentId` parameter
+        // NOTE: this count intentionally does NOT filter by AgentID. The `agentId` parameter
         // here is the Memory Manager's own ID (passed from `params.agent.ID` at the call
         // site), not the agent that owns the notes. Filtering the count by MM's own agent
         // ID would never match anything because MM doesn't own notes — it processes notes
         // belonging to other (memory-enabled) agents.
-        const rv = new RunView();
-        const newNoteResult = await rv.RunView({
-            EntityName: 'MJ: AI Agent Notes',
-            ExtraFilter: `IsAutoGenerated=1 AND Status='Active' AND __mj_CreatedAt > '${lastRun.toISOString()}'`,
-            ResultType: 'count_only'
-        }, contextUser);
+        //
+        // AIEngineBase caches `MJ: AI Agent Notes` unfiltered as full entity objects
+        // (`AIEngine.Instance.AgentNotes`) and keeps that cache current via BaseEntity
+        // save/delete events, so we count in-memory instead of a `count_only` RunView. This
+        // avoids the "Entity Already in Engine" redundancy telemetry warning and a DB
+        // round-trip on every maintenance cycle. Mirrors the cached-note filtering used
+        // elsewhere in this class (e.g. buildMaintenanceSummary).
+        const lastRunMs = lastRun.getTime();
+        const newNoteCount = AIEngine.Instance.AgentNotes.filter(n =>
+            n.IsAutoGenerated &&
+            n.Status === 'Active' &&
+            n.__mj_CreatedAt != null &&
+            new Date(n.__mj_CreatedAt).getTime() > lastRunMs
+        ).length;
 
-        if (newNoteResult.Success && (newNoteResult.TotalRowCount || 0) >= CONSOLIDATION_CONFIG.noteCountTrigger) {
+        if (newNoteCount >= CONSOLIDATION_CONFIG.noteCountTrigger) {
             if (this._verbose) {
-                LogStatus(`Memory Manager: Event-driven consolidation trigger fired (${newNoteResult.TotalRowCount} new notes >= ${CONSOLIDATION_CONFIG.noteCountTrigger} threshold since last MM run)`);
+                LogStatus(`Memory Manager: Event-driven consolidation trigger fired (${newNoteCount} new notes >= ${CONSOLIDATION_CONFIG.noteCountTrigger} threshold since last MM run)`);
             }
             return { shouldRun: true, triggerType: 'event' };
         }
@@ -1996,8 +2061,59 @@ export class MemoryManagerAgent extends BaseAgent {
         return originals;
     }
 
-    /** Load a batch of notes by ID with the fields needed for source resolution. */
+    /**
+     * Load a batch of notes by ID with the fields needed for source resolution.
+     *
+     * AIEngineBase caches `MJ: AI Agent Notes` unfiltered as full entity objects
+     * (`AIEngine.Instance.AgentNotes`), so source-chain ancestors — which are pre-existing
+     * notes, never ones created earlier in this same cycle — are already in memory. We serve
+     * those from the cache and only issue a RunView for IDs the cache doesn't have, instead of
+     * a DB round-trip per BFS depth level. This resolves the redundancy telemetry's
+     * "Entity Already in Engine" warning for AIEngineBase while preserving exact behavior
+     * (the projection shape and field set are unchanged).
+     */
     private async loadResolvedNotes(noteIds: string[], contextUser: UserInfo): Promise<ResolvedNoteRecord[]> {
+        const cachedById = new Map<string, MJAIAgentNoteEntity>();
+        for (const note of AIEngine.Instance.AgentNotes) {
+            if (note.ID) cachedById.set(note.ID.toLowerCase(), note);
+        }
+
+        const resolved: ResolvedNoteRecord[] = [];
+        const missingIds: string[] = [];
+        for (const id of noteIds) {
+            const cached = cachedById.get(id.toLowerCase());
+            if (cached) {
+                resolved.push(this.projectResolvedNote(cached));
+            } else {
+                missingIds.push(id);
+            }
+        }
+
+        if (missingIds.length > 0) {
+            resolved.push(...await this.loadResolvedNotesFromDatabase(missingIds, contextUser));
+        }
+        return resolved;
+    }
+
+    /** Project a cached note entity into the read-only shape used by source resolution. */
+    private projectResolvedNote(note: MJAIAgentNoteEntity): ResolvedNoteRecord {
+        return {
+            ID: note.ID,
+            ConsolidationCount: note.ConsolidationCount,
+            DerivedFromNoteIDs: note.DerivedFromNoteIDs,
+            Note: note.Note,
+            Type: note.Type,
+            AccessCount: note.AccessCount,
+            ImportanceScore: note.ImportanceScore,
+            AgentID: note.AgentID,
+            UserID: note.UserID,
+            CompanyID: note.CompanyID,
+            __mj_CreatedAt: note.__mj_CreatedAt
+        };
+    }
+
+    /** RunView fallback for note IDs not present in the AIEngine cache. */
+    private async loadResolvedNotesFromDatabase(noteIds: string[], contextUser: UserInfo): Promise<ResolvedNoteRecord[]> {
         const resolvedFields: (keyof ResolvedNoteRecord)[] = [
             'ID', 'ConsolidationCount', 'DerivedFromNoteIDs', 'Note', 'Type',
             'AccessCount', 'ImportanceScore', 'AgentID', 'UserID', 'CompanyID', '__mj_CreatedAt'
@@ -2598,7 +2714,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const maxPerCycle = STALE_PRUNING_CONFIG.maxNotesPerRun;
         const result = { notesArchived: 0, orphanedAgents: 0, orphanedUsers: 0, orphanedCompanies: 0, orphanedConversations: 0 };
 
-        const notes = await this.loadPruneCandidateNotes(contextUser, maxPerCycle * 2);
+        const notes = this.loadPruneCandidateNotes(maxPerCycle * 2);
         if (notes.length === 0) {
             return result;
         }
@@ -2619,23 +2735,33 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Load auto-generated, non-immutable Active notes that are candidates for orphan pruning.
+     * Collect auto-generated, non-immutable `Active` notes that are candidates for orphan
+     * pruning, oldest first.
+     *
+     * Served from the `AIEngine` cache rather than a `RunView`: `AIEngine.Instance.AgentNotes`
+     * holds the full note pool, loaded unfiltered as entity objects and kept current via
+     * `BaseEntity` save/delete events, so an equivalent in-memory filter/sort/cap avoids both a
+     * DB round-trip and the "Entity Already in Engine" redundancy-telemetry warning each cycle.
+     * Note `.filter()` returns a fresh array, so the subsequent `.sort()` never reorders the
+     * engine's cached array. The result is projected to plain {@link PruneCandidateNote} rows —
+     * we never hand a cached `BaseEntity` instance to a mutating caller; `pruneStaleReferences`
+     * re-`Load()`s a fresh, owned entity before archiving.
+     *
+     * @param maxRows Hard cap on candidates returned this cycle (oldest-`__mj_CreatedAt` first).
+     * @returns Lightweight projection rows for orphan-reference evaluation.
      */
-    private async loadPruneCandidateNotes(contextUser: UserInfo, maxRows: number): Promise<PruneCandidateNote[]> {
-        const rv = new RunView();
-        const notesResult = await rv.RunView<PruneCandidateNote>({
-            EntityName: 'MJ: AI Agent Notes',
-            ExtraFilter: `IsAutoGenerated = 1 AND Status = 'Active' AND ProtectionTier != 'Immutable'`,
-            Fields: ['ID', 'AgentID', 'UserID', 'CompanyID', 'SourceConversationID'],
-            OrderBy: '__mj_CreatedAt ASC',
-            MaxRows: maxRows,
-            ResultType: 'simple'
-        }, contextUser);
-
-        if (!notesResult.Success || !notesResult.Results?.length) {
-            return [];
-        }
-        return notesResult.Results;
+    private loadPruneCandidateNotes(maxRows: number): PruneCandidateNote[] {
+        return AIEngine.Instance.AgentNotes
+            .filter(n => n.IsAutoGenerated && n.Status === 'Active' && (n.ProtectionTier || 'Standard') !== 'Immutable')
+            .sort((a, b) => new Date(a.__mj_CreatedAt).getTime() - new Date(b.__mj_CreatedAt).getTime())
+            .slice(0, maxRows)
+            .map(n => ({
+                ID: n.ID,
+                AgentID: n.AgentID,
+                UserID: n.UserID,
+                CompanyID: n.CompanyID,
+                SourceConversationID: n.SourceConversationID
+            }));
     }
 
     /**
@@ -2846,7 +2972,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const md = this.ProviderToUse;
         const nowISO = new Date().toISOString();
 
-        const [expiredNotes, expiredExamples] = await this.loadExpiredItems(contextUser, nowISO);
+        const [expiredNotes, expiredExamples] = this.loadExpiredItems(nowISO);
 
         for (const note of expiredNotes) {
             if ((note.ProtectionTier || 'Standard') === 'Immutable') continue;
@@ -2860,29 +2986,43 @@ export class MemoryManagerAgent extends BaseAgent {
         return result;
     }
 
-    private async loadExpiredItems(
-        contextUser: UserInfo,
+    /**
+     * Find notes and examples whose explicit `ExpiresAt` timestamp has passed, so the
+     * archival pass can expire them regardless of decay score.
+     *
+     * Served from the `AIEngine` caches (`AgentNotes` / `AgentExamples`) instead of a batched
+     * `RunViews`: both pools are loaded unfiltered as entity objects and kept current via
+     * `BaseEntity` events, so an in-memory filter/cap reproduces the former queries while
+     * removing two DB round-trips and the pair of "Entity Already in Engine" redundancy
+     * warnings they emitted. Rows are projected to plain shapes; `archiveExpiredNote` /
+     * `archiveExpiredExample` re-`Load()` a fresh, owned entity before mutating.
+     *
+     * Notes include `Provisional` (via {@link IsInjectableNoteStatus} — the same Active+Provisional
+     * predicate used by the read-path injection queries) so the TTL safety net on in-flight
+     * agent writes is enforced: a provisional note the hardening pass never reaches must still
+     * expire.
+     *
+     * @param nowISO Current time as an ISO string; items with `ExpiresAt` strictly before this are expired.
+     * @returns A `[expiredNotes, expiredExamples]` tuple of projection rows (each capped at 200).
+     */
+    private loadExpiredItems(
         nowISO: string
-    ): Promise<[Array<{ ID: string; ExpiresAt: Date; ProtectionTier: string }>, Array<{ ID: string; ExpiresAt: Date }>]> {
-        const rv = new RunView();
-        const [notesResult, examplesResult] = await Promise.all([
-            rv.RunView<{ ID: string; ExpiresAt: Date; ProtectionTier: string }>({
-                EntityName: 'MJ: AI Agent Notes',
-                ExtraFilter: `Status = 'Active' AND ExpiresAt IS NOT NULL AND ExpiresAt < '${nowISO}'`,
-                Fields: ['ID', 'ExpiresAt', 'ProtectionTier'],
-                MaxRows: 200,
-            }, contextUser),
-            rv.RunView<{ ID: string; ExpiresAt: Date }>({
-                EntityName: 'MJ: AI Agent Examples',
-                ExtraFilter: `Status = 'Active' AND ExpiresAt IS NOT NULL AND ExpiresAt < '${nowISO}'`,
-                Fields: ['ID', 'ExpiresAt'],
-                MaxRows: 200,
-            }, contextUser)
-        ]);
-        return [
-            notesResult.Success && notesResult.Results ? notesResult.Results : [],
-            examplesResult.Success && examplesResult.Results ? examplesResult.Results : []
-        ];
+    ): [Array<{ ID: string; ExpiresAt: Date; ProtectionTier: string }>, Array<{ ID: string; ExpiresAt: Date }>] {
+        type ExpiredNoteRow = { ID: string; ExpiresAt: Date; ProtectionTier: string };
+        type ExpiredExampleRow = { ID: string; ExpiresAt: Date };
+        const nowMs = new Date(nowISO).getTime();
+
+        const expiredNotes: ExpiredNoteRow[] = AIEngine.Instance.AgentNotes
+            .filter(n => IsInjectableNoteStatus(n.Status) && n.ExpiresAt != null && new Date(n.ExpiresAt).getTime() < nowMs)
+            .slice(0, 200)
+            .map(n => ({ ID: n.ID, ExpiresAt: n.ExpiresAt as Date, ProtectionTier: n.ProtectionTier || 'Standard' }));
+
+        const expiredExamples: ExpiredExampleRow[] = AIEngine.Instance.AgentExamples
+            .filter(e => e.Status === 'Active' && e.ExpiresAt != null && new Date(e.ExpiresAt).getTime() < nowMs)
+            .slice(0, 200)
+            .map(e => ({ ID: e.ID, ExpiresAt: e.ExpiresAt as Date }));
+
+        return [expiredNotes, expiredExamples];
     }
 
     private async archiveExpiredNote(
@@ -2929,7 +3069,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const stats: DecayStatsAccumulator = { decayFactors: [], protectedPreserved: 0, ephemeralAccelerated: 0 };
         const md = this.ProviderToUse;
 
-        const [activeNotes, activeExamples] = await this.loadDecayCandidates(contextUser);
+        const [activeNotes, activeExamples] = this.loadDecayCandidates();
 
         for (const note of activeNotes) {
             await this.decayOneNote(note, archiveEnabledAgentIds, md, contextUser, result, stats);
@@ -2943,29 +3083,45 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Fetch notes and examples in parallel — they're independent.
+     * Fetch decay-candidate notes and examples from the AIEngine caches.
+     *
+     * Served from `AIEngine.Instance.AgentNotes` / `AgentExamples` (loaded unfiltered as
+     * entity objects and kept current via BaseEntity events), filtered/capped in-memory to
+     * mirror the former RunViews — avoids two "Entity Already in Engine" redundancy warnings
+     * and a DB round-trip per maintenance cycle. We project to plain candidate rows; the
+     * actual decay/archival re-Loads fresh entities.
+     *
+     * @returns A `[activeNotes, activeExamples]` tuple of decay-candidate projection rows
+     *          (auto-generated `Active` notes capped at 1000; auto-generated `Active` examples
+     *          scoring below 50, capped at 500).
      */
-    private async loadDecayCandidates(contextUser: UserInfo): Promise<[DecayNoteCandidate[], DecayExampleCandidate[]]> {
-        const rv = new RunView();
-        const [activeNotesResult, activeExamplesResult] = await Promise.all([
-            rv.RunView<DecayNoteCandidate>({
-                EntityName: 'MJ: AI Agent Notes',
-                ExtraFilter: `IsAutoGenerated = 1 AND Status = 'Active'`,
-                Fields: ['ID', 'ImportanceScore', 'ProtectionTier', 'LastAccessedAt', '__mj_CreatedAt', 'AccessCount', 'AgentID'],
-                MaxRows: 1000,
-            }, contextUser),
-            rv.RunView<DecayExampleCandidate>({
-                EntityName: 'MJ: AI Agent Examples',
-                ExtraFilter: `IsAutoGenerated = 1 AND Status = 'Active' AND SuccessScore < 50`,
-                Fields: ['ID', 'SuccessScore', 'LastAccessedAt', '__mj_CreatedAt', 'AccessCount', 'AgentID'],
-                MaxRows: 500,
-            }, contextUser)
-        ]);
+    private loadDecayCandidates(): [DecayNoteCandidate[], DecayExampleCandidate[]] {
+        const activeNotes: DecayNoteCandidate[] = AIEngine.Instance.AgentNotes
+            .filter(n => n.IsAutoGenerated && n.Status === 'Active')
+            .slice(0, 1000)
+            .map(n => ({
+                ID: n.ID,
+                ImportanceScore: n.ImportanceScore,
+                ProtectionTier: n.ProtectionTier || 'Standard',
+                LastAccessedAt: n.LastAccessedAt,
+                __mj_CreatedAt: n.__mj_CreatedAt,
+                AccessCount: n.AccessCount,
+                AgentID: n.AgentID
+            }));
 
-        return [
-            activeNotesResult.Success && activeNotesResult.Results ? activeNotesResult.Results : [],
-            activeExamplesResult.Success && activeExamplesResult.Results ? activeExamplesResult.Results : []
-        ];
+        const activeExamples: DecayExampleCandidate[] = AIEngine.Instance.AgentExamples
+            .filter(e => e.IsAutoGenerated && e.Status === 'Active' && (e.SuccessScore ?? 0) < 50)
+            .slice(0, 500)
+            .map(e => ({
+                ID: e.ID,
+                SuccessScore: e.SuccessScore,
+                LastAccessedAt: e.LastAccessedAt,
+                __mj_CreatedAt: e.__mj_CreatedAt,
+                AccessCount: e.AccessCount,
+                AgentID: e.AgentID
+            }));
+
+        return [activeNotes, activeExamples];
     }
 
     /**
@@ -3046,6 +3202,132 @@ export class MemoryManagerAgent extends BaseAgent {
         exampleToArchive.Status = 'Archived';
         exampleToArchive.Comments = `${exampleToArchive.Comments || ''} [Archived by Memory Manager: effective score ${effectiveScore.toFixed(2)} below floor]`.trim();
         if (await exampleToArchive.Save()) result.examplesArchived++;
+    }
+
+    /**
+     * Hardening pass over in-flight agent-written notes (Status='Provisional',
+     * AuthorType='Agent'). Runs UNCONDITIONALLY at the start of every MM cycle —
+     * before the consolidation-gated maintenance phases — so that:
+     *   1. provisional notes never languish waiting for a consolidation trigger, and
+     *   2. notes hardened here participate in importance scoring, consolidation,
+     *      contradiction detection, and decay in the SAME cycle via the existing
+     *      machinery (no duplicated reconciliation logic in this pass).
+     *
+     * Per note: dedupe against hardened (Active) notes using the same LLM dedupe
+     * prompt as extraction — duplicates are Archived with ConsolidatedIntoNoteID
+     * lineage; survivors are hardened (Status='Active', ExpiresAt=NULL so the
+     * standard decay machinery owns their lifetime).
+     */
+    protected async runHardeningPhase(
+        contextUser: UserInfo
+    ): Promise<{ hardened: number; deduped: number; failed: number }> {
+        const counters = { hardened: 0, deduped: 0, failed: 0 };
+        const step = await this.CreateRunStep('Decision', 'Harden Provisional Notes', {
+            maxNotesPerRun: HARDENING_CONFIG.maxNotesPerRun
+        });
+        try {
+            // Served from AIEngine.Instance.AgentNotes (loaded unfiltered as entity
+            // objects and kept current via BaseEntity + remote-invalidate events),
+            // filtered/ordered/capped in-memory to mirror the former RunView. This
+            // avoids the "Entity Already in Engine" redundancy warning and a DB
+            // round-trip every MM cycle, matching loadDecayCandidates/loadExpiredItems.
+            // Provisional agent notes are in-flight writes already reflected in the
+            // cache, and hardenSingleNote mutates+saves these entities directly —
+            // consistent with the dedupe path, which already saves cached note
+            // instances returned by FindSimilarAgentNotes.
+            const provisionalNotes = AIEngine.Instance.AgentNotes
+                .filter(n => n.Status === 'Provisional' && n.AuthorType === 'Agent')
+                .sort((a, b) => new Date(a.__mj_CreatedAt).getTime() - new Date(b.__mj_CreatedAt).getTime())
+                .slice(0, HARDENING_CONFIG.maxNotesPerRun);
+
+            if (provisionalNotes.length === 0) {
+                await this.FinalizeRunStep(step, true, { ...counters, provisionalCount: 0 });
+                return counters;
+            }
+
+            const runner = new AIPromptRunner();
+            const dedupePrompt = AIEngine.Instance.Prompts.find(p =>
+                p.Name === 'Memory Manager - Deduplicate Note' && p.Category === 'MJ: System'
+            );
+
+            for (const note of provisionalNotes) {
+                const outcome = await this.hardenSingleNote(note, dedupePrompt, runner, contextUser);
+                counters[outcome]++;
+            }
+
+            if (this._verbose) {
+                LogStatus(`Memory Manager: Hardening pass — ${counters.hardened} hardened, ${counters.deduped} deduped, ${counters.failed} failed of ${provisionalNotes.length} provisional notes`);
+            }
+            await this.FinalizeRunStep(step, counters.failed === 0, { ...counters, provisionalCount: provisionalNotes.length });
+        } catch (error) {
+            LogError('Memory Manager: Hardening pass failed, continuing with run:', error);
+            await this.FinalizeRunStep(step, false, counters, undefined, error instanceof Error ? error.message : String(error));
+        }
+        return counters;
+    }
+
+    /**
+     * Harden one provisional note: archive it as a duplicate when the LLM dedupe
+     * decision says an equivalent hardened note exists, otherwise promote it to
+     * Active with decay-managed lifetime.
+     */
+    protected async hardenSingleNote(
+        note: MJAIAgentNoteEntity,
+        dedupePrompt: MJAIPromptEntityExtended | undefined,
+        runner: AIPromptRunner,
+        contextUser: UserInfo
+    ): Promise<'hardened' | 'deduped' | 'failed'> {
+        try {
+            // Compare against HARDENED notes only — other provisional notes are themselves
+            // unvetted, and same-run duplicates were already handled at write time.
+            const similar = (await AIEngine.Instance.FindSimilarAgentNotes(
+                note.Note || '',
+                note.AgentID || undefined,
+                note.UserID || undefined,
+                note.CompanyID || undefined,
+                10,
+                HARDENING_CONFIG.dedupeSimilarity
+            )).filter(m => m.note.ID !== note.ID && m.note.Status === 'Active');
+
+            if (similar.length > 0 && dedupePrompt) {
+                const candidate: ExtractedNote = {
+                    type: note.Type,
+                    content: note.Note || '',
+                    confidence: 100,
+                    agentId: note.AgentID || undefined,
+                    userId: note.UserID || undefined,
+                    companyId: note.CompanyID || undefined,
+                };
+                const decision = await this.runDedupePromptForCandidate(runner, dedupePrompt, candidate, similar, contextUser);
+                if (!decision.shouldAdd) {
+                    const target = similar[0].note;
+                    note.Status = 'Archived';
+                    note.ConsolidatedIntoNoteID = target.ID;
+                    note.Comments = `${note.Comments || ''} [Hardening: duplicate of ${target.ID} — ${decision.reason}]`.trim();
+                    if (!await note.Save()) {
+                        LogError(`Memory Manager: Failed to archive duplicate provisional note ${note.ID}: ${note.LatestResult?.CompleteMessage || 'unknown error'}`);
+                        return 'failed';
+                    }
+                    target.AccessCount = (target.AccessCount || 0) + 1;
+                    target.LastAccessedAt = new Date();
+                    if (!await target.Save()) {
+                        LogError(`Memory Manager: Failed to bump dedupe target ${target.ID}: ${target.LatestResult?.CompleteMessage || 'unknown error'}`);
+                    }
+                    return 'deduped';
+                }
+            }
+
+            note.Status = 'Active';
+            note.ExpiresAt = null;
+            if (!await note.Save()) {
+                LogError(`Memory Manager: Failed to harden provisional note ${note.ID}: ${note.LatestResult?.CompleteMessage || 'unknown error'}`);
+                return 'failed';
+            }
+            return 'hardened';
+        } catch (error) {
+            LogError(`Memory Manager: Exception hardening note ${note.ID}:`, error);
+            return 'failed';
+        }
     }
 
     /**
@@ -3260,26 +3542,16 @@ export class MemoryManagerAgent extends BaseAgent {
         let skipped = 0;
         let failed = 0;
         const md = this.ProviderToUse;
-        const rv = new RunView();
 
-        // Cache source agent runs to avoid repeated lookups
-        const runCache = new Map<string, MJAIAgentRunEntity | null>();
+        // Cache source agent runs (scope fields only) to avoid repeated lookups
+        const runCache = new Map<string, SourceRunScope | null>();
 
         for (const extracted of extractedExamples) {
             try {
                 // Load source agent run for scope inheritance (if available)
-                let sourceRun: MJAIAgentRunEntity | null = null;
+                let sourceRun: SourceRunScope | null = null;
                 if (extracted.sourceAgentRunId) {
-                    if (!runCache.has(extracted.sourceAgentRunId)) {
-                        const runResult = await rv.RunView<MJAIAgentRunEntity>({
-                            EntityName: 'MJ: AI Agent Runs',
-                            ExtraFilter: `ID='${extracted.sourceAgentRunId}'`,
-                            MaxRows: 1,
-                            ResultType: 'entity_object'
-                        }, contextUser);
-                        runCache.set(extracted.sourceAgentRunId, runResult.Success && runResult.Results?.length > 0 ? runResult.Results[0] : null);
-                    }
-                    sourceRun = runCache.get(extracted.sourceAgentRunId) || null;
+                    sourceRun = await this.loadSourceRunScope(extracted.sourceAgentRunId, runCache, contextUser);
                 }
 
                 const example = await md.GetEntityObject<MJAIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
@@ -3366,12 +3638,16 @@ export class MemoryManagerAgent extends BaseAgent {
             this._stepCounter = 0;
             this._contextUser = params.contextUser || null;
 
-            LogStatus('Memory Manager: Starting analysis cycle');
+            // Verbose-only: the scheduling engine's always-on "▶️ Starting / ✅ Completed" lines already
+            // mark that this run began/ended. On routine no-op runs this internal trace is just noise.
+            LogStatusEx({ message: 'Memory Manager: Starting analysis cycle', verboseOnly: true });
 
-            const lastRunTime = await this.GetLastRunTime(params.agent.ID, params.contextUser!);
-
-            // Load agents that have memory injection enabled
-            const agentsUsingMemory = await this.LoadAgentsUsingMemory(params.contextUser!);
+            // Phase 1: the last-run-time and the memory-enabled agent set are independent — load in
+            // parallel (avoids two back-to-back sequential RunViews flagged by the parallelization telemetry).
+            const [lastRunTime, agentsUsingMemory] = await Promise.all([
+                this.GetLastRunTime(params.agent.ID, params.contextUser!),
+                this.LoadAgentsUsingMemory(params.contextUser!)
+            ]);
 
             if (this._verbose) {
                 const sinceMessage = lastRunTime ? `since ${lastRunTime.toISOString()}` : 'all history';
@@ -3388,13 +3664,21 @@ export class MemoryManagerAgent extends BaseAgent {
                 return { finalStep, stepCount: 1 };
             }
 
-            // Step 1: Load conversations with new activity (includes rating data)
+            // Phase 2: conversations-with-new-activity and high-value agent runs both depend only on
+            // (lastRunTime, agentsUsingMemory) — never on each other — so load them in parallel, each
+            // recorded in its own run step.
             const step1 = await this.CreateRunStep('Decision', 'Load Conversations With New Activity', {
                 since: lastRunTime?.toISOString() || null,
                 agentCount: agentsUsingMemory.length,
                 agentIds: agentsUsingMemory.map(a => a.ID)
             });
-            const conversations = await this.LoadConversationsWithNewActivity(lastRunTime, agentsUsingMemory, params.contextUser!);
+            const step2 = await this.CreateRunStep('Decision', 'Load High-Value Agent Runs', {
+                since: lastRunTime?.toISOString() || null
+            });
+            const [conversations, agentRuns] = await Promise.all([
+                this.LoadConversationsWithNewActivity(lastRunTime, agentsUsingMemory, params.contextUser!),
+                this.LoadHighValueAgentRuns(lastRunTime, params.contextUser!)
+            ]);
             const totalMessages = conversations.reduce((sum, c) => sum + c.messages.length, 0);
             await this.FinalizeRunStep(step1, true, {
                 conversationCount: conversations.length,
@@ -3403,19 +3687,11 @@ export class MemoryManagerAgent extends BaseAgent {
                 negativeCount: conversations.filter(c => c.hasNegativeRating).length,
                 unratedCount: conversations.filter(c => c.isUnrated).length
             });
-            if (this._verbose) {
-                LogStatus(`Memory Manager: Found ${conversations.length} conversations with new activity`);
-            }
-
-            // Step 2: Load high-value agent runs
-            const step2 = await this.CreateRunStep('Decision', 'Load High-Value Agent Runs', {
-                since: lastRunTime?.toISOString() || null
-            });
-            const agentRuns = await this.LoadHighValueAgentRuns(lastRunTime, params.contextUser!);
             await this.FinalizeRunStep(step2, true, {
                 runCount: agentRuns.length
             });
             if (this._verbose) {
+                LogStatus(`Memory Manager: Found ${conversations.length} conversations with new activity`);
                 LogStatus(`Memory Manager: Found ${agentRuns.length} high-value agent runs`);
             }
 
@@ -3496,8 +3772,16 @@ export class MemoryManagerAgent extends BaseAgent {
                 if (this._verbose) LogStatus(`Memory Manager: Created ${notesCreated} notes and ${examplesCreated} examples`);
             }
 
+            // Harden agent-written provisional notes FIRST and unconditionally — survivors
+            // become Active and participate in this same cycle's maintenance phases
+            // (importance, consolidation, contradiction, decay) when those fire.
+            const hardening = await this.runHardeningPhase(params.contextUser!);
+            const hardeningSummary = hardening.hardened + hardening.deduped + hardening.failed > 0
+                ? ` Hardened ${hardening.hardened} provisional notes (${hardening.deduped} deduped, ${hardening.failed} failed).`
+                : '';
+
             const forceMaintenance = params.data?.forceMaintenance === true;
-            const triggerDecision = await this.shouldRunConsolidation(params.agent.ID, params.contextUser!, forceMaintenance);
+            const triggerDecision = await this.shouldRunConsolidation(params.agent.ID, params.contextUser!, forceMaintenance, lastRunTime);
             const maintenance = triggerDecision.shouldRun
                 ? await this.runMaintenancePhases(params.contextUser!, forceMaintenance, triggerDecision.triggerType)
                 : { consolidatedCount: 0, consolidationArchived: 0, contradictionsFound: 0, contradictionsResolved: 0, contradictionsFlagged: 0, staleNotesArchived: 0, decayNotesArchived: 0, decayExamplesArchived: 0, importanceScored: 0, tierPromotions: 0 } satisfies MaintenancePhaseResults;
@@ -3507,7 +3791,7 @@ export class MemoryManagerAgent extends BaseAgent {
             const finalStep: BaseAgentNextStep<P> = {
                 terminate: true,
                 step: 'Success',
-                message: `Processed ${conversations.length} conversations (${totalMessages} messages) and ${agentRuns.length} agent runs. Created ${notesCreated} notes and ${examplesCreated} examples.${maintenanceSummary}`,
+                message: `Processed ${conversations.length} conversations (${totalMessages} messages) and ${agentRuns.length} agent runs. Created ${notesCreated} notes and ${examplesCreated} examples.${hardeningSummary}${maintenanceSummary}`,
                 newPayload: {
                     notesCreated,
                     examplesCreated,

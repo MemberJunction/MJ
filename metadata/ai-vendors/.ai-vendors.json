@@ -344,5 +344,33 @@
       "lastModified": "2026-05-08T00:53:49.018Z",
       "checksum": "41df91fd00c1ad43f8e226361ea0273229325341e37edc1d9a9e134fb4838576"
     }
+  },
+  {
+    "fields": {
+      "Name": "AssemblyAI",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "255D7FB9-26CE-41AE-BCE0-59B53D68AD09"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:09.210Z",
+      "checksum": "7dd5843f33dd6940ac44193c3a96531983b41ad6b1bfd168b96a799fb6627470"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inworld",
+      "Description": "Inworld AI is a real-time voice AI platform whose Realtime API is a single-WebSocket, full-duplex speech-to-speech stack. It brokers many underlying LLMs (selected per session via modelId, e.g. anthropic/claude-sonnet-4-6), runs server-side speech-to-text with voice profiling on input, and synthesizes output with its Realtime TTS-2 engine (supporting inline steering tags like [laugh]). Turn-taking uses semantic VAD with adjustable eagerness, handling true barge-in. Session components (model, instructions, audio, STT/TTS, tools, turn detection) are swappable mid-session without reconnect via session.update.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "9C93ADFB-7EA3-4D3C-A591-D0F06112B689"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:09.223Z",
+      "checksum": "f778175ea41a178814c7e66627508b37ba065f47c0b258b76e1978732fd43cf4"
+    }
   }
 ]
