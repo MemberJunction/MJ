@@ -188,14 +188,20 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
 
     // ── Capability Getters ───────────────────────────────────────────
 
-    // NOTE: write capability is PER-OBJECT, not global. The frozen contract proves
-    // only DriveItem / List / ListItem / Subscription support writes (their IO rows
-    // carry Create/Update/Delete columns); Site, Drive, and the other 19 objects are
-    // read-only. So we do NOT override the global SupportsCreate/Update/Delete getters
-    // to a blanket `true` — that would wrongly advertise writes for the read-only
-    // objects. The base class's generic CreateRecord/UpdateRecord/DeleteRecord throws
-    // a clear "not configured" error for any object whose per-operation columns are
-    // null, which is the correct null-capability-honesty behavior.
+    // RUNTIME STATUS: this connector is READ-ONLY end-to-end. The global
+    // SupportsCreate/Update/Delete getters inherit `false`, and BOTH the
+    // IntegrationEngine push path AND the IntegrationWriteRecord resolver gate every
+    // write on those GLOBAL getters — so no write executes through the product today,
+    // regardless of the per-object metadata. Read sync is what is live-proven.
+    //
+    // The write surface below (the ListItem CreateRecord override + the Create/Update/
+    // Delete columns the frozen contract populates for DriveItem / List / ListItem /
+    // Subscription) is implemented and unit-tested, but is intentionally PER-OBJECT, not
+    // global: we do NOT flip the global getters to `true`, because that would wrongly
+    // advertise writes for Site / Drive / the other read-only objects. It activates only
+    // once the engine adds per-object write dispatch (a separate framework change); until
+    // then it is dormant by design, and the base generic CRUD throws a clear
+    // "not configured" error for any object whose per-operation columns are null.
 
     /**
      * Verbatim from the frozen contract's Integration.Name AND the baseline-seeded
