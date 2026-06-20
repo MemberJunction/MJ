@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
@@ -227,7 +227,7 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
  */
-export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider {
+export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider, IRemoteOperationProvider {
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
@@ -580,6 +580,48 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     // ========================================================================
     // PUBLIC API METHODS - Orchestrate Pre → Cache → Internal → Post flow
     // ========================================================================
+
+    /**
+     * Routes a typed Remote Operation by key to its implementation (see {@link IRemoteOperationProvider}).
+     *
+     * This is the public **power-tool** transport seam. Prefer the typed
+     * `BaseRemotableOperation.Execute()` entry point in application code — `RouteOperation` is the
+     * stringly-typed escape hatch for dynamic dispatch / generic tooling, not for building
+     * significant systems. Server providers override {@link InternalRouteOperation} to execute the
+     * operation in-process; the client (GraphQL) provider overrides it to marshal over the wire.
+     * Only registered, active (and, when AI-authored, approved) operations are routable, and every
+     * call is authorized on the server side.
+     *
+     * @param operationKey - Stable registry key of the operation (e.g. `RecordProcess.RunNow`).
+     * @param input - The operation's typed input payload.
+     * @param options - Optional invocation options (mode, progress callback, user, provider, fingerprint).
+     * @returns The operation result; never throws for logical failures — check `Success`/`ErrorMessage`.
+     */
+    public async RouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options?: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
+        const key = operationKey?.trim();
+        if (!key) {
+            return { Success: false, ResultCode: 'INVALID_OPERATION_KEY', ErrorMessage: 'operationKey is required' };
+        }
+        return this.InternalRouteOperation<TInput, TOutput>(key, input, options ?? {});
+    }
+
+    /**
+     * Provider-specific transport for a Remote Operation. The default implementation reports that
+     * the provider does not support remote operations; concrete providers override it — server
+     * providers resolve and execute the operation in-process, the client provider marshals it over
+     * GraphQL. Kept as an overridable (non-abstract) hook so existing providers remain source-
+     * compatible until they opt in.
+     * @param operationKey - Trimmed, non-empty operation key (validated by {@link RouteOperation}).
+     * @param input - The operation's typed input payload.
+     * @param options - Invocation options (never undefined here; defaulted by {@link RouteOperation}).
+     */
+    protected InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, _input: TInput, _options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
+        return Promise.resolve({
+            Success: false,
+            ResultCode: 'NOT_SUPPORTED',
+            ErrorMessage: `This provider does not support remote operations (operationKey='${operationKey}')`,
+        });
+    }
 
     /**
      * Runs a view based on the provided parameters.

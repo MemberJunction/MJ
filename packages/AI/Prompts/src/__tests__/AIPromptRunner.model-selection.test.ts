@@ -345,3 +345,77 @@ describe('selectModel — credential gating, short-circuit & forceFullModelEvalu
     expect(r.model?.ID).toBe(MODEL.ClaudeOpus45);
   });
 });
+
+// ===========================================================================
+// executeModelWithFailover must NOT fire a live request at a candidate that has
+// no credentials configured. `allCandidates` is intentionally the FULL ordered
+// list (see the DECISION note in selectModelWithAPIKeyTracked), so the top entry
+// can be an uncredentialed vendor (e.g. Fireworks.ai / OpenRouter with no key).
+// Attempting one yields a misleading "401 invalid API key", and because an
+// Authentication error is fatal it would halt failover before any credentialed
+// candidate is reached. The loop must skip uncredentialed candidates instead.
+// Regression for the model-selection / hot-path optimization that surfaced this.
+// ===========================================================================
+describe('executeModelWithFailover — skips uncredentialed candidates', () => {
+  type ExecArgs = unknown[];
+  type FailoverRunner = {
+    executeModel: (...args: ExecArgs) => Promise<{ success: boolean }>;
+    executeModelWithFailover: (...args: ExecArgs) => Promise<{ success: boolean; errorMessage?: string }>;
+  };
+
+  function candidate(modelId: string, driverClass: string, vendorId: string, vendorName: string, priority: number) {
+    return {
+      model: { ID: modelId, Name: `${vendorName} ${modelId}` },
+      vendorId, vendorName, driverClass, apiName: 'api-name',
+      supportsEffortLevel: false, effortLevel: undefined,
+      isPreferredVendor: false, priority, source: 'prompt-model',
+    };
+  }
+
+  // Driver-class index in the executeModel(...) argument list (model, prompt, params,
+  // vendorId, conv, role, token, DRIVERCLASS, apiName, ...).
+  const DRIVER_CLASS_ARG = 8;
+
+  async function runFailover(runner: AIPromptRunner, candidates: ReturnType<typeof candidate>[], configuredDrivers: string[]) {
+    loadCatalog(catalog, configuredDrivers);
+    const prompt = makePrompt({ FailoverStrategy: 'NextBestModel' });
+    const first = candidates[0];
+    return (runner as unknown as FailoverRunner).executeModelWithFailover(
+      first.model, 'rendered prompt', prompt, { verbose: false }, first.vendorId,
+      undefined, 'system', undefined, candidates, undefined,
+      first.driverClass, first.apiName, false, undefined,
+    );
+  }
+
+  it('skips the uncredentialed top candidate and executes the first credentialed one', async () => {
+    const runner = new AIPromptRunner();
+    const execSpy = vi.spyOn(runner as unknown as FailoverRunner, 'executeModel')
+      .mockResolvedValue({ success: true });
+
+    const candidates = [
+      candidate('m-oss', 'FireworksLLM', 'v-fireworks', 'Fireworks.ai', 5300), // no creds → skipped
+      candidate('m-gem', 'GeminiLLM', 'v-google', 'Google', 5251),             // credentialed → run
+    ];
+    const result = await runFailover(runner, candidates, ['GeminiLLM']);
+
+    expect(execSpy).toHaveBeenCalledTimes(1);
+    expect(execSpy.mock.calls[0][DRIVER_CLASS_ARG]).toBe('GeminiLLM');
+    expect(result.success).toBe(true);
+  });
+
+  it('never calls executeModel and returns an actionable error when no candidate has credentials', async () => {
+    const runner = new AIPromptRunner();
+    const execSpy = vi.spyOn(runner as unknown as FailoverRunner, 'executeModel')
+      .mockResolvedValue({ success: true });
+
+    const candidates = [
+      candidate('m-oss', 'FireworksLLM', 'v-fireworks', 'Fireworks.ai', 5300),
+      candidate('m-or', 'OpenRouterLLM', 'v-openrouter', 'OpenRouter', 5290),
+    ];
+    const result = await runFailover(runner, candidates, []); // nothing configured
+
+    expect(execSpy).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.errorMessage).toContain('No API credentials configured');
+  });
+});

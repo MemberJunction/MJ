@@ -466,7 +466,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       pick.Agent.Name || this.resolveVoiceAgentName(),
       pick.PreferredModelId,
       pick.CoAgentId,
-      BuildRealtimeConfigOverridesJson(pick.PreferredModelId)
+      BuildRealtimeConfigOverridesJson(pick.PreferredModelId, pick.PreferredVoice)
     );
   }
 

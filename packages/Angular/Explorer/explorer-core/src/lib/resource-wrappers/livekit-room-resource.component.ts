@@ -4,7 +4,8 @@ import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RunView } from '@memberjunction/core';
-import { GraphQLLiveKitClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLLiveKitClient, GraphQLDataProvider, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
+import { UserHoldsAuthorization, REALTIME_ADVANCED_SESSION_CONTROLS } from '@memberjunction/ng-conversations';
 
 /** A selectable target agent for the pre-join picker. */
 interface TargetAgentChoice {
@@ -46,6 +47,10 @@ interface InviteeChoice {
           [TargetAgentID]="targetAgentId"
           [AgentName]="targetAgentName"
           [AvailableAgents]="agents"
+          [RealtimeModelID]="selectedModelId"
+          [RealtimeVoice]="selectedVoice"
+          [CanPickModelVoice]="canPickModelVoice"
+          [AvailableModels]="realtimeModels"
           [Provider]="ProviderToUse"
           [ShowAgentState]="true"
           [ShowWhiteboard]="true"
@@ -73,6 +78,24 @@ interface InviteeChoice {
             </select>
             @if (selectedDescription) {
               <p class="mj-lk-prejoin__desc">{{ selectedDescription }}</p>
+            }
+            @if (canPickModelVoice && realtimeModels.length) {
+              <label class="mj-lk-prejoin__label" for="mj-lk-model">Model <span class="mj-lk-prejoin__dev">dev</span></label>
+              <select id="mj-lk-model" class="mj-input mj-lk-prejoin__select" (change)="onModelChange($event)">
+                <option value="">Default model</option>
+                @for (m of realtimeModels; track m.ModelID) {
+                  <option [value]="m.ModelID" [selected]="UUIDsEqual(m.ModelID, selectedModelId)">{{ m.ModelName }}</option>
+                }
+              </select>
+              @if (selectedModelVoices.length) {
+                <label class="mj-lk-prejoin__label" for="mj-lk-voice">Voice <span class="mj-lk-prejoin__dev">dev</span></label>
+                <select id="mj-lk-voice" class="mj-input mj-lk-prejoin__select" (change)="onVoiceChange($event)">
+                  <option value="">Default voice</option>
+                  @for (v of selectedModelVoices; track v.ID) {
+                    <option [value]="v.ID" [selected]="v.ID === selectedVoice">{{ v.Name }}</option>
+                  }
+                </select>
+              }
             }
             <button type="button" class="mj-lk-prejoin__start" [disabled]="!selectedTargetId" (click)="startCall()">
               <i class="fa-solid fa-phone"></i> Start call
@@ -206,6 +229,17 @@ interface InviteeChoice {
         color: var(--mj-text-secondary);
         font-size: 0.8125rem;
         font-weight: 600;
+      }
+      .mj-lk-prejoin__dev {
+        margin-left: 0.35rem;
+        padding: 0 0.35rem;
+        border-radius: 999px;
+        font-size: 0.625rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--mj-text-inverse);
+        background: var(--mj-brand-primary);
+        vertical-align: middle;
       }
       .mj-lk-prejoin__select {
         width: 100%;
@@ -378,6 +412,32 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
   /** The currently-selected target in the picker (defaults to "Sage" when present). */
   public selectedTargetId: string | null = null;
 
+  // ── Dev model/voice override (gated by the `Realtime: Advanced Session Controls` authorization) ──────
+  /** Whether the current user may override the realtime model/voice (drives the dev pickers). */
+  public canPickModelVoice = false;
+  /** Active Realtime models + their voices (loaded once when the user can override). */
+  public realtimeModels: RealtimeModelVoices[] = [];
+  /** The MODEL override chosen for the FIRST agent in the pre-join picker (null = default). */
+  public selectedModelId: string | null = null;
+  /** The VOICE override chosen for the FIRST agent in the pre-join picker (null = default). */
+  public selectedVoice: string | null = null;
+
+  /** Voices for the model chosen in the pre-join picker. */
+  public get selectedModelVoices(): RealtimeVoiceOption[] {
+    return this.realtimeModels.find((m) => UUIDsEqual(m.ModelID, this.selectedModelId))?.Voices ?? [];
+  }
+
+  /** Records the pre-join MODEL choice; clears the voice so it can't outlive a model switch. */
+  public onModelChange(event: Event): void {
+    this.selectedModelId = (event.target as HTMLSelectElement).value || null;
+    this.selectedVoice = null;
+  }
+
+  /** Records the pre-join VOICE choice. */
+  public onVoiceChange(event: Event): void {
+    this.selectedVoice = (event.target as HTMLSelectElement).value || null;
+  }
+
   /** Exposed for template use — platform-safe UUID equality (SQL upper vs PG lower). */
   public UUIDsEqual = UUIDsEqual;
 
@@ -459,6 +519,15 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     }
     this.agentId = coAgent.ID;
 
+    // Dev model/voice override: gate on the `Realtime: Advanced Session Controls` authorization and, when
+    // held, load the active models + their voices for the pickers (here and the in-room add-agent control).
+    this.canPickModelVoice = UserHoldsAuthorization(
+      this.ProviderToUse?.CurrentUser, REALTIME_ADVANCED_SESSION_CONTROLS, this.ProviderToUse,
+    );
+    if (this.canPickModelVoice) {
+      void this.loadRealtimeModels();
+    }
+
     // Target candidates: every active agent EXCEPT the Realtime co-agents (they voice a target, not themselves).
     this.agents = AIEngineBase.Instance.Agents
       .filter((a) => a.Status === 'Active' && (!realtimeType || !UUIDsEqual(a.TypeID, realtimeType.ID)))
@@ -483,6 +552,17 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
   /** Picker selection handler (native select; avoids a FormsModule dependency). */
   public onTargetChange(event: Event): void {
     this.selectedTargetId = (event.target as HTMLSelectElement).value || null;
+  }
+
+  /** Loads active Realtime models + their voices for the dev pickers (best-effort; empty on failure). */
+  private async loadRealtimeModels(): Promise<void> {
+    try {
+      const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+      this.realtimeModels = await client.GetRealtimeModelVoices();
+    } catch {
+      this.realtimeModels = [];
+    }
+    this.cdr.markForCheck();
   }
 
   /** Commits the chosen target and switches to the live room. */

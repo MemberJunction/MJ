@@ -334,6 +334,24 @@ describe('AIBridgeEngine — lifecycle and status transitions', () => {
         // Should NOT overwrite status (already terminal); Save not needed.
         expect(row.Status).toBe('Disconnected');
     });
+
+    it('invokes the registered run finalizer when reaping an orphan (no live session) so the co-agent run finalizes', async () => {
+        const row = makeBridgeRow({ Status: 'Connected', AgentSessionID: 'sess-42' });
+        const { provider } = makeProvider(() => row);
+        const finalizer = vi.fn(async () => undefined);
+        engine().SetSessionRunFinalizer(finalizer);
+        const user = makeUser();
+        try {
+            // Not in the active map → reconcile-only path → markBridgeDisconnected → finalizer.
+            const ok = await engine().StopBridgeSession('bridge-orphan-x', 'Janitor', user, provider);
+            expect(ok).toBe(true);
+            expect(row.Status).toBe('Disconnected');
+            // 'Janitor' is a non-error reason → finalize as success, scoped to the row's AgentSessionID.
+            expect(finalizer).toHaveBeenCalledWith('sess-42', true, user, provider);
+        } finally {
+            engine().SetSessionRunFinalizer(async () => undefined); // reset shared singleton state
+        }
+    });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -341,7 +359,13 @@ describe('AIBridgeEngine — lifecycle and status transitions', () => {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe('AIBridgeEngine — turn-taking integration (Passive)', () => {
-    it('Passive: requests a spoken update only when the agent is addressed', async () => {
+    it('does NOT force a spoken update — relies on the model auto-response (no double-fire / overlap)', async () => {
+        // The bridged model runs with server-VAD auto-response (same config as browser-direct), so it
+        // already replies to each turn on its own — one clean stream. The engine must NOT also force a
+        // `RequestSpokenUpdate`: that second `response.create` races the auto-response and the agent
+        // answers twice, the streams overlapping/chopping. This guards against re-introducing that bug.
+        // (Turn-controlled mode — where the bridge DISABLES auto-response and becomes the sole trigger —
+        // is the multi-agent floor-control follow-up; it will assert the forced-update path separately.)
         const session = new MockRealtimeSession();
         const { provider } = makeProvider(() => makeBridgeRow());
         const active = await engine().StartBridgeSession(
@@ -351,19 +375,40 @@ describe('AIBridgeEngine — turn-taking integration (Passive)', () => {
             }),
         );
 
-        // Not addressed → silent (no spoken update).
+        // No forced spoken update on ANY turn — addressed or not — because the model auto-responds.
+        session.EmitTranscript({ Role: 'user', Text: 'How is the weather today', IsFinal: true });
+        session.EmitTranscript({ Role: 'user', Text: 'Hey Sage, what do you think?', IsFinal: true });
+        session.EmitTranscript({ Role: 'assistant', Text: 'Sage here, responding', IsFinal: true });
+        session.EmitTranscript({ Role: 'user', Text: 'Sage', IsFinal: false });
+        expect(session.SpokenUpdates.length).toBe(0);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('meeting mode (DisableAutoResponse): the bridge is the SOLE trigger — forces a spoken update ONLY when addressed', async () => {
+        // With auto-response OFF (multi-agent room), the model never replies on its own, so the engine MUST
+        // force exactly one response when the turn policy says the agent was addressed — and stay silent on
+        // un-addressed turns. This is the core of "hear everything, speak only when addressed".
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(
+            baseParams(session, provider, {
+                TurnMode: 'Passive',
+                DisableAutoResponse: true,
+                TurnMatcher: { IsAddressed: (seg) => /\bSage\b/i.test(seg.Text) },
+            }),
+        );
+
+        // Un-addressed final turn → silent (no forced response).
         session.EmitTranscript({ Role: 'user', Text: 'How is the weather today', IsFinal: true });
         expect(session.SpokenUpdates.length).toBe(0);
 
-        // Addressed → speak.
+        // Addressed final turn → exactly one forced response (the bridge speaks for the agent).
         session.EmitTranscript({ Role: 'user', Text: 'Hey Sage, what do you think?', IsFinal: true });
         expect(session.SpokenUpdates.length).toBe(1);
 
-        // Assistant transcripts never drive turn-taking (would self-trigger).
+        // Assistant + non-final turns never trigger.
         session.EmitTranscript({ Role: 'assistant', Text: 'Sage here, responding', IsFinal: true });
-        expect(session.SpokenUpdates.length).toBe(1);
-
-        // Non-final user transcript ignored.
         session.EmitTranscript({ Role: 'user', Text: 'Sage', IsFinal: false });
         expect(session.SpokenUpdates.length).toBe(1);
 
@@ -431,6 +476,47 @@ describe('AIBridgeEngine — participant tracking', () => {
         await new Promise((r) => setTimeout(r, 0));
 
         expect(participantRequested).toBe(false);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('arms an auto-leave grace timer when the last human leaves, and cancels it on re-join', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        await new Promise((r) => setTimeout(r, 0));
+
+        // Human present → seen, no countdown.
+        loopback.EmitParticipants([{ ExternalId: 'h1', DisplayName: 'Alice', Role: 'Host', IsAgent: false }]);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(active.HasSeenHuman).toBe(true);
+        expect(active.LeaveGraceTimer).toBeUndefined();
+
+        // Only agents remain → grace timer armed (not fired yet).
+        loopback.EmitParticipants([{ ExternalId: 'agent-x', DisplayName: 'Bot', Role: 'Participant', IsAgent: true }]);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(active.LeaveGraceTimer).toBeDefined();
+
+        // Human re-joins within the window (e.g. a refresh) → countdown cancelled.
+        loopback.EmitParticipants([{ ExternalId: 'h1', DisplayName: 'Alice', Role: 'Host', IsAgent: false }]);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(active.LeaveGraceTimer).toBeUndefined();
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('never arms auto-leave when a human was never present (bot joined ahead of anyone)', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        await new Promise((r) => setTimeout(r, 0));
+
+        loopback.EmitParticipants([{ ExternalId: 'agent-x', DisplayName: 'Bot', Role: 'Participant', IsAgent: true }]);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(active.HasSeenHuman).toBe(false);
+        expect(active.LeaveGraceTimer).toBeUndefined();
+
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 });

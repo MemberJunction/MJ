@@ -123,7 +123,9 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMagicLinkRedemptions', sectionName: 'Magic Link Redemptions', isExpanded: false },
             { sectionKey: 'mJMagicLinkInvites', sectionName: 'Magic Link Invites', isExpanded: false },
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
-            { sectionKey: 'mJAIAgentSessionBridgeParticipants', sectionName: 'AI Agent Session Bridge Participants', isExpanded: false }
+            { sectionKey: 'mJAIAgentSessionBridgeParticipants', sectionName: 'AI Agent Session Bridge Participants', isExpanded: false },
+            { sectionKey: 'mJRemoteOperations', sectionName: 'Remote Operations', isExpanded: false },
+            { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false }
         ]);
     }
 }

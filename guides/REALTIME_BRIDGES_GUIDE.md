@@ -61,6 +61,19 @@ The single biggest design win is **reuse**. The realtime session contract `IReal
 `OnOutput(handler)` is *what the agent says* — but it had **no client-facing pipe**. A bridge **is**
 that pipe.
 
+> **🚨 A bridge is transport + host UX tools ONLY — it does NOT build the agent.** Identity (the agent
+> speaks first-person AS the target), the model/voice **precedence cascade**, the base prompt + memory, the
+> `invoke-target-agent` delegation, and session/run tracking all come from the **one** core producer,
+> `RealtimeClientSessionService.PrepareRealtimeSessionParams`, which the bridge *consumes* (see
+> `BaseAgent.StartBridgeRealtimeSession`). A bridge that re-implements any of that is drift — exactly what
+> the convergence in [`plans/realtime/realtime-core-host-convergence.md`](../plans/realtime/realtime-core-host-convergence.md)
+> removed (and what `ai-agents/src/__tests__/realtime-convergence-drift.test.ts` guards). What a bridge DOES
+> own: media transport (audio/video/screen) and any **host-specific** UX tools, injected via
+> `RealtimeSessionRunnerDeps.ExtraTools`/`ExecuteTool` — never baked into core. So the agent is the *same
+> agent* (identity, voice, delegation, tracking) whether you reach it in native chat, LiveKit, or Zoom/Teams;
+> only how it's heard and what surfaces it can touch differ. See the boundary table in the
+> [Co-Agents Guide §3](REALTIME_CO_AGENTS_GUIDE.md#-single-source-of-truth-one-prep-the-precedence-cascade-the-corehost-boundary).
+
 ### The transport seam
 
 ```

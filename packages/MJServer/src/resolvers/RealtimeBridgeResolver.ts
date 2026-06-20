@@ -1,11 +1,12 @@
-import { Resolver, Mutation, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
+import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
 import { randomUUID } from 'crypto';
 import { LogError, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService } from '@memberjunction/livekit-room-server';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
-import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
+import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices } from '@memberjunction/ai-agents';
+import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
 
@@ -18,6 +19,14 @@ import { NotificationEngine } from '@memberjunction/notifications';
  * other. Idempotent (latest-wins).
  */
 LiveKitAgentRoomCoordinator.Instance.SetSessionFactory(CreateBridgeRealtimeSession);
+
+/**
+ * Binds the co-agent run finalizer onto the bridge engine (same module-load rationale as the factory above).
+ * Lets the engine finalize a session's dangling co-agent observability run when it reaps a bridge WITHOUT a
+ * live in-memory session (a prior-boot orphan / cross-host reap) — the one teardown path the agent layer's
+ * `Close()`-wrapped finalizer can't reach. Idempotent for clean same-process teardowns.
+ */
+AIBridgeEngine.Instance.SetSessionRunFinalizer(FinalizeBridgeCoAgentRuns);
 
 /**
  * GraphQL surface for the MJ-native LiveKit room: mints scoped client access tokens and starts an
@@ -73,6 +82,14 @@ export class StartLiveKitAgentRoomSessionInput {
   /** The TARGET agent the co-agent voices (the one being "called") — the Realtime Co-Agent delegates to it. */
   @Field(() => String, { nullable: true })
   TargetAgentID?: string;
+
+  /** Optional per-session Realtime MODEL override (Name or ID) — a dev choosing the model for this agent. */
+  @Field(() => String, { nullable: true })
+  RealtimeModelID?: string;
+
+  /** Optional per-session VOICE override (provider-native voice id) — gives this agent a distinct voice. */
+  @Field(() => String, { nullable: true })
+  RealtimeVoice?: string;
 
   @Field(() => String, { nullable: true })
   RoomName?: string;
@@ -130,6 +147,29 @@ export class LiveKitRecordingResult {
 
   @Field(() => String)
   Status: string;
+}
+
+/** A selectable provider-native voice for the dev voice picker. */
+@ObjectType()
+export class RealtimeVoiceOptionResult {
+  @Field(() => String)
+  ID: string;
+
+  @Field(() => String)
+  Name: string;
+}
+
+/** An active Realtime model with the voices its driver supports — feeds the dev model/voice picker. */
+@ObjectType()
+export class RealtimeModelVoicesResult {
+  @Field(() => String)
+  ModelID: string;
+
+  @Field(() => String)
+  ModelName: string;
+
+  @Field(() => [RealtimeVoiceOptionResult])
+  Voices: RealtimeVoiceOptionResult[];
 }
 
 @Resolver()
@@ -218,6 +258,8 @@ export class RealtimeBridgeResolver extends ResolverBase {
         AgentID: input.AgentID,
         AgentName: input.AgentName,
         TargetAgentID: input.TargetAgentID,
+        RealtimeModelID: input.RealtimeModelID,
+        RealtimeVoice: input.RealtimeVoice,
         TurnMode: this.normalizeTurnMode(input.TurnMode),
         ContextUser: user,
         MetadataProvider: provider,
@@ -263,6 +305,28 @@ export class RealtimeBridgeResolver extends ResolverBase {
     } catch (error) {
       LogError(`StopLiveKitAgentRoomSession failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
+    }
+  }
+
+  /**
+   * Lists active Realtime models with the voices each driver supports — the source for the dev model/voice
+   * picker (gated client-side by the `Realtime: Advanced Session Controls` authorization). Read-only; returns
+   * an empty list on any error so the picker degrades gracefully to "no overrides".
+   */
+  @Query(() => [RealtimeModelVoicesResult])
+  async GetRealtimeModelVoices(
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<RealtimeModelVoicesResult[]> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return [];
+      }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      return await GetRealtimeModelVoices(user, provider);
+    } catch (error) {
+      LogError(`GetRealtimeModelVoices failed: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
     }
   }
 

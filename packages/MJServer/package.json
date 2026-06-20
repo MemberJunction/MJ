@@ -39,6 +39,7 @@
     "@memberjunction/ai-agent-manager": "5.41.0",
     "@memberjunction/ai-agent-manager-actions": "5.41.0",
     "@memberjunction/ai-agents": "5.41.0",
+    "@memberjunction/ai-bridge-server": "5.41.0",
     "@memberjunction/ai-core-plus": "5.41.0",
     "@memberjunction/ai-engine-base": "5.41.0",
     "@memberjunction/ai-mcp-client": "5.41.0",
