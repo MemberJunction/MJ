@@ -10,8 +10,6 @@
  * @since 2.76.0
  */
 
-import { MJLruCache } from './MJLruCache';
-
 /**
  * Result of expression evaluation including success status and diagnostics
  */
@@ -100,12 +98,6 @@ export class SafeExpressionEvaluator {
     ];
 
     /**
-     * Cache for compiled expressions to improve performance on repeated evaluations
-     * @private
-     */
-    private readonly _compiledExpressionCache = new MJLruCache<string, Function>({ maxSize: 1000 });
-
-    /**
      * Safe methods that can be called on objects
      * @private
      */
@@ -169,28 +161,18 @@ export class SafeExpressionEvaluator {
             const contextKeys = Object.keys(safeContext);
             const contextValues = contextKeys.map(key => safeContext[key]);
 
-            // Check cache for compiled expression
-            const cacheKey = `${expression}|${contextKeys.join(',')}`;
-            let evaluator = this._compiledExpressionCache.Get(cacheKey);
+            // Build function body with strict mode
+            const functionBody = `
+                "use strict";
+                try {
+                    return Boolean(${expression});
+                } catch (e) {
+                    throw new Error('Expression evaluation failed: ' + e.message);
+                }
+            `;
 
-            if (!evaluator) {
-                // Build function body with strict mode
-                const functionBody = `
-                    "use strict";
-                    try {
-                        return Boolean(${expression});
-                    } catch (e) {
-                        throw new Error('Expression evaluation failed: ' + e.message);
-                    }
-                `;
-
-                // Create and execute function
-                evaluator = new Function(...contextKeys, functionBody);
-
-                // Store in cache
-                this._compiledExpressionCache.Set(cacheKey, evaluator);
-            }
-
+            // Create and execute function
+            const evaluator = new Function(...contextKeys, functionBody);
             const result = evaluator(...contextValues);
 
             return {
