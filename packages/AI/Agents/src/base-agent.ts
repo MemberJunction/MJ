@@ -11546,9 +11546,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // Defer expiry of messages inside the cache-stable prefix to preserve the
                 // provider's cached prompt prefix; overflow recovery handles them if needed.
                 if (i < stablePrefixBoundary) {
-                    if (params.verbose) {
-                        console.log(`[Turn ${currentTurn}] Deferred expiry of cache-stable prefix message at index ${i}`);
-                    }
+                    this.logStatus(`[Turn ${currentTurn}] Deferred expiry of cache-stable prefix message at index ${i}`, true, params);
                     continue;
                 }
 

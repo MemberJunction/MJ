@@ -30,14 +30,6 @@ function resolveActionResultCrush(agentTypePromptParams?: Record<string, unknown
     return { threshold: ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang };
 }
 
-/** Mirror of QueryBuilderAgent.resolveActionResultCrush — opts into SQL code crushing. */
-function resolveQueryBuilderCrush(agentTypePromptParams?: Record<string, unknown>): ActionResultCrushConfig | undefined {
-    const base = resolveActionResultCrush(agentTypePromptParams);
-    if (!base) {
-        return base;
-    }
-    return { ...base, codeLang: base.codeLang ?? 'sql' };
-}
 
 /** Mirror of BaseAgent.crushParamValue — structural JSON compression (safe no-op on non-JSON). */
 function crushParamValue(stringValue: string, config: ActionResultCrushConfig | undefined): string | null {
@@ -203,7 +195,7 @@ describe('action-result crush wiring', () => {
     });
 
     it('routes a large SQL string to code crushing — the JSON attempt is a safe no-op', () => {
-        const config = resolveQueryBuilderCrush(); // QueryBuilder opts into codeLang: 'sql'
+        const config = resolveActionResultCrush({ crushCodeLang: 'sql' }); // opt into SQL code crushing
         const sql = buildLargeSql();
 
         const formatted = formatParamValueForResult(sql, config);

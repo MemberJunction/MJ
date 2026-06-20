@@ -19,9 +19,9 @@ MemberJunction entity coupling, no AI calls, deterministic output.
 ```ts
 import { CrushJSON, DescribeCrush } from '@memberjunction/context-crush';
 
-const result = CrushJSON(largeArrayOfRecords, { maxChars: 8000 });
-const prompt = `${DescribeCrush(result)}\n${result.text}`;
-// result.originalChars / result.crushedChars report the savings.
+const result = CrushJSON(largeArrayOfRecords, { MaxChars: 8000 });
+const prompt = `${DescribeCrush(result)}\n${result.Text}`;
+// result.OriginalChars / result.CrushedChars report the savings.
 ```
 
 ```ts

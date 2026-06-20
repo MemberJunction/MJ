@@ -1,6 +1,6 @@
 /**
- * Integration tests for the opt-in code-string reduction wiring in BaseAgent /
- * QueryBuilderAgent (resolveActionResultCrush.codeLang + crushCodeValue).
+ * Integration tests for the opt-in code-string reduction wiring in BaseAgent
+ * (resolveActionResultCrush.codeLang via the `crushCodeLang` prompt param + crushCodeValue).
  *
  * Mirror-style (see prompt-formatting.test.ts) but exercising the REAL
  * @memberjunction/context-crush CrushCode engine.
@@ -29,15 +29,6 @@ function resolveBase(promptParams?: Record<string, unknown>): CrushConfig | unde
     return { threshold: ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang };
 }
 
-/** Mirror of QueryBuilderAgent.resolveActionResultCrush — opts into SQL. */
-function resolveQueryBuilder(promptParams?: Record<string, unknown>): CrushConfig | undefined {
-    const base = resolveBase(promptParams);
-    if (!base) {
-        return base;
-    }
-    return { ...base, codeLang: base.codeLang ?? 'sql' };
-}
-
 /** Mirror of BaseAgent.crushCodeValue. */
 function crushCodeValue(stringValue: string, config: CrushConfig | undefined): string | null {
     if (!config || !config.codeLang || stringValue.length < config.threshold) {
@@ -63,24 +54,19 @@ describe('code-string action-result crush wiring', () => {
         expect(crushCodeValue(sql, resolveBase())).toBeNull();
     });
 
-    it('reduces large SQL strings once an agent opts into a code language (QueryBuilder)', () => {
+    it('reduces large SQL strings once an agent opts into a code language (crushCodeLang)', () => {
         const sql = buildLargeSql();
-        const crushed = crushCodeValue(sql, resolveQueryBuilder());
+        const crushed = crushCodeValue(sql, resolveBase({ crushCodeLang: 'sql' }));
         expect(crushed).not.toBeNull();
         expect(crushed!).toContain('value tuples elided');
         expect(crushed!.split('\n  ↳ ')[0].length).toBeLessThan(sql.length);
     });
 
-    it('honors an explicit crushCodeLang prompt param on the base agent', () => {
-        const sql = buildLargeSql();
-        expect(crushCodeValue(sql, resolveBase({ crushCodeLang: 'sql' }))).not.toBeNull();
-    });
-
     it('does not crush code when the agent opts out of crushing entirely', () => {
-        expect(resolveQueryBuilder({ crushActionResults: false })).toBeUndefined();
+        expect(resolveBase({ crushActionResults: false })).toBeUndefined();
     });
 
     it('leaves small code strings verbatim (below threshold)', () => {
-        expect(crushCodeValue('SELECT 1;', resolveQueryBuilder())).toBeNull();
+        expect(crushCodeValue('SELECT 1;', resolveBase({ crushCodeLang: 'sql' }))).toBeNull();
     });
 });
