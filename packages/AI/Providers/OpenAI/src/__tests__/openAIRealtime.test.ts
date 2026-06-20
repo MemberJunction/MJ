@@ -205,6 +205,31 @@ describe('OpenAIRealtime', () => {
             }
         });
 
+        it('meeting mode: translates Config.disableAutoResponse to turn_detection.create_response=false (and never sends the raw flag)', async () => {
+            await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys', Config: { disableAutoResponse: true } });
+            const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+            if (update?.type === 'session.update' && update.session.type === 'realtime') {
+                const session = update.session as Record<string, unknown>;
+                // The host-neutral flag must be consumed, NOT forwarded raw to the API.
+                expect(session.disableAutoResponse).toBeUndefined();
+                const turnDetection = (session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+                expect(turnDetection).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+            } else {
+                throw new Error('expected realtime session.update');
+            }
+        });
+
+        it('1:1 call: no turn_detection override when disableAutoResponse is absent (model auto-responds)', async () => {
+            await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+            const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+            if (update?.type === 'session.update' && update.session.type === 'realtime') {
+                const turnDetection = (update.session.audio as { input?: { turn_detection?: unknown } })?.input?.turn_detection;
+                expect(turnDetection).toBeUndefined();
+            } else {
+                throw new Error('expected realtime session.update');
+            }
+        });
+
         it('maps Tools into OpenAI function tools at start', async () => {
             await driver.StartSession({
                 Model: 'gpt-realtime',

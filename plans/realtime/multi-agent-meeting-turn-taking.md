@@ -1,6 +1,18 @@
 # Multi-Agent Meeting Turn-Taking
 
-**Status:** Design (2026-06-19). Companion to [`realtime-core-host-convergence.md`](realtime-core-host-convergence.md) (this is the meaty part of its Phase 2 / bridged-session runtime).
+**Status:** **2a MVP SHIPPED** (2026-06-19) · 2b/2c future. Companion to [`realtime-core-host-convergence.md`](realtime-core-host-convergence.md) (the meaty part of its Phase 2 / bridged-session runtime).
+
+**Shipped this session (2a MVP — "hear everything, speak when addressed"):**
+- **Disable-auto-response lever**: the host-neutral `disableAutoResponse` flag rides the session `Config`; OpenAI translates it to `audio.input.turn_detection.create_response=false` (keeping detection for transcription + barge-in). 1:1 calls keep auto-response byte-for-byte.
+- **Bridge is the sole speech trigger in meeting mode**: `AIBridgeEngine`'s `Speak` turn-decision now issues exactly one `RequestSpokenUpdate` when `DisableAutoResponse` is set (gated by the addressing matcher); for 1:1 it stays hands-off (no double-fire).
+- **Meeting discipline in the prompt**: `RealtimeClientSessionService.buildMeetingFraming` adds a "listen to everything, speak only when addressed (by name), don't talk over others" clause — present only in meeting mode.
+- **Activation**: `LiveKitAgentRoomCoordinator` tracks a per-room roster; the **first** agent in a room is a normal 1:1 voice, and a **second** agent joining starts in meeting mode (auto-response off + a `RegexAddressedMatcher` on its names + `DisableAutoResponse` to the engine + the meeting prompt). Roster is pruned on stop.
+- **Tested**: OpenAI turn_detection translation; engine forced-update-only-when-addressed; coordinator first-solo / second-meeting detection; service config-flag + prompt-clause presence.
+
+**Known limitations (deliberate for the MVP):** the FIRST agent isn't retroactively re-gated when a room becomes multi-agent (it answers freely — it's the one you're talking to); cross-session **floor control** (one-speaker-at-a-time) is the next step (§6 2c); Gemini's auto-response isn't disabled (its native turn-taking differs — relies on the prompt for now). The gate is L0 (name-addressing); L1/L2 are future.
+
+---
+
 
 **The vision.** An MJ agent joins a meeting (LiveKit now; Zoom/Teams/Webex later) like a human participant: it **hears the entire conversation**, **knows when it's being addressed and when it isn't**, **speaks only when appropriate**, and can **talk to other agents** when the moment calls for it. That's the whole point of an agent being *in the meeting* rather than in a 1:1 call.
 

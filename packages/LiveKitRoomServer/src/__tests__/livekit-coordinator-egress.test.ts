@@ -86,6 +86,30 @@ describe('LiveKitAgentRoomCoordinator', () => {
     expect(ok).toBe(true);
     expect(ops.StopBridgeSession).toHaveBeenCalledWith('bridge-1', 'Explicit', undefined, undefined);
   });
+
+  it('multi-agent room: the FIRST agent is solo 1:1, a SECOND agent joins in MEETING mode (auto-response off + addressed-only)', async () => {
+    const { ops, startCalls } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+    const factoryCtx: Record<string, unknown>[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    coordinator.SetSessionFactory(async (ctx: any) => { factoryCtx.push(ctx); return {} as any; });
+
+    const room = 'meeting-room-unique-1';
+    // First agent → solo: model auto-responds (no meeting flag), and it answers freely (AlwaysAddressedMatcher).
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'm1', RoomName: room, AgentName: 'Sage' });
+    expect(startCalls[0].DisableAutoResponse).toBeUndefined();
+    expect(factoryCtx[0].MeetingMode).toBeUndefined();
+    expect((startCalls[0].TurnMatcher as object).constructor.name).toBe('AlwaysAddressedMatcher');
+
+    // Second agent into the SAME room → meeting mode: auto-response disabled + addressed-only matcher.
+    await coordinator.StartAgentRoomSession({
+      AgentSessionID: 'm2', RoomName: room, AgentName: 'Marketing', AgentAliases: ['Marketing Agent'],
+    });
+    expect(startCalls[1].DisableAutoResponse).toBe(true);
+    expect(factoryCtx[1].MeetingMode).toBe(true);
+    expect(factoryCtx[1].SelfNames).toEqual(['Marketing', 'Marketing Agent']);
+    expect((startCalls[1].TurnMatcher as object).constructor.name).toBe('RegexAddressedMatcher');
+  });
 });
 
 describe('wsToHttpUrl', () => {

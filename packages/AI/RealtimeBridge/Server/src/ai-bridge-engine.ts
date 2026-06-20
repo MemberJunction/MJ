@@ -143,6 +143,15 @@ export interface StartBridgeSessionParams {
     /** Optional extra turn-taking tuning (silence window, throttle, score threshold, clock). */
     TurnTuning?: Partial<Omit<TurnTakingPolicyConfig, 'Mode' | 'Matcher' | 'Scorer'>>;
 
+    /**
+     * **Multi-agent meeting mode.** When `true`, the realtime model's blind auto-response was disabled at
+     * session start (the agent layer set `disableAutoResponse` on the model session), so the BRIDGE is the
+     * sole speech trigger: on a `Speak` turn decision the engine issues exactly one `RequestSpokenUpdate`.
+     * When `false`/absent the model auto-responds and the engine must NOT also trigger (it would double-fire).
+     * Must agree with what the session was opened with. See `plans/realtime/multi-agent-meeting-turn-taking.md`.
+     */
+    DisableAutoResponse?: boolean;
+
     /** Per-session bridge configuration (resolved credential refs, region, …) passed to the driver. */
     Configuration?: Record<string, unknown>;
 
@@ -198,6 +207,13 @@ export interface ActiveBridgeSession {
 
     /** The per-session turn-taking policy gating generation. */
     TurnPolicy: TurnTakingPolicy;
+
+    /**
+     * Whether the model's blind auto-response is OFF for this session (multi-agent meeting). When `true`
+     * the bridge is the sole speech trigger — a `Speak` decision issues one `RequestSpokenUpdate`. When
+     * `false` the model auto-responds and the engine stays hands-off (forcing would double-fire).
+     */
+    DisableAutoResponse: boolean;
 
     /** The provider row backing this session. */
     Provider: MJAIBridgeProviderEntity;
@@ -504,6 +520,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 Bridge: driver,
                 RealtimeSession: params.RealtimeSession,
                 TurnPolicy: turnPolicy,
+                DisableAutoResponse: params.DisableAutoResponse === true,
                 Provider: params.Provider,
                 ContextUser: params.ContextUser,
                 MetadataProvider: params.MetadataProvider,
@@ -841,17 +858,18 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private applyTurnDecision(active: ActiveBridgeSession, action: 'Speak' | 'PostToChat' | 'Silent'): void {
         switch (action) {
             case 'Speak':
-                // The model is configured with server-VAD auto-response (the same config the browser
-                // client-direct path uses), so it ALREADY responds to the participant's turn on its own —
-                // one clean stream. We must NOT also force a `RequestSpokenUpdate` here: that issues a
-                // SECOND `response.create` racing the auto-response, so the agent answers twice and the
-                // two streams overlap/chop (the symptom that does not occur in browser-direct, which has
-                // only the auto-response). Rely on auto-response.
-                //
-                // NOTE: when we add multi-agent floor control, the bridge will instead DISABLE the
-                // model's auto-response (turn_detection.create_response = false) and become the sole
-                // trigger — at which point this branch forces the response. Until then, forcing here only
-                // double-fires. See the bot-vs-bot floor-control follow-up.
+                if (active.DisableAutoResponse) {
+                    // MEETING MODE: the model's blind auto-response is OFF (the agent layer opened the
+                    // session with `disableAutoResponse`), so the bridge is the SOLE speech trigger. The
+                    // turn policy already gated this to an ADDRESSED turn, so issue exactly one response.
+                    // This is what lets several agents share a room without all answering every utterance.
+                    active.RealtimeSession.RequestSpokenUpdate?.('');
+                } else {
+                    // 1:1 CALL: the model has server-VAD auto-response on (same as the browser client-direct
+                    // path), so it ALREADY answered this turn — one clean stream. Forcing a second
+                    // `RequestSpokenUpdate` here would race the auto-response (double-answer + overlap/chop).
+                    // Rely on auto-response.
+                }
                 break;
             case 'PostToChat':
                 // Bridge chat is a Phase 2 channel surface; the hook is here so the wiring is complete.
@@ -1187,6 +1205,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         } catch (err) {
             LogError(
                 `[AIBridgeEngine] driver Disconnect failed for bridge ${active.SessionBridgeID}: ` +
+                    `${err instanceof Error ? err.message : String(err)}`,
+            );
+        }
+        // Close the realtime model session too — releases the provider connection AND triggers the
+        // co-agent run/prompt-run finalizer the agent layer wrapped onto Close() (otherwise the run dangles
+        // in `Running` and the model socket leaks). Tolerant: a provider Close error must not block teardown.
+        try {
+            await active.RealtimeSession.Close();
+        } catch (err) {
+            LogError(
+                `[AIBridgeEngine] realtime session Close failed for bridge ${active.SessionBridgeID}: ` +
                     `${err instanceof Error ? err.message : String(err)}`,
             );
         }

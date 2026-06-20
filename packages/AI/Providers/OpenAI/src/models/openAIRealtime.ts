@@ -25,6 +25,7 @@ import type {
     RealtimeConversationItemSystemMessage,
     RealtimeConversationItemUserMessage,
     RealtimeSessionCreateRequest,
+    RealtimeAudioInputTurnDetection,
 } from 'openai/resources/realtime/realtime';
 import type {
     ClientSecretCreateParams,
@@ -543,6 +544,18 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     /** Sends the `session.update` that establishes instructions, input transcription, and tools. */
     private sendSessionUpdate(systemPrompt: string, tools?: RealtimeToolDefinition[], config?: JSONObject): void {
+        // Pull the host-neutral meeting flag OUT of the open Config bag so it is never sent raw to the API.
+        // In a multi-agent meeting the BRIDGE (after its turn policy gates on addressing), not the model,
+        // decides WHEN to speak — so we disable server-VAD auto-response while KEEPING detection so input
+        // transcription and barge-in still work. A 1:1 call (flag absent) keeps the default auto-response.
+        const cfg = { ...(config ?? {}) } as JSONObject & { disableAutoResponse?: boolean };
+        const disableAutoResponse = cfg.disableAutoResponse === true;
+        delete cfg.disableAutoResponse;
+
+        const turnDetection: RealtimeAudioInputTurnDetection | undefined = disableAutoResponse
+            ? { type: 'server_vad', create_response: false, interrupt_response: true }
+            : undefined;
+
         const session: RealtimeSessionCreateRequest = {
             type: 'realtime',
             instructions: systemPrompt,
@@ -550,8 +563,8 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             // the client-direct topology — so user-role transcripts flow server-bridged too (the
             // contract promises BOTH roles). The config bag spreads after this so a
             // per-conversation override can still replace the audio block.
-            audio: { input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL } } },
-            ...config,
+            audio: { input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL }, ...(turnDetection ? { turn_detection: turnDetection } : {}) } },
+            ...cfg,
         };
         if (tools && tools.length > 0) {
             session.tools = this.mapTools(tools);

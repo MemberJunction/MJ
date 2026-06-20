@@ -38,6 +38,7 @@ import {
     ChatMessage,
     ClientRealtimeSessionConfig,
     GetAIAPIKey,
+    IRealtimeSession,
     JSONObject,
     RealtimeSessionParams,
     RealtimeToolCall,
@@ -127,6 +128,22 @@ export interface PrepareClientSessionInput {
      * trusts the input. Malformed JSON is tolerated (it simply contributes nothing to the merge).
      */
     ConfigOverridesJson?: string;
+    /**
+     * **Multi-agent meeting mode.** When `true`, the agent joins as one of several voices in a shared
+     * room: its model's **blind auto-response is disabled** (the session Config carries
+     * `disableAutoResponse`, which providers translate to e.g. OpenAI `turn_detection.create_response=false`)
+     * and a meeting-aware clause is added to the prompt so it **hears everything but speaks only when
+     * addressed**. The bridge becomes the sole speech trigger (gated by its turn policy). Absent/`false`
+     * = a 1:1 call with the model's normal auto-response. See
+     * `plans/realtime/multi-agent-meeting-turn-taking.md`.
+     */
+    DisableAutoResponse?: boolean;
+    /**
+     * The names the meeting-aware prompt tells the agent it answers to (its own display name + aliases).
+     * Used ONLY to phrase the "you are addressed when someone says one of these" guidance; the actual
+     * addressing GATE is the bridge's `RegexAddressedMatcher`. Ignored unless {@link DisableAutoResponse}.
+     */
+    SelfNames?: string[];
 }
 
 /**
@@ -286,6 +303,23 @@ export interface RealtimeSessionParamsPrep {
 }
 
 /**
+ * The runtime handle returned by {@link RealtimeClientSessionService.WireBridgeRealtimeSession} — the
+ * server long-lived (bridged) counterpart to what `PrepareClientSession` returns for the browser. The
+ * bridge holds this for the life of the session: the observability run ids (for nesting + correlation)
+ * and an **idempotent** {@link Finalize} the bridge MUST call on teardown so the co-agent run + prompt
+ * run don't dangle in `Running`. Finalize also runs automatically when the session's `Close()` is invoked
+ * or the connection drops — calling it again is a safe no-op.
+ */
+export interface BridgeRealtimeRuntime {
+    /** The `MJ: AI Agent Runs` row id created for this voice session (delegated runs nest under it). */
+    CoAgentRunID?: string;
+    /** The `MJ: AI Prompt Runs` row id for the session's system prompt. */
+    PromptRunID?: string;
+    /** Finalizes the co-agent + prompt run. Idempotent; safe to call from multiple teardown paths. */
+    Finalize: (success: boolean) => Promise<void>;
+}
+
+/**
  * Outcome of resolving the realtime model for a session: either a usable {@link RealtimeModelResolution}
  * or a specific, human-readable failure reason (used for explicit preferred-model failures, where the
  * generic "no model" message would hide WHY the user's chosen model couldn't be used).
@@ -427,6 +461,105 @@ export class RealtimeClientSessionService {
             EffectiveConfig: effectiveConfig,
             NarrationPaceMs: GetNarrationPaceMs(effectiveConfig) ?? undefined,
         };
+    }
+
+    /**
+     * Wires a **server long-lived (bridged)** realtime session onto the SAME core machinery the
+     * client-direct path uses — so a LiveKit (or future Zoom/Teams) agent does real work and is tracked
+     * identically, with **zero host-local re-implementation**. This is the Phase 2 counterpart to
+     * {@link PrepareClientSession}: the browser relays tool calls back over GraphQL to `ExecuteRelayedTool`,
+     * whereas here the server holds the live {@link IRealtimeSession} and we wire its `OnToolCall` directly to
+     * the SAME {@link ExecuteRelayedTool} (so `invoke-target-agent` runs the target via `AgentRunner`, nests
+     * under the co-agent run, supports barge-in cancel + paused-run resume — all of it, for free).
+     *
+     * Responsibilities, in order:
+     * 1. Create the co-agent observability run (+ prompt run + step) so the voice session shows up in the
+     *    agent-run timeline and delegated runs nest under it (best-effort; a failure just omits the ids).
+     * 2. Wire `session.OnToolCall` → `ExecuteRelayedTool` → `session.SendToolResult`.
+     * 3. Guarantee finalize-once: wrap `session.Close()` and listen for an unexpected drop (`OnClose`), both
+     *    routed through one idempotent finalizer. The bridge teardown calls `Close()`, so the run finalizes
+     *    on graceful end; a dropped socket finalizes via `OnClose`.
+     *
+     * @param session The live realtime session the bridge owns (from `model.StartSession`).
+     * @param input The same prep input used to build the session (carries AgentSessionID, TargetAgentID, …).
+     * @param prep The successful {@link PrepareRealtimeSessionParams} result (CoAgent + Resolution).
+     * @param contextUser The calling user (threaded into observability + delegated runs).
+     * @param provider The request-scoped metadata provider.
+     * @returns A {@link BridgeRealtimeRuntime} the bridge holds for the session lifetime.
+     */
+    public async WireBridgeRealtimeSession(
+        session: IRealtimeSession,
+        input: PrepareClientSessionInput,
+        prep: RealtimeSessionParamsPrep,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<BridgeRealtimeRuntime> {
+        const coAgent = prep.CoAgent;
+        const resolution = prep.Resolution;
+        if (!coAgent || !resolution) {
+            // Prep must have succeeded before wiring; degrade to a tool-error fallback rather than throw.
+            return this.wireBridgeFallbackRuntime(session);
+        }
+
+        const promptID = this.resolveCoAgentSystemPrompt(coAgent).PromptID;
+        const obs = await this.createCoAgentObservabilityRun(
+            coAgent, promptID, resolution.ModelID, resolution.VendorID,
+            input.UserID || contextUser?.ID, input.AgentSessionID,
+            contextUser, provider, input.ConversationID,
+        );
+
+        let finalized = false;
+        const finalize = async (success: boolean): Promise<void> => {
+            if (finalized) {
+                return;
+            }
+            finalized = true;
+            await this.FinalizeCoAgentRun(
+                obs?.CoAgentRunID ?? null, obs?.PromptRunID ?? null,
+                contextUser, provider, success, obs?.CoAgentRunStepID ?? null,
+            );
+        };
+
+        // Tool calls → the shared delegation entry point, then hand the serialized result back to the model.
+        session.OnToolCall(async (call) => {
+            try {
+                const result = await this.ExecuteRelayedTool(
+                    { AgentSessionID: input.AgentSessionID, ParentRunID: obs?.CoAgentRunID, TargetAgentID: input.TargetAgentID, Call: call },
+                    contextUser, provider,
+                );
+                await session.SendToolResult(call.CallID, result.ResultJson);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                LogError(`WireBridgeRealtimeSession: tool '${call.ToolName}' failed: ${message}`);
+                await session.SendToolResult(call.CallID, JSON.stringify({ success: false, error: message }));
+            }
+        });
+
+        // Finalize on graceful teardown (the bridge calls Close()) and on an unexpected drop. Both routed
+        // through the idempotent finalizer, so double-fire is harmless.
+        const originalClose = session.Close.bind(session);
+        session.Close = async (): Promise<void> => {
+            await finalize(true);
+            await originalClose();
+        };
+        session.OnClose?.(() => { void finalize(true); });
+
+        return { CoAgentRunID: obs?.CoAgentRunID, PromptRunID: obs?.PromptRunID, Finalize: finalize };
+    }
+
+    /**
+     * Degenerate {@link BridgeRealtimeRuntime} for the rare case wiring is attempted without a resolved
+     * co-agent: answer every tool call with a clear "not available" error and a no-op finalize. Keeps the
+     * bridge from hanging on a tool call when prep was incomplete.
+     */
+    private wireBridgeFallbackRuntime(session: IRealtimeSession): BridgeRealtimeRuntime {
+        session.OnToolCall((call) => {
+            void session.SendToolResult(
+                call.CallID,
+                JSON.stringify({ success: false, error: 'Tool execution is unavailable — the co-agent did not resolve. Let the user know.' }),
+            );
+        });
+        return { Finalize: async () => { /* nothing to finalize */ } };
     }
 
     /**
@@ -1382,11 +1515,16 @@ export class RealtimeClientSessionService {
         driverClass?: string
     ): JSONObject | undefined {
         const providerVoice = GetProviderVoiceSettings(effectiveConfig, driverClass ?? null);
-        if (!providerVoice) {
-            return input.Config;
+        let bag: JSONObject | undefined = providerVoice
+            ? (DeepMergeConfigs(providerVoice, input.Config as JSONObjectLike | undefined) as JSONObject)
+            : input.Config;
+        // Multi-agent meeting: carry the host-NEUTRAL disable-auto-response flag in the open config bag so
+        // each provider translates it its own way (OpenAI → turn_detection.create_response=false) — the
+        // bridge becomes the sole speech trigger. Absent ⇒ byte-for-byte the prior 1:1 behavior.
+        if (input.DisableAutoResponse) {
+            bag = { ...(bag ?? {}), disableAutoResponse: true } as JSONObject;
         }
-        const merged = DeepMergeConfigs(providerVoice, input.Config as JSONObjectLike | undefined);
-        return merged as JSONObject;
+        return bag;
     }
 
     /**
@@ -1420,6 +1558,7 @@ export class RealtimeClientSessionService {
         // browser/whiteboard); bridges pass none.
         const framing = BuildRealtimeAgentFraming(targetName, this.buildInteractiveSurfaceFraming(input.ExtraTools));
 
+        const meetingFraming = this.buildMeetingFraming(input);
         const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);
         const voiceManner = BuildVoiceMannerSection(effectiveConfig);
         const targetIdentity = this.formatTargetIdentity(target);
@@ -1427,9 +1566,36 @@ export class RealtimeClientSessionService {
         const history = this.formatConversationHistory(input.ConversationMessages);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
 
-        return [framing, coAgentPrompt, voiceManner, targetIdentity, priorTranscript, history, memoryContext]
+        return [framing, meetingFraming, coAgentPrompt, voiceManner, targetIdentity, priorTranscript, history, memoryContext]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
+    }
+
+    /**
+     * Builds the **meeting-mode** discipline clause — present only for a multi-agent meeting session
+     * ({@link PrepareClientSessionInput.DisableAutoResponse}). It tells the agent to hear the whole
+     * conversation but speak only when addressed (named) or clearly called on, and never to talk over
+     * others. This is the *prompt* half of "hear always, speak selectively"; the enforcement half is the
+     * model's disabled auto-response + the bridge's addressing gate. Empty for a 1:1 call (prompt unchanged).
+     * See `plans/realtime/multi-agent-meeting-turn-taking.md`.
+     *
+     * @param input The prepare-session input (carries the meeting flag + self names).
+     * @returns The meeting clause, or `''` for a non-meeting session.
+     */
+    protected buildMeetingFraming(input: PrepareClientSessionInput): string {
+        if (!input.DisableAutoResponse) {
+            return '';
+        }
+        const names = (input.SelfNames ?? []).map(n => n.trim()).filter(n => n.length > 0);
+        const addressed = names.length > 0
+            ? `You are addressed when someone says your name (${names.join(', ')}) or clearly directs a question at you.`
+            : `You are addressed when someone clearly directs a question at you.`;
+        return (
+            `MEETING MODE: You are one of several participants (people and other agents) in a live meeting. ` +
+            `LISTEN to the whole conversation, but do NOT respond to every utterance — speak only when it is your turn. ` +
+            `${addressed} When you are not addressed, stay silent and keep listening; never talk over others or answer ` +
+            `a question meant for someone else. Let people finish before you respond, and keep your replies brief.`
+        );
     }
 
     /**

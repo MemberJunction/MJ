@@ -1652,9 +1652,12 @@ export class BaseAgent {
         // cascade, the tool set (always incl. invoke-target-agent), and memory are byte-for-byte identical to
         // the native realtime chat. Bridges differ ONLY in opening the session server-side (StartSession) and
         // their media transport. See plans/realtime/realtime-core-host-convergence.md.
-        const prep = await new RealtimeClientSessionService().PrepareRealtimeSessionParams(
-            this.buildBridgePrepInput(params), params.contextUser as UserInfo, provider,
-        );
+        // ONE service instance: it produces the prep AND wires the long-lived runtime, so the in-flight
+        // delegation registry (barge-in cancel) is shared between them.
+        const service = new RealtimeClientSessionService();
+        const input = this.buildBridgePrepInput(params);
+        const contextUser = params.contextUser as UserInfo;
+        const prep = await service.PrepareRealtimeSessionParams(input, contextUser, provider);
         if (!prep.Success || !prep.Resolution || !prep.SessionParams) {
             throw new Error(
                 prep.ErrorMessage ?? `Failed to prepare a realtime session for agent '${params.agent.Name}'. ` +
@@ -1663,28 +1666,14 @@ export class BaseAgent {
             );
         }
         const session = await prep.Resolution.Model.StartSession(prep.SessionParams);
-        this.wireBridgeToolFallback(session);
-        return session;
-    }
 
-    /**
-     * Wires a SAFE tool-call fallback on a bridged session. The core prep registers `invoke-target-agent`
-     * (delegation is a core capability), but a bridge's tool RUNTIME — real delegate-to-target execution +
-     * `AIAgentSession`/run tracking — is **Phase 2** of the convergence
-     * (`plans/realtime/realtime-core-host-convergence.md`); LiveKit today is audio-only. Until that lands,
-     * answer any tool call with a structured "not yet available here" so the model **narrates** the
-     * limitation to the user instead of hanging on an unanswered call. Phase 2 replaces this with the real
-     * delegate-to-target wiring (reusing {@link delegateRealtimeToTarget}).
-     *
-     * @param session The freshly opened bridged session.
-     */
-    private wireBridgeToolFallback(session: IRealtimeSession): void {
-        session.OnToolCall((call) => {
-            void session.SendToolResult(
-                call.CallID,
-                JSON.stringify({ success: false, error: 'Tool execution is not yet wired on this realtime surface — let the user know.' }),
-            );
-        });
+        // Phase 2: wire the SAME core runtime the native chat uses — real `invoke-target-agent` delegation
+        // (target runs via AgentRunner, nested + tracked) + co-agent run/prompt-run observability, finalized
+        // when the bridge calls `session.Close()`. No host-local tool re-implementation. The runtime handle's
+        // side effects live on `session` (OnToolCall + a finalize-wrapped Close), so the bridge just owns the
+        // session. See plans/realtime/realtime-core-host-convergence.md (Phase 2).
+        await service.WireBridgeRealtimeSession(session, input, prep, contextUser, provider);
+        return session;
     }
 
     /**
@@ -1693,7 +1682,8 @@ export class BaseAgent {
      * ride `params.data` (the same conduit the native dev picker uses, funneled into the one
      * `ConfigOverridesJson` cascade slot via {@link BuildRealtimeOverridesJson}). Tools are left empty — a
      * bridge host injects its OWN UX tools (none for LiveKit audio today); identity/precedence/invoke-target
-     * come from the core. `AgentSessionID` is unused by prep (it drives observability, a future bridge step).
+     * come from the core. `AgentSessionID` groups this session's observability runs (see
+     * {@link RealtimeClientSessionService.WireBridgeRealtimeSession}).
      *
      * @param params The bridge execution parameters.
      * @returns The core prep input.
@@ -1702,6 +1692,14 @@ export class BaseAgent {
         const modelID = (params.data?.realtimeModelID as string | undefined)?.trim() || undefined;
         const voice = (params.data?.realtimeVoice as string | undefined)?.trim() || undefined;
         const targetID = (params.data?.targetAgentID as string | undefined)?.trim() || '';
+        // Multi-agent meeting signal (set by the room coordinator when the agent joins a room that already
+        // has agents): disable the model's blind auto-response + add meeting discipline to the prompt so it
+        // hears everything but speaks only when addressed. SelfNames feed only the prompt phrasing; the
+        // addressing GATE is the bridge's matcher. See plans/realtime/multi-agent-meeting-turn-taking.md.
+        const meetingMode = params.data?.realtimeMeetingMode === true;
+        const selfNames = Array.isArray(params.data?.realtimeSelfNames)
+            ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
+            : undefined;
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
@@ -1710,6 +1708,8 @@ export class BaseAgent {
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
             ConversationMessages: params.conversationMessages,
             UserID: params.contextUser?.ID,
+            DisableAutoResponse: meetingMode || undefined,
+            SelfNames: selfNames,
         };
     }
 

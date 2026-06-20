@@ -20,6 +20,15 @@ import {
     BuildRealtimeOverridesJson,
     GetProviderVoiceSettings,
 } from '../realtime/realtime-coagent-config';
+import { RealtimeClientSessionService, type PrepareClientSessionInput } from '../realtime/realtime-client-session-service';
+
+/** Exposes the two protected meeting-mode prep seams for direct, engine-free assertions. */
+class MeetingProbe extends RealtimeClientSessionService {
+    public MeetingFraming(input: PrepareClientSessionInput): string { return this.buildMeetingFraming(input); }
+    public SessionConfig(input: PrepareClientSessionInput): Record<string, unknown> | undefined {
+        return this.buildSessionConfigBag(input, undefined, undefined) as Record<string, unknown> | undefined;
+    }
+}
 
 // Helpers to build the per-layer TypeConfiguration JSON the cascade consumes.
 const cfg = (modelPreference?: string, voice?: string): string =>
@@ -124,6 +133,34 @@ describe('Realtime convergence — drift protection', () => {
             const eff = ResolveEffectiveRealtimeConfig(null, cfg('co', 'alloy'), overrideJson, cfg('tgt', 'echo'));
             expect(eff.realtime?.modelPreference).toBe('picked-model');
             expect((GetProviderVoiceSettings(eff, 'OpenAIRealtime') as { voice?: string }).voice).toBe('verse');
+        });
+    });
+
+    // ── Multi-agent meeting turn-taking (MVP): hear always, speak when addressed ───────────────────────
+    describe('meeting mode prep (one producer, neutral lever)', () => {
+        const probe = new MeetingProbe();
+        const base: PrepareClientSessionInput = { TargetAgentID: 't', AgentSessionID: 's' };
+
+        it('puts the host-NEUTRAL disableAutoResponse flag in the session Config only in meeting mode', () => {
+            expect(probe.SessionConfig({ ...base, DisableAutoResponse: true })?.disableAutoResponse).toBe(true);
+            // 1:1 call: Config untouched (no flag) — preserves the prior behavior byte-for-byte.
+            expect(probe.SessionConfig({ ...base })).toBeUndefined();
+        });
+
+        it('adds the meeting discipline clause (named addressing) only in meeting mode', () => {
+            const clause = probe.MeetingFraming({ ...base, DisableAutoResponse: true, SelfNames: ['Marketing', 'Marketing Agent'] });
+            expect(clause).toContain('MEETING MODE');
+            expect(clause).toContain('speak only when');     // "speak only when it is your turn"
+            expect(clause).toContain('Marketing');
+            expect(clause).toContain('Marketing Agent');
+            // A 1:1 call must NOT carry the clause (prompt unchanged).
+            expect(probe.MeetingFraming({ ...base })).toBe('');
+        });
+
+        it('falls back to generic addressing when no self names are supplied', () => {
+            const clause = probe.MeetingFraming({ ...base, DisableAutoResponse: true });
+            expect(clause).toContain('MEETING MODE');
+            expect(clause).toContain('clearly directs a question at you');
         });
     });
 });

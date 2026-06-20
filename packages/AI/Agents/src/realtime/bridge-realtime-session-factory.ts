@@ -56,6 +56,14 @@ export interface BridgeRealtimeSessionContext {
     ContextUser?: UserInfo;
     /** The request-scoped metadata provider (multi-provider safe). Falls back to the global default. */
     MetadataProvider?: IMetadataProvider;
+    /**
+     * **Multi-agent meeting mode.** Set `true` when the agent joins a room that already has other agents,
+     * so it disables blind auto-response and speaks only when addressed (the room coordinator decides this).
+     * Flows to `params.data.realtimeMeetingMode`. See `plans/realtime/multi-agent-meeting-turn-taking.md`.
+     */
+    MeetingMode?: boolean;
+    /** The names the agent answers to (display name + aliases) — phrasing for the meeting prompt only. */
+    SelfNames?: string[];
 }
 
 /**
@@ -118,6 +126,12 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
     }
     if (ctx.RealtimeVoice && ctx.RealtimeVoice.trim().length > 0) {
         data.realtimeVoice = ctx.RealtimeVoice.trim();
+    }
+    if (ctx.MeetingMode === true) {
+        data.realtimeMeetingMode = true;
+    }
+    if (ctx.SelfNames && ctx.SelfNames.length > 0) {
+        data.realtimeSelfNames = ctx.SelfNames;
     }
     return Object.keys(data).length > 0 ? data : undefined;
 }

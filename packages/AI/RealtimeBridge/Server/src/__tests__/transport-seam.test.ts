@@ -366,6 +366,36 @@ describe('AIBridgeEngine — turn-taking integration (Passive)', () => {
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
+
+    it('meeting mode (DisableAutoResponse): the bridge is the SOLE trigger — forces a spoken update ONLY when addressed', async () => {
+        // With auto-response OFF (multi-agent room), the model never replies on its own, so the engine MUST
+        // force exactly one response when the turn policy says the agent was addressed — and stay silent on
+        // un-addressed turns. This is the core of "hear everything, speak only when addressed".
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(
+            baseParams(session, provider, {
+                TurnMode: 'Passive',
+                DisableAutoResponse: true,
+                TurnMatcher: { IsAddressed: (seg) => /\bSage\b/i.test(seg.Text) },
+            }),
+        );
+
+        // Un-addressed final turn → silent (no forced response).
+        session.EmitTranscript({ Role: 'user', Text: 'How is the weather today', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(0);
+
+        // Addressed final turn → exactly one forced response (the bridge speaks for the agent).
+        session.EmitTranscript({ Role: 'user', Text: 'Hey Sage, what do you think?', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(1);
+
+        // Assistant + non-final turns never trigger.
+        session.EmitTranscript({ Role: 'assistant', Text: 'Sage here, responding', IsFinal: true });
+        session.EmitTranscript({ Role: 'user', Text: 'Sage', IsFinal: false });
+        expect(session.SpokenUpdates.length).toBe(1);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
