@@ -21,6 +21,16 @@ import { LogError } from './logging';
  */
 export class BaseEntitySaveQueue {
     private readonly queue = new KeyedSerialTaskQueue();
+    private readonly onError?: (message: string) => void;
+
+    /**
+     * @param opts.onError Optional handler for a failed save's diagnostic message. Defaults to the
+     *   global `LogError`. Consumers with structured logging (e.g. a category/metadata logger) pass
+     *   their own so failures stay in their log stream.
+     */
+    constructor(opts?: { onError?: (message: string) => void }) {
+        this.onError = opts?.onError;
+    }
 
     /**
      * Fire-and-forget INSERT of a freshly `NewRecord()`'d entity. The entity instance is the
@@ -61,12 +71,21 @@ export class BaseEntitySaveQueue {
             }
             const ok = await entity.Save(options);
             if (!ok) {
-                LogError(`${label} failed: ${this.saveError(entity)}`);
+                this.logFailure(`${label} failed: ${this.saveError(entity)}`);
             }
             return ok;
         } catch (e) {
-            LogError(`${label} threw: ${e instanceof Error ? e.message : String(e)}`);
+            this.logFailure(`${label} threw: ${e instanceof Error ? e.message : String(e)}`);
             return false;
+        }
+    }
+
+    /** Routes a failure message to the caller-supplied handler, or the global `LogError` by default. */
+    private logFailure(message: string): void {
+        if (this.onError) {
+            this.onError(message);
+        } else {
+            LogError(message);
         }
     }
 

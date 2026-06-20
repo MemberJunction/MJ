@@ -1383,6 +1383,39 @@ CodeNameFromString('First Name');          // 'FirstName'
 
 ---
 
+## Fire-and-Forget Entity Saves (`BaseEntitySaveQueue`)
+
+`BaseEntitySaveQueue` is the entity-aware façade over `@memberjunction/global`'s `KeyedSerialTaskQueue` for **non-blocking persistence** — writing observability/log rows (agent-run steps, action-execution logs, AI prompt runs, record-process details) without blocking the work that produced them on a DB round-trip.
+
+```typescript
+import { BaseEntitySaveQueue } from '@memberjunction/core';
+
+const queue = new BaseEntitySaveQueue();
+
+// Fire-and-forget INSERT of a freshly NewRecord()'d entity.
+queue.Insert(logEntity);
+
+// Fire-and-forget UPDATE chained after that entity's INSERT. The mutation runs INSIDE the
+// post-INSERT task, so the INSERT's finalizeSave reload can never revert it.
+queue.Update(logEntity, (e) => { e.Set('EndedAt', new Date()); e.Set('Status', 'Completed'); });
+
+// At a run/goal boundary, flush to await all pending saves + surface failure counts.
+const { failures } = await queue.Flush();
+```
+
+**Why the `Update(applyMutation)` shape matters.** A fire-and-forget INSERT serializes the entity's current fields and, on completion, `BaseEntity.finalizeSave` reloads the inserted row (`init()` + `SetMany`). Any field mutated on that same instance *while the INSERT is in flight* is reverted, and a force-persisted UPDATE then writes the stale values — the classic "stuck at Running" bug. Because the queue runs `applyMutation` **inside** the post-INSERT task, the mutation always lands after the reload, making that race **impossible by construction**.
+
+| Method | Purpose |
+|---|---|
+| `Insert(entity)` | Fire-and-forget create. The entity instance is the serialization key, so a later `Update` of the same instance waits for it. |
+| `Update(entity, applyMutation?)` | Fire-and-forget, force-persisted (`IgnoreDirtyState`) update chained after the INSERT; `applyMutation` runs post-INSERT (race-safe). |
+| `Flush()` | Await all pending saves; returns `{ failures, rejections }`. Call at a run/goal boundary. |
+| `new BaseEntitySaveQueue({ onError })` | Route failure messages to a structured logger (e.g. a category/metadata logger) instead of the default `LogError`. |
+
+Single-primary-key entities only; the queue logs (never throws) on a failed save, since these rows are observability and must not break the work that produced them.
+
+---
+
 ## Error Handling
 
 RunView and RunQuery do NOT throw exceptions on failure. Always check `Success`:

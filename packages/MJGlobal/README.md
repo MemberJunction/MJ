@@ -456,6 +456,26 @@ cache.Remove('user-prefs');
 cache.Clear();
 ```
 
+### KeyedSerialTaskQueue
+
+An entity-agnostic primitive for **fire-and-forget work that must serialize per key**. Tasks enqueued under the same key (compared by object identity) run strictly in order — the next can't start until the prior settles — while tasks under different keys run concurrently. Failures are tallied for a later `flush()` and never propagate outward, so the enqueue site is never blocked, nor broken, by a background failure.
+
+It is **self-bounding**: only in-flight tasks are retained (they drop out as they settle) and failures accumulate into counters, so a long-lived queue that never flushes does not grow without bound.
+
+```typescript
+import { KeyedSerialTaskQueue } from '@memberjunction/global';
+
+const queue = new KeyedSerialTaskQueue({ onError: (err, label) => console.error(label, err) });
+
+// Same key (the `record` object) → these run in order; different keys → concurrent.
+queue.enqueue(record, () => insert(record));
+queue.enqueue(record, () => update(record), { label: 'update', isOk: (ok) => ok === true });
+
+const { failures, rejections } = await queue.flush(); // await in-flight tasks + read/reset the failure tally
+```
+
+The canonical consumer is `BaseEntitySaveQueue` in `@memberjunction/core`, which builds the fire-and-forget entity-save pattern (INSERT then chained UPDATE, with the "mutate-after-insert" race made structurally impossible) on top of this primitive.
+
 ### WarningManager
 
 A singleton warning system with session-level deduplication, debounced output, and tree-structured formatting. Tracks deprecation warnings, field-not-found warnings, and redundant load warnings.

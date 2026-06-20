@@ -14,9 +14,10 @@
 - ✅ **New consumer** `GenericProcessRunTracker` (`@memberjunction/record-set-processor`) — fire-and-forget per-record detail writes + flush on complete (35 tests green).
 - ✅ **Migration 1/3** `AgentRunStepSaveQueue` (`@memberjunction/ai-core-plus`) → thin wrapper; existing race test stays green (8/8).
 - ✅ **Migration 2/3** `ActionEngine` log (`@memberjunction/actions`) → shared queue; suite green (152/152, incl. a fixed pre-existing `MJLruCache` mock gap).
-- ⏳ **Migration 3/3** `AIPromptRunner` + `AIModelRunner` (`@memberjunction/ai-prompts`) — **DEFERRED for a careful pass.** `updatePromptRun` sets ~50 fields (with conditionals/computations) across two files + the consolidated path, on the critical AI-execution path, and uses a rich `this.logError` (category/metadata) rather than the global `LogError`. Wrapping those mutations into post-INSERT `Update` callbacks warrants per-statement review (and a decision on preserving the structured logging) rather than a rushed change. The existing hand-rolled queue keeps working until then.
+- ✅ **Migration 3/3** `AIPromptRunner` + `AIModelRunner` (`@memberjunction/ai-prompts`) → shared queue. `updatePromptRun`'s ~50-field finalize block was extracted to `applyFinalizedPromptRunFields` and run inside the post-INSERT `Update` callback (race-safe); `createPromptRun` → `Insert`; the consolidated/complete/fail paths → `Update` (insert demonstrably landed after the awaited model/embedding work, so no callback needed); `WaitForPendingPromptRunSaves()` → `Flush()`. The structured `this.logError` (category/metadata) is preserved via `BaseEntitySaveQueue`'s new `onError` hook. ai-prompts suite green (229/229; the two fire-and-forget tests updated to the queue API).
+- ✅ **Strengthened tests**: Layer A 11, Layer B 11 (added `onError` routing, cross-entity concurrency, flush-window, self-bounding cases). README docs added to `@memberjunction/global` + `@memberjunction/core`.
 
-Changeset added (patch): `global`, `core`, `ai-core-plus`, `actions`, `record-set-processor`. `ai-prompts` joins when migration 3/3 lands; this file moves to `plans/complete/` then.
+**All 3 sites migrated.** Changeset (patch): `global`, `core`, `ai-core-plus`, `actions`, `record-set-processor`, `ai-prompts`. This file now lives in `plans/complete/`.
 
 ---
 

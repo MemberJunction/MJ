@@ -145,4 +145,32 @@ describe('BaseEntitySaveQueue', () => {
 
         expect(persisted).toEqual(['Running', 'Running']);
     });
+
+    it('routes a failed save to the provided onError handler (not the default LogError)', async () => {
+        const messages: string[] = [];
+        const q = new BaseEntitySaveQueue({ onError: (m) => messages.push(m) });
+        q.Insert(fakeEntity({ result: false }));
+        const result = await q.Flush();
+        expect(result.failures).toBe(1);
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toMatch(/failed/i);
+    });
+
+    it('saves different entities concurrently (no cross-entity serialization)', async () => {
+        const q = new BaseEntitySaveQueue();
+        const order: string[] = [];
+        const slow = { EntityInfo: { Name: 'Slow' }, LatestResult: { CompleteMessage: '' }, Save: vi.fn(async () => { await new Promise((r) => setTimeout(r, 25)); order.push('slow'); return true; }) } as unknown as BaseEntity;
+        const fast = { EntityInfo: { Name: 'Fast' }, LatestResult: { CompleteMessage: '' }, Save: vi.fn(async () => { order.push('fast'); return true; }) } as unknown as BaseEntity;
+        q.Insert(slow);
+        q.Insert(fast);
+        await q.Flush();
+        expect(order).toEqual(['fast', 'slow']);
+    });
+
+    it('Flush drains — a second Flush after no new work reports zero', async () => {
+        const q = new BaseEntitySaveQueue();
+        q.Insert(fakeEntity({ result: false }));
+        expect((await q.Flush()).failures).toBe(1);
+        expect((await q.Flush()).failures).toBe(0);
+    });
 });

@@ -69,4 +69,34 @@ describe('KeyedSerialTaskQueue', () => {
         await q.flush();
         expect(order).toEqual([2]);
     });
+
+    it('passes the label to onError', async () => {
+        const seen: Array<string | undefined> = [];
+        const q = new KeyedSerialTaskQueue({ onError: (_e, label) => seen.push(label) });
+        q.enqueue({}, async () => { throw new Error('boom'); }, { label: 'my-task' });
+        await q.flush();
+        expect(seen).toEqual(['my-task']);
+    });
+
+    it('flush awaits tasks enqueued before it began, not ones enqueued after', async () => {
+        const q = new KeyedSerialTaskQueue();
+        const done: string[] = [];
+        q.enqueue({}, async () => { done.push('first'); });        // fast — in the flush snapshot
+        const flushed = q.flush();                                  // snapshots only 'first'
+        q.enqueue({}, async () => { await delay(30); done.push('second'); }); // slow, after flush began
+        await flushed;
+        expect(done).toEqual(['first']);        // flush awaited only 'first'; 'second' is still running
+        await q.flush();                         // next window awaits 'second'
+        expect(done).toEqual(['first', 'second']);
+    });
+
+    it('is self-bounding — many settled tasks do not accumulate (flush still awaits in-flight)', async () => {
+        const q = new KeyedSerialTaskQueue();
+        for (let i = 0; i < 50; i++) {
+            q.enqueue({}, async () => { /* resolves immediately */ });
+        }
+        // All settle; a flush after they've drained reports zero and resolves promptly.
+        await delay(5);
+        expect(await q.flush()).toEqual({ failures: 0, rejections: 0 });
+    });
 });
