@@ -26,7 +26,11 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
 
 // Mock the agent factory so importing the resolver doesn't pull the heavy @memberjunction/ai-agents graph
 // into this thin resolver test (the binding only needs the symbol to exist).
-vi.mock('@memberjunction/ai-agents', () => ({ CreateBridgeRealtimeSession: vi.fn() }));
+vi.mock('@memberjunction/ai-agents', () => ({
+  CreateBridgeRealtimeSession: vi.fn(),
+  FinalizeBridgeCoAgentRuns: vi.fn(),
+  GetRealtimeModelVoices: vi.fn(),
+}));
 
 import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput } from '../resolvers/RealtimeBridgeResolver';
 import type { AppContext } from '../types.js';
