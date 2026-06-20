@@ -13,6 +13,7 @@ export * from "./generic/runQuery";
 export * from "./generic/interfaces";
 export * from "./generic/scoring/ReciprocalRankFusion";
 export * from "./generic/baseEntity";
+export * from "./generic/BaseEntitySaveQueue";
 export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
 export * from "./generic/baseRemotableOperation";

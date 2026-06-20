@@ -7,7 +7,9 @@ const { mockClassFactory } = vi.hoisted(() => ({
         GetAllRegistrations: vi.fn().mockReturnValue([]),
     },
 }));
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    // Real MJLruCache — EntityActionInvocationTypes' script cache (and its caching tests) need the real one.
+    MJLruCache: (await importOriginal<typeof import('@memberjunction/global')>()).MJLruCache,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,

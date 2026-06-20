@@ -5,7 +5,7 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { BaseEntitySaveQueue, IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { MJProcessRunDetailEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
 import {
     IProcessRunTracker,
@@ -25,6 +25,14 @@ interface GenericRunHandle extends RunHandle {
 
 /** The default tracker, persisting to the generic `MJ: Process Runs` / `MJ: Process Run Details` tables. */
 export class GenericProcessRunTracker implements IProcessRunTracker {
+    /**
+     * Fire-and-forget queue for per-record detail INSERTs. Each detail is its own entity instance (a
+     * distinct key), so detail writes run concurrently without blocking the per-record loop; `CompleteRun`
+     * flushes them before finalizing the run. (Reliable/insert-before-fire mode is a future enhancement —
+     * it needs a per-record start hook on `IProcessRunTracker`.)
+     */
+    private readonly detailQueue = new BaseEntitySaveQueue();
+
     public async BeginRun(meta: ProcessRunMeta, contextUser: UserInfo, provider?: IMetadataProvider): Promise<RunHandle> {
         const md = provider ?? Metadata.Provider;
         const run = await md.GetEntityObject<MJProcessRunEntity>('MJ: Process Runs', contextUser);
@@ -73,11 +81,9 @@ export class GenericProcessRunTracker implements IProcessRunTracker {
         detail.ErrorMessage = result.ErrorMessage ?? null;
         detail.ActionExecutionLogID = result.ActionExecutionLogID ?? null;
         detail.AIAgentRunID = result.AIAgentRunID ?? null;
-        const saved = await detail.Save();
-        if (!saved) {
-            // A failed detail write must not abort the run — log and continue.
-            LogError(`GenericProcessRunTracker: failed to save Process Run Detail for record '${record.RecordID}': ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-        }
+        // Fire-and-forget — the detail write must not block the per-record loop, and a failed write must
+        // not abort the run (the queue logs failures; CompleteRun flushes + reports the count).
+        this.detailQueue.Insert(detail);
     }
 
     public async Checkpoint(handle: RunHandle, cursor: ProcessCursor, counts: RunCounts, _contextUser: UserInfo, _provider?: IMetadataProvider): Promise<boolean> {
@@ -109,6 +115,12 @@ export class GenericProcessRunTracker implements IProcessRunTracker {
     }
 
     public async CompleteRun(handle: RunHandle, summary: ProcessRunSummary, _contextUser: UserInfo, _provider?: IMetadataProvider): Promise<void> {
+        // Ensure every fire-and-forget detail write has landed before we finalize the run header.
+        const flush = await this.detailQueue.Flush();
+        if (flush.failures > 0) {
+            LogError(`GenericProcessRunTracker: ${flush.failures} Process Run Detail write(s) failed for run '${(handle as GenericRunHandle).run.ID}'`);
+        }
+
         const run = (handle as GenericRunHandle).run;
         run.Status = summary.Status;
         run.EndTime = summary.EndTime ?? new Date();

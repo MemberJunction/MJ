@@ -7,6 +7,19 @@
 
 ---
 
+## 0. Implementation status (2026-06-20)
+
+- ✅ **Layer A** `KeyedSerialTaskQueue` (`@memberjunction/global`) — implemented **self-bounding** (in-flight set + failure counters, not a growing pending list) + 8 unit tests.
+- ✅ **Layer B** `BaseEntitySaveQueue` (`@memberjunction/core`) — implemented + 8 unit tests (race-proofing test ported from `AgentRunStepSaveQueue`).
+- ✅ **New consumer** `GenericProcessRunTracker` (`@memberjunction/record-set-processor`) — fire-and-forget per-record detail writes + flush on complete (35 tests green).
+- ✅ **Migration 1/3** `AgentRunStepSaveQueue` (`@memberjunction/ai-core-plus`) → thin wrapper; existing race test stays green (8/8).
+- ✅ **Migration 2/3** `ActionEngine` log (`@memberjunction/actions`) → shared queue; suite green (152/152, incl. a fixed pre-existing `MJLruCache` mock gap).
+- ⏳ **Migration 3/3** `AIPromptRunner` + `AIModelRunner` (`@memberjunction/ai-prompts`) — **DEFERRED for a careful pass.** `updatePromptRun` sets ~50 fields (with conditionals/computations) across two files + the consolidated path, on the critical AI-execution path, and uses a rich `this.logError` (category/metadata) rather than the global `LogError`. Wrapping those mutations into post-INSERT `Update` callbacks warrants per-statement review (and a decision on preserving the structured logging) rather than a rushed change. The existing hand-rolled queue keeps working until then.
+
+Changeset added (patch): `global`, `core`, `ai-core-plus`, `actions`, `record-set-processor`. `ai-prompts` joins when migration 3/3 lands; this file moves to `plans/complete/` then.
+
+---
+
 ## 1. Motivation
 
 Three subsystems independently hand-roll the **same** fire-and-forget persistence pattern:
