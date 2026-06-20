@@ -9,8 +9,7 @@ import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
-import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
-import { ResultSelectionConfig } from './ParallelExecution';
+import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
@@ -185,7 +184,7 @@ export class AIPromptRunner {
   private _metadata: Metadata;
   private _templateEngine: TemplateEngineServer;
   private _executionPlanner: ExecutionPlanner;
-  private _parallelCoordinator: ParallelExecutionCoordinator;
+  private _parallelCoordinator?: IParallelExecutionCoordinator;
   private _jsonValidator: JSONValidator;
   private _modelRunner: AIModelRunner;
   private _provider: IMetadataProvider | null = null;
@@ -234,9 +233,42 @@ export class AIPromptRunner {
     this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
-    this._parallelCoordinator = new ParallelExecutionCoordinator();
     this._jsonValidator = new JSONValidator();
     this._modelRunner = new AIModelRunner();
+  }
+
+  /** ClassFactory key the parallel coordinator self-registers under (see {@link ParallelCoordinator}). */
+  private static readonly PARALLEL_COORDINATOR_KEY = 'ParallelExecutionCoordinator';
+
+  /**
+   * Lazily resolves the parallel execution coordinator.
+   *
+   * The coordinator is a SUBCLASS of AIPromptRunner — it inherits {@link executeModel} and the rest
+   * of the battle-tested execution path so there is a single source of truth for credential / driver
+   * / ChatParams / streaming resolution. That subclass relationship means the base cannot statically
+   * `new` it without a hard circular import, so we resolve it through the ClassFactory instead (the
+   * coordinator self-registers via `@RegisterClass(AIPromptRunner, PARALLEL_COORDINATOR_KEY)`).
+   * Created once per runner and reused; the runner's Provider override is propagated. Throws a clear
+   * error if the coordinator class was never loaded/registered — otherwise ClassFactory would silently
+   * fall back to a plain AIPromptRunner that lacks the parallel methods.
+   */
+  protected get ParallelCoordinator(): IParallelExecutionCoordinator {
+    if (!this._parallelCoordinator) {
+      const instance = MJGlobal.Instance.ClassFactory.CreateInstance<IParallelExecutionCoordinator>(
+        AIPromptRunner,
+        AIPromptRunner.PARALLEL_COORDINATOR_KEY,
+      );
+      if (!instance || typeof instance.executeTasksInParallel !== 'function') {
+        throw new Error(
+          `ParallelExecutionCoordinator is not registered with the ClassFactory. Ensure ` +
+          `'@memberjunction/ai-prompts' is fully loaded (it is exported from the package index and ` +
+          `picked up by the class-registration manifest).`,
+        );
+      }
+      instance.Provider = this.Provider;
+      this._parallelCoordinator = instance;
+    }
+    return this._parallelCoordinator;
   }
 
   /**
@@ -1087,7 +1119,7 @@ export class AIPromptRunner {
     }
 
     // Execute tasks in parallel
-    const parallelResult = await this._parallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
+    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
 
     if (!parallelResult.success) {
       throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
@@ -1108,7 +1140,7 @@ export class AIPromptRunner {
         selectorPromptId: prompt.ResultSelectorPromptID,
       };
 
-      const aiSelectedResult = await this._parallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken);
+      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken);
       if (aiSelectedResult) {
         selectedResult = aiSelectedResult;
       }
@@ -2787,7 +2819,7 @@ export class AIPromptRunner {
       promptRun.Status = 'Running';
       promptRun.Cancelled = false;
       promptRun.CacheHit = false;
-      promptRun.StreamingEnabled = false;
+      promptRun.StreamingEnabled = !!params.onStreaming;
       promptRun.WasSelectedResult = false;
       
       // Set model selection tracking fields
@@ -3403,9 +3435,13 @@ export class AIPromptRunner {
   }
 
   /**
-   * Executes the AI model with the rendered prompt
+   * Executes the AI model with the rendered prompt.
+   *
+   * `protected` so the parallel coordinator subclass reuses this exact code path — credential
+   * resolution, driver selection, ChatParams construction, prefill, media handling, and streaming
+   * all live here ONCE. Do not duplicate this logic elsewhere.
    */
-  private async executeModel(
+  protected async executeModel(
     model: MJAIModelEntityExtended,
     renderedPrompt: string,
     prompt: MJAIPromptEntityExtended,
@@ -3568,6 +3604,19 @@ export class AIPromptRunner {
 
       // Apply assistant prefill (native or fallback) based on prompt config and provider support
       this.applyAssistantPrefill(chatParams, prompt, model, vendorId, llm);
+
+      // Streaming: wire the prompt-level onStreaming callback into the LLM call. This is the SINGLE
+      // place streaming is configured for prompt execution, so the single-model path and the parallel
+      // path (which bridges its per-task callbacks into params.onStreaming) stream through identical
+      // code — no second streaming implementation that can drift.
+      if (params.onStreaming) {
+        const onStreaming = params.onStreaming;
+        chatParams.streaming = true;
+        chatParams.streamingCallbacks = {
+          OnContent: (chunk: string, isComplete: boolean) =>
+            onStreaming({ content: chunk, isComplete, modelName: model.Name }),
+        };
+      }
 
       // Execute the model with cancellation support
       if (cancellationToken) {

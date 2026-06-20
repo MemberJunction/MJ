@@ -129,6 +129,8 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
 });
 
 import { AIPromptRunner } from '../AIPromptRunner';
+import { ParallelExecutionCoordinator } from '../ParallelExecutionCoordinator';
+import { MJGlobal } from '@memberjunction/global';
 import {
   buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL, VENDOR, CONFIG, MODEL_TYPE,
   makePromptModel, type AICatalog,
@@ -578,5 +580,82 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
     expect(credSpy.mock.calls[0][0]).toBe('AnthropicLLM'); // driverClass arg of hasCredentialsAvailable
     expect(execSpy).toHaveBeenCalledTimes(2);
     expect(result.success).toBe(true);
+  });
+});
+
+// ===========================================================================
+// The parallel coordinator is a SUBCLASS of AIPromptRunner so it REUSES the
+// battle-tested executeModel (credentials, driver, ChatParams, prefill, media,
+// streaming) instead of re-implementing it. These tests lock in that reuse so
+// the two execution paths can never silently drift apart again.
+// ===========================================================================
+describe('ParallelExecutionCoordinator — reuses base execution path (no drift)', () => {
+  type ExecArgs = unknown[];
+  type CoordInternals = {
+    executeModel: (...args: ExecArgs) => Promise<{ success: boolean; data?: unknown }>;
+    executeSingleTask: (params: unknown, task: unknown, timeoutMS: number) => Promise<{ success: boolean }>;
+    buildPerTaskParams: (params: unknown, task: unknown) => {
+      additionalParameters?: Record<string, unknown>;
+      onStreaming?: (chunk: { content: string; isComplete: boolean }) => void;
+    };
+  };
+
+  function makeTask(overrides: Record<string, unknown> = {}) {
+    return {
+      taskId: 't1', prompt: makePrompt(), model: { ID: 'm1', Name: 'Model One', DriverClass: 'GeminiLLM', APIName: 'gemini' },
+      renderedPrompt: 'hello', executionGroup: 0, priority: 0,
+      vendorId: 'v-google', vendorDriverClass: 'GeminiLLM', vendorApiName: 'gemini',
+      templateMessageRole: 'system', ...overrides,
+    };
+  }
+
+  it('inherits executeModel/buildMessageArray from the base — does not redefine them', () => {
+    const proto = ParallelExecutionCoordinator.prototype;
+    // Own-property checks: if someone re-adds a duplicate implementation, these fail.
+    expect(Object.prototype.hasOwnProperty.call(proto, 'executeModel')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(proto, 'buildMessageArray')).toBe(false);
+    expect(new ParallelExecutionCoordinator()).toBeInstanceOf(AIPromptRunner);
+  });
+
+  it('is resolvable from the ClassFactory under the key the base uses', () => {
+    const inst = MJGlobal.Instance.ClassFactory.CreateInstance(AIPromptRunner, 'ParallelExecutionCoordinator');
+    expect(inst).toBeInstanceOf(ParallelExecutionCoordinator);
+    expect(typeof (inst as unknown as CoordInternals & { executeTasksInParallel: unknown }).executeTasksInParallel).toBe('function');
+  });
+
+  it('executeSingleTask delegates the model call to the inherited executeModel with the task config', async () => {
+    const coord = new ParallelExecutionCoordinator();
+    const execSpy = vi.spyOn(coord as unknown as CoordInternals, 'executeModel')
+      .mockResolvedValue({ success: true, data: { usage: {} } });
+
+    const task = makeTask();
+    const result = await (coord as unknown as CoordInternals).executeSingleTask({ verbose: false }, task, 30000);
+
+    expect(execSpy).toHaveBeenCalledTimes(1);
+    const args = execSpy.mock.calls[0];
+    expect(args[0]).toBe(task.model);            // model
+    expect(args[2]).toBe(task.prompt);           // prompt entity (not re-derived)
+    expect(args[4]).toBe('v-google');            // vendorId
+    expect(args[8]).toBe('GeminiLLM');           // vendorDriverClass (no model.DriverClass fallback)
+    expect(args[9]).toBe('gemini');              // vendorApiName
+    expect(result.success).toBe(true);
+  });
+
+  it('buildPerTaskParams clones (no shared mutation), merges model params, and bridges streaming', () => {
+    const coord = new ParallelExecutionCoordinator();
+    const shared = { additionalParameters: { temperature: 0.1 } } as Record<string, unknown>;
+    const onContent = vi.fn();
+    const task = makeTask({
+      modelParameters: { topP: 0.9 },
+      streamingConfig: { enabled: true, callbacks: { OnContent: onContent } },
+    });
+
+    const per = (coord as unknown as CoordInternals).buildPerTaskParams(shared, task);
+
+    expect(per).not.toBe(shared);                                       // cloned, not the shared object
+    expect(shared.additionalParameters).toEqual({ temperature: 0.1 }); // shared object untouched
+    expect(per.additionalParameters).toEqual({ temperature: 0.1, topP: 0.9 }); // per-model merged in
+    per.onStreaming?.({ content: 'tok', isComplete: false });
+    expect(onContent).toHaveBeenCalledWith('tok', false);              // OnContent bridged via onStreaming
   });
 });
