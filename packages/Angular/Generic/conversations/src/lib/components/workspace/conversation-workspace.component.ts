@@ -174,6 +174,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private previousIsNewConversation: boolean = false; // Track new conversation state changes
   private destroy$ = new Subject<void>();
 
+  // Stored bound references so addEventListener and removeEventListener get the same function object.
+  private readonly boundOnResizeMove = this.onResizeMove.bind(this);
+  private readonly boundOnResizeEnd = this.onResizeEnd.bind(this);
+  private readonly boundOnResizeTouchMove = this.onResizeTouchMove.bind(this);
+  private readonly boundOnResizeTouchEnd = this.onResizeTouchEnd.bind(this);
+
   // User Settings key for server-side persistence
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -400,12 +406,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
 
     // Setup resize listeners
-    window.addEventListener('mousemove', this.onResizeMove.bind(this));
-    window.addEventListener('mouseup', this.onResizeEnd.bind(this));
+    window.addEventListener('mousemove', this.boundOnResizeMove);
+    window.addEventListener('mouseup', this.boundOnResizeEnd);
 
     // Setup touch listeners for mobile
-    window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
-    window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
+    window.addEventListener('touchmove', this.boundOnResizeTouchMove);
+    window.addEventListener('touchend', this.boundOnResizeTouchEnd);
 
     // CRITICAL: Initialize engines FIRST before rendering any UI
     // The isWorkspaceReady flag blocks all child components from rendering
@@ -571,10 +577,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
 
     // Remove resize listeners
-    window.removeEventListener('mousemove', this.onResizeMove.bind(this));
-    window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
-    window.removeEventListener('touchmove', this.onResizeTouchMove.bind(this));
-    window.removeEventListener('touchend', this.onResizeTouchEnd.bind(this));
+    window.removeEventListener('mousemove', this.boundOnResizeMove);
+    window.removeEventListener('mouseup', this.boundOnResizeEnd);
+    window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
+    window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
   }
 
   @HostListener('window:resize')
