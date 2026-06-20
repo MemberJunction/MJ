@@ -2,6 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { gradeCell, gradeCells, isCountBased } from './anti-vacuous.mjs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── isCountBased ──────────────────────────────────────────────────────────────────────────────────
 test('isCountBased: row-moving kinds and explicit countBased flag are count-based; others are not', () => {
@@ -168,4 +173,12 @@ test('gradeCell: a non-object cell fails gracefully', () => {
     const { pass, reasons } = gradeCell(null);
     assert.equal(pass, false);
     assert.ok(reasons.length === 1);
+});
+
+test('DRIFT GUARD: floor-check.workflow.js keeps the inline anti-vacuous e2e enforcement', () => {
+    // anti-vacuous is enforced INLINE for the hybrid-e2e path (not via this module); pin it so a future
+    // edit cannot silently drop the "0 rows / unmeasured assertion = FAIL" guard the module embodies.
+    const fc = readFileSync(resolve(__dirname, '..', '..', 'primitives', 'floor-check.workflow.js'), 'utf8');
+    assert.ok(fc.includes('e2e-landed-zero-rows'), 'floor-check must fail an e2e cell that landed zero rows');
+    assert.ok(fc.includes('e2e-assertion-unverified'), 'floor-check must fail an e2e cell with an unmeasured assertion');
 });

@@ -119,6 +119,10 @@ const FLOOR_VERDICT_SCHEMA = {
                             // wrong &IntegrationID=@parent:ID resolves to the IO's OWN id, matches no
                             // sibling, and rolls back mj sync push (the iMIS/GrowthZone deploy defect).
                             'fk-lookup-qualifier-wrong',
+                            // An IO declares a capability flag (SupportsCreate/Update/Delete/IncrementalSync)
+                            // while its required per-operation columns are blank -> the generic CRUD path
+                            // THROWS at runtime. Capability flag set requires its required column set populated.
+                            'bijection-violation',
                         ],
                     },
                     slot: { type: 'string' },
@@ -162,6 +166,7 @@ const RAW_FETCH_SCHEMA = {
         planContent: { type: 'string' },          // the planner-emitted plans/<vendor>.workflow.js ('' if absent)
         enumerateCatalogJson: { type: 'string' }, // stdout of the DETERMINISTIC record-type enumerator run over the source artifact(s) ('' if no source)
         fkLookupQualifierJson: { type: 'string' }, // stdout of fk-lookup-qualifier.mjs over the metadata file — IOF FK @lookup-qualifier check ('' if it errors)
+        bijectionJson: { type: 'string' }, // stdout of graders/bijection.mjs over the metadata file — capability<->per-operation-column bijection ('' if it errors)
     },
     additionalProperties: false,
 };
@@ -222,7 +227,8 @@ const fetched = await agent(
             ? `12. Run \`node packages/Integration/connector-builder-workshop/floor/enumerate-catalog.mjs ${enumPathArgs}\` -> return its stdout VERBATIM as enumerateCatalogJson (deterministic record-type enumeration; '' if it errors). This is a fixed script — run it exactly, do not edit its output.\n`
             : `12. No source artifact paths available: return enumerateCatalogJson=''.\n`) +
         `13. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/fk-lookup-qualifier.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as fkLookupQualifierJson (deterministic IOF FK @lookup-qualifier check — flags &IntegrationID=@parent:ID, which must be @parent:IntegrationID; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
-        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, enumerateCatalogJson, fkLookupQualifierJson }.`,
+        `14. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/graders/bijection.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as bijectionJson (deterministic capability<->per-operation-column bijection — flags an IO whose SupportsCreate/Update/Delete/IncrementalSync is set while its required columns are blank; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
+        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, enumerateCatalogJson, fkLookupQualifierJson, bijectionJson }.`,
     { agentType: 'independent-reviewer', schema: RAW_FETCH_SCHEMA, phase: 'load-bijection', label: `floor-fetch:${runID}` }
 );
 
@@ -296,6 +302,24 @@ if (fetched && typeof fetched.fkLookupQualifierJson === 'string' && fetched.fkLo
             failures.push({
                 rule: 'fk-lookup-qualifier-wrong',
                 detail: `${fk.violations.length} IOF RelatedIntegrationObjectID @lookup(s) use the wrong qualifier &IntegrationID=@parent:ID — that resolves to the IntegrationObject's own id (not the Integration's), matches no sibling object, and rolls back mj sync push (the iMIS/GrowthZone deploy failure). Change each to &IntegrationID=@parent:IntegrationID. Offenders: ${sample}${fk.violations.length > 25 ? ', …' : ''}`,
+            });
+        }
+    } catch { /* malformed script output -> not gated here; the standalone `--all` run is the hard CI gate */ }
+}
+
+// ── Capability<->per-operation-column bijection gate (deterministic; agent ran graders/bijection.mjs). ──
+// An IO that declares a capability flag (SupportsCreate/Update/Delete/IncrementalSync) while any of that
+// capability's required per-operation columns (CreateAPIPath/Method/BodyShape/IDLocation, etc.) is blank
+// makes the generic BaseRESTIntegrationConnector CRUD path THROW at the first write of that verb. Flag set
+// requires the required columns populated. Read the script JSON (the large-catalog path strips relatedEntities).
+if (fetched && typeof fetched.bijectionJson === 'string' && fetched.bijectionJson.trim() !== '') {
+    try {
+        const bj = JSON.parse(fetched.bijectionJson);
+        if (bj && Array.isArray(bj.violations) && bj.violations.length > 0) {
+            const sample = bj.violations.slice(0, 25).map(v => `${v.io}/${v.capability} missing ${(v.missing || []).join('+')}`).join('; ');
+            failures.push({
+                rule: 'bijection-violation',
+                detail: `${bj.violations.length} IO(s) declare a capability flag while its required per-operation column(s) are blank — the generic CRUD path will THROW at runtime. Populate the missing column(s) or set the capability flag false. Offenders: ${sample}${bj.violations.length > 25 ? ', ...' : ''}`,
             });
         }
     } catch { /* malformed script output -> not gated here; the standalone `--all` run is the hard CI gate */ }

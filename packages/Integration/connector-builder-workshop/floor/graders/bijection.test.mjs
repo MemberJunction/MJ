@@ -2,6 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { findBijectionViolations, isMissingValue } from './bijection.mjs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Build a metadata record with a single IO whose fields are `ioFields`. */
 function recWithIO(ioFields, relatedKey = 'MJ: Integration Objects') {
@@ -217,4 +222,11 @@ test('multiple IOs with multiple capability violations are all reported', () => 
     const caps = v.map((x) => x.capability).sort();
     assert.deepEqual(caps, ['SupportsCreate', 'SupportsIncrementalSync']);
     assert.ok(v.every((x) => x.io === 'A'));
+});
+
+test('DRIFT GUARD: floor-check.workflow.js still wires the bijection gate', () => {
+    const fc = readFileSync(resolve(__dirname, '..', '..', 'primitives', 'floor-check.workflow.js'), 'utf8');
+    assert.ok(fc.includes('graders/bijection.mjs'), 'floor-check must run graders/bijection.mjs as a subprocess');
+    assert.ok(fc.includes('bijectionJson'), 'floor-check must capture + parse bijectionJson');
+    assert.ok(fc.includes('bijection-violation'), 'floor-check must push the bijection-violation failure rule');
 });
