@@ -30,6 +30,7 @@ export class GenericProcessRunTracker implements IProcessRunTracker {
         const run = await md.GetEntityObject<MJProcessRunEntity>('MJ: Process Runs', contextUser);
         run.NewRecord();
         run.RecordProcessID = meta.RecordProcessID ?? null;
+        run.ScheduledJobRunID = meta.ScheduledJobRunID ?? null;
         run.EntityID = meta.EntityID ?? null;
         run.TriggeredBy = meta.TriggeredBy;
         run.SourceType = meta.SourceType;

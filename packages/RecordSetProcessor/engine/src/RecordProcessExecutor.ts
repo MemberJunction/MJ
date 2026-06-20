@@ -35,6 +35,8 @@ export interface RunRecordProcessOptions {
     triggeredBy?: TriggeredByValue;
     /** Process a single record (the on-change / on-demand single-record case) instead of the scope. */
     singleRecordID?: string;
+    /** FK to the owning `ScheduledJobRun` when launched by the scheduler (links the Process Run back). */
+    scheduledJobRunID?: string;
     /** Progress callback. */
     onProgress?: (progress: ProgressInfo) => void;
 }
@@ -61,6 +63,7 @@ export class RecordProcessExecutor {
             contextUser: options.contextUser,
             provider,
             recordProcessID: rp.ID,
+            scheduledJobRunID: options.scheduledJobRunID,
             entityID: rp.EntityID,
             triggeredBy: options.triggeredBy ?? 'OnDemand',
             batchSize: rp.BatchSize ?? undefined,
