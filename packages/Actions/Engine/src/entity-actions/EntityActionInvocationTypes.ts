@@ -1,4 +1,4 @@
-import { MJGlobal, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { BaseEntity, Metadata, RunView } from "@memberjunction/core";
 import { ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult } from "@memberjunction/actions-base";
@@ -76,7 +76,8 @@ export abstract class EntityActionInvocationBase {
         return returnValues;
     }
 
-    private _scriptCache: Map<string, Function> = new Map<string, Function>();
+    /** LRU cache for compiled script functions keyed by EntityActionID. Bounded at 1000 entries. */
+    private _scriptCache = new MJLruCache<string, Function>({ maxSize: 1000 });
 
     /**
      * Attempt to execute a script and wraps in try/catch to handle any errors so that no exceptions are thrown
@@ -92,17 +93,14 @@ export abstract class EntityActionInvocationBase {
         };
     
         try {
-            let scriptFunction;
-            if (this._scriptCache.has(EntityActionID)) {
-                scriptFunction = this._scriptCache.get(EntityActionID);
-            }
-            else {
+            let scriptFunction = this._scriptCache.Get(EntityActionID);
+            if (!scriptFunction) {
                 scriptFunction = new Function('EntityActionContext', `
                     return (async () => {
                         ${scriptText}
                     })();
                 `);
-                this._scriptCache.set(EntityActionID, scriptFunction);
+                this._scriptCache.Set(EntityActionID, scriptFunction);
             }
     
             const ret = await scriptFunction(entityActionContext);

@@ -44,6 +44,37 @@ describe('CacheManager', () => {
       cache.set('key1', 'value2');
       expect(cache.get('key1')).toBe('value2');
     });
+
+    it('should cancel the old TTL timer when a key is overwritten', () => {
+      // Arrange: set a key and then overwrite it before the first TTL fires.
+      // If the old timer is NOT cancelled, it fires and deletes the new value.
+      cache.set('key1', 'original');    // schedules delete-key1 at t+10s
+      vi.advanceTimersByTime(5000);     // halfway to first TTL
+      cache.set('key1', 'updated');     // must cancel the t+10s timer and schedule a new one
+
+      // Advance past the original TTL — the cancelled timer must NOT fire
+      vi.advanceTimersByTime(6000);     // t=11s; original timer would have fired here
+
+      // The new value must still be present (or have been evicted by its own TTL at t=15s)
+      // At t=11s the new entry's TTL (set at t=5s) still has 4s to go
+      expect(cache.get('key1')).toBe('updated');
+    });
+
+    it('should delete key only when the current TTL fires, not the overwritten timer', () => {
+      cache.set('key1', 'v1');       // timer fires at t=10s
+      vi.advanceTimersByTime(2000);
+      cache.set('key1', 'v2');       // timer fires at t=12s; old timer cancelled
+      vi.advanceTimersByTime(2000);
+      cache.set('key1', 'v3');       // timer fires at t=14s; prev timer cancelled
+
+      // At t=14s first two timers should be cancelled; key still present from last set
+      vi.advanceTimersByTime(9999);  // t=13.999s — latest TTL hasn't fired yet
+      expect(cache.get('key1')).toBe('v3');
+
+      // At t=14s the latest TTL fires
+      vi.advanceTimersByTime(2);     // cross t=14s
+      expect(cache.get('key1')).toBeUndefined();
+    });
   });
 
   describe('has', () => {
@@ -66,6 +97,17 @@ describe('CacheManager', () => {
 
     it('should return false for non-existent key', () => {
       expect(cache.delete('nonexistent')).toBe(false);
+    });
+
+    it('should cancel the TTL timer when a key is explicitly deleted', () => {
+      cache.set('key1', 'value1');
+      cache.delete('key1');
+
+      // Advancing past TTL must not throw (timer already cancelled) and key stays gone
+      vi.advanceTimersByTime(15000);
+      expect(cache.get('key1')).toBeUndefined();
+      // Stats should show 0 entries (timer didn't re-delete an already-missing entry)
+      expect(cache.getStats().size).toBe(0);
     });
   });
 

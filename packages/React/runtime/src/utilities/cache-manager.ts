@@ -7,6 +7,8 @@ export interface CacheEntry<T> {
   value: T;
   timestamp: number;
   size?: number;
+  /** Handle returned by setTimeout for per-entry TTL deletion. Cancelled on overwrite/delete. */
+  timer?: ReturnType<typeof setTimeout>;
 }
 
 export interface CacheOptions {
@@ -60,19 +62,25 @@ export class CacheManager<T = any> {
       this.evictByMemory(size);
     }
 
-    // Remove old entry if exists
+    // Remove old entry if exists — cancel its pending TTL timer to avoid orphaned timers
     const oldEntry = this.cache.get(key);
     if (oldEntry) {
       this.memoryUsage -= oldEntry.size || 0;
+      if (oldEntry.timer !== undefined) {
+        clearTimeout(oldEntry.timer);
+      }
     }
 
     this.cache.set(key, entry);
     this.memoryUsage += size;
 
-    // Schedule removal if TTL is set
+    // Schedule removal if TTL is set; store handle so it can be cancelled on overwrite/delete
     if (ttl || this.options.defaultTTL) {
       const timeout = ttl || this.options.defaultTTL;
-      setTimeout(() => this.delete(key), timeout);
+      entry.timer = setTimeout(() => {
+        entry.timer = undefined;
+        this.delete(key);
+      }, timeout);
     }
   }
 
@@ -110,21 +118,31 @@ export class CacheManager<T = any> {
   }
 
   /**
-   * Delete a key from the cache
+   * Delete a key from the cache. Cancels any pending TTL timer for the entry.
    */
   delete(key: string): boolean {
     const entry = this.cache.get(key);
     if (entry) {
       this.memoryUsage -= entry.size || 0;
+      if (entry.timer !== undefined) {
+        clearTimeout(entry.timer);
+        entry.timer = undefined;
+      }
       return this.cache.delete(key);
     }
     return false;
   }
 
   /**
-   * Clear all entries
+   * Clear all entries. Cancels all pending per-entry TTL timers.
    */
   clear(): void {
+    for (const entry of this.cache.values()) {
+      if (entry.timer !== undefined) {
+        clearTimeout(entry.timer);
+        entry.timer = undefined;
+      }
+    }
     this.cache.clear();
     this.memoryUsage = 0;
   }
