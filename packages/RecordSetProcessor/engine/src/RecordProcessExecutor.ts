@@ -22,6 +22,7 @@ import {
 import { RecordSetProcessor } from './RecordSetProcessor';
 import { ActionRecordProcessor } from './processors/ActionRecordProcessor';
 import { AgentRecordProcessor } from './processors/AgentRecordProcessor';
+import { InferProcessor } from './processors/InferProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
 import { OutputMappingConfig } from './writeBack';
 
@@ -117,6 +118,11 @@ export class RecordProcessExecutor {
                 throw new Error(`Record Process '${rp.Name}': WorkType=Agent requires AgentID`);
             }
             base = new AgentRecordProcessor(rp.AgentID, inputMapping);
+        } else if (rp.WorkType === 'Infer') {
+            if (!rp.PromptID) {
+                throw new Error(`Record Process '${rp.Name}': WorkType=Infer requires PromptID`);
+            }
+            base = new InferProcessor(rp.PromptID, inputMapping);
         } else {
             throw new Error(`Record Process '${rp.Name}': unsupported WorkType '${rp.WorkType}'`);
         }
