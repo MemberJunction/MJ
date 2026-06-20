@@ -66,6 +66,8 @@ export interface RecordResult {
     ActionExecutionLogID?: string;
     /** Deep-trace link to an AI Agent Run, when the work was an Agent. */
     AIAgentRunID?: string;
+    /** Deep-trace link to an AI Prompt Run, when the work was an Infer-and-Write-Back. */
+    AIPromptRunID?: string;
 }
 
 /** Running tallies for a process run. */

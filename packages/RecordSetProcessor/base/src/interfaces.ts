@@ -87,6 +87,8 @@ export interface RunHandle {
 export interface ProcessRunMeta {
     /** FK to the originating Record Process definition (NULL for ad-hoc / engine-driven runs). */
     RecordProcessID?: string;
+    /** FK to the owning `ScheduledJobRun` when launched by the scheduler (NULL otherwise). */
+    ScheduledJobRunID?: string;
     /** FK to the target entity. */
     EntityID?: string;
     /** What triggered the run. */
@@ -147,6 +149,8 @@ export interface RecordSetProcessOptions {
     provider?: IMetadataProvider;
     /** Optional FK to the originating Record Process definition. */
     recordProcessID?: string;
+    /** Optional FK to the owning `ScheduledJobRun` when launched by the scheduler. */
+    scheduledJobRunID?: string;
     /** Optional target entity ID (otherwise derived from the source). */
     entityID?: string;
     /** What triggered the run (default `Manual`). */

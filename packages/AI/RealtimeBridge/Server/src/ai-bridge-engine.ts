@@ -70,6 +70,38 @@ export type BridgeSessionRunFinalizer = (
 ) => Promise<void>;
 
 /**
+ * One final transcript line from a room's **scribe** session (the single elected per-room writer). The
+ * engine knows the room topology + owns the transcript tap; the SINK owns *where* it persists (e.g. an
+ * `MJ: Conversations` "Meeting Room" + `MJ: Conversation Details`). Keeping the Conversations/app specifics
+ * out of the engine — the engine only emits these neutral lines. See `plans/realtime/...followups.md` §5.
+ */
+export interface BridgeTranscriptLine {
+    /** The room grouping (driver `ExternalConnectionId`) — one room = one unified transcript. */
+    RoomKey: string;
+    /** The scribe's agent-session id (stamped on the scribe's OWN speech lines). */
+    AgentSessionID: string;
+    /** The scribe's agent id, when known (attribution for its own speech). */
+    AgentID?: string;
+    /** `true` for the scribe's OWN speech (`assistant`), `false` for anything it heard (`user`). */
+    IsAgentSpeech: boolean;
+    /** The speaker's participant id — the scribe's own bot id for its speech; absent for heard speech. */
+    SpeakerParticipantID?: string;
+    /** The final transcript text for the turn. */
+    Text: string;
+}
+
+/**
+ * Registered by the app layer to persist the unified room transcript. The engine calls it for each FINAL
+ * transcript line from a room's scribe, passing the scribe session's `contextUser` + `provider` so the sink
+ * can write entities under the right identity. Bound once at startup (see `AIBridgeEngine.SetTranscriptSink`).
+ */
+export type BridgeTranscriptSink = (
+    line: BridgeTranscriptLine,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+) => void | Promise<void>;
+
+/**
  * The host-instance identity provider the engine uses to stamp `HostInstanceID` for node affinity
  * and orphan reconciliation. Mirrors `@memberjunction/server`'s `HostInstance` helper but is
  * **injected** so this server-tier engine has no hard dependency on MJServer (which would create a
@@ -124,6 +156,9 @@ export class DefaultHostInstanceIdentity implements IHostInstanceIdentity {
 export interface StartBridgeSessionParams {
     /** The `MJ: AI Agent Sessions` row this bridge attaches to (the session IS the existing session). */
     AgentSessionID: string;
+
+    /** The voicing agent's `MJ: AI Agents` id — used only to attribute this agent's transcript lines. */
+    AgentID?: string;
 
     /** The bridge provider to transport through (resolved to its `DriverClass` for ClassFactory). */
     Provider: MJAIBridgeProviderEntity;
@@ -221,6 +256,9 @@ export interface ActiveBridgeSession {
     /** The `MJ: AI Agent Sessions` row id the bridge is attached to. */
     AgentSessionID: string;
 
+    /** The voicing agent's `MJ: AI Agents` id — stamped on this agent's transcript lines for attribution. */
+    AgentID?: string;
+
     /** The concrete driver instance transporting media. */
     Bridge: BaseRealtimeBridge;
 
@@ -250,6 +288,19 @@ export interface ActiveBridgeSession {
      * bot leaves the empty room and its co-agent run finalizes. Cleared on any teardown.
      */
     LeaveGraceTimer?: ReturnType<typeof setTimeout>;
+
+    /** The room key (driver `ExternalConnectionId`) this session is in — the unified-transcript room grouping. */
+    RoomKey?: string;
+
+    /** This session's own bot participant id on the endpoint — the speaker label on its own transcript lines. */
+    BotParticipantID?: string;
+
+    /**
+     * Whether THIS session is the room's transcript **scribe**. Exactly one session per room writes the
+     * unified meeting transcript (its own speech + everything it hears), so a multi-agent room records one
+     * copy, not N. Elected at connect (first session in the room); re-elected if the scribe leaves.
+     */
+    IsTranscriptScribe: boolean;
 
     /** The provider row backing this session. */
     Provider: MJAIBridgeProviderEntity;
@@ -321,6 +372,12 @@ export interface ActiveBridgeSession {
 export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements IStartupSink {
     /** Registered by the agent layer; finalizes dangling co-agent runs on orphan/cross-host teardown. */
     private runFinalizer?: BridgeSessionRunFinalizer;
+
+    /** Registered by the app layer; persists the unified per-room transcript from the elected scribe. */
+    private transcriptSink?: BridgeTranscriptSink;
+
+    /** roomKey (lowercased) → the bridge id of that room's current transcript scribe. Election dedup. */
+    private readonly roomScribes = new Map<string, string>();
     /** Diagnostic: session ids that have already logged their first inbound / outbound media frame. */
     private diagInbound = new Set<string>();
     private diagOutbound = new Set<string>();
@@ -435,6 +492,18 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      */
     public SetSessionRunFinalizer(finalizer: BridgeSessionRunFinalizer): void {
         this.runFinalizer = finalizer;
+    }
+
+    /**
+     * Registers the {@link BridgeTranscriptSink} that persists the unified per-room transcript. The engine
+     * elects one scribe per room and feeds its final transcript lines here; the sink owns *where* they land
+     * (e.g. an `MJ: Conversations` "Meeting Room"). Bound once at startup by the app layer. Without it, no
+     * transcript is persisted (the engine still elects a scribe but emits nothing).
+     *
+     * @param sink The transcript sink (from the app layer).
+     */
+    public SetTranscriptSink(sink: BridgeTranscriptSink): void {
+        this.transcriptSink = sink;
     }
 
     /** Returns the active identities for an agent. @see AIBridgeEngineBase.IdentitiesForAgent */
@@ -566,11 +635,15 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             const active: ActiveBridgeSession = {
                 SessionBridgeID: bridgeRow.ID,
                 AgentSessionID: params.AgentSessionID,
+                AgentID: params.AgentID,
                 Bridge: driver,
                 RealtimeSession: params.RealtimeSession,
                 TurnPolicy: turnPolicy,
                 DisableAutoResponse: params.DisableAutoResponse === true,
                 HasSeenHuman: false,
+                RoomKey: result.ExternalConnectionId,
+                BotParticipantID: result.BotParticipantId,
+                IsTranscriptScribe: false,
                 Provider: params.Provider,
                 ContextUser: params.ContextUser,
                 MetadataProvider: params.MetadataProvider,
@@ -578,6 +651,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 ServerChannelTools: [],
             };
 
+            this.electTranscriptScribe(active);
             this.wireTransportSeam(active);
             this.wireParticipantTracking(active);
             this.wireTurnTaking(active);
@@ -924,6 +998,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (t.IsFinal) {
                 // Only log FINAL transcripts — partials fire per-word and flood the log.
                 LogStatus(`[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`);
+                // Persist the unified room transcript (scribe only — emits both roles).
+                this.emitTranscriptLine(active, t);
             }
             if (t.Role !== 'user' || !t.IsFinal) {
                 return; // act only on a completed human turn
@@ -987,6 +1063,90 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             ...(params.TurnTuning ?? {}),
         };
         return new TurnTakingPolicy(config);
+    }
+
+    /**
+     * Elects this session as its room's transcript **scribe** iff a transcript sink is registered, the
+     * session has a room key, and no scribe exists for that room yet. Exactly one scribe per room writes the
+     * unified transcript, so a multi-agent room records one copy (the scribe hears everyone), not N.
+     *
+     * @param active The freshly connected session.
+     */
+    private electTranscriptScribe(active: ActiveBridgeSession): void {
+        if (!this.transcriptSink || !active.RoomKey) {
+            return;
+        }
+        const roomKey = active.RoomKey.toLowerCase();
+        if (!this.roomScribes.has(roomKey)) {
+            this.roomScribes.set(roomKey, active.SessionBridgeID);
+            active.IsTranscriptScribe = true;
+            LogStatus(`[AIBridgeEngine] Bridge ${active.SessionBridgeID} is the transcript scribe for its room.`);
+        }
+    }
+
+    /**
+     * Releases this session's scribe role on teardown and HANDS OFF to another live session in the same
+     * room (so the transcript continues when the original scribe leaves a still-occupied room). No-op when
+     * the session wasn't the scribe. Called during disconnect while the session is still in the active map.
+     *
+     * @param active The session being torn down.
+     */
+    private releaseTranscriptScribe(active: ActiveBridgeSession): void {
+        if (!active.RoomKey) {
+            return;
+        }
+        const roomKey = active.RoomKey.toLowerCase();
+        if (this.roomScribes.get(roomKey) !== active.SessionBridgeID) {
+            return; // not the scribe
+        }
+        this.roomScribes.delete(roomKey);
+        active.IsTranscriptScribe = false;
+        for (const other of this.activeSessions.values()) {
+            if (other !== active && other.RoomKey?.toLowerCase() === roomKey) {
+                this.roomScribes.set(roomKey, other.SessionBridgeID);
+                other.IsTranscriptScribe = true;
+                LogStatus(`[AIBridgeEngine] Transcript scribe handed to bridge ${other.SessionBridgeID} (prior scribe left).`);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Emits one FINAL transcript line to the registered sink — only from the room's scribe, so the room
+     * gets a single unified transcript. The scribe's OWN speech (`assistant`) is attributed to it; everything
+     * it hears (`user`) is recorded as heard. Best-effort: a sink failure is logged, never fatal to media.
+     *
+     * @param active The scribe session.
+     * @param t The final transcript line.
+     */
+    private emitTranscriptLine(active: ActiveBridgeSession, t: RealtimeTranscript): void {
+        if (!active.IsTranscriptScribe || !this.transcriptSink || !active.RoomKey) {
+            return;
+        }
+        const text = (t.Text ?? '').trim();
+        if (!text) {
+            return;
+        }
+        const isAgentSpeech = t.Role === 'assistant';
+        void Promise.resolve(
+            this.transcriptSink(
+                {
+                    RoomKey: active.RoomKey,
+                    AgentSessionID: active.AgentSessionID,
+                    AgentID: active.AgentID,
+                    IsAgentSpeech: isAgentSpeech,
+                    SpeakerParticipantID: isAgentSpeech ? active.BotParticipantID : undefined,
+                    Text: text,
+                },
+                active.ContextUser,
+                active.MetadataProvider,
+            ),
+        ).catch((err) =>
+            LogError(
+                `[AIBridgeEngine] transcript sink failed for bridge ${active.SessionBridgeID}: ` +
+                    `${err instanceof Error ? err.message : String(err)}`,
+            ),
+        );
     }
 
     // ──────────────────────────────────────────────────────────────────────────────
@@ -1293,6 +1453,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             clearTimeout(active.LeaveGraceTimer);
             active.LeaveGraceTimer = undefined;
         }
+        // Hand the transcript scribe role to another live session in the room (if this was the scribe), so a
+        // multi-agent room keeps recording after the first agent leaves. Done before the active map removal.
+        this.releaseTranscriptScribe(active);
         // Close the channel plane first so its post-close hooks see the session still mid-teardown,
         // then release the driver's media plane.
         await this.closeChannelPlane(active);

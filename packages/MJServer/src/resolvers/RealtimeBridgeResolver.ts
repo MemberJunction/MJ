@@ -5,7 +5,7 @@ import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService 
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
-import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices } from '@memberjunction/ai-agents';
+import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices, CreateBridgeRoomTranscriptSink } from '@memberjunction/ai-agents';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -27,6 +27,17 @@ LiveKitAgentRoomCoordinator.Instance.SetSessionFactory(CreateBridgeRealtimeSessi
  * `Close()`-wrapped finalizer can't reach. Idempotent for clean same-process teardowns.
  */
 AIBridgeEngine.Instance.SetSessionRunFinalizer(FinalizeBridgeCoAgentRuns);
+
+/**
+ * Binds the unified room-transcript sink onto the bridge engine (same module-load rationale). The engine
+ * elects one scribe per LiveKit room and feeds its final transcript lines here; the sink persists them as a
+ * single `MJ: Conversations` of `Type='Meeting Room'`, scoped `Application` so it stays OUT of the normal
+ * chat list (it surfaces in the Meet app's own view), with one `MJ: Conversation Detail` per utterance. The
+ * "Meeting Room"/scope choices live HERE (the Meet composition layer), keeping the engine generic.
+ */
+AIBridgeEngine.Instance.SetTranscriptSink(
+  CreateBridgeRoomTranscriptSink({ ConversationType: 'Meeting Room', ApplicationScope: 'Application' }),
+);
 
 /**
  * GraphQL surface for the MJ-native LiveKit room: mints scoped client access tokens and starts an
