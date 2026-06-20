@@ -30,3 +30,4 @@ export { HivebriteConnector, LoadHivebriteConnector, type HivebriteConnectionCon
 export { CventConnector, LoadCventConnector, type CventConnectionConfig } from './CventConnector.js';
 export { NeonCRMConnector, LoadNeonCRMConnector, type NeonCRMConnectionConfig } from './NeonCRMConnector.js';
 export { PheedLoopConnector } from './PheedLoopConnector.js';
+export { DynamicsDataverseConnector, LoadDynamicsDataverseConnector, type DynamicsConnectionConfig } from './DynamicsDataverseConnector.js';

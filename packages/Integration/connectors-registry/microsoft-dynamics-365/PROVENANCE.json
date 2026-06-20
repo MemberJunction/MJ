@@ -1,0 +1,174 @@
+{
+  "Entries": [
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/authentication",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming OAuth 2.0 as the required authentication mechanism for all non-.NET Dataverse clients",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.AuthFlow",
+      "Excerpt": "OAuth is the preferred means to authenticate because it provides access to all web services... If you are using anything other than .NET Framework, you must authenticate using OAuth and you must use the OData RESTful web services (Web API and OData global Discovery service)."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/authenticate-oauth",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming Microsoft Entra ID as the identity provider and OAuth 2.0 Bearer token header pattern",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.AuthHeaderPattern",
+      "Excerpt": "OAuth 2.0 is the industry-standard protocol for authorization... For Dataverse, the identity provider is Microsoft Entra ID."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming Dataverse Web API base URL structure: https://{orgName}.crm{region}.dynamics.com/api/data/v9.2/",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.BaseURLTemplate",
+      "Excerpt": "Part: Protocol https:// + Environment Name (e.g. contoso) + Region (crm for North America, crm2 for South America, crm7 for Japan) + Base URL (dynamics.com) + Web API path /api/data/ + Version v9.2 + Resource."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/web-api-versions",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming APIVersioningStrategy=url-path (version embedded as /api/data/v9.2/) and that v9.0/v9.1/v9.2 are identical",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.APIVersioningStrategy",
+      "Excerpt": "Starting with the v9.0 release of Dynamics 365, the Web API supports version-specific differences in the same environment... the v9.0, v9.1, and v9.2 releases don't include any breaking changes. Each of these releases has identical Web API behaviors."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/query/page-results",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming PaginationDefaults: @odata.nextLink cursor, max 5000 rows/page, $skip not supported",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.PaginationDefaults",
+      "Excerpt": "Use OData paging with the Prefer: odata.maxpagesize request header to control the number of records returned... If you don't specify a number, each request might return up to 5,000 table rows. For both standard and elastic tables, you can specify a max page size up to 5,000. The service ignores max page size requests larger than 5,000... Dataverse doesn't support the $skip query option."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/use-change-tracking-synchronize-data-external-systems",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming IncrementalSyncCapability=true via OData change tracking with Prefer: odata.track-changes + @odata.deltaLink",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.IncrementalSyncCapability",
+      "Excerpt": "You can track changes made in tables by using Web API requests that include the Prefer: odata.track-changes header. This header requests that a delta link is returned, which you can later use to retrieve table changes. Delta links are opaque, service-generated links... @odata.deltaLink: [Organization URI]/api/data/v9.0/accounts?...&$deltatoken=919042..."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming ServiceProtectionLimits: 6000 requests / 300-second window / 1200s execution time / 52 concurrent requests. BatchMaxRequestCount is null — no simple per-app requests/window model; the limit is per-user per-server-node with three independent dimensions.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "Service protection API limits that the system enforces per web server: Number of requests: 6,000 within the five-minute sliding window. Execution time: 20 minutes (1,200 seconds) within the five-minute sliding window. Number of concurrent requests: 52 or higher. These limits can change and might vary between different environments."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming BatchRequestWaitTime is null — rate limits are sliding-window per-user per-server, not a simple fixed-window rate. No single canonical requests/second figure exists.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "Service protection API limits... Two of the service protection API limits use a five-minute (300 second) sliding window. If either limit exceeds the preceding 300 seconds, the system returns a service protection API limit error. The system evaluates service protection API limits for each user."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming BulkOperationsAvailable=true, base path /api/data/v9.2/$batch, max 1000 subrequests per batch",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.BulkOperationsAvailable",
+      "Excerpt": "You can group multiple operations into a single HTTP request by using a batch operation... Batch requests can contain up to 1,000 individual requests and can't contain other batch requests."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/perform-conditional-operations-using-web-api",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming ConcurrencyControl=etag — @odata.etag on all entity records + If-Match/If-None-Match conditional PATCH support",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.ConcurrencyControl",
+      "Excerpt": "Dataverse generates a weakly validating @odata.etag property for every entity instance, and this property is automatically returned with each retrieved entity record... Dataverse provides ETags to support conditional retrievals, optimistic concurrency, and limited upsert operations. Use If-Match and If-None-Match headers with ETag values."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/entity-metadata",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming DeleteSemantics=soft via statecode/statuscode deactivation pattern (statecode=1 Inactive is the default soft-delete)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.DeleteSemantics",
+      "Excerpt": "StateCode and StatusCode values are linked... the common pattern for many tables, and the default for custom tables: StateCode Choices: 0: Active / StatusCode 1: Active; 1: Inactive / StatusCode 2: Inactive."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/retrieve-entity-using-web-api",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming universalPK: every standard Dataverse table has a GUID PK named <entityLogicalName>id, used as URL path parameter",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.universalPK",
+      "Excerpt": "Returns data for an account entity record with the primary key value equal to 00000000-0000-0000-0000-000000000001: GET [Organization URI]/api/data/v9.2/accounts(00000000-0000-0000-0000-000000000001)... response includes 'accountid': '00000000-0000-0000-0000-000000000001'."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/create-entity-web-api",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming WriteCapability Create: POST /api/data/v9.2/{entityset}, returns 204 No Content with OData-EntityId header containing the new record URI",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.WriteCapability",
+      "Excerpt": "POST [Organization URI]/api/data/v9.2/accounts... Response: HTTP/1.1 204 No Content OData-Version: 4.0 OData-EntityId: [Organization URI]/api/data/v9.2/accounts(00aa00aa-bb11-cc22-dd33-44ee44ee44ee)"
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming ErrorResponseShape: {\"error\":{\"code\":\"...\",\"message\":\"...\"}} top-level structure",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.ErrorResponseShape",
+      "Excerpt": "You should be aware of errors as JSON in the following format. { \"error\":{ \"code\": \"<This code is not related to the http status code and is frequently empty>\", \"message\": \"<A message describing the error>\" } }"
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/use-webhooks",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming WebhooksAvailable=true (outbound webhooks from Dataverse to external URL) with no HMAC signature (key-in-header model)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.WebhooksAvailable",
+      "Excerpt": "Use webhooks to send Microsoft Dataverse server events to an external web application... you can secure your endpoint by using authentication header or query string parameter keys. This approach is simpler than the SAS authentication model."
+    },
+    {
+      "URL": "https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/create-update-entity-definitions-using-web-api",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming CustomObjectMarkerPattern: custom tables have IsCustomEntity=true and SchemaName with publisher customization prefix (e.g. new_)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "Configuration.CustomObjectMarkerPattern",
+      "Excerpt": "SchemaName new_BankAccount Note: You should include the customization prefix that matches the solution publisher. Here the default value 'new_' is used, but you should choose the prefix that works for your solution."
+    },
+    {
+      "URL": "file:metadata/credential-types/.credential-types.json",
+      "AccessedAt": "2026-06-18T00:00:00.000Z",
+      "UsedFor": "Confirming CredentialTypeID: Azure Service Principal (ID 9C378F0A-9728-4404-BFEC-5F4627BCFF67) is the correct credential type for OAuth2 client credentials against Microsoft Entra ID",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialSDK",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID",
+      "Excerpt": "Credential types file: primaryKey.ID = 9C378F0A-9728-4404-BFEC-5F4627BCFF67, Name = 'Azure Service Principal', Description = 'Azure AD service principal credentials. Used for Microsoft Graph, Azure OpenAI, Azure Blob Storage, and other Azure services.'"
+    }
+  ]
+}
