@@ -186,6 +186,18 @@ export abstract class BaseRealtimeBridge {
      */
     public abstract OnMedia(handler: (frame: BridgeMediaFrame) => void): void;
 
+    /**
+     * Flushes any outbound media the driver has queued for the endpoint — the agent's not-yet-played
+     * voice. The engine calls this on a true barge-in (the user interrupts the agent) so the agent stops
+     * talking immediately instead of draining already-buffered audio after the model was cut off.
+     *
+     * **No-op by default** (NOT capability-gated): a driver with no client-side outbound buffer simply has
+     * nothing to flush, so calling this is always safe. Drivers that buffer outbound audio override it.
+     */
+    public FlushOutboundMedia(): void {
+        // Default: nothing buffered to flush.
+    }
+
     // ──────────────────────────────────────────────────────────────────────────────
     // VIRTUAL / capability-gated — throw NotSupported unless a driver overrides.
     // The engine gates each on the matching SupportedFeatures flag first.

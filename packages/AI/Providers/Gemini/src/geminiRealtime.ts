@@ -337,6 +337,15 @@ export class GeminiRealtime extends BaseRealtimeModel {
  * and never instantiated directly by consumers.
  */
 class GeminiRealtimeSession implements IRealtimeSession {
+    /**
+     * Gemini Live consumes **16 kHz** PCM input ({@link GEMINI_INPUT_AUDIO_MIME_TYPE}) and emits 24 kHz. A
+     * server-bridged host reads these to resample room audio correctly — without it the bridge feeds Gemini
+     * 24 kHz audio it can't parse, so the agent never responds (while client-direct works, as the browser
+     * negotiates the rate). See `plans/realtime/realtime-core-host-convergence.md`.
+     */
+    public readonly InputSampleRate = 16000;
+    public readonly OutputSampleRate = 24000;
+
     private live: GeminiLiveSession | null = null;
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;

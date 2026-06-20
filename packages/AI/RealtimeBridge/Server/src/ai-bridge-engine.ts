@@ -48,6 +48,60 @@ const SESSION_BRIDGE_ENTITY = 'MJ: AI Agent Session Bridges';
 const SESSION_BRIDGE_PARTICIPANT_ENTITY = 'MJ: AI Agent Session Bridge Participants';
 
 /**
+ * Grace window after the last human leaves a room before the bot auto-leaves. Long enough that a page
+ * refresh (participant briefly drops + rejoins) does NOT kill the agent, short enough that an abandoned
+ * room frees its model session + finalizes its run promptly. See {@link AIBridgeEngine.evaluateRoomOccupancy}.
+ */
+const ROOM_EMPTY_GRACE_MS = 15000;
+
+/**
+ * Finalizes the co-agent observability run(s) for an agent session when a bridge is torn down WITHOUT a
+ * live in-memory session — a prior-boot orphan or a cross-host reap, where the agent layer's `Close()`-wrapped
+ * finalizer can't run, so the co-agent `AIAgentRun` would otherwise dangle in `Running` forever. The agent
+ * layer registers it via {@link AIBridgeEngine.SetSessionRunFinalizer} at startup (it lives in
+ * `@memberjunction/ai-agents`, not reachable from this package). **Idempotent**: for a clean same-process
+ * teardown the run is already `Completed`, so this is a harmless no-op.
+ */
+export type BridgeSessionRunFinalizer = (
+    agentSessionID: string,
+    success: boolean,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+) => Promise<void>;
+
+/**
+ * One final transcript line from a room's **scribe** session (the single elected per-room writer). The
+ * engine knows the room topology + owns the transcript tap; the SINK owns *where* it persists (e.g. an
+ * `MJ: Conversations` "Meeting Room" + `MJ: Conversation Details`). Keeping the Conversations/app specifics
+ * out of the engine — the engine only emits these neutral lines. See `plans/realtime/...followups.md` §5.
+ */
+export interface BridgeTranscriptLine {
+    /** The room grouping (driver `ExternalConnectionId`) — one room = one unified transcript. */
+    RoomKey: string;
+    /** The scribe's agent-session id (stamped on the scribe's OWN speech lines). */
+    AgentSessionID: string;
+    /** The scribe's agent id, when known (attribution for its own speech). */
+    AgentID?: string;
+    /** `true` for the scribe's OWN speech (`assistant`), `false` for anything it heard (`user`). */
+    IsAgentSpeech: boolean;
+    /** The speaker's participant id — the scribe's own bot id for its speech; absent for heard speech. */
+    SpeakerParticipantID?: string;
+    /** The final transcript text for the turn. */
+    Text: string;
+}
+
+/**
+ * Registered by the app layer to persist the unified room transcript. The engine calls it for each FINAL
+ * transcript line from a room's scribe, passing the scribe session's `contextUser` + `provider` so the sink
+ * can write entities under the right identity. Bound once at startup (see `AIBridgeEngine.SetTranscriptSink`).
+ */
+export type BridgeTranscriptSink = (
+    line: BridgeTranscriptLine,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+) => void | Promise<void>;
+
+/**
  * The host-instance identity provider the engine uses to stamp `HostInstanceID` for node affinity
  * and orphan reconciliation. Mirrors `@memberjunction/server`'s `HostInstance` helper but is
  * **injected** so this server-tier engine has no hard dependency on MJServer (which would create a
@@ -103,6 +157,9 @@ export interface StartBridgeSessionParams {
     /** The `MJ: AI Agent Sessions` row this bridge attaches to (the session IS the existing session). */
     AgentSessionID: string;
 
+    /** The voicing agent's `MJ: AI Agents` id — used only to attribute this agent's transcript lines. */
+    AgentID?: string;
+
     /** The bridge provider to transport through (resolved to its `DriverClass` for ClassFactory). */
     Provider: MJAIBridgeProviderEntity;
 
@@ -142,6 +199,15 @@ export interface StartBridgeSessionParams {
 
     /** Optional extra turn-taking tuning (silence window, throttle, score threshold, clock). */
     TurnTuning?: Partial<Omit<TurnTakingPolicyConfig, 'Mode' | 'Matcher' | 'Scorer'>>;
+
+    /**
+     * **Multi-agent meeting mode.** When `true`, the realtime model's blind auto-response was disabled at
+     * session start (the agent layer set `disableAutoResponse` on the model session), so the BRIDGE is the
+     * sole speech trigger: on a `Speak` turn decision the engine issues exactly one `RequestSpokenUpdate`.
+     * When `false`/absent the model auto-responds and the engine must NOT also trigger (it would double-fire).
+     * Must agree with what the session was opened with. See `plans/realtime/multi-agent-meeting-turn-taking.md`.
+     */
+    DisableAutoResponse?: boolean;
 
     /** Per-session bridge configuration (resolved credential refs, region, …) passed to the driver. */
     Configuration?: Record<string, unknown>;
@@ -190,6 +256,9 @@ export interface ActiveBridgeSession {
     /** The `MJ: AI Agent Sessions` row id the bridge is attached to. */
     AgentSessionID: string;
 
+    /** The voicing agent's `MJ: AI Agents` id — stamped on this agent's transcript lines for attribution. */
+    AgentID?: string;
+
     /** The concrete driver instance transporting media. */
     Bridge: BaseRealtimeBridge;
 
@@ -198,6 +267,40 @@ export interface ActiveBridgeSession {
 
     /** The per-session turn-taking policy gating generation. */
     TurnPolicy: TurnTakingPolicy;
+
+    /**
+     * Whether the model's blind auto-response is OFF for this session (multi-agent meeting). When `true`
+     * the bridge is the sole speech trigger — a `Speak` decision issues one `RequestSpokenUpdate`. When
+     * `false` the model auto-responds and the engine stays hands-off (forcing would double-fire).
+     */
+    DisableAutoResponse: boolean;
+
+    /**
+     * Whether at least one HUMAN participant has been seen in the room. Auto-leave only fires after a human
+     * was present and then all humans left — so a bot that joins ahead of anyone (or a momentarily bot-only
+     * roster at startup) is never reaped prematurely. Set by the occupancy check off the driver roster.
+     */
+    HasSeenHuman: boolean;
+
+    /**
+     * Pending grace timer started when the last human leaves. If a human rejoins within the grace window
+     * (e.g. a page refresh) it is cleared; otherwise it fires {@link AIBridgeEngine.StopBridgeSession} so the
+     * bot leaves the empty room and its co-agent run finalizes. Cleared on any teardown.
+     */
+    LeaveGraceTimer?: ReturnType<typeof setTimeout>;
+
+    /** The room key (driver `ExternalConnectionId`) this session is in — the unified-transcript room grouping. */
+    RoomKey?: string;
+
+    /** This session's own bot participant id on the endpoint — the speaker label on its own transcript lines. */
+    BotParticipantID?: string;
+
+    /**
+     * Whether THIS session is the room's transcript **scribe**. Exactly one session per room writes the
+     * unified meeting transcript (its own speech + everything it hears), so a multi-agent room records one
+     * copy, not N. Elected at connect (first session in the room); re-elected if the scribe leaves.
+     */
+    IsTranscriptScribe: boolean;
 
     /** The provider row backing this session. */
     Provider: MJAIBridgeProviderEntity;
@@ -267,6 +370,14 @@ export interface ActiveBridgeSession {
     description: 'Server-side AI Bridge Engine (realtime bridge coordination + transport seam)',
 })
 export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements IStartupSink {
+    /** Registered by the agent layer; finalizes dangling co-agent runs on orphan/cross-host teardown. */
+    private runFinalizer?: BridgeSessionRunFinalizer;
+
+    /** Registered by the app layer; persists the unified per-room transcript from the elected scribe. */
+    private transcriptSink?: BridgeTranscriptSink;
+
+    /** roomKey (lowercased) → the bridge id of that room's current transcript scribe. Election dedup. */
+    private readonly roomScribes = new Map<string, string>();
     /** Diagnostic: session ids that have already logged their first inbound / outbound media frame. */
     private diagInbound = new Set<string>();
     private diagOutbound = new Set<string>();
@@ -370,6 +481,29 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     /** Resolves an agent identity by its address value. @see AIBridgeEngineBase.IdentityByValue */
     public IdentityByValue(identityValue: string, providerId?: string): MJAIBridgeAgentIdentityEntity | undefined {
         return this.Base.IdentityByValue(identityValue, providerId);
+    }
+
+    /**
+     * Registers the {@link BridgeSessionRunFinalizer} this engine calls when a bridge is marked disconnected
+     * without a live in-memory session (orphan/cross-host reap) — so the co-agent run finalizes there too,
+     * not only on the same-process `Close()` path. Bound once at startup by the agent layer. Idempotent.
+     *
+     * @param finalizer The finalizer (from `@memberjunction/ai-agents`).
+     */
+    public SetSessionRunFinalizer(finalizer: BridgeSessionRunFinalizer): void {
+        this.runFinalizer = finalizer;
+    }
+
+    /**
+     * Registers the {@link BridgeTranscriptSink} that persists the unified per-room transcript. The engine
+     * elects one scribe per room and feeds its final transcript lines here; the sink owns *where* they land
+     * (e.g. an `MJ: Conversations` "Meeting Room"). Bound once at startup by the app layer. Without it, no
+     * transcript is persisted (the engine still elects a scribe but emits nothing).
+     *
+     * @param sink The transcript sink (from the app layer).
+     */
+    public SetTranscriptSink(sink: BridgeTranscriptSink): void {
+        this.transcriptSink = sink;
     }
 
     /** Returns the active identities for an agent. @see AIBridgeEngineBase.IdentitiesForAgent */
@@ -501,9 +635,15 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             const active: ActiveBridgeSession = {
                 SessionBridgeID: bridgeRow.ID,
                 AgentSessionID: params.AgentSessionID,
+                AgentID: params.AgentID,
                 Bridge: driver,
                 RealtimeSession: params.RealtimeSession,
                 TurnPolicy: turnPolicy,
+                DisableAutoResponse: params.DisableAutoResponse === true,
+                HasSeenHuman: false,
+                RoomKey: result.ExternalConnectionId,
+                BotParticipantID: result.BotParticipantId,
+                IsTranscriptScribe: false,
                 Provider: params.Provider,
                 ContextUser: params.ContextUser,
                 MetadataProvider: params.MetadataProvider,
@@ -511,6 +651,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 ServerChannelTools: [],
             };
 
+            this.electTranscriptScribe(active);
             this.wireTransportSeam(active);
             this.wireParticipantTracking(active);
             this.wireTurnTaking(active);
@@ -616,6 +757,16 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             const track: BridgeMediaTrackKind = 'video-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
+
+        // Barge-in: on a TRUE interruption (the user speaks over the agent), the model stops generating —
+        // but the driver may still hold queued outbound audio that would keep playing. Flush it so the
+        // agent goes quiet immediately. Without this, interruption "doesn't work" on the bridge surface.
+        RealtimeSession.OnInterruption(() => {
+            if (this.diagOutbound.has(active.SessionBridgeID)) {
+                LogStatus(`[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`);
+            }
+            Bridge.FlushOutboundMedia();
+        });
     }
 
     /**
@@ -690,6 +841,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         try {
             active.Bridge.OnParticipantChange((participants: BridgeParticipantInfo[]) => {
                 void this.upsertParticipants(active, participants);
+                // Auto-leave an emptied room: the dominant teardown path (the user just closes the tab never
+                // calls StopBridgeSession), so without this the bot lingers Connected and its co-agent run
+                // dangles in Running forever. Routed through the normal stop, so the run finalizes cleanly.
+                this.evaluateRoomOccupancy(active, participants);
             });
         } catch (err) {
             // The driver did not actually implement roster despite the flag — log and continue.
@@ -698,6 +853,43 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                     `${err instanceof Error ? err.message : String(err)}`,
             );
         }
+    }
+
+    /**
+     * Decides whether an emptied room should auto-leave. Marks {@link ActiveBridgeSession.HasSeenHuman}
+     * once any human is present; when a human WAS present and the roster drops to agents-only, it arms a
+     * grace timer ({@link ROOM_EMPTY_GRACE_MS}) that stops the session (so a page-refresh re-join cancels
+     * it). The stop routes through {@link StopBridgeSession} → driver disconnect → realtime `Close()`, which
+     * finalizes the co-agent run — so a closed tab no longer leaves a `Connected` bridge + `Running` run.
+     *
+     * Only providers with a roster (diarization) reach here; rosterless transports rely on the host janitor.
+     *
+     * @param active The live bridged session.
+     * @param participants The current roster from the driver.
+     */
+    private evaluateRoomOccupancy(active: ActiveBridgeSession, participants: BridgeParticipantInfo[]): void {
+        const humanPresent = participants.some(p => !p.IsAgent);
+        if (humanPresent) {
+            active.HasSeenHuman = true;
+            if (active.LeaveGraceTimer) {
+                clearTimeout(active.LeaveGraceTimer);
+                active.LeaveGraceTimer = undefined;
+            }
+            return;
+        }
+        // Agents-only roster. Never reaped unless a human was actually here first (so a bot that joins ahead
+        // of anyone isn't killed), and only one countdown at a time.
+        if (!active.HasSeenHuman || active.LeaveGraceTimer) {
+            return;
+        }
+        active.LeaveGraceTimer = setTimeout(() => {
+            active.LeaveGraceTimer = undefined;
+            // A re-join cleared this timer; a prior stop removed the session. Only act if it's still live.
+            if (this.activeSessions.has(active.SessionBridgeID.toLowerCase())) {
+                LogStatus(`[AIBridgeEngine] All humans left bridge ${active.SessionBridgeID}; auto-leaving (grace elapsed).`);
+                void this.StopBridgeSession(active.SessionBridgeID, 'HostEnded', active.ContextUser, active.MetadataProvider);
+            }
+        }, ROOM_EMPTY_GRACE_MS);
     }
 
     /**
@@ -806,6 +998,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (t.IsFinal) {
                 // Only log FINAL transcripts — partials fire per-word and flood the log.
                 LogStatus(`[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`);
+                // Persist the unified room transcript (scribe only — emits both roles).
+                this.emitTranscriptLine(active, t);
             }
             if (t.Role !== 'user' || !t.IsFinal) {
                 return; // act only on a completed human turn
@@ -831,11 +1025,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private applyTurnDecision(active: ActiveBridgeSession, action: 'Speak' | 'PostToChat' | 'Silent'): void {
         switch (action) {
             case 'Speak':
-                // Let the session respond. Prefer an instructed spoken update when the provider
-                // supports it; otherwise the inbound media already reached the model and it will
-                // respond on its own turn — nothing further to force.
-                if (active.RealtimeSession.RequestSpokenUpdate) {
-                    active.RealtimeSession.RequestSpokenUpdate('Respond to the participant who just addressed you.');
+                if (active.DisableAutoResponse) {
+                    // MEETING MODE: the model's blind auto-response is OFF (the agent layer opened the
+                    // session with `disableAutoResponse`), so the bridge is the SOLE speech trigger. The
+                    // turn policy already gated this to an ADDRESSED turn, so issue exactly one response.
+                    // This is what lets several agents share a room without all answering every utterance.
+                    active.RealtimeSession.RequestSpokenUpdate?.('');
+                } else {
+                    // 1:1 CALL: the model has server-VAD auto-response on (same as the browser client-direct
+                    // path), so it ALREADY answered this turn — one clean stream. Forcing a second
+                    // `RequestSpokenUpdate` here would race the auto-response (double-answer + overlap/chop).
+                    // Rely on auto-response.
                 }
                 break;
             case 'PostToChat':
@@ -863,6 +1063,90 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             ...(params.TurnTuning ?? {}),
         };
         return new TurnTakingPolicy(config);
+    }
+
+    /**
+     * Elects this session as its room's transcript **scribe** iff a transcript sink is registered, the
+     * session has a room key, and no scribe exists for that room yet. Exactly one scribe per room writes the
+     * unified transcript, so a multi-agent room records one copy (the scribe hears everyone), not N.
+     *
+     * @param active The freshly connected session.
+     */
+    private electTranscriptScribe(active: ActiveBridgeSession): void {
+        if (!this.transcriptSink || !active.RoomKey) {
+            return;
+        }
+        const roomKey = active.RoomKey.toLowerCase();
+        if (!this.roomScribes.has(roomKey)) {
+            this.roomScribes.set(roomKey, active.SessionBridgeID);
+            active.IsTranscriptScribe = true;
+            LogStatus(`[AIBridgeEngine] Bridge ${active.SessionBridgeID} is the transcript scribe for its room.`);
+        }
+    }
+
+    /**
+     * Releases this session's scribe role on teardown and HANDS OFF to another live session in the same
+     * room (so the transcript continues when the original scribe leaves a still-occupied room). No-op when
+     * the session wasn't the scribe. Called during disconnect while the session is still in the active map.
+     *
+     * @param active The session being torn down.
+     */
+    private releaseTranscriptScribe(active: ActiveBridgeSession): void {
+        if (!active.RoomKey) {
+            return;
+        }
+        const roomKey = active.RoomKey.toLowerCase();
+        if (this.roomScribes.get(roomKey) !== active.SessionBridgeID) {
+            return; // not the scribe
+        }
+        this.roomScribes.delete(roomKey);
+        active.IsTranscriptScribe = false;
+        for (const other of this.activeSessions.values()) {
+            if (other !== active && other.RoomKey?.toLowerCase() === roomKey) {
+                this.roomScribes.set(roomKey, other.SessionBridgeID);
+                other.IsTranscriptScribe = true;
+                LogStatus(`[AIBridgeEngine] Transcript scribe handed to bridge ${other.SessionBridgeID} (prior scribe left).`);
+                return;
+            }
+        }
+    }
+
+    /**
+     * Emits one FINAL transcript line to the registered sink — only from the room's scribe, so the room
+     * gets a single unified transcript. The scribe's OWN speech (`assistant`) is attributed to it; everything
+     * it hears (`user`) is recorded as heard. Best-effort: a sink failure is logged, never fatal to media.
+     *
+     * @param active The scribe session.
+     * @param t The final transcript line.
+     */
+    private emitTranscriptLine(active: ActiveBridgeSession, t: RealtimeTranscript): void {
+        if (!active.IsTranscriptScribe || !this.transcriptSink || !active.RoomKey) {
+            return;
+        }
+        const text = (t.Text ?? '').trim();
+        if (!text) {
+            return;
+        }
+        const isAgentSpeech = t.Role === 'assistant';
+        void Promise.resolve(
+            this.transcriptSink(
+                {
+                    RoomKey: active.RoomKey,
+                    AgentSessionID: active.AgentSessionID,
+                    AgentID: active.AgentID,
+                    IsAgentSpeech: isAgentSpeech,
+                    SpeakerParticipantID: isAgentSpeech ? active.BotParticipantID : undefined,
+                    Text: text,
+                },
+                active.ContextUser,
+                active.MetadataProvider,
+            ),
+        ).catch((err) =>
+            LogError(
+                `[AIBridgeEngine] transcript sink failed for bridge ${active.SessionBridgeID}: ` +
+                    `${err instanceof Error ? err.message : String(err)}`,
+            ),
+        );
     }
 
     // ──────────────────────────────────────────────────────────────────────────────
@@ -1068,11 +1352,19 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @returns The bridge context.
      */
     private buildBridgeContext(params: StartBridgeSessionParams): RealtimeBridgeContext {
+        // Carry the realtime model's audio format down to the media-transport driver so it resamples to the
+        // rate the model actually consumes/emits (OpenAI 24 kHz; Gemini Live 16 kHz IN). Without this a
+        // bridge feeds e.g. Gemini 24 kHz audio it can't parse and the agent never responds. Defaults keep
+        // every existing driver/model on 24 kHz. See plans/realtime/realtime-core-host-convergence.md.
         return {
             Features: params.Provider.SupportedFeaturesObject ?? {},
             ProviderName: params.Provider.Name,
             Address: params.Address,
-            Configuration: params.Configuration,
+            Configuration: {
+                ...params.Configuration,
+                InboundSampleRate: params.RealtimeSession.InputSampleRate ?? 24000,
+                OutboundSampleRate: params.RealtimeSession.OutputSampleRate ?? 24000,
+            },
             ContextUser: params.ContextUser,
         };
     }
@@ -1156,6 +1448,14 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /** Disconnects the driver of a live session, tolerant of driver teardown errors, and closes its channels. */
     private async disconnectDriver(active: ActiveBridgeSession, reason: BridgeDisconnectReason): Promise<void> {
+        // Cancel any pending auto-leave timer so it can't fire against an already-torn-down session.
+        if (active.LeaveGraceTimer) {
+            clearTimeout(active.LeaveGraceTimer);
+            active.LeaveGraceTimer = undefined;
+        }
+        // Hand the transcript scribe role to another live session in the room (if this was the scribe), so a
+        // multi-agent room keeps recording after the first agent leaves. Done before the active map removal.
+        this.releaseTranscriptScribe(active);
         // Close the channel plane first so its post-close hooks see the session still mid-teardown,
         // then release the driver's media plane.
         await this.closeChannelPlane(active);
@@ -1164,6 +1464,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         } catch (err) {
             LogError(
                 `[AIBridgeEngine] driver Disconnect failed for bridge ${active.SessionBridgeID}: ` +
+                    `${err instanceof Error ? err.message : String(err)}`,
+            );
+        }
+        // Close the realtime model session too — releases the provider connection AND triggers the
+        // co-agent run/prompt-run finalizer the agent layer wrapped onto Close() (otherwise the run dangles
+        // in `Running` and the model socket leaks). Tolerant: a provider Close error must not block teardown.
+        try {
+            await active.RealtimeSession.Close();
+        } catch (err) {
+            LogError(
+                `[AIBridgeEngine] realtime session Close failed for bridge ${active.SessionBridgeID}: ` +
                     `${err instanceof Error ? err.message : String(err)}`,
             );
         }
@@ -1198,6 +1509,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         if (row.Status === 'Disconnected' || row.Status === 'Failed') {
             return true; // idempotent — already terminal, keep the original reason.
         }
+        const agentSessionID = row.AgentSessionID;
         row.Status = 'Disconnected';
         row.CloseReason = reason;
         row.DisconnectedAt = new Date();
@@ -1207,6 +1519,20 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 `[AIBridgeEngine] markBridgeDisconnected save failed for ${sessionBridgeID}: ` +
                     `${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
             );
+        }
+        // Finalize the co-agent run(s) for this session on EVERY teardown path. The same-process `Close()`
+        // already finalized them (so this is a no-op there), but the orphan/cross-host reaps reach here
+        // WITHOUT a live session — this is the only place their dangling `Running` co-agent run gets closed.
+        // Tolerant: a finalizer failure must never block the disconnect bookkeeping.
+        if (saved && this.runFinalizer && agentSessionID) {
+            try {
+                await this.runFinalizer(agentSessionID, reason !== 'Error', contextUser, provider);
+            } catch (err) {
+                LogError(
+                    `[AIBridgeEngine] session run finalizer failed for ${sessionBridgeID}: ` +
+                        `${err instanceof Error ? err.message : String(err)}`,
+                );
+            }
         }
         return saved;
     }

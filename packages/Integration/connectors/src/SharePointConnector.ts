@@ -16,13 +16,8 @@ import {
     type ExternalRecord,
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
-    type IntegrationObjectInfo,
-    type ActionGeneratorConfig,
-    type CRUDResult,
     type CreateRecordContext,
-    type UpdateRecordContext,
-    type DeleteRecordContext,
-    type GetRecordContext,
+    type CRUDResult,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -130,80 +125,32 @@ const DEFAULT_MAX_RETRIES = 5;
 /** Buffer before token expiry at which to refresh (60s). */
 const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
 
-/** Object name used to match the SiteListColumns IntegrationObject during runtime field discovery. */
-const LIST_ITEM_OBJECT = 'SiteListItems';
+/**
+ * IntegrationObject name whose runtime field discovery augments static metadata
+ * with per-list column definitions. Matches the frozen-contract object name `ListItem`.
+ */
+const LIST_ITEM_OBJECT = 'ListItem';
 
-// ─── SharePoint Object Metadata for Action Generation ─────────────────
+/**
+ * Object names that support Microsoft Graph `/delta` incremental queries.
+ * Per the re-derived contract, exactly Site, DriveItem, and ListItem carry
+ * `IncrementalWatermarkField=@odata.deltaLink`; everything else is full-scan.
+ */
+const DELTA_OBJECTS = new Set<string>(['Site', 'DriveItem', 'ListItem']);
 
-const SHAREPOINT_OBJECTS: IntegrationObjectInfo[] = [
-    {
-        Name: 'Sites',
-        DisplayName: 'Site',
-        Description: 'A SharePoint site (team, communication, hub, or personal OneDrive site).',
-        SupportsWrite: false,
-        Fields: [
-            { Name: 'id', DisplayName: 'Site ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Composite site identifier (hostname,site-collection-guid,web-guid).' },
-            { Name: 'displayName', DisplayName: 'Display Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Human-readable site name.' },
-            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Internal site name.' },
-            { Name: 'webUrl', DisplayName: 'Web URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Full URL to the site.' },
-            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Site description.' },
-            { Name: 'createdDateTime', DisplayName: 'Created Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Site creation timestamp.' },
-            { Name: 'lastModifiedDateTime', DisplayName: 'Last Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Last modification timestamp.' },
-        ],
-    },
-    {
-        Name: 'SiteLists',
-        DisplayName: 'List',
-        Description: 'A list within a SharePoint site (custom list, document library, or calendar).',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'id', DisplayName: 'List ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'List GUID.' },
-            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Internal list name.' },
-            { Name: 'displayName', DisplayName: 'Display Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'List title shown in the UI.' },
-            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'List description.' },
-            { Name: 'webUrl', DisplayName: 'Web URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'URL to the list in SharePoint.' },
-            { Name: 'lastModifiedDateTime', DisplayName: 'Last Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Last modification timestamp.' },
-        ],
-    },
-    {
-        Name: 'SiteListItems',
-        DisplayName: 'List Item',
-        Description: 'A row within a SharePoint list. Dynamic custom columns live in the fields dictionary.',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'id', DisplayName: 'Item ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Per-list auto-increment integer.' },
-            { Name: 'createdDateTime', DisplayName: 'Created Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Item creation timestamp.' },
-            { Name: 'lastModifiedDateTime', DisplayName: 'Last Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Item modification timestamp.' },
-            { Name: 'webUrl', DisplayName: 'Web URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Full URL to the item.' },
-            { Name: 'fields', DisplayName: 'Fields', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Dynamic dictionary keyed by list column names.' },
-        ],
-    },
-    {
-        Name: 'Drives',
-        DisplayName: 'Drive',
-        Description: 'A SharePoint document library or OneDrive personal drive.',
-        SupportsWrite: false,
-        Fields: [
-            { Name: 'id', DisplayName: 'Drive ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Drive GUID.' },
-            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Drive name.' },
-            { Name: 'driveType', DisplayName: 'Drive Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'personal, business, or documentLibrary.' },
-            { Name: 'webUrl', DisplayName: 'Web URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'URL to the drive.' },
-        ],
-    },
-    {
-        Name: 'DriveItems',
-        DisplayName: 'Drive Item',
-        Description: 'A file or folder in a SharePoint drive.',
-        SupportsWrite: true,
-        Fields: [
-            { Name: 'id', DisplayName: 'Item ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Drive item GUID.' },
-            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'File or folder name.' },
-            { Name: 'size', DisplayName: 'Size', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'File size in bytes.' },
-            { Name: 'webUrl', DisplayName: 'Web URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Full URL to the item.' },
-            { Name: 'lastModifiedDateTime', DisplayName: 'Last Modified', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Item modification timestamp.' },
-        ],
-    },
-];
+/**
+ * Objects whose Microsoft Graph CREATE shape is genuinely idiosyncratic and cannot be
+ * expressed by the generic flat/wrapped BodyShape columns, so CreateRecord is overridden
+ * for them (and ONLY them). Everything else uses the generic per-operation CRUD path.
+ *
+ *  - ListItem: `POST /sites/{site}/lists/{list}/items` requires the column values nested
+ *    under a `fields` envelope: `{ "fields": { Title: "x", ... } }`. The metadata declares
+ *    `CreateBodyShape=flat` (because the UPDATE path `/items/{id}/fields` PATCHes the flat
+ *    map directly — create and update are asymmetric in Graph), so the generic flat create
+ *    would POST the bare map and Graph rejects it. We re-wrap here. The override STILL routes
+ *    through BuildCreatedResult so a 2xx-with-no-id fails loudly.
+ */
+const LISTITEM_CREATE_OBJECT = 'ListItem';
 
 // ─── Connector Implementation ────────────────────────────────────────
 
@@ -220,9 +167,15 @@ const SHAREPOINT_OBJECTS: IntegrationObjectInfo[] = [
  *   2. Bearer token attached to every Graph request
  *   3. Token is refreshed proactively before expiry
  *
- * Pagination: `@odata.nextLink` cursor (per OData convention).
+ * Pagination: `@odata.nextLink` cursor (per OData convention) — replayed verbatim.
  *
- * Incremental sync: `/delta?token=...` endpoints for drives and list items.
+ * Incremental sync: Graph `/delta` for Site, DriveItem, and ListItem (the three
+ * objects the frozen contract proves carry `@odata.deltaLink`). The watermark is
+ * the full deltaLink URL, replayed verbatim; the first sync runs as a full fetch.
+ *
+ * Discovery is non-authoritative (DiscoveryIsAuthoritative inherits false): the 25
+ * standard objects come from Declared metadata; runtime field discovery only ADDS
+ * tenant-specific list columns. Absence in a refresh never deactivates.
  */
 @RegisterClass(BaseIntegrationConnector, 'SharePointConnector')
 export class SharePointConnector extends BaseRESTIntegrationConnector {
@@ -235,33 +188,41 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
 
     // ── Capability Getters ───────────────────────────────────────────
 
-    public override get SupportsCreate(): boolean { return true; }
-    public override get SupportsUpdate(): boolean { return true; }
-    public override get SupportsDelete(): boolean { return true; }
+    // RUNTIME STATUS: this connector is READ-ONLY end-to-end. The global
+    // SupportsCreate/Update/Delete getters inherit `false`, and BOTH the
+    // IntegrationEngine push path AND the IntegrationWriteRecord resolver gate every
+    // write on those GLOBAL getters — so no write executes through the product today,
+    // regardless of the per-object metadata. Read sync is what is live-proven.
+    //
+    // The write surface below (the ListItem CreateRecord override + the Create/Update/
+    // Delete columns the frozen contract populates for DriveItem / List / ListItem /
+    // Subscription) is implemented and unit-tested, but is intentionally PER-OBJECT, not
+    // global: we do NOT flip the global getters to `true`, because that would wrongly
+    // advertise writes for Site / Drive / the other read-only objects. It activates only
+    // once the engine adds per-object write dispatch (a separate framework change); until
+    // then it is dormant by design, and the base generic CRUD throws a clear
+    // "not configured" error for any object whose per-operation columns are null.
 
+    /**
+     * Verbatim from the frozen contract's Integration.Name AND the baseline-seeded
+     * `__mj.Integration` row — both are exactly `'SharePoint'`. This is load-bearing:
+     * the three-way invariant `IntegrationName === MJ: Integrations.Name === @RegisterClass
+     * driver→ClassName` is how the engine binds this connector to its Integration row. A
+     * mismatch (e.g. 'SharePoint Online') means the engine never resolves the connector,
+     * no connection is created, and the live sync lands 0 rows. DO NOT change this string.
+     */
     public override get IntegrationName(): string { return 'SharePoint'; }
 
     // ── Action Generation ────────────────────────────────────────────
-
-    public override GetIntegrationObjects(): IntegrationObjectInfo[] {
-        return SHAREPOINT_OBJECTS;
-    }
-
-    public override GetActionGeneratorConfig(): ActionGeneratorConfig | null {
-        const objects = this.GetIntegrationObjects();
-        if (objects.length === 0) return null;
-
-        return {
-            IntegrationName: 'SharePoint',
-            CategoryName: 'SharePoint',
-            IconClass: 'fa-brands fa-microsoft',
-            Objects: objects,
-            IncludeSearch: false,
-            IncludeList: false,
-            CategoryDescription: 'Microsoft SharePoint integration actions (via Graph)',
-            ParentCategoryName: 'Business Apps',
-        };
-    }
+    //
+    // We deliberately do NOT override GetIntegrationObjects / GetActionGeneratorConfig.
+    // The object/field catalog is NOT baked in connector code — it lives entirely in the
+    // 25 Declared IntegrationObject rows in metadata (case 1: credential-free Graph spec).
+    // Baking a module-level catalog constant here is the `catalog-in-code` floor-check
+    // failure (it freezes the object set AND becomes a circular source a later build reads
+    // its own output back from). The base GetIntegrationObjects() returns [] and the base
+    // GetActionGeneratorConfig() returns null when objects are empty — exactly what we want.
+    // DiscoverObjects (below) delegates to super, which reads the Declared rows at runtime.
 
     // ── Default Configuration ────────────────────────────────────────
 
@@ -270,25 +231,25 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
             DefaultSchemaName: 'SharePoint',
             DefaultObjects: [
                 {
-                    SourceObjectName: 'Sites',
+                    SourceObjectName: 'Site',
                     TargetTableName: 'SharePoint_Site',
                     TargetEntityName: 'SharePoint Sites',
                     SyncEnabled: true,
-                    FieldMappings: this.GetDefaultFieldMappings('Sites', 'Contacts'),
+                    FieldMappings: this.GetDefaultFieldMappings('Site', 'Sites'),
                 },
                 {
-                    SourceObjectName: 'SiteLists',
+                    SourceObjectName: 'List',
                     TargetTableName: 'SharePoint_List',
                     TargetEntityName: 'SharePoint Lists',
                     SyncEnabled: true,
-                    FieldMappings: this.GetDefaultFieldMappings('SiteLists', 'Lists'),
+                    FieldMappings: this.GetDefaultFieldMappings('List', 'Lists'),
                 },
                 {
-                    SourceObjectName: 'SiteListItems',
+                    SourceObjectName: 'ListItem',
                     TargetTableName: 'SharePoint_ListItem',
                     TargetEntityName: 'SharePoint List Items',
                     SyncEnabled: true,
-                    FieldMappings: this.GetDefaultFieldMappings('SiteListItems', 'ListItems'),
+                    FieldMappings: this.GetDefaultFieldMappings('ListItem', 'ListItems'),
                 },
             ],
         };
@@ -296,20 +257,20 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
 
     public override GetDefaultFieldMappings(objectName: string, _entityName: string): DefaultFieldMapping[] {
         switch (objectName) {
-            case 'Sites':
+            case 'Site':
                 return [
                     { SourceFieldName: 'id', DestinationFieldName: 'ExternalID', IsKeyField: true },
                     { SourceFieldName: 'displayName', DestinationFieldName: 'Name' },
                     { SourceFieldName: 'webUrl', DestinationFieldName: 'URL' },
                     { SourceFieldName: 'description', DestinationFieldName: 'Description' },
                 ];
-            case 'SiteLists':
+            case 'List':
                 return [
                     { SourceFieldName: 'id', DestinationFieldName: 'ExternalID', IsKeyField: true },
                     { SourceFieldName: 'displayName', DestinationFieldName: 'Name' },
                     { SourceFieldName: 'description', DestinationFieldName: 'Description' },
                 ];
-            case 'SiteListItems':
+            case 'ListItem':
                 return [
                     { SourceFieldName: 'id', DestinationFieldName: 'ExternalID', IsKeyField: true },
                 ];
@@ -389,84 +350,81 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
      */
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         const obj = this.GetCachedObject(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
-        // Delta sync path — when watermark is present and object supports it,
-        // use /delta endpoints rather than full re-enumeration.
-        if (ctx.WatermarkValue && obj.SupportsIncrementalSync && this.SupportsDeltaForObject(obj)) {
+        // Delta sync path — only when the watermark is a full, absolute Graph delta
+        // URL (the verbatim @odata.deltaLink from a previous batch). The first sync
+        // has no delta link yet, so it falls through to the base full fetch, which
+        // does the parent-chain template traversal and yields the deltaLink for next
+        // time. We never synthesise a delta URL from a bare token.
+        const wm = ctx.WatermarkValue;
+        if (wm && /^https?:\/\//.test(wm) && obj.SupportsIncrementalSync && this.SupportsDeltaForObject(obj)) {
             return this.FetchChangesViaDelta(ctx, obj);
         }
         return super.FetchChanges(ctx);
     }
 
     // ── CRUD operations ──────────────────────────────────────────────
+    //
+    // Update / Delete / Get use the GENERIC BaseRESTIntegrationConnector path verbatim:
+    // the frozen contract fully populates the per-operation columns for the writable IOs
+    // (DriveItem / List / ListItem / Subscription) — Update/DeleteAPIPath/Method/BodyShape/
+    // IDLocation — including ListItem's Graph-specific `/items/{id}/fields` PATCH path,
+    // whose flat body the generic `flat` shape sends correctly. We do NOT override those.
+    //
+    // Create is overridden for EXACTLY ONE object — ListItem — because Graph's
+    // `POST .../items` is the one create whose envelope (`{ "fields": {...} }`) cannot be
+    // expressed by the flat/wrapped columns (create is asymmetric to the flat `/fields`
+    // PATCH update). Every other object's create falls straight through to the generic
+    // path; the ListItem branch STILL routes through BuildCreatedResult so a 2xx with no
+    // ID fails loudly (the HubSpot silent-loss guard).
+    //
+    // (DriveItem *content* upload — Graph's `createUploadSession` chunked PUT — is a
+    // separate, multi-step write that is NOT part of the frozen contract's CRUD surface;
+    // DriveItem create here is the metadata POST that the generic path handles. If/when
+    // content upload is added it belongs in its own override, also via BuildCreatedResult.)
 
+    /**
+     * Generic create for every object EXCEPT ListItem, whose Graph create requires the
+     * `{ "fields": {...} }` envelope. We re-wrap the attributes for ListItem and execute
+     * the same generic mechanics (auth → headers → POST → BuildCreatedResult), so the
+     * loud-on-empty-ID guarantee is preserved.
+     */
     public override async CreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> {
-        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
-        const contextUser = ctx.ContextUser as UserInfo;
-        const auth = await this.Authenticate(companyIntegration, contextUser);
-
-        try {
-            const url = this.BuildCRUDUrl(auth, companyIntegration.IntegrationID, ctx.ObjectName, null);
-            const response = await this.MakeHTTPRequest(auth, url, 'POST', this.BuildHeaders(auth), ctx.Attributes);
-            this.ValidateResponse(response, url);
-            const body = response.Body as { id?: string };
-            return this.BuildCreatedResult(body.id, response.Status, ctx.ObjectName);
-        } catch (err: unknown) {
-            return this.BuildCRUDError(err, 'CreateRecord', ctx.ObjectName);
+        if (ctx.ObjectName !== LISTITEM_CREATE_OBJECT) {
+            return super.CreateRecord(ctx);
         }
-    }
 
-    public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
-        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const ci = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
-        const auth = await this.Authenticate(companyIntegration, contextUser);
-
-        try {
-            const url = this.BuildCRUDUrl(auth, companyIntegration.IntegrationID, ctx.ObjectName, ctx.ExternalID);
-            const response = await this.MakeHTTPRequest(auth, url, 'PATCH', this.BuildHeaders(auth), ctx.Attributes);
-            this.ValidateResponse(response, url);
-            return { Success: true, ExternalID: ctx.ExternalID, StatusCode: response.Status };
-        } catch (err: unknown) {
-            return this.BuildCRUDError(err, 'UpdateRecord', ctx.ObjectName);
+        const obj = this.GetCachedObject(ci.IntegrationID, ctx.ObjectName);
+        if (!obj.CreateAPIPath || !obj.CreateMethod) {
+            throw new Error(
+                `CreateRecord not supported for "${ctx.ObjectName}": ` +
+                `CreateAPIPath / CreateMethod not configured on IntegrationObject.`
+            );
         }
-    }
 
-    public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
-        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
-        const contextUser = ctx.ContextUser as UserInfo;
-        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const auth = await this.Authenticate(ci, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const baseURL = this.GetBaseURL(ci, auth);
+        const url = `${baseURL.replace(/\/+$/, '')}${obj.CreateAPIPath.startsWith('/') ? '' : '/'}${obj.CreateAPIPath}`;
 
-        try {
-            const url = this.BuildCRUDUrl(auth, companyIntegration.IntegrationID, ctx.ObjectName, ctx.ExternalID);
-            const response = await this.MakeHTTPRequest(auth, url, 'DELETE', this.BuildHeaders(auth));
-            if (response.Status === 404) {
-                return { Success: true, ExternalID: ctx.ExternalID, StatusCode: 404 };
-            }
-            this.ValidateResponse(response, url);
-            return { Success: true, ExternalID: ctx.ExternalID, StatusCode: response.Status };
-        } catch (err: unknown) {
-            return this.BuildCRUDError(err, 'DeleteRecord', ctx.ObjectName);
+        // The one idiosyncrasy: Graph wants the column map under `fields`. If the caller
+        // already nested it (idempotent), don't double-wrap.
+        const attrs = ctx.Attributes;
+        const body = ('fields' in attrs && typeof attrs.fields === 'object')
+            ? attrs
+            : { fields: attrs };
+
+        const response = await this.MakeHTTPRequest(auth, url, obj.CreateMethod, headers, body);
+        if (response.Status >= 200 && response.Status < 300) {
+            const externalID = this.ExtractIDFromResponse(response, obj.CreateIDLocation);
+            return this.BuildCreatedResult(externalID, response.Status, ctx.ObjectName);
         }
-    }
-
-    public override async GetRecord(ctx: GetRecordContext): Promise<ExternalRecord | null> {
-        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
-        const contextUser = ctx.ContextUser as UserInfo;
-        const auth = await this.Authenticate(companyIntegration, contextUser);
-
-        try {
-            const url = this.BuildCRUDUrl(auth, companyIntegration.IntegrationID, ctx.ObjectName, ctx.ExternalID);
-            const response = await this.MakeHTTPRequest(auth, url, 'GET', this.BuildHeaders(auth));
-            if (response.Status === 404) return null;
-            this.ValidateResponse(response, url);
-            const body = response.Body as Record<string, unknown>;
-            return {
-                ExternalID: String(body['id'] ?? ctx.ExternalID),
-                ObjectType: ctx.ObjectName,
-                Fields: body,
-            };
-        } catch {
-            return null;
-        }
+        return {
+            Success: false,
+            StatusCode: response.Status,
+            ErrorMessage: this.ExtractErrorMessage(response) ?? `HTTP ${response.Status} on create`,
+        };
     }
 
     // ─── Abstract BaseRESTIntegrationConnector hooks ────────────────
@@ -543,6 +501,24 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
      * already passes `ResponseDataKey` from metadata — we default to the `value`
      * convention when responseDataKey is null.
      */
+    /**
+     * Scope filter: a SharePoint *document-library* connector enumerates SharePoint sites
+     * (team/communication sites under `<tenant>.sharepoint.com/sites/...`), NOT users' personal
+     * OneDrive sites (`<tenant>-my.sharepoint.com/personal/...`). Personal sites are a different
+     * product (OneDrive), are routinely admin-locked (Graph returns HTTP 423 `resourceLocked` on
+     * their `/drives`), and carry no SharePoint document libraries — so iterating Drive/DriveItem
+     * over them yields only errors and starves the traversal before it reaches real document sites.
+     * We drop them at the Site source so they never become parents for the second-layer objects.
+     * Only Site records carry a `webUrl` on the `-my` host, so this is a no-op for every other object.
+     */
+    private ExcludePersonalSites(records: Record<string, unknown>[]): Record<string, unknown>[] {
+        return records.filter(r => {
+            const webUrl = typeof r.webUrl === 'string' ? r.webUrl : '';
+            const isPersonal = r.isPersonalSite === true || webUrl.includes('-my.sharepoint.com');
+            return !isPersonal;
+        });
+    }
+
     protected NormalizeResponse(
         rawBody: unknown,
         responseDataKey: string | null
@@ -550,9 +526,9 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
         const body = rawBody as Record<string, unknown>;
         const key = responseDataKey ?? 'value';
         const data = body[key];
-        if (Array.isArray(data)) return data as Record<string, unknown>[];
+        if (Array.isArray(data)) return this.ExcludePersonalSites(data as Record<string, unknown>[]);
         // Single-record response fallback
-        if (body && typeof body === 'object' && 'id' in body) return [body];
+        if (body && typeof body === 'object' && 'id' in body) return this.ExcludePersonalSites([body]);
         return [];
     }
 
@@ -782,70 +758,15 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
         }
     }
 
-    // ─── CRUD URL builder ────────────────────────────────────────────
-
-    /**
-     * Builds a CRUD-target URL for a given object + external ID.
-     *
-     * The APIPath from metadata may contain template variables (e.g.,
-     * `/sites/{siteId}/lists/{id}/items`). For a CRUD call we resolve those
-     * variables from the composite external ID: if the object has N template
-     * variables and an optional terminal ID, the external ID is a pipe-delimited
-     * string of N+1 parts (e.g., `siteId|listId|itemId`).
-     */
-    private BuildCRUDUrl(
-        auth: SharePointAuthContext,
-        integrationID: string,
-        objectName: string,
-        externalID: string | null
-    ): string {
-        const obj = this.GetCachedObject(integrationID, objectName);
-        const apiPath = this.ResolveTemplatePath(obj.APIPath, externalID);
-        const base = auth.BaseUrl;
-        const path = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
-        return `${base}${path}`;
-    }
-
-    /**
-     * Resolves template variables in an API path using a pipe-delimited
-     * external ID (e.g., `site-id|list-id|item-id`).
-     */
-    private ResolveTemplatePath(apiPath: string, externalID: string | null): string {
-        const templateVars = this.DetectTemplateVariables(apiPath);
-        if (templateVars.length === 0) {
-            // Flat path — append externalID if present
-            if (externalID) return `${apiPath}/${encodeURIComponent(externalID)}`;
-            return apiPath;
-        }
-        if (!externalID) return apiPath;
-        const parts = externalID.split('|');
-        let resolved = apiPath;
-        templateVars.forEach((varName, idx) => {
-            const value = parts[idx] ?? '';
-            resolved = resolved.replace(`{${varName}}`, encodeURIComponent(value));
-        });
-        // If there is an extra parts element beyond the template vars, treat it
-        // as the terminal ID (e.g., list item id)
-        if (parts.length > templateVars.length) {
-            const terminalId = parts[parts.length - 1];
-            resolved = `${resolved}/${encodeURIComponent(terminalId)}`;
-        }
-        return resolved;
-    }
-
-    private DetectTemplateVariables(apiPath: string): string[] {
-        const matches = apiPath.match(/\{(\w+)\}/g);
-        return matches ? matches.map(m => m.slice(1, -1)) : [];
-    }
-
     // ─── Delta sync ──────────────────────────────────────────────────
 
     /**
-     * Detects whether an IntegrationObject supports Graph delta queries.
-     * Currently: DriveItems and SiteListItems.
+     * Detects whether an IntegrationObject supports Graph `/delta` queries.
+     * Per the frozen contract, exactly Site, DriveItem, and ListItem carry
+     * `IncrementalWatermarkField=@odata.deltaLink`.
      */
     private SupportsDeltaForObject(obj: MJIntegrationObjectEntity): boolean {
-        return obj.Name === 'DriveItems' || obj.Name === 'SiteListItems';
+        return DELTA_OBJECTS.has(obj.Name);
     }
 
     /**
@@ -892,21 +813,22 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
     }
 
     private BuildDeltaUrl(
-        auth: SharePointAuthContext,
-        obj: MJIntegrationObjectEntity,
+        _auth: SharePointAuthContext,
+        _obj: MJIntegrationObjectEntity,
         watermark: string | null
     ): string {
-        // If watermark is already a full URL, use it as-is
-        if (watermark && watermark.startsWith('http')) return watermark;
-
-        // Translate object's APIPath into its /delta sibling
-        const base = auth.BaseUrl;
-        const path = obj.Name === 'DriveItems'
-            ? '/drives/{id}/root/delta'
-            : '/sites/{siteId}/lists/{id}/items/delta';
-        const deltaBase = `${base}${path}`;
-        if (watermark) return `${deltaBase}?token=${encodeURIComponent(watermark)}`;
-        return deltaBase;
+        // The watermark IS the verbatim `@odata.deltaLink` (or `@odata.nextLink`) URL
+        // returned by Graph on the previous batch — a complete, absolute continuation
+        // request. We never reconstruct it from a token: Graph's delta/next links are
+        // opaque and must be replayed exactly as returned (the same VERBATIM rule as
+        // ExtractPaginationInfo's @odata.nextLink handling).
+        if (watermark && /^https?:\/\//.test(watermark)) return watermark;
+        // No usable delta link yet (first sync) — caller gates on this; we should not
+        // be here without an absolute delta URL.
+        throw new Error(
+            `SharePointConnector: delta sync for "${_obj.Name}" requires a full @odata.deltaLink ` +
+            `watermark; got "${watermark ?? 'null'}". First-time sync must run via full fetch.`
+        );
     }
 
     // ─── Runtime List-Column Discovery (Custom Fields) ───────────────
@@ -1005,17 +927,6 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
         if (col.personOrGroup) return 'string';
         if (col.hyperlinkOrPicture) return 'string';
         return 'string';
-    }
-
-    // ─── CRUD helpers ────────────────────────────────────────────────
-
-    private BuildCRUDError(err: unknown, operation: string, objectName: string): CRUDResult {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-            Success: false,
-            ErrorMessage: `${operation} failed for ${objectName}: ${message}`,
-            StatusCode: 500,
-        };
     }
 }
 
