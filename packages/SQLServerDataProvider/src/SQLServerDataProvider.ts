@@ -804,6 +804,7 @@ export class SQLServerDataProvider
     // after all base fields (the overwhelming majority), the output is byte-for-byte identical to the
     // prior sequence-ordered output (a no-op). It only changes — and corrects — entities where a
     // virtual field was sequenced ahead of a base column.
+    this.warnIfBaseFieldSequencedAfterVirtual(entityInfo);
     const orderedFields = [
       ...entityInfo.Fields.filter((f) => !f.IsVirtual),
       ...entityInfo.Fields.filter((f) => f.IsVirtual),
@@ -816,6 +817,42 @@ export class SQLServerDataProvider
       outputCount++;
     }
     return sRet;
+  }
+
+  /** Entities already warned about base-after-virtual field-order skew — so we warn once, not every save. */
+  private static _fieldOrderWarnedEntities: Set<string> = new Set<string>();
+
+  /**
+   * INTEGRITY GUARD: in a well-formed entity every base (non-virtual) field sequences BEFORE the
+   * virtual/related fields, so EntityField order matches the base view's `SELECT [base].*, <joins>`
+   * column order that the positional save-capture relies on. CodeGen can leave a base column sequenced
+   * AFTER a virtual field (newly-discovered columns get a temporary maxSequence+100000 offset that is
+   * supposed to be renumbered). `getAllEntityColumnsSQL` re-orders defensively so saves stay correct,
+   * but the underlying metadata is inconsistent and should be fixed at the source — so surface it
+   * loudly here (once per entity), and CodeGen flags it too (ManageMetadataBase integrity check).
+   */
+  private warnIfBaseFieldSequencedAfterVirtual(entityInfo: EntityInfo): void {
+    if (SQLServerDataProvider._fieldOrderWarnedEntities.has(entityInfo.Name)) return;
+    let sawVirtual = false;
+    const misSequenced: string[] = [];
+    for (const f of entityInfo.Fields) {
+      if (f.IsVirtual) sawVirtual = true;
+      else if (sawVirtual) misSequenced.push(f.Name);
+    }
+    if (misSequenced.length === 0) return;
+    SQLServerDataProvider._fieldOrderWarnedEntities.add(entityInfo.Name);
+    const bar = '='.repeat(100);
+    console.warn(
+      `\n${bar}\n` +
+      `⚠️  ENTITY FIELD-ORDER INCONSISTENCY — ${entityInfo.Name}\n` +
+      `${bar}\n` +
+      `   Base column(s) sequenced AFTER a virtual/related field: ${misSequenced.join(', ')}\n` +
+      `   EntityField Sequence order does not match the base view ([base].* then related joins). The\n` +
+      `   save-capture (@ResultTable) re-orders base-before-virtual so saves remain CORRECT — but this\n` +
+      `   is a metadata/CodeGen sequencing defect. Re-run CodeGen; if it persists, the field's Sequence\n` +
+      `   must be renumbered below the virtual fields. (SQLServerDataProvider.getAllEntityColumnsSQL)\n` +
+      `${bar}\n`
+    );
   }
 
   /**
