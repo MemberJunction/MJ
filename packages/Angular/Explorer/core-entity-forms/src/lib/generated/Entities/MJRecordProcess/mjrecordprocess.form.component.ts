@@ -17,13 +17,13 @@ export class MJRecordProcessFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'processDefinition', sectionName: 'Process Definition', isExpanded: true },
-            { sectionKey: 'workConfiguration', sectionName: 'Work Configuration', isExpanded: true },
+            { sectionKey: 'executionLogic', sectionName: 'Execution Logic', isExpanded: true },
             { sectionKey: 'scopeConfiguration', sectionName: 'Scope Configuration', isExpanded: true },
             { sectionKey: 'triggers', sectionName: 'Triggers', isExpanded: true },
-            { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: true },
+            { sectionKey: 'performanceAndOptimization', sectionName: 'Performance and Optimization', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
-            { sectionKey: 'mJRecordProcessWatermarks', sectionName: 'Record Process Watermarks', isExpanded: false }
+            { sectionKey: 'mJRecordProcessWatermarks', sectionName: 'Record Process Watermarks', isExpanded: false },
+            { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false }
         ]);
     }
 }

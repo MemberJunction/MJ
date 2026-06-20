@@ -18793,6 +18793,9 @@ export class MJAIPrompt_ {
     @Field(() => [MJAction_])
     MJActions_DefaultCompactPromptIDArray: MJAction_[]; // Link to MJActions
     
+    @Field(() => [MJRecordProcess_])
+    MJRecordProcesses_PromptIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
+    
 }
 
 //****************************************************************************
@@ -19323,6 +19326,16 @@ export class MJAIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwActions')} WHERE ${provider.QuoteIdentifier('DefaultCompactPromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Actions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Actions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordProcess_])
+    async MJRecordProcesses_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('PromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -43729,11 +43742,11 @@ export class MJEntity_ {
     @Field(() => [MJSignatureRequest_])
     MJSignatureRequests_EntityIDArray: MJSignatureRequest_[]; // Link to MJSignatureRequests
     
-    @Field(() => [MJProcessRun_])
-    MJProcessRuns_EntityIDArray: MJProcessRun_[]; // Link to MJProcessRuns
-    
     @Field(() => [MJProcessRunDetail_])
     MJProcessRunDetails_EntityIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
+    
+    @Field(() => [MJProcessRun_])
+    MJProcessRuns_EntityIDArray: MJProcessRun_[]; // Link to MJProcessRuns
     
     @Field(() => [MJRecordProcessWatermark_])
     MJRecordProcessWatermarks_EntityIDArray: MJRecordProcessWatermark_[]; // Link to MJRecordProcessWatermarks
@@ -44818,16 +44831,6 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJProcessRun_])
-    async MJProcessRuns_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRuns')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Runs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJProcessRunDetail_])
     async MJProcessRunDetails_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Process Run Details', userPayload);
@@ -44835,6 +44838,16 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRunDetails')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJProcessRun_])
+    async MJProcessRuns_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRuns')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -67585,11 +67598,11 @@ export class MJRecordProcessCategory_ {
     @MaxLength(36)
     RootParentID?: string;
         
-    @Field(() => [MJRecordProcess_])
-    MJRecordProcesses_CategoryIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
-    
     @Field(() => [MJRecordProcessCategory_])
     MJRecordProcessCategories_ParentIDArray: MJRecordProcessCategory_[]; // Link to MJRecordProcessCategories
+    
+    @Field(() => [MJRecordProcess_])
+    MJRecordProcesses_CategoryIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
     
 }
 
@@ -67696,16 +67709,6 @@ export class MJRecordProcessCategoryResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJRecordProcess_])
-    async MJRecordProcesses_CategoryIDArray(@Root() mjrecordprocesscategory_: MJRecordProcessCategory_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('CategoryID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocesscategory_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJRecordProcessCategory_])
     async MJRecordProcessCategories_ParentIDArray(@Root() mjrecordprocesscategory_: MJRecordProcessCategory_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Process Categories', userPayload);
@@ -67713,6 +67716,16 @@ export class MJRecordProcessCategoryResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcessCategories')} WHERE ${provider.QuoteIdentifier('ParentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Process Categories', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocesscategory_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Process Categories', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordProcess_])
+    async MJRecordProcesses_CategoryIDArray(@Root() mjrecordprocesscategory_: MJRecordProcessCategory_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('CategoryID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocesscategory_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -67961,7 +67974,7 @@ export class MJRecordProcess_ {
     @MaxLength(20)
     Status: string;
         
-    @Field({description: `Whether the work is an Action or an Agent (Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction)`}) 
+    @Field({description: `Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`}) 
     @MaxLength(20)
     WorkType: string;
         
@@ -67972,6 +67985,10 @@ export class MJRecordProcess_ {
     @Field({nullable: true, description: `Foreign key to the AI Agent to run, when WorkType=Agent`}) 
     @MaxLength(36)
     AgentID?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the AI Prompt to run for each record, when WorkType=Infer. The prompt's structured output is written back to the data model via OutputMapping.`}) 
+    @MaxLength(36)
+    PromptID?: string;
         
     @Field({description: `How the record set is scoped for the Schedule and On-Demand triggers: SingleRecord, View, List, or Filter. The On-Change trigger is always single-record and ignores this.`}) 
     @MaxLength(20)
@@ -68054,6 +68071,10 @@ export class MJRecordProcess_ {
     Agent?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(255)
+    Prompt?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(100)
     ScopeView?: string;
         
@@ -68061,11 +68082,11 @@ export class MJRecordProcess_ {
     @MaxLength(100)
     ScopeList?: string;
         
-    @Field(() => [MJProcessRun_])
-    MJProcessRuns_RecordProcessIDArray: MJProcessRun_[]; // Link to MJProcessRuns
-    
     @Field(() => [MJRecordProcessWatermark_])
     MJRecordProcessWatermarks_RecordProcessIDArray: MJRecordProcessWatermark_[]; // Link to MJRecordProcessWatermarks
+    
+    @Field(() => [MJProcessRun_])
+    MJProcessRuns_RecordProcessIDArray: MJProcessRun_[]; // Link to MJProcessRuns
     
 }
 
@@ -68100,6 +68121,9 @@ export class CreateMJRecordProcessInput {
 
     @Field({ nullable: true })
     AgentID: string | null;
+
+    @Field({ nullable: true })
+    PromptID: string | null;
 
     @Field({ nullable: true })
     ScopeType?: string;
@@ -68188,6 +68212,9 @@ export class UpdateMJRecordProcessInput {
 
     @Field({ nullable: true })
     AgentID?: string | null;
+
+    @Field({ nullable: true })
+    PromptID?: string | null;
 
     @Field({ nullable: true })
     ScopeType?: string;
@@ -68304,16 +68331,6 @@ export class MJRecordProcessResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJProcessRun_])
-    async MJProcessRuns_RecordProcessIDArray(@Root() mjrecordprocess_: MJRecordProcess_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRuns')} WHERE ${provider.QuoteIdentifier('RecordProcessID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocess_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Runs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJRecordProcessWatermark_])
     async MJRecordProcessWatermarks_RecordProcessIDArray(@Root() mjrecordprocess_: MJRecordProcess_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Process Watermarks', userPayload);
@@ -68321,6 +68338,16 @@ export class MJRecordProcessResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcessWatermarks')} WHERE ${provider.QuoteIdentifier('RecordProcessID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Process Watermarks', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocess_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Process Watermarks', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJProcessRun_])
+    async MJProcessRuns_RecordProcessIDArray(@Root() mjrecordprocess_: MJRecordProcess_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRuns')} WHERE ${provider.QuoteIdentifier('RecordProcessID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocess_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -68387,11 +68414,11 @@ export class MJRemoteOperationCategory_ {
     @MaxLength(36)
     RootParentID?: string;
         
-    @Field(() => [MJRemoteOperation_])
-    MJRemoteOperations_CategoryIDArray: MJRemoteOperation_[]; // Link to MJRemoteOperations
-    
     @Field(() => [MJRemoteOperationCategory_])
     MJRemoteOperationCategories_ParentIDArray: MJRemoteOperationCategory_[]; // Link to MJRemoteOperationCategories
+    
+    @Field(() => [MJRemoteOperation_])
+    MJRemoteOperations_CategoryIDArray: MJRemoteOperation_[]; // Link to MJRemoteOperations
     
 }
 
@@ -68498,16 +68525,6 @@ export class MJRemoteOperationCategoryResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJRemoteOperation_])
-    async MJRemoteOperations_CategoryIDArray(@Root() mjremoteoperationcategory_: MJRemoteOperationCategory_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Remote Operations', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRemoteOperations')} WHERE ${provider.QuoteIdentifier('CategoryID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Remote Operations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjremoteoperationcategory_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Remote Operations', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJRemoteOperationCategory_])
     async MJRemoteOperationCategories_ParentIDArray(@Root() mjremoteoperationcategory_: MJRemoteOperationCategory_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Remote Operation Categories', userPayload);
@@ -68515,6 +68532,16 @@ export class MJRemoteOperationCategoryResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRemoteOperationCategories')} WHERE ${provider.QuoteIdentifier('ParentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Remote Operation Categories', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjremoteoperationcategory_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Remote Operation Categories', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRemoteOperation_])
+    async MJRemoteOperations_CategoryIDArray(@Root() mjremoteoperationcategory_: MJRemoteOperationCategory_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Remote Operations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRemoteOperations')} WHERE ${provider.QuoteIdentifier('CategoryID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Remote Operations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjremoteoperationcategory_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Remote Operations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
