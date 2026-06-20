@@ -34,6 +34,12 @@ export interface BridgeRealtimeSessionContext {
     AgentID?: string;
     /** The agent to voice, by name (fallback when no id). */
     AgentName?: string;
+    /**
+     * The TARGET agent the co-agent voices — the one the user is actually "calling". The Realtime
+     * Co-Agent is a voice front-end that delegates to this agent via `invoke-target-agent`; without a
+     * target it has nobody to speak for and stays idle. Flows to `params.data.targetAgentID`.
+     */
+    TargetAgentID?: string;
     /** The transport endpoint being joined (room/meeting/number) — informational here; not required. */
     RoomName?: string;
     /** The user the session runs as (scopes memory + DB ops). */
@@ -81,6 +87,9 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
         provider,
         // A fresh bridge session starts with no prior turns; memory context degrades gracefully to empty.
         conversationMessages: [] as ChatMessage[],
+        // The TARGET agent the co-agent voices via `invoke-target-agent` (BaseAgent reads
+        // params.data.targetAgentID). Without it the co-agent has nobody to speak for and stays idle.
+        data: ctx.TargetAgentID ? { targetAgentID: ctx.TargetAgentID } : undefined,
     });
 }
 

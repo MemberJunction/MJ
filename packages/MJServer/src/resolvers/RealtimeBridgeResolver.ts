@@ -6,6 +6,8 @@ import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
+import { SessionManager } from '../agentSessions/SessionManager.js';
+import { NotificationEngine } from '@memberjunction/notifications';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
@@ -68,6 +70,10 @@ export class StartLiveKitAgentRoomSessionInput {
   @Field(() => String, { nullable: true })
   AgentName?: string;
 
+  /** The TARGET agent the co-agent voices (the one being "called") — the Realtime Co-Agent delegates to it. */
+  @Field(() => String, { nullable: true })
+  TargetAgentID?: string;
+
   @Field(() => String, { nullable: true })
   RoomName?: string;
 
@@ -128,6 +134,9 @@ export class LiveKitRecordingResult {
 
 @Resolver()
 export class RealtimeBridgeResolver extends ResolverBase {
+  /** Durable `AIAgentSession` record manager — creates the session row the bridge FK-references. */
+  private readonly sessionManager = new SessionManager();
+
   /**
    * Mints a scoped LiveKit access token for the current user to join the given room. The participant
    * identity is derived server-side from the authenticated user (never trusted from the client).
@@ -185,13 +194,30 @@ export class RealtimeBridgeResolver extends ResolverBase {
       }
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
       const roomName = input.RoomName?.trim() || `mj-${randomUUID()}`;
-      const agentSessionID = input.AgentSessionID?.trim() || randomUUID();
+
+      // Resolve the AIAgentSession the bridge will reference. The bridge row FK-references
+      // AIAgentSession(ID), so we must use an EXISTING session — either one the caller supplied, or a
+      // freshly-created one. Previously this minted a bare random UUID with no backing row, so the
+      // bridge INSERT failed the FK_AIAgentSessionBridge_Session constraint.
+      let agentSessionID = input.AgentSessionID?.trim();
+      if (!agentSessionID) {
+        if (!input.AgentID?.trim()) {
+          return failure('An AgentID is required to start an agent room session.', roomName);
+        }
+        const createdSession = await this.sessionManager.CreateSession(
+          { agentID: input.AgentID.trim(), userID: user.ID },
+          user,
+          provider,
+        );
+        agentSessionID = createdSession.ID;
+      }
 
       const session = await LiveKitAgentRoomCoordinator.Instance.StartAgentRoomSession({
         AgentSessionID: agentSessionID,
         RoomName: roomName,
         AgentID: input.AgentID,
         AgentName: input.AgentName,
+        TargetAgentID: input.TargetAgentID,
         TurnMode: this.normalizeTurnMode(input.TurnMode),
         ContextUser: user,
         MetadataProvider: provider,
@@ -212,6 +238,81 @@ export class RealtimeBridgeResolver extends ResolverBase {
       const msg = error instanceof Error ? error.message : String(error);
       LogError(`StartLiveKitAgentRoomSession failed: ${msg}`);
       return failure(msg, input.RoomName ?? '');
+    }
+  }
+
+  /**
+   * Stops one agent's presence in a room (the bot leaves) — the remove half of in-room agent management.
+   * Identified by the `SessionBridgeID` returned from {@link StartLiveKitAgentRoomSession}. Returns `true`
+   * when the bridge was stopped. Best-effort: a missing/already-stopped bridge or any error resolves `false`.
+   *
+   * @param sessionBridgeID The `MJ: AI Agent Session Bridges` row id of the agent to remove.
+   */
+  @Mutation(() => Boolean)
+  async StopLiveKitAgentRoomSession(
+    @Arg('sessionBridgeID', () => String) sessionBridgeID: string,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<boolean> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return false;
+      }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      return await LiveKitAgentRoomCoordinator.Instance.StopAgentRoomSession(sessionBridgeID, 'Explicit', user, provider);
+    } catch (error) {
+      LogError(`StopLiveKitAgentRoomSession failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }
+
+  /**
+   * Invites MJ users to a live room: for each user, sends a **"Live Room Invite"** notification via the
+   * unified {@link NotificationEngine} — which writes the in-app notification (clickable → joins the room
+   * via the `meet-room` ResourceConfiguration) and ALSO delivers over MJ Comms (email/SMS) when the type's
+   * channels + a provider are configured. Best-effort: Comms not being set up never blocks the in-app
+   * notification, and a missing "Live Room Invite" type (seed not yet pushed) is caught and returns false.
+   *
+   * @param roomName The LiveKit room the invitees should join.
+   * @param userIDs The `MJ: Users` ids to invite.
+   * @returns `true` when at least one invite was delivered.
+   */
+  @Mutation(() => Boolean)
+  async InviteUsersToLiveKitRoom(
+    @Arg('roomName', () => String) roomName: string,
+    @Arg('userIDs', () => [String]) userIDs: string[],
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<boolean> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return false;
+      }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      await NotificationEngine.Instance.Config(false, user, provider);
+
+      const inviter = user.Name?.trim() || user.Email || 'Someone';
+      let anyDelivered = false;
+      for (const userId of userIDs ?? []) {
+        if (!userId?.trim()) {
+          continue;
+        }
+        const result = await NotificationEngine.Instance.SendNotification(
+          {
+            userId,
+            typeNameOrId: 'Live Room Invite',
+            title: `${inviter} invited you to a live room`,
+            message: `${inviter} is inviting you to join a live Meet room. Open this notification to join.`,
+            resourceConfiguration: { type: 'meet-room', room: roomName },
+          },
+          user,
+        );
+        anyDelivered = anyDelivered || result.success;
+      }
+      return anyDelivered;
+    } catch (error) {
+      LogError(`InviteUsersToLiveKitRoom failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
     }
   }
 

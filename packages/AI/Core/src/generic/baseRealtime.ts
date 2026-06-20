@@ -132,7 +132,32 @@ export abstract class BaseRealtimeModel extends BaseModel {
     public async CreateClientSession(_params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
     }
+
+    /**
+     * Whether this driver's sessions carry a **video** track in addition to audio — i.e. the model
+     * accepts video input (it can "see" the user's camera) and/or emits video output (a talking-head
+     * avatar / generated video), in sync with audio.
+     *
+     * Defaults to `false` (audio-only — today's realtime models). Video-capable drivers (a native
+     * multimodal realtime model, or an avatar provider) override this to `true`. The session's media
+     * plane is media-tagged ({@link IRealtimeSession.SendInput} takes a {@link RealtimeMediaKind};
+     * {@link IRealtimeSession.OnVideoOutput} delivers video-out), so a video session reuses the entire
+     * realtime contract — only the media frames gain a `video` kind. Resolution prefers a video-capable
+     * model when an agent requests video, and degrades to audio-only otherwise.
+     *
+     * @returns `true` if sessions can carry video; `false` (audio-only) otherwise.
+     */
+    public get SupportsVideo(): boolean {
+        return false;
+    }
 }
+
+/**
+ * The media plane a realtime frame belongs to. The realtime contract is otherwise media-agnostic — a
+ * `video` session reuses every method (tools, transcript, usage, turn-taking); only the media frames
+ * carry this tag so audio and video can be disambiguated on the same session.
+ */
+export type RealtimeMediaKind = 'audio' | 'video';
 
 /**
  * The server-minted configuration a browser needs to open a **client-direct** realtime session.
@@ -191,13 +216,18 @@ export interface ClientRealtimeSessionConfig {
  */
 export interface IRealtimeSession {
     /**
-     * Sends a client media frame to the model (audio now, video later).
+     * Sends a client media frame to the model.
      *
-     * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation.
+     * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation. The
+     * optional `kind` tags the media plane — `'audio'` (default, back-compatible: existing callers and
+     * audio-only drivers need not pass or read it) or `'video'` for a camera frame to a video-capable
+     * model (one that {@link BaseRealtimeModel.SupportsVideo}). Audio-only drivers ignore `'video'`
+     * frames.
      *
      * @param chunk A raw media frame as an `ArrayBuffer`.
+     * @param kind The media plane the frame belongs to. Defaults to `'audio'`.
      */
-    SendInput(chunk: ArrayBuffer): void;
+    SendInput(chunk: ArrayBuffer, kind?: RealtimeMediaKind): void;
 
     /**
      * Registers the set of tools the model may call, translating them into the provider's
@@ -226,11 +256,24 @@ export interface IRealtimeSession {
     RegisterTools(tools: RealtimeToolDefinition[]): Promise<void>;
 
     /**
-     * Registers a handler for model media output frames (the media plane).
+     * Registers a handler for model **audio** output frames (the audio media plane).
      *
-     * @param handler Invoked with each output media frame as an `ArrayBuffer`.
+     * @param handler Invoked with each output audio frame as an `ArrayBuffer`.
      */
     OnOutput(handler: (chunk: ArrayBuffer) => void): void;
+
+    /**
+     * Registers a handler for model **video** output frames — the talking-head avatar / generated
+     * video a video-capable model emits, in sync with {@link IRealtimeSession.OnOutput}'s audio.
+     *
+     * Optional: audio-only drivers (the default) don't implement it, and consumers must call it
+     * null-safely (`session.OnVideoOutput?.(...)`). A video-capable driver
+     * ({@link BaseRealtimeModel.SupportsVideo}) implements it; the consumer (bridge / client) maps these
+     * frames onto its `video-out` track exactly as it maps audio.
+     *
+     * @param handler Invoked with each output video frame as an `ArrayBuffer`.
+     */
+    OnVideoOutput?(handler: (chunk: ArrayBuffer) => void): void;
 
     /**
      * Registers a handler for transcript events (the text stream).

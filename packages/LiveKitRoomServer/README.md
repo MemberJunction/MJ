@@ -31,10 +31,12 @@ LIVEKIT_API_KEY=...
 LIVEKIT_API_SECRET=...
 ```
 
-> **Local dev:** spin up a throwaway LiveKit server in Docker and use matching dev creds — see
-> [`docker/livekit/`](../../docker/livekit/README.md) (`docker compose up -d`, then
-> `LIVEKIT_URL=ws://localhost:7880` / `LIVEKIT_API_KEY=devkey` / `LIVEKIT_API_SECRET=mj-local-dev-livekit-secret-0123456789`). For
-> production, use [LiveKit Cloud](https://cloud.livekit.io) or a properly-networked self-host.
+> **Where the LiveKit server comes from — see [`docker/livekit/README.md`](../../docker/livekit/README.md) (canonical setup guide):**
+> - **Local dev:** spin up a throwaway LiveKit server with matching dev creds — Docker (`docker compose up -d`) for
+>   browser-only testing, or native `livekit-server --config docker/livekit/livekit.yaml` for the agent-bot path on
+>   macOS. Then `LIVEKIT_URL=ws://localhost:7880` / `LIVEKIT_API_KEY=devkey` / `LIVEKIT_API_SECRET=mj-local-dev-livekit-secret-0123456789`.
+> - **Production / real-world:** use [**LiveKit Cloud**](https://cloud.livekit.io) — a hosted `wss://…livekit.cloud`
+>   URL + API key + secret to drop into `.env`, no server to run (or a properly-networked self-host).
 
 ## Token minting (fully functional)
 

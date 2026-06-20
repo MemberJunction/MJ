@@ -42,10 +42,12 @@ export interface LiveKitClientTokenResult {
 
 /** Input for {@link GraphQLLiveKitClient.StartAgentRoomSession}. */
 export interface StartLiveKitAgentRoomSessionInput {
-  /** The agent to voice in the room. */
+  /** The agent to voice in the room (the Realtime Co-Agent / voice front-end). */
   AgentID?: string;
   /** The agent's display name (bot name + addressing). */
   AgentName?: string;
+  /** The TARGET agent the co-agent voices — the one being "called". Without it the agent stays idle. */
+  TargetAgentID?: string;
   /** The room to use. When omitted, the server generates one. */
   RoomName?: string;
   /** The MJ agent-session id. When omitted, the server generates one. */
@@ -156,6 +158,50 @@ export class GraphQLLiveKitClient {
       const e = error as Error;
       LogError('GraphQLLiveKitClient.StartAgentRoomSession failed', undefined, e);
       return { Success: false, ErrorMessage: e.message || 'Unknown error', SessionBridgeID: '', RoomName: '', ServerUrl: '', ClientToken: '', Identity: '' };
+    }
+  }
+
+  /**
+   * Removes one agent from a room (the bot leaves) — identified by the `SessionBridgeID` from
+   * {@link StartAgentRoomSession}. Returns `true` when stopped. Best-effort: any failure resolves `false`.
+   *
+   * @param sessionBridgeID The agent's bridge row id.
+   */
+  public async StopAgentRoomSession(sessionBridgeID: string): Promise<boolean> {
+    try {
+      const mutation = gql`
+        mutation StopLiveKitAgentRoomSession($sessionBridgeID: String!) {
+          StopLiveKitAgentRoomSession(sessionBridgeID: $sessionBridgeID)
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(mutation, { sessionBridgeID });
+      return result?.StopLiveKitAgentRoomSession === true;
+    } catch (e: any) {
+      LogError('GraphQLLiveKitClient.StopAgentRoomSession failed', undefined, e);
+      return false;
+    }
+  }
+
+  /**
+   * Invites MJ users to a room — the server sends each a "Live Room Invite" notification (in-app +
+   * MJ Comms when configured) whose in-app entry joins the room when clicked. Best-effort.
+   *
+   * @param roomName The room to invite into.
+   * @param userIDs The `MJ: Users` ids to invite.
+   * @returns `true` when at least one invite was delivered.
+   */
+  public async InviteUsers(roomName: string, userIDs: string[]): Promise<boolean> {
+    try {
+      const mutation = gql`
+        mutation InviteUsersToLiveKitRoom($roomName: String!, $userIDs: [String!]!) {
+          InviteUsersToLiveKitRoom(roomName: $roomName, userIDs: $userIDs)
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(mutation, { roomName, userIDs });
+      return result?.InviteUsersToLiveKitRoom === true;
+    } catch (e: any) {
+      LogError('GraphQLLiveKitClient.InviteUsers failed', undefined, e);
+      return false;
     }
   }
 

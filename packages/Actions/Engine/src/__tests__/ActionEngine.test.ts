@@ -118,11 +118,17 @@ vi.mock('@memberjunction/actions-base', () => {
         private _Params: Array<Record<string, unknown>> = [];
         private _ActionResultCodes: Array<Record<string, unknown>> = [];
         private _ActionLibraries: Array<Record<string, unknown>> = [];
-        protected ContextUser = { ID: 'test-user-id', Name: 'Test User' };
-        protected Loaded = true;
+        public ContextUser = { ID: 'test-user-id', Name: 'Test User' };
+        public Loaded = true;
 
+        // ActionEngineServer now COMPOSES the base via `ActionEngineBase.Instance`, so the mock must
+        // expose a singleton `Instance` accessor (cached) in addition to `getInstance`.
+        private static _inst: MockActionEngineBase | undefined;
+        static get Instance(): MockActionEngineBase {
+            return (MockActionEngineBase._inst ??= new MockActionEngineBase());
+        }
         static getInstance<T>(): T {
-            return new MockActionEngineBase() as unknown as T;
+            return MockActionEngineBase.Instance as unknown as T;
         }
 
         get Actions() { return this._Actions; }
@@ -437,7 +443,9 @@ describe('ActionEngineServer', () => {
             mockClassFactory.CreateInstance.mockReturnValue(testAction);
 
             // Set up the engine's ActionResultCodes
-            (engine as Record<string, unknown>)['_ActionResultCodes'] = [
+            // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
+            // ActionEngineServer proxies — seed it there, not on the server instance.
+            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[
                 { ActionID: 'action-1', ResultCode: 'SUCCESS' },
             ];
 
@@ -514,7 +522,9 @@ describe('ActionEngineServer', () => {
             const testAction = new TestAction();
             mockClassFactory.CreateInstance.mockReturnValue(testAction);
 
-            (engine as Record<string, unknown>)['_ActionResultCodes'] = [];
+            // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
+            // ActionEngineServer proxies — seed it there, not on the server instance.
+            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[];
 
             const params = {
                 Action: { ID: 'action-1', Name: 'FallbackName', DriverClass: '' },
@@ -535,7 +545,9 @@ describe('ActionEngineServer', () => {
             testAction.mockResult = { Success: true, ResultCode: 'success', Message: 'ok' };
             mockClassFactory.CreateInstance.mockReturnValue(testAction);
 
-            (engine as Record<string, unknown>)['_ActionResultCodes'] = [
+            // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
+            // ActionEngineServer proxies — seed it there, not on the server instance.
+            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[
                 { ActionID: 'action-1', ResultCode: '  SUCCESS  ' },
             ];
 
@@ -555,7 +567,9 @@ describe('ActionEngineServer', () => {
         it('should create and end action log when SkipActionLog is false', async () => {
             const testAction = new TestAction();
             mockClassFactory.CreateInstance.mockReturnValue(testAction);
-            (engine as Record<string, unknown>)['_ActionResultCodes'] = [];
+            // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
+            // ActionEngineServer proxies — seed it there, not on the server instance.
+            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[];
 
             const startSpy = vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({
                 Save: vi.fn().mockResolvedValue(true),
