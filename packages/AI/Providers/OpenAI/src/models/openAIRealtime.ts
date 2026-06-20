@@ -211,7 +211,14 @@ export class OpenAIRealtime extends BaseRealtimeModel {
         // Enable transcription of the user's mic input so BOTH sides of the conversation are
         // captured (live captions + persisted ConversationDetail turns). Realtime models accept
         // audio natively, so input transcription is a separate ASR pass that must be opted into.
-        session.audio = { input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL } } };
+        // The OUTPUT voice comes from the effective config's per-provider voice (`params.Config.voice`,
+        // shaped by GetProviderVoiceSettings) — this is what lets a co-agent's configured voice OR a
+        // per-session override actually take effect in the client-direct topology.
+        const voice = (params.Config as { voice?: string } | undefined)?.voice;
+        session.audio = {
+            input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL } },
+            ...(voice && voice.trim().length > 0 ? { output: { voice: voice.trim() } } : {}),
+        };
         const response = await this.mintClientSecret({ session });
         return {
             Provider: 'openai',
