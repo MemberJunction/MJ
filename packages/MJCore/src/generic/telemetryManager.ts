@@ -100,8 +100,10 @@ export interface TelemetryRunViewParams {
     ResultType?: RunViewResultType;
     /** Maximum rows to return */
     MaxRows?: number;
-    /** Starting row for pagination */
+    /** Starting row for offset pagination */
     StartRow?: number;
+    /** Serialized keyset pagination cursor (CompositeKey) when present — keeps each sweep page a distinct fingerprint */
+    AfterKey?: string;
     /** Whether to cache locally */
     CacheLocal?: boolean;
     /** Internal marker for engine-initiated calls */
@@ -1564,12 +1566,16 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
                 views: viewKey
             };
         } else {
-            // Single operation
+            // Single operation. Pagination cursors (StartRow / AfterKey) are part of the key so that
+            // consecutive pages of a sweep over the same entity+filter+orderBy are DISTINCT
+            // fingerprints — otherwise page 2 collides with page 1 and trips the Duplicate analyzer.
             return {
                 entity: params.EntityName?.toLowerCase().trim(),
                 filter: params.ExtraFilter?.toLowerCase().trim(),
                 orderBy: params.OrderBy?.toLowerCase().trim(),
-                resultType: params.ResultType
+                resultType: params.ResultType,
+                startRow: params.StartRow,
+                afterKey: params.AfterKey
             };
         }
     }

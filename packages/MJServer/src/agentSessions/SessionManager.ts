@@ -137,6 +137,7 @@ export class SessionManager {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         closeReason: SessionCloseReason = 'Explicit',
+        preloadedChannels?: MJAIAgentSessionChannelEntity[],
     ): Promise<boolean> {
         const session = await this.loadSession(agentSessionID, contextUser, provider);
         if (!session) {
@@ -156,7 +157,7 @@ export class SessionManager {
         if (!closed) {
             return false;
         }
-        await this.disconnectChannels(agentSessionID, contextUser, provider);
+        await this.disconnectChannels(agentSessionID, contextUser, provider, preloadedChannels);
         await this.finalizeObservabilityRuns(session, contextUser, provider);
         await this.notifyChannelPluginsSessionClosed(agentSessionID, closeReason);
         return true;
@@ -376,24 +377,72 @@ export class SessionManager {
         agentSessionID: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        preloadedChannels?: MJAIAgentSessionChannelEntity[],
     ): Promise<void> {
-        const rv = RunView.FromMetadataProvider(provider);
-        const result = await rv.RunView<MJAIAgentSessionChannelEntity>({
-            EntityName: SESSION_CHANNEL_ENTITY,
-            ExtraFilter: `AgentSessionID='${agentSessionID}' AND Status <> 'Disconnected'`,
-            ResultType: 'entity_object',
-        }, contextUser);
-
-        if (!result.Success) {
-            LogError(`SessionManager.disconnectChannels failed to load channels: ${result.ErrorMessage}`);
-            return;
-        }
+        // Sweep callers (the janitor) close a whole page of sessions at once and pre-load every
+        // session's channels in ONE batched query (see LoadActiveChannelsBySession), passing this
+        // session's slice here to avoid an N+1 channel read (one RunView per closing session).
+        // Every other close path passes nothing and reads just this session's channels.
+        const channels = preloadedChannels
+            ?? await this.loadActiveChannels([agentSessionID], contextUser, provider);
         const now = new Date();
-        for (const channel of result.Results) {
+        for (const channel of channels) {
             channel.Status = 'Disconnected';
             channel.DisconnectedAt = now;
             await this.saveOrLog(channel, 'disconnectChannels');
         }
+    }
+
+    /**
+     * Loads the non-Disconnected channels for one or more sessions in a SINGLE RunView
+     * (`AgentSessionID IN (...)`). Session IDs are server-generated GUIDs (never user input), so
+     * inline interpolation carries no injection risk. Returns [] on empty input or load failure.
+     */
+    private async loadActiveChannels(
+        sessionIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<MJAIAgentSessionChannelEntity[]> {
+        if (sessionIDs.length === 0) {
+            return [];
+        }
+        const inList = sessionIDs.map(id => `'${id}'`).join(',');
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<MJAIAgentSessionChannelEntity>({
+            EntityName: SESSION_CHANNEL_ENTITY,
+            ExtraFilter: `AgentSessionID IN (${inList}) AND Status <> 'Disconnected'`,
+            ResultType: 'entity_object',
+        }, contextUser);
+        if (!result.Success) {
+            LogError(`SessionManager.loadActiveChannels failed to load channels: ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results;
+    }
+
+    /**
+     * Batch-loads active channels for many sessions at once and groups them by AgentSessionID
+     * (lowercased), so a sweep can disconnect a whole page of sessions with ONE query instead of
+     * one-per-session. Sessions with no active channels are absent from the map (callers default
+     * to []). Pass each session's slice to {@link CloseSession}'s `preloadedChannels`.
+     */
+    public async LoadActiveChannelsBySession(
+        sessionIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<Map<string, MJAIAgentSessionChannelEntity[]>> {
+        const channels = await this.loadActiveChannels(sessionIDs, contextUser, provider);
+        const bySession = new Map<string, MJAIAgentSessionChannelEntity[]>();
+        for (const channel of channels) {
+            const key = String(channel.AgentSessionID).toLowerCase();
+            const list = bySession.get(key);
+            if (list) {
+                list.push(channel);
+            } else {
+                bySession.set(key, [channel]);
+            }
+        }
+        return bySession;
     }
 
     /** True once the per-session coalescing window has elapsed since the last persisted write. */
