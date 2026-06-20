@@ -1,0 +1,3357 @@
+[
+  {
+    "fields": {
+      "Name": "OpenWater",
+      "Icon": "fa-solid fa-trophy",
+      "ClassName": "OpenWaterConnector",
+      "Description": "OpenWater awards/grants/abstracts/fellowship platform connector — pull-centric sync of programs, applications, users, invoices, judges, rounds and nested review objects via the OpenWater Public API v2 (REST, ClientKey + ApiKey headers).",
+      "ImportPath": "@memberjunction/connector-openwater",
+      "NavigationBaseURL": "https://api.getopenwater.com",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=OpenWater API"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "Name": "Program",
+            "DisplayName": "Program",
+            "Description": "OpenWater Program (door). Source schema: Models.Program.ProgramListItemModel. Access: /v2/Programs.",
+            "APIPath": "/v2/Programs",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "createdSinceUtc",
+            "PaginationType": "PageNumber",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Program id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "DisplayName": "Code",
+                  "Description": "Program Code",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Program Name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tag",
+                  "DisplayName": "Tag",
+                  "Description": "Program Tag",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "isArchived",
+                  "DisplayName": "Is Archived",
+                  "Description": "Is program archived",
+                  "Type": "Boolean",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "enableSessions",
+                  "DisplayName": "Enable Sessions",
+                  "Description": "Are sessions enabled in a program",
+                  "Type": "Boolean",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "enableScheduler",
+                  "DisplayName": "Enable Scheduler",
+                  "Description": "Is scheduler enabled in a program",
+                  "Type": "Boolean",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "createdAtUtc",
+                  "DisplayName": "Created At Utc",
+                  "Description": "Program created date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "rounds",
+                  "DisplayName": "Rounds",
+                  "Description": "Program rounds",
+                  "Type": "json",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationCategories",
+                  "DisplayName": "Application Categories",
+                  "Description": "Program application categories",
+                  "Type": "json",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "User",
+            "DisplayName": "User",
+            "Description": "OpenWater User (door). Source schema: Models.User.UserListItemModel. Access: /v2/Users.",
+            "APIPath": "/v2/Users",
+            "SupportsWrite": true,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "lastModifiedSinceUtc",
+            "PaginationType": "PageNumber",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/v2/Users",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/v2/Users/{id}",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "SupportsDelete": false,
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "User id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Description": "User email",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "firstName",
+                  "DisplayName": "First Name",
+                  "Description": "User first name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "lastName",
+                  "DisplayName": "Last Name",
+                  "Description": "User last name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "thirdPartyUniqueId",
+                  "DisplayName": "Third Party Unique Id",
+                  "Description": "User 3rd party unique id",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "externalAuthData",
+                  "DisplayName": "External Auth Data",
+                  "Description": "User external auth data",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "createdAtUtc",
+                  "DisplayName": "Created At Utc",
+                  "Description": "User created date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "lastModifiedAtUtc",
+                  "DisplayName": "Last Modified At Utc",
+                  "Description": "User last modified date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "lastLoggedInUtc",
+                  "DisplayName": "Last Logged In Utc",
+                  "Description": "User last logged in date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Application",
+            "DisplayName": "Application",
+            "Description": "OpenWater Application (door). Source schema: Models.Application.ApplicationListItemModel. Access: /v2/Applications.",
+            "APIPath": "/v2/Applications",
+            "SupportsWrite": true,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "lastModifiedSinceUtc",
+            "PaginationType": "PageNumber",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/v2/Applications",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/v2/Applications/{id}",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Application id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "programId",
+                  "DisplayName": "Program Id",
+                  "Description": "Program id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Program"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "userId",
+                  "DisplayName": "User Id",
+                  "Description": "Application owner user Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "User"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "DisplayName": "Code",
+                  "Description": "Application code",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Application name",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "categoryName",
+                  "DisplayName": "Category Name",
+                  "Description": "Application category name",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "categoryFriendlyPath",
+                  "DisplayName": "Category Friendly Path",
+                  "Description": "Application category friendly path",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "lastModifiedUtc",
+                  "DisplayName": "Last Modified Utc",
+                  "Description": "Application last modified since date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "DeletedApplication",
+            "DisplayName": "Deleted Application",
+            "Description": "OpenWater DeletedApplication (door). Source schema: Models.DeletedApplication.DeletedApplicationListItemModel. Access: /v2/Applications/DeletedData.",
+            "APIPath": "/v2/Applications/DeletedData",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "deletedSinceUtc",
+            "PaginationType": "PageNumber",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Deleted application id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "programId",
+                  "DisplayName": "Program Id",
+                  "Description": "Program id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Program"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationId",
+                  "DisplayName": "Application Id",
+                  "Description": "Application id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Application"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationCode",
+                  "DisplayName": "Application Code",
+                  "Description": "Application code",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationName",
+                  "DisplayName": "Application Name",
+                  "Description": "Application name",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "userId",
+                  "DisplayName": "User Id",
+                  "Description": "User id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "User"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Description": "User email",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "firstName",
+                  "DisplayName": "First Name",
+                  "Description": "User first name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "lastName",
+                  "DisplayName": "Last Name",
+                  "Description": "User last name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "deletedAtUtc",
+                  "DisplayName": "Deleted At Utc",
+                  "Description": "Deleted since date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Invoice",
+            "DisplayName": "Invoice",
+            "Description": "OpenWater Invoice (door). Source schema: Models.Invoice.InvoiceListItemModel. Access: /v2/Invoices.",
+            "APIPath": "/v2/Invoices",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "mostRecentTransactionSinceUtc",
+            "PaginationType": "PageNumber",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Invoice id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "programId",
+                  "DisplayName": "Program Id",
+                  "Description": "Program id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Program"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "programCode",
+                  "DisplayName": "Program Code",
+                  "Description": "Program code",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "thirdPartyCorporateId",
+                  "DisplayName": "Third Party Corporate Id",
+                  "Description": "User 3rd party unique id",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "createdAtUtc",
+                  "DisplayName": "Created At Utc",
+                  "Description": "Invoice created date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "mostRecentTransactionDateUtc",
+                  "DisplayName": "Most Recent Transaction Date Utc",
+                  "Description": "Invoice most recent transaction date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "BillingLineItem",
+            "DisplayName": "Billing Line Item",
+            "Description": "OpenWater BillingLineItem (door). Source schema: Models.Invoice.BillingLineItemListItemModel. Access: /v2/Invoices/BillingLineItems.",
+            "APIPath": "/v2/Invoices/BillingLineItems",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "lastModifiedUtc",
+            "PaginationType": "PageNumber",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Billing line item id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationId",
+                  "DisplayName": "Application Id",
+                  "Description": "Related application id",
+                  "Type": "Integer",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Application"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "deletedApplicationId",
+                  "DisplayName": "Deleted Application Id",
+                  "Description": "Related deleted application id",
+                  "Type": "Integer",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "DeletedApplication"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=DeletedApplication&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "invoiceId",
+                  "DisplayName": "Invoice Id",
+                  "Description": "Invoice id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Invoice"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "amount",
+                  "DisplayName": "Amount",
+                  "Description": "Billing line item Amount",
+                  "Type": "Decimal",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "notes",
+                  "DisplayName": "Notes",
+                  "Description": "Billing line item Notes",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "details",
+                  "DisplayName": "Details",
+                  "Description": "Billing line item Details",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "targetType",
+                  "DisplayName": "Target Type",
+                  "Description": "Billing line item target",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "isVat",
+                  "DisplayName": "Is Vat",
+                  "Description": "Is billing line item related to VAT",
+                  "Type": "Boolean",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "isManualAdjustment",
+                  "DisplayName": "Is Manual Adjustment",
+                  "Description": "Is billing line item related to manual adjustment",
+                  "Type": "Boolean",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "createdAtUtc",
+                  "DisplayName": "Created At Utc",
+                  "Description": "Billing line item created date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Session",
+            "DisplayName": "Session",
+            "Description": "OpenWater Session (door). Source schema: Models.Session.SessionListItemModel. Access: /v2/Sessions.",
+            "APIPath": "/v2/Sessions",
+            "SupportsWrite": true,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "lastModifiedSinceUtc",
+            "PaginationType": "PageNumber",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/v2/Sessions",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "literal",
+            "CreateIDLocation": "body",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/v2/Sessions/{id}",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared",
+            "Configuration": {
+              "LiteralCreateReason": "Create CreateRequest requires typeId (int FK to SessionType); synced IOF has typeName (string) not typeId — generic flat body would 400. Connector overrides CreateRecord: resolve typeId from typeName via SessionType (or accept typeId input)."
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Session id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "programId",
+                  "DisplayName": "Program Id",
+                  "Description": "Program id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Program"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationIds",
+                  "DisplayName": "Application Ids",
+                  "Description": "Application ids assigned to session",
+                  "Type": "json",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Session name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "typeName",
+                  "DisplayName": "Type Name",
+                  "Description": "Session type name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationItemCount",
+                  "DisplayName": "Application Item Count",
+                  "Description": "Session applicationItemCount",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "otherTimeItemCount",
+                  "DisplayName": "Other Time Item Count",
+                  "Description": "Session otherTimeItemCount",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "totalSessionItemCount",
+                  "DisplayName": "Total Session Item Count",
+                  "Description": "Session totalSessionItemCount",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "DeletedSession",
+            "DisplayName": "Deleted Session",
+            "Description": "OpenWater DeletedSession (door). Source schema: Models.DeletedSession.DeletedSessionListItemModel. Access: /v2/Sessions/DeletedData.",
+            "APIPath": "/v2/Sessions/DeletedData",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "deletedSinceUtc",
+            "PaginationType": "PageNumber",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Deleted session id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "programId",
+                  "DisplayName": "Program Id",
+                  "Description": "Solicitation id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Program"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sessionId",
+                  "DisplayName": "Session Id",
+                  "Description": "Session id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Session"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Session&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "typeName",
+                  "DisplayName": "Type Name",
+                  "Description": "Session type name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sessionName",
+                  "DisplayName": "Session Name",
+                  "Description": "Session name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "deletedByUserId",
+                  "DisplayName": "Deleted By User Id",
+                  "Description": "Deleted by user id",
+                  "Type": "Integer",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "User"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "deletedAtUtc",
+                  "DisplayName": "Deleted At Utc",
+                  "Description": "Deleted since date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Rounds",
+            "DisplayName": "Rounds",
+            "Description": "OpenWater Rounds (embedded). Source schema: Models.Program.RoundModel. Access: Programs -> rounds[].",
+            "APIPath": "(embedded in Models.Program.ProgramListItemModel.rounds[])",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "nestingSegments": [
+                  "rounds[]"
+                ],
+                "extractionMode": "embedded-array"
+              }
+            },
+            "Status": "Active",
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Round id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Round name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "isJudgingOnly",
+                  "DisplayName": "Is Judging Only",
+                  "Description": "Is round judging only",
+                  "Type": "Boolean",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "submissionStartDateUtc",
+                  "DisplayName": "Submission Start Date Utc",
+                  "Description": "Submission period start date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "submissionEndDateUtc",
+                  "DisplayName": "Submission End Date Utc",
+                  "Description": "Submission period end date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "judgingStartDateUtc",
+                  "DisplayName": "Judging Start Date Utc",
+                  "Description": "Judging period start date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "judgingEndDateUtc",
+                  "DisplayName": "Judging End Date Utc",
+                  "Description": "Judging period end date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "winnerTypes",
+                  "DisplayName": "Winner Types",
+                  "Description": "Round winner types",
+                  "Type": "json",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Evaluation",
+            "DisplayName": "Evaluation",
+            "Description": "OpenWater Evaluation (door). Source schema: Models.Evaluation.EvaluationListItemModel. Access: /v2/Evaluations.",
+            "APIPath": "/v2/Evaluations",
+            "SupportsWrite": true,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "lastModifiedSinceUtc",
+            "PaginationType": "PageNumber",
+            "SupportsCreate": false,
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/v2/Evaluations/{id}",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "SupportsDelete": false,
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Evaluation id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "programId",
+                  "DisplayName": "Program Id",
+                  "Description": "Program id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Program"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Program&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "roundId",
+                  "DisplayName": "Round Id",
+                  "Description": "Round id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Rounds"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Rounds&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "judgeUserId",
+                  "DisplayName": "Judge User Id",
+                  "Description": "Judge user id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "User"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationId",
+                  "DisplayName": "Application Id",
+                  "Description": "Application id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Application"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationCode",
+                  "DisplayName": "Application Code",
+                  "Description": "Application code",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "status",
+                  "DisplayName": "Status",
+                  "Description": "Evaluation Status",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "totalScore",
+                  "DisplayName": "Total Score",
+                  "Description": "Evaluation total score",
+                  "Type": "Decimal",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "startedAtUtc",
+                  "DisplayName": "Started At Utc",
+                  "Description": "Evaluation started date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "updatedAtUtc",
+                  "DisplayName": "Updated At Utc",
+                  "Description": "Evaluation updated date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "evaluationDateUtc",
+                  "DisplayName": "Evaluation Date Utc",
+                  "Description": "Evaluation date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Fund",
+            "DisplayName": "Fund",
+            "Description": "OpenWater Fund (door). Source schema: Models.Fund.FundListItemModel. Access: /v2/Funds.",
+            "APIPath": "/v2/Funds",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Fund id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Fund name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "currency",
+                  "DisplayName": "Currency",
+                  "Description": "Fund currency",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "totalAmount",
+                  "DisplayName": "Total Amount",
+                  "Description": "Fund total amount",
+                  "Type": "Decimal",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "isArchived",
+                  "DisplayName": "Is Archived",
+                  "Description": "Is fund archived",
+                  "Type": "Boolean",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "JudgeTeam",
+            "DisplayName": "Judge Team",
+            "Description": "OpenWater JudgeTeam (door). Source schema: Models.JudgeTeam.JudgeTeamListItemModel. Access: /v2/JudgeTeams.",
+            "APIPath": "/v2/JudgeTeams",
+            "SupportsWrite": true,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/v2/JudgeTeams",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Judge team id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "roundId",
+                  "DisplayName": "Round Id",
+                  "Description": "Judge team round id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Rounds"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Rounds&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Judge team name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "judges",
+                  "DisplayName": "Judges",
+                  "Description": "Judge team members",
+                  "Type": "json",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "managers",
+                  "DisplayName": "Managers",
+                  "Description": "Judge team managers",
+                  "Type": "json",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Payment",
+            "DisplayName": "Payment",
+            "Description": "OpenWater Payment (door). Source schema: Models.Invoice.PaymentListItemModel. Access: /v2/Invoices/Payments.",
+            "APIPath": "/v2/Invoices/Payments",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "lastModifiedUtc",
+            "PaginationType": "PageNumber",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Payment id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "invoiceId",
+                  "DisplayName": "Invoice Id",
+                  "Description": "Invoice id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Invoice"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "amount",
+                  "DisplayName": "Amount",
+                  "Description": "Payment amount",
+                  "Type": "Decimal",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "isManualAdjustment",
+                  "DisplayName": "Is Manual Adjustment",
+                  "Description": "Is payment related to manual adjustment",
+                  "Type": "Boolean",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "isPromissoryNote",
+                  "DisplayName": "Is Promissory Note",
+                  "Description": "Is payment related to promissory note",
+                  "Type": "Boolean",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "canRefund",
+                  "DisplayName": "Can Refund",
+                  "Description": "Can payment be refund",
+                  "Type": "Boolean",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "externalPaymentTransactionData",
+                  "DisplayName": "External Payment Transaction Data",
+                  "Description": "External payment transaction data",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "billingName",
+                  "DisplayName": "Billing Name",
+                  "Description": "Payment billing name",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "referenceNumber",
+                  "DisplayName": "Reference Number",
+                  "Description": "Payment reference number",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "notes",
+                  "DisplayName": "Notes",
+                  "Description": "Payment notes",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "method",
+                  "DisplayName": "Method",
+                  "Description": "Payment method",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "details",
+                  "DisplayName": "Details",
+                  "Description": "Payment details",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "createdAtUtc",
+                  "DisplayName": "Created At Utc",
+                  "Description": "Payment created date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Refund",
+            "DisplayName": "Refund",
+            "Description": "OpenWater Refund (door). Source schema: Models.Invoice.RefundListItemModel. Access: /v2/Invoices/Refunds.",
+            "APIPath": "/v2/Invoices/Refunds",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": true,
+            "IncrementalWatermarkField": "lastModifiedUtc",
+            "PaginationType": "PageNumber",
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Refund id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "invoiceId",
+                  "DisplayName": "Invoice Id",
+                  "Description": "Invoice id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Invoice"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Invoice&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "amount",
+                  "DisplayName": "Amount",
+                  "Description": "Refund amount",
+                  "Type": "Decimal",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "notes",
+                  "DisplayName": "Notes",
+                  "Description": "Refund notes",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "details",
+                  "DisplayName": "Details",
+                  "Description": "Refund details",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "createdAtUtc",
+                  "DisplayName": "Created At Utc",
+                  "Description": "Refund created date (UTC)",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "ApplicationCategory",
+            "DisplayName": "Application Category",
+            "Description": "OpenWater ApplicationCategory (nested). Source schema: Models.ApplicationCategory.ApplicationCategoryListItemModel. Access: Programs -> programId -> ApplicationCategories.",
+            "APIPath": "/v2/Programs/{programId}/ApplicationCategories",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "parentParamName": "programId",
+                "nestingSegments": [
+                  "applicationCategories"
+                ],
+                "entryPath": "/v2/Programs/{programId}/ApplicationCategories"
+              }
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Application category Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Application category name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "DisplayName": "Code",
+                  "Description": "Application category code",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "path",
+                  "DisplayName": "Path",
+                  "Description": "Application category path",
+                  "Type": "String",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "FundTransaction",
+            "DisplayName": "Fund Transaction",
+            "Description": "OpenWater FundTransaction (nested). Source schema: Models.FundTransaction.FundTransactionListItemModel. Access: Funds -> fundId -> Transactions.",
+            "APIPath": "/v2/Funds/{fundId}/Transactions",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Fund",
+                "doorPath": "/v2/Funds",
+                "parentParamName": "fundId",
+                "nestingSegments": [
+                  "transactions"
+                ],
+                "entryPath": "/v2/Funds/{fundId}/Transactions"
+              }
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Fund transaction id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationId",
+                  "DisplayName": "Application Id",
+                  "Description": "Application id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Application"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "approvedByUserId",
+                  "DisplayName": "Approved By User Id",
+                  "Description": "Approved by user id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "User"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "amount",
+                  "DisplayName": "Amount",
+                  "Description": "Fund transaction amount",
+                  "Type": "Decimal",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "DisplayName": "Description",
+                  "Description": "Fund transaction description",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date",
+                  "DisplayName": "Date",
+                  "Description": "Fund transaction date",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "JudgeAssignment",
+            "DisplayName": "Judge Assignment",
+            "Description": "OpenWater JudgeAssignment (nested). Source schema: Models.JudgeAssignment.JudgeListItemModel. Access: Programs -> rounds[] -> roundId -> JudgeAssignments.",
+            "APIPath": "/v2/JudgeAssignments/AssignedToRound",
+            "SupportsWrite": true,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/v2/JudgeAssignments/Round",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "literal",
+            "CreateIDLocation": "n/a",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/v2/JudgeAssignments/Round",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "n/a",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "nestingSegments": [
+                  "rounds[]"
+                ],
+                "parentParamName": "roundId",
+                "entryPath": "/v2/JudgeAssignments/AssignedToRound",
+                "parentParamIn": "query"
+              },
+              "LiteralCreateReason": "Create AssignJudgeToRoundRequest requires {judgeUserId, roundId}; synced IOFs are {userId,...} — generic flat body would 400. Connector overrides CreateRecord: judgeUserId<-record.userId, roundId<-parent AccessPath round context."
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "userId",
+                  "DisplayName": "User Id",
+                  "Description": "User id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "User"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "firstName",
+                  "DisplayName": "First Name",
+                  "Description": "User first name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "lastName",
+                  "DisplayName": "Last Name",
+                  "Description": "User last name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Description": "User email",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "judgeTeams",
+                  "DisplayName": "Judge Teams",
+                  "Description": "Judge teams where judge belongs to",
+                  "Type": "json",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "JudgeRecusal",
+            "DisplayName": "Judge Recusal",
+            "Description": "OpenWater JudgeRecusal (nested). Source schema: Models.Judge.JudgeRecusalListItemModel. Access: Programs -> rounds[] -> roundId -> Recusals.",
+            "APIPath": "/v2/Judges/Recusals",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "nestingSegments": [
+                  "rounds[]"
+                ],
+                "parentParamName": "roundId",
+                "entryPath": "/v2/Judges/Recusals",
+                "parentParamIn": "query"
+              }
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "userId",
+                  "DisplayName": "User Id",
+                  "Description": "Judge user id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "User"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=User&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "applicationId",
+                  "DisplayName": "Application Id",
+                  "Description": "Application id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "Application"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Application&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "firstName",
+                  "DisplayName": "First Name",
+                  "Description": "Judge first name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "lastName",
+                  "DisplayName": "Last Name",
+                  "Description": "Judge last name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Description": "Judge email",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "recusalReason",
+                  "DisplayName": "Recusal Reason",
+                  "Description": "Recusal reason",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "OtherSessionItemType",
+            "DisplayName": "Other Session Item Type",
+            "Description": "OpenWater OtherSessionItemType (nested). Source schema: Models.OtherSessionItemType.OtherSessionItemTypeListItemModel. Access: Programs -> programId -> OtherSessionItemTypes.",
+            "APIPath": "/v2/Programs/{programId}/OtherSessionItemTypes",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "parentParamName": "programId",
+                "entryPath": "/v2/Programs/{programId}/OtherSessionItemTypes"
+              }
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Other session item type id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Other session item type name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "DisplayName": "Description",
+                  "Description": "Other session item type description",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Report",
+            "DisplayName": "Report",
+            "Description": "OpenWater Report (nested). Source schema: Models.Report.ReportListItemModel. Access: Programs -> rounds[] -> roundId -> ApplicationReports | JudgeReports; Programs -> programId -> SessionReports.",
+            "APIPath": "/v2/Rounds/{roundId}/ApplicationReports",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "nestingSegments": [
+                  "rounds[]"
+                ],
+                "parentParamName": "roundId",
+                "entryPath": "/v2/Rounds/{roundId}/ApplicationReports",
+                "alternativePaths": [
+                  "/v2/Rounds/{roundId}/JudgeReports",
+                  "/v2/Programs/{programId}/SessionReports"
+                ]
+              }
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Report Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Report name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "ScheduleDay",
+            "DisplayName": "Schedule Day",
+            "Description": "OpenWater ScheduleDay (nested). Source schema: Models.ScheduleDay.ScheduleDayListItemModel. Access: Programs -> programId -> Scheduler.Days.",
+            "APIPath": "/v2/Programs/{programId}/Scheduler/Days",
+            "SupportsWrite": true,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/v2/Programs/{programId}/Scheduler/Days",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/v2/Programs/Scheduler/Days/{scheduleDayId}",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/v2/Programs/Scheduler/Days/{scheduleDayId}",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "parentParamName": "programId",
+                "entryPath": "/v2/Programs/{programId}/Scheduler/Days"
+              }
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Schedule day Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Schedule day name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "DisplayName": "Code",
+                  "Description": "Schedule day code",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date",
+                  "DisplayName": "Date",
+                  "Description": "Schedule day Date",
+                  "Type": "DateTime",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "ScheduleRoom",
+            "DisplayName": "Schedule Room",
+            "Description": "OpenWater ScheduleRoom (nested). Source schema: Models.ScheduleRoom.ScheduleRoomListItemModel. Access: Programs -> programId -> Scheduler.Rooms.",
+            "APIPath": "/v2/Programs/{programId}/Scheduler/Rooms",
+            "SupportsWrite": true,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/v2/Programs/{programId}/Scheduler/Rooms",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/v2/Programs/Scheduler/Rooms/{scheduleRoomId}",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/v2/Programs/Scheduler/Rooms/{scheduleRoomId}",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "parentParamName": "programId",
+                "entryPath": "/v2/Programs/{programId}/Scheduler/Rooms"
+              }
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Schedule room Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Schedule room name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "DisplayName": "Code",
+                  "Description": "Schedule room code",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "capacity",
+                  "DisplayName": "Capacity",
+                  "Description": "Schedule room capacity",
+                  "Type": "Integer",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "notes",
+                  "DisplayName": "Notes",
+                  "Description": "Schedule room notes",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "ScheduleTimeSlot",
+            "DisplayName": "Schedule Time Slot",
+            "Description": "OpenWater ScheduleTimeSlot (nested). Source schema: Models.ScheduleTimeSlot.ScheduleTimeSlotListItemModel. Access: Programs -> programId -> Scheduler.TimeSlots.",
+            "APIPath": "/v2/Programs/{programId}/Scheduler/TimeSlots",
+            "SupportsWrite": true,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/v2/Programs/{programId}/Scheduler/TimeSlots",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "literal",
+            "CreateIDLocation": "body",
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/v2/Programs/Scheduler/TimeSlots/{scheduleTimeSlotId}",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "literal",
+            "UpdateIDLocation": "path",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/v2/Programs/Scheduler/TimeSlots/{scheduleTimeSlotId}",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "parentParamName": "programId",
+                "entryPath": "/v2/Programs/{programId}/Scheduler/TimeSlots"
+              },
+              "LiteralCreateReason": "Create CreateRequest requires scheduleDayIds; synced IOFs lack that exact field (availableOnlyInDayIds is the read-side name) — generic flat body would omit it. Connector overrides CreateRecord to supply scheduleDayIds.",
+              "LiteralUpdateReason": "Update UpdateRequest requires scheduleDayIds (array of int); read-side IOF is availableOnlyInDayIds. Generic flat body omits/misnames it -> 422. Connector overrides UpdateRecord to supply scheduleDayIds from availableOnlyInDayIds. Mirrors LiteralCreateReason."
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Schedule time slot Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Schedule time slot name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "DisplayName": "Code",
+                  "Description": "Schedule time slot code",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "startTime",
+                  "DisplayName": "Start Time",
+                  "Description": "Schedule time slot start time",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "endTime",
+                  "DisplayName": "End Time",
+                  "Description": "Schedule time slot end time",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "availableOnlyInDayIds",
+                  "DisplayName": "Available Only In Day Ids",
+                  "Description": "Schedule day Ids where time slot is available (available in all days if NULL or empty)",
+                  "Type": "json",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "ScheduleItem",
+            "DisplayName": "Schedule Item",
+            "Description": "OpenWater ScheduleItem (nested). Source schema: Models.ScheduleItem.ScheduleItemListItemModel. Access: Programs -> programId -> Scheduler.ScheduleItems.",
+            "APIPath": "/v2/Programs/{programId}/Scheduler/ScheduleItems",
+            "SupportsWrite": true,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/v2/Programs/{programId}/Scheduler/ScheduleItems",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "SupportsUpdate": false,
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/v2/Programs/Scheduler/ScheduleItems/{scheduleItemId}",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "parentParamName": "programId",
+                "entryPath": "/v2/Programs/{programId}/Scheduler/ScheduleItems"
+              }
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Schedule item Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "scheduleRoomId",
+                  "DisplayName": "Schedule Room Id",
+                  "Description": "Schedule room Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "ScheduleRoom"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleRoom&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "scheduleDayId",
+                  "DisplayName": "Schedule Day Id",
+                  "Description": "Schedule day Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "ScheduleDay"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleDay&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "scheduleTimeSlotId",
+                  "DisplayName": "Schedule Time Slot Id",
+                  "Description": "Schedule time slot Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "IsForeignKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared",
+                  "Configuration": {
+                    "ReferencedType": "ScheduleTimeSlot"
+                  },
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=ScheduleTimeSlot&IntegrationID=@parent:IntegrationID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "targetType",
+                  "DisplayName": "Target Type",
+                  "Description": "Target entry type (primary, other)",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "targetId",
+                  "DisplayName": "Target Id",
+                  "Description": "Target entry Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "SessionType",
+            "DisplayName": "Session Type",
+            "Description": "OpenWater SessionType (nested). Source schema: Models.SessionType.SessionTypeListItemModel. Access: Programs -> programId -> SessionTypes.",
+            "APIPath": "/v2/Programs/{programId}/SessionTypes",
+            "SupportsWrite": false,
+            "SupportsIncrementalSync": false,
+            "PaginationType": "PageNumber",
+            "Configuration": {
+              "AccessPath": {
+                "door": "Program",
+                "doorPath": "/v2/Programs",
+                "parentParamName": "programId",
+                "entryPath": "/v2/Programs/{programId}/SessionTypes"
+              }
+            },
+            "Status": "Active",
+            "SupportsPagination": true,
+            "IntegrationID": "@parent:ID",
+            "MetadataSource": "Declared"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "DisplayName": "Id",
+                  "Description": "Session type Id",
+                  "Type": "Integer",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Description": "Session type name",
+                  "Type": "String",
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "IsPrimaryKey": false,
+                  "IsUniqueKey": false,
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID",
+                  "MetadataSource": "Declared"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

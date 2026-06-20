@@ -284,6 +284,48 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   }
 
   /**
+   * Max time {@link ResolveAgentSessionId} waits for the session id to bind before giving up, and the
+   * poll interval it re-checks on. Protected so tests can shrink the wait; production keeps the
+   * defaults (the real mint race is sub-second, 8s is generous headroom).
+   */
+  protected SessionIdWaitTimeoutMs = 8000;
+  protected SessionIdWaitIntervalMs = 200;
+
+  /**
+   * Resolves the live {@link RealtimeChannelContext.AgentSessionID}, briefly WAITING for it when it
+   * isn't bound yet rather than giving up instantly. `AgentSessionID` is a live getter over the
+   * session service's current id: it reads `null` in the window BEFORE the session mints (the
+   * realtime model can fire a tool call the very first beat it connects, before `mintSession`
+   * resolves) and again AFTER teardown. Server-backed tool paths (e.g. the Remote Browser channel's
+   * `browser_*` tools) call this instead of reading `Context?.AgentSessionID` synchronously, so a tool
+   * invoked a beat early WAITS for the session to come live — defense-in-depth against the
+   * "session id missing" race — instead of returning a hard failure to the model.
+   *
+   * Returns the id as soon as it's non-null (the common path resolves immediately, no delay), or
+   * `null` if it's still unbound after {@link SessionIdWaitTimeoutMs} — or the channel was
+   * {@link Dispose}d in the meantime (`Context` goes null, so we stop waiting on a torn-down session).
+   */
+  protected async ResolveAgentSessionId(): Promise<string | null> {
+    const immediate = this.Context?.AgentSessionID ?? null;
+    if (immediate) {
+      return immediate;
+    }
+    const intervalMs = Math.max(1, this.SessionIdWaitIntervalMs);
+    for (let waited = 0; waited < this.SessionIdWaitTimeoutMs; waited += intervalMs) {
+      await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
+      // Context goes null on Dispose() — the session is gone, stop waiting.
+      if (!this.Context) {
+        return null;
+      }
+      const id = this.Context.AgentSessionID;
+      if (id) {
+        return id;
+      }
+    }
+    return this.Context?.AgentSessionID ?? null;
+  }
+
+  /**
    * Serializes the channel's current state of record (the payload persisted on the
    * session's channel row), or `null` when the channel keeps no persistent state.
    * Default: `null`.

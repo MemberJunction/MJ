@@ -1,6 +1,6 @@
 import { BaseAgent } from './base-agent';
 import { RegisterClass, CleanAndParseJSON } from '@memberjunction/global';
-import { UserInfo, RunView, RunQuery, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, RunView, RunQuery, LogError, LogStatus, LogStatusEx, IMetadataProvider } from '@memberjunction/core';
 import {
     MJConversationDetailEntity,
     MJAIAgentNoteEntity,
@@ -689,7 +689,9 @@ export class MemoryManagerAgent extends BaseAgent {
         }, contextUser);
 
         if (!result.Success || !result.Results || result.Results.length === 0) {
-            LogStatus('Memory Manager: No conversations with new activity found');
+            // Verbose-only: the common no-op outcome. The engine's "✅ Completed (Nms)" line already
+            // signals the run finished with no work; surfacing "why" is a verbose diagnostic detail.
+            LogStatusEx({ message: 'Memory Manager: No conversations with new activity found', verboseOnly: true });
             return [];
         }
 
@@ -3224,21 +3226,20 @@ export class MemoryManagerAgent extends BaseAgent {
             maxNotesPerRun: HARDENING_CONFIG.maxNotesPerRun
         });
         try {
-            const rv = new RunView();
-            const result = await rv.RunView<MJAIAgentNoteEntity>({
-                EntityName: 'MJ: AI Agent Notes',
-                ExtraFilter: `Status = 'Provisional' AND AuthorType = 'Agent'`,
-                OrderBy: '__mj_CreatedAt ASC',
-                MaxRows: HARDENING_CONFIG.maxNotesPerRun,
-                ResultType: 'entity_object'
-            }, contextUser);
+            // Served from AIEngine.Instance.AgentNotes (loaded unfiltered as entity
+            // objects and kept current via BaseEntity + remote-invalidate events),
+            // filtered/ordered/capped in-memory to mirror the former RunView. This
+            // avoids the "Entity Already in Engine" redundancy warning and a DB
+            // round-trip every MM cycle, matching loadDecayCandidates/loadExpiredItems.
+            // Provisional agent notes are in-flight writes already reflected in the
+            // cache, and hardenSingleNote mutates+saves these entities directly —
+            // consistent with the dedupe path, which already saves cached note
+            // instances returned by FindSimilarAgentNotes.
+            const provisionalNotes = AIEngine.Instance.AgentNotes
+                .filter(n => n.Status === 'Provisional' && n.AuthorType === 'Agent')
+                .sort((a, b) => new Date(a.__mj_CreatedAt).getTime() - new Date(b.__mj_CreatedAt).getTime())
+                .slice(0, HARDENING_CONFIG.maxNotesPerRun);
 
-            if (!result.Success) {
-                await this.FinalizeRunStep(step, false, counters, undefined, `Failed to load provisional notes: ${result.ErrorMessage}`);
-                return counters;
-            }
-
-            const provisionalNotes = result.Results || [];
             if (provisionalNotes.length === 0) {
                 await this.FinalizeRunStep(step, true, { ...counters, provisionalCount: 0 });
                 return counters;
@@ -3637,7 +3638,9 @@ export class MemoryManagerAgent extends BaseAgent {
             this._stepCounter = 0;
             this._contextUser = params.contextUser || null;
 
-            LogStatus('Memory Manager: Starting analysis cycle');
+            // Verbose-only: the scheduling engine's always-on "▶️ Starting / ✅ Completed" lines already
+            // mark that this run began/ended. On routine no-op runs this internal trace is just noise.
+            LogStatusEx({ message: 'Memory Manager: Starting analysis cycle', verboseOnly: true });
 
             // Phase 1: the last-run-time and the memory-enabled agent set are independent — load in
             // parallel (avoids two back-to-back sequential RunViews flagged by the parallelization telemetry).

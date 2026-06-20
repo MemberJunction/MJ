@@ -57,6 +57,10 @@ beforeAll(async () => {
   await writeFixtureFile('SQL Scripts/MJ_Base.sql', 'CREATE TABLE x;');
   await writeFixtureFile('migrations/v5/V202601010000__x.sql', 'MIGRATION');
   await writeFixtureFile('migrations-pg/v5/V202601010000__x.sql', 'PG MIGRATION');
+  // Claude pack source — exercises the default-include path
+  await writeFixtureFile('templates/claude-pack/dist/v5/CLAUDE.md', '# Project Instructions');
+  await writeFixtureFile('templates/claude-pack/dist/v5/.claude/mj/VERSION', '5.1.0');
+  await writeFixtureFile('templates/claude-pack/dist/v5/.claude/settings.json', '{}');
 });
 
 afterAll(async () => {
@@ -126,5 +130,50 @@ describe('createDistributionBundle', () => {
 
   it('throws when neither SourceDir nor Ref is provided', async () => {
     await expect(createDistributionBundle({ Out: '/tmp/none.zip' })).rejects.toThrow(/SourceDir or Ref/);
+  });
+
+  it('includes the Claude pack at the bundle root by default', async () => {
+    const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-pack-'));
+    const out = path.join(outDir, 'dist.zip');
+    try {
+      await createDistributionBundle({ SourceDir: fixtureDir, Out: out });
+      const names = new Set(new AdmZip(out).getEntries().map((e) => e.entryName));
+      expect(names.has('CLAUDE.md')).toBe(true);
+      expect(names.has('.claude/mj/VERSION')).toBe(true);
+      expect(names.has('.claude/settings.json')).toBe(true);
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it('IncludeClaudePack: false excludes the pack from the bundle', async () => {
+    const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-nopack-'));
+    const out = path.join(outDir, 'dist.zip');
+    try {
+      await createDistributionBundle({ SourceDir: fixtureDir, Out: out, IncludeClaudePack: false });
+      const names = new Set(new AdmZip(out).getEntries().map((e) => e.entryName));
+      expect(names.has('CLAUDE.md')).toBe(false);
+      expect([...names].some((n) => n.startsWith('.claude/'))).toBe(false);
+      // The rest of the distribution is still there
+      expect(names.has('package.json')).toBe(true);
+      expect(names.has('apps/MJAPI/src/index.ts')).toBe(true);
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it('when fetching from a ref with IncludeClaudePack: false, the pack source path is omitted from the sparse fetch', async () => {
+    const cleanup = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    mockFetchPaths.mockResolvedValue({ Dir: fixtureDir, UsedFallback: false, Cleanup: cleanup });
+    const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-ref-nopack-'));
+    const out = path.join(outDir, 'dist.zip');
+    try {
+      await createDistributionBundle({ Ref: 'v1.0.0', RepoUrl: 'url', Out: out, IncludeClaudePack: false });
+      const fetchedPaths = mockFetchPaths.mock.calls.at(-1)?.[0].Paths;
+      expect(fetchedPaths).toBeDefined();
+      expect(fetchedPaths).not.toContain('templates/claude-pack/dist');
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
   });
 });

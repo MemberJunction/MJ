@@ -23,6 +23,13 @@ vi.mock('@memberjunction/global', () => ({
         typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase(),
     NormalizeUUID: (value: unknown): string =>
         typeof value === 'string' ? value.toLowerCase() : String(value),
+    // EntityActionEngineServer now composes the base via BaseSingleton instead of extending it.
+    BaseSingleton: class BaseSingletonMock<T> {
+        protected constructor() {}
+        protected static getInstance<U>(this: new () => U): U {
+            return new this();
+        }
+    },
 }));
 
 // Mock @memberjunction/core

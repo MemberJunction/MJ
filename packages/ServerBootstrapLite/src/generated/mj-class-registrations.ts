@@ -1039,11 +1039,12 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/scheduling-engine (4 classes)
+// @memberjunction/scheduling-engine (5 classes)
 import {
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
+    IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
 } from '@memberjunction/scheduling-engine';
 
@@ -1857,6 +1858,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
+    IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     AgentEvalDriver,
 ];
@@ -1865,7 +1867,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 801;
+export const CLASS_REGISTRATIONS_COUNT = 800;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

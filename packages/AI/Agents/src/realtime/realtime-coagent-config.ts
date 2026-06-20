@@ -70,12 +70,44 @@ export interface RealtimeNarrationConfig {
     paceMs?: number;
 }
 
+/**
+ * Video configuration: whether the realtime session carries a synced VIDEO track (a talking-head /
+ * avatar out, and the camera in) alongside audio. Absent / `enabled !== true` ⇒ audio-only (today's
+ * behavior). The video track reuses the entire realtime contract — this just opts a co-agent into it
+ * and names the avatar to use.
+ */
+export interface RealtimeVideoConfig {
+    /**
+     * Whether the session should carry video. Default (absent / non-boolean): `false`. When `true`,
+     * resolution prefers a video-capable model and the client captures the camera + renders the
+     * model/avatar video; degrades to audio-only when no video-capable model resolves.
+     */
+    enabled?: boolean;
+    /**
+     * Preferred video model/avatar provider — an `MJ: AI Models` Name OR ID of a video-capable realtime
+     * model (e.g. a Runway avatar). Optional; absent ⇒ the default video-capable model is resolved.
+     */
+    provider?: string;
+    /**
+     * Provider-specific avatar/character identifier (e.g. a Runway preset or custom avatar id). OPAQUE
+     * — passed through to the matching video driver (its shape is a private pact with that driver).
+     */
+    avatarId?: string;
+    /**
+     * Per-provider native video settings keyed by provider, merged into the matching driver's open
+     * config bag — an OPAQUE private pact with that driver (mirrors {@link RealtimeVoiceConfig.providers}).
+     */
+    providers?: Record<string, JSONObjectLike>;
+}
+
 /** The `realtime` section of a co-agent's effective configuration. */
 export interface RealtimeConfigSection {
     /** Preferred realtime model — an `MJ: AI Models` Name OR ID. Degrades gracefully when unsatisfiable. */
     modelPreference?: string;
     /** Voice persona + per-provider voice settings. */
     voice?: RealtimeVoiceConfig;
+    /** Video/avatar configuration — opt a co-agent into a synced video track. Absent ⇒ audio-only. */
+    video?: RealtimeVideoConfig;
     /**
      * Whether an (authorized) caller may override the realtime model per session.
      * `false` blocks explicit model overrides even for callers holding the
@@ -252,7 +284,46 @@ function normalizeConfig(merged: JSONObjectLike): RealtimeCoAgentConfig {
         section.narration = narration;
     }
 
+    const video = normalizeVideo(rawRealtime['video']);
+    if (video) {
+        section.video = video;
+    }
+
     return Object.keys(section).length > 0 ? { realtime: section } : { realtime: {} };
+}
+
+/** Normalizes the `video` block; returns `null` when nothing usable survives. */
+function normalizeVideo(raw: unknown): RealtimeVideoConfig | null {
+    if (!isPlainObject(raw)) {
+        return null;
+    }
+    const video: RealtimeVideoConfig = {};
+
+    if (typeof raw['enabled'] === 'boolean') {
+        video.enabled = raw['enabled'];
+    }
+    if (typeof raw['provider'] === 'string' && raw['provider'].trim().length > 0) {
+        video.provider = raw['provider'].trim();
+    }
+    if (typeof raw['avatarId'] === 'string' && raw['avatarId'].trim().length > 0) {
+        video.avatarId = raw['avatarId'].trim();
+    }
+
+    const rawProviders = raw['providers'];
+    if (isPlainObject(rawProviders)) {
+        const providers: Record<string, JSONObjectLike> = {};
+        for (const key of Object.keys(rawProviders)) {
+            const settings = rawProviders[key];
+            if (isPlainObject(settings) && key.trim().length > 0) {
+                providers[key] = settings;
+            }
+        }
+        if (Object.keys(providers).length > 0) {
+            video.providers = providers;
+        }
+    }
+
+    return Object.keys(video).length > 0 ? video : null;
 }
 
 /** Normalizes the `voice` block; returns `null` when nothing usable survives. */

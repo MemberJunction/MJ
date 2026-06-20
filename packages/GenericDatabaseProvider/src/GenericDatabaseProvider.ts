@@ -1065,22 +1065,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // to avoid duplicate DECLARE/SET. Skip here.
             if (isUpdate && f.IsPrimaryKey) continue;
 
-            // PK-on-CREATE with no explicit value: omit so the SP default fires.
-            const isPKOnCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement;
-            if (isPKOnCreate) {
-                const v = entity.Get(f.Name);
-                if (v === null || v === undefined) continue;
-            }
-
-            // Read with ActiveStatusAssertions temporarily disabled — matches
-            // the prior SS path which silenced warnings for this lookup.
+            // Resolve the EntityField instance once and read its Value directly. This is a
+            // framework-internal read for SQL parameter building, so it deliberately bypasses
+            // entity.Get(), which would assert active status (deprecation warning / disabled throw)
+            // for what is NOT user use of the field. (EntityField.Value itself never asserts.)
             const theField = entity.Fields.find(
                 (field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase(),
             );
-            const tempStatus = theField?.ActiveStatusAssertions;
-            if (theField) theField.ActiveStatusAssertions = false;
             const rawValue = theField?.Value;
-            if (theField && tempStatus !== undefined) theField.ActiveStatusAssertions = tempStatus;
+
+            // PK-on-CREATE with no explicit value: omit so the SP default fires.
+            const isPKOnCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement;
+            if (isPKOnCreate && (rawValue === null || rawValue === undefined)) continue;
 
             const coerced = this.CoerceSaveFieldValue(f, rawValue, isUpdate);
             if (coerced.kind === 'skip') continue;
@@ -3589,7 +3585,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
             if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
             const quotes = pk.NeedsQuotes ? "'" : '';
-            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${val.Value}${quotes}`;
+            // Escape embedded single quotes when the value is wrapped in quotes. A PK value can
+            // legitimately contain apostrophes (e.g. an object-valued soft key whose JSON carries
+            // free-text), and an unescaped quote both breaks the SQL string and is an injection vector.
+            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
+            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
         }).join(' AND ');
 
         // Append Read RLS filter (exemption check is centralized in GetUserRowLevelSecurityWhereClause)

@@ -16,7 +16,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -1618,6 +1618,52 @@ export class BaseAgent {
     }
 
     /**
+     * Opens a **raw** {@link IRealtimeSession} for this agent — the duplex model connection a Realtime
+     * Bridge hands to `AIBridgeEngine.StartBridgeSession` so the agent can talk + hear over a media
+     * transport (a LiveKit room, a Zoom/Teams meeting, a phone call). The bridge engine owns turn-taking
+     * and the transport seam, so this deliberately returns the **session itself**, NOT a
+     * {@link RealtimeSessionRunner} (which is the client-direct topology's own orchestration loop).
+     *
+     * It reuses the EXACT same resolution + assembly as {@link executeRealtimeSession} — model selection
+     * ({@link resolveRealtimeModel}), agent configuration ({@link loadAgentConfiguration}), effective-config
+     * persona/voice ({@link resolveRealtimeEffectiveConfig}), and the system-prompt + memory context
+     * ({@link buildRealtimeSessionParams}) — then opens the session via
+     * {@link BaseRealtimeModel.StartSession}. Tools are intentionally NOT pre-populated: the
+     * `invoke-target-agent` + interactive-surface tools are a runner concern; a bridge that needs them
+     * registers them on the returned session itself.
+     *
+     * @param params The execution parameters (agent + context user + the request-scoped provider). A fresh
+     *   bridge session typically passes an empty `conversationMessages` array.
+     * @returns The live realtime session.
+     * @throws When the agent configuration fails to load or no usable Realtime model can be resolved.
+     */
+    public async StartBridgeRealtimeSession(params: ExecuteAgentParams): Promise<IRealtimeSession> {
+        // Mirror Execute()'s provider wiring so the realtime helpers operate on the request-scoped provider.
+        this._activeProvider = params.provider ?? Metadata.Provider;
+        await AIEngine.Instance.Config(false, params.contextUser, params.provider);
+
+        const config = await this.loadAgentConfiguration(params.agent);
+        if (!config.success) {
+            throw new Error(config.errorMessage ?? `Failed to load configuration for agent '${params.agent.Name}'.`);
+        }
+
+        const modelResolution = await this.resolveRealtimeModel(params);
+        if (!modelResolution) {
+            throw new Error(
+                `No usable Realtime model resolved for agent '${params.agent.Name}'. Configure an Active ` +
+                    `AIModelType 'Realtime' model with an active vendor whose DriverClass has a resolvable API key.`,
+            );
+        }
+
+        const effectiveConfig = this.resolveRealtimeEffectiveConfig(params.agent);
+        const sessionParams = await this.buildRealtimeSessionParams(
+            params, config, modelResolution.apiName, effectiveConfig, modelResolution.driverClass,
+        );
+
+        return await modelResolution.model.StartSession(sessionParams);
+    }
+
+    /**
      * Resolves the realtime model + vendor driver + API key for a session-driven run.
      *
      * **Overridable seam.** This is the single injection point that test subclasses override to
@@ -1637,60 +1683,67 @@ export class BaseAgent {
     protected async resolveRealtimeModel(
         params: ExecuteAgentParams
     ): Promise<{ model: BaseRealtimeModel; modelID: string; vendorID: string; apiName: string; driverClass?: string } | null> {
-        const model = this.selectRealtimeModelEntity(params.agent);
-        if (!model) {
-            return null;
+        // Walk candidates in resolution order (preference first, then highest PowerRank), returning the
+        // FIRST that FULLY resolves (active vendor + resolvable API key + ClassFactory driver). Single-pick
+        // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
+        // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
+        // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
+        const candidates = this.selectRealtimeModelCandidates(params.agent);
+        for (const model of candidates) {
+            const vendor = this.selectRealtimeVendor(model.ID);
+            if (!vendor) {
+                continue;
+            }
+            const apiKey = GetAIAPIKey(vendor.driverClass);
+            if (!apiKey) {
+                continue;
+            }
+            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
+                BaseRealtimeModel,
+                vendor.driverClass,
+                apiKey
+            );
+            if (!instance) {
+                continue;
+            }
+            return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
         }
-
-        const vendor = this.selectRealtimeVendor(model.ID);
-        if (!vendor) {
-            return null;
-        }
-
-        const apiKey = GetAIAPIKey(vendor.driverClass);
-        if (!apiKey) {
-            return null;
-        }
-
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-            BaseRealtimeModel,
-            vendor.driverClass,
-            apiKey
-        );
-        if (!instance) {
-            return null;
-        }
-
-        return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
+        return null;
     }
 
     /**
-     * Selects the `MJ: AI Models` row to use for a realtime session: the highest-power active
-     * model of AIModelType `Realtime`. Returns `null` when no `Realtime` model exists in metadata
-     * (expected before P4).
+     * The active `Realtime`-AIModelType models to try, in resolution order — the candidate list
+     * {@link resolveRealtimeModel} walks until one yields a usable vendor + key + driver. Returns ALL
+     * candidates (not just the top pick) so a keyless / undriveable higher-power model falls through to
+     * the next usable one instead of dead-ending the whole resolution.
      *
-     * @param agent The agent being executed (reserved for future per-agent model preference).
-     * @returns The chosen model entity, or `null`.
+     * Ordering: an effective-config model preference (`realtime.modelPreference`, an MJ: AI Models Name
+     * or ID) goes FIRST when it resolves, followed by the rest by descending PowerRank (so even a keyless
+     * preferred model degrades gracefully). An unsatisfiable preference logs and is ignored.
+     *
+     * @param agent The agent being executed.
+     * @returns The candidate models in resolution order (empty when none are active).
      */
-    private selectRealtimeModelEntity(agent: MJAIAgentEntityExtended): MJAIModelEntityExtended | null {
+    private selectRealtimeModelCandidates(agent: MJAIAgentEntityExtended): MJAIModelEntityExtended[] {
         const isRealtime = (m: MJAIModelEntityExtended): boolean =>
             typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'realtime';
 
         const realtimeModels = AIEngine.Instance.Models.filter(m => m.IsActive && isRealtime(m));
         if (realtimeModels.length === 0) {
-            return null;
+            return [];
         }
 
-        // Effective-config model preference (realtime.modelPreference, an MJ: AI Models Name or
-        // ID) participates first. METADATA preferences degrade gracefully: an unsatisfiable
-        // preference logs and falls through to the default highest-PowerRank selection.
+        const byPower = [...realtimeModels].sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
+
         const preference = this.resolveRealtimeEffectiveConfig(agent).realtime?.modelPreference;
         if (preference) {
             const wanted = preference.trim().toLowerCase();
             const preferred = realtimeModels.find(m => UUIDsEqual(m.ID, preference))
                 ?? realtimeModels.find(m => m.Name?.trim().toLowerCase() === wanted);
             if (preferred) {
-                return preferred;
+                // Preference first, the rest (by power) as fallback so a keyless preferred model still
+                // falls through to a usable one rather than dead-ending.
+                return [preferred, ...byPower.filter(m => !UUIDsEqual(m.ID, preferred.ID))];
             }
             this.logError(
                 `Realtime model preference '${preference}' for agent '${agent.Name}' matches no Active Realtime ` +
@@ -1699,7 +1752,7 @@ export class BaseAgent {
             );
         }
 
-        return realtimeModels.sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+        return byPower;
     }
 
     /**
@@ -2364,8 +2417,13 @@ export class BaseAgent {
      * @protected
      */
     protected async initializeEngines(contextUser?: UserInfo): Promise<void> {
-        await AIEngine.Instance.Config(false, contextUser);
+        // Load the Action engine BEFORE the AI engine. AIEngine.RefreshActions()
+        // (invoked by AIEngine.Config) reuses already-cached 'MJ: Actions'
+        // metadata via BaseEngineRegistry, so priming ActionEngineServer first
+        // lets AIEngine skip loading a second copy into ActionEngineBase —
+        // eliminating the duplicate-RunView telemetry warning at agent startup.
         await ActionEngineServer.Instance.Config(false, contextUser);
+        await AIEngine.Instance.Config(false, contextUser);
     }
 
     /**

@@ -103,7 +103,7 @@ export interface RtcLocalParticipant {
     /** The bot's own identity. */
     identity: string;
     /** Publishes a track (the bot's audio). VERIFY: returns a publication / Promise. */
-    publishTrack(track: RtcLocalAudioTrack, options?: unknownRecord): Promise<unknownRecord>;
+    publishTrack(track: RtcLocalAudioTrack, options?: RtcTrackPublishOptions): Promise<unknownRecord>;
     /** Publishes a reliable data message. VERIFY: `(payload: Uint8Array, options)`. */
     publishData(payload: Uint8Array, options?: unknownRecord): Promise<void>;
 }
@@ -148,6 +148,20 @@ export interface RtcNodeModule {
     };
     /** Track-kind constants. VERIFY: `KIND_AUDIO`. */
     TrackKind: { KIND_AUDIO: number };
+    /**
+     * `new TrackPublishOptions({ source })` — the publish-options protobuf message. REQUIRED by
+     * `publishTrack`: passing a plain object leaves `source` unset and the track improperly bound, so the
+     * native `AudioSource.captureFrame` rejects every frame with `InvalidState`. Construct the real proto.
+     */
+    TrackPublishOptions: new (data?: { source?: number; dtx?: boolean; red?: boolean; stream?: string }) => RtcTrackPublishOptions;
+    /** Track-source constants — `SOURCE_MICROPHONE` tags the bot's published voice track. */
+    TrackSource: { SOURCE_MICROPHONE: number };
+}
+
+/** Opaque marker for a constructed `TrackPublishOptions` proto handed to `publishTrack`. */
+export interface RtcTrackPublishOptions {
+    /** The track source (e.g. `SOURCE_MICROPHONE`). */
+    readonly source?: number;
 }
 
 /** The injectable loader for `@livekit/rtc-node` (tests inject a fake; production lazy-imports the addon). */
@@ -237,6 +251,13 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     private rtc: RtcNodeModule | null = null;
     private room: RtcRoom | null = null;
     private audioSource: RtcAudioSource | null = null;
+    /**
+     * The published outbound track. MUST be retained for the session's lifetime: it owns the FFI handle
+     * that binds the {@link audioSource} to the room. If only the source is kept and the track is left to
+     * GC, its handle is finalized, the rust-side track drops, and every `captureFrame` then rejects with
+     * `InvalidState` (the agent generates audio but is never heard).
+     */
+    private audioTrack: RtcLocalAudioTrack | null = null;
     private readonly inboundStreams: RtcAudioStream[] = [];
 
     private audioHandler?: (frame: NativeRoomAudioFrame) => void;
@@ -269,14 +290,18 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         // VERIFY against @livekit/rtc-node: connect(url, token, { autoSubscribe, dynacast }).
         await room.connect(args.url, args.token, { autoSubscribe: true, dynacast: true });
 
-        // Publish the bot's outbound audio track (the agent's voice). VERIFY ctor + publishTrack option bag.
+        // Publish the bot's outbound audio track (the agent's voice). The options MUST be a real
+        // TrackPublishOptions proto with `source` set — a plain `{ name }` bag leaves the track unbound and
+        // every captureFrame() then fails with `InvalidState` (the agent generates audio but is never heard).
         const source = new rtc.AudioSource(this.outboundRate, this.channels);
         const track = rtc.LocalAudioTrack.createAudioTrack('agent-voice', source);
-        await room.localParticipant.publishTrack(track, { name: args.name });
+        const publishOptions = new rtc.TrackPublishOptions({ source: rtc.TrackSource.SOURCE_MICROPHONE });
+        await room.localParticipant.publishTrack(track, publishOptions);
 
         this.rtc = rtc;
         this.room = room;
         this.audioSource = source;
+        this.audioTrack = track; // retain — see field doc: losing this to GC orphans the source (InvalidState)
 
         return { localIdentity: room.localParticipant.identity, roomName: room.name ?? '' };
     }
@@ -287,6 +312,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         this.closeInboundStreams();
         this.room = null;
         this.audioSource = null;
+        this.audioTrack = null;
         this.rtc = null;
         if (room) {
             try {

@@ -41,6 +41,16 @@ mj test regression remote --target=<name-or-path>     # Run against a remote URL
 
 **Why JSON comparison instead of DB:** The Docker SQL Server is wiped on `down -v`, so DB-based `mj test compare` can't see prior runs. The JSON artifacts in `test-results/run-*/` are the portable comparison baseline — they survive teardown, work in CI, and can be archived as build artifacts.
 
+### docker/livekit/
+**Purpose**: Local **LiveKit media server** (an SFU) for the **Meet** app — MJ's multi-party live audio/video/screen rooms, built on the MJ-native LiveKit bridge. Dev only.
+
+- Single service `mj-livekit` (`livekit/livekit-server`) configured by [`livekit.yaml`](livekit/livekit.yaml): dev keys `devkey` / `mj-local-dev-livekit-secret-0123456789`, signaling on `7880`, WebRTC media on `7881` (TCP) / `7882` (UDP).
+- Start/stop from `docker/livekit/`: `docker compose up -d` / `docker compose down`.
+- MJAPI does **not** proxy media — it only mints LiveKit join tokens (`LiveKitTokenService`, via `MintLiveKitClientToken` / `StartLiveKitAgentRoomSession`) using `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` from the repo-root `.env` (which must match `livekit.yaml`'s `keys:`). Browsers + the agent connect to the LiveKit server directly.
+- macOS/Docker note: WebRTC UDP may not traverse Docker Desktop NAT; LiveKit auto-falls back to TCP on `7881` (mapped), so calls still connect. For native UDP, `brew install livekit && livekit-server --dev`. For production, use **LiveKit Cloud** or a properly-networked self-host.
+- The `LiveKitTokenService is not configured` error in the UI means MJAPI didn't see the three `LIVEKIT_*` vars (add them to `.env` and restart MJAPI).
+- Full how-to: [`docker/livekit/README.md`](livekit/README.md).
+
 ### docker/workbench/
 **Purpose**: Claude Code workbench with dedicated SQL Server, headless browser, and Auth0 integration for autonomous development and testing.
 

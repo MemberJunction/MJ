@@ -1083,10 +1083,14 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
-     * Returns true if the field is a uniqueidentifier in the database.
+     * Returns true if the field is a GUID/UUID column in the database.
+     * Accepts both the SQL Server type name (`uniqueidentifier`) and the
+     * PostgreSQL type name (`uuid`) — on PG the metadata `Type` is reported as
+     * `uuid`, so a `uniqueidentifier`-only check would miss every UUID column.
      */
     get IsUniqueIdentifier(): boolean {
-        return this.Type.trim().toLowerCase() === 'uniqueidentifier';
+        const t = this.Type.trim().toLowerCase();
+        return t === 'uniqueidentifier' || t === 'uuid';
     }
 
     /**
@@ -1867,6 +1871,25 @@ export class EntityInfo extends BaseInfo {
      */
     get Fields(): EntityFieldInfo[] {
         return this._Fields;
+    }
+
+    private _hasInactiveFields: boolean | undefined = undefined;
+    /**
+     * Returns true if ANY field on this entity is `Deprecated` or `Disabled` (i.e. not `Active`).
+     *
+     * Computed once on first access and cached for the lifetime of this EntityInfo. The value is a
+     * property of the entity definition (shared across every record instance), so the common case —
+     * an entity whose fields are all Active — is a single cached boolean.
+     *
+     * This is the fast-path gate for active-status enforcement in BaseEntity.Get/Set/SetMany: when
+     * it is false those paths skip the per-field status lookup entirely, keeping hot read/write loops
+     * free of any deprecation-check overhead.
+     */
+    get HasInactiveFields(): boolean {
+        if (this._hasInactiveFields === undefined) {
+            this._hasInactiveFields = this._Fields.some(f => f.Status === 'Deprecated' || f.Status === 'Disabled');
+        }
+        return this._hasInactiveFields;
     }
     /**
      * Gets all relationships where other entities reference this entity.

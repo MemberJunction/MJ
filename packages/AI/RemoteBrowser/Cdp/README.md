@@ -103,8 +103,10 @@ an injectable seam:
 ```typescript
 import { CdpRemoteBrowserSession } from '@memberjunction/remote-browser-cdp';
 
-// Production binds an MJ-aware engine (vision-model auto-selection, prompt-run logging). Tests bind a fake
-// (no browser, no LLM). Default is ProgressComputerUseEngine (base computer-use, no model auto-selection).
+// Production binds an MJ-aware engine (defaults to the stored Computer Use controller/judge prompts —
+// which carry the model selection — with prompt-run logging; auto-selects a vision model only as a
+// fallback). Tests bind a fake (no browser, no LLM). Default is ProgressComputerUseEngine (base
+// computer-use, no metadata prompts, no model auto-selection).
 CdpRemoteBrowserSession.SetGoalEngineFactory(() => new MyGoalEngine());
 ```
 
