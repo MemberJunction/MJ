@@ -239,6 +239,21 @@ export interface ClientRealtimeSessionConfig {
  */
 export interface IRealtimeSession {
     /**
+     * The PCM sample rate (Hz) this model **consumes** on {@link IRealtimeSession.SendInput} — its audio
+     * INPUT format. Optional; consumers default to 24000 (OpenAI Realtime). **Gemini Live = 16000.** A
+     * server-bridged host (LiveKit/Zoom/Teams) MUST resample inbound room audio to this rate or the model
+     * receives mis-rated audio it can't parse (the symptom: the agent never responds on the bridge while
+     * the same model works client-direct, where the browser negotiates the rate itself).
+     */
+    InputSampleRate?: number;
+
+    /**
+     * The PCM sample rate (Hz) this model **emits** on {@link IRealtimeSession.OnOutput} — its audio OUTPUT
+     * format. Optional; consumers default to 24000 (both OpenAI and Gemini Live emit 24 kHz today).
+     */
+    OutputSampleRate?: number;
+
+    /**
      * Sends a client media frame to the model.
      *
      * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation. The

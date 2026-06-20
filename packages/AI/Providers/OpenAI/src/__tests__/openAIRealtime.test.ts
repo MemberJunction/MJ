@@ -127,6 +127,17 @@ class TestableOpenAIRealtime extends OpenAIRealtime {
     protected override createConnection(): IOpenAIRealtimeConnection {
         return this.Fake;
     }
+    /**
+     * Simulates the realtime handshake: `applyInitialConfig` now DEFERS its `session.update` until the
+     * server's `session.created` frame (so instructions can't race the socket open). The real connection
+     * emits that on connect; the fake doesn't, so the testable fires it right after start — modelling the
+     * real lifecycle and keeping the "config sent on start" assertions valid.
+     */
+    public override async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
+        const session = await super.StartSession(params);
+        this.Fake.Fire({ type: 'session.created' } as RealtimeServerEvent);
+        return session;
+    }
 }
 
 /** Driver subclass that captures the mint request and returns a fake ephemeral secret (no network). */

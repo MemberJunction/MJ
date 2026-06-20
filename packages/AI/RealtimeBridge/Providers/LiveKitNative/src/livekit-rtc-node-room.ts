@@ -529,10 +529,17 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
     const channels = opts.Channels ?? DEFAULT_CHANNELS;
     const loader = opts.Loader ?? defaultRtcNodeLoader;
     return {
-        createRoomClient(_options: NativeRoomClientOptions): NativeRoomClient {
+        createRoomClient(options: NativeRoomClientOptions): NativeRoomClient {
             // Credentials (Url/ApiKey/ApiSecret) are not needed here — the bridge hands a pre-signed access
-            // token to client.connect(args). Options are accepted for contract conformance + future use.
-            return new LiveKitRtcNodeRoomClient(outbound, inbound, channels, loader);
+            // token to client.connect(args). The PER-SESSION sample rates ARE used: the agent's realtime
+            // model dictates them (OpenAI 24 kHz; Gemini Live 16 kHz IN), threaded down from the engine, so
+            // inbound room audio is resampled to what THIS model consumes. Fall back to the module defaults.
+            return new LiveKitRtcNodeRoomClient(
+                options.OutboundSampleRate ?? outbound,
+                options.InboundSampleRate ?? inbound,
+                channels,
+                loader,
+            );
         },
     };
 }

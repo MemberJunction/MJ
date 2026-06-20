@@ -52,6 +52,7 @@ import {
     RealtimeToolBroker,
     RealtimeToolBrokerDeps,
     INVOKE_TARGET_AGENT_TOOL_NAME,
+    BuildRealtimeAgentFraming,
     DelegateToTargetRequest,
     DelegatedResult,
     DelegatedRunArtifact,
@@ -265,6 +266,26 @@ export interface RealtimeModelResolution {
 }
 
 /**
+ * Output of {@link RealtimeClientSessionService.PrepareRealtimeSessionParams} — the host-agnostic prep that
+ * every realtime surface consumes before opening a session its own way. Carries the assembled
+ * {@link RealtimeSessionParams} plus the resolved co-agent / model / effective config the openers need.
+ */
+export interface RealtimeSessionParamsPrep {
+    /** Whether prep succeeded. When false, only {@link ErrorMessage} is set. */
+    Success: boolean;
+    /** Failure reason (present only when {@link Success} is false). */
+    ErrorMessage?: string;
+    /** The resolved co-agent (the Realtime-type agent that does the voicing). */
+    CoAgent?: MJAIAgentEntityExtended;
+    /** The resolved realtime model + identifiers. */
+    Resolution?: RealtimeModelResolution;
+    /** The effective config from the full precedence cascade (type-default < co-agent < target < override). */
+    EffectiveConfig?: RealtimeCoAgentConfig;
+    /** The assembled session params (TARGET-identity prompt, stable tools incl. invoke-target, voice, memory). */
+    SessionParams?: RealtimeSessionParams;
+}
+
+/**
  * Outcome of resolving the realtime model for a session: either a usable {@link RealtimeModelResolution}
  * or a specific, human-readable failure reason (used for explicit preferred-model failures, where the
  * generic "no model" message would hide WHY the user's chosen model couldn't be used).
@@ -360,23 +381,13 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<RealtimeClientSessionPrepResult> {
-        await this.configureEngine(contextUser, provider);
-
-        const coAgent = this.resolveCoAgent(input);
-        if (!coAgent) {
-            return { Success: false, ErrorMessage: 'The Realtime Co-Agent could not be resolved from the supplied id or entity.' };
+        // Build the canonical session params via the ONE shared producer (identity + cascade + tools +
+        // voice + memory) — then do the client-direct-specific bits: SupportsClientDirect gate, mint, obs.
+        const prep = await this.PrepareRealtimeSessionParams(input, contextUser, provider);
+        if (!prep.Success || !prep.CoAgent || !prep.Resolution || !prep.SessionParams || !prep.EffectiveConfig) {
+            return { Success: false, ErrorMessage: prep.ErrorMessage };
         }
-
-        // Effective config: type DefaultConfiguration ← agent TypeConfiguration ← runtime
-        // overrides (already authorization-gated upstream). Drives model preference, voice
-        // persona/provider settings, and narration pacing below.
-        const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson);
-
-        const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
-        if (!outcome.Resolution) {
-            return { Success: false, ErrorMessage: outcome.ErrorMessage ?? this.noModelMessage() };
-        }
-        const resolution = outcome.Resolution;
+        const { CoAgent: coAgent, Resolution: resolution, SessionParams: sessionParams, EffectiveConfig: effectiveConfig } = prep;
 
         if (!resolution.Model.SupportsClientDirect) {
             return {
@@ -384,10 +395,6 @@ export class RealtimeClientSessionService {
                 ErrorMessage: `The resolved realtime model '${resolution.APIName}' does not support client-direct sessions.`
             };
         }
-
-        const sessionParams = await this.buildSessionParams(
-            input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
-        );
 
         let clientConfig: ClientRealtimeSessionConfig;
         try {
@@ -423,20 +430,80 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Resolves the EFFECTIVE realtime configuration for a co-agent: the agent TYPE's
-     * `DefaultConfiguration` (base) ← the agent's `TypeConfiguration` ← the (pre-authorized)
-     * runtime overrides — deep-merged per key and normalized. Tolerant end-to-end: malformed
-     * layers contribute nothing and an unloaded metadata cache yields no type defaults.
+     * **The single source of truth for realtime session prep.** Builds the {@link RealtimeSessionParams}
+     * for a co-agent voicing a target: resolves the co-agent, the effective config via the full precedence
+     * cascade (type-default < co-agent < **target** < runtime override), the realtime model, then assembles
+     * the companion system prompt (**first-person as the TARGET** — this is what gives every host the right
+     * identity), the stable tool set (**always including `invoke-target-agent`**), voice, and memory.
+     *
+     * EVERY realtime host consumes this — native chat via {@link PrepareClientSession} → `CreateClientSession`,
+     * and the server-bridged hosts (LiveKit, future Zoom/Teams) via `StartSession`. Hosts differ ONLY in how
+     * they OPEN the session and their media transport; identity/precedence/prompt/tools live here, once. Do
+     * NOT re-implement this in a host. See `plans/realtime/realtime-core-host-convergence.md`.
+     *
+     * Pure-ish and side-effect-free (no session opened, no observability run created) — those are the
+     * opener's concern. Never throws — returns `Success: false` on failure.
+     *
+     * @param input The co-agent/target/session inputs (the runtime override rides `ConfigOverridesJson`).
+     * @param contextUser The calling user (threaded to metadata + memory retrieval).
+     * @param provider The request-scoped metadata provider.
+     * @returns The prep result: `Success` + co-agent/resolution/effective-config/session-params, or `Success: false`.
+     */
+    public async PrepareRealtimeSessionParams(
+        input: PrepareClientSessionInput,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<RealtimeSessionParamsPrep> {
+        await this.configureEngine(contextUser, provider);
+
+        const coAgent = this.resolveCoAgent(input);
+        if (!coAgent) {
+            return { Success: false, ErrorMessage: 'The Realtime Co-Agent could not be resolved from the supplied id or entity.' };
+        }
+
+        // Effective config via the surface-agnostic cascade: type DefaultConfiguration < co-agent
+        // TypeConfiguration < TARGET agent TypeConfiguration < runtime overrides (authorization-gated
+        // upstream). This is the identical precedence on every host.
+        const targetAgent = this.resolveTargetAgent(input.TargetAgentID);
+        const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson, targetAgent);
+
+        const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
+        if (!outcome.Resolution) {
+            return { Success: false, ErrorMessage: outcome.ErrorMessage ?? this.noModelMessage() };
+        }
+        const resolution = outcome.Resolution;
+
+        const sessionParams = await this.buildSessionParams(
+            input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+        );
+
+        return { Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams };
+    }
+
+    /**
+     * Resolves the EFFECTIVE realtime configuration via the surface-agnostic precedence cascade:
+     * agent-TYPE `DefaultConfiguration` (base) < **co-agent** `TypeConfiguration` < **target agent**
+     * `TypeConfiguration` < (pre-authorized) runtime override — deep-merged per key and normalized.
+     * The target layer is what makes a voiced agent (Sage, Marketing Agent, …) carry its own voice/model
+     * regardless of host. Tolerant end-to-end: malformed layers contribute nothing and an unloaded metadata
+     * cache yields no type defaults. See `plans/realtime/realtime-core-host-convergence.md`.
      *
      * @param coAgent The resolved co-agent.
      * @param overridesJson The pre-authorized runtime override layer, when present.
+     * @param targetAgent The TARGET agent being voiced, when distinct from the co-agent — contributes the
+     *   per-voiced-agent layer (above the co-agent, below the runtime override). Omit when there is none.
      * @returns The normalized effective configuration (possibly empty, never `null`).
      */
-    protected resolveEffectiveConfig(coAgent: MJAIAgentEntityExtended, overridesJson?: string): RealtimeCoAgentConfig {
+    protected resolveEffectiveConfig(
+        coAgent: MJAIAgentEntityExtended,
+        overridesJson?: string,
+        targetAgent?: MJAIAgentEntityExtended | null
+    ): RealtimeCoAgentConfig {
         return ResolveEffectiveRealtimeConfig(
             this.getAgentTypeDefaultConfiguration(coAgent),
             coAgent.TypeConfiguration ?? null,
-            overridesJson ?? null
+            overridesJson ?? null,
+            targetAgent?.TypeConfiguration ?? null
         );
     }
 
@@ -1348,13 +1415,10 @@ export class RealtimeClientSessionService {
         const target = this.resolveTargetAgent(input.TargetAgentID);
         const targetName = target?.Name ?? 'the configured target agent';
 
-        const framing =
-            `You are the real-time voice for the agent "${targetName}". Hold a natural, low-latency ` +
-            `conversation with the user, always speaking in the FIRST PERSON as ${targetName} — own the work ` +
-            `("I'm pulling that up", "I found three matches"); never refer to ${targetName} or the work in the ` +
-            `third person. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
-            `tool and narrate progress while it runs — do not attempt to do the work yourself.` +
-            this.buildInteractiveSurfaceFraming(input.ExtraTools);
+        // Identity framing comes from the ONE shared producer (see BuildRealtimeAgentFraming) so the agent
+        // is the same agent on every host. The interactive-surface clause is host-specific (native chat's
+        // browser/whiteboard); bridges pass none.
+        const framing = BuildRealtimeAgentFraming(targetName, this.buildInteractiveSurfaceFraming(input.ExtraTools));
 
         const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);
         const voiceManner = BuildVoiceMannerSection(effectiveConfig);

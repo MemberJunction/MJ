@@ -142,6 +142,13 @@ export interface NativeRoomClientOptions {
     ApiKey?: string;
     /** The LiveKit API secret (resolved upstream). Used only to sign the join token. */
     ApiSecret?: string;
+    /**
+     * PCM rate (Hz) the agent's model CONSUMES — the rate inbound room audio is resampled to. Default 24000
+     * (OpenAI); Gemini Live = 16000. A wrapper that ignores this stays on its constructed default.
+     */
+    InboundSampleRate?: number;
+    /** PCM rate (Hz) the agent's model EMITS — the bot's published voice-track rate. Default 24000. */
+    OutboundSampleRate?: number;
 }
 
 /**
@@ -165,6 +172,14 @@ export interface LiveKitNativeSdkConfig {
      * package name or an absolute path to a sidecar entry). Required in production; tests inject a loader.
      */
     NativeModuleSpecifier?: string;
+    /**
+     * PCM rate (Hz) the agent's realtime model **consumes** — the rate inbound room audio is resampled to
+     * before reaching the model. Threaded from the model via the engine (`IRealtimeSession.InputSampleRate`).
+     * Default 24000 (OpenAI); Gemini Live = 16000. Mismatch = the agent never hears the user on the bridge.
+     */
+    InboundSampleRate?: number;
+    /** PCM rate (Hz) the agent's model **emits** — the bot's published voice track rate. Default 24000. */
+    OutboundSampleRate?: number;
 }
 
 /** Normalizes the native client's free-form role string onto the seam's {@link LiveKitParticipantRole}. */
@@ -336,6 +351,10 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
             Url: args.RoomUrl || this.config.Url,
             ApiKey: this.config.ApiKey,
             ApiSecret: this.config.ApiSecret,
+            // The model's audio format (threaded from IRealtimeSession via the engine) — so inbound room
+            // audio is resampled to what the model consumes (OpenAI 24 kHz; Gemini Live 16 kHz).
+            InboundSampleRate: this.config.InboundSampleRate,
+            OutboundSampleRate: this.config.OutboundSampleRate,
         });
         this.wireClient(client);
 
@@ -496,10 +515,17 @@ export function readNativeConfig(config?: Record<string, unknown>): LiveKitNativ
         AccessToken: readString(cfg.AccessToken),
         BotDisplayName: readString(cfg.BotDisplayName),
         NativeModuleSpecifier: readString(cfg.NativeModuleSpecifier),
+        InboundSampleRate: readNumber(cfg.InboundSampleRate),
+        OutboundSampleRate: readNumber(cfg.OutboundSampleRate),
     };
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */
 function readString(value: unknown): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/** Reads a positive finite number from a free-form config value, or `undefined`. */
+function readNumber(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 }

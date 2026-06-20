@@ -1083,11 +1083,19 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @returns The bridge context.
      */
     private buildBridgeContext(params: StartBridgeSessionParams): RealtimeBridgeContext {
+        // Carry the realtime model's audio format down to the media-transport driver so it resamples to the
+        // rate the model actually consumes/emits (OpenAI 24 kHz; Gemini Live 16 kHz IN). Without this a
+        // bridge feeds e.g. Gemini 24 kHz audio it can't parse and the agent never responds. Defaults keep
+        // every existing driver/model on 24 kHz. See plans/realtime/realtime-core-host-convergence.md.
         return {
             Features: params.Provider.SupportedFeaturesObject ?? {},
             ProviderName: params.Provider.Name,
             Address: params.Address,
-            Configuration: params.Configuration,
+            Configuration: {
+                ...params.Configuration,
+                InboundSampleRate: params.RealtimeSession.InputSampleRate ?? 24000,
+                OutboundSampleRate: params.RealtimeSession.OutputSampleRate ?? 24000,
+            },
             ContextUser: params.ContextUser,
         };
     }

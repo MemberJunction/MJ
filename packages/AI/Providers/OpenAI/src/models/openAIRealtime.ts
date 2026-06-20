@@ -274,16 +274,33 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Applies the initial session config: system prompt + tools via `session.update`, optional
-     * initial context as a user message. Called once by {@link OpenAIRealtime.StartSession}.
+     * Applies the initial session config: system prompt + tools via `session.update`, optional initial
+     * context as a user message. Called once by {@link OpenAIRealtime.StartSession}.
+     *
+     * **Deferred to `session.created`.** When `StartSession` returns, the realtime WebSocket is NOT open yet
+     * — sending `session.update` synchronously races the handshake and the instructions (the **system
+     * prompt + tools**) are silently dropped, so the model runs with NO prompt (no identity, no companion
+     * framing). We therefore wait for the server's `session.created` frame — the first event once the socket
+     * is open and the session exists, and the canonical moment to configure a realtime session — exactly the
+     * point the browser/client-direct path applies its config. Idempotent (a re-emitted `session.created`
+     * can't double-apply); the listener removes itself once it fires.
      *
      * @param params The session parameters.
      */
     public applyInitialConfig(params: RealtimeSessionParams): void {
-        this.sendSessionUpdate(params.SystemPrompt, params.Tools, params.Config);
-        if (params.InitialContext && params.InitialContext.length > 0) {
-            this.sendInitialContext(params.InitialContext);
-        }
+        let applied = false;
+        const applyWhenReady = (event: RealtimeServerEvent): void => {
+            if (applied || event.type !== 'session.created') {
+                return;
+            }
+            applied = true;
+            this.connection.off('event', applyWhenReady);
+            this.sendSessionUpdate(params.SystemPrompt, params.Tools, params.Config);
+            if (params.InitialContext && params.InitialContext.length > 0) {
+                this.sendInitialContext(params.InitialContext);
+            }
+        };
+        this.connection.on('event', applyWhenReady);
     }
 
     // ---- IRealtimeSession outbound ----

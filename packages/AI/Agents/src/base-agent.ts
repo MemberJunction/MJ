@@ -29,12 +29,15 @@ import {
 } from './realtime/realtime-session-runner';
 import { ResolveNarrationInstructionsTemplate } from './realtime/realtime-narration';
 import {
+    BuildRealtimeOverridesJson,
     BuildVoiceMannerSection,
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
+import { RealtimeClientSessionService, PrepareClientSessionInput } from './realtime/realtime-client-session-service';
+import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -1640,45 +1643,74 @@ export class BaseAgent {
     public async StartBridgeRealtimeSession(params: ExecuteAgentParams): Promise<IRealtimeSession> {
         // Mirror Execute()'s provider wiring so the realtime helpers operate on the request-scoped provider.
         this._activeProvider = params.provider ?? Metadata.Provider;
-        await AIEngine.Instance.Config(false, params.contextUser, params.provider);
+        const provider = params.provider ?? Metadata.Provider;
 
-        const config = await this.loadAgentConfiguration(params.agent);
-        if (!config.success) {
-            throw new Error(config.errorMessage ?? `Failed to load configuration for agent '${params.agent.Name}'.`);
-        }
-
-        // Model + voice resolve via a 3-layer precedence cascade:
-        //   1. runtime override — a dev's per-session pick, ridden in on params.data (wins)
-        //   2. the TARGET agent's own realtime config — Sage / Marketing Agent / Demo Loop each persist
-        //      their own voice/model in TypeConfiguration, so they're distinct everywhere by default
-        //   3. the co-agent's config / type default — the shared fallback (applied by buildRealtimeSessionParams)
-        const runtimeModelID = (params.data?.realtimeModelID as string | undefined)?.trim() || undefined;
-        const runtimeVoice = (params.data?.realtimeVoice as string | undefined)?.trim() || undefined;
-        const targetConfig = this.resolveTargetRealtimeConfig(params);
-        const overrideModelID = runtimeModelID ?? targetConfig?.realtime?.modelPreference;
-
-        const modelResolution = await this.resolveRealtimeModel(params, overrideModelID);
-        if (!modelResolution) {
+        // A LiveKit / Zoom / Teams bridge is a thin TRANSPORT over the realtime co-agent — it does NOT build
+        // session prep itself. It CONSUMES the one shared producer
+        // ({@link RealtimeClientSessionService.PrepareRealtimeSessionParams}) so the agent's identity (it
+        // speaks first-person AS the target — Sage / Marketing Agent / …), the model + voice precedence
+        // cascade, the tool set (always incl. invoke-target-agent), and memory are byte-for-byte identical to
+        // the native realtime chat. Bridges differ ONLY in opening the session server-side (StartSession) and
+        // their media transport. See plans/realtime/realtime-core-host-convergence.md.
+        const prep = await new RealtimeClientSessionService().PrepareRealtimeSessionParams(
+            this.buildBridgePrepInput(params), params.contextUser as UserInfo, provider,
+        );
+        if (!prep.Success || !prep.Resolution || !prep.SessionParams) {
             throw new Error(
-                `No usable Realtime model resolved for agent '${params.agent.Name}'. Configure an Active ` +
-                    `AIModelType 'Realtime' model with an active vendor whose DriverClass has a resolvable API key.`,
+                prep.ErrorMessage ?? `Failed to prepare a realtime session for agent '${params.agent.Name}'. ` +
+                    `Configure an Active AIModelType 'Realtime' model with an active vendor whose DriverClass has a ` +
+                    `resolvable API key.`,
             );
         }
+        const session = await prep.Resolution.Model.StartSession(prep.SessionParams);
+        this.wireBridgeToolFallback(session);
+        return session;
+    }
 
-        const effectiveConfig = this.resolveRealtimeEffectiveConfig(params.agent);
-        const sessionParams = await this.buildRealtimeSessionParams(
-            params, config, modelResolution.apiName, effectiveConfig, modelResolution.driverClass,
-        );
+    /**
+     * Wires a SAFE tool-call fallback on a bridged session. The core prep registers `invoke-target-agent`
+     * (delegation is a core capability), but a bridge's tool RUNTIME — real delegate-to-target execution +
+     * `AIAgentSession`/run tracking — is **Phase 2** of the convergence
+     * (`plans/realtime/realtime-core-host-convergence.md`); LiveKit today is audio-only. Until that lands,
+     * answer any tool call with a structured "not yet available here" so the model **narrates** the
+     * limitation to the user instead of hanging on an unanswered call. Phase 2 replaces this with the real
+     * delegate-to-target wiring (reusing {@link delegateRealtimeToTarget}).
+     *
+     * @param session The freshly opened bridged session.
+     */
+    private wireBridgeToolFallback(session: IRealtimeSession): void {
+        session.OnToolCall((call) => {
+            void session.SendToolResult(
+                call.CallID,
+                JSON.stringify({ success: false, error: 'Tool execution is not yet wired on this realtime surface — let the user know.' }),
+            );
+        });
+    }
 
-        // Voice cascade (layers 1→2; layer 3 is already baked into Config by buildRealtimeSessionParams).
-        // Shape matches GetProviderVoiceSettings (`{ voice: '…' }`).
-        const targetVoice = GetProviderVoiceSettings(targetConfig, modelResolution.driverClass ?? null)?.voice as string | undefined;
-        const overrideVoice = runtimeVoice ?? (targetVoice?.trim() || undefined);
-        if (overrideVoice) {
-            sessionParams.Config = { ...(sessionParams.Config ?? {}), voice: overrideVoice };
-        }
-
-        return await modelResolution.model.StartSession(sessionParams);
+    /**
+     * Adapts {@link ExecuteAgentParams} → the core {@link PrepareClientSessionInput} for a server-bridged
+     * session. The CO-AGENT is the executed agent; the TARGET agent + the per-session model/voice override
+     * ride `params.data` (the same conduit the native dev picker uses, funneled into the one
+     * `ConfigOverridesJson` cascade slot via {@link BuildRealtimeOverridesJson}). Tools are left empty — a
+     * bridge host injects its OWN UX tools (none for LiveKit audio today); identity/precedence/invoke-target
+     * come from the core. `AgentSessionID` is unused by prep (it drives observability, a future bridge step).
+     *
+     * @param params The bridge execution parameters.
+     * @returns The core prep input.
+     */
+    private buildBridgePrepInput(params: ExecuteAgentParams): PrepareClientSessionInput {
+        const modelID = (params.data?.realtimeModelID as string | undefined)?.trim() || undefined;
+        const voice = (params.data?.realtimeVoice as string | undefined)?.trim() || undefined;
+        const targetID = (params.data?.targetAgentID as string | undefined)?.trim() || '';
+        return {
+            CoAgent: params.agent,
+            TargetAgentID: targetID,
+            AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
+            PreferredModelID: modelID,
+            ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
+            ConversationMessages: params.conversationMessages,
+            UserID: params.contextUser?.ID,
+        };
     }
 
     /**
@@ -1933,17 +1965,11 @@ export class BaseAgent {
         effectiveConfig?: RealtimeCoAgentConfig,
         driverClass?: string
     ): Promise<RealtimeSessionParams> {
-        const framing =
-            `You are the real-time voice for the agent "${params.agent.Name}". Hold a natural, ` +
-            `low-latency conversation with the user. When actual work is required, call the ` +
-            `'invoke-target-agent' tool and narrate progress while it runs — do not attempt to do ` +
-            `the work yourself. ONE EXCEPTION: besides 'invoke-target-agent' you may have been given ` +
-            `interactive-surface tools (for example 'browser_*' to drive a LIVE web browser the user ` +
-            `can watch, or 'Whiteboard_*' to draw on a shared board). Those surfaces are operated by ` +
-            `YOU, directly — when the user asks to use one (e.g. "open/show a browser", "go to a ` +
-            `site", "add to the whiteboard"), call the matching tool yourself immediately and narrate ` +
-            `what you're doing. NEVER route an interactive-surface request through 'invoke-target-agent', ` +
-            `and never claim you lack a session — calling the tool is all that's needed.`;
+        // Identity framing comes from the ONE shared producer so the agent speaks first-person AS the
+        // TARGET (Sage / Marketing Agent / …), identical to every other realtime host — not as the co-agent.
+        // See BuildRealtimeAgentFraming + plans/realtime/realtime-core-host-convergence.md.
+        const targetAgent = this.resolveRealtimeTargetAgent(params);
+        const framing = BuildRealtimeAgentFraming(targetAgent?.Name ?? 'the configured target agent');
 
         const basePrompt = config.systemPrompt?.TemplateText ? config.systemPrompt.TemplateText : '';
         // Effective-config voice persona (realtime.voice.default) → short "Voice & manner" section.
@@ -2111,20 +2137,6 @@ export class BaseAgent {
             return null;
         }
         return AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, targetID)) ?? null;
-    }
-
-    /**
-     * Resolves the TARGET agent's effective realtime config — layer 2 of the voice/model precedence cascade
-     * ({@link StartBridgeRealtimeSession}). This is how a voiced agent (Sage, Marketing Agent, …) carries
-     * its OWN voice/model that the shared co-agent then speaks with. Returns `null` when there's no target
-     * or the target carries no realtime config.
-     *
-     * @param params The session parameters (target id rides `params.data.targetAgentID`).
-     * @returns The target's effective {@link RealtimeCoAgentConfig}, or `null`.
-     */
-    private resolveTargetRealtimeConfig(params: ExecuteAgentParams): RealtimeCoAgentConfig | null {
-        const targetAgent = this.resolveRealtimeTargetAgent(params);
-        return targetAgent ? this.resolveRealtimeEffectiveConfig(targetAgent) : null;
     }
 
     /**
