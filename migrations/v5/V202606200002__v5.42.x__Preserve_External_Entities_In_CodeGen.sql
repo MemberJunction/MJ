@@ -3,9 +3,14 @@
 -- External-data-source entities (Entity.ExternalDataSourceID set) have no physical table or view
 -- in the MJ database — their data is proxied live from a remote system. CodeGen's manage-metadata
 -- pass would otherwise treat them as orphaned and prune them on every run:
---   1. checkAndRemoveMetadataForDeletedTables would delete the whole entity (handled in code:
---      the deletion loop now skips entities whose ExternalDataSourceID is set — the analogue of
---      the existing VirtualEntity exclusion in getEntitiesWithMissingBaseTablesFilter()).
+--   1. checkAndRemoveMetadataForDeletedTables would delete the whole entity. That pass reads
+--      vwEntitiesWithMissingBaseTables (entities whose BaseTable is absent from the SQL catalog —
+--      always true for external entities, whose data is remote). A code-level guard skips rows
+--      whose ExternalDataSourceID is set, BUT that view is a `SELECT e.*` over vwEntities and its
+--      cached column list predated ExternalDataSourceID, so the column was invisible to the guard
+--      and external entities were pruned anyway. This migration recreates the view (re-expanding *)
+--      AND excludes external entities at the SQL level — the analogue of the VirtualEntity handling
+--      — so they never appear in the missing-base-tables set regardless of the code guard.
 --   2. spDeleteUnneededEntityFields would delete ALL of their EntityField rows, because those
 --      columns never appear in the SQL catalog (vwSQLColumnsAndEntityFields). This migration
 --      excludes external-data-source entities from that proc — the analogue of its existing
@@ -116,4 +121,29 @@ SELECT * FROM #DeletedFields
 DROP TABLE #ef_spDeleteUnneededEntityFields
 DROP TABLE #actual_spDeleteUnneededEntityFields
 DROP TABLE #DeletedFields
+GO
+
+-- ── Preserve external entities from ENTITY-level pruning ──────────────────────────────────────
+-- Recreate vwEntitiesWithMissingBaseTables so its `SELECT e.*` re-expands to include the
+-- ExternalDataSourceID column added in V202606200001 (a `*` view caches its column list at
+-- creation, so the column was previously invisible to checkAndRemoveMetadataForDeletedTables'
+-- code guard, and external entities were pruned on every codegen run). Also exclude external
+-- entities directly in the WHERE — the SQL-level analogue of the VirtualEntity exclusion — so
+-- they never appear in the missing-base-tables set at all.
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwEntitiesWithMissingBaseTables]
+GO
+CREATE VIEW [${flyway:defaultSchema}].[vwEntitiesWithMissingBaseTables]
+AS
+SELECT
+    e.*
+FROM
+    [${flyway:defaultSchema}].vwEntities e
+LEFT JOIN
+    INFORMATION_SCHEMA.TABLES t
+ON
+    e.SchemaName = t.TABLE_SCHEMA AND
+    e.BaseTable = t.TABLE_NAME
+WHERE
+    t.TABLE_NAME IS NULL AND
+    e.ExternalDataSourceID IS NULL
 GO

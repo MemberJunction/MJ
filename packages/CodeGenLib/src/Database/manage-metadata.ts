@@ -1399,6 +1399,12 @@ export class ManageMetadataBase {
          logError('   Cannot sync external entity fields: no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources (and the relevant driver) are loaded in the CodeGen process.');
          return {success: false, anyUpdates: false};
       }
+      // Refresh the in-memory metadata cache so the external entities are present for EntityByName()
+      // inside manageSingleExternalEntity / manageSingleVirtualEntityField. External entities are
+      // often created/seeded after the CodeGen process loaded metadata at startup; without this
+      // refresh, EntityByName() returns null and field sync is SILENTLY skipped — the same gotcha
+      // already handled for config-created virtual entities above.
+      await new Metadata().Refresh();
       for (const ee of externalEntities) {
          const {success, updatedEntity} = await this.manageSingleExternalEntity(pool, ee, router, currentUser);
          anyUpdates = anyUpdates || updatedEntity;
@@ -3131,6 +3137,7 @@ export class ManageMetadataBase {
                                  ${this.qs(mj_core_schema(), 'vwEntities')}
                               WHERE
                                  VirtualEntity = ${this.boolLit(false)} AND
+                                 ExternalDataSourceID IS NULL AND -- external entities have no physical base table to add __mj_ system columns to (data is remote)
                                  TrackRecordChanges = ${this.boolLit(true)} AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
          const entitiesResult = await this.runQuery(pool, sqlEntities);
