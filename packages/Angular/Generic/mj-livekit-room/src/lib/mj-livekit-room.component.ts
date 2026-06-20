@@ -62,113 +62,129 @@ export interface AgentInRoom {
       </div>
     } @else if (serverUrl && token) {
       <div class="mj-lk-room-wrap">
-      <mj-livekit-room
-        [ServerUrl]="serverUrl"
-        [Token]="token"
-        [DisplayName]="resolvedDisplayName"
-        [AutoConnect]="true"
-        [StartWithMicrophone]="StartWithMicrophone"
-        [StartWithCamera]="StartWithCamera"
-        [Layout]="Layout"
-        [Title]="Title"
-        [ShowHeader]="ShowHeader"
-        [ShowControlBar]="ShowControlBar"
-        [ShowChat]="ShowChat"
-        [ShowParticipantsPanel]="ShowParticipantsPanel"
-        [EnableMicrophoneControl]="EnableMicrophoneControl"
-        [EnableCameraControl]="EnableCameraControl"
-        [EnableScreenShareControl]="EnableScreenShareControl"
-        [EnableDeviceSettings]="EnableDeviceSettings"
-        [EnableLeaveControl]="EnableLeaveControl"
-        [EnablePinning]="EnablePinning"
-        [EnableLayoutSwitcher]="EnableLayoutSwitcher"
-        [EnableNoiseFilter]="EnableNoiseFilter"
-        [EnableBackgroundEffects]="EnableBackgroundEffects"
-        [ShowAgentState]="ShowAgentState"
-        [ShowWhiteboard]="ShowWhiteboard"
-        [ShowPreJoin]="ShowPreJoin"
-        [ShowRecordingControl]="EnableRecording"
-        [IsRecording]="isRecording"
-        [E2EEPassphrase]="E2EEPassphrase"
-        [E2EEWorker]="E2EEWorker"
-        [AgentAvatarUrl]="AgentAvatarUrl"
-        (Connected)="Connected.emit($event)"
-        (Disconnected)="Disconnected.emit($event)"
-        (ParticipantJoined)="ParticipantJoined.emit($event)"
-        (ParticipantLeft)="ParticipantLeft.emit($event)"
-        (DataReceived)="DataReceived.emit($event)"
-        (ToggleRecording)="onToggleRecording()"
-        (ErrorOccurred)="ErrorOccurred.emit($event)"
-      ></mj-livekit-room>
+        <mj-livekit-room
+          [ServerUrl]="serverUrl"
+          [Token]="token"
+          [DisplayName]="resolvedDisplayName"
+          [AutoConnect]="true"
+          [StartWithMicrophone]="StartWithMicrophone"
+          [StartWithCamera]="StartWithCamera"
+          [Layout]="Layout"
+          [Title]="Title"
+          [ShowHeader]="ShowHeader"
+          [ShowControlBar]="ShowControlBar"
+          [ShowChat]="ShowChat"
+          [ShowParticipantsPanel]="ShowParticipantsPanel"
+          [EnableMicrophoneControl]="EnableMicrophoneControl"
+          [EnableCameraControl]="EnableCameraControl"
+          [EnableScreenShareControl]="EnableScreenShareControl"
+          [EnableDeviceSettings]="EnableDeviceSettings"
+          [EnableLeaveControl]="EnableLeaveControl"
+          [EnablePinning]="EnablePinning"
+          [EnableLayoutSwitcher]="EnableLayoutSwitcher"
+          [EnableNoiseFilter]="EnableNoiseFilter"
+          [EnableBackgroundEffects]="EnableBackgroundEffects"
+          [ShowAgentState]="ShowAgentState"
+          [ShowWhiteboard]="ShowWhiteboard"
+          [ShowPreJoin]="ShowPreJoin"
+          [ShowRecordingControl]="EnableRecording"
+          [IsRecording]="isRecording"
+          [E2EEPassphrase]="E2EEPassphrase"
+          [E2EEWorker]="E2EEWorker"
+          [AgentAvatarUrl]="AgentAvatarUrl"
+          (Connected)="Connected.emit($event)"
+          (Disconnected)="Disconnected.emit($event)"
+          (ParticipantJoined)="ParticipantJoined.emit($event)"
+          (ParticipantLeft)="ParticipantLeft.emit($event)"
+          (DataReceived)="DataReceived.emit($event)"
+          (ToggleRecording)="onToggleRecording()"
+          (ErrorOccurred)="ErrorOccurred.emit($event)"
+        ></mj-livekit-room>
 
-      @if (Mode === 'agent' && EnableAgentManagement && resolvedRoomName) {
-        <div class="mj-lk-agents">
-          @if (showAgentsPanel) {
-            <div class="mj-lk-agents__panel">
-              <div class="mj-lk-agents__head">In this room</div>
-              @for (a of agentsInRoom; track a.SessionBridgeID) {
-                <div class="mj-lk-agents__row">
-                  <span class="mj-lk-agents__name"><i class="fa-solid fa-robot"></i> {{ a.Name }}</span>
-                  <button type="button" class="mj-lk-agents__remove" title="Remove agent"
-                    [disabled]="a.Removing" (click)="RemoveAgent(a)">
-                    <i class="fa-solid" [class.fa-xmark]="!a.Removing" [class.fa-spinner]="a.Removing" [class.fa-spin]="a.Removing"></i>
-                  </button>
-                </div>
-              }
-              @if (availableToAdd.length) {
-                <div class="mj-lk-agents__add">
-                  <select class="mj-input mj-lk-agents__select" (change)="onAddTargetChange($event)">
-                    <option value="">Add an agent…</option>
-                    @for (a of availableToAdd; track a.ID) {
-                      <option [value]="a.ID" [selected]="UUIDsEqual(a.ID, addTargetId)">{{ a.Name }}</option>
-                    }
-                  </select>
-                  <button type="button" class="mj-lk-agents__addbtn" [disabled]="!addTargetId || addingAgent" (click)="AddAgent()">
-                    <i class="fa-solid" [class.fa-plus]="!addingAgent" [class.fa-spinner]="addingAgent" [class.fa-spin]="addingAgent"></i>
-                  </button>
-                </div>
-                @if (CanPickModelVoice && AvailableModels.length) {
-                  <div class="mj-lk-agents__overrides">
-                    <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="onAddModelChange($event)" title="Model (dev override)">
-                      <option value="">Default model</option>
-                      @for (m of AvailableModels; track m.ModelID) {
-                        <option [value]="m.ModelID" [selected]="UUIDsEqual(m.ModelID, addModelId)">{{ m.ModelName }}</option>
-                      }
-                    </select>
-                    @if (addVoices.length) {
-                      <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="onAddVoiceChange($event)" title="Voice (dev override)">
-                        <option value="">Default voice</option>
-                        @for (v of addVoices; track v.ID) {
-                          <option [value]="v.ID" [selected]="v.ID === addVoice">{{ v.Name }}</option>
-                        }
-                      </select>
-                    }
+        @if (Mode === 'agent' && EnableAgentManagement && resolvedRoomName) {
+          <div class="mj-lk-agents">
+            @if (showAgentsPanel) {
+              <div class="mj-lk-agents__panel">
+                <div class="mj-lk-agents__head">In this room</div>
+                @for (a of agentsInRoom; track a.SessionBridgeID) {
+                  <div class="mj-lk-agents__row">
+                    <span class="mj-lk-agents__name"><i class="fa-solid fa-robot"></i> {{ a.Name }}</span>
+                    <button
+                      type="button"
+                      class="mj-lk-agents__remove"
+                      title="Remove agent"
+                      aria-label="Remove agent"
+                      [disabled]="a.Removing"
+                      (click)="RemoveAgent(a)"
+                    >
+                      <i class="fa-solid" [class.fa-xmark]="!a.Removing" [class.fa-spinner]="a.Removing" [class.fa-spin]="a.Removing" aria-hidden="true"></i>
+                    </button>
                   </div>
                 }
-              }
-              @if (addError) {
-                <div class="mj-lk-agents__error">{{ addError }}</div>
+                @if (availableToAdd.length) {
+                  <div class="mj-lk-agents__add">
+                    <select class="mj-input mj-lk-agents__select" (change)="onAddTargetChange($event)">
+                      <option value="">Add an agent…</option>
+                      @for (a of availableToAdd; track a.ID) {
+                        <option [value]="a.ID" [selected]="UUIDsEqual(a.ID, addTargetId)">{{ a.Name }}</option>
+                      }
+                    </select>
+                    <button
+                      type="button"
+                      class="mj-lk-agents__addbtn"
+                      title="Add selected agent"
+                      aria-label="Add selected agent"
+                      [disabled]="!addTargetId || addingAgent"
+                      (click)="AddAgent()"
+                    >
+                      <i class="fa-solid" [class.fa-plus]="!addingAgent" [class.fa-spinner]="addingAgent" [class.fa-spin]="addingAgent" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                  @if (CanPickModelVoice && AvailableModels.length) {
+                    <div class="mj-lk-agents__overrides">
+                      <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="onAddModelChange($event)" title="Model (dev override)">
+                        <option value="">Default model</option>
+                        @for (m of AvailableModels; track m.ModelID) {
+                          <option [value]="m.ModelID" [selected]="UUIDsEqual(m.ModelID, addModelId)">{{ m.ModelName }}</option>
+                        }
+                      </select>
+                      @if (addVoices.length) {
+                        <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="onAddVoiceChange($event)" title="Voice (dev override)">
+                          <option value="">Default voice</option>
+                          @for (v of addVoices; track v.ID) {
+                            <option [value]="v.ID" [selected]="v.ID === addVoice">{{ v.Name }}</option>
+                          }
+                        </select>
+                      }
+                    </div>
+                  }
+                }
+                @if (addError) {
+                  <div class="mj-lk-agents__error">{{ addError }}</div>
+                }
+              </div>
+            }
+            <div class="mj-lk-agents__pills">
+              <button type="button" class="mj-lk-agents__toggle" (click)="showAgentsPanel = !showAgentsPanel">
+                <i class="fa-solid fa-robot"></i> Agents ({{ agentsInRoom.length }})
+              </button>
+              @if (EnableInvite) {
+                <button type="button" class="mj-lk-agents__toggle" title="Copy a link to invite someone to this room" (click)="CopyInvite()">
+                  <i class="fa-solid" [class.fa-link]="!inviteCopied" [class.fa-check]="inviteCopied"></i>
+                  {{ inviteCopied ? 'Link copied' : 'Copy link' }}
+                </button>
+                <button
+                  type="button"
+                  class="mj-lk-agents__toggle"
+                  title="Invite people from this workspace"
+                  (click)="InvitePeopleRequested.emit(resolvedRoomName)"
+                >
+                  <i class="fa-solid fa-user-plus"></i> Invite people
+                </button>
               }
             </div>
-          }
-          <div class="mj-lk-agents__pills">
-            <button type="button" class="mj-lk-agents__toggle" (click)="showAgentsPanel = !showAgentsPanel">
-              <i class="fa-solid fa-robot"></i> Agents ({{ agentsInRoom.length }})
-            </button>
-            @if (EnableInvite) {
-              <button type="button" class="mj-lk-agents__toggle" title="Copy a link to invite someone to this room"
-                (click)="CopyInvite()">
-                <i class="fa-solid" [class.fa-link]="!inviteCopied" [class.fa-check]="inviteCopied"></i>
-                {{ inviteCopied ? 'Link copied' : 'Copy link' }}
-              </button>
-              <button type="button" class="mj-lk-agents__toggle" title="Invite people from this workspace"
-                (click)="InvitePeopleRequested.emit(resolvedRoomName)">
-                <i class="fa-solid fa-user-plus"></i> Invite people
-              </button>
-            }
           </div>
-        </div>
-      }
+        }
       </div>
     }
   `,
@@ -588,9 +604,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.token = result.ClientToken;
     this.resolvedRoomName = result.RoomName;
     // Track the agent we just brought in as the first entry in the in-room roster.
-    this.agentsInRoom = [
-      { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.TargetAgentID, Name: this.AgentName ?? 'Agent' },
-    ];
+    this.agentsInRoom = [{ SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.TargetAgentID, Name: this.AgentName ?? 'Agent' }];
     this.SessionStarted.emit({ SessionBridgeID: result.SessionBridgeID, RoomName: result.RoomName });
   }
 
@@ -627,10 +641,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
         this.addError = result.ErrorMessage ?? 'Failed to add the agent.';
         return;
       }
-      this.agentsInRoom = [
-        ...this.agentsInRoom,
-        { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.addTargetId, Name: target?.Name ?? 'Agent' },
-      ];
+      this.agentsInRoom = [...this.agentsInRoom, { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.addTargetId, Name: target?.Name ?? 'Agent' }];
       this.addTargetId = null;
       this.addModelId = null;
       this.addVoice = null;
