@@ -5230,9 +5230,16 @@ export class AIPromptRunner {
     },
   ): Promise<void> {
     try {
+      // Ensure the initial 'Running' INSERT (and its BaseEntity.finalizeSave post-save reload, which does
+      // init() + SetMany(insertedRow)) has fully landed BEFORE we mutate the final state. Mutating while the
+      // INSERT is still in flight lets the reload revert these values, and the chained UPDATE then persists
+      // the stale 'Running' row (the same race fixed in the agent-run-step queue and action-execution-log).
+      // The model call between create and update almost always covers this; a fast-failing prompt could not.
+      await this._promptRunSaveChains.get(promptRun);
+
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
-      
+
       // Determine what to save as the result
       let resultToSave: string;
       const rawResult = modelResult.data?.choices?.[0]?.message?.content || '';
