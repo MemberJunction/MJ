@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/lib/components/slots/**/*.ts",
+    "src/lib/components/shared/user-picker.component.ts",
+    "src/lib/components/shared/user-picker.component.dom.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

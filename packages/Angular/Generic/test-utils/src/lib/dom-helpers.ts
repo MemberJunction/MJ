@@ -1,3 +1,4 @@
+import { EventEmitter } from '@angular/core';
 import { ComponentFixture } from '@angular/core/testing';
 
 /**
@@ -60,7 +61,7 @@ export function typeInto(fixture: ComponentFixture<unknown>, selector: string, v
  * click(fixture, 'button');
  * expect(clicks).toEqual([true]);
  */
-export function capture<T>(emitter: { subscribe(next: (value: T) => void): void }): T[] {
+export function capture<T>(emitter: EventEmitter<T>): T[] {
   const values: T[] = [];
   emitter.subscribe((value) => values.push(value));
   return values;
