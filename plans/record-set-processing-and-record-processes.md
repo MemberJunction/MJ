@@ -734,4 +734,44 @@ Phased, each phase a gateable PR that builds the affected package(s) and runs th
 
 ---
 
-*End of plan. Build proceeds per the phased PR breakdown after review.*
+## 18. Implementation status — this PR (as of 2026-06-19)
+
+The substrate + transport + execution/control **backbone is built, building clean, and unit-tested**.
+The remainder below is the **interactive-session worklist for the rest of this same PR** — each item is
+gated on the DB / CodeGen / running app / Angular, so it wants attended work with the stack live, not a
+blind autonomous pass.
+
+### 18.1 Done — committed
+- **P0** — migration for the 7 entities (Record Process + generic run tables + Remote Operation tables), run + CodeGen'd.
+- **RO-0** — `BaseRemotableOperation<TInput,TOutput>`; `IRemoteOperationProvider` (separate from `IMetadataProvider`) + `RouteOperation` in `ProviderBase`; in-process dispatch (`dispatchRemoteOperationInProcess`, `GetRegistration`-first to avoid ClassFactory base-fallback); `DatabaseProviderBase` + `GraphQLDataProvider` `InternalRouteOperation`.
+- **RO-1** — `ExecuteRemoteOperationResolver` (`@memberjunction/server`) with the §16.5 auth chain; **POC `RecordProcess.GetRunStatus`** typed round-trip.
+- **P1** — `@memberjunction/record-set-processor-base` (sources: Array/View/List/Filter/Keyset, `sourceUtil`) + `…/engine` (hardened `RecordSetProcessor` loop, `RateLimiter`, `GenericProcessRunTracker`, `NoOpTracker`, `FunctionRecordProcessor`).
+- **P2** — Entity Action **`GetRecordList`** View/List fan-out. *(RunSingleFilter intentionally deferred — see 18.3.)*
+- **Mapping util** — `@memberjunction/global` `valueMapping` (`getValueAtPath`/`resolveMappingRef`/`resolveValueMapping`), genericized from the Flow Agent input-mapping pattern.
+- **Executors** — `ActionRecordProcessor` + `AgentRecordProcessor` (engine), mapping each record into action params / agent data via the resolver.
+
+### 18.2 Done — staged, not yet committed (this push)
+- **Facade core (execution half of P5)** — `writeBack.ts` (`applyOutputMapping`: fields + child record, single-PK, via the shared resolver) · `WriteBackProcessor` decorator · **`RecordProcessExecutor`** (Scope→source, Work→processor, OutputMapping→write-back wrap, runs `RecordSetProcessor`) · control ops **`RecordProcess.RunNow` / `PauseRun` / `ResumeRun` / `CancelRun`**.
+- **P3** — `RecordProcessScheduledJobDriver` (sibling to Action/Agent drivers; heartbeat-per-batch lease renewal). *Driver code only — job-type metadata seed pending (18.3).*
+- **RO-6** — `guides/REMOTE_OPERATIONS_GUIDE.md` + root `CLAUDE.md` "Development Guides" pointer.
+- Tests green: engine 32 · base 11 · global `valueMapping` 15 · Actions/Engine 152 · MJCore RO 15.
+
+### 18.3 Remaining for this PR — the interactive worklist
+Tackle attended, roughly in this order (each ends with its package build + Vitest run):
+
+1. **Metadata seeds + runtime wiring** *(needs DB `mj sync push` + manifest regen)* — seed the **"Run Record Process" scheduled-job type**, the **`recordprocess:execute` API Scope**, and (POC→metadata) the Remote Operation rows; regenerate the MJAPI/MJExplorer supplemental manifests and add a bootstrap import of the engine's `Load…` anchors so the new `@RegisterClass` ops + driver are runtime-resolvable. *Smallest unblocker — makes the built backbone actually runnable.*
+2. **P5 reconciliation** *(needs DB to validate invariants)* — `MJRecordProcessEntityServer`: on `Save()`, own/reconcile the Entity Action (on-change) + Scheduled Job (recurrence) trigger rows; on-change self-trigger + concurrency guard. Follow `guides/BASE_ENTITY_SERVER_PATTERNS.md`.
+3. **RO-2** *(needs CodeGen + seed)* — `RemoteOperationEngineBase` (`@RegisterForStartup` cache); CodeGen emitter for the concrete typed base (`Manual`/`Default` modes); **extract a shared emitter/approval base from the Action codegen** (watch Action-codegen regression); convert the POC to a metadata row.
+4. **RO-3** *(needs GraphQL subscription wiring)* — the generic typed `RemoteOpProgress` channel; long-running **detached** (handle + auto-notify) and **attached** (await + `onProgress`) modes. `RunNow` currently awaits to completion (flagged inline) — this lifts it.
+5. **P4 (inference half)** *(needs EntityDocument render + `AIPromptRunner`)* — `InferAndWriteBackProcessor` (render record→text → JSON-schema prompt → reuse the *already-built* `applyOutputMapping`) + the thin **"Infer And Write Back" Action** wrapper.
+6. **P6 — Explorer UX** *(Angular)* — RecordProcess form (Scope/Work/Mapping/Recurrence/On-change panels) + a generic Process **Run viewer** (header + per-record details, live progress).
+7. **RO-4 / RO-5** — AI-from-`Description` body generation (`advancedGeneration` gate + `CodeApprovalStatus`); showcase-refactor one existing custom system (rec. clustering) onto Remote Operations with before/after line counts.
+8. **P7 / P8 — substrate refactors** *(regression-risky — own commit each)* — migrate the five existing set operations (classifier, geocoding, vector-sync, …) onto the substrate.
+
+### 18.4 Deferred / flag at PR end
+- **Entity Action `RunSingleFilter`** — genuinely ambiguous: plan says `SafeExpressionEvaluator` but `MJActionFilter.Code` is generated TS, not an expression field. Needs a schema/mechanism decision before building.
+- **Flow Agent refactor** — adopt the now-generic `@memberjunction/global` `valueMapping` resolver in the Flow Agent (Option B follow-up; the resolver was extracted from it).
+
+---
+
+*End of plan. §18 is the live remainder for this PR's interactive session.*

@@ -7,9 +7,13 @@
 
 export * from './RateLimiter';
 export * from './RecordSetProcessor';
+export * from './RecordProcessExecutor';
+export * from './writeBack';
 export * from './processors/FunctionRecordProcessor';
 export * from './processors/ActionRecordProcessor';
 export * from './processors/AgentRecordProcessor';
+export * from './processors/WriteBackProcessor';
 export * from './trackers/NoOpTracker';
 export * from './trackers/GenericProcessRunTracker';
 export * from './operations/RecordProcessGetRunStatusOperation';
+export * from './operations/RecordProcessControlOperations';
