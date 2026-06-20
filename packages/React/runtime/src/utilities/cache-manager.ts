@@ -258,7 +258,7 @@ export class CacheManager<T = unknown> {
    * Start the cleanup timer
    */
   private startCleanupTimer(): void {
-    this.cleanupTimer = window.setInterval(() => {
+    this.cleanupTimer = setInterval(() => {
       this.cleanup();
     }, this.options.cleanupInterval);
   }
@@ -268,7 +268,7 @@ export class CacheManager<T = unknown> {
    */
   private stopCleanupTimer(): void {
     if (this.cleanupTimer) {
-      window.clearInterval(this.cleanupTimer);
+      clearInterval(this.cleanupTimer);
       this.cleanupTimer = undefined;
     }
   }
