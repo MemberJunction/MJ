@@ -105,6 +105,20 @@ interface ModelSelectionResult {
   modelEffortLevel?: number;
   selectionInfo?: AIModelSelectionInfo;
   allCandidates: ModelVendorCandidate[];
+  /**
+   * Per-candidate credential-availability already computed by
+   * {@link AIPromptRunner.selectModelWithAPIKeyTracked} during selection, keyed by
+   * `driverClass:modelID:vendorId` (the same key {@link AIPromptRunner.executeModelWithFailover}
+   * uses for its own cache). Lets failover REUSE selection's credential probes instead of
+   * recomputing `hasCredentialsAvailable` for the prefix it already walked.
+   *
+   * Because selection short-circuits once the highest-priority credentialed candidate is found
+   * (see the DECISION note in {@link AIPromptRunner.selectModelWithAPIKeyTracked}), this map
+   * only contains the candidates UP TO AND INCLUDING the selected one. The not-evaluated tail is
+   * intentionally absent so failover still probes it lazily — only if it ever has to walk down
+   * there during an actual failover.
+   */
+  credentialAvailability?: Map<string, boolean>;
 }
 
 /**
@@ -884,6 +898,9 @@ export class AIPromptRunner {
     let vendorSupportsEffortLevel = existingSelection?.vendorSupportsEffortLevel;
     let modelEffortLevel = existingSelection?.modelEffortLevel;
     let allCandidates: ModelVendorCandidate[] = existingSelection?.allCandidates ?? [];
+    // Credential probes already done during selection — reused by failover so it doesn't
+    // recompute hasCredentialsAvailable for the prefix it walks before the selected candidate.
+    let credentialAvailability = existingSelection?.credentialAvailability;
 
     if (!selectedModel) {
       // Determine which prompt to use for model selection
@@ -901,6 +918,7 @@ export class AIPromptRunner {
       modelEffortLevel = modelResult.modelEffortLevel;
       modelSelectionInfo = modelResult.selectionInfo;
       allCandidates = modelResult.allCandidates || [];
+      credentialAvailability = modelResult.credentialAvailability;
       if (!selectedModel) {
         throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
       }
@@ -930,7 +948,8 @@ export class AIPromptRunner {
       vendorDriverClass,
       vendorApiName,
       vendorSupportsEffortLevel,
-      modelEffortLevel // Pass model-specific effort level
+      modelEffortLevel, // Pass model-specific effort level
+      credentialAvailability // Reuse credential probes from selection
     );
 
     // Calculate execution metrics
@@ -1675,7 +1694,7 @@ export class AIPromptRunner {
       // }
 
       // Select the first candidate with available credentials and track all attempts
-      const { selected, consideredModels } = await this.selectModelWithAPIKeyTracked(candidates, prompt.ID, params);
+      const { selected, consideredModels, credentialAvailability } = await this.selectModelWithAPIKeyTracked(candidates, prompt.ID, params);
 
       // Merge considered models into our tracking
       modelsConsidered.push(...consideredModels);
@@ -1689,6 +1708,7 @@ export class AIPromptRunner {
           vendorSupportsEffortLevel: undefined,
           modelEffortLevel: undefined,
           allCandidates: candidates,
+          credentialAvailability,
           selectionInfo: this.createSelectionInfo({
             aiConfiguration: configuration,
             modelsConsidered,
@@ -1735,6 +1755,7 @@ export class AIPromptRunner {
         vendorSupportsEffortLevel: selected.supportsEffortLevel,
         modelEffortLevel: selected.effortLevel, // Pass through model-specific effort level
         allCandidates: candidates,
+        credentialAvailability,
         selectionInfo: this.createSelectionInfo({
           aiConfiguration: configuration,
           modelsConsidered,
@@ -2516,6 +2537,13 @@ export class AIPromptRunner {
       available: boolean;
       unavailableReason?: string;
     }>;
+    /**
+     * The credential-availability cache built while probing candidates, keyed by
+     * `driverClass:modelId:vendorId`. Returned so callers (failover) can reuse these probes
+     * rather than recomputing them. Contains only the candidates actually evaluated — the
+     * short-circuited tail is absent (see the DECISION note below).
+     */
+    credentialAvailability: Map<string, boolean>;
   }> {
     // Cache for credential availability checks
     // Key format: "driverClass:modelId:vendorId" to properly cache credential hierarchy
@@ -2622,7 +2650,7 @@ export class AIPromptRunner {
       });
     }
 
-    return { selected: selectedCandidate, consideredModels };
+    return { selected: selectedCandidate, consideredModels, credentialAvailability: credentialCache };
   }
 
   /**
@@ -3030,7 +3058,8 @@ export class AIPromptRunner {
     vendorDriverClass?: string,
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
-    modelEffortLevel?: number
+    modelEffortLevel?: number,
+    credentialAvailability?: Map<string, boolean>
   ): Promise<ChatResult> {
     // Get failover configuration (used for errorScope filtering)
     const failoverConfig = this.getFailoverConfiguration(prompt);
@@ -3050,7 +3079,17 @@ export class AIPromptRunner {
 
     // Cache credential availability per driver:model:vendor for the duration of this failover
     // scan so we don't repeat env-var / binding lookups while walking the candidate list.
-    const failoverCredentialCache = new Map<string, boolean>();
+    //
+    // PERF: seed it with the probes model SELECTION already performed (same key format). Selection
+    // walks the priority list until it finds the first credentialed candidate, so this map holds
+    // the prefix it rejected (known false) PLUS the selected candidate (known true) — which is
+    // exactly the segment failover re-walks on the happy path. Reusing those results means the
+    // common case (and any caller looping failover) does ZERO redundant hasCredentialsAvailable
+    // calls. The not-evaluated tail is intentionally absent, so failover still lazily probes it
+    // only if a real failure forces it to walk down there.
+    const failoverCredentialCache = credentialAvailability
+      ? new Map<string, boolean>(credentialAvailability)
+      : new Map<string, boolean>();
     const candidateHasCredentials = (c: ModelVendorCandidate): boolean => {
       const key = `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
       let has = failoverCredentialCache.get(key);
@@ -3979,7 +4018,8 @@ export class AIPromptRunner {
     vendorDriverClass?: string,
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
-    modelEffortLevel?: number
+    modelEffortLevel?: number,
+    credentialAvailability?: Map<string, boolean>
   ): Promise<{
     modelResult: ChatResult;
     parsedResult: { result: unknown; validationResult?: ValidationResult };
@@ -4026,7 +4066,8 @@ export class AIPromptRunner {
           vendorDriverClass,
           vendorApiName,
           vendorSupportsEffortLevel,
-          modelEffortLevel
+          modelEffortLevel,
+          credentialAvailability // Reuse credential probes from selection
         );
 
         // Check for fatal errors - don't attempt validation/retry on these

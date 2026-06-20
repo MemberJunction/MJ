@@ -419,3 +419,164 @@ describe('executeModelWithFailover — skips uncredentialed candidates', () => {
     expect(result.errorMessage).toContain('No API credentials configured');
   });
 });
+
+// ===========================================================================
+// selectModel must EXPOSE the credential probes it performed (credentialAvailability)
+// so the execution/failover layer can reuse them instead of recomputing
+// hasCredentialsAvailable for candidates selection already walked. The map only
+// covers the probed prefix + the selected candidate — the short-circuited tail is
+// intentionally absent so failover still probes it lazily if it ever walks there.
+// ===========================================================================
+describe('selectModel — exposes credentialAvailability for reuse', () => {
+  type FullSelect = SelectModelResult & {
+    credentialAvailability?: Map<string, boolean>;
+    allCandidates: Array<{ model: { ID: string }; driverClass: string; vendorId?: string }>;
+  };
+  const keyOf = (c: { driverClass: string; model: { ID: string }; vendorId?: string }) =>
+    `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
+
+  async function selectModelFull(prompt: Record<string, unknown>, opts: Parameters<typeof selectModel>[2] = {}): Promise<FullSelect> {
+    return (await selectModel(runner, prompt, opts)) as unknown as FullSelect;
+  }
+
+  it('returns a Map covering only the probed prefix + selected candidate (tail short-circuited)', async () => {
+    const r = await selectModelFull(makePrompt({ SelectionStrategy: 'Default' }));
+    const map = r.credentialAvailability;
+    expect(map).toBeInstanceOf(Map);
+    // Top candidate (Gemini Flash) is credentialed by default → selected on the first probe,
+    // so the map holds exactly that one entry and the rest of the list is short-circuited.
+    expect(map!.size).toBe(1);
+    expect(map!.size).toBeLessThan(r.allCandidates.length);
+    const selected = r.allCandidates.find(c => c.model.ID === r.model!.ID && c.driverClass === r.vendorDriverClass)!;
+    expect(map!.get(keyOf(selected))).toBe(true);
+  });
+
+  it('forceFullModelEvaluation probes AND caches every distinct candidate', async () => {
+    const r = await selectModelFull(makePrompt({ SelectionStrategy: 'Default' }), { forceFullModelEvaluation: true });
+    const map = r.credentialAvailability!;
+    const distinctKeys = new Set(r.allCandidates.map(keyOf));
+    expect(map.size).toBe(distinctKeys.size);
+  });
+
+  it('marks the uncredentialed prefix false and the selected candidate true', async () => {
+    // Drop Gemini drivers → the top Gemini candidate(s) are uncredentialed; selection walks
+    // down to the first credentialed candidate, probing (and caching) the rejected prefix.
+    loadCatalog(catalog, DEFAULT_CONFIGURED_DRIVERS.filter(d => d !== 'GeminiLLM' && d !== 'VertexLLM'));
+    const r = await selectModelFull(makePrompt({ SelectionStrategy: 'Default' }));
+    const map = r.credentialAvailability!;
+    const selected = r.allCandidates.find(c => c.model.ID === r.model!.ID && c.driverClass === r.vendorDriverClass)!;
+    expect(map.get(keyOf(selected))).toBe(true);
+    // At least one probed-but-rejected (false) entry exists for the dropped-Gemini prefix.
+    expect([...map.values()].some(v => v === false)).toBe(true);
+  });
+});
+
+// ===========================================================================
+// executeModelWithFailover must REUSE the credential probes selection already did
+// (threaded in via the credentialAvailability map) rather than recomputing
+// hasCredentialsAvailable on the happy path. This is the perf re-optimization:
+// selection and failover walk the same prefix, so failover should not re-probe it.
+// The not-evaluated tail (absent from the seeded map) is still probed lazily only
+// if a real failure forces failover to walk down to it.
+// ===========================================================================
+describe('executeModelWithFailover — reuses selection credential probes', () => {
+  type ExecArgs = unknown[];
+  type ReuseRunner = {
+    executeModel: (...args: ExecArgs) => Promise<{ success: boolean; errorInfo?: unknown }>;
+    executeModelWithFailover: (...args: ExecArgs) => Promise<{ success: boolean; errorMessage?: string }>;
+    hasCredentialsAvailable: (...args: ExecArgs) => boolean;
+  };
+
+  function candidate(modelId: string, driverClass: string, vendorId: string, vendorName: string, priority: number) {
+    return {
+      model: { ID: modelId, Name: `${vendorName} ${modelId}` },
+      vendorId, vendorName, driverClass, apiName: 'api-name',
+      supportsEffortLevel: false, effortLevel: undefined,
+      isPreferredVendor: false, priority, source: 'prompt-model',
+    };
+  }
+  const keyOf = (c: ReturnType<typeof candidate>) => `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
+  const DRIVER_CLASS_ARG = 8;
+
+  async function runFailoverWithCreds(
+    runner: AIPromptRunner,
+    candidates: ReturnType<typeof candidate>[],
+    configuredDrivers: string[],
+    credentialAvailability?: Map<string, boolean>,
+  ) {
+    loadCatalog(catalog, configuredDrivers);
+    const prompt = makePrompt({ FailoverStrategy: 'NextBestModel' });
+    const first = candidates[0];
+    return (runner as unknown as ReuseRunner).executeModelWithFailover(
+      first.model, 'rendered prompt', prompt, { verbose: false }, first.vendorId,
+      undefined, 'system', undefined, candidates, undefined,
+      first.driverClass, first.apiName, false, undefined,
+      credentialAvailability,
+    );
+  }
+
+  it('does NOT re-probe credentials for a candidate selection already evaluated (happy path)', async () => {
+    const runner = new AIPromptRunner();
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable');
+    const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel').mockResolvedValue({ success: true });
+
+    const c = candidate('m-gem', 'GeminiLLM', 'v-google', 'Google', 5251);
+    const cred = new Map<string, boolean>([[keyOf(c), true]]);
+    const result = await runFailoverWithCreds(runner, [c], ['GeminiLLM'], cred);
+
+    expect(credSpy).not.toHaveBeenCalled(); // seeded map answered it
+    expect(execSpy).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
+  });
+
+  it('treats the seeded map as authoritative — a seeded `true` runs even with NO drivers configured', async () => {
+    const runner = new AIPromptRunner();
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable');
+    const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel').mockResolvedValue({ success: true });
+
+    const c = candidate('m-gem', 'GeminiLLM', 'v-google', 'Google', 5251);
+    const cred = new Map<string, boolean>([[keyOf(c), true]]);
+    const result = await runFailoverWithCreds(runner, [c], [], cred); // nothing configured
+
+    expect(credSpy).not.toHaveBeenCalled();
+    expect(execSpy).toHaveBeenCalledTimes(1);
+    expect(execSpy.mock.calls[0][DRIVER_CLASS_ARG]).toBe('GeminiLLM');
+    expect(result.success).toBe(true);
+  });
+
+  it('reuses a seeded `false` to skip the prefix without re-probing, landing on the seeded credentialed candidate', async () => {
+    const runner = new AIPromptRunner();
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable');
+    const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel').mockResolvedValue({ success: true });
+
+    const top = candidate('m-oss', 'FireworksLLM', 'v-fireworks', 'Fireworks.ai', 5300);
+    const sel = candidate('m-gem', 'GeminiLLM', 'v-google', 'Google', 5251);
+    const cred = new Map<string, boolean>([[keyOf(top), false], [keyOf(sel), true]]);
+    const result = await runFailoverWithCreds(runner, [top, sel], [], cred);
+
+    expect(credSpy).not.toHaveBeenCalled(); // both answered from the seeded map
+    expect(execSpy).toHaveBeenCalledTimes(1);
+    expect(execSpy.mock.calls[0][DRIVER_CLASS_ARG]).toBe('GeminiLLM');
+    expect(result.success).toBe(true);
+  });
+
+  it('lazily probes ONLY the not-evaluated tail (absent from the seeded map) during a real failover', async () => {
+    const runner = new AIPromptRunner();
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable'); // calls through to real impl
+    // First (seeded) candidate fails over-ably; the tail (lazily probed) then succeeds.
+    const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel')
+      .mockResolvedValueOnce({ success: false, errorInfo: { canFailover: true, errorType: 'ServiceError', severity: 'NonFatal' } })
+      .mockResolvedValueOnce({ success: true });
+
+    const sel = candidate('m-gem', 'GeminiLLM', 'v-google', 'Google', 5251);   // seeded true
+    const tail = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 5100); // absent from map
+    const cred = new Map<string, boolean>([[keyOf(sel), true]]); // tail intentionally omitted
+    const result = await runFailoverWithCreds(runner, [sel, tail], ['AnthropicLLM'], cred);
+
+    // Selection covered `sel`, so the only credential probe is the lazy one for the tail.
+    expect(credSpy).toHaveBeenCalledTimes(1);
+    expect(credSpy.mock.calls[0][0]).toBe('AnthropicLLM'); // driverClass arg of hasCredentialsAvailable
+    expect(execSpy).toHaveBeenCalledTimes(2);
+    expect(result.success).toBe(true);
+  });
+});
