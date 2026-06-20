@@ -21,28 +21,19 @@ The auto-leave + explicit-stop paths finalize the co-agent run via the finalize-
 - The impl, `RealtimeClientSessionService.FinalizeCoAgentRunsBySession`, finds the session's TOP-LEVEL co-agent run (`Status='Running' AND ParentRunID IS NULL`) and finalizes it + its prompt run + step via the existing idempotent `FinalizeCoAgentRun`. `MJ: AI Agent Runs` is transactional (no engine caches it), so a narrow ids-only `RunView` is correct — only reached on the orphan path; the same-process teardown uses in-memory ids (no query).
 - Bound at startup in `RealtimeBridgeResolver` (`FinalizeBridgeCoAgentRuns`, next to the session-factory binding). **Idempotent**: a clean same-process teardown already marked the run `Completed`, so the finalizer finds nothing.
 
-## 2. TTL / heartbeat reaper *(robustness backstop)*
+## 2. TTL / heartbeat reaper — ✅ SHIPPED (2026-06-20)
 
-`evaluateRoomOccupancy` only covers **roster-capable** providers (LiveKit/Zoom/Teams with diarization) and assumes `OnParticipantChange` fires reliably. Add a periodic host-scheduled sweep (sibling to `CalendarWatcher.Sweep`) that stops bridges which are `Connected` but stale:
+`AIBridgeEngine.SweepStaleSessions(now?)` reaps live, same-process sessions that are **idle** past `SESSION_IDLE_TTL_MS` (10 min, no inbound transcript) or over `SESSION_MAX_DURATION_MS` (4 h) — the same-process complement to `ReconcileOrphans` (prior-boot). Each session stamps `ConnectedAtMs`/`LastActivityMs` (in-memory, **no new column**); the reap routes through `StopBridgeSession` using the session's own user/provider, so the co-agent run finalizes (§1). Self-scheduled via `StartStaleSessionSweep()` (called from `HandleStartup`; idempotent; `unref`'d so it never holds the process open) / `StopStaleSessionSweep()`. Covers rosterless transports, a missed leave event, and "the bot joined but nobody came."
 
-- no roster change / no media / `LastActiveAt` older than a TTL, **and**
-- (for rosterless transports — telephony) a max-session-duration cap.
+## 3. Floor control — one-speaker-at-a-time — ✅ SHIPPED (2026-06-20)
 
-Covers: rosterless providers, a missed leave event, and "the bot joined a scheduled meeting but nobody ever came." Reuses the §1 finalizer.
+Addressed-gating stops the *spiral*; floor control stops two **addressed** agents talking over each other. Wired `MultiAgentRoomCoordinator` into the engine's `Speak` path: every bridged session `RegisterRoomParticipant`s on connect (keyed on `RoomKey` = external connection id) and `Unregister`s on teardown — so a 1-member room's floor is always free (no-op) and a 2+-member room takes turns. In meeting mode the `Speak` decision does `TakeFloor` first → denied ⇒ stay silent; granted ⇒ `RequestSpokenUpdate` + `armFloorHold` (a `FLOOR_MAX_HOLD_MS`=20s safety release). The floor releases on the agent's own final assistant transcript, the safety timer, or teardown. Facilitator override comes free from the coordinator.
 
-## 3. Floor control — one-speaker-at-a-time *(functional, from the turn-taking MVP)*
+## 4. Gemini meeting mode — ✅ SHIPPED (2026-06-20), subclass-only · ⚠️ needs live validation
 
-Addressed-gating stops the *spiral*; floor control stops two **addressed** agents talking over each other. The `MultiAgentRoomCoordinator` already has `CanTakeFloor` / `TakeFloor` / `ReleaseFloor` — wire them into the engine's `Speak` path:
+Done **entirely in `geminiRealtime.ts`** — zero core changes (the audit confirmed `BaseRealtimeModel` carries no vendor logic; the neutral `Config.disableAutoResponse` flows generically). `buildConnectConfig` now **strips** the neutral flag (it was being `Object.assign`'d raw before — a latent bug) and, when set, configures `realtimeInputConfig.automaticActivityDetection.disabled = true`. Because Gemini Live has **no** clean "detect-but-don't-respond" lever like OpenAI's `create_response=false`, the session drives turns manually: `SendInput` lazily opens an `activityStart` window, and `RequestSpokenUpdate` commits it with `activityEnd` (the bridge is the sole trigger). 1:1 calls are byte-for-byte unchanged.
 
-- Before `RequestSpokenUpdate`: `CanTakeFloor` → if denied, stay silent (or queue).
-- On speak: `TakeFloor`; release on the agent's final assistant transcript (or a short post-speech timeout).
-- Needs the room roster registered with the coordinator (`RegisterRoomParticipant` on join / `Unregister` on leave) — keyed on the room (external connection id), set by the LiveKit coordinator.
-
-## 4. Gemini meeting mode *(functional)*
-
-Only OpenAI's auto-response is actually disabled (`turn_detection.create_response=false`). Gemini currently relies on the prompt alone. Wire Gemini Live's native control: `realtimeInputConfig.automaticActivityDetection.disabled = true` + send manual `activityStart`/`activityEnd` (or drive `RequestSpokenUpdate` as the sole trigger). Honor the same neutral `Config.disableAutoResponse` flag the bridge already sets.
-
-### CRITICAL: Do this in the Gemini sub-class, do not change core logic in rest of sysmte, make sure the wiring in how subclases off BaseRealtimeModel work allow this flexibilty and report back if issues here. No hardcoding of routes/paths specific to various vendors/models in our core code, that must be generic
+> **Report-back (the §4 ask):** the seam fully supports this with no core changes — but Gemini's manual-activity path is meatier than OpenAI's one flag, and the exact multi-speaker turn-boundary behavior (one accumulating window vs. per-speaker) **needs live validation against the current Gemini Live API** before we trust it in a busy room. Unit-tested at the send-shape level; not yet live-tested.
 
 ## 5. Bridge transcript persistence — ✅ SHIPPED as a UNIFIED ROOM TRANSCRIPT (2026-06-20)
 
@@ -63,12 +54,19 @@ Only OpenAI's auto-response is actually disabled (`turn_detection.create_respons
 ### Original question (answered above):
 So each agent would have a copy of this if we had multiple agents in the same chat. I think that is ok, we have archiving to get rid of large chunks of data we don't need. but d we have the concept of a transcript that is unified for the meeting room itself?
 
-## 6. First-agent retroactive re-gating *(polish)*
+## 6. First-agent retroactive re-gating — ✅ SHIPPED (2026-06-20), capability-gated
 
-When a room becomes multi-agent, the **first** agent stays 1:1 (auto-response on, answers freely) — it isn't re-gated. To make the *whole* room meeting-mode, the coordinator must reconfigure the already-running first agent: a live `session.update` disabling auto-response + swapping its matcher to `RegexAddressedMatcher`. Needs a "reconfigure turn mode" method on the live session/bridge.
+When a room becomes multi-agent, the agents **already in it** are now re-gated to meeting mode (auto-response off + addressed-only) instead of staying 1:1 — so the whole room takes turns. Built on a new **capability-introspection** surface (the realtime-session analogue of `IBridgeProviderFeatures`), so the container never blind-calls an unsupported method:
 
-### NOTE: 
-Yes and the little thing on top saying who's speaking doesn't show other agents speaking there even though their box in the conf room does "light up" in terms of the blue outoline around their rectangle
+- **Core**: `RealtimeSessionCapabilities { CanReconfigureTurnMode }` + optional `IRealtimeSession.Capabilities` getter + optional `Reconfigure(params)`. Both optional → any of the 6 existing drivers that doesn't declare them is treated conservatively (not capable). Additive, non-breaking.
+- **OpenAI** declares `CanReconfigureTurnMode: true` and implements `Reconfigure` via a partial `session.update` (its config is runtime-mutable). **Gemini** declares `false` (activity detection is fixed at connect) and **omits** the method.
+- **Engine** `ReconfigureSessionToMeeting(bridgeId, matcher)` is **capability-gated**: capable → push `Reconfigure({DisableAutoResponse:true})`, flip `DisableAutoResponse`, rebuild the turn policy with the addressed matcher; incapable → leave it conversational, **no dead call**. Idempotent.
+- **Coordinator** re-gates each existing roster agent when a new one joins a multi-agent room.
+
+Net: OpenAI rooms become fully turn-taking the moment a 2nd agent joins; a Gemini agent that started 1:1 stays conversational (honestly, because its provider can't re-gate mid-socket) until that capability lands — at which point it's a one-line flag flip.
+
+### ✅ Speaking-indicator sub-bug — SHIPPED (2026-06-20)
+The "who's speaking" spotlight/header didn't show *other* agents even though their tile ring lit up. Root cause: the tile ring uses per-participant `IsSpeaking` (works for server-published agents) while `selectSpotlight`/`selectSplitSpeaker` used only the native `ActiveSpeakerIdentities` list (which omits them). Fixed in `livekit-room-logic.ts` by adding an `IsSpeaking` fallback to both selectors — the native list still wins when populated, the flag catches the agent it misses.
 
 ## 7. Smarter turn-taking gate (L1 / L2)
 
@@ -82,10 +80,11 @@ From the turn-taking doc: L0 (name-addressing) ships today. L1 = a lightweight "
 
 ---
 
-## Suggested sequencing
+## Status / remaining
 
-1. **§1 (finalize on all teardown paths)** — small, pure correctness; pairs naturally with the auto-leave just shipped.
-2. **§3 (floor control)** — the next real multi-agent functional gain.
-3. **§4 (Gemini meeting mode)** — so the Gemini↔GPT cross-talk gets the same gating discipline.
-4. **§5 (transcript persistence)** — makes everything debuggable.
-5. **§2 (TTL reaper)**, then **§6–§8** as polish / future.
+**Shipped:** §1 (finalize on all teardown paths) · §2 (TTL/idle sweep) · §3 (floor control) · §4 (Gemini meeting mode — *pending live validation*) · §5 (unified room transcript) · §6 (first-agent re-gating + the speaking-indicator sub-bug) + the realtime-session **capability surface**.
+
+**Remaining:**
+1. **§4 live validation** — confirm the Gemini manual-activity turn boundaries against the live API in a busy room.
+2. **§5(b) per-speaker diarization** — so the room transcript attributes each line to its speaker (model transcript has no speaker label; needs audio-frame speaker correlation).
+3. **§7 smarter gate** (L1 contextual → L2 model-native), **§8 Phase 3** (per-host UX tools, video), configurable grace window, the `RealtimeClientSessionService` rename.

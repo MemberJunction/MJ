@@ -55,6 +55,24 @@ const SESSION_BRIDGE_PARTICIPANT_ENTITY = 'MJ: AI Agent Session Bridge Participa
 const ROOM_EMPTY_GRACE_MS = 15000;
 
 /**
+ * Max time a meeting agent may hold the speaking floor before the engine force-releases it — a safety
+ * valve so a missed end-of-speech signal can't wedge a multi-agent room's floor closed. The normal release
+ * (the agent's own final transcript) fires well within this. See {@link AIBridgeEngine.releaseRoomFloor}.
+ */
+const FLOOR_MAX_HOLD_MS = 20000;
+
+/**
+ * Stale-session sweep thresholds (the SAME-process complement to {@link AIBridgeEngine.ReconcileOrphans},
+ * which handles prior-boot orphans). A live session is reaped when it has been **idle** (no inbound
+ * transcript) for longer than the idle TTL, OR has simply run past the absolute max duration — covering a
+ * missed leave event, a rosterless transport with no occupancy signal, and "the bot joined a scheduled
+ * meeting but nobody ever came." The reap routes through the normal stop, so the co-agent run finalizes.
+ */
+const SESSION_IDLE_TTL_MS = 10 * 60 * 1000; // 10 min with no transcript activity
+const SESSION_MAX_DURATION_MS = 4 * 60 * 60 * 1000; // 4 h absolute cap
+const STALE_SWEEP_INTERVAL_MS = 60 * 1000; // sweep cadence when self-scheduled
+
+/**
  * Finalizes the co-agent observability run(s) for an agent session when a bridge is torn down WITHOUT a
  * live in-memory session — a prior-boot orphan or a cross-host reap, where the agent layer's `Close()`-wrapped
  * finalizer can't run, so the co-agent `AIAgentRun` would otherwise dangle in `Running` forever. The agent
@@ -302,6 +320,26 @@ export interface ActiveBridgeSession {
      */
     IsTranscriptScribe: boolean;
 
+    /**
+     * Whether this session currently holds the room's speaking floor (multi-agent floor control). Set when
+     * the engine claims the floor before triggering speech in meeting mode, cleared when the agent's own
+     * final transcript lands (it finished) or on teardown. Single-agent rooms always hold trivially.
+     */
+    HoldsFloor: boolean;
+
+    /**
+     * Safety timer that force-releases a held floor after {@link FLOOR_MAX_HOLD_MS} in case the agent's
+     * final transcript never arrives — so one agent can't wedge the room's floor closed. Cleared on a
+     * normal release.
+     */
+    FloorReleaseTimer?: ReturnType<typeof setTimeout>;
+
+    /** Epoch-ms when this session connected — drives the max-session-duration cap of the stale sweep. */
+    ConnectedAtMs: number;
+
+    /** Epoch-ms of the last inbound activity (transcript) — drives the idle cap of the stale sweep. */
+    LastActivityMs: number;
+
     /** The provider row backing this session. */
     Provider: MJAIBridgeProviderEntity;
 
@@ -373,6 +411,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     /** Registered by the agent layer; finalizes dangling co-agent runs on orphan/cross-host teardown. */
     private runFinalizer?: BridgeSessionRunFinalizer;
 
+    /** Interval handle for the self-scheduled stale-session sweep (started via {@link StartStaleSessionSweep}). */
+    private staleSweepTimer?: ReturnType<typeof setInterval>;
+
     /** Registered by the app layer; persists the unified per-room transcript from the elected scribe. */
     private transcriptSink?: BridgeTranscriptSink;
 
@@ -427,6 +468,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      */
     public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         await this.Config(false, contextUser, provider);
+        // Begin reaping stale live sessions (idle / over-duration) — the same-process backstop to the
+        // occupancy auto-leave + the prior-boot orphan reconcile. Idempotent.
+        this.StartStaleSessionSweep();
     }
 
     /**
@@ -644,6 +688,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 RoomKey: result.ExternalConnectionId,
                 BotParticipantID: result.BotParticipantId,
                 IsTranscriptScribe: false,
+                HoldsFloor: false,
+                ConnectedAtMs: Date.now(),
+                LastActivityMs: Date.now(),
                 Provider: params.Provider,
                 ContextUser: params.ContextUser,
                 MetadataProvider: params.MetadataProvider,
@@ -652,6 +699,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             };
 
             this.electTranscriptScribe(active);
+            // Join the room's floor-control roster (keyed on the shared room). For a single-agent room this
+            // is a 1-member room where the floor is always free — so floor control is a no-op until a 2nd
+            // agent joins, at which point they take turns. Unregistered on teardown.
+            if (active.RoomKey) {
+                this.roomCoordinator.RegisterRoomParticipant(active.RoomKey, active.AgentSessionID);
+            }
             this.wireTransportSeam(active);
             this.wireParticipantTracking(active);
             this.wireTurnTaking(active);
@@ -995,11 +1048,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      */
     private wireTurnTaking(active: ActiveBridgeSession): void {
         active.RealtimeSession.OnTranscript((t: RealtimeTranscript) => {
+            active.LastActivityMs = Date.now(); // any transcript = the session is alive (drives the idle sweep)
             if (t.IsFinal) {
                 // Only log FINAL transcripts — partials fire per-word and flood the log.
                 LogStatus(`[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`);
                 // Persist the unified room transcript (scribe only — emits both roles).
                 this.emitTranscriptLine(active, t);
+                // The agent finished its own turn → release the room floor so the next addressed agent can
+                // speak (multi-agent floor control). No-op when it doesn't hold the floor.
+                if (t.Role === 'assistant' && active.HoldsFloor) {
+                    this.releaseRoomFloor(active);
+                }
             }
             if (t.Role !== 'user' || !t.IsFinal) {
                 return; // act only on a completed human turn
@@ -1028,8 +1087,18 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 if (active.DisableAutoResponse) {
                     // MEETING MODE: the model's blind auto-response is OFF (the agent layer opened the
                     // session with `disableAutoResponse`), so the bridge is the SOLE speech trigger. The
-                    // turn policy already gated this to an ADDRESSED turn, so issue exactly one response.
-                    // This is what lets several agents share a room without all answering every utterance.
+                    // turn policy already gated this to an ADDRESSED turn. Before speaking, CLAIM THE FLOOR
+                    // so two addressed agents don't talk over each other — single-agent rooms grant it
+                    // trivially; a multi-agent room grants one speaker at a time (facilitator may override).
+                    // Denied → stay silent and let the holder finish.
+                    if (active.RoomKey) {
+                        const floor = this.roomCoordinator.TakeFloor(active.RoomKey, active.AgentSessionID);
+                        if (!floor.Granted) {
+                            LogStatus(`[AIBridgeEngine] floor denied (${floor.Reason}) for bridge ${active.SessionBridgeID} — staying silent`);
+                            break;
+                        }
+                        this.armFloorHold(active);
+                    }
                     active.RealtimeSession.RequestSpokenUpdate?.('');
                 } else {
                     // 1:1 CALL: the model has server-VAD auto-response on (same as the browser client-direct
@@ -1063,6 +1132,72 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             ...(params.TurnTuning ?? {}),
         };
         return new TurnTakingPolicy(config);
+    }
+
+    /**
+     * Retroactively switches an already-running session into **meeting mode** (auto-response off +
+     * addressed-only) — used when a room becomes multi-agent and the first (1:1) agent must stop
+     * auto-responding. **Capability-gated**: only sessions whose provider reports
+     * {@link RealtimeSessionCapabilities.CanReconfigureTurnMode} can change turn mode on a live socket;
+     * others (e.g. Gemini, fixed at connect) are left in their start mode — no dead-method call. Idempotent.
+     *
+     * @param sessionBridgeID The bridge to re-gate.
+     * @param matcher The addressed-matcher (the agent's names) the re-gated session should speak on.
+     * @returns `true` if now in meeting mode (or already was); `false` if the session is unknown or the
+     *   provider can't reconfigure mid-session.
+     */
+    public ReconfigureSessionToMeeting(sessionBridgeID: string, matcher: IAddressedMatcher): boolean {
+        const active = this.activeSessions.get(sessionBridgeID.toLowerCase());
+        if (!active) {
+            return false;
+        }
+        if (active.DisableAutoResponse) {
+            return true; // already meeting mode — nothing to do
+        }
+        if (active.RealtimeSession.Capabilities?.CanReconfigureTurnMode !== true) {
+            LogStatus(
+                `[AIBridgeEngine] bridge ${sessionBridgeID} cannot reconfigure turn mode mid-session ` +
+                    `(provider config fixed at connect) — leaving it conversational.`,
+            );
+            return false;
+        }
+        active.RealtimeSession.Reconfigure?.({ DisableAutoResponse: true });
+        active.DisableAutoResponse = true;
+        active.TurnPolicy = new TurnTakingPolicy({ Mode: 'Passive', Matcher: matcher });
+        LogStatus(`[AIBridgeEngine] re-gated bridge ${sessionBridgeID} to meeting mode (room became multi-agent)`);
+        return true;
+    }
+
+    /**
+     * Marks the session as holding the room floor and arms the safety release timer (so a missed
+     * end-of-speech can't wedge the floor closed). Called right after a granted {@link TakeFloor}.
+     *
+     * @param active The session that just claimed the floor.
+     */
+    private armFloorHold(active: ActiveBridgeSession): void {
+        active.HoldsFloor = true;
+        if (active.FloorReleaseTimer) {
+            clearTimeout(active.FloorReleaseTimer);
+        }
+        active.FloorReleaseTimer = setTimeout(() => this.releaseRoomFloor(active), FLOOR_MAX_HOLD_MS);
+    }
+
+    /**
+     * Releases the room floor this session holds (if any) and clears the safety timer. Idempotent and safe
+     * for non-room / single-agent sessions (a no-op when the session never held the floor). Called on the
+     * agent's own final transcript, the safety timeout, and teardown.
+     *
+     * @param active The session to release the floor for.
+     */
+    private releaseRoomFloor(active: ActiveBridgeSession): void {
+        if (active.FloorReleaseTimer) {
+            clearTimeout(active.FloorReleaseTimer);
+            active.FloorReleaseTimer = undefined;
+        }
+        if (active.RoomKey && active.HoldsFloor) {
+            this.roomCoordinator.ReleaseFloor(active.RoomKey, active.AgentSessionID);
+        }
+        active.HoldsFloor = false;
     }
 
     /**
@@ -1228,8 +1363,70 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     // ──────────────────────────────────────────────────────────────────────────────
-    // Janitor — orphan reconciliation (scaffold; scheduling is a host-provided hook).
+    // Janitor — orphan reconciliation + stale-session sweep.
     // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Reaps **live, same-process** sessions that have gone stale — idle past {@link SESSION_IDLE_TTL_MS}
+     * (no inbound transcript) or running past {@link SESSION_MAX_DURATION_MS}. This is the same-process
+     * complement to {@link ReconcileOrphans} (prior-boot orphans): it covers a missed leave event, a
+     * rosterless transport with no occupancy signal, and "the bot joined but nobody came." Each reap routes
+     * through {@link StopBridgeSession} using the session's own user/provider, so the co-agent run finalizes.
+     *
+     * Tolerant: a single failed stop is logged and the sweep continues. Safe to call on any cadence.
+     *
+     * @param nowMs Current epoch-ms (injectable for tests; defaults to `Date.now()`).
+     * @returns The number of stale sessions reaped.
+     */
+    public async SweepStaleSessions(nowMs: number = Date.now()): Promise<number> {
+        const stale = [...this.activeSessions.values()].filter(
+            (s) => nowMs - s.LastActivityMs > SESSION_IDLE_TTL_MS || nowMs - s.ConnectedAtMs > SESSION_MAX_DURATION_MS,
+        );
+        let reaped = 0;
+        for (const active of stale) {
+            const idle = nowMs - active.LastActivityMs > SESSION_IDLE_TTL_MS;
+            LogStatus(
+                `[AIBridgeEngine] Stale sweep reaping bridge ${active.SessionBridgeID} ` +
+                    `(${idle ? 'idle' : 'max-duration'}) — auto-leaving.`,
+            );
+            try {
+                await this.StopBridgeSession(active.SessionBridgeID, 'HostEnded', active.ContextUser, active.MetadataProvider);
+                reaped++;
+            } catch (err) {
+                LogError(
+                    `[AIBridgeEngine] stale sweep stop failed for ${active.SessionBridgeID}: ` +
+                        `${err instanceof Error ? err.message : String(err)}`,
+                );
+            }
+        }
+        return reaped;
+    }
+
+    /**
+     * Starts the self-scheduled stale-session sweep ({@link SweepStaleSessions} every
+     * {@link STALE_SWEEP_INTERVAL_MS}). Idempotent — calling again is a no-op while a sweep is scheduled.
+     * The host opts in once at startup; {@link StopStaleSessionSweep} cancels it (e.g. for tests/shutdown).
+     */
+    public StartStaleSessionSweep(intervalMs: number = STALE_SWEEP_INTERVAL_MS): void {
+        if (this.staleSweepTimer) {
+            return;
+        }
+        this.staleSweepTimer = setInterval(() => {
+            void this.SweepStaleSessions().catch((err) =>
+                LogError(`[AIBridgeEngine] stale sweep tick failed: ${err instanceof Error ? err.message : String(err)}`),
+            );
+        }, intervalMs);
+        // Don't keep the process alive solely for the sweep (Node-only; guarded for non-Node hosts).
+        (this.staleSweepTimer as { unref?: () => void })?.unref?.();
+    }
+
+    /** Cancels the self-scheduled stale-session sweep, if running. */
+    public StopStaleSessionSweep(): void {
+        if (this.staleSweepTimer) {
+            clearInterval(this.staleSweepTimer);
+            this.staleSweepTimer = undefined;
+        }
+    }
 
     /**
      * Force-closes `Connected`/`Connecting` bridges left behind by a **previous boot of this host**
@@ -1456,6 +1653,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // Hand the transcript scribe role to another live session in the room (if this was the scribe), so a
         // multi-agent room keeps recording after the first agent leaves. Done before the active map removal.
         this.releaseTranscriptScribe(active);
+        // Drop out of the floor-control roster: release the floor if held (so a remaining agent isn't
+        // blocked) and unregister so the room's membership count stays accurate.
+        this.releaseRoomFloor(active);
+        if (active.RoomKey) {
+            this.roomCoordinator.UnregisterRoomParticipant(active.RoomKey, active.AgentSessionID);
+        }
         // Close the channel plane first so its post-close hooks see the session still mid-teardown,
         // then release the driver's media plane.
         await this.closeChannelPlane(active);

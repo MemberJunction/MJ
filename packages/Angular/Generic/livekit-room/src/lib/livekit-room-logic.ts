@@ -37,7 +37,12 @@ export function selectSpotlight(state: LiveKitRoomState, pinnedIdentity: string 
     }
   }
   const speakingId = state.ActiveSpeakerIdentities.find((id) => id !== state.Local?.Identity);
-  const bySpeaking = speakingId ? state.Remote.find((p) => p.Identity === speakingId) : undefined;
+  // Prefer the native dominant-speaker list, but fall back to the per-participant IsSpeaking flag — the same
+  // signal the tile ring uses. ActiveSpeakersChanged (server-computed) can omit a server-published AGENT,
+  // so without this fallback a speaking agent never becomes the spotlight even though its tile lights up.
+  const bySpeaking =
+    (speakingId ? state.Remote.find((p) => p.Identity === speakingId) : undefined) ??
+    state.Remote.find((p) => p.IsSpeaking);
   const byAgent = state.Remote.find((p) => p.Role === 'agent');
   return bySpeaking ?? byAgent ?? state.Remote[0] ?? state.Local ?? null;
 }
@@ -57,7 +62,11 @@ export function selectSplitSpeaker(state: LiveKitRoomState): LiveKitParticipantV
   const screenId = selectScreenShare(selectAllParticipants(state))?.Identity;
   const speakingId = state.ActiveSpeakerIdentities.find((id) => id !== screenId);
   const all = selectAllParticipants(state);
-  const bySpeaking = speakingId ? all.find((p) => p.Identity === speakingId) : undefined;
+  // Same fallback as the spotlight: the per-participant IsSpeaking flag catches a server-published agent
+  // the native active-speaker list misses. Exclude the screen-sharer so the speaker pane stays the talker.
+  const bySpeaking =
+    (speakingId ? all.find((p) => p.Identity === speakingId) : undefined) ??
+    all.find((p) => p.IsSpeaking && p.Identity !== screenId);
   const byAgent = state.Remote.find((p) => p.Role === 'agent');
   return bySpeaking ?? byAgent ?? state.Remote.find((p) => p.Identity !== screenId) ?? state.Local ?? null;
 }

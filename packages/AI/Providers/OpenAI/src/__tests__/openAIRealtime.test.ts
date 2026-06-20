@@ -230,6 +230,21 @@ describe('OpenAIRealtime', () => {
             }
         });
 
+        it('capability: reports CanReconfigureTurnMode and Reconfigure pushes a live session.update disabling auto-response', async () => {
+            const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+            expect(session.Capabilities?.CanReconfigureTurnMode).toBe(true);
+
+            session.Reconfigure?.({ DisableAutoResponse: true });
+            const updates = driver.Fake.Sent.filter((e) => e.type === 'session.update');
+            const last = updates[updates.length - 1];
+            if (last?.type === 'session.update' && last.session.type === 'realtime') {
+                const td = (last.session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+                expect(td).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+            } else {
+                throw new Error('expected realtime session.update from Reconfigure');
+            }
+        });
+
         it('maps Tools into OpenAI function tools at start', async () => {
             await driver.StartSession({
                 Model: 'gpt-realtime',

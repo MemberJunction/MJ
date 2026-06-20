@@ -12,6 +12,8 @@ import {
     type FunctionResponse,
     type Content,
     type Blob as GeminiBlob,
+    type ActivityStart,
+    type ActivityEnd,
 } from '@google/genai';
 
 // MemberJunction AI core contract
@@ -27,6 +29,7 @@ import {
     type RealtimeSessionError,
     type JSONObject,
     type JSONValue,
+    type RealtimeSessionCapabilities,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -63,7 +66,14 @@ export interface GeminiLiveSession {
      * native-audio models treat {@link sendClientContent} as history seeding only and will
      * NOT generate from it mid-call, while realtime text triggers immediately.
      */
-    sendRealtimeInput(params: { audio?: GeminiBlob; media?: GeminiBlob; text?: string }): void;
+    sendRealtimeInput(params: {
+        audio?: GeminiBlob;
+        media?: GeminiBlob;
+        text?: string;
+        /** Manual activity markers — used in MEETING mode (automatic activity detection disabled). */
+        activityStart?: ActivityStart;
+        activityEnd?: ActivityEnd;
+    }): void;
     /** Appends client content (used to seed initial context) to the conversation. */
     sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void;
     /** Replies to a server tool call with one or more function responses. */
@@ -123,6 +133,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
         const session = new GeminiRealtimeSession();
         session.SetConnectTimeTools(params.Tools ?? []);
         const config = this.buildConnectConfig(params);
+        // Meeting mode (auto activity detection disabled) → the session must drive turns manually.
+        session.SetMeetingMode(config.realtimeInputConfig?.automaticActivityDetection?.disabled === true);
         const live = await this.connectLiveSession({
             Model: params.Model,
             Config: config,
@@ -309,7 +321,22 @@ export class GeminiRealtime extends BaseRealtimeModel {
         // The open config bag is merged last so per-conversation overrides (voice, language,
         // turn-taking) win over the defaults above. Cast through the shared JSON object shape.
         if (params.Config) {
-            Object.assign(config, params.Config as Partial<LiveConnectConfig>);
+            // Pull the host-NEUTRAL meeting flag out before merging — it is NOT a Gemini config key, and a
+            // blind copy would send it raw. In meeting mode we disable Gemini's AUTOMATIC activity detection
+            // so the model stops auto-responding to room audio; the bridge then drives turns manually
+            // (activityStart on input, activityEnd on RequestSpokenUpdate). This is the Gemini-native
+            // equivalent of OpenAI's `turn_detection.create_response=false`, kept entirely in this subclass.
+            // See plans/realtime/multi-agent-meeting-turn-taking.md §4.
+            const cfg = { ...(params.Config as Record<string, unknown>) };
+            const disableAutoResponse = cfg.disableAutoResponse === true;
+            delete cfg.disableAutoResponse;
+            Object.assign(config, cfg as Partial<LiveConnectConfig>);
+            if (disableAutoResponse) {
+                config.realtimeInputConfig = {
+                    ...(config.realtimeInputConfig ?? {}),
+                    automaticActivityDetection: { ...(config.realtimeInputConfig?.automaticActivityDetection ?? {}), disabled: true },
+                };
+            }
         }
         return config;
     }
@@ -391,10 +418,36 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private queuedSends: Array<() => void> = [];
 
     /**
+     * Whether this session runs in MEETING mode — Gemini's automatic activity detection is disabled, so the
+     * model never auto-responds to room audio. The bridge drives turns manually instead: an `activityStart`
+     * opens an input window on the first audio, and `RequestSpokenUpdate` sends `activityEnd` to commit the
+     * turn and elicit one response. Set by the driver from the connect config. See the §4 design.
+     */
+    private meetingMode = false;
+
+    /** In meeting mode, whether a manual input window (`activityStart` … pending `activityEnd`) is open. */
+    private manualActivityOpen = false;
+
+    /**
      * Binds the underlying live session. Called by the driver once `connect` resolves.
      */
     public AttachLiveSession(live: GeminiLiveSession): void {
         this.live = live;
+    }
+
+    /** Sets MEETING mode (manual turn-taking). Called by the driver from the connect config at start. */
+    public SetMeetingMode(on: boolean): void {
+        this.meetingMode = on;
+    }
+
+    /**
+     * @inheritdoc — Gemini Live's activity detection is fixed at **connect** time, so the turn mode can't be
+     * changed on a live socket (it would need a reconnect). Reported `false` so the container leaves a
+     * Gemini agent in its start mode rather than calling an unsupported reconfigure. {@link Reconfigure} is
+     * intentionally omitted.
+     */
+    public get Capabilities(): RealtimeSessionCapabilities {
+        return { CanReconfigureTurnMode: false };
     }
 
     /**
@@ -408,11 +461,19 @@ class GeminiRealtimeSession implements IRealtimeSession {
 
     /** @inheritdoc */
     public SendInput(chunk: ArrayBuffer): void {
+        const live = this.requireLive();
+        // Meeting mode: automatic activity detection is OFF, so audio is only processed inside an explicit
+        // activity window. Open one lazily on the first audio after the last turn was committed — the window
+        // stays open (accumulating what the agent hears) until RequestSpokenUpdate sends `activityEnd`.
+        if (this.meetingMode && !this.manualActivityOpen) {
+            live.sendRealtimeInput({ activityStart: {} });
+            this.manualActivityOpen = true;
+        }
         const audio: GeminiBlob = {
             data: GeminiRealtimeSession.ArrayBufferToBase64(chunk),
             mimeType: GEMINI_INPUT_AUDIO_MIME_TYPE,
         };
-        this.requireLive().sendRealtimeInput({ audio });
+        live.sendRealtimeInput({ audio });
     }
 
     /**
@@ -587,7 +648,20 @@ class GeminiRealtimeSession implements IRealtimeSession {
     public RequestSpokenUpdate(instructions: string): void {
         this.enqueueOrRun(() => {
             this.responseActive = true;
-            this.requireLive().sendRealtimeInput({ text: instructions });
+            const live = this.requireLive();
+            if (this.meetingMode) {
+                // MEETING mode: the agent has been heard accumulating audio inside the open activity window
+                // (no auto-response). Commit the turn with `activityEnd` to elicit exactly ONE response — the
+                // bridge is the sole trigger. Any instructions ride as a realtime-text nudge first so the
+                // model has the "respond now" framing, then the window is closed (reopened on next audio).
+                if (instructions && instructions.trim().length > 0) {
+                    live.sendRealtimeInput({ text: instructions });
+                }
+                live.sendRealtimeInput({ activityEnd: {} });
+                this.manualActivityOpen = false;
+                return;
+            }
+            live.sendRealtimeInput({ text: instructions });
         });
     }
 

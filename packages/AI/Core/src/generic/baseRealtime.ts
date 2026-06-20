@@ -231,6 +231,26 @@ export interface ClientRealtimeSessionConfig {
 }
 
 /**
+ * Static capability flags of a live {@link IRealtimeSession}, for container introspection (the realtime-
+ * session analogue of `IBridgeProviderFeatures`). Grow this as providers gain runtime abilities — each new
+ * flag defaults to "unsupported" for any driver that hasn't declared it, so the container stays safe.
+ */
+export interface RealtimeSessionCapabilities {
+    /**
+     * Whether the session can change its turn-taking / auto-response mode on a **live** socket (no
+     * reconnect) via {@link IRealtimeSession.Reconfigure}. `true` for providers with a runtime-mutable
+     * session config (OpenAI `session.update`); `false` where it's fixed at connect (Gemini Live).
+     */
+    CanReconfigureTurnMode: boolean;
+}
+
+/** Parameters for {@link IRealtimeSession.Reconfigure} — a live turn-taking change. */
+export interface RealtimeReconfigureParams {
+    /** Switch the model's blind auto-response OFF (meeting mode) or ON (1:1). */
+    DisableAutoResponse?: boolean;
+}
+
+/**
  * A long-lived, full-duplex session handle returned by {@link BaseRealtimeModel.StartSession}.
  *
  * All `On*` methods register a single handler invoked as the corresponding provider events
@@ -384,6 +404,28 @@ export interface IRealtimeSession {
      * @param instructions Instructions for the single spoken update (tone, brevity, content).
      */
     RequestSpokenUpdate?(instructions: string): void;
+
+    /**
+     * **Capability introspection.** A small, static description of what THIS live session can do, so the
+     * container can ask "is it safe to call X?" instead of invoking optional methods that silently no-op (or
+     * can't be supported) on some providers — the same role `IBridgeProviderFeatures` plays for bridges and
+     * {@link BaseRealtimeModel.SupportsClientDirect} plays for minting. Optional: a driver that hasn't
+     * declared its capabilities is treated **conservatively** (everything unsupported). As models gain
+     * abilities, drivers just flip a flag — no container changes.
+     */
+    Capabilities?: RealtimeSessionCapabilities;
+
+    /**
+     * **Optional capability** (gate on {@link RealtimeSessionCapabilities.CanReconfigureTurnMode}) —
+     * reconfigures a **live** session's turn-taking without reconnecting: e.g. switch a 1:1 agent to
+     * meeting mode (auto-response off) when its room becomes multi-agent. Providers whose runtime config is
+     * mutable mid-socket (OpenAI: `session.update`) implement this and report the capability `true`;
+     * providers whose turn config is fixed at connect (Gemini Live's activity detection) report `false` and
+     * omit the method. The container **must** check the capability before calling — never blind-invoke.
+     *
+     * @param params The reconfiguration to apply (e.g. `DisableAutoResponse`).
+     */
+    Reconfigure?(params: RealtimeReconfigureParams): void;
 
     /**
      * Registers a handler for provider-detected interruptions (barge-in).

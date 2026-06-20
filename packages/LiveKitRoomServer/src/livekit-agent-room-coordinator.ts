@@ -21,7 +21,7 @@ import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService } from './livekit-token-service';
 
 /** The subset of {@link AIBridgeEngine} the coordinator drives — an injectable seam for unit testing. */
-export type BridgeOps = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'StopBridgeSession'>;
+export type BridgeOps = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'StopBridgeSession' | 'ReconfigureSessionToMeeting'>;
 
 /** The `DriverClass` the LiveKit bridge registers under (must match the `MJ: AI Bridge Providers` row). */
 export const LIVEKIT_BRIDGE_DRIVER_CLASS = 'LiveKitBridge';
@@ -197,12 +197,13 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     const botToken = await this.tokenService.MintBotToken(params.RoomName, botIdentity, botName);
 
     // Multi-agent MEETING detection: if the room already holds an agent, THIS agent joins as a meeting
-    // participant — auto-response OFF, speaks only when addressed by name. The first agent in a room stays
-    // a normal 1:1 voice (it answers freely; it isn't retroactively re-gated). The names the agent answers
-    // to drive both its addressing matcher (the GATE) and the meeting prompt phrasing.
+    // participant — auto-response OFF, speaks only when addressed by name. When a room becomes multi-agent
+    // the agents ALREADY in it are retroactively re-gated too (capability-permitting — see below). The names
+    // the agent answers to drive both its addressing matcher (the GATE) and the meeting prompt phrasing.
     const roomKey = params.RoomName.trim().toLowerCase();
     const selfNames = [botName, ...(params.AgentAliases ?? [])].map(n => n.trim()).filter(n => n.length > 0);
-    const isMeeting = (this.roomRosters.get(roomKey)?.length ?? 0) > 0;
+    const existingAgents = this.roomRosters.get(roomKey) ?? [];
+    const isMeeting = existingAgents.length > 0;
 
     const session = await this.sessionFactory({
       AgentID: params.AgentID,
@@ -248,6 +249,17 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     });
 
     this.addToRoster(roomKey, { AgentSessionID: params.AgentSessionID, SessionBridgeID: active.SessionBridgeID, Names: selfNames });
+
+    // The room just became (or stayed) multi-agent → retroactively re-gate the agents already in it into
+    // meeting mode so the whole room takes turns, not just the newcomers. Capability-gated in the engine:
+    // a provider that can't reconfigure a live session (e.g. Gemini) is left conversational, no dead call.
+    // Idempotent — agents already in meeting mode are no-ops.
+    if (isMeeting) {
+      for (const agent of existingAgents) {
+        this.bridgeOps.ReconfigureSessionToMeeting(agent.SessionBridgeID, new RegexAddressedMatcher(agent.Names));
+      }
+    }
+
     LogStatus(
       `[LiveKitAgentRoomCoordinator] Agent ${botName} bridged into LiveKit room ${params.RoomName} ` +
         `(bridge ${active.SessionBridgeID}, ${isMeeting ? 'MEETING — addressed-only' : 'solo 1:1'})`,

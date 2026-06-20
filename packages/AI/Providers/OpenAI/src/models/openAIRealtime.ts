@@ -2,6 +2,8 @@ import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     IRealtimeSession,
+    RealtimeSessionCapabilities,
+    RealtimeReconfigureParams,
     RealtimeSessionParams,
     RealtimeToolDefinition,
     RealtimeTranscript,
@@ -386,6 +388,34 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         }
         this.responseActive = true;
         this.connection.send({ type: 'response.create', response: { instructions } });
+    }
+
+    /** @inheritdoc — OpenAI's `session.update` is runtime-mutable, so a live turn-mode change is supported. */
+    public get Capabilities(): RealtimeSessionCapabilities {
+        return { CanReconfigureTurnMode: true };
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Live turn-mode change via a partial `session.update` — flips server-VAD auto-response on/off without
+     * reconnecting (e.g. re-gate a 1:1 agent to meeting mode when its room becomes multi-agent). The input
+     * transcription block is re-sent alongside so the partial update can't drop it.
+     */
+    public Reconfigure(params: RealtimeReconfigureParams): void {
+        const disable = params.DisableAutoResponse === true;
+        const turnDetection: RealtimeAudioInputTurnDetection = {
+            type: 'server_vad',
+            create_response: !disable,
+            interrupt_response: true,
+        };
+        this.connection.send({
+            type: 'session.update',
+            session: {
+                type: 'realtime',
+                audio: { input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL }, turn_detection: turnDetection } },
+            },
+        });
     }
 
     // ---- IRealtimeSession handler registration ----

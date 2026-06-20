@@ -75,6 +75,16 @@ class MockRealtimeSession implements IRealtimeSession {
         this.SpokenUpdates.push(instructions);
     }
 
+    /** Capability flag + capture for the live-reconfigure path (§6). */
+    public CanReconfigure = true;
+    public readonly ReconfigureCalls: Array<{ DisableAutoResponse?: boolean }> = [];
+    public get Capabilities(): { CanReconfigureTurnMode: boolean } {
+        return { CanReconfigureTurnMode: this.CanReconfigure };
+    }
+    public Reconfigure(params: { DisableAutoResponse?: boolean }): void {
+        this.ReconfigureCalls.push(params);
+    }
+
     /** Drive an output frame (what the agent says) through the wired handler. */
     public EmitOutput(chunk: ArrayBuffer): void {
         this.outputHandler?.(chunk);
@@ -413,6 +423,97 @@ describe('AIBridgeEngine — turn-taking integration (Passive)', () => {
         expect(session.SpokenUpdates.length).toBe(1);
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('floor control: a meeting agent stays silent while another agent holds the room floor, speaks once it is released', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(
+            baseParams(session, provider, {
+                TurnMode: 'Passive',
+                DisableAutoResponse: true,
+                TurnMatcher: { IsAddressed: () => true }, // always addressed → the gate is purely the floor
+            }),
+        );
+        const roomKey = active.RoomKey!;
+        const coord = engine().RoomCoordinator;
+
+        // Another agent in the SAME room takes the floor first.
+        coord.RegisterRoomParticipant(roomKey, 'other-agent');
+        expect(coord.TakeFloor(roomKey, 'other-agent').Granted).toBe(true);
+
+        // Our agent is addressed but the floor is held → it must stay silent.
+        session.EmitTranscript({ Role: 'user', Text: 'anyone?', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(0);
+
+        // The holder finishes → floor free → our agent speaks on the next addressed turn.
+        coord.ReleaseFloor(roomKey, 'other-agent');
+        session.EmitTranscript({ Role: 'user', Text: 'still there?', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(1);
+        // It now holds the floor; its own final transcript releases it for the next speaker.
+        expect(coord.IsFloorHolder(roomKey, active.AgentSessionID)).toBe(true);
+        session.EmitTranscript({ Role: 'assistant', Text: 'here I am', IsFinal: true });
+        expect(coord.IsFloorHolder(roomKey, active.AgentSessionID)).toBe(false);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Retroactive re-gating (capability-gated).
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIBridgeEngine — ReconfigureSessionToMeeting', () => {
+    it('re-gates a CAPABLE session to meeting mode (idempotently); leaves an INCAPABLE one conversational', async () => {
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const always = { IsAddressed: () => true };
+
+        // Capable provider (OpenAI-like) → re-gated: auto-response off + Reconfigure pushed once (idempotent).
+        const capable = new MockRealtimeSession(); // CanReconfigure defaults true
+        const a1 = await engine().StartBridgeSession(baseParams(capable, provider)); // starts 1:1
+        expect(a1.DisableAutoResponse).toBe(false);
+        expect(engine().ReconfigureSessionToMeeting(a1.SessionBridgeID, always)).toBe(true);
+        expect(a1.DisableAutoResponse).toBe(true);
+        expect(capable.ReconfigureCalls).toEqual([{ DisableAutoResponse: true }]);
+        // Idempotent — already meeting → true, no second reconfigure.
+        expect(engine().ReconfigureSessionToMeeting(a1.SessionBridgeID, always)).toBe(true);
+        expect(capable.ReconfigureCalls.length).toBe(1);
+        await engine().StopBridgeSession(a1.SessionBridgeID, 'Explicit');
+
+        // Incapable provider (Gemini-like) → left conversational, NO dead Reconfigure call.
+        const incapable = new MockRealtimeSession();
+        incapable.CanReconfigure = false;
+        const a2 = await engine().StartBridgeSession(baseParams(incapable, provider));
+        expect(engine().ReconfigureSessionToMeeting(a2.SessionBridgeID, always)).toBe(false);
+        expect(a2.DisableAutoResponse).toBe(false);
+        expect(incapable.ReconfigureCalls.length).toBe(0);
+        await engine().StopBridgeSession(a2.SessionBridgeID, 'Explicit');
+    });
+
+    it('returns false for an unknown bridge', () => {
+        expect(engine().ReconfigureSessionToMeeting('nope', { IsAddressed: () => true })).toBe(false);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Stale-session sweep (same-process janitor).
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIBridgeEngine — SweepStaleSessions', () => {
+    it('reaps idle / over-duration sessions but leaves fresh ones running', async () => {
+        const session = new MockRealtimeSession();
+        const bridgeRow = makeBridgeRow({ Status: 'Connected', AgentSessionID: 'sweep-1' });
+        const { provider } = makeProvider(() => bridgeRow);
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+
+        // Fresh session → not reaped.
+        expect(await engine().SweepStaleSessions(active.ConnectedAtMs + 1000)).toBe(0);
+        expect(bridgeRow.Status).toBe('Connected');
+
+        // Idle past the TTL (last activity long ago) → reaped via the normal stop → row Disconnected.
+        const future = active.LastActivityMs + 11 * 60 * 1000;
+        expect(await engine().SweepStaleSessions(future)).toBe(1);
+        expect(bridgeRow.Status).toBe('Disconnected');
     });
 });
 

@@ -9,17 +9,23 @@ const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSec
 /** A bridge-ops mock that captures the StartBridgeSession params and returns a canned active session. */
 function makeBridgeOps(providerFound = true) {
   const startCalls: Record<string, unknown>[] = [];
+  const reconfigureCalls: Array<{ id: string }> = [];
+  let seq = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ops = {
     Config: vi.fn(async () => undefined),
     ProviderByDriverClass: vi.fn(() => (providerFound ? ({ ID: 'p1', DriverClass: LIVEKIT_BRIDGE_DRIVER_CLASS } as any) : undefined)),
     StartBridgeSession: vi.fn(async (params: Record<string, unknown>) => {
       startCalls.push(params);
-      return { SessionBridgeID: 'bridge-1' } as any;
+      return { SessionBridgeID: `bridge-${++seq}` } as any;
     }),
     StopBridgeSession: vi.fn(async () => true),
+    ReconfigureSessionToMeeting: vi.fn((id: string) => {
+      reconfigureCalls.push({ id });
+      return true;
+    }),
   } satisfies BridgeOps;
-  return { ops, startCalls };
+  return { ops, startCalls, reconfigureCalls };
 }
 
 describe('LiveKitAgentRoomCoordinator', () => {
@@ -111,6 +117,22 @@ describe('LiveKitAgentRoomCoordinator', () => {
     expect(factoryCtx[1].MeetingMode).toBe(true);
     expect(factoryCtx[1].SelfNames).toEqual(['Marketing', 'Marketing Agent']);
     expect((startCalls[1].TurnMatcher as object).constructor.name).toBe('RegexAddressedMatcher');
+  });
+
+  it('re-gates the agents already in the room when it becomes multi-agent', async () => {
+    const { ops, reconfigureCalls } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+
+    const room = 'regate-room-1';
+    // First agent → solo: nobody to re-gate yet.
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'g1', RoomName: room, AgentName: 'Sage', AgentAliases: ['Sage AI'] });
+    expect(reconfigureCalls.length).toBe(0);
+
+    // Second agent joins → the FIRST agent (bridge-1) is retroactively re-gated to meeting mode.
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'g2', RoomName: room, AgentName: 'Marketing' });
+    expect(reconfigureCalls.map((c) => c.id)).toContain('bridge-1');
+    // The re-gate matcher carries the first agent's names (built into a RegexAddressedMatcher).
+    expect(ops.ReconfigureSessionToMeeting).toHaveBeenCalledWith('bridge-1', expect.anything());
   });
 });
 
