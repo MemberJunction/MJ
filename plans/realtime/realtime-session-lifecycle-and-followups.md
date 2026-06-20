@@ -42,13 +42,33 @@ Addressed-gating stops the *spiral*; floor control stops two **addressed** agent
 
 Only OpenAI's auto-response is actually disabled (`turn_detection.create_response=false`). Gemini currently relies on the prompt alone. Wire Gemini Live's native control: `realtimeInputConfig.automaticActivityDetection.disabled = true` + send manual `activityStart`/`activityEnd` (or drive `RequestSpokenUpdate` as the sole trigger). Honor the same neutral `Config.disableAutoResponse` flag the bridge already sets.
 
-## 5. Bridge transcript persistence *(observability parity)*
+### CRITICAL: Do this in the Gemini sub-class, do not change core logic in rest of sysmte, make sure the wiring in how subclases off BaseRealtimeModel work allow this flexibilty and report back if issues here. No hardcoding of routes/paths specific to various vendors/models in our core code, that must be generic
 
-The bridge path creates the co-agent `AIPromptRun` but does **not** persist the voice transcript onto it (native chat does). Wire `session.OnTranscript` → append to the prompt run's `Messages` (debounced/serialized like the completion-loop's `PersistTranscript`). Without it, bridged sessions can't be reviewed after the fact. Finalize-time flush on teardown.
+## 5. Bridge transcript persistence — ✅ SHIPPED as a UNIFIED ROOM TRANSCRIPT (2026-06-20)
+
+**Answer to the question below:** yes — there's now a *unified* room transcript (not N per-agent copies). It reuses `MJ: Conversations` + `MJ: Conversation Details` (ground-truth study confirmed they're the right shape, and `AIAgentRun` *already* links `ConversationID`/`ConversationDetailID` natively).
+
+**What shipped:**
+- **One `MJ: Conversations` per room** — `Type='Meeting Room'`, keyed by `ExternalID = ExternalConnectionId`, `ApplicationScope='Application'` (so it stays **out of the normal chat list** — reusing the existing scope exclusion in `ConversationEngine`, no new filter), tieable to the Meet app via `ApplicationID`.
+- **One `MJ: Conversation Details` per final utterance** — `Role='AI'` (the scribe's own speech, attributed via `AgentID`/`AgentSessionID`/`ExternalID`) or `'User'` (everything it heard).
+- **Single-scribe election** (`AIBridgeEngine`): exactly one session per room writes the transcript (it hears everyone), so a multi-agent room records **one copy, not N**. Re-elected (handoff) if the scribe leaves a still-occupied room.
+- **Generic engine, app-specific binding**: the engine only emits neutral `BridgeTranscriptLine`s via a registered `BridgeTranscriptSink`; the `'Meeting Room'`/scope choices live at the bind site (`RealtimeBridgeResolver`), the persistence in `@memberjunction/ai-agents` (`CreateBridgeRoomTranscriptSink`). Nothing about Conversations/Meet leaks into the engine.
+- Tested: engine election/emit/handoff + sink create/reuse/cache/role-mapping.
+
+**Known limitations (documented MVP):**
+- **No per-speaker diarization** — `RealtimeTranscript` carries no speaker label, so only the scribe's own speech is agent-attributed; humans + *other* agents are recorded as `'User'`. The common case (1 agent + human) is clean. Finer attribution needs audio-frame-level speaker correlation (follow-up).
+- The per-agent `AIPromptRun.Messages` (raw model I/O) is still **not** persisted — out of scope; each agent's run already links into the shared transcript via `ConversationID`/`ConversationDetailID`, so per-agent context exists without duplication.
+- Writes are finals-only.
+
+### Original question (answered above):
+So each agent would have a copy of this if we had multiple agents in the same chat. I think that is ok, we have archiving to get rid of large chunks of data we don't need. but d we have the concept of a transcript that is unified for the meeting room itself?
 
 ## 6. First-agent retroactive re-gating *(polish)*
 
 When a room becomes multi-agent, the **first** agent stays 1:1 (auto-response on, answers freely) — it isn't re-gated. To make the *whole* room meeting-mode, the coordinator must reconfigure the already-running first agent: a live `session.update` disabling auto-response + swapping its matcher to `RegexAddressedMatcher`. Needs a "reconfigure turn mode" method on the live session/bridge.
+
+### NOTE: 
+Yes and the little thing on top saying who's speaking doesn't show other agents speaking there even though their box in the conf room does "light up" in terms of the blue outoline around their rectangle
 
 ## 7. Smarter turn-taking gate (L1 / L2)
 

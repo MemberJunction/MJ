@@ -17,10 +17,10 @@ export class MJRecordProcessCategoryFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
-            { sectionKey: 'hierarchyConfiguration', sectionName: 'Hierarchy Configuration', isExpanded: true },
+            { sectionKey: 'hierarchy', sectionName: 'Hierarchy', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
-            { sectionKey: 'mJRecordProcessCategories', sectionName: 'Record Process Categories', isExpanded: false }
+            { sectionKey: 'mJRecordProcessCategories', sectionName: 'Record Process Categories', isExpanded: false },
+            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false }
         ]);
     }
 }

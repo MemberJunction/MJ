@@ -71,6 +71,7 @@
     "@memberjunction/ai-ollama": "5.41.0",
     "@memberjunction/ai-openai": "5.41.0",
     "@memberjunction/ai-openrouter": "5.41.0",
+    "@memberjunction/ai-prompts": "5.41.0",
     "@memberjunction/ai-provider-bundle": "5.41.0",
     "@memberjunction/ai-recommendations-rex": "5.41.0",
     "@memberjunction/ai-reranker": "5.41.0",

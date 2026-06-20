@@ -522,6 +522,58 @@ describe('AIBridgeEngine — participant tracking', () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Unified room transcript — scribe election + emit.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIBridgeEngine — unified room transcript', () => {
+    it('elects ONE scribe per room; only the scribe emits final lines (both roles), with handoff on departure', async () => {
+        const sink = vi.fn(async () => undefined);
+        engine().SetTranscriptSink(sink);
+        const addr = 'loopback://transcript-room-unique';
+        const sessionA = new MockRealtimeSession();
+        const sessionB = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        try {
+            const a = await engine().StartBridgeSession(
+                baseParams(sessionA, provider, { Address: addr, AgentSessionID: 'sess-A', AgentID: 'agent-A' }),
+            );
+            const b = await engine().StartBridgeSession(
+                baseParams(sessionB, provider, { Address: addr, AgentSessionID: 'sess-B', AgentID: 'agent-B' }),
+            );
+            // First session in the room is the scribe; the second is not.
+            expect(a.IsTranscriptScribe).toBe(true);
+            expect(b.IsTranscriptScribe).toBe(false);
+
+            // Scribe emits FINAL lines — its own speech attributed (IsAgentSpeech), heard speech as 'other'.
+            sessionA.EmitTranscript({ Role: 'assistant', Text: 'Hello from A', IsFinal: true });
+            sessionA.EmitTranscript({ Role: 'user', Text: 'a human spoke', IsFinal: true });
+            sessionA.EmitTranscript({ Role: 'user', Text: 'partial', IsFinal: false }); // not final → ignored
+            await new Promise((r) => setTimeout(r, 0));
+            expect(sink).toHaveBeenCalledTimes(2);
+            expect(sink.mock.calls[0][0]).toMatchObject({ IsAgentSpeech: true, AgentSessionID: 'sess-A', AgentID: 'agent-A', Text: 'Hello from A' });
+            expect(sink.mock.calls[1][0]).toMatchObject({ IsAgentSpeech: false, Text: 'a human spoke' });
+
+            // Non-scribe emits nothing.
+            sink.mockClear();
+            sessionB.EmitTranscript({ Role: 'assistant', Text: 'B speaks', IsFinal: true });
+            await new Promise((r) => setTimeout(r, 0));
+            expect(sink).not.toHaveBeenCalled();
+
+            // Scribe A leaves → B is handed the scribe role and now emits.
+            await engine().StopBridgeSession(a.SessionBridgeID, 'Explicit');
+            expect(b.IsTranscriptScribe).toBe(true);
+            sessionB.EmitTranscript({ Role: 'assistant', Text: 'B now scribe', IsFinal: true });
+            await new Promise((r) => setTimeout(r, 0));
+            expect(sink).toHaveBeenCalledTimes(1);
+
+            await engine().StopBridgeSession(b.SessionBridgeID, 'Explicit');
+        } finally {
+            engine().SetTranscriptSink(async () => undefined); // reset shared singleton state
+        }
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Janitor — orphan reconciliation.
 // ──────────────────────────────────────────────────────────────────────────────
 

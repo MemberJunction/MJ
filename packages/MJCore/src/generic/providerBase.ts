@@ -1938,7 +1938,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
                 CacheLocal: params.CacheLocal,
-                _fromEngine: params._fromEngine
+                _fromEngine: params._fromEngine,
+                Exempt: params.Telemetry?.Exempt,
+                ExemptReason: params.Telemetry?.Reason
             },
             contextUser?.ID
         );
@@ -3032,7 +3034,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ResultType: params.ResultType,
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
-                _fromEngine: params._fromEngine
+                _fromEngine: params._fromEngine,
+                Exempt: params.Telemetry?.Exempt,
+                ExemptReason: params.Telemetry?.Reason
             },
             contextUser?.ID
         );
@@ -3080,6 +3084,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async PreProcessRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<void> {
         // Start telemetry tracking for batch operation
         const fromEngine = params.some(p => p._fromEngine);
+        // A batch is exempt only when EVERY constituent view opts out — a mixed batch should still
+        // be analyzed. Reason is taken from the first view that supplied one.
+        const batchExempt = params.length > 0 && params.every(p => p.Telemetry?.Exempt);
         const eventId = TelemetryManager.Instance.StartEvent(
             'RunView',
             'ProviderBase.RunViews',
@@ -3090,7 +3097,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // tell apart two batches over the same entity set but with different filters.
                 Filters: params.map(p => p.ExtraFilter as string | undefined),
                 OrderBys: params.map(p => p.OrderBy as string | undefined),
-                _fromEngine: fromEngine
+                _fromEngine: fromEngine,
+                Exempt: batchExempt,
+                ExemptReason: params.find(p => p.Telemetry?.Reason)?.Telemetry?.Reason
             },
             contextUser?.ID
         );

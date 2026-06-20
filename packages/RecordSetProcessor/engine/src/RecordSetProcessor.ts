@@ -63,6 +63,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         const descriptor = source.Describe();
         const meta: ProcessRunMeta = {
             RecordProcessID: options.recordProcessID,
+            ScheduledJobRunID: options.scheduledJobRunID,
             EntityID: options.entityID ?? descriptor.EntityID,
             TriggeredBy: options.triggeredBy ?? 'Manual',
             SourceType: descriptor.SourceType,

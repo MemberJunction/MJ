@@ -18,7 +18,7 @@ export class MJRemoteOperationFormComponent extends BaseFormComponent {
             { sectionKey: 'operationDetails', sectionName: 'Operation Details', isExpanded: true },
             { sectionKey: 'contractDefinition', sectionName: 'Contract Definition', isExpanded: true },
             { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: true },
-            { sectionKey: 'implementation', sectionName: 'Implementation', isExpanded: true },
+            { sectionKey: 'implementationAndApproval', sectionName: 'Implementation and Approval', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
