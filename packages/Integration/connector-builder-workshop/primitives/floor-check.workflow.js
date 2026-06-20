@@ -907,6 +907,69 @@ if (hybridE2E && hybridE2E.assertions) {
     }
 }
 
+// ── Behavioral-coverage + write-coverage gates (the no-silent-subset floor). ────────────────────────
+// Mirrors the deterministic graders floor/graders/{behavioral-coverage,write-coverage}.mjs (unit-tested
+// pure spec + CLI). floor-check is sandboxed (no fs/import), so it computes the SAME set-membership check
+// inline from the per-object coverage the e2e reports on `hybridE2E.assertions` + the already-parsed ioRows.
+//
+// The defect this closes: bijection/dag check the WHOLE object set statically, but the BEHAVIORAL proof had
+// no equivalent — an e2e could sync 5 of 377 objects (and exercise 0 of N write paths), fail nothing, and
+// "verified" got asserted on a convenient subset. (The "Goldilocks" rule bounds ROW VOLUME per stream, NOT
+// the number of objects/writes exercised.) This makes "every object/write either exercised or explicitly
+// scoped" the floor instead of something an operator must demand round after round.
+//
+// TOKEN/ACCURACY CONTRACT (why this cannot regress either):
+//   • Pure inline JS — zero LLM tokens.
+//   • It blocks ONLY on a SILENT subset: the e2e DID report a covered set, a remainder exists, and there is
+//     NO `coverageScopeReason` and NO per-object skip accounting it. The escape is ONE reason string (or
+//     per-object skips) — token-FLAT, never a forced full run. A legitimately-scoped run (Goldilocks-bounded)
+//     passes and is surfaced loudly; the operator keeps the lever to demand more if the reason is weak.
+//   • When the e2e reports NO per-object coverage (`coveredObjects` not an array — older runs, or it didn't
+//     emit it), this is INFORMATIONAL only and NEVER fails. Worst case a no-op; best case it kills the duck.
+if (hybridE2E && hybridE2E.assertions) {
+    const a = hybridE2E.assertions;
+    const norm = (s) => String(s == null ? '' : s).trim().toLowerCase();
+    const toNameSet = (list) => {
+        const set = new Set();
+        for (const n of (Array.isArray(list) ? list : [])) {
+            // accept plain names OR {object, reason} entries (skips carry a reason)
+            const name = (n && typeof n === 'object') ? (n.object ?? n.Object ?? n.name ?? n.Name) : n;
+            if (typeof name === 'string' && name.trim()) set.add(norm(name));
+        }
+        return set;
+    };
+    const ioActive = (f) => { const s = norm(f && f.Status); return s === '' || (s !== 'disabled' && s !== 'deprecated' && s !== 'inactive'); };
+    const isWritable = (f) => {
+        if (!f) return false;
+        const has = (v) => typeof v === 'string' && v.trim().length > 0;
+        const flag = (v) => v === true || norm(v) === 'true' || norm(v) === '1' || norm(v) === 'yes';
+        return has(f.CreateAPIPath) || has(f.UpdateAPIPath) || has(f.DeleteAPIPath) || flag(f.SupportsCreate) || flag(f.SupportsUpdate) || flag(f.SupportsDelete);
+    };
+    const activeIOFields = ioRows.map((io) => (io && io.fields) ? io.fields : {}).filter((f) => f && f.Name && ioActive(f));
+    const scopeReason = typeof a.coverageScopeReason === 'string' ? a.coverageScopeReason.trim() : '';
+
+    // Behavioral coverage — every Active object covered (>=1 row) OR skipped OR (remainder) scope-reasoned.
+    if (Array.isArray(a.coveredObjects)) {
+        const covered = toNameSet(a.coveredObjects);
+        const skipped = toNameSet(a.skippedObjects);
+        const silent = activeIOFields.filter((f) => !covered.has(norm(f.Name)) && !skipped.has(norm(f.Name)));
+        if (silent.length > 0 && !scopeReason) {
+            failures.push({ rule: 'behavioral-coverage-silent-subset', detail: `hybrid-e2e covered ${covered.size}/${activeIOFields.length} active object(s); ${silent.length} were neither synced nor skipped nor scope-reasoned (first: ${silent.slice(0, 8).map((f) => f.Name).join(', ')}${silent.length > 8 ? ', …' : ''}). A silent subset is the convenient-subset duck — exercise them, mark per-object skipReasons, OR set assertions.coverageScopeReason (one line, e.g. Goldilocks-bounded representative streams) so the remainder is acknowledged, not hidden.` });
+        }
+    }
+
+    // Write coverage — every WRITABLE object's write actually round-tripped OR skipped OR scope-reasoned.
+    if (Array.isArray(a.exercisedWrites)) {
+        const exercised = toNameSet(a.exercisedWrites);
+        const skipped = toNameSet(a.skippedObjects);
+        const writable = activeIOFields.filter(isWritable);
+        const unproven = writable.filter((f) => !exercised.has(norm(f.Name)) && !skipped.has(norm(f.Name)));
+        if (unproven.length > 0 && !scopeReason) {
+            failures.push({ rule: 'write-coverage-unproven', detail: `${unproven.length}/${writable.length} writable object(s) declare a write capability whose path was never exercised by the e2e and is not skipped/scope-reasoned (first: ${unproven.slice(0, 8).map((f) => f.Name).join(', ')}${unproven.length > 8 ? ', …' : ''}). bijection proves the write COLUMNS exist; this proves the write WORKS. Round-trip a representative write, mark per-object skipReasons, OR set assertions.coverageScopeReason.` });
+        }
+    }
+}
+
 // ── EXTRACTION_REPORT_MATRIX.csv coverage + PK-defer rate (JS over cat'd bytes). ──
 const emittedIOCount = Number.isInteger(extractStats.objectsExtracted)
     ? extractStats.objectsExtracted

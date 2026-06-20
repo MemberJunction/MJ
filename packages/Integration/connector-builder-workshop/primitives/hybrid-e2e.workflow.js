@@ -125,6 +125,15 @@ const E2E_RESULT_SCHEMA = {
                 firstSyncComplete: { type: 'boolean' },       // every selected object reached its FULL rowcount on the FIRST pass (an object that fills only on a later pass = door-before-child ordering defect; GZ #21/#28 — second-sync self-heal is a FAIL)
                 secondSyncGrew: { type: 'boolean' },          // TRUE if ANY table's rowcount GREW between the full pull and the idempotent re-run (non-idempotent identity; GZ #22: 127→254). Two-pass zero-growth is the gate.
                 captureEngaged: { type: 'boolean' },          // __mj_integration_CustomOverflow EXISTS on every created table (DB-checked) AND capture wrote customs where the source carries them (GZ #29/#31 silent no-op class). null if unverifiable.
+                // ── Behavioral/write COVERAGE (no-silent-subset floor; consumed by floor-check). ──
+                // These convert "verified on a convenient subset" from a silent footnote into a gate. Fill
+                // them from the per-object rowcounts you ALREADY compute for forwardCompleteness — marginal
+                // output, no extra work. Token-safe: the floor blocks ONLY a SILENT subset; a scoped run
+                // escapes with coverageScopeReason (one line), never a forced full run.
+                coveredObjects: { type: 'array', items: { type: 'string' }, description: 'object NAMES (IO.Name) that landed >=1 forward-sync row this run' },
+                exercisedWrites: { type: 'array', items: { type: 'string' }, description: 'object NAMES whose write path (create/update/delete) was actually round-tripped this run' },
+                skippedObjects: { type: 'array', items: { type: 'object', properties: { object: { type: 'string' }, reason: { type: 'string' } } }, description: 'objects deliberately NOT exercised, each with a one-line reason (e.g. non-enumerable by-id object, no bulk list)' },
+                coverageScopeReason: { type: 'string', description: 'REQUIRED when not every active object/write was exercised: one-line justification for the scoped set (e.g. "Goldilocks-bounded: representative multi-page streams per read-style covered; remainder same read-style, unit-proven"). Its presence downgrades the remainder from a blocking silent-subset to an acknowledged, surfaced scope.' },
             },
         },
         failures: { type: 'array', items: { type: 'object' } },
@@ -255,6 +264,7 @@ if (HAS_BROKER_CREDS) {
         `  • firstSyncComplete — record per-table rowcounts AFTER the full pull and AFTER the idempotent re-run. TRUE iff no table reached its final count only on a later pass (a table that landed rows only on the re-run is a door-before-child ordering defect — the GZ #21/#28 class; second-sync self-heal is a FAIL, set it false).\n` +
         `  • secondSyncGrew — TRUE if ANY table's rowcount GREW between the full pull and the idempotent re-run (non-idempotent identity, the GZ #22 class: 127→254). Zero-growth everywhere → false.\n` +
         `  • captureEngaged — query sys.columns: every created table in the connector's schema MUST have __mj_integration_CustomOverflow (its absence is the GZ #29/#31 silent-kill class → false); when present, true. Leave null ONLY if the DB is unreachable for the check.\n` +
+        `  • COVERAGE (no-silent-subset floor) — from the per-object rowcounts you already collected, set: coveredObjects = the IO.Name list that landed >=1 row; exercisedWrites = the IO.Name list whose write you round-tripped (read-only live runs: leave empty + a skip/scope reason); skippedObjects = [{object,reason}]. If you did NOT cover every active object/write (a bounded subset is legitimate), you MUST set coverageScopeReason to a one-line justification — otherwise the floor flags a silent subset. Marginal output of data you already have; declare the scope honestly, do NOT expand the run to chase 100%.\n` +
         `  ADVISORY (set if exposed; do NOT gate): pkClassifierRan, idempotentThreeSync, runEventsParsed, customColumnsCaptured, rateLimitObserved, referenceModeWorks. status='pass' iff: instanceCreated AND connectionTested AND discoveryAddedObjects AND entitiesRegistered AND entityMapCount>0 AND rowsProcessed>0 AND syncLandedRows AND forwardCompleteness AND idempotentZeroWork AND firstSyncComplete!==false AND secondSyncGrew!==true AND captureEngaged!==false. Return phaseId='E2E.Hybrid.Live', the scrubbed steps VERBATIM in steps, a plain-English nl summary, and mjapiPort.`,
         { agentType: 'testing-agent', schema: E2E_RESULT_SCHEMA, phase: 'E2ELive', label: `hybrid-live:${VENDOR}` }
     );
@@ -270,6 +280,7 @@ if (HAS_BROKER_CREDS) {
         `  • firstSyncComplete — per-table rowcounts after the full pull vs after the idempotent re-run; a table that fills only on a later pass = door-before-child ordering defect (FALSE).\n` +
         `  • secondSyncGrew — TRUE if any table grew between the full pull and the idempotent re-run (non-idempotent identity). captureEngaged — every created table has __mj_integration_CustomOverflow AND customs captured where the source carries them.\n` +
         `  • deltaApplied — the DeltaPass create AND update AND delete-tombstone each verified by DB state independently.\n` +
+        `  • COVERAGE (no-silent-subset floor) — from the per-object rowcounts you already collected, set: coveredObjects = the IO.Name list that landed >=1 row; exercisedWrites = the IO.Name list whose write you round-tripped; skippedObjects = [{object,reason}] for any you deliberately did not exercise. If you did NOT cover every active object/write (a bounded "Goldilocks" subset is legitimate), you MUST set coverageScopeReason to a one-line justification — otherwise the floor flags a silent subset. This is marginal output of data you already have; do NOT expand the run to chase 100% — declare the scope honestly instead.\n` +
         `status='pass' ONLY if applyAllRan AND forwardCompleteness AND syncLandedRows AND idempotentZeroWork AND firstSyncComplete!==false AND secondSyncGrew!==true AND captureEngaged!==false. Return scrubbed steps VERBATIM in steps, a plain-English nl summary, phaseId='E2E.Hybrid.Mock', and mjapiPort.`,
         { agentType: 'testing-agent', schema: E2E_RESULT_SCHEMA, phase: 'E2EMock', label: `hybrid-mock:${VENDOR}` }
     );
