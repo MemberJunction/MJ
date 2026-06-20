@@ -123,6 +123,12 @@ export interface ILiveKitRoomSdk {
     publishAudioFrame(pcm: ArrayBuffer): void;
 
     /**
+     * Flushes all pending/queued outbound audio (the agent's voice). Called on barge-in so the agent
+     * stops talking immediately instead of draining already-buffered audio after the model is cut off.
+     */
+    flushOutboundAudio(): void;
+
+    /**
      * Subscribes inbound per-participant audio frames (what the agent hears, carrying the speaker
      * identity for diarization). "Latest handler wins." The SFU never echoes the bot's own published
      * audio back, so frames here are always from OTHER participants.

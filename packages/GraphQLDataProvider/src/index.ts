@@ -38,7 +38,9 @@ export type {
     LiveKitClientTokenResult,
     StartLiveKitAgentRoomSessionInput,
     LiveKitAgentRoomSessionResult,
-    LiveKitRecordingResult
+    LiveKitRecordingResult,
+    RealtimeModelVoices,
+    RealtimeVoiceOption
 } from './graphQLLiveKitClient';
 export { GraphQLClassifyClient } from './graphQLClassifyClient';
 export type {
