@@ -5,12 +5,15 @@
 -- pass would otherwise treat them as orphaned and prune them on every run:
 --   1. checkAndRemoveMetadataForDeletedTables would delete the whole entity. That pass reads
 --      vwEntitiesWithMissingBaseTables (entities whose BaseTable is absent from the SQL catalog —
---      always true for external entities, whose data is remote). A code-level guard skips rows
---      whose ExternalDataSourceID is set, BUT that view is a `SELECT e.*` over vwEntities and its
---      cached column list predated ExternalDataSourceID, so the column was invisible to the guard
---      and external entities were pruned anyway. This migration recreates the view (re-expanding *)
---      AND excludes external entities at the SQL level — the analogue of the VirtualEntity handling
---      — so they never appear in the missing-base-tables set regardless of the code guard.
+--      always true for external entities, whose data is remote) and skips external rows with a
+--      single, dialect-agnostic code-level guard (`if (e.ExternalDataSourceID) continue;`). That
+--      guard needs the column present on the row, BUT the view is a `SELECT e.*` over vwEntities
+--      whose cached column list predated ExternalDataSourceID, so the column was invisible and the
+--      guard never fired (external entities were pruned anyway). This migration simply recreates
+--      the view (re-expanding *) so the column is exposed; the exclusion itself stays in the code
+--      guard alone — one mechanism, the same place the guard already lives, working uniformly across
+--      SQL Server and PostgreSQL. (The view is left semantically unchanged — a pure "missing base
+--      table" detector — so its single consumer keeps its original meaning.)
 --   2. spDeleteUnneededEntityFields would delete ALL of their EntityField rows, because those
 --      columns never appear in the SQL catalog (vwSQLColumnsAndEntityFields). This migration
 --      excludes external-data-source entities from that proc — the analogue of its existing
@@ -127,9 +130,10 @@ GO
 -- Recreate vwEntitiesWithMissingBaseTables so its `SELECT e.*` re-expands to include the
 -- ExternalDataSourceID column added in V202606200001 (a `*` view caches its column list at
 -- creation, so the column was previously invisible to checkAndRemoveMetadataForDeletedTables'
--- code guard, and external entities were pruned on every codegen run). Also exclude external
--- entities directly in the WHERE — the SQL-level analogue of the VirtualEntity exclusion — so
--- they never appear in the missing-base-tables set at all.
+-- code guard, and external entities were pruned on every codegen run). The view definition is
+-- otherwise UNCHANGED from baseline — it stays a pure "missing base table" detector; exclusion of
+-- external entities is the code guard's job (see checkAndRemoveMetadataForDeletedTables), kept as
+-- the single, dialect-agnostic mechanism rather than duplicated here.
 DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwEntitiesWithMissingBaseTables]
 GO
 CREATE VIEW [${flyway:defaultSchema}].[vwEntitiesWithMissingBaseTables]
@@ -144,6 +148,5 @@ ON
     e.SchemaName = t.TABLE_SCHEMA AND
     e.BaseTable = t.TABLE_NAME
 WHERE
-    t.TABLE_NAME IS NULL AND
-    e.ExternalDataSourceID IS NULL
+    t.TABLE_NAME IS NULL
 GO

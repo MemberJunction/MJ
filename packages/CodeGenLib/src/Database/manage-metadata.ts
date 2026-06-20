@@ -2566,8 +2566,12 @@ export class ManageMetadataBase {
             for (const e of entities) {
                // External-data-source entities have no physical MJ table by design, so they always
                // surface in vwEntitiesWithMissingBaseTables — but they must NOT be pruned (their data
-               // lives on a remote system). Skip them here: this is the analogue of the VirtualEntity
-               // exclusion the dialect filter (getEntitiesWithMissingBaseTablesFilter) already applies.
+               // lives on a remote system). Skip them here. This is the analogue of the VirtualEntity
+               // exclusion, but kept as a single dialect-agnostic code guard rather than baked into the
+               // per-dialect filter (getEntitiesWithMissingBaseTablesFilter) or the view, so it applies
+               // uniformly across SQL Server and PostgreSQL. (The v5.42 migration only recreates the
+               // view to re-expose the ExternalDataSourceID column to this guard; it does not exclude
+               // external entities at the SQL level.)
                if (e.ExternalDataSourceID) {
                   continue;
                }

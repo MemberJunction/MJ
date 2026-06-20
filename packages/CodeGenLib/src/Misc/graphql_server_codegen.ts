@@ -400,8 +400,23 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         pkParamNames.push(pk.CodeName);
       }
       const pkParamsList = pkParamNames.join(', ');
+      const pkCompositeKeyPairs = entity.PrimaryKeys.map((pk) => `{ FieldName: '${pk.CodeName}', Value: ${pk.CodeName} }`).join(', ');
 
-      sRet += `
+      if (entity.ExternalDataSourceID) {
+        // External-data-source entities have no MJ base view to query — proxy the single-record
+        // load through a BaseEntity object, which the provider dispatches to the external read
+        // router (same path as the grid's RunView). RLS + field post-processing are applied there.
+        sRet += `
+    @Query(() => ${serverGraphQLTypeName}, { nullable: true })
+    async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
+        this.CheckUserReadPermissions('${entity.Name}', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });${auditAccessCode}
+        const compositeKey = new CompositeKey([${pkCompositeKeyPairs}]);
+        return this.LoadExternalRecordByKey<${serverGraphQLTypeName}>('${entity.Name}', compositeKey, provider, userPayload);
+    }
+    `;
+      } else {
+        sRet += `
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
     async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
@@ -412,6 +427,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         return result;
     }
     `;
+      }
       if (entity.AllowAllRowsAPI) {
         // this entity allows a query to return all rows, so include that type of query next
         sRet += `

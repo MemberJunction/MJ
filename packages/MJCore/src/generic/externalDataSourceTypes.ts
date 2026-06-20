@@ -23,6 +23,30 @@ export interface ExternalSchemaColumn {
   description?: string;
 }
 
+/** One column pairing in a foreign-key relationship (referencing column → referenced column). */
+export interface ExternalSchemaRelationshipColumn {
+  /** Column on this (the referencing) object that holds the foreign key. */
+  column: string;
+  /** Column on the referenced object that `column` points to. */
+  referencedColumn: string;
+}
+
+/**
+ * A foreign-key relationship discovered during schema introspection: this object's
+ * column(s) reference another object's column(s). Modeled on the referencing side (the
+ * object that holds the foreign key), mirroring how relational catalogs report constraints.
+ */
+export interface ExternalSchemaRelationship {
+  /** Constraint name if the remote catalog supplies one. */
+  name?: string;
+  /** Name of the object this relationship points to. */
+  referencedObject: string;
+  /** Schema/namespace of the referenced object, when applicable. */
+  referencedSchema?: string;
+  /** Column pairings that make up the foreign key (an array to support composite keys). */
+  columns: ExternalSchemaRelationshipColumn[];
+}
+
 /** One table/view/collection discovered during schema introspection. */
 export interface ExternalSchemaObject {
   name: string;
@@ -30,6 +54,13 @@ export interface ExternalSchemaObject {
   /** Schema/namespace the object lives in on the remote side, when applicable. */
   schema?: string;
   columns: ExternalSchemaColumn[];
+  /**
+   * Foreign-key relationships originating from this object (the referencing side).
+   * Optional and additive: drivers populate this incrementally as per-provider relationship
+   * introspection lands, and DBAutoDoc may further enrich it. An absent or empty array means
+   * "relationships not yet discovered", NOT "this object has no relationships".
+   */
+  relationships?: ExternalSchemaRelationship[];
 }
 
 /** The result of introspecting a remote source's schema. */
