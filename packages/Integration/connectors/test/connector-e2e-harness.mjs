@@ -1157,8 +1157,43 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
             result.steps.preClean = [step('preClean.tables', true, { cleared, note: 'emptied mirror tables + record maps so completeness measures this run only' })];
         }
 
-        // P1+P2 — forward full + incremental on the Goldilocks subset, completeness + record-map 1:1.
+        // P1+P2 — forward full + incremental over the FULL catalog (setup.syncMaps == every materialized
+        // object when E2E_SYNC_ALL_OBJECTS!=0), completeness + record-map 1:1.
         result.steps.forward = await phaseForward({ gql, db, hubspotTotal: null, ciid: setup.ciid, maps: setup.syncMaps, cfg });
+
+        // FULL-CATALOG COVERAGE GATE — the anti-vacuous law applied over EVERY materialized object, not a
+        // subset. A connector is NOT runtime-proven unless every object either synced rows>0 OR is flagged
+        // legitimately-empty with a logged reason (a structural ZERO_PARENTS where the source genuinely has
+        // no parents this run). This is what CATCHES a thin fixture passing as "all objects".
+        result.steps.coverage = (() => {
+            const comp = (result.steps.forward || []).filter(c => c && c.name === 'forward.completeness');
+            const run = (result.steps.forward || []).find(c => c && c.name === 'forward.full.run');
+            // MOCK: the fixture controls ALL data, so EVERY object can be given rows — a 0-row object is a
+            // FIXTURE gap (missing parent chain), never "legitimately empty". No exemption. This is what
+            // forces relationally-coherent fixtures and catches a thin fixture passing as all-objects.
+            // LIVE: a real tenant can genuinely have an empty object → ZERO_PARENTS/SECOND_LAYER_EMPTY exempts.
+            const legitEmpty = cfg.mode === 'live'
+                ? new Set((run?.warnings || [])
+                    .filter(w => w && (w.code === 'ZERO_PARENTS' || w.code === 'SECOND_LAYER_EMPTY'))
+                    .map(w => String(w.stage)))
+                : new Set();
+            const covered = comp.filter(c => (c.destRows || 0) > 0).map(c => c.object);
+            const zeroReal = comp.filter(c => (c.destRows || 0) === 0 && !legitEmpty.has(c.object)).map(c => c.object);
+            const zeroLegit = comp.filter(c => (c.destRows || 0) === 0 && legitEmpty.has(c.object)).map(c => c.object);
+            const total = comp.length, catalog = (setup.applyAll?.mapsCreated ?? setup.maps.length);
+            const ok = zeroReal.length === 0 && total > 0;
+            return [step('coverage.all-objects', ok, {
+                catalogObjects: catalog, checkedObjects: total,
+                coveredWithRows: covered.length, zeroRowReal: zeroReal.length, zeroRowLegitEmpty: zeroLegit.length,
+                zeroRealObjects: zeroReal.slice(0, 40), zeroLegitObjects: zeroLegit.slice(0, 40),
+                note: ok ? 'every materialized object synced rows>0 (or is logged legit-empty) — real all-object DAG coverage'
+                         : `${zeroReal.length} object(s) synced 0 rows with NO legitimate-empty reason — NOT all-object proven`,
+            })];
+        })();
+
+        // Heavy fault-injection cells stay on a bounded representative subset (per-object fault injection
+        // over a 1600-object catalog is intractable + adds no coverage signal). Coverage is proven above.
+        const faultMaps = setup.syncMaps.slice(0, Number(process.env.E2E_FAULT_OBJECTS) || 8);
 
         // ALL 17 CELLS ALWAYS RUN. A cell either executes (GREEN/FAIL) or returns ONE step with an
         // explicit skipReason — never silently absent. Cells split into three groups by what they need:
@@ -1167,6 +1202,9 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
         //       client vendor (delta-mutation, rate-limit 429, retry 500, concurrency timing, discovery
         //       deactivation, bidirectional write). These run in mock; in live they skip-WITH-REASON.
 
+        // watermark + delta must see the FULL set to find their target object (the watermarked object /
+        // the object carrying the deltaPass) — capping to faultMaps can miss it → false fails. They're cheap
+        // (one object's passes), so full-set is fine. Only the per-object-heavy fault cells use faultMaps.
         // C1 — server-side watermark filter. phaseWatermark self-skips-with-reason in live (no request capture).
         result.steps.watermark = await phaseWatermark({ gql, mock, ciid: setup.ciid, maps: setup.syncMaps, cfg });
 
@@ -1179,7 +1217,7 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
         result.steps.idempotent = await phaseIdempotent({ gql, verify, ciid: setup.ciid, maps: setup.syncMaps, cfg });
 
         // I3 — non-advancing pagination. phaseInfinitePagination self-skips-with-reason in live (needs mock route-swap + capture).
-        result.steps.pagination = await phaseInfinitePagination({ gql, mock, ciid: setup.ciid, maps: setup.syncMaps, cfg });
+        result.steps.pagination = await phaseInfinitePagination({ gql, mock, ciid: setup.ciid, maps: faultMaps, cfg });
 
         // cells 11/12/14 — DB/gql-side, NO mock needed → run in BOTH modes (this is the gap that hid them in live).
         // cell 11 — column discovery surfaces fields + stats soft-PK inference (self-skips if connector declares no runtime discovery).
@@ -1187,20 +1225,20 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
         // cell 12 — selected objects topologically layer; full sync applies parents before children.
         result.steps.dag = await phaseDAG({ gql, db, ciid: setup.ciid, maps: setup.syncMaps, cfg, integrationID: cfg.integrationID });
         // cell 14 — Merkle/partition reconcile skips an unchanged partition (0 writes on re-sync).
-        result.steps.merkle = await phaseMerkle({ gql, ciid: setup.ciid, maps: setup.syncMaps, cfg });
+        result.steps.merkle = await phaseMerkle({ gql, ciid: setup.ciid, maps: faultMaps, cfg });
 
         // (B) mock-only fault-injection / vendor-mutation cells — explicit skip-with-reason in live.
         if (cfg.mode === 'mock') {
             // cell 10 — runtime discovery OVERLAYS declared metadata (present create/update; absent deactivates, reversible).
-            result.steps.discoverOverlay = await phaseDiscoverOverlay({ gql, db, mock, ciid: setup.ciid, maps: setup.syncMaps, cfg, integrationID: cfg.integrationID });
+            result.steps.discoverOverlay = await phaseDiscoverOverlay({ gql, db, mock, ciid: setup.ciid, maps: faultMaps, cfg, integrationID: cfg.integrationID });
             // cell 15 — 429 storm → AIMD backoff + recovery.
-            result.steps.rateLimit = await phaseAdaptiveRateLimit({ gql, mock, ciid: setup.ciid, maps: setup.syncMaps, cfg });
+            result.steps.rateLimit = await phaseAdaptiveRateLimit({ gql, mock, ciid: setup.ciid, maps: faultMaps, cfg });
             // cell 16 — within-layer parallelism (observed via request timing) + clean completion.
-            result.steps.concurrency = await phaseConcurrency({ gql, mock, ciid: setup.ciid, maps: setup.syncMaps, cfg });
+            result.steps.concurrency = await phaseConcurrency({ gql, mock, ciid: setup.ciid, maps: faultMaps, cfg });
             // cell 17 — transient 500 retried to clean completion; watermark NOT advanced on persistent failure.
-            result.steps.retry = await phaseRetry({ gql, db, mock, ciid: setup.ciid, maps: setup.syncMaps, cfg });
+            result.steps.retry = await phaseRetry({ gql, db, mock, ciid: setup.ciid, maps: faultMaps, cfg });
             // capability g — write round-trip against the mock vendor store (REAL with fixtures WriteRoundTrip; else stub).
-            result.steps.bidirectional = await phaseBidirectional({ gql, mock, verify, ciid: setup.ciid, maps: setup.syncMaps, cfg });
+            result.steps.bidirectional = await phaseBidirectional({ gql, mock, verify, ciid: setup.ciid, maps: faultMaps, cfg });
         } else {
             result.steps.discoverOverlay = [step('discover-overlay.skipped', true, { skipReason: 'live — overlay deactivation needs mock route-removal (cannot remove objects from a real vendor).' })];
             result.steps.rateLimit = [step('rate-limit.skipped', true, { skipReason: 'live — 429-storm injection needs the programmable mock; cannot force a real vendor to rate-limit on demand.' })];

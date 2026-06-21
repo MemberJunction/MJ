@@ -518,6 +518,10 @@ async function connectorE2EPlan(values, scrub, allowWrite) { // eslint-disable-l
             fixtureRegen = await regenerateFixturesFromDeployed({
                 db, platform: cfg.platform, mjSchema: cfg.mjSchema, integrationID,
                 fixturesDir: cfg.fixturesDir, cfgKey: process.env.E2E_CFG_URL_KEY || 'BaseURL',
+                // Full per-object coverage: fixture EVERY deployed object, not a bounded "Goldilocks" subset.
+                // The old default (7) silently capped large catalogs to a famous-few. Env-overridable for
+                // a deliberately-bounded run; default is effectively uncapped.
+                maxObjects: Number(process.env.E2E_MAX_FIXTURE_OBJECTS) || 100000,
             });
             console.log(`[connector-e2e] regen-fixtures: ${fixtureRegen.ok ? `wrote ${fixtureRegen.written} (${(fixtureRegen.objectNames || []).join(', ')})` : `skipped — ${fixtureRegen.reason}`}`);
         } catch (e) { fixtureRegen = { ok: false, reason: String(e?.message ?? e) }; console.log(`[connector-e2e] regen-fixtures failed: ${fixtureRegen.reason}`); }

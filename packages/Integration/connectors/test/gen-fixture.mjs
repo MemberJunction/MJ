@@ -156,23 +156,90 @@ function buildAccessPathManifest(rows, cfgKey) {
   return { manifest, objectNames: objs.map((o) => o.Name), deltaObject: delta ? delta.obj.name : null };
 }
 
-export function buildFixtureFromRows(rows, cfgKey = 'BaseURL') {
+export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = null) {
+  // Wrap a synthetic row array in the connector's response envelope (`{[envelopeKey]: rows}`) when the
+  // connector reads `body.<key>`; bare array otherwise. Centralized so route + delta bodies stay consistent.
+  const wrapBody = (arr) => (envelopeKey ? { [envelopeKey]: arr } : arr);
+  // Inverse of wrapBody — get the row array back out of a (possibly enveloped) route Body so the
+  // delta-candidate scan + delta-pass construction work identically for bare-array and enveloped fixtures.
+  const unwrapBody = (b) => (Array.isArray(b) ? b : (b && envelopeKey && Array.isArray(b[envelopeKey]) ? b[envelopeKey] : []));
   // ACCESS-PATH connectors (nested doors) need a nested door body, not a flat route-per-object.
-  if (Array.isArray(rows) && rows.some((r) => r && r.accessPath && r.accessPath.door)) {
+  // Use the pure access-path manifest ONLY when EVERY routable object is access-path (e.g. neon).
+  // A MIXED catalog (a few access-path objects among many flat ones — openwater had 1 of 25) must
+  // NOT take this branch: it only emits the access-path objects and DROPS every flat object, which
+  // is what reduced openwater to 1 fixtured object of 25. Mixed/flat → the flat route-per-object path.
+  if (Array.isArray(rows) && rows.length > 0 && rows.every((r) => r && r.accessPath && r.accessPath.door)) {
     return buildAccessPathManifest(rows, cfgKey);
   }
-  const objs = [], routes = [];
-  for (const r of rows) {
-    const { name, apipath, wm, pk, pkType, fields } = r;
-    const mkRow = (n) => {
-      const row = {};
-      for (const { fn, ft } of fields) row[fn] = fn === pk ? synthPk(name, pkType, n) : (fn === wm ? `2026-06-1${n}T00:00:00Z` : synth(ft, n));
-      row[pk] = synthPk(name, pkType, n);
-      if (wm) row[wm] = `2026-06-1${n}T00:00:00Z`;
-      return row;
-    };
-    routes.push({ Path: apipath, Method: 'GET', Status: 200, Body: [mkRow(1), mkRow(2), mkRow(3)] });
-    objs.push({ Name: name, OrderingField: wm || pk });
+  // Build a synthetic row for ANY object r at index n (PK + watermark + per-field provable-shape values).
+  // Each row ALSO carries one UNDECLARED custom field (not in the IOF set) so the custom-column capture
+  // cell is genuinely exercised: a real source returns vendor/custom fields the static schema doesn't list,
+  // and the connector's full-record passthrough must surface them → overflow → promotion. A bare declared-
+  // only row makes the custom-column cell vacuous. Gated by E2E_FIXTURE_CUSTOM_FIELDS!=0.
+  const emitCustom = process.env.E2E_FIXTURE_CUSTOM_FIELDS !== '0';
+  const mkRowFor = (r, n) => {
+    const row = {};
+    for (const { fn, ft } of r.fields) row[fn] = fn === r.pk ? synthPk(r.name, r.pkType, n) : (fn === r.wm ? `2026-06-1${n}T00:00:00Z` : synth(ft, n));
+    row[r.pk] = synthPk(r.name, r.pkType, n);
+    if (r.wm) row[r.wm] = `2026-06-1${n}T00:00:00Z`;
+    if (emitCustom) row.mj_e2e_custom_attr = `custom-${n}`;   // undeclared → must be captured to overflow
+    return row;
+  };
+  // MIXED catalog (flat door objects + access-path children): flat objects get a route-per-object;
+  // access-path objects either EMBED into their door object's records (embedded-array extraction, e.g.
+  // Program.rounds[]) or get their OWN entry route (path/query-injected, called once per parent id — the
+  // mock answers regardless of the injected id). This makes a real DAG sync populate EVERY layer
+  // (door → embedded child → per-parent grandchild), which is what the all-object coverage gate requires.
+  const accessRows = rows.filter((r) => r.accessPath && r.accessPath.door);
+  const flatRows = rows.filter((r) => !(r.accessPath && r.accessPath.door));
+  const objs = [], routes = [], routeRows = [], bodyByDoor = new Map();
+  for (const r of flatRows) {
+    const body = [mkRowFor(r, 1), mkRowFor(r, 2), mkRowFor(r, 3)];
+    routes.push({ Path: r.apipath, Method: 'GET', Status: 200, Body: wrapBody(body) });
+    routeRows.push(r);
+    objs.push({ Name: r.name, OrderingField: r.wm || r.pk });
+    bodyByDoor.set(r.name, body);
+  }
+  for (const r of accessRows) {
+    objs.push({ Name: r.name, OrderingField: r.wm || r.pk });
+    const ap = r.accessPath;
+    const mode = String(ap.extractionMode || '').toLowerCase();
+    const segs = ap.nestingSegments || [];
+    const field = String(segs[segs.length - 1] || '').replace(/\[\]$/, '');
+    const doorBody = bodyByDoor.get(ap.door);
+    // parent-id params any access child of this door injects — alias them onto the embedded element's PK
+    // so the connector finds whatever id it descends to (e.g. roundId off Program.rounds[]).
+    const childParams = accessRows.filter((a) => a.accessPath.door === ap.door && a.accessPath.parentParamName)
+      .map((a) => a.accessPath.parentParamName);
+    // Embed when the source marks it embedded-array OR it has no own route (apipath is a "(embedded …)"
+    // marker) — either way its records live inside the door object's nesting field, not at a route.
+    const isEmbedded = mode.includes('embed') || !r.apipath || String(r.apipath).startsWith('(');
+    if (isEmbedded && doorBody && field) {
+      for (const dr of doorBody) {
+        dr[field] = [1, 2, 3].map((n) => {
+          const e = mkRowFor(r, n);
+          for (const p of childParams) e[p] = e[r.pk];
+          if (e.id == null) e.id = e[r.pk];
+          return e;
+        });
+      }
+    } else {
+      // path/query-injected child: own GET route(s). The connector fetches access-path children from
+      // accessPath.entryPath AND every accessPath.alternativePaths entry (e.g. openwater Report tries
+      // /v2/Rounds/{roundId}/ApplicationReports, /v2/Rounds/{roundId}/JudgeReports,
+      // /v2/Programs/{programId}/SessionReports). A 404 on ANY of them aborts the whole object's leaf fetch
+      // → 0 rows. So emit a route for the entryPath, EVERY alternativePath, AND the APIPath — every path the
+      // connector might call must answer. Template vars are kept (mock wildcard-matches the injected id).
+      const childPaths = [ap.entryPath, ...(ap.alternativePaths || []), r.apipath]
+        .filter((p) => p && !String(p).startsWith('('));
+      const seenPaths = new Set();
+      for (const cp of childPaths) {
+        if (seenPaths.has(cp)) continue;
+        seenPaths.add(cp);
+        routes.push({ Path: cp, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, 1), mkRowFor(r, 2), mkRowFor(r, 3)]) });
+      }
+      routeRows.push(r);
+    }
   }
   if (!objs.length) return { manifest: null, objectNames: [], deltaObject: null };
 
@@ -195,31 +262,34 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL') {
     if (/date|time|_links|link|url|json|fields|id$|^id$|code|status|type|guid|uuid/i.test(fn)) return false;
     return typeof body[0]?.[fn] === 'string';
   };
+  // Delta operates on objects with a TOP-LEVEL route (routeRows aligns 1:1 with routes); embedded-only
+  // access objects have no own route and are excluded from the delta candidate scan.
   let pick = -1, updField = null;
-  for (let i = 0; i < rows.length; i++) {
-    const rr = rows[i], body = routes[i]?.Body;
+  for (let i = 0; i < routeRows.length; i++) {
+    const rr = routeRows[i], body = unwrapBody(routes[i]?.Body);
     if (!rr.pk || !Array.isArray(body) || body.length < 3) continue;
     const uf = rr.fields.map((f) => f.fn).find((fn) => isSafeScalarStr(body, fn, (rr.fields.find((x) => x.fn === fn) || {}).ft, rr.pk, rr.wm));
     if (uf) { pick = i; updField = uf; break; }
   }
   // Fallback: first PK-bearing object with any non-PK/non-wm string body value (excluding link/json names).
-  if (pick < 0) for (let i = 0; i < rows.length; i++) {
-    const rr = rows[i], body = routes[i]?.Body;
+  if (pick < 0) for (let i = 0; i < routeRows.length; i++) {
+    const rr = routeRows[i], body = unwrapBody(routes[i]?.Body);
     if (!rr.pk || !Array.isArray(body) || body.length < 3) continue;
     updField = Object.keys(body[0]).find((k) => k !== rr.pk && k !== rr.wm
       && typeof body[0][k] === 'string' && !/date|time|_links|link|url|json|fields/i.test(k)) || null;
     pick = i; break;
   }
   if (pick < 0) pick = 0; // last resort: first object, no update sub-assert
-  const first = rows[pick], r0 = routes[pick];
+  const first = routeRows[pick], r0 = routes[pick];
+  const r0Body = unwrapBody(r0.Body);
   const pk0 = first.pk;
   const NEW_VAL = 'updated-delta';
-  const deltaRow1 = { ...r0.Body[0] }; if (updField) deltaRow1[updField] = NEW_VAL;
+  const deltaRow1 = { ...r0Body[0] }; if (updField) deltaRow1[updField] = NEW_VAL;
   const deltaPass = {
     Object: first.name,
     // ExpectedDeletes ⇒ phaseDelta runs this as a FULL sync (orphan detection needs the complete set);
     // row3 absent ⇒ deleted/tombstoned, rows 1+2 present, row1's updField now equals NEW_VAL.
-    Routes: [{ Path: r0.Path, Method: 'GET', Status: 200, Body: [deltaRow1, r0.Body[1]] }],
+    Routes: [{ Path: r0.Path, Method: 'GET', Status: 200, Body: wrapBody([deltaRow1, r0Body[1]]) }],
     ExpectedPresent: [String(synthPk(first.name, first.pkType, 1)), String(synthPk(first.name, first.pkType, 2))],
     ExpectedDeletes: [String(synthPk(first.name, first.pkType, 3))],
   };
@@ -241,6 +311,9 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL') {
     // OAuth2 password / refresh-token grants (Hivebrite et al. require RefreshToken OR AdminEmail+Password).
     RefreshToken: 'mock-refresh-token', AdminEmail: 'mock-admin@example.com',
     Token: 'mock-token', AccessToken: 'mock-token', apiKey: 'mock-token', APIKey: 'mock-token', ApiKey: 'mock-token',
+    // API key + paired secret (PheedLoop ApiKey/ApiSecret; others use Secret/AppKey/AppSecret/PrivateToken).
+    ApiSecret: 'mock-api-secret', apiSecret: 'mock-api-secret', Secret: 'mock-secret',
+    AppKey: 'mock-app-key', AppSecret: 'mock-app-secret', PrivateToken: 'mock-private-token', PublicKey: 'mock-public-key',
     // Every URL-shaped key carries the placeholder origin so the connector's base/token/instance URL
     // is redirected to the runtime mock (rewriteConfigToOrigin in buildMock). Covers config-driven
     // bases (BaseURL/HostBaseURL/InstanceURL) AND token endpoints (TokenURL/LoginUrl/TokenUrl).
@@ -258,6 +331,10 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL') {
     // NetSuite TBA (OAuth1a) keys — both casings since connectors differ (TokenID vs TokenId).
     TokenId: 'mock-token-id', TokenSecret: 'mock-token-secret',
     TokenID: 'mock-token-id',
+    // Microsoft Graph / Azure AD (SharePoint, Dynamics 365): the connector validates a directory
+    // (tenant) id before any fetch — `TenantId is required`. Seed all common casings so the connector's
+    // own config check passes against the mock (the mock ignores auth; this only satisfies validation).
+    TenantId: 'mock-tenant-id', TenantID: 'mock-tenant-id', tenantId: 'mock-tenant-id', Tenant: 'mock-tenant',
   };
   const manifest = {
     Transport: 'http', ConfigUrlKey: cfgKey,
@@ -289,10 +366,10 @@ function rowFromMetaLine(line) {
  * @param {string} args.integrationID the Integration row id whose deployed schema to mirror
  * @param {string} args.fixturesDir   absolute path to the connector's fixtures/ dir (the fixtures.json is written here)
  * @param {string} [args.cfgKey]      ConfigUrlKey (default 'BaseURL')
- * @param {number} [args.maxObjects]  cap routable objects (default 7 — bounded Goldilocks set)
+ * @param {number} [args.maxObjects]  cap routable objects (default 100000 — effectively uncapped, FULL per-object coverage)
  * @returns {Promise<{ ok:boolean, written?:string, objectNames?:string[], deltaObject?:string|null, reason?:string }>}
  */
-export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = '__mj', integrationID, fixturesDir, cfgKey = 'BaseURL', maxObjects = 7 }) {
+export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = '__mj', integrationID, fixturesDir, cfgKey = 'BaseURL', maxObjects = 100000 }) {
   // HAND-AUTHORED FIXTURE GUARD: connectors whose routes cannot be derived from the deployed IO
   // APIPaths — SOQL (Salesforce/Fonteva/Nimble use /services/data/.../queryAll + describe), file-feed
   // (PropFuel), by-ID (ORCID /{iD}/...), or any fixture that hardcodes its base (UpstreamHost), uses a
@@ -343,8 +420,8 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
   // edge cases like content-hash-keyed columns). The old unordered scan picked a different, often
   // machinery-heavy 7 each time → flaky greens. Deprioritize meta-objects, then order by Name.
   const ioSql = pg
-    ? `SELECT "ID" AS id, "Name" AS name, "APIPath" AS apipath, "IncrementalWatermarkField" AS wm, "Configuration" AS cfg FROM ${IO} WHERE "IntegrationID" = ${lit(integrationID)} AND "Status" = 'Active' ORDER BY CASE WHEN "Name" ILIKE '%custom%' OR "Name" ILIKE '%webhook%' OR "Name" ILIKE '%validator%' OR "Name" ILIKE '%relation%' THEN 1 ELSE 0 END, "Name"`
-    : `SELECT ID AS id, Name AS name, APIPath AS apipath, IncrementalWatermarkField AS wm, Configuration AS cfg FROM ${IO} WHERE IntegrationID = ${lit(integrationID)} AND Status = 'Active' ORDER BY CASE WHEN Name LIKE '%Custom%' OR Name LIKE '%Webhook%' OR Name LIKE '%Validator%' OR Name LIKE '%Relation%' THEN 1 ELSE 0 END, Name`;
+    ? `SELECT "ID" AS id, "Name" AS name, "APIPath" AS apipath, "IncrementalWatermarkField" AS wm, "Configuration" AS cfg, "ResponseDataKey" AS rdk FROM ${IO} WHERE "IntegrationID" = ${lit(integrationID)} AND "Status" = 'Active' ORDER BY CASE WHEN "Name" ILIKE '%custom%' OR "Name" ILIKE '%webhook%' OR "Name" ILIKE '%validator%' OR "Name" ILIKE '%relation%' THEN 1 ELSE 0 END, "Name"`
+    : `SELECT ID AS id, Name AS name, APIPath AS apipath, IncrementalWatermarkField AS wm, Configuration AS cfg, ResponseDataKey AS rdk FROM ${IO} WHERE IntegrationID = ${lit(integrationID)} AND Status = 'Active' ORDER BY CASE WHEN Name LIKE '%Custom%' OR Name LIKE '%Webhook%' OR Name LIKE '%Validator%' OR Name LIKE '%Relation%' THEN 1 ELSE 0 END, Name`;
   const ioRows = await db.rows(ioSql);
   if (!ioRows?.length) return { ok: false, reason: `no deployed IntegrationObject rows for integration ${integrationID}` };
 
@@ -359,12 +436,17 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
   for (const ioRow of ioRows) {
     if (rows.length >= maxObjects) break;
     const apipath = col(ioRow, 'apipath');
-    // Skip only truly non-routable paths (embedded/parenthesized markers). TEMPLATE-VAR paths
-    // (`/{iD}/works`, `/contacts/{ContactID}/notes`) ARE routable: the route is emitted with the
-    // `{var}` segment kept, and mock-vendor-server.matchRoute wildcard-matches `{seg}` against the
-    // connector's runtime-substituted request (`/0000-.../works`). Skipping them dropped every
-    // by-iD / template-var connector (orcid, etc.) to "no routable objects" → 0 coverage.
-    if (!apipath || String(apipath).startsWith('(')) continue;
+    // Parse the access-path block (door + nesting chain) EARLY — it decides whether a non-routable apipath
+    // is still keepable: an EMBEDDED-array object (e.g. openwater Rounds, apipath "(embedded in …)") has no
+    // own route but MUST be carried so the door-embed logic nests it into its parent's records. Skipping it
+    // (the old `startsWith('(')` filter) left the parent's nesting field a scalar → the nested grandchildren
+    // (JudgeAssignment/Report, fetched per parent id) found no ids → 0 rows. Keep any object with a door.
+    let accessPath = null;
+    try { const j = JSON.parse(col(ioRow, 'cfg') || '{}'); accessPath = j.AccessPath || null; } catch { /* not JSON */ }
+    const hasDoor = !!(accessPath && accessPath.door);
+    // Skip only truly non-routable paths (embedded/parenthesized markers) THAT also have no access-path door.
+    // TEMPLATE-VAR paths (`/{iD}/works`) ARE routable (wildcard-matched). by-iD/template-var connectors kept.
+    if ((!apipath || String(apipath).startsWith('(')) && !hasDoor) continue;
     if (excludeObjects.has(String(col(ioRow, 'name')).toLowerCase())) continue; // bounded-Goldilocks exclude
     const ioID = col(ioRow, 'id');
     const iofSql = pg
@@ -376,15 +458,22 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
     const pk = pkRow ? col(pkRow, 'fn') : null;
     const pkType = pkRow ? col(pkRow, 'ft') : null; // PK column type → numeric PKs need numeric synth values
     if (!pk || !fields.length) continue; // need a PK to key the synthetic rows + identity assertions
-    // Parse the access-path block (door + nesting chain) if the connector declared one — nested
-    // connectors (neon, etc.) reach many objects by descending ONE door response. Null ⇒ flat object.
-    let accessPath = null;
-    try { const j = JSON.parse(col(ioRow, 'cfg') || '{}'); accessPath = j.AccessPath || null; } catch { /* not JSON */ }
-    rows.push({ name: col(ioRow, 'name'), apipath, wm: col(ioRow, 'wm') || null, pk, pkType, fields, accessPath });
+    rows.push({ name: col(ioRow, 'name'), apipath, wm: col(ioRow, 'wm') || null, pk, pkType, fields, accessPath, rdk: col(ioRow, 'rdk') || null });
   }
   if (!rows.length) return { ok: false, reason: `no routable, PK-bearing deployed objects for integration ${integrationID}` };
 
-  const { manifest, objectNames, deltaObject } = buildFixtureFromRows(rows, cfgKey);
+  // RESPONSE ENVELOPE: a Graph/OData/REST connector whose NormalizeResponse reads `body.<key>` (e.g.
+  // `value`, `data`, `results`, `items`) needs the fixture body wrapped in that envelope — a bare array
+  // yields `body[key]===undefined` → 0 records (the SharePoint Site 0-row trap). The key comes from the
+  // IO's declared `ResponseDataKey`; for connectors that default the envelope in CODE (SharePoint hard-
+  // codes `value` while ResponseDataKey is null), the global override `E2E_RESPONSE_ENVELOPE_KEY` supplies
+  // it. Null ⇒ bare array (the openwater/plain-REST case, unchanged).
+  const envelopeKey = process.env.E2E_RESPONSE_ENVELOPE_KEY
+    || (rows.map((r) => r.rdk).filter(Boolean).sort((a, b) =>
+        rows.filter((r) => r.rdk === b).length - rows.filter((r) => r.rdk === a).length)[0])
+    || null;
+
+  const { manifest, objectNames, deltaObject } = buildFixtureFromRows(rows, cfgKey, envelopeKey);
   if (!manifest) return { ok: false, reason: 'fixture builder produced no objects' };
   mkdirSync(fixturesDir, { recursive: true });
   const out = pathResolve(fixturesDir, 'fixtures.json');

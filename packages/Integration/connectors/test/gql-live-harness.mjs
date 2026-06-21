@@ -274,9 +274,14 @@ export async function phaseSetup({ gql, cfg }) {
             entityMapID: m.EntityMapID, entityName: m.EntityName, sourceObjectName: m.SourceObjectName, fieldMapCount: m.FieldMapCount,
         }));
     }
-    // The data-sync phases operate on the Goldilocks subset (cfg.objects) only — bounded, mock-routed.
+    // FULL-CATALOG coverage (real-sync fidelity): the data-sync phases cover EVERY materialized object,
+    // not a Goldilocks subset — so per-object coverage can be genuinely ENFORCED (no hollow green off a
+    // thin fixture). Set E2E_SYNC_ALL_OBJECTS=0 to fall back to the cfg.objects subset (legacy bounded mode).
     const wanted = new Set(cfg.objects.map(n => String(n).toLowerCase()));
-    const syncMaps = maps.filter(m => wanted.has(String(m.sourceObjectName).toLowerCase()));
+    const fullCoverage = process.env.E2E_SYNC_ALL_OBJECTS !== '0';
+    const syncMaps = (fullCoverage || !wanted.size)
+        ? maps                                                                      // every materialized object
+        : maps.filter(m => wanted.has(String(m.sourceObjectName).toLowerCase()));   // legacy Goldilocks subset
     // Cross-check via the list query.
     const listed = expectGqlSuccess('ListEntityMaps', (await gql(GQL.listEntityMaps, { ciid })).IntegrationListEntityMaps);
     return {
