@@ -55,6 +55,14 @@ export interface OAuth2TokenRequest {
     UseBasicAuth?: boolean;
     /** Request timeout in ms. Default 30000. */
     TimeoutMs?: number;
+    /**
+     * Extra `application/x-www-form-urlencoded` parameters appended to the grant body for vendors
+     * whose token endpoint requires non-standard inputs — e.g. Auth0's `audience` on a
+     * `client_credentials` grant, or a vendor-specific `resource`/`tenant` param. Applies to every
+     * grant type; standard params (grant_type, client_id/secret, scope, refresh_token, username,
+     * password) take precedence and are never overwritten by this map.
+     */
+    ExtraParams?: Record<string, string>;
 }
 
 /** A minted access token plus its derived expiry. */
@@ -172,6 +180,13 @@ export class OAuth2TokenManager {
     /** Builds the `application/x-www-form-urlencoded` grant body for the chosen flow. */
     private BuildGrantBody(req: OAuth2TokenRequest, grant: OAuth2GrantType): URLSearchParams {
         const body = new URLSearchParams();
+        // Seed vendor extra params FIRST so the standard params set below always take precedence
+        // (a caller can never clobber grant_type/scope/credentials via ExtraParams).
+        if (req.ExtraParams) {
+            for (const [k, v] of Object.entries(req.ExtraParams)) {
+                if (typeof v === 'string' && v.length > 0) body.set(k, v);
+            }
+        }
         body.set('grant_type', grant);
         const scopeParam = req.ScopeParam ?? 'scope';
         if (req.Scopes) body.set(scopeParam, req.Scopes);
