@@ -21,12 +21,19 @@ and it can't count cache reads).
 | `runquery-cache-tests.ts` | 9 tests for RunQuery result caching: TTL mode, smart CacheValidationSQL validation, fingerprinting, adversarial break attempts. **Creates and deletes its own Query fixtures** — see the file header |
 | `record-process-tests.ts` | **Deterministic** — drives `RecordSetProcessor` over an in-memory source: ProcessRun/Detail persistence (the tracker's fire-and-forget queue), mixed counts, throw-isolation, circuit breaker, batching, bounded concurrency (6 tests) |
 | `rls-isolation-tests.ts` | **Deterministic** — Row-Level Security multi-user isolation: `{{UserID}}` predicate substitution, two users get distinct predicates (cache fingerprint can't leak A→B), adaptive live RunView scoping check (3 tests) |
+| `record-process-facade-tests.ts` | **Deterministic** — the `RecordProcessExecutor` facade: a real `MJ: Record Processes` definition run via `Run()` + `RunByID()`, ScopeType→source mapping, ProcessRun linked back via `RecordProcessID` (2 tests) |
+| `api-keys-tests.ts` | **Deterministic** — API Keys engine vs. real seeded metadata: `Config()` loads real scopes/applications, end-to-end `Authorize()` with a real key (explicit allow + deny rules), self-cleaning (3 tests) |
+| `scheduled-jobs-tests.ts` | **Deterministic** — Scheduled Jobs engine lifecycle: `ExecuteScheduledJob` persists a terminal run, the distributed lease is acquired→released, stats increment, job is re-runnable, self-cleaning (2 tests) |
 | `prompt-runner-tests.ts` | **Live model tier (gated)** — runs real prompts through AIPromptRunner and verifies the persisted `MJ: AI Prompt Runs` rows (3 prompts) |
 | `agent-runner-tests.ts` | **Live model tier (gated)** — runs Sage, Query Builder, Demo Flow Agent, Demo Loop Agent (×3 prompts), Research Agent (×3 prompts) and deep-verifies run + steps + prompt runs + action logs + sub-agent runs (9 tests) |
 | `concurrent-tests.ts` | **Live model tier (gated)** — N concurrent prompt runs + concurrent agent runs each persist independently (no cross-run corruption — stresses the queue's per-entity keying) |
 | `run-all.ts` | Aggregator — runs every suite in sequence, one exit code (the gated suites skip unless `RUN_AGENT_TESTS=1`) |
 | `lib/harness.ts` | Env/config loading, minimal test runner, shape assertions, instrumented storage provider |
 | `lib/ai-bootstrap.ts` | Live provider stack + `AIEngine.Config` + the deep persisted-record verifiers for the AI suites |
+
+> **Running it.** From the repo root: `npm run test:integration` runs the whole aggregator (`run-all.ts`) — the deterministic tier executes, the live-model tier skips unless `RUN_AGENT_TESTS=1`. For the full gated run: `RUN_AGENT_TESTS=1 npm run test:integration`.
+>
+> **In CI.** The deterministic tier needs a real, seeded MJ database, so it runs in the **release-validation lane** (`.github/workflows/release-test.yml` → `integration-suite` job) against the regression Docker stack (SQL Server + migrations + CodeGen + metadata) via the `test-runner` container — not the mocked per-PR unit-test gate. When this coverage is lifted into the MJ Testing Framework as the "Integration Test" test type, it will run in the same regression lane via `mj-test`.
 
 > **Two tiers.** The cache/runquery suites are **deterministic, credential-free, and CI-ready today**. The agent/prompt suites are a **live model tier** — they make real LLM calls (cost tokens, need credentials), so they're gated behind `RUN_AGENT_TESTS=1` and skip by default. See **[Agent & Prompt suites](#agent--prompt-suites-live-model-tier)** below.
 

@@ -1751,6 +1751,56 @@ const params = EntityInfo.BuildOrganicKeyViewParams(record, relatedEntity, organ
 
 > **Full Guide**: See [Organic Keys Guide](./docs/organic-keys.md) for the complete schema, all 4 query patterns, normalization strategies, CodeGen configuration, Angular UI integration, and an end-to-end setup walkthrough.
 
+## Entity Field Rules
+
+`EntityFieldRules` is the **metadata-aware** layer on top of the pure field-rules engine in
+[`@memberjunction/global`](../MJGlobal/README.md#field-rules-engine). The pure engine is deliberately
+metadata-blind — it computes a per-field diff from a plain `Record<string, unknown>` and an injected
+lookup resolver, so it runs anywhere. `EntityFieldRules` adds the things that only make sense when the
+**target is a real MJ entity** and that need this package's metadata layer:
+
+| Adds | Why it needs core |
+|---|---|
+| **`Validate(entityName, ruleSet)`** — target field exists? writable (not PK/read-only/virtual)? source `field` refs valid? | `EntityInfo` / `EntityFieldInfo` |
+| **Type coercion** — a formula yielding `"42"` becomes numeric `42` for a numeric column | `EntityFieldInfo.TSType` |
+| **Built-in lookup resolver** for `lookup` rule sources | `RunView` |
+| **`ApplyToEntity(entity, ruleSet, { DryRun })`** — write the computed values + `Save()` (Record Changes captures before/after) | `BaseEntity` |
+
+**Scope:** the *target is always an MJ entity*; the *source* may be the entity's own fields plus an
+optional injected `Context` (a data context, a query result, an agent's output, related-entity lookups)
+— all data you already hold. When the *other side* is a **live external system**, that is the domain of
+[`@memberjunction/integration`](../Integration/engine/README.md#field-mapping--the-shared-transform-engine),
+which uses the same pure transform engine. `EntityFieldRules` is a writer *to* entities, not a
+bidirectional mapper.
+
+```ts
+import { EntityFieldRules } from '@memberjunction/core';
+import type { FieldRuleSet } from '@memberjunction/global';
+
+const ruleSet: FieldRuleSet = {
+    Rules: [
+        { TargetField: 'Description', Source: { Kind: 'formula', Expression: "fields.Name + ' (normalized)'" } },
+        { TargetField: 'Status', Source: { Kind: 'static', Value: 'Inactive' }, Condition: 'DaysSinceActivity > 365' },
+    ],
+};
+
+// 1) Pre-flight (synchronous, safe to run in a UX on every edit)
+const check = EntityFieldRules.Validate('Accounts', ruleSet);
+if (!check.Valid) console.warn(check.Errors);
+
+// 2) Dry-run preview (computes the diff, writes nothing)
+const rules = new EntityFieldRules(contextUser);
+const preview = await rules.ApplyToEntity(account, ruleSet, { DryRun: true });
+// preview.Changes → per-field old → new; preview.Saved === false
+
+// 3) Apply for real (writes + Save → Record Changes versioning)
+const result = await rules.ApplyToEntity(account, ruleSet);
+```
+
+> For **bulk** updates across a view / list / filtered set, the `FieldRulesProcessor` in
+> `@memberjunction/record-set-processor` runs `EntityFieldRules` per record with batching, concurrency,
+> and dry-run — that's the rules-based bulk-update tool.
+
 ## Documentation
 
 For detailed guides on specific topics, see the [docs/](./docs/) folder:

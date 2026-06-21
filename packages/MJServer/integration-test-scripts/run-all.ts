@@ -20,7 +20,11 @@ const SCRIPTS = [
     'server-cache-tests.ts',
     'runquery-cache-tests.ts',
     'record-process-tests.ts',
+    'record-process-facade-tests.ts',
     'rls-isolation-tests.ts',
+    'api-keys-tests.ts',
+    'scheduled-jobs-tests.ts',
+    'field-rules-bulk-update-tests.ts',
     // Live model tier — skips unless RUN_AGENT_TESTS=1:
     'prompt-runner-tests.ts',
     'agent-runner-tests.ts',
