@@ -233,6 +233,9 @@ const MAX_AMENDMENT_ROUNDS = 3;
 let extractStats, frozen, review;
 let amendmentRound = 0;
 let previousReviewFingerprint = null;
+// connector.* (code) fixes the extractor structurally cannot apply — accumulated across rounds and
+// handed to the CodeBuild stage downstream (the netFORUM false-deadlock fix). Deduped by slot.
+let deferredConnectorFindings = [];
 
 while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
     const isAmendment = amendmentRound > 0;
@@ -246,9 +249,23 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
     // GUARD: with no `integration.*` fixes (the common case) this is a no-op and the extractor
     // receives the full set exactly as before — worst-case ≤ today, never worse.
     const allFindings = isAmendment ? (review.FixInstructions ?? []) : [];
-    const isIntegrationRowSlot = (f) => String(f?.slot ?? '').toLowerCase().startsWith('integration.');
+    const slotOf = (f) => String(f?.slot ?? '').toLowerCase();
+    const isIntegrationRowSlot = (f) => slotOf(f).startsWith('integration.');
+    // A `connector.*` slot is a CODE gap (a defect in the generated connector .ts) — neither the IO/IOF
+    // extractor nor metadata-writer can fix it; only the CodeBuild stage can. Pre-fix, it fell into the
+    // extractor's bucket (it isn't `integration.*`), so the reviewer re-flagged it every round →
+    // byte-identical fingerprint → false EscalatedDeadlock on a clean build (the netFORUM class). Partition
+    // it out and DEFER to CodeBuild; the extractor only ever receives io.*/iof.* it can actually fix.
+    const isConnectorSlot = (f) => slotOf(f).startsWith('connector.');
     const integrationRowFindings = allFindings.filter(isIntegrationRowSlot);
-    const ioIofFindings = allFindings.filter((f) => !isIntegrationRowSlot(f));
+    const connectorFindings = allFindings.filter(isConnectorSlot);
+    const ioIofFindings = allFindings.filter((f) => !isIntegrationRowSlot(f) && !isConnectorSlot(f));
+    if (connectorFindings.length > 0) {
+        for (const cf of connectorFindings) {
+            if (!deferredConnectorFindings.some((d) => (d?.slot ?? '') === (cf?.slot ?? ''))) deferredConnectorFindings.push(cf);
+        }
+        log(`Deferred ${connectorFindings.length} connector.* (code) fix(es) to CodeBuild (round ${amendmentRound}); the extractor cannot fix code gaps.`);
+    }
     if (integrationRowFindings.length > 0) {
         phase(phaseLabel);
         await agent(
@@ -319,6 +336,17 @@ while (amendmentRound < MAX_AMENDMENT_ROUNDS) {
     // ── Loop exit conditions ──────────────────────────────────────────
     if (review.ConfirmedGapsBlocking === 0) {
         log(`Amendment loop converged at round ${amendmentRound} (no blocking gaps)`);
+        break;
+    }
+
+    // If the ONLY remaining blocking gaps are connector.* (code) slots, the metadata contract is as complete
+    // as the extractor/metadata-writer can make it — those gaps belong to CodeBuild, which runs downstream.
+    // Break the EXTRACT loop (carrying deferredConnectorFindings forward) rather than false-deadlocking on a
+    // slot this loop structurally cannot fix. A mixed set still loops: io/iof fixes converge first, then the
+    // residual connector-only set trips this break on the next round.
+    const blockingFixes = review.FixInstructions ?? [];
+    if (blockingFixes.length > 0 && blockingFixes.every(isConnectorSlot)) {
+        log(`Amendment loop: all ${review.ConfirmedGapsBlocking} blocking gap(s) are connector.* (code) → deferring ${deferredConnectorFindings.length} to CodeBuild, exiting extract loop`);
         break;
     }
 
@@ -476,7 +504,7 @@ while (codeRound < MAX_CODE_BUILD_ROUNDS) {
     codeResult = await withRetry(() => agent(
         isAmendment
             ? `Re-build the ${brand.CanonicalName} connector. Prior round failed: ${JSON.stringify(codeResult?.BuildErrors ?? ladder?.classifiedFailures ?? [])}. Apply the specific fixes. Use generic per-operation BaseRESTIntegrationConnector CRUD; override only when genuinely idiosyncratic.`
-            : `Build the connector class for ${brand.CanonicalName} from the frozen contract at ${frozen.contractPath}. Use generic per-operation BaseRESTIntegrationConnector CRUD; override only when genuinely idiosyncratic.`,
+            : `Build the connector class for ${brand.CanonicalName} from the frozen contract at ${frozen.contractPath}. Use generic per-operation BaseRESTIntegrationConnector CRUD; override only when genuinely idiosyncratic.${deferredConnectorFindings.length ? ` The extract-review loop deferred these connector.* (code) fixes for you to apply — address each: ${JSON.stringify(deferredConnectorFindings)}.` : ''}`,
         { agentType: 'code-builder', schema: CODE_RESULT_SCHEMA, phase: isAmendment ? `CodeBuildRound${codeRound}` : 'CodeBuild', label: `code:r${codeRound}` }
     ), `code:r${codeRound}`);
     log(`CodeBuild round ${codeRound}: ${codeResult.LinesOfCode ?? 0} LOC, BuildClean=${codeResult.BuildClean}`);

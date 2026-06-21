@@ -359,4 +359,48 @@ Only the BEHAVIORAL credential-free tiers (T5/T6/T12) + a REAL push (HybridE2E) 
 lesson: a connector is not "done" until a real push + a real-engine ApplyAll + a rowcount-asserted sync pass —
 exactly the `test-connector` terminal gate, which must be mandatory, not best-effort.
 
+### Milestone — five additive determinism/coverage units (post-netFORUM feedback, 2026-06-20)
+
+Five GENERAL additions (no vendor-specific logic — each motivated by a concrete failure, the same way the
+gates above cite Salesforce/PathLMS). All are pure-fn-`+`-`.test.mjs` (the `env/` convention); 31 new tests,
+158 workshop tests green. The throughline is the standing arc principle: **push determinism into scripts; let
+the structural attribute be READ from an input, never baked from a template.**
+
+1. **Stateful mock vendor** — `fixtures/stateful-mock-vendor.mjs` (+`.test.mjs`). `cassette-replay.mjs` is
+   route-replay (each match independent), so the WRITE family is unprovable credential-free. The new
+   `VendorStore` is a mutable in-memory store (identity assignment, watermark bump, pagination window,
+   idempotency dedup, soft-delete `+` tombstone) `+` a thin `node:http` adapter. It makes
+   create→read-back→update→read-back→delete→404, bidirectional, idempotent-replay, incremental-`since`, and the
+   once-only-429 cell all provable with ZERO credentials. Generic: PK field / watermark field / pagination
+   params / rate-limit targets are all inputs. **Plug-in:** the e2e harness points the connector's transport
+   at this server for the write/bidir/delete cells instead of skipping them.
+
+2. **`connector.*` gate-placement routing** — `plans/_TEMPLATE.workflow.js` (live). The amendment loop routed
+   `integration.*`→metadata-writer and EVERYTHING ELSE→extractor, so a `connector.*` (code) finding went to the
+   extractor — which can never fix code → byte-identical fingerprint → false `EscalatedDeadlock` on a clean
+   build (the netFORUM class). Now partitions a third bucket: `connector.*` fixes are deferred (deduped by slot)
+   to the CodeBuild stage and threaded into its first prompt; a connector-only blocking set breaks the extract
+   loop instead of deadlocking. Guarded no-op when there are no `connector.*` findings — worst-case ≤ today.
+
+3. **Schema-conformance gate** — `floor/iof-field-conformance.mjs` (+`.test.mjs`). Catches the
+   build-against-wrong-schema hole: an emitted column absent from the DEPLOYED entity schema
+   (`IsForeignKey`/`ForeignKeyTarget`/`Source`-vs-`MetadataSource`/`SupportsCreate`…) is silently no-op'd by
+   `BaseEntity.SetLocal`, so the push "succeeds" while the value never persists. Pure set-arithmetic; the
+   allowed-column set is an INPUT (caller introspects `__mj.IntegrationObject*` columns) — it NEVER bakes a
+   list (a baked list would freeze the drift it exists to catch). **Plug-in:** floor-check runs it when the env
+   bring-up has produced the deployed-column introspection; graceful skip when absent.
+
+4. **Materializability scoping gate** — `floor/materializability.mjs` (+`.test.mjs`). "Extract everything
+   provable" can produce a facade wider than the dialect's per-table column limit (netFORUM: 7/34 facades >
+   SQL Server's 1024). Old behavior: raw `CREATE TABLE` crash ~30 min into ApplyAll, sinking the whole run. New:
+   partition objects into materializable vs overflow UP FRONT (documented limits — SQL Server 1024 / PG 1600 —
+   × emitted field counts), emit a non-destructive per-object plan (route overflow to custom-overflow capture;
+   never drop fields), advisory by default so the consumer scopes `+` tests the rest, `--strict` for zero-overflow CI.
+
+5. **Deliverable manifest `+` canonical-format guard** — `scripts/deliverable-manifest.mjs` (+`.test.mjs`).
+   Partitions a `git status --porcelain` into {stage exactly the deliverables} / {never stage — generated-tree,
+   config, lockfile, tooling, backups, with the reason} / {surface unrecognized framework-src for human review},
+   so a build's PR is review-ready without a human trimming churn. `assertCanonicalMetadata` catches a minified
+   metadata one-liner (the 9.88 MB-on-one-line bug) — non-trivial JSON must be indent=2.
+
 <!-- APPEND new milestones + leaks below as the run progresses. -->
