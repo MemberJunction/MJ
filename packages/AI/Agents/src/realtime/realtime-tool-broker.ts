@@ -37,6 +37,31 @@ import { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 export const INVOKE_TARGET_AGENT_TOOL_NAME = 'invoke-target-agent';
 
 /**
+ * **The single producer of the realtime co-agent's identity framing.** Builds the opening of the companion
+ * system prompt that makes the agent speak first-person **AS the target agent** (Sage, Marketing Agent, …),
+ * delegating real work through `invoke-target-agent`. EVERY host (native chat, LiveKit, future Zoom/Teams)
+ * uses this — so the agent's identity is byte-for-byte the same everywhere. Do NOT inline this framing in a
+ * host; that is exactly the drift the convergence removed. See
+ * `plans/realtime/realtime-core-host-convergence.md`.
+ *
+ * @param targetName The TARGET agent's display name (what the agent identifies AS). Callers pass a clear
+ *   fallback (e.g. "the configured target agent") when no distinct target is resolved.
+ * @param interactiveSurfaceClause Optional trailing clause for host UX tools the co-agent drives itself
+ *   (browser/whiteboard); empty for pure-voice hosts. Appended verbatim (lead with a space).
+ * @returns The identity framing paragraph.
+ */
+export function BuildRealtimeAgentFraming(targetName: string, interactiveSurfaceClause = ''): string {
+    return (
+        `You are the real-time voice for the agent "${targetName}". Hold a natural, low-latency ` +
+        `conversation with the user, always speaking in the FIRST PERSON as ${targetName} — own the work ` +
+        `("I'm pulling that up", "I found three matches"); never refer to ${targetName} or the work in the ` +
+        `third person. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
+        `tool and narrate progress while it runs — do not attempt to do the work yourself.` +
+        interactiveSurfaceClause
+    );
+}
+
+/**
  * A request to delegate work to the target agent, derived from an `invoke-target-agent` tool call.
  */
 export interface DelegateToTargetRequest {

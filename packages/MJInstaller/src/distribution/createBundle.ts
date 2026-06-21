@@ -33,6 +33,13 @@ export interface CreateBundleOptions {
    * (PostgreSQL), so the bundle works against either database offline.
    */
   MigrationPlatform?: DbPlatform;
+  /**
+   * Include the pre-built Claude Code pack (CLAUDE.md + `.claude/` tree) in the bundle.
+   * Default (`undefined` / `true`): include if present at the source. Pass `false` to
+   * exclude (`--no-claude-pack` on `mj bundle`). Honors Goal #1 of the pack design —
+   * air-gapped installs get the Claude experience without a second over-the-wire step.
+   */
+  IncludeClaudePack?: boolean;
 }
 
 /** Result of {@link createDistributionBundle}. */
@@ -59,12 +66,11 @@ export async function createDistributionBundle(opts: CreateBundleOptions): Promi
   const assembler = new DistributionAssembler();
   const includeMigrations = opts.IncludeMigrations ?? false;
   const migrationPlatform = opts.MigrationPlatform;
+  const includeClaudePack = opts.IncludeClaudePack ?? true;
+  const assembleOpts = { IncludeMigrations: includeMigrations, MigrationPlatform: migrationPlatform, IncludeClaudePack: includeClaudePack };
 
   if (opts.SourceDir) {
-    const ops = await assembler.AssembleToZip(
-      { SourceDir: opts.SourceDir, IncludeMigrations: includeMigrations, MigrationPlatform: migrationPlatform },
-      opts.Out,
-    );
+    const ops = await assembler.AssembleToZip({ SourceDir: opts.SourceDir, ...assembleOpts }, opts.Out);
     return { Out: opts.Out, EntryCount: ops.length, Source: 'local', UsedFallback: false };
   }
 
@@ -75,11 +81,11 @@ export async function createDistributionBundle(opts: CreateBundleOptions): Promi
   const fetched = await new RepoFetcher().FetchPaths({
     RepoUrl: opts.RepoUrl ?? DEFAULT_REPO_URL,
     Ref: opts.Ref,
-    Paths: distributionSourcePaths(includeMigrations, migrationPlatform),
+    Paths: distributionSourcePaths(includeMigrations, migrationPlatform, includeClaudePack),
   });
 
   try {
-    const ops = await assembler.AssembleToZip({ SourceDir: fetched.Dir, IncludeMigrations: includeMigrations, MigrationPlatform: migrationPlatform }, opts.Out);
+    const ops = await assembler.AssembleToZip({ SourceDir: fetched.Dir, ...assembleOpts }, opts.Out);
     return { Out: opts.Out, EntryCount: ops.length, Source: 'fetch', UsedFallback: fetched.UsedFallback };
   } finally {
     await fetched.Cleanup();

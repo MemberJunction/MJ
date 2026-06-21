@@ -137,14 +137,9 @@ class TestParallelAgent extends BaseAgent {
         (this as any).queueStepSave(stepEntity);
     }
 
-    // Expose internal pendingSaves for assertion
-    public getPendingSaves() {
-        return (this as any)._pendingSaves;
-    }
-
-    // Expose internal stepSavePromises for assertion
-    public getStepSavePromises() {
-        return (this as any)._stepSavePromises;
+    // Flush the shared fire-and-forget step-save queue (awaits every queued INSERT/UPDATE save).
+    public async testFlushStepSaves() {
+        return await (this as any)._stepSaveQueue.Flush();
     }
 
     protected override async ExecuteSubAgent<SC = any, SR = any>(
@@ -207,7 +202,7 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
             agent.testQueueStepSave(step1);
             agent.testQueueStepSave(step2);
 
-            await Promise.all(agent.getPendingSaves());
+            await agent.testFlushStepSaves();
 
             expect(callOrder).toContain('step-1-saved');
             expect(callOrder).toContain('step-2-saved');
@@ -267,7 +262,7 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
             resolveFirstSave(true);
 
             // Wait for all pending saves to complete
-            await Promise.all(agent.getPendingSaves());
+            await agent.testFlushStepSaves();
 
             expect(callOrder).toEqual([
                 'save-1-started',
@@ -312,7 +307,7 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
             expect(callOrder).toEqual(['insert-started']);
 
             resolveInsert(true);
-            await Promise.all(agent.getPendingSaves());
+            await agent.testFlushStepSaves();
 
             expect(callOrder).toEqual(['insert-started', 'insert-ended', 'update-started']);
         });
@@ -917,14 +912,12 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
     });
 
     describe('finalizeAgentRun pending-save lifecycle', () => {
-        it('should clear _pendingSaves and _stepSavePromises after awaiting them', async () => {
-            const step1 = new MockStepEntity('s1');
-            const step2 = new MockStepEntity('s2');
+        it('flushes the queued step saves through finalizeAgentRun (queue drains)', async () => {
+            let saved = 0;
+            const step1 = new MockStepEntity('s1', async () => { saved++; return true; });
+            const step2 = new MockStepEntity('s2', async () => { saved++; return true; });
             agent.testQueueStepSave(step1);
             agent.testQueueStepSave(step2);
-
-            expect(agent.getPendingSaves().length).toBe(2);
-            expect(agent.getStepSavePromises().size).toBe(2);
 
             // Invoke finalizeAgentRun via reflection
             const fakeFinalStep: any = { step: 'Success', terminate: true, newPayload: {}, previousPayload: {} };
@@ -939,20 +932,22 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
                 Save: vi.fn().mockResolvedValue(true)
             };
             // Stub out resolveMediaPlaceholdersInPayload/processMessageMediaPlaceholders so
-            // finalize doesn't blow up before reaching the cleanup we care about.
+            // finalize doesn't blow up before reaching the queue flush we care about.
             (agent as any).resolveMediaPlaceholdersInPayload = (x: any) => x;
             (agent as any).processMessageMediaPlaceholders = (x: any) => x;
             (agent as any).buildExecuteAgentResult = vi.fn().mockReturnValue({ success: true });
-            (agent as any).finalize_realFinalize = (agent as any).finalizeAgentRun;
 
             try {
                 await (agent as any).finalizeAgentRun(fakeFinalStep, {}, undefined);
             } catch {
-                // We only care about the cleanup contract, not the rest of finalize
+                // We only care about the flush contract, not the rest of finalize
             }
 
-            expect(agent.getPendingSaves().length).toBe(0);
-            expect(agent.getStepSavePromises().size).toBe(0);
+            // finalize awaited the queue's flush, so both queued saves ran...
+            expect(saved).toBe(2);
+            // ...and the queue is drained: a subsequent flush reports no pending work.
+            const after = await agent.testFlushStepSaves();
+            expect(after.failures).toBe(0);
         });
     });
 });

@@ -1,0 +1,20 @@
+[
+  {
+    "entity": "MJ: Scheduled Job Types",
+    "fields": {
+      "Name": "Run Record Process",
+      "Description": "Runs a Record Process (MJ: Record Processes) on a cron schedule via the RecordSetProcessor engine — iterating the process's scoped record set (View / List / Filter) and applying its configured Action or Agent work with batching, bounded concurrency, rate limiting, and pause/resume. Each run is tracked in MJ: Process Runs. Configuration: { \"RecordProcessID\": \"<id>\" }.",
+      "DriverClass": "RecordProcessScheduledJobDriver",
+      "DomainRunEntity": "MJ: Process Runs",
+      "DomainRunEntityFKey": "ScheduledJobRunID",
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "C4C46927-C884-4E5B-B900-97537BEDFDBD"
+    },
+    "sync": {
+      "lastModified": "2026-06-20T16:51:06.055Z",
+      "checksum": "4bb7bd9090d5674663c6244135d52442b2fb91260185d86cff169861b6346811"
+    }
+  }
+]

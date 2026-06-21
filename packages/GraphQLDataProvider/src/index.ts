@@ -32,6 +32,16 @@ export type {
     ClusterAnalysisInfo,
     ClusterAnalysisMetrics
 } from './graphQLClusterClient';
+export { GraphQLLiveKitClient } from './graphQLLiveKitClient';
+export type {
+    MintLiveKitClientTokenInput,
+    LiveKitClientTokenResult,
+    StartLiveKitAgentRoomSessionInput,
+    LiveKitAgentRoomSessionResult,
+    LiveKitRecordingResult,
+    RealtimeModelVoices,
+    RealtimeVoiceOption
+} from './graphQLLiveKitClient';
 export { GraphQLClassifyClient } from './graphQLClassifyClient';
 export type {
     GenerateSeedTaxonomyInput,

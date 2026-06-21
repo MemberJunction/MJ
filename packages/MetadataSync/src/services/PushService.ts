@@ -43,6 +43,21 @@ export interface PushOptions {
   incremental?: boolean;  // Skip files whose checksum hasn't changed since last push
 }
 
+/**
+ * A single record-level failure, surfaced exactly ONCE per failed record (unlike
+ * {@link PushCallbacks.onError}, which is multi-line human logging). Lets a
+ * machine-readable consumer collect a structured error list — `mj sync push
+ * --format=json | jq '.errors[]'` — instead of parsing the human log.
+ */
+export interface PushRecordError {
+  entityName: string;
+  /** Source file path of the offending record, when known. */
+  path?: string;
+  /** Display form of the primary key, e.g. "ID=85B8…". */
+  primaryKey?: string;
+  message: string;
+}
+
 export interface PushCallbacks {
   onProgress?: (message: string) => void;
   /**
@@ -51,6 +66,12 @@ export interface PushCallbacks {
    */
   onSuccess?: (message: string, changed?: boolean) => void;
   onError?: (message: string) => void;
+  /**
+   * Structured per-record failure, fired once per failed record (in addition to
+   * the human-readable {@link PushCallbacks.onError} lines). Use this to build a
+   * machine-readable error list.
+   */
+  onRecordError?: (detail: PushRecordError) => void;
   onWarn?: (message: string) => void;
   onLog?: (message: string) => void;
   onConfirm?: (message: string) => Promise<boolean>;
@@ -1065,6 +1086,14 @@ export class PushService {
           const warning = `Record not found: ${entityName} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
           localWarnings.push(warning);
           callbacks?.onWarn?.(warning);
+          // Counted as an error below — surface it structurally too (this path
+          // returns rather than throws, so it wouldn't otherwise reach onRecordError).
+          callbacks?.onRecordError?.({
+            entityName,
+            path: flattenedRecord.path,
+            primaryKey: pkDisplay,
+            message: `Record not found: ${entityName} {${pkDisplay}} (set push.autoCreateMissingRecords=true to auto-create)`,
+          });
           return { status: 'error', isDuplicate: false, warnings: localWarnings }; // This will be counted as error, not skipped
         } else {
           // Log that we're creating the missing record
@@ -1456,6 +1485,14 @@ export class PushService {
         callbacks?.onError?.(`   ⚠️  Transaction error detected. The database transaction may be corrupted.`);
       }
       
+      // Structured, single-shot error for machine-readable consumers.
+      callbacks?.onRecordError?.({
+        entityName,
+        path: flattenedRecord.path,
+        primaryKey: primaryKeyInfo.length > 0 ? primaryKeyInfo.join(', ') : undefined,
+        message: errorMessage,
+      });
+
       // Throw error to trigger rollback and stop processing
       throw new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
     }
@@ -1695,7 +1732,14 @@ export class PushService {
         if (errorDetails) {
           callbacks?.onError?.(`   Details: ${errorDetails}`);
         }
-        
+
+        callbacks?.onRecordError?.({
+          entityName,
+          path: flattenedRecord.path,
+          primaryKey: primaryKeyDisplay.length > 0 ? primaryKeyDisplay.join(', ') : undefined,
+          message: errorMessage,
+        });
+
         throw new Error(`Failed to delete ${entityName} record: ${errorMessage}`);
       }
 

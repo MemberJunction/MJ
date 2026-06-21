@@ -1,0 +1,28 @@
+[
+  {
+    "fields": {
+      "Name": "Meet",
+      "Description": "Multi-party live meetings inside MemberJunction — audio, video, and screen share with people and MJ agents together in the room. Built on the MJ-native LiveKit bridge.",
+      "Icon": "fa-solid fa-video",
+      "Color": "#0076b6",
+      "DefaultForNewUser": false,
+      "Status": "Active",
+      "DefaultNavItems": [
+        {
+          "Label": "Live Room",
+          "Icon": "fa-solid fa-video",
+          "ResourceType": "Custom",
+          "DriverClass": "LiveKitRoomResource",
+          "isDefault": true
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4FBD1C76-BE86-448D-815F-42100DCEC010"
+    },
+    "sync": {
+      "lastModified": "2026-06-20T16:51:06.597Z",
+      "checksum": "afe06cfd31d14c1f20871a7cfc76c47cc6d20ca9412461b45ecee1eaec321c99"
+    }
+  }
+]

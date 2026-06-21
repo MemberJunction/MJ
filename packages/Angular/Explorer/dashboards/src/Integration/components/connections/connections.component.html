@@ -343,6 +343,14 @@
                     title="Select source objects and create entity tables">
               <i class="fa-solid fa-table"></i> Create Tables
             </button>
+            <button class="add-map-btn" (click)="FindAndAddNewTables()" [disabled]="IsCreatingTables"
+                    title="Discover and add every source object that isn't mapped yet, in one step">
+              @if (IsCreatingTables) {
+                <i class="fa-solid fa-spinner fa-spin"></i> Finding…
+              } @else {
+                <i class="fa-solid fa-magnifying-glass-plus"></i> Find New Tables
+              }
+            </button>
             <button class="add-map-btn" (click)="ToggleAutoMapPanel()" [class.active]="ShowAutoMapPanel">
               <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map Schema
             </button>

@@ -19,5 +19,89 @@
       "lastModified": "2026-06-05T02:25:21.808Z",
       "checksum": "f02072e35ad369f0373d75fc68ec1d8a0b8f499d43f0842fcf39048d44a5e059"
     }
+  },
+  {
+    "fields": {
+      "Name": "AI Agents Search",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agents",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-ai-agents-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    },
+    "primaryKey": {
+      "ID": "DA9AD383-A4DC-4C0C-93A8-EAC99C75054B"
+    },
+    "sync": {
+      "lastModified": "2026-06-20T16:51:05.832Z",
+      "checksum": "270f1eb62ec9ae72fc92863b3f35ba10e7a17bbb1c1bac5256f4f7aa2c236dc5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Actions Search",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Actions",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-actions-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    },
+    "primaryKey": {
+      "ID": "E467CA46-2469-4585-BB51-062DEAF05187"
+    },
+    "sync": {
+      "lastModified": "2026-06-20T16:51:06.002Z",
+      "checksum": "a02ec9863bee105d4463cf5373766c564472617ea15fb66deb39cdc0a4042b8b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Prompts Search",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Prompts",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-ai-prompts-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    },
+    "primaryKey": {
+      "ID": "B0970355-4BE1-4E45-BA41-F2FCC02DDB3D"
+    },
+    "sync": {
+      "lastModified": "2026-06-20T16:51:05.796Z",
+      "checksum": "a00332331dab351114cd25e07802fec89714d033cc073c0fd6066baadf419b6c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Models Search",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Models",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-ai-models-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    },
+    "primaryKey": {
+      "ID": "2983145C-51B8-4E45-BD28-63361AE5CA1A"
+    },
+    "sync": {
+      "lastModified": "2026-06-20T16:51:05.986Z",
+      "checksum": "80a6d308a4c3dbb9cc9381b2ccd095bd044dd679047bbe58c42dde6f1c8648af"
+    }
   }
 ]

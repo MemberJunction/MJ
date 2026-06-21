@@ -2,6 +2,7 @@
 // Reusable standalone Angular UI components for MemberJunction
 
 export * from './lib/button/button.directive';
+export * from './lib/clickable/clickable.directive';
 export * from './lib/dialog/dialog.component';
 export * from './lib/dialog/dialog.service';
 export * from './lib/dropdown/dropdown.component';
