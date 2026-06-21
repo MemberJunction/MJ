@@ -208,19 +208,28 @@ export async function runSyncObserved(gql, ciid, opts) {
  * Returns { ciid, credentialID, maps, referenceMode }.
  */
 export async function phaseSetup({ gql, cfg }) {
-    const referenceMode = !!cfg.companyIntegrationID;
+    // TOKEN WINS: a supplied token forces create/token mode even if a (possibly stale) CIID lingers —
+    // a stale HS_LIVE_CIID must never silently force reference mode for a credentialed run.
+    const referenceMode = !!cfg.companyIntegrationID && !cfg.token;
     let ciid, credentialID = null, schemaRefresh = null, connectionTest = null;
 
     if (referenceMode) {
         ciid = cfg.companyIntegrationID;
     } else {
         if (!cfg.token) throw new Error('phaseSetup: no companyIntegrationID (reference mode) and no token (create mode) — nothing to connect with');
+        // MULTI-SECRET credentials: build CredentialValues from E2E_TOKEN_KEY (the secret key name) +
+        // E2E_LIVE_CONFIG (non-secret fields, e.g. SharePoint ClientId/TenantId), not a hardcoded
+        // { apiKey }. Single-secret connectors keep working (default key 'apiKey', empty extra).
+        const liveTokenKey = process.env.E2E_TOKEN_KEY || 'apiKey';
+        let liveExtra = {};
+        try { liveExtra = process.env.E2E_LIVE_CONFIG ? JSON.parse(process.env.E2E_LIVE_CONFIG) : {}; } catch { liveExtra = {}; }
         const input = {
             CompanyID: cfg.companyID,
             IntegrationID: cfg.integrationID,
             CredentialTypeID: cfg.credentialTypeID,
             CredentialName: cfg.credentialName ?? `hs-live-${cfg.runId}`,
-            CredentialValues: JSON.stringify({ apiKey: cfg.token }),
+            CredentialValues: JSON.stringify({ ...liveExtra, [liveTokenKey]: cfg.token }),
+            ...(Object.keys(liveExtra).length ? { Configuration: JSON.stringify(liveExtra) } : {}),
         };
         const conn = expectGqlSuccess('CreateConnection',
             (await gql(GQL.createConnection, { input, testConnection: true, runSchemaRefresh: true })).IntegrationCreateConnection);
