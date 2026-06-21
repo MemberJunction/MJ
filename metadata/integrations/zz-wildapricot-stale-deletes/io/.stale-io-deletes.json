@@ -1,0 +1,211 @@
+[
+  {
+    "fields": {
+      "Name": "Contacts"
+    },
+    "primaryKey": {
+      "ID": "DD8ABE45-1EEA-4EF2-9D24-512AA017120A"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ContactFields"
+    },
+    "primaryKey": {
+      "ID": "B8336AF2-F861-4173-9EEA-7CEF081F4301"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "MembershipLevels"
+    },
+    "primaryKey": {
+      "ID": "9F075C9A-081E-443C-B2E2-3E841A730EDD"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "MemberGroups"
+    },
+    "primaryKey": {
+      "ID": "1B546090-7CB4-4E29-8A6E-0D7FBD67A11A"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Events"
+    },
+    "primaryKey": {
+      "ID": "96154A9F-ACB2-4727-8555-3CA7859E2866"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "EventRegistrations"
+    },
+    "primaryKey": {
+      "ID": "FC12147A-6FFD-485D-AE55-69A05A190D68"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "EventRegistrationTypes"
+    },
+    "primaryKey": {
+      "ID": "2988CD89-B569-4DA4-9296-73E91CFEFB34"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Invoices"
+    },
+    "primaryKey": {
+      "ID": "4885BD86-F0EE-4418-BBF6-93C01E687619"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Payments"
+    },
+    "primaryKey": {
+      "ID": "9D2FCE0C-0266-4347-B00C-D8428524B947"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Refunds"
+    },
+    "primaryKey": {
+      "ID": "CCB21476-D58F-45DD-87DA-DC58C8B0F309"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Donations"
+    },
+    "primaryKey": {
+      "ID": "19FD373A-C9C4-48EC-9B47-398635164EE0"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "DonationFields"
+    },
+    "primaryKey": {
+      "ID": "EA9BD358-1965-492B-8355-129F2F0B272D"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tenders"
+    },
+    "primaryKey": {
+      "ID": "47CF0955-CFF2-456C-AC3C-8384DBA40489"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bundles"
+    },
+    "primaryKey": {
+      "ID": "24967E9A-0668-49B0-A231-26D65CFFE2A5"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "SentEmails"
+    },
+    "primaryKey": {
+      "ID": "6743BA8F-27AC-4AFE-B5E8-9955F6C0BB9C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "EmailDrafts"
+    },
+    "primaryKey": {
+      "ID": "510FDBB4-F9C5-4A2D-B90B-C8DF9431D17E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "AuditLogItems"
+    },
+    "primaryKey": {
+      "ID": "94C7839C-C25B-4A1F-A6A6-6C80297F9E3C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "SavedSearches"
+    },
+    "primaryKey": {
+      "ID": "7D4B7FA8-5FE8-4A6A-B55C-6B94D9341054"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "StoreProducts"
+    },
+    "primaryKey": {
+      "ID": "373817C7-990C-4AB6-BED2-2116EB008E75"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  }
+]

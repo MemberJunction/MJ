@@ -19,7 +19,7 @@ export { MailchimpConnector } from './MailchimpConnector.js';
 export { SharePointConnector } from './SharePointConnector.js';
 export { DynamicsDataverseConnector, LoadDynamicsDataverseConnector, type DynamicsConnectionConfig } from './DynamicsDataverseConnector.js';
 export { MagnetMailConnector } from './MagnetMailConnector.js';
-export { WildApricotConnector } from './WildApricotConnector.js';
+export { WildApricotConnector, LoadWildApricotConnector } from './WildApricotConnector.js';
 export { Reach360Connector } from './Reach360Connector.js';
 export { BlackbaudConnector } from './BlackbaudConnector.js';
 export { NetSuiteConnector } from './NetSuiteConnector.js';

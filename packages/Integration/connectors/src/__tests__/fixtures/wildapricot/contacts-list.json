@@ -1,0 +1,34 @@
+{
+  "ContactsCount": 2,
+  "Contacts": [
+    {
+      "Id": 41000001,
+      "FirstName": "<scrubbed-name-1>",
+      "LastName": "<scrubbed-name-2>",
+      "Email": "example+1@example.com",
+      "Organization": "<scrubbed-org-1>",
+      "DisplayName": "<scrubbed-name-1> <scrubbed-name-2>",
+      "MembershipEnabled": true,
+      "Status": "Active",
+      "ProfileLastUpdated": "2026-03-14T10:22:00-04:00",
+      "FieldValues": [
+        { "FieldName": "First name", "SystemCode": "FirstName", "Value": "<scrubbed-name-1>" },
+        { "FieldName": "Custom Region", "SystemCode": "custom-12345", "Value": "Northeast" }
+      ]
+    },
+    {
+      "Id": 41000002,
+      "FirstName": "<scrubbed-name-3>",
+      "LastName": "<scrubbed-name-4>",
+      "Email": "example+2@example.com",
+      "Organization": "<scrubbed-org-2>",
+      "DisplayName": "<scrubbed-name-3> <scrubbed-name-4>",
+      "MembershipEnabled": false,
+      "Status": "Lapsed",
+      "ProfileLastUpdated": "2026-05-02T08:00:00-04:00",
+      "FieldValues": [
+        { "FieldName": "Custom Region", "SystemCode": "custom-12345", "Value": "West" }
+      ]
+    }
+  ]
+}

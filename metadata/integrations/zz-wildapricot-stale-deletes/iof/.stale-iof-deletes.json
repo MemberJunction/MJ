@@ -1,0 +1,1597 @@
+[
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "E4046AAB-B5CB-464A-881C-3FED3FB61FB8"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "FirstName"
+    },
+    "primaryKey": {
+      "ID": "5DB05E20-A827-40B0-9114-A0DAAEC47A5A"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "LastName"
+    },
+    "primaryKey": {
+      "ID": "138A0B8A-4257-4CC5-9A67-F8C1E246627E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Email"
+    },
+    "primaryKey": {
+      "ID": "6E199D09-CFEA-403F-A4A3-FF562644AEB6"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Organization"
+    },
+    "primaryKey": {
+      "ID": "C2F8107F-A8F3-417F-BAEC-7616E91C6662"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "DisplayName"
+    },
+    "primaryKey": {
+      "ID": "ECB5A10C-0482-45AC-8BAD-BDE723C1C968"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "MembershipEnabled"
+    },
+    "primaryKey": {
+      "ID": "C1A013B2-C1FF-437F-9DE0-C02E68CDCDFA"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Status"
+    },
+    "primaryKey": {
+      "ID": "0A8C7487-8F89-4C1B-9370-91FF0788BDBF"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "MembershipLevel"
+    },
+    "primaryKey": {
+      "ID": "0C1D418A-A492-4CC0-A49D-1C22AD44CFD6"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ProfileLastUpdated"
+    },
+    "primaryKey": {
+      "ID": "B5F0D244-B55F-42B5-8D39-4344023B0E89"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "FieldValues"
+    },
+    "primaryKey": {
+      "ID": "E160CD3A-F39B-4AF2-9C69-D446D3118E5E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "1732713F-ECEB-445E-B1CD-A2E4EA73FDA8"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "SystemCode"
+    },
+    "primaryKey": {
+      "ID": "7FF922E7-11A0-4805-B48A-32AA9F119061"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "FieldName"
+    },
+    "primaryKey": {
+      "ID": "C8486172-F164-4971-87EC-2FBDA4AEE4EF"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "FieldType"
+    },
+    "primaryKey": {
+      "ID": "5395F26A-2640-4B79-9F6E-70A44B1143E8"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "MemberOnly"
+    },
+    "primaryKey": {
+      "ID": "66E7FA39-5E88-4D56-B4B9-8E6307D5EA8C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "IsSystem"
+    },
+    "primaryKey": {
+      "ID": "7B3AD648-4308-40D9-A609-B00CF1DB3FFE"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "42802F16-4671-42B4-8235-D26DC2AE017B"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Name"
+    },
+    "primaryKey": {
+      "ID": "641756AA-3F29-4E28-A9ED-FD3AFA919F79"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Description"
+    },
+    "primaryKey": {
+      "ID": "D65AA64C-7B79-45BE-8281-0B872563330D"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Type"
+    },
+    "primaryKey": {
+      "ID": "EA95386F-8531-4C4D-BED4-7ABDDCC3E0E4"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "MembershipFee"
+    },
+    "primaryKey": {
+      "ID": "38D5AC67-E3D8-45CE-A660-04B0C6EE2B66"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "PublicCanApply"
+    },
+    "primaryKey": {
+      "ID": "B6FAB58D-F5B1-4AA0-B938-916765D823C1"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "BundleMembersLimit"
+    },
+    "primaryKey": {
+      "ID": "36D8DA59-0234-4B95-B3AB-AFB3123AE339"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "CB451CC4-2090-4F48-B520-97E470D35A33"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ContactsCount"
+    },
+    "primaryKey": {
+      "ID": "88180F78-F9C8-47FC-8570-BDDFD1AAB800"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ContactIds"
+    },
+    "primaryKey": {
+      "ID": "D0887CF6-7B8A-4859-BC10-FAA71B78B9C2"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "71B8EB05-324C-4CB9-98AF-D2FF32F7861B"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Name"
+    },
+    "primaryKey": {
+      "ID": "F7F0CB83-9CB7-49FF-8782-4E781CE0229D"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "EventType"
+    },
+    "primaryKey": {
+      "ID": "8018BFF6-9BB1-41F9-9660-142EEB755F18"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "StartDate"
+    },
+    "primaryKey": {
+      "ID": "E9F3AD6F-D291-418C-8B42-426EDB057EFC"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "EndDate"
+    },
+    "primaryKey": {
+      "ID": "A2EE31E7-211B-4F78-8417-ABCC18E4FAA3"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Location"
+    },
+    "primaryKey": {
+      "ID": "FA9E9F4C-1FF9-4EBC-8FCD-9E9425238659"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "RegistrationEnabled"
+    },
+    "primaryKey": {
+      "ID": "0FDEEF7B-1354-4EF7-A569-1344BCE43746"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "RegistrationsLimit"
+    },
+    "primaryKey": {
+      "ID": "2FE11F26-BFB6-434D-9631-E1048103AA26"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tags"
+    },
+    "primaryKey": {
+      "ID": "98087A5D-283E-4484-8BA4-E4B855E578A5"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "LastUpdated"
+    },
+    "primaryKey": {
+      "ID": "50220CFC-1A76-4EEB-81B1-D9FF5091D0C4"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "2107A364-9AC9-4A1C-A2D0-037812DF5EAB"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Event"
+    },
+    "primaryKey": {
+      "ID": "77FE4337-9BA1-451C-BD82-1A4380DA2193"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Contact"
+    },
+    "primaryKey": {
+      "ID": "69F8CF0E-CC51-4AF2-A874-E85D5353E028"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "RegistrationTypeId"
+    },
+    "primaryKey": {
+      "ID": "BE3CC22C-530E-4AF9-945C-196D8F3AAF25"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "IsCheckedIn"
+    },
+    "primaryKey": {
+      "ID": "7D003986-C8F3-4E84-B8B1-5B25077F0203"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "RegistrationDate"
+    },
+    "primaryKey": {
+      "ID": "27B91EC9-81E5-44BE-9A9C-35CAB930F853"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Memo"
+    },
+    "primaryKey": {
+      "ID": "A9F877A6-AC65-4F5D-A1BE-F1EA901A31BC"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ShowToPublic"
+    },
+    "primaryKey": {
+      "ID": "440A45BE-BC59-404B-AD19-621BBD4F35C2"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "8E30CCCA-092B-4D4B-A2CB-139C75C7E7E4"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "EventId"
+    },
+    "primaryKey": {
+      "ID": "185AB886-8FE8-4B35-BDB4-7DC34C5DA27B"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Name"
+    },
+    "primaryKey": {
+      "ID": "073A204F-304A-44C8-B9B9-635C872F674D"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "IsEnabled"
+    },
+    "primaryKey": {
+      "ID": "10D95305-54AD-4F30-B2C6-185EDC0092BD"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Description"
+    },
+    "primaryKey": {
+      "ID": "78102916-7B91-47A0-A718-78C6AD060C06"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "BasePrice"
+    },
+    "primaryKey": {
+      "ID": "BD600D99-1A65-4E8C-A879-536C6BDC2EB4"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "GuestPrice"
+    },
+    "primaryKey": {
+      "ID": "125166BC-6477-41DE-BC07-6FF24669465F"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "AvailableFrom"
+    },
+    "primaryKey": {
+      "ID": "8812F48C-2256-4303-A2CA-A2AE4A1FC9CA"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "AvailableThrough"
+    },
+    "primaryKey": {
+      "ID": "2FF422DB-35CD-4D21-BE64-06A1F000B3BF"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "MaximumRegistrantsCount"
+    },
+    "primaryKey": {
+      "ID": "75D90604-A6CA-4EDE-8872-B177285BCFC4"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "IsWaitlistEnabled"
+    },
+    "primaryKey": {
+      "ID": "2F691864-7769-4EFC-8417-F1FF71EC3CCB"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "D11676E2-E947-4511-BE04-F99C1B50E602"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "DocumentNumber"
+    },
+    "primaryKey": {
+      "ID": "222D882D-2702-448B-98A7-3AE78AFE6109"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "IsPaid"
+    },
+    "primaryKey": {
+      "ID": "F21541B0-C1D2-4103-9847-E331D8086280"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "PaidAmount"
+    },
+    "primaryKey": {
+      "ID": "4E7CBDFB-F790-4CC0-B525-2B5D2C93302E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "OrderType"
+    },
+    "primaryKey": {
+      "ID": "37440938-1FCB-4EF3-8D82-48235E51A29E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Memo"
+    },
+    "primaryKey": {
+      "ID": "D1CF788E-52BE-459D-9109-6611D71289E0"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "PublicMemo"
+    },
+    "primaryKey": {
+      "ID": "95C7E2C6-007D-4B3F-9B27-E54587EF08B9"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "VoidedDate"
+    },
+    "primaryKey": {
+      "ID": "6531C447-B666-46B8-8F7A-0553F899CAE0"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "LastUpdated"
+    },
+    "primaryKey": {
+      "ID": "C588273A-A066-40A8-9651-CE1FC80E4BBB"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "AB072209-C396-4F5A-AA36-5678F7E09CE0"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Value"
+    },
+    "primaryKey": {
+      "ID": "05CE4FDA-9DF5-49AA-9DD0-B8CE2D2A715B"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "DocumentDate"
+    },
+    "primaryKey": {
+      "ID": "31088B1F-3C15-44E6-BC67-FCE0C68CD0F8"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Invoices"
+    },
+    "primaryKey": {
+      "ID": "C6E0352A-9259-4C52-9CE4-559DC625A342"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Contact"
+    },
+    "primaryKey": {
+      "ID": "F04B4166-DF71-4DCC-B2BE-1DD199DAD05B"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tender"
+    },
+    "primaryKey": {
+      "ID": "E4AB1F6B-87E9-4FF4-992F-9CE3B01A8B2C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comment"
+    },
+    "primaryKey": {
+      "ID": "E3BA87ED-64D4-4C33-8DCD-5337CDC1BD04"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "PublicComment"
+    },
+    "primaryKey": {
+      "ID": "0D751C3E-BD08-45B4-8679-C61974598ADF"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "PaymentType"
+    },
+    "primaryKey": {
+      "ID": "96660432-2EA0-429F-867C-7D08DC31F36E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "LastUpdated"
+    },
+    "primaryKey": {
+      "ID": "2B015617-9BF2-43D3-BBD9-22D81824CBA3"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "48F0BD33-14A5-45B3-A0EB-A508DBAF8DD8"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tender"
+    },
+    "primaryKey": {
+      "ID": "3C8B3724-1AB3-4831-B050-10317B69E2CD"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comment"
+    },
+    "primaryKey": {
+      "ID": "82E186C6-0AB5-4B66-8E78-D0BCA0EE2984"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "PublicComment"
+    },
+    "primaryKey": {
+      "ID": "FCB3A2FF-8357-4815-848B-48F542C650C9"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "SettledValue"
+    },
+    "primaryKey": {
+      "ID": "B37B6648-36F4-4E0F-8183-877058C6EB6C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "67F3D09F-9A7E-4190-BC0A-68E6D248D141"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Value"
+    },
+    "primaryKey": {
+      "ID": "341E751E-12A2-4E24-B1EE-8CACFBB73D0C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "DonationDate"
+    },
+    "primaryKey": {
+      "ID": "C24C64C2-2628-4E9E-9CF7-4FFC27AED65E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "FirstName"
+    },
+    "primaryKey": {
+      "ID": "A2E80BE5-969D-4F95-9EFE-D80E574AC5EB"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "LastName"
+    },
+    "primaryKey": {
+      "ID": "C40712BD-3D30-4A33-996A-D62A76717A6C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Email"
+    },
+    "primaryKey": {
+      "ID": "D68A7263-55C3-4F7C-80E7-B1FDD1F9EC74"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Organization"
+    },
+    "primaryKey": {
+      "ID": "DC0EE96C-6756-40F9-8F2E-5B74F745FA4F"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Type"
+    },
+    "primaryKey": {
+      "ID": "3429B0EB-EF79-4046-9330-B0D22E9D0FAE"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comment"
+    },
+    "primaryKey": {
+      "ID": "C54CE141-9773-4D15-AC5E-7407EFEF8A17"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "PublicComment"
+    },
+    "primaryKey": {
+      "ID": "7CB660F2-D091-4473-AC3B-6F2D6B4D7B7D"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "34EF1123-C7CF-48E6-9A16-6575469606C7"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "FieldType"
+    },
+    "primaryKey": {
+      "ID": "DAEC18C4-773F-4CE8-80B4-E8626B2D782B"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "C1F71B28-BD79-4DB1-9A1D-E4BF5F047BB6"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "DisplayPosition"
+    },
+    "primaryKey": {
+      "ID": "7683F26E-5B50-4512-BA99-3BA6B4084834"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "IsCustom"
+    },
+    "primaryKey": {
+      "ID": "FDB7D27E-5716-4AAF-A134-5C14B69366A8"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "BA7BCE2D-CE33-4387-ADAB-B16AD2272D6C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Email"
+    },
+    "primaryKey": {
+      "ID": "C940EA2E-F3D8-4AAC-9EE1-C479263C0F44"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ParticipantsCount"
+    },
+    "primaryKey": {
+      "ID": "E7D83206-1E9D-4CB2-9BEB-058130FEEDF3"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "SpacesLeft"
+    },
+    "primaryKey": {
+      "ID": "FCD8864A-BB28-4836-95C2-3B5D3E98136F"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "B4AF47F9-1875-4E2F-AE71-B4A08EAAA335"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "SentDate"
+    },
+    "primaryKey": {
+      "ID": "0AF18C90-91E8-4627-8B40-74C01255E15F"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Subject"
+    },
+    "primaryKey": {
+      "ID": "8A2154D7-3B8F-4BD4-A058-5A18B33639FD"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "SenderId"
+    },
+    "primaryKey": {
+      "ID": "8CF82F4C-2CA5-4521-BB6A-579B5AA7467C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "SenderName"
+    },
+    "primaryKey": {
+      "ID": "D1FCE0BD-9C29-485A-8520-0F1C33B8D084"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "RecipientCount"
+    },
+    "primaryKey": {
+      "ID": "A85F1958-AE20-420D-9DB8-FBF68CD91CF6"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "SuccessfullySentCount"
+    },
+    "primaryKey": {
+      "ID": "BAC18313-6ECC-4951-9E2C-62CA655DB569"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ReadCount"
+    },
+    "primaryKey": {
+      "ID": "79A1AB95-DF65-4FD8-888A-6947A54FB3BA"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "UniqueLinkClickCount"
+    },
+    "primaryKey": {
+      "ID": "EB539860-28B5-4926-9C1F-83F63C4045D5"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "FailedCount"
+    },
+    "primaryKey": {
+      "ID": "DC5B67AC-1C02-4FEC-A3DC-175955BF8A4E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "InProgress"
+    },
+    "primaryKey": {
+      "ID": "46592D11-3612-4AB5-9154-F79AD0694EAA"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "3B29EEAA-86C3-4352-9B62-9A5DDDB7CBCB"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "CreatedDate"
+    },
+    "primaryKey": {
+      "ID": "17C312C4-9A19-4099-9680-57EBA1D0DEB9"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Type"
+    },
+    "primaryKey": {
+      "ID": "C0A2E20F-C040-4390-A7D6-5C5A1662CC70"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Subject"
+    },
+    "primaryKey": {
+      "ID": "F9D61773-D031-4A6F-9D64-3AB05966D782"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ReplyToName"
+    },
+    "primaryKey": {
+      "ID": "E06B89F2-77CF-4B1C-B415-985848ECC7A6"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ReplyToAddress"
+    },
+    "primaryKey": {
+      "ID": "08C08F02-2064-43B5-93DE-8D5A54542B37"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "EventId"
+    },
+    "primaryKey": {
+      "ID": "996EA8E8-5D55-4787-B727-D29C5BCC3DAE"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "IsLinkTrackingAllowed"
+    },
+    "primaryKey": {
+      "ID": "4A9567F9-9DD9-45ED-AB57-040CFCB4B32A"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "IsScheduled"
+    },
+    "primaryKey": {
+      "ID": "070D60BA-80F6-4D6D-8F0F-2BA8F092764C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ScheduledDate"
+    },
+    "primaryKey": {
+      "ID": "F8814CDA-98A9-4E6D-982A-94555165C18B"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "LastChangedDate"
+    },
+    "primaryKey": {
+      "ID": "D5258119-46FB-4C4E-AE89-1AC0C1CE0CF5"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "DC1559C8-E962-40B2-BA81-9BB941313805"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Timestamp"
+    },
+    "primaryKey": {
+      "ID": "6DF3E07B-2A34-48B8-AB67-ED73D72A34E4"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "FirstName"
+    },
+    "primaryKey": {
+      "ID": "45CBDE0D-EC7C-472D-9A30-5921D1F776DE"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "LastName"
+    },
+    "primaryKey": {
+      "ID": "9BFF872F-5D07-4299-8348-040767A18278"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Organization"
+    },
+    "primaryKey": {
+      "ID": "B7981C7C-204E-4116-BD45-AAAFA79EEA1C"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Email"
+    },
+    "primaryKey": {
+      "ID": "A51AE255-3FAD-4CCA-AE34-BB475778B3C4"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Message"
+    },
+    "primaryKey": {
+      "ID": "93A1E15A-AAEA-4919-A91E-A5AF360F4FC5"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Severity"
+    },
+    "primaryKey": {
+      "ID": "D5DC2F82-7389-4266-815E-49FCBBFB60BF"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "OrderType"
+    },
+    "primaryKey": {
+      "ID": "42E5BD19-E13E-4F65-884D-258FD44CBF37"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "DocumentType"
+    },
+    "primaryKey": {
+      "ID": "A7A5590C-C960-4CEC-A1F2-CE971C15343E"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "DocumentAction"
+    },
+    "primaryKey": {
+      "ID": "EED17CC4-E012-4936-8E8C-D619F594301A"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "Id"
+    },
+    "primaryKey": {
+      "ID": "8A6D03D3-74DB-482E-B189-9AD097742491"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "ContactIds"
+    },
+    "primaryKey": {
+      "ID": "E5608E8C-79BC-42DD-ACCD-55E70961ACA8"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "id"
+    },
+    "primaryKey": {
+      "ID": "B1501652-C73A-44B4-B854-AE71BAA16B54"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "title"
+    },
+    "primaryKey": {
+      "ID": "E853D9BC-D0F0-4843-85DB-45FE96C93A22"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "description"
+    },
+    "primaryKey": {
+      "ID": "77F5F139-9221-4CF0-BB2A-E179FCEF4C15"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "price"
+    },
+    "primaryKey": {
+      "ID": "7AE015C3-E916-4EA6-89A1-763EA0733BD5"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "status"
+    },
+    "primaryKey": {
+      "ID": "6633378A-F60F-4301-B980-C58887A6DCEE"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "type"
+    },
+    "primaryKey": {
+      "ID": "D01D3270-96F3-45F3-AA26-8E18FBFB4B98"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "stock"
+    },
+    "primaryKey": {
+      "ID": "E7D8C7E6-50E9-4D3D-B02A-F622052EF036"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "trackInventory"
+    },
+    "primaryKey": {
+      "ID": "1701B043-F598-4673-B014-95D92493DAD9"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "outOfStock"
+    },
+    "primaryKey": {
+      "ID": "F96D6458-21D2-4AD3-9188-EF45B351F9A9"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "totalStock"
+    },
+    "primaryKey": {
+      "ID": "16ACACA9-3480-49B5-99F8-A3A56C8B1629"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  },
+  {
+    "fields": {
+      "Name": "created"
+    },
+    "primaryKey": {
+      "ID": "F65ACB52-EAC1-4F4B-9B2D-7DE79F404D57"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  }
+]

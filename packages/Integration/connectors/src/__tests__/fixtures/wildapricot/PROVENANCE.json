@@ -1,0 +1,54 @@
+{
+  "Entries": [
+    {
+      "URL": "https://gethelp.wildapricot.com/en/articles/180-contacts-call",
+      "AccessedAt": "2026-06-21T00:00:00.000Z",
+      "UsedFor": "Wild Apricot GET /accounts/{accountId}/contacts response envelope shape (Contacts[] wrapper + ProfileLastUpdated watermark field + FieldValues[] custom fields). All PII scrubbed.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.Contact",
+      "Excerpt": "Response: { ContactsCount, Contacts: [ { Id, FirstName, LastName, Email, Organization, DisplayName, ProfileLastUpdated, FieldValues: [...] } ] }"
+    },
+    {
+      "URL": "https://gethelp.wildapricot.com/en/articles/484-events",
+      "AccessedAt": "2026-06-21T00:00:00.000Z",
+      "UsedFor": "Wild Apricot GET /accounts/{accountId}/events response envelope shape (Events[] wrapper + LastUpdated watermark). All PII scrubbed.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.Event",
+      "Excerpt": "Response: { Events: [ { Id, Name, StartDate, EndDate, Location, LastUpdated } ] }"
+    },
+    {
+      "URL": "https://gethelp.wildapricot.com/en/articles/391-membership-levels-call",
+      "AccessedAt": "2026-06-21T00:00:00.000Z",
+      "UsedFor": "Wild Apricot GET /accounts/{accountId}/membershiplevels returns a bare root array (no wrapper).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.MembershipLevel",
+      "Excerpt": "Response: [ { Id, Name, MembershipFee, Type } ]"
+    },
+    {
+      "URL": "https://oauth.wildapricot.org/auth/token",
+      "AccessedAt": "2026-06-21T00:00:00.000Z",
+      "UsedFor": "Wild Apricot OAuth2 client_credentials token-endpoint response shape (access_token / expires_in).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID",
+      "Excerpt": "POST oauth.wildapricot.org/auth/token, grant_type=client_credentials, clientId=APIKEY, scope=auto → { access_token, token_type: Bearer, expires_in }"
+    },
+    {
+      "URL": "https://gethelp.wildapricot.com/en/articles/180-contacts-call",
+      "AccessedAt": "2026-06-21T00:00:00.000Z",
+      "UsedFor": "Wild Apricot async Contacts pattern: $async=true returns ResultUrl + RequestFinished; poll until Contacts present.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.Contact",
+      "Excerpt": "GET /contacts?$async=true → { State, ResultId, ResultUrl }; poll ResultUrl until { Contacts: [...] }"
+    }
+  ]
+}

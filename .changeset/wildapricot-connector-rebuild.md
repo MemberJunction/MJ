@@ -1,0 +1,5 @@
+---
+"@memberjunction/integration-connectors": minor
+---
+
+Rebuild the Wild Apricot connector against the v2 connector arc: 28 Integration Objects (up from 19) with corrected primary keys (OpenAPI GetById–evidenced), incremental watermarks (AuditLogItem→Timestamp; Event incremental disabled — no last-modified field), and per-operation CRUD. The connector now extends `BaseRESTIntegrationConnector` using the shared `OAuth2TokenManager` auth-helper and reads object paths/watermarks from metadata, and adds a connection-level `ApiBaseUrl` override (sandbox/on-prem/test endpoints; reroutes both the data API and the OAuth2 token host via one config key). Verified credential-free over all 28 objects: T0 static, T1 invariants, T2 cross-pass, T3 doc self-check, T4 mocked-fixture, T7 OpenAPI bijective coverage, plus the bijection / dag-completeness / fk-lookup-qualifier floor graders (0 violations). The prior flat seed (`.wild-apricot.json`, 19 IOs) is removed and replaced by the per-vendor folder; top-level `deleteRecord` entries purge the stale Integration + 19 IO + 145 IOF rows on deploy.

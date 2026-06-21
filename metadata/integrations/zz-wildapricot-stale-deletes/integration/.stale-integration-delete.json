@@ -1,0 +1,13 @@
+[
+  {
+    "fields": {
+      "Name": "Wild Apricot"
+    },
+    "primaryKey": {
+      "ID": "4FB2B6BF-BA93-435A-8ABD-EB7D7890CCB6"
+    },
+    "deleteRecord": {
+      "delete": true
+    }
+  }
+]

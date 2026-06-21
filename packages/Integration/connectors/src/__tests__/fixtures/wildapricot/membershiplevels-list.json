@@ -1,0 +1,4 @@
+[
+  { "Id": 770001, "Name": "Individual", "Type": "Individual", "MembershipFee": 50.0, "PublicCanApply": true },
+  { "Id": 770002, "Name": "Bundle", "Type": "Bundle", "MembershipFee": 200.0, "BundleMembersLimit": 5, "PublicCanApply": true }
+]
