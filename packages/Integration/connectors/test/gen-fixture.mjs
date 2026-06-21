@@ -475,10 +475,31 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
 
   const { manifest, objectNames, deltaObject } = buildFixtureFromRows(rows, cfgKey, envelopeKey);
   if (!manifest) return { ok: false, reason: 'fixture builder produced no objects' };
+
+  // PER-CONNECTOR TEST DESCRIPTOR (each connector is unique). A connector's build may drop a
+  // `test-descriptor.json` next to its fixtures declaring what the GENERIC generator can't infer:
+  //   { "credentials": { "ApiKey": "...", "ApiSecret": "..." },   // exact keys this connector validates
+  //     "envelopeKey": "value",                                    // response envelope if code-defined
+  //     "fetchShape": "rest|accesspath|template-var|soql|soap|graphql",
+  //     "liveOnly": true }                                         // auth can't be mocked (Graph hardcoded host)
+  // `credentials` are merged into the fixture Configuration so connectors that validate specific cred keys
+  // (e.g. PheedLoop ApiKey/ApiSecret) stop failing "No credential found" in mock. liveOnly/fetchShape are
+  // surfaced for the harness/operator. This is the seam that makes the generic generator connector-aware.
+  let descriptor = null;
+  try {
+    const dPath = pathResolve(fixturesDir, 'test-descriptor.json');
+    if (existsSync(dPath)) descriptor = JSON.parse(readFileSync(dPath, 'utf8'));
+  } catch { /* malformed descriptor → ignore, use generic */ }
+  if (descriptor) {
+    if (descriptor.credentials && manifest.Configuration) Object.assign(manifest.Configuration, descriptor.credentials);
+    if (descriptor.fetchShape) manifest.FetchShape = descriptor.fetchShape;
+    if (descriptor.liveOnly) manifest.LiveOnly = true;
+  }
+
   mkdirSync(fixturesDir, { recursive: true });
   const out = pathResolve(fixturesDir, 'fixtures.json');
   writeFileSync(out, JSON.stringify(manifest, null, 2) + '\n');
-  return { ok: true, written: out, objectNames, deltaObject };
+  return { ok: true, written: out, objectNames, deltaObject, descriptor: descriptor ? Object.keys(descriptor) : null };
 }
 
 // ── CLI (legacy /tmp/<CONN>-meta.txt path) ──────────────────────────────────────
