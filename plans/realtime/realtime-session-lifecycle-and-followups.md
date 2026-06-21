@@ -82,9 +82,15 @@ From the turn-taking doc: L0 (name-addressing) ships today. L1 = a lightweight "
 
 ## Status / remaining
 
-**Shipped:** §1 (finalize on all teardown paths) · §2 (TTL/idle sweep) · §3 (floor control) · §4 (Gemini meeting mode — *pending live validation*) · §5 (unified room transcript) · §6 (first-agent re-gating + the speaking-indicator sub-bug) + the realtime-session **capability surface**.
+**Shipped:** §1 (finalize) · §2 (TTL/idle sweep, now **configurable** via `ConfigureSessionTimings`) · §3 (floor control) · §4 (Gemini meeting mode — *pending live validation*) · §5 (unified room transcript) · §5(b) **per-speaker diarization** · §6 (first-agent re-gating + the **re-gate context note** + speaking-indicator) + the realtime-session **capability surface**.
+
+**Surfacing (loose end #1) — SHIPPED:**
+- **Voice Transcripts dashboard** — a new nav item in the AI Analytics shell (`@memberjunction/ng-dashboards`): a master-detail browser over the meeting-room transcripts, **diarized per speaker** (agent lines → agent name; heard lines → the participant's display name via the `ExternalID` → roster join). `AnalyticsRealtimeTranscriptsComponent` + `realtime-transcripts-data.ts`.
+- **Meet-app linkage** — the transcript sink now resolves the **`Meet`** application by name (`ApplicationName: 'Meet'`) and stamps `ApplicationID` on the room conversation, so the rooms are owned by the Meet app (still scoped out of the normal chat list).
+
+**§5(b) diarization — SHIPPED:** the engine tracks `LastInboundSpeaker` from the inbound media frame's `SpeakerLabel` (which the LiveKit/Zoom drivers populate) and attributes each `User` transcript line to that participant — so the room transcript records *who* spoke, not just "a user." Single-speaker-at-a-time approximation; resolving a participant identity to an MJ `UserID` (vs. display name) is the remaining refinement.
 
 **Remaining:**
 1. **§4 live validation** — confirm the Gemini manual-activity turn boundaries against the live API in a busy room.
-2. **§5(b) per-speaker diarization** — so the room transcript attributes each line to its speaker (model transcript has no speaker label; needs audio-frame speaker correlation).
-3. **§7 smarter gate** (L1 contextual → L2 model-native), **§8 Phase 3** (per-host UX tools, video), configurable grace window, the `RealtimeClientSessionService` rename.
+2. **Diarization → UserID** — heard participants resolve to a display name; mapping to an MJ `UserID` needs a per-provider identity resolver (the `AIAgentSessionBridgeParticipant.UserID` is currently unpopulated).
+3. **§7 smarter gate** (L1 contextual → L2 model-native), **§8 Phase 3** (per-host UX tools, video), the `RealtimeClientSessionService` rename (deferred — mechanical, its own commit).

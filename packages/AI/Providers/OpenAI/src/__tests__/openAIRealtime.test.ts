@@ -388,6 +388,23 @@ describe('OpenAIRealtime', () => {
             }
         });
 
+        it('RequestSpokenUpdate with BLANK instructions omits the per-response override (uses the session prompt — preserves the delegate directive)', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            // The meeting-mode bridge trigger passes '' = "respond now using your session prompt". Forwarding
+            // `response.instructions: ''` would override (wipe) the system prompt — incl. 'call invoke-target-agent'.
+            for (const blank of ['', '   ']) {
+                driver.Fake.Sent = [];
+                session.RequestSpokenUpdate(blank);
+                driver.Fake.Fire({ type: 'response.done', event_id: 'e', response: {} } as RealtimeServerEvent); // clear flag
+                expect(driver.Fake.Sent).toHaveLength(1);
+                const respond = driver.Fake.Sent[0];
+                expect(respond.type).toBe('response.create');
+                if (respond.type === 'response.create') {
+                    expect(respond.response).toBeUndefined(); // no per-response instruction override
+                }
+            }
+        });
+
         it('RequestSpokenUpdate is SKIPPED while a response is active and resumes after response.done', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
             // Server reports a response in flight.

@@ -62,6 +62,26 @@ const ROOM_EMPTY_GRACE_MS = 15000;
 const FLOOR_MAX_HOLD_MS = 20000;
 
 /**
+ * Window for collapsing duplicate transcriptions of the SAME user utterance across a room's agents. When
+ * several agents transcribe the user (slightly apart), only the first dispatch within this window drives the
+ * room's addressing gate; later identical-text dispatches are dropped. See {@link AIBridgeEngine.dispatchUserTurn}.
+ */
+const ROOM_TURN_DEDUP_MS = 2500;
+
+/** Upper bound on the per-room diarized lookback the engine retains in memory (the moderator narrows this further). */
+const ROOM_LOOKBACK_MAX_TURNS = 50;
+
+/** Hard cap on chars stored per lookback turn (memory bound; the moderator clips again to its configured budget). */
+const ROOM_LOOKBACK_MAX_CHARS = 600;
+
+/**
+ * Runaway breaker: max consecutive agent-only turns (no human between) before the engine pauses agent↔agent
+ * continuation regardless of the configurable {@link RealtimeModeratorConfig.maxConsecutiveAgentOnlyTurns}
+ * (which defaults to no cap). Set high — real discussions don't approach it — purely to stop a pathological loop.
+ */
+const ROOM_AGENT_TURN_HARD_CEILING = 30;
+
+/**
  * Stale-session sweep thresholds (the SAME-process complement to {@link AIBridgeEngine.ReconcileOrphans},
  * which handles prior-boot orphans). A live session is reaped when it has been **idle** (no inbound
  * transcript) for longer than the idle TTL, OR has simply run past the absolute max duration — covering a
@@ -71,6 +91,12 @@ const FLOOR_MAX_HOLD_MS = 20000;
 const SESSION_IDLE_TTL_MS = 10 * 60 * 1000; // 10 min with no transcript activity
 const SESSION_MAX_DURATION_MS = 4 * 60 * 60 * 1000; // 4 h absolute cap
 const STALE_SWEEP_INTERVAL_MS = 60 * 1000; // sweep cadence when self-scheduled
+
+/** Context note injected into a re-gated agent so it knows it's now in a meeting (its prompt predates it). */
+const MEETING_REGATE_CONTEXT_NOTE =
+    'You are now in a multi-party meeting with other people and agents. Stop responding to everything you ' +
+    'hear — listen, and speak only when you are addressed by name or the conversation clearly needs your ' +
+    'expertise. Never talk over others, and keep your replies brief.';
 
 /**
  * Finalizes the co-agent observability run(s) for an agent session when a bridge is torn down WITHOUT a
@@ -118,6 +144,68 @@ export type BridgeTranscriptSink = (
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
 ) => void | Promise<void>;
+
+/** One diarized turn in the moderator's lookback window (oldest→newest). */
+export interface ModeratorLookbackTurn {
+    /** Display name of who spoke (agent name or participant label). */
+    Speaker: string;
+    /** Whether the speaker was an agent (vs a human participant). */
+    IsAgent: boolean;
+    /** The agent's id when {@link ModeratorLookbackTurn.IsAgent}. */
+    AgentID?: string;
+    /** What was said (engine stores a memory-bounded copy; the moderator clips further per its config). */
+    Text: string;
+}
+
+/** One agent eligible to speak in a room, as the turn moderator sees it. */
+export interface ModeratorRosterAgent {
+    /** The bridge's `AIAgentSession` id — the stable identifier the moderator returns to route a turn. */
+    AgentSessionID: string;
+    /** The co-agent's `MJ: AI Agents` id (the generic Realtime voice agent). */
+    AgentID?: string;
+    /** The TARGET agent this co-agent voices (the role/identity the user hears), when distinct from {@link ModeratorRosterAgent.AgentID}. */
+    TargetAgentID?: string;
+    /** Names/aliases the agent answers to. */
+    Names: string[];
+    /** Short role/description for relevance judgement (the moderator plugin resolves the live value from the agent). */
+    Role?: string;
+    /** Participation style — `'addressed-only'` agents are routed only on a direct address (resolved live by the plugin). */
+    Mode: 'proactive' | 'addressed-only';
+}
+
+/**
+ * The context handed to the room {@link TurnModerator} for ONE decision: the roster, the recent diarized
+ * lookback (incl. the triggering turn), and the bookkeeping the moderator needs to honor progress/observability.
+ */
+export interface TurnModeratorContext {
+    /** The external room key. */
+    RoomKey: string;
+    /** Every agent currently in the room. */
+    Roster: ModeratorRosterAgent[];
+    /** Recent diarized turns oldest→newest (the engine's bounded buffer; the moderator narrows per its config). */
+    Lookback: ModeratorLookbackTurn[];
+    /** The turn that triggered this decision (also the last element of {@link TurnModeratorContext.Lookback}). */
+    LatestTurn: ModeratorLookbackTurn;
+    /** Consecutive agent-only turns since the last human turn (for the optional ping-pong backstop). */
+    ConsecutiveAgentOnlyTurns: number;
+    /** A representative co-agent run id to tie the moderator prompt run to (observability). */
+    AgentRunID?: string;
+    /** The representative (scribe) bridge's `AIAgentSession` id — the plugin uses it to resolve the co-agent run id for observability when {@link TurnModeratorContext.AgentRunID} is absent. */
+    RepAgentSessionID?: string;
+    /** The context user + provider for the moderator's own metadata/prompt operations. */
+    ContextUser?: UserInfo;
+    Provider?: IMetadataProvider;
+}
+
+/**
+ * The room turn **moderator** — injected (like the transcript sink / run finalizer) so the engine stays
+ * framework-agnostic. Given one turn's context, it returns the **ordered** `AgentSessionID`s that should
+ * speak next (empty = nobody; the room goes quiet / hands back to the human). The engine triggers them
+ * **serially** via the floor. The agent-layer implementation is a fast LLM prompt run; see
+ * `@memberjunction/ai-agents` `RealtimeTurnModerator`. When no moderator is set the engine falls back to the
+ * per-agent addressed matchers.
+ */
+export type TurnModerator = (ctx: TurnModeratorContext) => Promise<string[]>;
 
 /**
  * The host-instance identity provider the engine uses to stamp `HostInstanceID` for node affinity
@@ -260,6 +348,29 @@ export interface StartBridgeSessionParams {
      * When omitted, the engine applies the provider's registered native binding (if any).
      */
     BindSdk?: BridgeNativeSdkBinding;
+
+    /**
+     * This agent's participation style in a MULTI-agent room, surfaced to the room turn moderator:
+     * `'proactive'` (default) may jump in unaddressed when judged relevant; `'addressed-only'` speaks only
+     * when directly addressed. Ignored in single-agent rooms.
+     */
+    ParticipationMode?: 'proactive' | 'addressed-only';
+
+    /** The names/aliases this agent answers to — the moderator's roster entry + the addressed-only fallback. */
+    AgentNames?: string[];
+
+    /** A short role/description of the voiced agent — context the moderator uses to judge relevance. */
+    AgentRole?: string;
+
+    /** The voiced agent's `MJ: AI Agent Runs` id — tied to each moderator prompt run for observability. */
+    AgentRunID?: string;
+
+    /**
+     * The TARGET agent this co-agent voices (the role/identity the user hears — e.g. Sage), when distinct from
+     * {@link StartBridgeSessionParams.AgentID} (the generic co-agent). The moderator resolves the agent's role
+     * + per-agent `turnTaking.mode` from this agent's config.
+     */
+    TargetAgentID?: string;
 }
 
 /**
@@ -340,6 +451,28 @@ export interface ActiveBridgeSession {
     /** Epoch-ms of the last inbound activity (transcript) — drives the idle cap of the stale sweep. */
     LastActivityMs: number;
 
+    /**
+     * The participant identity of the most-recent inbound AUDIO frame (when the provider diarizes). Used to
+     * attribute a 'user' transcript to the speaker who produced it — since the model transcript itself has
+     * no speaker label. Approximate (single-speaker-at-a-time); `undefined` until the first diarized frame.
+     */
+    LastInboundSpeaker?: string;
+
+    /** This agent's participation style for the room moderator (`'proactive'` | `'addressed-only'`). */
+    ParticipationMode: 'proactive' | 'addressed-only';
+
+    /** The names/aliases this agent answers to (moderator roster + addressed-only fallback). */
+    AgentNames: string[];
+
+    /** A short role/description of the voiced agent (moderator relevance context). */
+    AgentRole?: string;
+
+    /** The voiced agent's `MJ: AI Agent Runs` id — tied to each moderator prompt run for observability. */
+    AgentRunID?: string;
+
+    /** The TARGET agent this co-agent voices (role/identity source for the moderator), when distinct from {@link ActiveBridgeSession.AgentID}. */
+    TargetAgentID?: string;
+
     /** The provider row backing this session. */
     Provider: MJAIBridgeProviderEntity;
 
@@ -414,6 +547,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     /** Interval handle for the self-scheduled stale-session sweep (started via {@link StartStaleSessionSweep}). */
     private staleSweepTimer?: ReturnType<typeof setInterval>;
 
+    // Session timing thresholds (defaults from the module consts; overridable via {@link ConfigureSessionTimings}).
+    private idleTtlMs = SESSION_IDLE_TTL_MS;
+    private maxDurationMs = SESSION_MAX_DURATION_MS;
+    private emptyGraceMs = ROOM_EMPTY_GRACE_MS;
+    private floorMaxHoldMs = FLOOR_MAX_HOLD_MS;
+
     /** Registered by the app layer; persists the unified per-room transcript from the elected scribe. */
     private transcriptSink?: BridgeTranscriptSink;
 
@@ -424,6 +563,27 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private diagOutbound = new Set<string>();
     /** In-memory registry of bridged sessions this process currently hosts, keyed by bridge id (lowercased). */
     private activeSessions = new Map<string, ActiveBridgeSession>();
+
+    /** Per-room, per-utterance-text last-dispatch timestamps — collapses duplicate transcriptions (see {@link ROOM_TURN_DEDUP_MS}). */
+    private recentRoomTurnDispatch = new Map<string, number>();
+
+    /** Optional injected room turn moderator (LLM router). When set, multi-agent rooms use it instead of per-agent matchers. */
+    private turnModerator?: TurnModerator;
+
+    /** Per-room rolling diarized lookback the moderator reads. Bounded to {@link ROOM_LOOKBACK_MAX_TURNS}. */
+    private roomLookback = new Map<string, ModeratorLookbackTurn[]>();
+
+    /** Per-room ordered queue of `AgentSessionID`s the moderator decided should speak, drained serially via the floor. */
+    private roomSpeakerQueue = new Map<string, string[]>();
+
+    /** Per-room count of consecutive agent-only turns since the last human turn (optional ping-pong backstop). */
+    private roomConsecutiveAgentTurns = new Map<string, number>();
+
+    /** Rooms with a moderator decision in flight — prevents overlapping moderator calls for one room. */
+    private roomModeratorBusy = new Set<string>();
+
+    /** Per-room latest turn that arrived while the moderator was busy — run once the in-flight call finishes (no turn lost). */
+    private roomPendingTurn = new Map<string, ModeratorLookbackTurn>();
 
     /** Host-instance identity provider; injected by the host application or defaulted for standalone use. */
     private hostIdentity: IHostInstanceIdentity = new DefaultHostInstanceIdentity();
@@ -539,6 +699,20 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /**
+     * Overrides the session timing thresholds (the idle/max-duration sweep caps, the empty-room auto-leave
+     * grace, and the floor max-hold). Any omitted value keeps its default. Call once at startup to tune for a
+     * deployment (e.g. shorter idle TTL for a high-churn telephony host).
+     *
+     * @param timings The thresholds to override (ms).
+     */
+    public ConfigureSessionTimings(timings: { IdleTtlMs?: number; MaxDurationMs?: number; EmptyGraceMs?: number; FloorMaxHoldMs?: number }): void {
+        if (timings.IdleTtlMs != null) { this.idleTtlMs = timings.IdleTtlMs; }
+        if (timings.MaxDurationMs != null) { this.maxDurationMs = timings.MaxDurationMs; }
+        if (timings.EmptyGraceMs != null) { this.emptyGraceMs = timings.EmptyGraceMs; }
+        if (timings.FloorMaxHoldMs != null) { this.floorMaxHoldMs = timings.FloorMaxHoldMs; }
+    }
+
+    /**
      * Registers the {@link BridgeTranscriptSink} that persists the unified per-room transcript. The engine
      * elects one scribe per room and feeds its final transcript lines here; the sink owns *where* they land
      * (e.g. an `MJ: Conversations` "Meeting Room"). Bound once at startup by the app layer. Without it, no
@@ -548,6 +722,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      */
     public SetTranscriptSink(sink: BridgeTranscriptSink): void {
         this.transcriptSink = sink;
+    }
+
+    /**
+     * Injects the room turn {@link TurnModerator} (the LLM router). When set, a MULTI-agent room routes each
+     * turn through it (who speaks next, serialized via the floor) instead of evaluating per-agent matchers.
+     * Single-agent rooms and the no-moderator case are unaffected (they keep using the matcher path).
+     *
+     * @param moderator The moderator function, or `undefined` to clear it.
+     */
+    public SetTurnModerator(moderator: TurnModerator | undefined): void {
+        this.turnModerator = moderator;
     }
 
     /** Returns the active identities for an agent. @see AIBridgeEngineBase.IdentitiesForAgent */
@@ -691,6 +876,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 HoldsFloor: false,
                 ConnectedAtMs: Date.now(),
                 LastActivityMs: Date.now(),
+                ParticipationMode: params.ParticipationMode ?? 'proactive',
+                AgentNames: params.AgentNames ?? [],
+                AgentRole: params.AgentRole,
+                AgentRunID: params.AgentRunID,
+                TargetAgentID: params.TargetAgentID,
                 Provider: params.Provider,
                 ContextUser: params.ContextUser,
                 MetadataProvider: params.MetadataProvider,
@@ -783,6 +973,13 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's
         // Track tags the plane, so a human's camera (`video-in`) reaches the model as a `video` frame.
         Bridge.OnMedia((frame: BridgeMediaFrame) => {
+            // DIARIZATION: the inbound frame carries the speaking participant's identity (when the provider
+            // supports it). The realtime model's transcript has no speaker label, so we remember the
+            // most-recent inbound audio speaker here and attribute the next 'user' transcript to them — a
+            // single-speaker-at-a-time approximation that's right for the common case. See emitTranscriptLine.
+            if (frame.Track === 'audio-in' && frame.SpeakerLabel) {
+                active.LastInboundSpeaker = frame.SpeakerLabel;
+            }
             const chunk = this.frameToArrayBuffer(frame);
             if (chunk) {
                 if (!this.diagInbound.has(active.SessionBridgeID)) {
@@ -819,6 +1016,14 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 LogStatus(`[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`);
             }
             Bridge.FlushOutboundMedia();
+            // A human cut in → any moderator decision staged for the prior turn is now stale. Drop the queued
+            // speakers (the human's new turn will drive a fresh decision); also free the floor this agent held.
+            if (active.RoomKey) {
+                this.clearRoomModeratorState(active.RoomKey, false);
+                if (active.HoldsFloor) {
+                    this.releaseRoomFloor(active);
+                }
+            }
         });
     }
 
@@ -942,7 +1147,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 LogStatus(`[AIBridgeEngine] All humans left bridge ${active.SessionBridgeID}; auto-leaving (grace elapsed).`);
                 void this.StopBridgeSession(active.SessionBridgeID, 'HostEnded', active.ContextUser, active.MetadataProvider);
             }
-        }, ROOM_EMPTY_GRACE_MS);
+        }, this.emptyGraceMs);
     }
 
     /**
@@ -1021,7 +1226,13 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
         row.DisplayName = p.DisplayName ?? null;
         row.Role = p.Role;
-        row.IsAgent = p.IsAgent;
+        // Persist IsAgent ONLY for THIS bridge's own bot — the row-level invariant is "one bot per bridge".
+        // In a multi-agent room the live roster (driver-side `p.IsAgent`) flags OTHER agents too (turn-taking
+        // + occupancy need that), but on THIS bridge's persisted roster they are remote participants, not its
+        // bot. Diarization still resolves them: each agent's OWN bridge marks itself, and the transcript
+        // viewer OR-reduces IsAgent per identity across all of the room's bridges.
+        row.IsAgent =
+            active.BotParticipantID != null && p.ExternalId.toLowerCase() === active.BotParticipantID.toLowerCase();
         const saved = await row.Save();
         if (!saved) {
             LogError(
@@ -1049,29 +1260,342 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private wireTurnTaking(active: ActiveBridgeSession): void {
         active.RealtimeSession.OnTranscript((t: RealtimeTranscript) => {
             active.LastActivityMs = Date.now(); // any transcript = the session is alive (drives the idle sweep)
-            if (t.IsFinal) {
-                // Only log FINAL transcripts — partials fire per-word and flood the log.
-                LogStatus(`[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`);
-                // Persist the unified room transcript (scribe only — emits both roles).
-                this.emitTranscriptLine(active, t);
-                // The agent finished its own turn → release the room floor so the next addressed agent can
-                // speak (multi-agent floor control). No-op when it doesn't hold the floor.
-                if (t.Role === 'assistant' && active.HoldsFloor) {
+            if (!t.IsFinal) {
+                return; // partials fire per-word — act only on a completed turn (and don't flood the log)
+            }
+            LogStatus(`[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`);
+            // Persist the unified room transcript (scribe only — emits both roles).
+            this.emitTranscriptLine(active, t);
+            // Record into the room's diarized lookback so the moderator (and observability) see the full thread.
+            this.recordRoomTurn(active, t);
+
+            if (t.Role === 'assistant') {
+                // The agent finished its own turn → release the room floor so the next can speak. Then advance:
+                // run the moderator for "who responds to this agent?" (the agent↔agent + pre-stage path) — this
+                // executes while the agent's audio is still playing out, hiding the moderator latency.
+                if (active.HoldsFloor) {
                     this.releaseRoomFloor(active);
                 }
+                this.onAgentTurnCompleted(active, t.Text ?? '');
+                return;
             }
-            if (t.Role !== 'user' || !t.IsFinal) {
-                return; // act only on a completed human turn
+            if (t.Role === 'user') {
+                this.dispatchUserTurn(active, t.Text ?? '');
             }
-            const segment: TurnTranscriptSegment = {
-                Text: t.Text,
-                IsAgent: false,
-                EndMs: Date.now(),
-            };
-            const decision = active.TurnPolicy.EvaluateTurn({ Segment: segment });
-            LogStatus(`[AIBridgeEngine][diag] turn decision=${decision.Action} for user turn "${(t.Text ?? '').slice(0, 60)}" (bridge ${active.SessionBridgeID})`);
-            this.applyTurnDecision(active, decision.Action);
         });
+    }
+
+    /**
+     * Routes a completed human turn to the addressing gate(s). In a **single-agent** room (or 1:1) only the
+     * source agent evaluates. In a **multi-agent** room the user's utterance is the SAME for everyone, so we
+     * broadcast it to EVERY agent's `TurnPolicy` — each independently decides "was I addressed?". This is the
+     * fix for agents whose own model can't transcribe in meeting mode (e.g. Gemini with automatic activity
+     * detection disabled): whichever agent CAN transcribe the room (e.g. the GPT agent, or the scribe) drives
+     * the addressing decision for all of them. The audio plane is untouched — every agent already hears the
+     * raw audio; this only decides WHEN each is triggered to commit + speak.
+     *
+     * Dedup: the same utterance may be transcribed by several agents (slightly apart). A per-room, per-text
+     * time window collapses those re-transcriptions so each real utterance dispatches to the room once.
+     *
+     * @param source The bridge whose session produced the transcript.
+     * @param text The final user-turn text.
+     */
+    private dispatchUserTurn(source: ActiveBridgeSession, text: string): void {
+        const peers = source.RoomKey ? this.roomAgents(source.RoomKey) : [source];
+        // A real human just spoke → definitive presence for EVERY agent in the room. Cancel any pending
+        // empty-room auto-leave (roster events alone miss a stable, actively-talking human) + reset the
+        // consecutive-agent-only counter (the ping-pong backstop only counts agent turns between humans).
+        for (const peer of peers) {
+            this.noteHumanPresence(peer);
+        }
+        if (source.RoomKey) {
+            this.roomConsecutiveAgentTurns.set(source.RoomKey.toLowerCase(), 0);
+        }
+
+        if (peers.length <= 1) {
+            this.evaluateUserTurnForAgent(source, text); // 1:1 / solo room — no broadcast, no dedup
+            return;
+        }
+        const now = Date.now();
+        const dedupKey = `${source.RoomKey!.toLowerCase()}\n${text.trim().toLowerCase()}`;
+        if (now - (this.recentRoomTurnDispatch.get(dedupKey) ?? 0) < ROOM_TURN_DEDUP_MS) {
+            return; // a peer already dispatched this same utterance to the room
+        }
+        this.recentRoomTurnDispatch.set(dedupKey, now);
+        if (this.recentRoomTurnDispatch.size > 512) {
+            this.recentRoomTurnDispatch.clear(); // bounded — dedup only needs the last few seconds
+        }
+
+        // MODERATOR PATH: one LLM decision routes the turn to 0+ agents (serialized via the floor). FALLBACK
+        // (no moderator configured): each agent independently evaluates its own addressed-matcher (broadcast).
+        if (this.turnModerator) {
+            void this.runRoomModerator(source.RoomKey!, { Speaker: this.speakerLabel(source, false), IsAgent: false, Text: text });
+            return;
+        }
+        LogStatus(`[AIBridgeEngine][diag] broadcasting user turn "${text.slice(0, 60)}" to ${peers.length} room agents for addressing (source bridge ${source.SessionBridgeID})`);
+        for (const peer of peers) {
+            this.evaluateUserTurnForAgent(peer, text);
+        }
+    }
+
+    /** Marks a human as present on a session: remembers it + cancels any pending empty-room auto-leave. */
+    private noteHumanPresence(active: ActiveBridgeSession): void {
+        active.HasSeenHuman = true;
+        if (active.LeaveGraceTimer) {
+            clearTimeout(active.LeaveGraceTimer);
+            active.LeaveGraceTimer = undefined;
+            LogStatus(`[AIBridgeEngine][diag] cancelled pending auto-leave for bridge ${active.SessionBridgeID} — a human is actively speaking`);
+        }
+    }
+
+    /** Evaluates ONE agent's addressed-matcher against a user utterance and acts on the decision (fallback path). */
+    private evaluateUserTurnForAgent(active: ActiveBridgeSession, text: string): void {
+        const segment: TurnTranscriptSegment = { Text: text, IsAgent: false, EndMs: Date.now() };
+        const decision = active.TurnPolicy.EvaluateTurn({ Segment: segment });
+        LogStatus(`[AIBridgeEngine][diag] turn decision=${decision.Action} for user turn "${(text ?? '').slice(0, 60)}" (bridge ${active.SessionBridgeID})`);
+        this.applyTurnDecision(active, decision.Action);
+    }
+
+    /** All active bridged sessions sharing a room (by external room key), case-insensitive. */
+    private roomAgents(roomKey: string): ActiveBridgeSession[] {
+        const key = roomKey.toLowerCase();
+        const out: ActiveBridgeSession[] = [];
+        for (const s of this.activeSessions.values()) {
+            if (s.RoomKey && s.RoomKey.toLowerCase() === key) {
+                out.push(s);
+            }
+        }
+        return out;
+    }
+
+    // ── Room turn moderator (LLM router) — the multi-agent path used when SetTurnModerator is wired ─────────
+
+    /** A diarized speaker label for a session (the agent's first name, or a generic human label). */
+    private speakerLabel(active: ActiveBridgeSession, isAgent: boolean): string {
+        if (isAgent) {
+            return active.AgentNames[0] ?? 'Agent';
+        }
+        return active.LastInboundSpeaker ?? 'Participant';
+    }
+
+    /**
+     * Appends one final turn to the room's bounded, clipped diarized lookback (oldest→newest). Sourcing rules
+     * keep the thread clean in a multi-agent room (where EVERY agent's session independently transcribes what
+     * it hears):
+     * - **Agent (assistant) turns** are recorded from the speaking agent's OWN bridge (correct, no duplication).
+     * - **Human (user) turns** are recorded ONLY by the room **scribe** (one canonical hearer → no N-fold
+     *   duplication), and ONLY when the diarized inbound speaker is a human — a `user` transcript whose speaker
+     *   is another AGENT (the scribe overhearing a peer agent) is dropped here, since that agent's own bridge
+     *   already recorded it as its assistant turn.
+     */
+    private recordRoomTurn(active: ActiveBridgeSession, t: RealtimeTranscript): void {
+        if (!active.RoomKey) {
+            return;
+        }
+        const isAgent = t.Role === 'assistant';
+        if (!isAgent) {
+            if (!active.IsTranscriptScribe) {
+                return; // only the scribe records human turns (avoids one copy per transcribing agent)
+            }
+            if (active.LastInboundSpeaker?.toLowerCase().startsWith('agent-')) {
+                return; // the scribe is overhearing another agent — that agent's own bridge records it
+            }
+        }
+        const key = active.RoomKey.toLowerCase();
+        const buf = this.roomLookback.get(key) ?? [];
+        buf.push({
+            Speaker: this.speakerLabel(active, isAgent),
+            IsAgent: isAgent,
+            AgentID: isAgent ? active.AgentID : undefined,
+            Text: (t.Text ?? '').slice(0, ROOM_LOOKBACK_MAX_CHARS),
+        });
+        while (buf.length > ROOM_LOOKBACK_MAX_TURNS) {
+            buf.shift();
+        }
+        this.roomLookback.set(key, buf);
+    }
+
+    /**
+     * Called when an agent finishes a turn. Advances a multi-agent room: increments the consecutive-agent-only
+     * counter and — if a moderator is wired and the room's speaker queue is empty — runs the moderator to decide
+     * whether (and who) continues the discussion. Because this fires on the agent's FINAL TEXT (its audio is
+     * still playing out), the moderator's latency is hidden behind playback. No-op for single-agent rooms.
+     */
+    private onAgentTurnCompleted(active: ActiveBridgeSession, text: string): void {
+        if (!active.RoomKey || !this.turnModerator || this.roomAgents(active.RoomKey).length <= 1) {
+            return;
+        }
+        const key = active.RoomKey.toLowerCase();
+        const consecutive = (this.roomConsecutiveAgentTurns.get(key) ?? 0) + 1;
+        this.roomConsecutiveAgentTurns.set(key, consecutive);
+        // Runaway breaker: even with the configurable cap left null (the user wants free-flowing agent↔agent
+        // discussion), a hard ceiling stops a pathological loop from burning tokens forever with no human. Real
+        // discussions don't run this many agent turns without a human; a human turn resets the counter.
+        if (consecutive >= ROOM_AGENT_TURN_HARD_CEILING) {
+            LogStatus(`[AIBridgeEngine] room ${active.RoomKey} hit the agent-turn hard ceiling (${ROOM_AGENT_TURN_HARD_CEILING}) — pausing agent↔agent continuation until a human speaks`);
+            return;
+        }
+        // Run the continuation ONLY when the room is fully idle: no more queued speakers AND nobody currently
+        // holds the floor. This handler fires AFTER `releaseRoomFloor` has already drained the next queued
+        // speaker (which now holds the floor), so without the floor check we'd re-route to an agent that's
+        // mid-response — double-speaking. The continuation then fires once, when the last speaker finishes.
+        if ((this.roomSpeakerQueue.get(key)?.length ?? 0) > 0 || this.roomAgents(active.RoomKey).some((a) => a.HoldsFloor)) {
+            return;
+        }
+        void this.runRoomModerator(active.RoomKey, { Speaker: this.speakerLabel(active, true), IsAgent: true, AgentID: active.AgentID, Text: text }, true);
+    }
+
+    /**
+     * Runs the room turn moderator for one decision: builds the context, calls the injected moderator, sets the
+     * room's ordered speaker queue to its result, and drains it (serialized via the floor). Guards against
+     * overlapping calls per room and against an unproductive agent-only loop via the optional consecutive cap.
+     *
+     * @param roomKey The external room key.
+     * @param latest The turn that triggered this decision.
+     * @param isContinuation True when triggered by an agent turn (vs a fresh human turn).
+     */
+    private async runRoomModerator(roomKey: string, latest: ModeratorLookbackTurn, isContinuation = false): Promise<void> {
+        const key = roomKey.toLowerCase();
+        if (!this.turnModerator) {
+            return;
+        }
+        if (this.roomModeratorBusy.has(key)) {
+            // A decision is already in flight for this room → remember the LATEST turn so it isn't dropped
+            // (e.g. a human speaks while a continuation is mid-call); it runs as soon as the current one finishes.
+            this.roomPendingTurn.set(key, latest);
+            return;
+        }
+        const ctx = this.buildModeratorContext(roomKey, latest);
+        if (ctx.Roster.length <= 1) {
+            return; // not a multi-agent room
+        }
+        this.roomModeratorBusy.add(key);
+        try {
+            const sessionIds = await this.turnModerator(ctx);
+            const valid = sessionIds.filter((id) => ctx.Roster.some((r) => r.AgentSessionID.toLowerCase() === id.toLowerCase()));
+            LogStatus(`[AIBridgeEngine][diag] moderator${isContinuation ? '(continuation)' : ''} routed turn "${latest.Text.slice(0, 50)}" → [${valid.map((id) => this.agentSessionLabel(id)).join(', ') || 'nobody'}]`);
+            // Moderator chose to go quiet → the (possible) agent↔agent exchange ended; reset the consecutive
+            // counter so a later resumption starts fresh rather than near the hard ceiling.
+            if (valid.length === 0) {
+                this.roomConsecutiveAgentTurns.set(key, 0);
+            }
+            this.roomSpeakerQueue.set(key, valid);
+            this.drainSpeakerQueue(roomKey);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] turn moderator failed for room ${roomKey}: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            this.roomModeratorBusy.delete(key);
+            // Process the latest turn that arrived while we were busy (if any) so no turn is lost.
+            const pending = this.roomPendingTurn.get(key);
+            if (pending) {
+                this.roomPendingTurn.delete(key);
+                void this.runRoomModerator(roomKey, pending, pending.IsAgent);
+            }
+        }
+    }
+
+    /** Builds the {@link TurnModeratorContext} for a room from the live roster + diarized lookback. */
+    private buildModeratorContext(roomKey: string, latest: ModeratorLookbackTurn): TurnModeratorContext {
+        const key = roomKey.toLowerCase();
+        const agents = this.roomAgents(roomKey);
+        const roster: ModeratorRosterAgent[] = agents.map((a) => ({
+            AgentSessionID: a.AgentSessionID,
+            AgentID: a.AgentID,
+            TargetAgentID: a.TargetAgentID,
+            Names: a.AgentNames,
+            Role: a.AgentRole,
+            Mode: a.ParticipationMode,
+        }));
+        // A representative session for observability/provider context (the scribe if we have it, else the first).
+        const rep = agents.find((a) => a.IsTranscriptScribe) ?? agents[0];
+        return {
+            RoomKey: roomKey,
+            Roster: roster,
+            Lookback: this.roomLookback.get(key) ?? [latest],
+            LatestTurn: latest,
+            ConsecutiveAgentOnlyTurns: this.roomConsecutiveAgentTurns.get(key) ?? 0,
+            AgentRunID: rep?.AgentRunID,
+            RepAgentSessionID: rep?.AgentSessionID,
+            ContextUser: rep?.ContextUser,
+            Provider: rep?.MetadataProvider,
+        };
+    }
+
+    /** Triggers the next queued speaker for a room (serialized — only when the floor is free). */
+    private drainSpeakerQueue(roomKey: string): void {
+        const key = roomKey.toLowerCase();
+        const queue = this.roomSpeakerQueue.get(key);
+        if (!queue || queue.length === 0) {
+            return;
+        }
+        // Don't start the next speaker while someone in the room still holds the floor.
+        if (this.roomAgents(roomKey).some((a) => a.HoldsFloor)) {
+            return;
+        }
+        const nextSessionId = queue.shift()!;
+        this.roomSpeakerQueue.set(key, queue);
+        const next = this.roomAgents(roomKey).find((a) => a.AgentSessionID.toLowerCase() === nextSessionId.toLowerCase());
+        if (!next) {
+            this.drainSpeakerQueue(roomKey); // session gone — skip to the next
+            return;
+        }
+        // If the trigger didn't actually start a turn (driver skipped → floor already freed by
+        // triggerMeetingSpeak), advance to the next queued speaker rather than stalling the queue. A floor
+        // DENIAL re-enters here too, but the holds-floor guard above makes the recursion a safe no-op (it waits
+        // for the holder's release to drive the next drain).
+        if (!this.triggerMeetingSpeak(next)) {
+            this.drainSpeakerQueue(roomKey);
+        }
+    }
+
+    /**
+     * Claims the room floor and triggers the model to speak exactly one turn (meeting mode). Returns `false`
+     * (stays silent) when another agent holds the floor. Shared by the matcher path and the moderator drainer.
+     */
+    private triggerMeetingSpeak(active: ActiveBridgeSession): boolean {
+        if (active.RoomKey) {
+            const floor = this.roomCoordinator.TakeFloor(active.RoomKey, active.AgentSessionID);
+            if (!floor.Granted) {
+                LogStatus(`[AIBridgeEngine] floor denied (${floor.Reason}) for bridge ${active.SessionBridgeID} — staying silent`);
+                return false;
+            }
+            LogStatus(`[AIBridgeEngine][diag] floor GRANTED to bridge ${active.SessionBridgeID} — triggering the model to speak`);
+            this.armFloorHold(active);
+        }
+        LogStatus(`[AIBridgeEngine][diag] meeting trigger → RequestSpokenUpdate for bridge ${active.SessionBridgeID}`);
+        // The trigger can be SKIPPED by the driver (a response already in flight) or commit nothing — in which
+        // case no assistant transcript will ever arrive to release the floor. If the driver reports "not sent"
+        // (explicit `false`), release the floor immediately so the room doesn't wedge until the safety timer,
+        // and advance the queue. `undefined`/`true` ⇒ a turn was triggered, so hold the floor as normal.
+        const sent = active.RealtimeSession.RequestSpokenUpdate?.('');
+        if (sent === false) {
+            LogStatus(`[AIBridgeEngine][diag] trigger NOT sent (driver skipped) for bridge ${active.SessionBridgeID} — releasing floor + advancing`);
+            this.releaseRoomFloor(active, /*skipDrain*/ true); // the drainSpeakerQueue caller advances the queue
+            return false;
+        }
+        return true;
+    }
+
+    /** A short label for an `AgentSessionID` (the agent's first name) for diagnostics. */
+    private agentSessionLabel(sessionId: string): string {
+        for (const s of this.activeSessions.values()) {
+            if (s.AgentSessionID.toLowerCase() === sessionId.toLowerCase()) {
+                return s.AgentNames[0] ?? s.AgentSessionID.slice(0, 8);
+            }
+        }
+        return sessionId.slice(0, 8);
+    }
+
+    /** Clears a room's moderator state (lookback, queue, counter) — on barge-in (queue only) or teardown (all). */
+    private clearRoomModeratorState(roomKey: string, full: boolean): void {
+        const key = roomKey.toLowerCase();
+        this.roomSpeakerQueue.delete(key);
+        this.roomPendingTurn.delete(key); // a barge-in/teardown invalidates any turn staged behind an in-flight call
+        if (full) {
+            this.roomLookback.delete(key);
+            this.roomConsecutiveAgentTurns.delete(key);
+            this.roomModeratorBusy.delete(key);
+        }
     }
 
     /**
@@ -1085,21 +1609,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         switch (action) {
             case 'Speak':
                 if (active.DisableAutoResponse) {
-                    // MEETING MODE: the model's blind auto-response is OFF (the agent layer opened the
-                    // session with `disableAutoResponse`), so the bridge is the SOLE speech trigger. The
-                    // turn policy already gated this to an ADDRESSED turn. Before speaking, CLAIM THE FLOOR
-                    // so two addressed agents don't talk over each other — single-agent rooms grant it
-                    // trivially; a multi-agent room grants one speaker at a time (facilitator may override).
-                    // Denied → stay silent and let the holder finish.
-                    if (active.RoomKey) {
-                        const floor = this.roomCoordinator.TakeFloor(active.RoomKey, active.AgentSessionID);
-                        if (!floor.Granted) {
-                            LogStatus(`[AIBridgeEngine] floor denied (${floor.Reason}) for bridge ${active.SessionBridgeID} — staying silent`);
-                            break;
-                        }
-                        this.armFloorHold(active);
-                    }
-                    active.RealtimeSession.RequestSpokenUpdate?.('');
+                    this.triggerMeetingSpeak(active);
                 } else {
                     // 1:1 CALL: the model has server-VAD auto-response on (same as the browser client-direct
                     // path), so it ALREADY answered this turn — one clean stream. Forcing a second
@@ -1155,15 +1665,26 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             return true; // already meeting mode — nothing to do
         }
         if (active.RealtimeSession.Capabilities?.CanReconfigureTurnMode !== true) {
-            LogStatus(
-                `[AIBridgeEngine] bridge ${sessionBridgeID} cannot reconfigure turn mode mid-session ` +
-                    `(provider config fixed at connect) — leaving it conversational.`,
+            // LOUD: this agent was the FIRST in the room (1:1 auto-response) and its provider can't switch a
+            // live socket to meeting mode (e.g. Gemini). It will keep auto-responding to ALL room audio,
+            // bypassing the turn moderator and likely talking over the other agents. The robust fix is to
+            // reconnect it in meeting mode; until then, prefer a re-configurable provider (OpenAI) as the FIRST
+            // agent in a room that will become multi-agent. See the Bridges guide §9.
+            LogError(
+                `[AIBridgeEngine] ⚠️ bridge ${sessionBridgeID} CANNOT re-gate to meeting mode mid-session ` +
+                    `(provider config fixed at connect, e.g. Gemini). It stays in 1:1 auto-response and will ` +
+                    `respond to ALL room audio, bypassing the moderator — use an OpenAI-realtime agent as the ` +
+                    `first agent in multi-agent rooms.`,
             );
             return false;
         }
         active.RealtimeSession.Reconfigure?.({ DisableAutoResponse: true });
         active.DisableAutoResponse = true;
         active.TurnPolicy = new TurnTakingPolicy({ Mode: 'Passive', Matcher: matcher });
+        // The agent started 1:1, so its system prompt has no meeting-discipline clause. The Reconfigure flips
+        // the ENFORCEMENT (auto-response off + addressed gate), but tell the agent too so its replies are
+        // meeting-appropriate. A context note is additive (doesn't clobber the prompt) — no-op if unsupported.
+        active.RealtimeSession.SendContextNote?.(MEETING_REGATE_CONTEXT_NOTE);
         LogStatus(`[AIBridgeEngine] re-gated bridge ${sessionBridgeID} to meeting mode (room became multi-agent)`);
         return true;
     }
@@ -1179,7 +1700,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         if (active.FloorReleaseTimer) {
             clearTimeout(active.FloorReleaseTimer);
         }
-        active.FloorReleaseTimer = setTimeout(() => this.releaseRoomFloor(active), FLOOR_MAX_HOLD_MS);
+        LogStatus(`[AIBridgeEngine][diag] floor HELD by bridge ${active.SessionBridgeID} (agentSession ${active.AgentSessionID}) — safety release in ${this.floorMaxHoldMs}ms if no assistant transcript`);
+        active.FloorReleaseTimer = setTimeout(() => {
+            LogStatus(`[AIBridgeEngine][diag] floor SAFETY-RELEASE fired for bridge ${active.SessionBridgeID} — it held the floor for ${this.floorMaxHoldMs}ms without producing a reply (the triggered turn never yielded audio)`);
+            this.releaseRoomFloor(active);
+        }, this.floorMaxHoldMs);
     }
 
     /**
@@ -1189,15 +1714,23 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      *
      * @param active The session to release the floor for.
      */
-    private releaseRoomFloor(active: ActiveBridgeSession): void {
+    private releaseRoomFloor(active: ActiveBridgeSession, skipDrain = false): void {
         if (active.FloorReleaseTimer) {
             clearTimeout(active.FloorReleaseTimer);
             active.FloorReleaseTimer = undefined;
         }
-        if (active.RoomKey && active.HoldsFloor) {
+        const held = active.HoldsFloor;
+        if (active.RoomKey && held) {
             this.roomCoordinator.ReleaseFloor(active.RoomKey, active.AgentSessionID);
+            LogStatus(`[AIBridgeEngine][diag] floor RELEASED by bridge ${active.SessionBridgeID} (agentSession ${active.AgentSessionID}) — next addressed agent can now take it`);
         }
         active.HoldsFloor = false;
+        // Floor freed → trigger the next agent the moderator queued for this turn (serialized speaking). Skipped
+        // when the caller (a skipped trigger inside drainSpeakerQueue) will itself advance the queue — avoids a
+        // double drain.
+        if (active.RoomKey && held && !skipDrain) {
+            this.drainSpeakerQueue(active.RoomKey);
+        }
     }
 
     /**
@@ -1270,7 +1803,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                     AgentSessionID: active.AgentSessionID,
                     AgentID: active.AgentID,
                     IsAgentSpeech: isAgentSpeech,
-                    SpeakerParticipantID: isAgentSpeech ? active.BotParticipantID : undefined,
+                    // The bot's own speech is labeled with its participant id; a 'user' line is attributed to
+                    // the last inbound speaker (diarization) so the transcript records WHO said it, not just
+                    // "a user". Falls back to undefined when the provider doesn't diarize.
+                    SpeakerParticipantID: isAgentSpeech ? active.BotParticipantID : active.LastInboundSpeaker,
                     Text: text,
                 },
                 active.ContextUser,
@@ -1380,11 +1916,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      */
     public async SweepStaleSessions(nowMs: number = Date.now()): Promise<number> {
         const stale = [...this.activeSessions.values()].filter(
-            (s) => nowMs - s.LastActivityMs > SESSION_IDLE_TTL_MS || nowMs - s.ConnectedAtMs > SESSION_MAX_DURATION_MS,
+            (s) => nowMs - s.LastActivityMs > this.idleTtlMs || nowMs - s.ConnectedAtMs > this.maxDurationMs,
         );
         let reaped = 0;
         for (const active of stale) {
-            const idle = nowMs - active.LastActivityMs > SESSION_IDLE_TTL_MS;
+            const idle = nowMs - active.LastActivityMs > this.idleTtlMs;
             LogStatus(
                 `[AIBridgeEngine] Stale sweep reaping bridge ${active.SessionBridgeID} ` +
                     `(${idle ? 'idle' : 'max-duration'}) — auto-leaving.`,
@@ -1658,6 +2194,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         this.releaseRoomFloor(active);
         if (active.RoomKey) {
             this.roomCoordinator.UnregisterRoomParticipant(active.RoomKey, active.AgentSessionID);
+            // Last agent out → drop the room's moderator state (lookback/queue/counter). A still-occupied room
+            // keeps its lookback so the conversation thread survives one agent leaving.
+            if (this.roomAgents(active.RoomKey).filter((a) => a.SessionBridgeID !== active.SessionBridgeID).length === 0) {
+                this.clearRoomModeratorState(active.RoomKey, true);
+            }
         }
         // Close the channel plane first so its post-close hooks see the session still mid-teardown,
         // then release the driver's media plane.

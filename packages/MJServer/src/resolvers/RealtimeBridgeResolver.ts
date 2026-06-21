@@ -5,7 +5,7 @@ import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService 
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
-import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices, CreateBridgeRoomTranscriptSink } from '@memberjunction/ai-agents';
+import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices, CreateBridgeRoomTranscriptSink, RealtimeTurnModeratorDecision } from '@memberjunction/ai-agents';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -36,8 +36,23 @@ AIBridgeEngine.Instance.SetSessionRunFinalizer(FinalizeBridgeCoAgentRuns);
  * "Meeting Room"/scope choices live HERE (the Meet composition layer), keeping the engine generic.
  */
 AIBridgeEngine.Instance.SetTranscriptSink(
-  CreateBridgeRoomTranscriptSink({ ConversationType: 'Meeting Room', ApplicationScope: 'Application' }),
+  CreateBridgeRoomTranscriptSink({ ConversationType: 'Meeting Room', ApplicationScope: 'Application', ApplicationName: 'Meet' }),
 );
+
+/**
+ * Binds the room **turn moderator** onto the bridge engine — **OPT-IN, off by default**. When
+ * `MJ_REALTIME_MODERATOR_MODE=on`, a multi-agent room routes each turn through a fast LLM prompt that decides
+ * who speaks (see `RealtimeTurnModerator` in `@memberjunction/ai-agents`). By default it's OFF: agents run in
+ * plain auto-response, hear everything, and self-moderate (no STT-driven router in the loop) — the
+ * coordinator likewise skips meeting mode when the flag is off, so the two stay consistent. We keep the
+ * moderator wired-but-toggleable for controlled scenarios (webinars, large rooms, weaker models).
+ */
+if (process.env.MJ_REALTIME_MODERATOR_MODE === 'on') {
+  AIBridgeEngine.Instance.SetTurnModerator(RealtimeTurnModeratorDecision);
+  console.log('[RealtimeBridge] turn MODERATOR mode is ON (MJ_REALTIME_MODERATOR_MODE=on) — multi-agent rooms use the LLM router.');
+} else {
+  console.log('[RealtimeBridge] turn moderator mode is OFF (default) — multi-agent rooms run free-for-all: all agents auto-respond + hear everything.');
+}
 
 /**
  * GraphQL surface for the MJ-native LiveKit room: mints scoped client access tokens and starts an

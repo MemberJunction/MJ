@@ -40,6 +40,9 @@ import { RegisterClass } from '@memberjunction/global';
  */
 const GEMINI_INPUT_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
 
+/** Meeting-mode watchdog: how long to wait for a turn after `activityEnd` before clearing a latched `responseActive` (shorter than the bridge's floor safety timer). */
+const GEMINI_MEETING_RESPONSE_WATCHDOG_MS = 5000;
+
 /**
  * Window (ms) within which a client-direct browser must OPEN its Live session using a minted
  * ephemeral token. After this the token can no longer start a NEW session (an already-open
@@ -428,6 +431,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** In meeting mode, whether a manual input window (`activityStart` … pending `activityEnd`) is open. */
     private manualActivityOpen = false;
 
+    /** Meeting-mode watchdog: clears a latched {@link responseActive} if an `activityEnd` elicits no turn. */
+    private meetingResponseWatchdog?: ReturnType<typeof setTimeout>;
+
     /**
      * Binds the underlying live session. Called by the driver once `connect` resolves.
      */
@@ -468,6 +474,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         if (this.meetingMode && !this.manualActivityOpen) {
             live.sendRealtimeInput({ activityStart: {} });
             this.manualActivityOpen = true;
+            console.log('[GeminiRealtime][diag] meeting: activityStart — opened input window on first audio (now accumulating room audio)');
         }
         const audio: GeminiBlob = {
             data: GeminiRealtimeSession.ArrayBufferToBase64(chunk),
@@ -645,7 +652,17 @@ class GeminiRealtimeSession implements IRealtimeSession {
      *
      * @param instructions Instructions for the single spoken update.
      */
-    public RequestSpokenUpdate(instructions: string): void {
+    public RequestSpokenUpdate(instructions: string): boolean {
+        console.log(`[GeminiRealtime][diag] RequestSpokenUpdate called (meetingMode=${this.meetingMode}, responseActive=${this.responseActive}, manualActivityOpen=${this.manualActivityOpen})`);
+        // MEETING mode: the bridge is the sole speech trigger and a single addressed turn = one reply. A
+        // duplicate trigger while a reply is already active (e.g. two agents re-transcribed the same address)
+        // is dropped, NOT queued — queuing would make the agent answer the same address twice. Mirrors the
+        // OpenAI driver's disposable-interim-update contract. Returns false so the bridge releases the floor.
+        if (this.meetingMode && this.responseActive) {
+            console.log('[GeminiRealtime][diag] meeting: RequestSpokenUpdate SKIPPED — a response is already active (duplicate addressed trigger dropped)');
+            return false;
+        }
+        let committed = false;
         this.enqueueOrRun(() => {
             this.responseActive = true;
             const live = this.requireLive();
@@ -657,12 +674,43 @@ class GeminiRealtimeSession implements IRealtimeSession {
                 if (instructions && instructions.trim().length > 0) {
                     live.sendRealtimeInput({ text: instructions });
                 }
+                // If no activity window is open (no fresh room audio since the last commit — e.g. a back-to-back
+                // continuation right after this agent spoke), OPEN one first. Otherwise the `activityEnd` closes
+                // nothing, Gemini never forms a turn → no `turnComplete`, and the bridge's floor would wedge.
+                if (!this.manualActivityOpen) {
+                    live.sendRealtimeInput({ activityStart: {} });
+                }
                 live.sendRealtimeInput({ activityEnd: {} });
                 this.manualActivityOpen = false;
+                this.armMeetingResponseWatchdog();
+                committed = true;
+                console.log('[GeminiRealtime][diag] meeting: activityEnd SENT — committed the turn, expecting ONE model response now');
                 return;
             }
             live.sendRealtimeInput({ text: instructions });
         });
+        // Meeting mode: report whether we actually committed a turn (so the bridge can release the floor if
+        // not). Non-meeting (narration) always reports sent — it queues rather than wedges a floor.
+        return this.meetingMode ? committed : true;
+    }
+
+    /**
+     * Watchdog for the manual-activity meeting trigger: if Gemini produces NO turn after an `activityEnd`
+     * (no `turnComplete` clears {@link responseActive}), force-clear it after a bounded wait so the agent can
+     * be triggered again instead of going permanently silent. Shorter than the bridge's floor safety timer so
+     * the model recovers before the floor does. Cleared by {@link completeTurn} on a real turn boundary.
+     */
+    private armMeetingResponseWatchdog(): void {
+        if (this.meetingResponseWatchdog) {
+            clearTimeout(this.meetingResponseWatchdog);
+        }
+        this.meetingResponseWatchdog = setTimeout(() => {
+            this.meetingResponseWatchdog = undefined;
+            if (this.responseActive) {
+                console.log('[GeminiRealtime][diag] meeting WATCHDOG fired — no turn produced after activityEnd; clearing responseActive so the agent isn’t stuck silent');
+                this.completeTurn();
+            }
+        }, GEMINI_MEETING_RESPONSE_WATCHDOG_MS);
     }
 
     /**
@@ -673,6 +721,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private enqueueOrRun(send: () => void): void {
         if (this.responseActive) {
             this.queuedSends.push(send);
+            console.log(`[GeminiRealtime][diag] send QUEUED behind in-flight turn (responseActive=true, queueLen=${this.queuedSends.length}) — will not fire until a turn boundary clears the flag`);
             return;
         }
         send();
@@ -684,6 +733,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * {@link RequestSpokenUpdate} re-sets {@link responseActive}).
      */
     private completeTurn(): void {
+        if (this.meetingResponseWatchdog) {
+            clearTimeout(this.meetingResponseWatchdog);
+            this.meetingResponseWatchdog = undefined;
+        }
+        console.log(`[GeminiRealtime][diag] turn boundary — clearing responseActive (was ${this.responseActive}), draining ${this.queuedSends.length} queued send(s)`);
         this.responseActive = false;
         while (!this.responseActive && this.queuedSends.length > 0) {
             const send = this.queuedSends.shift();
@@ -727,6 +781,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
         if (content.modelTurn) {
             // First model output of a turn marks generation in flight (Gemini emits no explicit
             // "response started" frame), so interim-update sends defer instead of interrupting.
+            if (!this.responseActive) {
+                console.log('[GeminiRealtime][diag] modelTurn — model is GENERATING output (the activityEnd worked)');
+            }
             this.responseActive = true;
             this.emitAudioOutput(content.modelTurn);
         }

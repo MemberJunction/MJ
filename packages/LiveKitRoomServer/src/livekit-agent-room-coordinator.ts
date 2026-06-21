@@ -203,7 +203,13 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     const roomKey = params.RoomName.trim().toLowerCase();
     const selfNames = [botName, ...(params.AgentAliases ?? [])].map(n => n.trim()).filter(n => n.length > 0);
     const existingAgents = this.roomRosters.get(roomKey) ?? [];
-    const isMeeting = existingAgents.length > 0;
+    // MODERATOR MODE is OPT-IN (off by default). When OFF (the default / "free-for-all" mode), a multi-agent
+    // room is NOT a gated "meeting": every agent stays in plain auto-response, hears all room audio (humans +
+    // agents), and decides for itself when to speak — the model's own judgment + barge-in do the turn-taking,
+    // with no STT-driven moderator in the loop. Flip MJ_REALTIME_MODERATOR_MODE=on to re-enable the moderator
+    // (gated meeting mode + LLM router) for controlled scenarios (webinars, large rooms, weaker models).
+    const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
+    const isMeeting = moderatorMode && existingAgents.length > 0;
 
     const session = await this.sessionFactory({
       AgentID: params.AgentID,
@@ -234,6 +240,13 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       // name-match would otherwise leave a single agent silent unless you said its name each turn.
       TurnMatcher: isMeeting ? new RegexAddressedMatcher(selfNames) : new AlwaysAddressedMatcher(),
       DisableAutoResponse: isMeeting || undefined,
+      // Roster info for the room turn moderator (the LLM router, when one is wired via SetTurnModerator):
+      // the names it answers to + its participation style. `'proactive'` (default) lets the moderator bring
+      // it in unaddressed when relevant; per-agent `'addressed-only'` resolution from config is a follow-up.
+      AgentNames: selfNames,
+      ParticipationMode: 'proactive',
+      // The voiced TARGET agent (e.g. Sage) — the moderator resolves its role + per-agent turnTaking.mode.
+      TargetAgentID: params.TargetAgentID,
       // NativeModuleSpecifier tells LiveKitNativeMeetingSdk which native room-client wrapper to load — the
       // @livekit/rtc-node-backed @memberjunction/ai-bridge-livekit-native by default, overridable via env
       // (e.g. a one-line module setting Gemini's 16 kHz inbound rate). AccessToken is the pre-signed bot

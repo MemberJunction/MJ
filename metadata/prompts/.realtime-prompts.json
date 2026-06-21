@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "Realtime: Turn Moderator",
+      "Description": "Room turn moderator for multi-agent realtime voice meetings. Run once per turn (a fast prompt, NOT an agent run): given the room roster + recent diarized conversation, returns the ordered agent(s) who should speak next (0+). Routes direct address and relevance, lets productive agent-to-agent discussion continue, and goes quiet on unproductive ping-pong. Bound to GPT-OSS-120B on Cerebras for low latency; swap the model binding (e.g. to Gemma on Cerebras) without code changes.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "TemplateText": "@file:templates/realtime/turn-moderator.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "EffortLevel": 1
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3CC90FE2-1E01-4FE5-B027-BF85208EFBDB"
+          },
+          "sync": {
+            "lastModified": "2026-06-21T05:01:41.305Z",
+            "checksum": "15187ce7e5d0848c743cf9662a10d07a695ef4b65c2dfe7fa9e68a8c6ce18c80"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0B4C7759-554B-4CE5-81AE-ACB43B71BD44"
+    },
+    "sync": {
+      "lastModified": "2026-06-21T20:56:47.208Z",
+      "checksum": "8a6fcb9b5d31e663ab8a5a6ee3bbd47e78e1e5f41c7201c282b4dd1819c0d943"
+    }
+  }
+]

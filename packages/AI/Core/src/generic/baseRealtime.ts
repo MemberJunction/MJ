@@ -402,8 +402,12 @@ export interface IRealtimeSession {
      * mid-session omit the member, and callers must feature-detect before invoking.
      *
      * @param instructions Instructions for the single spoken update (tone, brevity, content).
+     * @returns `true` when a response was actually triggered, `false` when it was skipped (e.g. a response
+     *   is already in flight). A bridge that claimed the speaking floor for this turn uses this to release the
+     *   floor immediately on a skip — otherwise a skipped trigger would wedge the room until the safety timer.
+     *   `void`/`undefined` from legacy drivers is treated as "triggered" for backward compatibility.
      */
-    RequestSpokenUpdate?(instructions: string): void;
+    RequestSpokenUpdate?(instructions: string): boolean | void;
 
     /**
      * **Capability introspection.** A small, static description of what THIS live session can do, so the

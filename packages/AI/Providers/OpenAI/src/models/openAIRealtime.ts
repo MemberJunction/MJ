@@ -380,14 +380,27 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * When sent, the flag is set eagerly (before the server's `response.created` echo) so two
      * back-to-back local triggers can't both fire.
      *
-     * @param instructions Instructions for the single spoken update.
+     * @param instructions Instructions for the single spoken update. **Blank/empty means "respond now using
+     *   the SESSION system prompt"** (the meeting-mode bridge trigger passes `''`); only a non-empty value is
+     *   forwarded as a per-response override.
      */
-    public RequestSpokenUpdate(instructions: string): void {
+    public RequestSpokenUpdate(instructions: string): boolean {
         if (this.responseActive) {
-            return;
+            console.log('[OpenAIRealtime][diag] RequestSpokenUpdate SKIPPED — a response is already active (interim updates are disposable)');
+            return false; // NOT sent — the caller (bridge) releases the floor instead of wedging on it
         }
         this.responseActive = true;
-        this.connection.send({ type: 'response.create', response: { instructions } });
+        console.log(`[OpenAIRealtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${typeof instructions === 'string' && instructions.trim().length > 0 ? 'yes' : 'none → session prompt governs'})`);
+        // CRITICAL: only set per-response `instructions` when the caller actually supplied some. OpenAI's
+        // `response.create` treats `response.instructions` as a FULL override of the session system prompt for
+        // that response — so forwarding `''` would wipe the co-agent identity framing (incl. the
+        // "call invoke-target-agent, don't do the work yourself" directive), and the model would answer
+        // directly instead of delegating. A blank value ⇒ plain `response.create` ⇒ the session prompt governs.
+        const hasInstructions = typeof instructions === 'string' && instructions.trim().length > 0;
+        this.connection.send(
+            hasInstructions ? { type: 'response.create', response: { instructions } } : { type: 'response.create' },
+        );
+        return true; // a response.create was issued — the bridge may hold the floor for this turn
     }
 
     /** @inheritdoc — OpenAI's `session.update` is runtime-mutable, so a live turn-mode change is supported. */
@@ -578,9 +591,14 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         // In a multi-agent meeting the BRIDGE (after its turn policy gates on addressing), not the model,
         // decides WHEN to speak — so we disable server-VAD auto-response while KEEPING detection so input
         // transcription and barge-in still work. A 1:1 call (flag absent) keeps the default auto-response.
-        const cfg = { ...(config ?? {}) } as JSONObject & { disableAutoResponse?: boolean };
+        const cfg = { ...(config ?? {}) } as JSONObject & { disableAutoResponse?: boolean; voice?: string };
         const disableAutoResponse = cfg.disableAutoResponse === true;
         delete cfg.disableAutoResponse;
+        // Pull the OUTPUT voice out of the bag too — OpenAI's realtime session takes it at
+        // `audio.output.voice` (NOT top-level), so letting it spread via `...cfg` would silently no-op (the
+        // co-agent's configured voice / a per-session dev override would be ignored on the server-bridged path).
+        const voice = typeof cfg.voice === 'string' ? cfg.voice.trim() : '';
+        delete cfg.voice;
 
         const turnDetection: RealtimeAudioInputTurnDetection | undefined = disableAutoResponse
             ? { type: 'server_vad', create_response: false, interrupt_response: true }
@@ -593,7 +611,10 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             // the client-direct topology — so user-role transcripts flow server-bridged too (the
             // contract promises BOTH roles). The config bag spreads after this so a
             // per-conversation override can still replace the audio block.
-            audio: { input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL }, ...(turnDetection ? { turn_detection: turnDetection } : {}) } },
+            audio: {
+                input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL }, ...(turnDetection ? { turn_detection: turnDetection } : {}) },
+                ...(voice ? { output: { voice } } : {}),
+            },
             ...cfg,
         };
         if (tools && tools.length > 0) {
