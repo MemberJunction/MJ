@@ -1,4 +1,4 @@
-# Data-Source Connector Strategy — Relational, Semi-Structured & Non-Relational
+# MJ Integration Framework — Data-Source Connector Strategy (Relational, Semi-Structured & Non-Relational)
 
 **Status:** Proposed (design only — no code yet). Not for *now*, but on the near roadmap.
 **Author:** drafted 2026-06-20
