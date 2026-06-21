@@ -15,8 +15,8 @@ export class MJRecordProcessWatermarkFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'processContext', sectionName: 'Process Context', isExpanded: true },
-            { sectionKey: 'watermarkDetails', sectionName: 'Watermark Details', isExpanded: true },
+            { sectionKey: 'processTracking', sectionName: 'Process Tracking', isExpanded: true },
+            { sectionKey: 'checksumData', sectionName: 'Checksum Data', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

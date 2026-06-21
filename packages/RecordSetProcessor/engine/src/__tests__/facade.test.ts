@@ -16,6 +16,7 @@ import {
 import {
     ActionRecordProcessor,
     AgentRecordProcessor,
+    InferProcessor,
     RecordProcessExecutor,
     WriteBackProcessor,
     applyOutputMapping,
@@ -56,6 +57,19 @@ describe('RecordProcessExecutor.buildProcessor', () => {
     });
     it('builds an AgentRecordProcessor for WorkType=Agent', () => {
         expect(exec.buildProcessor(rp({ WorkType: 'Agent', AgentID: 'AG1' }))).toBeInstanceOf(AgentRecordProcessor);
+    });
+    it('builds an InferProcessor for WorkType=Infer', () => {
+        expect(exec.buildProcessor(rp({ WorkType: 'Infer', PromptID: 'P1' }))).toBeInstanceOf(InferProcessor);
+    });
+    it('throws when Infer work is missing its PromptID', () => {
+        expect(() => exec.buildProcessor(rp({ WorkType: 'Infer' }))).toThrow(/PromptID/);
+    });
+    it('wraps an Infer processor with WriteBackProcessor when OutputMapping is set', () => {
+        const proc = exec.buildProcessor(rp({
+            WorkType: 'Infer', PromptID: 'P1',
+            OutputMapping: JSON.stringify({ fields: { S: '$.s' } }),
+        }));
+        expect(proc).toBeInstanceOf(WriteBackProcessor);
     });
     it('wraps with WriteBackProcessor when OutputMapping has field/child targets', () => {
         const proc = exec.buildProcessor(rp({

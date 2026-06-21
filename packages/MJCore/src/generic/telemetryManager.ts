@@ -108,6 +108,10 @@ export interface TelemetryRunViewParams {
     _fromEngine?: boolean;
     /** Whether result was served from cache (set after operation completes) */
     cacheHit?: boolean;
+    /** When true, this view opted out of optimization/redundancy analyzers (RunViewParams.Telemetry.Exempt). */
+    Exempt?: boolean;
+    /** Optional caller-provided justification for the exemption (RunViewParams.Telemetry.Reason). */
+    ExemptReason?: string;
 }
 
 /**
@@ -134,6 +138,10 @@ export interface TelemetryRunViewsBatchParams {
     OrderBys?: (string | undefined)[];
     /** Internal marker for engine-initiated calls */
     _fromEngine?: boolean;
+    /** When true, every view in the batch opted out of optimization/redundancy analyzers. */
+    Exempt?: boolean;
+    /** Optional caller-provided justification for the exemption (first non-empty across the batch). */
+    ExemptReason?: string;
 }
 
 /**
@@ -1157,6 +1165,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
     private updatePattern(event: TelemetryEvent): void {
         if (!this._settings.duplicateDetection.enabled) return;
+        // Exempt events don't form or contribute to duplicate-RunView patterns.
+        if (this.isEventExempt(event)) return;
 
         let pattern = this._patterns.get(event.fingerprint);
         const now = this.getTimestamp();
@@ -1341,8 +1351,39 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         return results;
     }
 
+    /**
+     * True when an event opted out of the optimization/redundancy analyzers via
+     * `RunViewParams.Telemetry.Exempt` (threaded into the event params as `Exempt`).
+     */
+    private isEventExempt(event: TelemetryEvent): boolean {
+        const p = event.params as { Exempt?: boolean } | undefined;
+        return p?.Exempt === true;
+    }
+
+    /**
+     * Verbose-only breadcrumb so an exempted query — and the caller's justification — is still
+     * auditable in telemetry logging even though it produced no warning.
+     */
+    private logExemptEvent(event: TelemetryEvent): void {
+        const level = this.GetLevelForCategory(event.category);
+        if (this.GetLevelValue(level) < TelemetryLevelValue['verbose']) return;
+        const p = event.params as { EntityName?: string; Entities?: string[]; ExemptReason?: string };
+        const target = p.EntityName ?? (Array.isArray(p.Entities) ? p.Entities.join(', ') : event.operation);
+        const reason = p.ExemptReason ? ` — ${p.ExemptReason}` : '';
+        // eslint-disable-next-line no-console
+        console.log(`💡 [Telemetry] Analysis exempt for ${event.category} "${target}"${reason}`);
+    }
+
     private runAnalyzers(event: TelemetryEvent): void {
         if (!this._settings.analyzers.enabled) return;
+
+        // Caller explicitly opted this query out of the optimization/redundancy analyzers. It is also
+        // excluded from the analyzer context (buildAnalyzerContext) and from duplicate-pattern counts
+        // (updatePattern), so it neither produces nor contributes to noise warnings.
+        if (this.isEventExempt(event)) {
+            this.logExemptEvent(event);
+            return;
+        }
 
         const context = this.buildAnalyzerContext();
 
@@ -1362,7 +1403,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
     private buildAnalyzerContext(): TelemetryAnalyzerContext {
         return {
-            recentEvents: this._events.slice(-1000),
+            // Exclude exempt events so they don't inflate per-entity / sequential counts for OTHER queries.
+            recentEvents: this._events.slice(-1000).filter(e => !this.isEventExempt(e)),
             patterns: this._patterns,
             getEngineLoadedEntities: () => {
                 // Integration with BaseEngineRegistry

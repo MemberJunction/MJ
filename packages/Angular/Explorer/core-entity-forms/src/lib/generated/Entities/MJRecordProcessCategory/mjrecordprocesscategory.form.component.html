@@ -36,10 +36,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Hierarchy Configuration Section -->
+    <!-- Hierarchy Section -->
     <mj-collapsible-panel
-        SectionKey="hierarchyConfiguration"
-        SectionName="Hierarchy Configuration"
+        SectionKey="hierarchy"
+        SectionName="Hierarchy"
         Icon="fa fa-sitemap"
         [Form]="this"
         [FormContext]="formContext">
@@ -95,31 +95,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Record Processes Section -->
-    <mj-collapsible-panel
-        SectionKey="mJRecordProcesses"
-        SectionName="Record Processes"
-        Icon="fa fa-cogs"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRecordProcesses')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Processes','CategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Record Processes')"
-                [AllowLoad]="IsSectionExpanded('mJRecordProcesses')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRecordProcesses', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Record Process Categories Section -->
     <mj-collapsible-panel
         SectionKey="mJRecordProcessCategories"
@@ -139,6 +114,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordProcessCategories', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Record Processes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRecordProcesses"
+        SectionName="Record Processes"
+        Icon="fa fa-cogs"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRecordProcesses')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Processes','CategoryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Processes')"
+                [AllowLoad]="IsSectionExpanded('mJRecordProcesses')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordProcesses', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -5945,7 +5945,9 @@ The context is now within limits. Please retry your request with the recovered c
                 SecondaryScopes: params.SecondaryScopes,
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
-                    this.queueStepSave(stepEntity);
+                    // Re-apply post-INSERT: this callback can fire while the step's INSERT is still in flight,
+                    // and the INSERT's reload would otherwise revert TargetLogID back to null.
+                    this.queueStepSave(stepEntity, (s) => { s.TargetLogID = agentRunId; });
                 }
             });
             
@@ -6921,17 +6923,29 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         try {
-            // Apply the completion state to the in-memory entity NOW (so the run's Steps array / UI see
-            // Completed immediately) via the shared single-source-of-truth helper, then fire-and-forget the
-            // UPDATE via queueStepSave — which chains after the INSERT and force-persists (IgnoreDirtyState).
-            // The agent flow never blocks on this UPDATE.
-            finalizeAgentRunStep(stepEntity, {
+            // Capture the completion timestamp NOW so the duration is accurate regardless of when the
+            // mutation is actually applied/persisted.
+            const finalizeOpts = {
                 success,
                 errorMessage,
-                outputData: outputData ? CopyScalarsAndArrays(outputData, true) : undefined
-            });
+                outputData: outputData ? CopyScalarsAndArrays(outputData, true) : undefined,
+                completedAt: new Date(),
+                // Capture any TargetLogID already stamped on the entity (e.g. a prompt-run / sub-agent-run id
+                // set before finalize) so the post-INSERT re-apply restores it too — otherwise the INSERT's
+                // reload could leave it null on a fast step.
+                targetLogID: stepEntity.TargetLogID ?? undefined
+            };
 
-            this.queueStepSave(stepEntity);
+            // Apply to the in-memory entity NOW so the run's Steps array / UI see the terminal state
+            // immediately. This in-memory copy can be reverted by the INSERT's post-save reload if the step
+            // finished while its INSERT was still in flight, which is why we ALSO re-apply it inside the
+            // post-INSERT continuation below (idempotent — same completedAt).
+            finalizeAgentRunStep(stepEntity, finalizeOpts);
+
+            // Fire-and-forget the UPDATE, but re-assert the finalize state AFTER the INSERT (and its reload)
+            // lands so the force-persisted UPDATE never writes stale pre-finalize values. The agent flow
+            // never blocks on this UPDATE.
+            this.queueStepSave(stepEntity, (s) => finalizeAgentRunStep(s, finalizeOpts));
         }
         catch (e) {
             LogError(`Failed to update agent run step record: ${(e as Error)?.message ?? e}`, undefined, e);
@@ -6946,8 +6960,8 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @protected
      */
-    protected queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended): void {
-        this._stepSaveQueue.QueueUpdate(stepEntity);
+    protected queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended, applyMutation?: (stepEntity: MJAIAgentRunStepEntityExtended) => void): void {
+        this._stepSaveQueue.QueueUpdate(stepEntity, applyMutation);
     }
 
     /**
@@ -7384,7 +7398,9 @@ The context is now within limits. Please retry your request with the recovered c
             
             promptParams.onPromptRunCreated = async (promptRunId: string) => {
                 stepEntity.TargetLogID = promptRunId;
-                this.queueStepSave(stepEntity);
+                // Re-apply post-INSERT: onPromptRunCreated can fire before the step's INSERT lands, and the
+                // INSERT's reload would otherwise revert TargetLogID back to null.
+                this.queueStepSave(stepEntity, (s) => { s.TargetLogID = promptRunId; });
             };
             
             // Execute the prompt
@@ -9471,8 +9487,11 @@ The context is now within limits. Please retry your request with the recovered c
                     
                     // Update step entity with ActionExecutionLog ID if available
                     if (actionResult.LogEntry?.ID) {
-                        stepEntity.TargetLogID = actionResult.LogEntry.ID;
-                        this.queueStepSave(stepEntity);
+                        const logId = actionResult.LogEntry.ID;
+                        stepEntity.TargetLogID = logId;
+                        // Re-apply post-INSERT: a fast action can finish before the step's INSERT lands, and
+                        // the INSERT's reload would otherwise revert TargetLogID back to null.
+                        this.queueStepSave(stepEntity, (s) => { s.TargetLogID = logId; });
                     }
                     
                     // Prepare output data with action result

@@ -95,6 +95,25 @@ export interface AggregateExpression {
 }
 
 /**
+ * Telemetry controls attached to a {@link RunViewParams}. See {@link RunViewParams.Telemetry}.
+ */
+export interface RunViewTelemetryOptions {
+    /**
+     * When true, this view is exempt from the telemetry optimization/redundancy analyzers — it will
+     * not produce, nor count toward, `Duplicate RunView` / `Entity Already in Engine` /
+     * `Sequential Queries` / `Multiple Calls` warnings. Use for queries that are intentionally
+     * separate or that deliberately read fresh/volatile state instead of a cached engine copy.
+     * Timing/stat telemetry is still recorded.
+     */
+    Exempt?: boolean;
+    /**
+     * Optional human-readable justification for the exemption. Recorded with the telemetry event and
+     * emitted in verbose telemetry logging so the intent is auditable (e.g. why a cache was bypassed).
+     */
+    Reason?: string;
+}
+
+/**
  * Parameters for running either a stored or dynamic view.
  * A stored view is a view that is saved in the database and can be run either by ID or Name.
  * A dynamic view is one that is not stored in the database and you provide parameters to return data as
@@ -325,6 +344,25 @@ export class RunViewParams {
      * ```
      */
     Aggregates?: AggregateExpression[];
+
+    /**
+     * Optional telemetry controls for this view. Use to mark a view that is *intentionally*
+     * separate, repeated, or redundant — e.g. a live read of volatile state that deliberately
+     * must NOT use a cached engine's copy — so the telemetry optimization/redundancy analyzers
+     * (`Duplicate RunView`, `Entity Already in Engine`, `Sequential Queries`, `Multiple Calls`)
+     * skip it instead of flagging it as noise. The optional `Reason` is recorded with the
+     * telemetry event and surfaced in verbose telemetry logging for auditability.
+     *
+     * @example
+     * ```typescript
+     * await rv.RunView({
+     *     EntityName: 'MJ: Scheduled Jobs',
+     *     ExtraFilter: `ID IN (...) AND ExpectedCompletionAt < '${now}'`,
+     *     Telemetry: { Exempt: true, Reason: 'Live lock-state read for hung-job sweep; cache would be stale' }
+     * }, contextUser);
+     * ```
+     */
+    Telemetry?: RunViewTelemetryOptions;
 
     /**
      * Optional callback invoked when the cached result set for this exact query

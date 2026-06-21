@@ -1,4 +1,4 @@
-import { MJGlobal, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { BaseEntity, Metadata, RunView } from "@memberjunction/core";
 import { ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult } from "@memberjunction/actions-base";
@@ -76,7 +76,8 @@ export abstract class EntityActionInvocationBase {
         return returnValues;
     }
 
-    private _scriptCache: Map<string, Function> = new Map<string, Function>();
+    // Bounded LRU cache prevents unbounded growth from one compiled function per unique EntityActionID.
+    private _scriptCache = new MJLruCache<string, (...args: unknown[]) => Promise<unknown>>({ maxSize: 1000 });
 
     /**
      * Attempt to execute a script and wraps in try/catch to handle any errors so that no exceptions are thrown
@@ -92,19 +93,16 @@ export abstract class EntityActionInvocationBase {
         };
     
         try {
-            let scriptFunction;
-            if (this._scriptCache.has(EntityActionID)) {
-                scriptFunction = this._scriptCache.get(EntityActionID);
-            }
-            else {
+            let scriptFunction = this._scriptCache.Get(EntityActionID);
+            if (!scriptFunction) {
                 scriptFunction = new Function('EntityActionContext', `
                     return (async () => {
                         ${scriptText}
                     })();
-                `);
-                this._scriptCache.set(EntityActionID, scriptFunction);
+                `) as (...args: unknown[]) => Promise<unknown>;
+                this._scriptCache.Set(EntityActionID, scriptFunction);
             }
-    
+
             const ret = await scriptFunction(entityActionContext);
             return ret || entityActionContext.result;
         }
@@ -256,7 +254,7 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
 
     /** Loads all members of a List as entity objects (single-primary-key entities). */
     protected async loadRecordsForList(params: EntityActionInvocationParams): Promise<BaseEntity[]> {
-        const entity = new Metadata().EntityByID(params.EntityAction.EntityID);
+        const entity = new Metadata().EntityByID(params.EntityAction.EntityID); // global-provider-ok: entity-definition lookup (structural metadata, not per-user/per-provider data); this invocation class isn't provider-threaded yet (multi-provider migration debt), consistent with the new RunView() above
         if (!entity) {
             throw new Error(`Entity '${params.EntityAction.EntityID}' for this entity action was not found in metadata`);
         }

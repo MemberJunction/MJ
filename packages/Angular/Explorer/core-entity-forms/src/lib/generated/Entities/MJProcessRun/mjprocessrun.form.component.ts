@@ -16,7 +16,11 @@ export class MJProcessRunFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'contextAndRelationships', sectionName: 'Context and Relationships', isExpanded: true },
+            { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
+            { sectionKey: 'progressAndResults', sectionName: 'Progress and Results', isExpanded: true },
+            { sectionKey: 'resumeAndConfiguration', sectionName: 'Resume and Configuration', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false }
         ]);
     }

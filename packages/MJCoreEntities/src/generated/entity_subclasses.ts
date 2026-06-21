@@ -21455,7 +21455,7 @@ export const MJProcessRunDetailSchema = z.object({
         * * Default Value: getutcdate()`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Type
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     ActionExecutionLog: z.string().nullable().describe(`
         * * Field Name: ActionExecutionLog
@@ -21480,13 +21480,13 @@ export const MJProcessRunSchema = z.object({
         * * Default Value: newsequentialid()`),
     RecordProcessID: z.string().nullable().describe(`
         * * Field Name: RecordProcessID
-        * * Display Name: Record Process ID
+        * * Display Name: Record Process
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
         * * Description: Foreign key to the Record Process that spawned this run; NULL for ad-hoc / engine-driven runs not tied to a saved definition`),
     EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Foreign key to the entity processed by this run, when the run is entity-scoped`),
@@ -21526,7 +21526,7 @@ export const MJProcessRunSchema = z.object({
         * * Description: Resolved filter snapshot used to materialize the record set for this run`),
     ScheduledJobRunID: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRunID
-        * * Display Name: Scheduled Job Run ID
+        * * Display Name: Scheduled Job Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
         * * Description: Foreign key to the Scheduled Job Run that launched this run, when scheduler-launched`),
@@ -21616,7 +21616,7 @@ export const MJProcessRunSchema = z.object({
         * * Description: Run-level error message when Status=Failed`),
     StartedByUserID: z.string().nullable().describe(`
         * * Field Name: StartedByUserID
-        * * Display Name: Started By User ID
+        * * Display Name: Started By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Foreign key to the user who started the run`),
@@ -21632,19 +21632,19 @@ export const MJProcessRunSchema = z.object({
         * * Default Value: getutcdate()`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
-        * * Display Name: Record Process
+        * * Display Name: Record Process Name
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
-        * * Display Name: Scheduled Job Run
+        * * Display Name: Scheduled Job Run Name
         * * SQL Data Type: nvarchar(200)`),
     StartedByUser: z.string().nullable().describe(`
         * * Field Name: StartedByUser
-        * * Display Name: Started By User
+        * * Display Name: Started By User Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -23433,7 +23433,7 @@ export const MJRecordProcessCategorySchema = z.object({
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Category Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Display name of the category`),
     Description: z.string().nullable().describe(`
@@ -23463,7 +23463,7 @@ export const MJRecordProcessCategorySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Category
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -23569,7 +23569,7 @@ export const MJRecordProcessSchema = z.object({
     *   * Disabled
     *   * Draft
         * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
-    WorkType: z.union([z.literal('Action'), z.literal('Agent')]).describe(`
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Infer')]).describe(`
         * * Field Name: WorkType
         * * Display Name: Work Type
         * * SQL Data Type: nvarchar(20)
@@ -23577,7 +23577,8 @@ export const MJRecordProcessSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Agent
-        * * Description: Whether the work is an Action or an Agent (Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction)`),
+    *   * Infer
+        * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`),
     ActionID: z.string().nullable().describe(`
         * * Field Name: ActionID
         * * Display Name: Action
@@ -23590,6 +23591,12 @@ export const MJRecordProcessSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Foreign key to the AI Agent to run, when WorkType=Agent`),
+    PromptID: z.string().nullable().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: Foreign key to the AI Prompt to run for each record, when WorkType=Infer. The prompt's structured output is written back to the data model via OutputMapping.`),
     ScopeType: z.union([z.literal('Filter'), z.literal('List'), z.literal('SingleRecord'), z.literal('View')]).describe(`
         * * Field Name: ScopeType
         * * Display Name: Scope Type
@@ -23620,13 +23627,13 @@ export const MJRecordProcessSchema = z.object({
         * * Description: Ad-hoc WHERE clause used to resolve the record set, when ScopeType=Filter`),
     OnChangeEnabled: z.boolean().describe(`
         * * Field Name: OnChangeEnabled
-        * * Display Name: Enable On-Change Trigger
+        * * Display Name: On-Change Enabled
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, the process runs per-record on save via an owned Entity Action`),
     OnChangeInvocationType: z.union([z.literal('AfterCreate'), z.literal('AfterDelete'), z.literal('AfterUpdate'), z.literal('Validate')]).nullable().describe(`
         * * Field Name: OnChangeInvocationType
-        * * Display Name: On-Change Event
+        * * Display Name: On-Change Invocation Type
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
@@ -23642,7 +23649,7 @@ export const MJRecordProcessSchema = z.object({
         * * Description: Gating expression evaluated against the changed record (with changed-fields context) that compiles into the owned Entity Action Filter; only when it passes does the on-change trigger fire`),
     ScheduleEnabled: z.boolean().describe(`
         * * Field Name: ScheduleEnabled
-        * * Display Name: Enable Schedule Trigger
+        * * Display Name: Schedule Enabled
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, the process runs on a cron schedule via an owned Scheduled Job`),
@@ -23659,7 +23666,7 @@ export const MJRecordProcessSchema = z.object({
         * * Description: IANA timezone for evaluating the cron expression (default UTC)`),
     OnDemandEnabled: z.boolean().describe(`
         * * Field Name: OnDemandEnabled
-        * * Display Name: Enable On-Demand Trigger
+        * * Display Name: On-Demand Enabled
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, the process can be run on demand (button / resolver)`),
@@ -23675,7 +23682,7 @@ export const MJRecordProcessSchema = z.object({
         * * Description: JSON mapping describing how the structured output payload writes back (to fields, a child record, or tags)`),
     SkipUnchanged: z.boolean().describe(`
         * * Field Name: SkipUnchanged
-        * * Display Name: Skip Unchanged Records
+        * * Display Name: Skip Unchanged
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, records whose watermark indicates no change since the last run are skipped`),
@@ -23713,27 +23720,31 @@ export const MJRecordProcessSchema = z.object({
         * * Default Value: getutcdate()`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category Name
+        * * Display Name: Category (Display)
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity (Display)
         * * SQL Data Type: nvarchar(255)`),
     Action: z.string().nullable().describe(`
         * * Field Name: Action
-        * * Display Name: Action Name
+        * * Display Name: Action (Display)
         * * SQL Data Type: nvarchar(425)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Name
+        * * Display Name: Agent (Display)
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().nullable().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt (Display)
         * * SQL Data Type: nvarchar(255)`),
     ScopeView: z.string().nullable().describe(`
         * * Field Name: ScopeView
-        * * Display Name: Scope View Name
+        * * Display Name: Scope View (Display)
         * * SQL Data Type: nvarchar(100)`),
     ScopeList: z.string().nullable().describe(`
         * * Field Name: ScopeList
-        * * Display Name: Scope List Name
+        * * Display Name: Scope List (Display)
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -23760,7 +23771,7 @@ export const MJRemoteOperationCategorySchema = z.object({
         * * Description: Optional description of what belongs in this category`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Remote Operation Categories (vwRemoteOperationCategories.ID)
         * * Description: Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)`),
@@ -23828,7 +23839,7 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Raw TypeScript interface/type source defining the input shape (same mechanism as EntityField JSON-type definitions)`),
     InputTypeIsArray: z.boolean().describe(`
         * * Field Name: InputTypeIsArray
-        * * Display Name: Input is Array
+        * * Display Name: Is Input Array
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, the input type is emitted as an array (TInput[])`),
@@ -23844,7 +23855,7 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Raw TypeScript interface/type source defining the output shape`),
     OutputTypeIsArray: z.boolean().describe(`
         * * Field Name: OutputTypeIsArray
-        * * Display Name: Output is Array
+        * * Display Name: Is Output Array
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, the output type is emitted as an array (TOutput[])`),
@@ -23887,7 +23898,7 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes`),
     CodeApprovalStatus: z.union([z.literal('Approved'), z.literal('Pending'), z.literal('Rejected')]).describe(`
         * * Field Name: CodeApprovalStatus
-        * * Display Name: Code Approval Status
+        * * Display Name: Approval Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
@@ -23898,7 +23909,7 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Human approval gate for AI-generated code: Pending, Approved, or Rejected. Only Approved AI code is emitted and routable.`),
     CodeApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUserID
-        * * Display Name: Approved By ID
+        * * Display Name: Approved By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Foreign key to the user who approved the generated code`),
@@ -23954,7 +23965,7 @@ export const MJRemoteOperationSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     CodeApprovedByUser: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUser
-        * * Display Name: Approved By
+        * * Display Name: Approved By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -86424,7 +86435,7 @@ export class MJProcessRunDetailEntity extends BaseEntity<MJProcessRunDetailEntit
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Type
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -86496,7 +86507,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: RecordProcessID
-    * * Display Name: Record Process ID
+    * * Display Name: Record Process
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
     * * Description: Foreign key to the Record Process that spawned this run; NULL for ad-hoc / engine-driven runs not tied to a saved definition
@@ -86510,7 +86521,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Foreign key to the entity processed by this run, when the run is entity-scoped
@@ -86590,7 +86601,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: ScheduledJobRunID
-    * * Display Name: Scheduled Job Run ID
+    * * Display Name: Scheduled Job Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
     * * Description: Foreign key to the Scheduled Job Run that launched this run, when scheduler-launched
@@ -86800,7 +86811,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: StartedByUserID
-    * * Display Name: Started By User ID
+    * * Display Name: Started By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Foreign key to the user who started the run
@@ -86834,7 +86845,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: RecordProcess
-    * * Display Name: Record Process
+    * * Display Name: Record Process Name
     * * SQL Data Type: nvarchar(255)
     */
     get RecordProcess(): string | null {
@@ -86843,7 +86854,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
@@ -86852,7 +86863,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: ScheduledJobRun
-    * * Display Name: Scheduled Job Run
+    * * Display Name: Scheduled Job Run Name
     * * SQL Data Type: nvarchar(200)
     */
     get ScheduledJobRun(): string | null {
@@ -86861,7 +86872,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: StartedByUser
-    * * Display Name: Started By User
+    * * Display Name: Started By User Name
     * * SQL Data Type: nvarchar(100)
     */
     get StartedByUser(): string | null {
@@ -91424,7 +91435,7 @@ export class MJRecordProcessCategoryEntity extends BaseEntity<MJRecordProcessCat
 
     /**
     * * Field Name: Name
-    * * Display Name: Category Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Display name of the category
     */
@@ -91493,7 +91504,7 @@ export class MJRecordProcessCategoryEntity extends BaseEntity<MJRecordProcessCat
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Category
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -91776,12 +91787,13 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     * * Possible Values 
     *   * Action
     *   * Agent
-    * * Description: Whether the work is an Action or an Agent (Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction)
+    *   * Infer
+    * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
     */
-    get WorkType(): 'Action' | 'Agent' {
+    get WorkType(): 'Action' | 'Agent' | 'Infer' {
         return this.Get('WorkType');
     }
-    set WorkType(value: 'Action' | 'Agent') {
+    set WorkType(value: 'Action' | 'Agent' | 'Infer') {
         this.Set('WorkType', value);
     }
 
@@ -91811,6 +91823,20 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     }
     set AgentID(value: string | null) {
         this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: Foreign key to the AI Prompt to run for each record, when WorkType=Infer. The prompt's structured output is written back to the data model via OutputMapping.
+    */
+    get PromptID(): string | null {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string | null) {
+        this.Set('PromptID', value);
     }
 
     /**
@@ -91875,7 +91901,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: OnChangeEnabled
-    * * Display Name: Enable On-Change Trigger
+    * * Display Name: On-Change Enabled
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, the process runs per-record on save via an owned Entity Action
@@ -91889,7 +91915,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: OnChangeInvocationType
-    * * Display Name: On-Change Event
+    * * Display Name: On-Change Invocation Type
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
@@ -91921,7 +91947,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: ScheduleEnabled
-    * * Display Name: Enable Schedule Trigger
+    * * Display Name: Schedule Enabled
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, the process runs on a cron schedule via an owned Scheduled Job
@@ -91962,7 +91988,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: OnDemandEnabled
-    * * Display Name: Enable On-Demand Trigger
+    * * Display Name: On-Demand Enabled
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When 1, the process can be run on demand (button / resolver)
@@ -92002,7 +92028,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: SkipUnchanged
-    * * Display Name: Skip Unchanged Records
+    * * Display Name: Skip Unchanged
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When 1, records whose watermark indicates no change since the last run are skipped
@@ -92082,7 +92108,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Category
-    * * Display Name: Category Name
+    * * Display Name: Category (Display)
     * * SQL Data Type: nvarchar(255)
     */
     get Category(): string | null {
@@ -92091,7 +92117,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity (Display)
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -92100,7 +92126,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Action
-    * * Display Name: Action Name
+    * * Display Name: Action (Display)
     * * SQL Data Type: nvarchar(425)
     */
     get Action(): string | null {
@@ -92109,7 +92135,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent Name
+    * * Display Name: Agent (Display)
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -92117,8 +92143,17 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     }
 
     /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt (Display)
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string | null {
+        return this.Get('Prompt');
+    }
+
+    /**
     * * Field Name: ScopeView
-    * * Display Name: Scope View Name
+    * * Display Name: Scope View (Display)
     * * SQL Data Type: nvarchar(100)
     */
     get ScopeView(): string | null {
@@ -92127,7 +92162,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: ScopeList
-    * * Display Name: Scope List Name
+    * * Display Name: Scope List (Display)
     * * SQL Data Type: nvarchar(100)
     */
     get ScopeList(): string | null {
@@ -92207,7 +92242,7 @@ export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperatio
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Remote Operation Categories (vwRemoteOperationCategories.ID)
     * * Description: Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)
@@ -92383,7 +92418,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: InputTypeIsArray
-    * * Display Name: Input is Array
+    * * Display Name: Is Input Array
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, the input type is emitted as an array (TInput[])
@@ -92423,7 +92458,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: OutputTypeIsArray
-    * * Display Name: Output is Array
+    * * Display Name: Is Output Array
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, the output type is emitted as an array (TOutput[])
@@ -92514,7 +92549,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovalStatus
-    * * Display Name: Code Approval Status
+    * * Display Name: Approval Status
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Pending
     * * Value List Type: List
@@ -92533,7 +92568,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedByUserID
-    * * Display Name: Approved By ID
+    * * Display Name: Approved By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Foreign key to the user who approved the generated code
@@ -92660,7 +92695,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedByUser
-    * * Display Name: Approved By
+    * * Display Name: Approved By User
     * * SQL Data Type: nvarchar(100)
     */
     get CodeApprovedByUser(): string | null {

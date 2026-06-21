@@ -168,7 +168,12 @@ export class AWSFileStorage extends FileStorageBase {
       this._keyPrefix = config.keyPrefix.endsWith('/') ? config.keyPrefix : `${config.keyPrefix}/`;
     }
 
-    // Reinitialize the S3 client with new credentials
+    // Reinitialize the S3 client with new credentials.
+    // Destroy the old client first so its keep-alive sockets and credential-provider
+    // chain (which can hold IMDS polling timers) are released before reassignment.
+    if (this._client) {
+      this._client.destroy();
+    }
     const credentials = {
       accessKeyId: this._accessKeyId,
       secretAccessKey: this._secretAccessKey,

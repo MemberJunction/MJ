@@ -24,6 +24,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { MockInstance } from 'vitest';
 import { ProviderBase } from '../generic/providerBase';
+import { TelemetryManager } from '../generic/telemetryManager';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import {
@@ -1112,5 +1113,44 @@ describe('ProviderBase Fields-Override Gate — cache MISS projection (hit/miss 
         expect(rowKeys(hit)).toEqual(['ID', 'Status']);
         // MISS projected from the widened DB result to ITS requested fields
         expect(rowKeys(miss)).toEqual(['Name']);
+    });
+});
+
+// ===========================================================================
+// Telemetry-exemption threading: RunViewParams.Telemetry → the RunView telemetry event.
+// (StartEvent records the call args before its enabled-gate, so the spy sees them even with
+// telemetry disabled — we only assert the param mapping, not analyzer behavior.)
+// ===========================================================================
+describe('ProviderBase — RunViewParams.Telemetry threading into the telemetry event', () => {
+    let provider: FieldsOverrideTestProvider;
+    let startSpy: MockInstance;
+
+    beforeEach(() => {
+        provider = new FieldsOverrideTestProvider();
+        provider.entities.set('Cacheable', makeEntity({ Name: 'Cacheable' }));
+        provider.trustLocalCache = true; // server mode → PreRunView (the StartEvent path)
+        ProviderBase.CoalesceWindowMs = 0;
+        startSpy = vi.spyOn(TelemetryManager.Instance, 'StartEvent');
+    });
+    afterEach(() => startSpy.mockRestore());
+
+    function runViewStartParams(): Record<string, unknown> | undefined {
+        const call = startSpy.mock.calls.find(c => c[0] === 'RunView' && c[1] === 'ProviderBase.RunView');
+        return call?.[2] as Record<string, unknown> | undefined;
+    }
+
+    it('threads Telemetry.Exempt + Reason into the RunView event params', async () => {
+        await provider.RunView({
+            EntityName: 'Cacheable',
+            Telemetry: { Exempt: true, Reason: 'live lock-state read' },
+        });
+        expect(runViewStartParams()).toMatchObject({ Exempt: true, ExemptReason: 'live lock-state read' });
+    });
+
+    it('leaves Exempt undefined when no Telemetry options are supplied', async () => {
+        await provider.RunView({ EntityName: 'Cacheable' });
+        const params = runViewStartParams();
+        expect(params).toBeDefined();
+        expect(params!.Exempt).toBeUndefined();
     });
 });
