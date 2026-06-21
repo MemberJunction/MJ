@@ -7,8 +7,8 @@
       "Description": "MemberSuite AMS connector — syncs members, organizations, memberships, chapters, events, registrations, orders, and certifications via MemberSuite REST API v2.",
       "NavigationBaseURL": "https://rest.membersuite.com",
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=MemberSuite API",
-      "BatchMaxRequestCount": null,
-      "BatchRequestWaitTime": null,
+      "BatchMaxRequestCount": -1,
+      "BatchRequestWaitTime": -1,
       "Configuration": {
         "Auth": {
           "model": "two-step-signed-request",
