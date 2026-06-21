@@ -1,5 +1,5 @@
 ---
-"@memberjunction/integration-connectors": patch
+"@memberjunction/integration-connectors": minor
 ---
 
 Make `mj sync push` idempotent for six connectors (SharePoint, Neon CRM, Fonteva, MemberSuite, PheedLoop, Rhythm) by filling their null `BatchMaxRequestCount` / `BatchRequestWaitTime`.
