@@ -210,6 +210,9 @@ export async function runSyncObserved(gql, ciid, opts) {
 export async function phaseSetup({ gql, cfg }) {
     // TOKEN WINS: a supplied token forces create/token mode even if a (possibly stale) CIID lingers —
     // a stale HS_LIVE_CIID must never silently force reference mode for a credentialed run.
+    // reference mode is LEGITIMATE here: connectorE2EPlan pre-creates the credentialed connection and the
+    // matrix runs read-only against that CIID. (Do NOT guard referenceMode here — it falsely fails the
+    // proven pre-create-then-reference flow used by every multi-secret live plan.)
     const referenceMode = !!cfg.companyIntegrationID && !cfg.token;
     let ciid, credentialID = null, schemaRefresh = null, connectionTest = null;
 

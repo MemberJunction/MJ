@@ -1134,20 +1134,6 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
             catch (e) { cfg.entityMapInputs = null; result.skipApplyFallback = String(e?.message ?? e); }
         }
         setup = await phaseSetup({ gql, cfg });
-
-        // TRUSTWORTHINESS GUARD (live): if a credential was provided (CONNECTOR_API_KEY / E2E_TOKEN_KEY)
-        // but the run resolved to referenceMode (token-free, pre-seeded CIID), the credential never reached
-        // the connection → the connector will read empty creds and 0-row SILENTLY, masquerading as a
-        // connector failure. That makes the result untrustworthy. FAIL LOUDLY instead: a live run with a
-        // supplied credential MUST be in token mode. (Reference mode is only legitimate when NO token is given.)
-        if (cfg.mode === 'live' && setup.referenceMode && (process.env.CONNECTOR_API_KEY || process.env.E2E_TOKEN_KEY)) {
-            result.error = `HARNESS: live run resolved to referenceMode but a credential was provided `
-                + `(CONNECTOR_API_KEY/E2E_TOKEN_KEY set). The credential did NOT reach the connection — `
-                + `check HS_LIVE_CIID is empty (a stale CIID forces reference mode) and CONNECTOR_API_KEY is non-empty. `
-                + `Refusing to report a silent 0-row run as a connector result.`;
-            return result;
-        }
-
         result.steps.setup = step('setup', setup.maps.length > 0 && setup.syncMaps.length > 0, {
             ciid: setup.ciid,
             applyAll: setup.applyAll,                 // objectsApplied (full catalog), mapsCreated, warnings, steps
