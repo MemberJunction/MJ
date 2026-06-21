@@ -63,6 +63,14 @@ export interface OAuth2TokenRequest {
     ExtraParams?: Record<string, string>;
     /** Request timeout in ms. Default 30000. */
     TimeoutMs?: number;
+    /**
+     * Extra `application/x-www-form-urlencoded` parameters appended to the grant body for vendors
+     * whose token endpoint requires non-standard inputs — e.g. Auth0's `audience` on a
+     * `client_credentials` grant, or a vendor-specific `resource`/`tenant` param. Applies to every
+     * grant type; standard params (grant_type, client_id/secret, scope, refresh_token, username,
+     * password) take precedence and are never overwritten by this map.
+     */
+    ExtraParams?: Record<string, string>;
 }
 
 /** A minted access token plus its derived expiry. */
