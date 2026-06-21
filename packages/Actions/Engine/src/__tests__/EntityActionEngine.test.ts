@@ -32,13 +32,15 @@ vi.mock('@memberjunction/global', () => ({
     },
     // Bounded LRU cache backing EntityActionInvocation*._scriptCache (field initializer
     // runs in the constructor, so the mock MUST export it or every invocation construct throws).
+    // Map-backed with PascalCase methods to match the real MJLruCache API the source calls.
     MJLruCache: class MJLruCacheMock<K, V> {
-        constructor(_maxSize?: number) {}
-        get(_key: K): V | undefined { return undefined; }
-        set(_key: K, _value: V): void {}
-        has(_key: K): boolean { return false; }
-        delete(_key: K): boolean { return false; }
-        clear(): void {}
+        private store = new Map<K, V>();
+        constructor(_opts?: unknown) {}
+        Get(key: K): V | undefined { return this.store.get(key); }
+        Set(key: K, value: V): void { this.store.set(key, value); }
+        Has(key: K): boolean { return this.store.has(key); }
+        Delete(key: K): boolean { return this.store.delete(key); }
+        Clear(): void { this.store.clear(); }
     },
 }));
 

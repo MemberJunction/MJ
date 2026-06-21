@@ -30,6 +30,7 @@ vi.mock('@memberjunction/ai-agents', () => ({
   CreateBridgeRealtimeSession: vi.fn(),
   FinalizeBridgeCoAgentRuns: vi.fn(),
   GetRealtimeModelVoices: vi.fn(),
+  CreateBridgeRoomTranscriptSink: vi.fn(),
 }));
 
 import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput } from '../resolvers/RealtimeBridgeResolver';
