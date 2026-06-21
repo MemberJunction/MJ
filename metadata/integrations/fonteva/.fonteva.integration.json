@@ -6,8 +6,8 @@
       "ImportPath": "@memberjunction/integration-connectors",
       "Description": "Fonteva AMS connector: syncs Salesforce-native OrderApi__* + EventApi__* association-management objects (commerce, membership, events, payments, badges, catalog) via FDService Apex REST + the Salesforce platform REST API. Extends SalesforceConnector.",
       "NavigationBaseURL": "https://login.salesforce.com",
-      "BatchMaxRequestCount": null,
-      "BatchRequestWaitTime": null,
+      "BatchMaxRequestCount": -1,
+      "BatchRequestWaitTime": -1,
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Salesforce JWT Bearer",
       "Configuration": {
         "AuthFlow": "oauth2-authcode",
