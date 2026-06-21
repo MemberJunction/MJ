@@ -156,6 +156,27 @@ function buildAccessPathManifest(rows, cfgKey) {
   return { manifest, objectNames: objs.map((o) => o.Name), deltaObject: delta ? delta.obj.name : null };
 }
 
+// PER-CONNECTOR TEST DESCRIPTOR (each connector is unique). A connector's build may drop a
+// `test-descriptor.json` next to its fixtures declaring what the GENERIC generator can't infer:
+//   { "credentials": { "ApiKey": "...", "ApiSecret": "...", "OrganizationCode": "..." },
+//     "envelopeKey": "value", "fetchShape": "rest|accesspath|template-var|soql|soap|graphql", "liveOnly": true }
+// `credentials` are merged into the fixture Configuration (mock uses Configuration for BOTH the credential
+// AND config, so connectors that read specific cred keys — PheedLoop ApiKey/ApiSecret, OrgCode — pass).
+// Applied to BOTH regenerated AND preserved (hand-authored) fixtures. Returns true if anything was applied.
+export function applyTestDescriptor(manifest, fixturesDir) {
+  let descriptor = null;
+  try {
+    const dPath = pathResolve(fixturesDir, 'test-descriptor.json');
+    if (existsSync(dPath)) descriptor = JSON.parse(readFileSync(dPath, 'utf8'));
+  } catch { return false; }
+  if (!descriptor) return false;
+  let changed = false;
+  if (descriptor.credentials) { manifest.Configuration = { ...(manifest.Configuration || {}), ...descriptor.credentials }; changed = true; }
+  if (descriptor.fetchShape) { manifest.FetchShape = descriptor.fetchShape; changed = true; }
+  if (descriptor.liveOnly) { manifest.LiveOnly = true; changed = true; }
+  return changed;
+}
+
 export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = null) {
   // Wrap a synthetic row array in the connector's response envelope (`{[envelopeKey]: rows}`) when the
   // connector reads `body.<key>`; bare array otherwise. Centralized so route + delta bodies stay consistent.
@@ -397,7 +418,13 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
         // by-ID connectors author template-var-resolved per-record routes the deployed APIPath can't express
         (Array.isArray(m.Routes) && m.Routes.some((r) => /^\/[0-9]{4}-[0-9]{4}-/.test(String(r.Path || ''))));
       if (handAuthored) {
-        return { ok: false, reason: `hand-authored fixture preserved (special-shape connector: ConfigUrlKey=${m.ConfigUrlKey}, transport=${m.Transport || 'http'}) — regen skipped`, preserved: true };
+        // Even when we PRESERVE a hand-authored fixture, apply the per-connector test-descriptor's
+        // credentials/flags to it (each connector is unique — e.g. PheedLoop reads ApiKey+ApiSecret from
+        // the Credential and OrganizationCode from Configuration; its hand fixture lacks them). The merge
+        // is into the existing fixture's Configuration so the connector's cred validation passes in mock.
+        const applied = applyTestDescriptor(m, fixturesDir);
+        if (applied) { writeFileSync(existing, JSON.stringify(m, null, 2) + '\n'); }
+        return { ok: false, reason: `hand-authored fixture preserved (ConfigUrlKey=${m.ConfigUrlKey}, transport=${m.Transport || 'http'})${applied ? ' + descriptor applied' : ''} — regen skipped`, preserved: true, descriptorApplied: applied };
       }
     }
   } catch { /* unreadable/invalid existing fixture → fall through to regen */ }
@@ -485,16 +512,7 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
   // `credentials` are merged into the fixture Configuration so connectors that validate specific cred keys
   // (e.g. PheedLoop ApiKey/ApiSecret) stop failing "No credential found" in mock. liveOnly/fetchShape are
   // surfaced for the harness/operator. This is the seam that makes the generic generator connector-aware.
-  let descriptor = null;
-  try {
-    const dPath = pathResolve(fixturesDir, 'test-descriptor.json');
-    if (existsSync(dPath)) descriptor = JSON.parse(readFileSync(dPath, 'utf8'));
-  } catch { /* malformed descriptor → ignore, use generic */ }
-  if (descriptor) {
-    if (descriptor.credentials && manifest.Configuration) Object.assign(manifest.Configuration, descriptor.credentials);
-    if (descriptor.fetchShape) manifest.FetchShape = descriptor.fetchShape;
-    if (descriptor.liveOnly) manifest.LiveOnly = true;
-  }
+  applyTestDescriptor(manifest, fixturesDir);
 
   mkdirSync(fixturesDir, { recursive: true });
   const out = pathResolve(fixturesDir, 'fixtures.json');
