@@ -111,6 +111,7 @@ export * from './generic/CacheInvalidationResolver.js';
 export * from './generic/ResolverBase.js';
 export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
+export * from './resolvers/RunRecordProcessResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
 export * from './resolvers/VectorizeEntityResolver.js';

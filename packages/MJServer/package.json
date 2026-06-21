@@ -97,6 +97,7 @@
     "@memberjunction/scheduling-engine": "5.41.0",
     "@memberjunction/scheduling-engine-base": "5.41.0",
     "@memberjunction/schema-engine": "5.41.0",
+    "@memberjunction/record-set-processor": "5.41.0",
     "@memberjunction/search-engine": "5.41.0",
     "@memberjunction/server-extensions-core": "5.41.0",
     "@memberjunction/skip-types": "5.41.0",

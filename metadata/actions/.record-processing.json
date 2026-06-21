@@ -1,0 +1,148 @@
+[
+  {
+    "fields": {
+      "Name": "Run Record Process",
+      "Description": "Runs a MJ: Record Processes definition against a runtime scope (selected records, a view, a list, or a filter), optionally as a dry-run. Thin wrapper over the RecordProcessExecutor engine — the agent / workflow / low-code surface for the same bulk-update capability the Record Process Runner UX drives. For WorkType=FieldRules, a dry-run computes the exact per-record field diff without writing.",
+      "DriverClass": "Run Record Process",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list-check",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordProcessID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "ID of the MJ: Record Processes definition to run."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Scope",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional JSON-string runtime scope override: {\"Kind\":\"records\",\"RecordIDs\":[...]} | {\"Kind\":\"view\",\"ViewID\":\"...\"} | {\"Kind\":\"list\",\"ListID\":\"...\"} | {\"Kind\":\"filter\",\"Filter\":\"...\"}. Omit to use the process's stored Scope."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DryRun",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "DefaultValue": "false",
+            "Description": "When true, compute the per-record changes without writing (FieldRules work type). Defaults to false."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProcessRunID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "ID of the persisted MJ: Process Runs row for this run (read MJ: Process Run Details for per-record outcomes/diffs)."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Processed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Number of records the run touched."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Succeeded",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Number of records that succeeded (in dry-run, records with a computed preview)."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Errored",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Number of records that errored."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Skipped",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Number of records skipped (no rule matched / nothing changed)."
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The record process run completed."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "The run ended with a non-completed status (see Message)."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "RecordProcessID was not supplied."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_JSON",
+            "IsSuccess": false,
+            "Description": "The Scope parameter was not valid JSON."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred while running the process."
+          }
+        }
+      ]
+    }
+  }
+]
