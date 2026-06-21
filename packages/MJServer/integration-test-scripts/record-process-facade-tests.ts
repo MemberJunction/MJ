@@ -18,16 +18,16 @@
  */
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI, settle } from './lib/ai-bootstrap';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { MJRecordProcessEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
 
 const RP_NAME = 'mj-integration-test-record-process (safe to delete)';
 
 async function main(): Promise<void> {
-    const { user } = await bootstrapAI();
+    const { user, provider } = await bootstrapAI();
     const suite = new TestRunner('RecordProcessExecutor facade live integration (real Record Process → ProcessRun)');
-    const md = new Metadata();
+    const md = provider;
 
     // Resolve a real entity + a real action ID (FK requirements) — neither is exercised since the
     // Filter scope matches 0 rows, but the columns must reference valid records.

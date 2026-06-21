@@ -1,17 +1,23 @@
 import { SafeExpressionEvaluator } from '../SafeExpressionEvaluator';
 import { FieldTransformEngine } from './FieldTransformEngine';
 import type {
+    EntityDocumentResolver,
     FieldChange,
     FieldRule,
     FieldRuleSet,
     FieldRuleValueSource,
     LookupResolver,
+    PromptResolver,
 } from './rules';
 
 /** Options for an evaluator instance. */
 export interface FieldRulesEvaluatorOptions {
     /** Resolver for `lookup` sources. Omit if no rule uses a lookup (a lookup rule then errors). */
     LookupResolver?: LookupResolver;
+    /** Resolver for `prompt` sources. Omit if no rule uses a prompt (a prompt rule then errors). */
+    PromptResolver?: PromptResolver;
+    /** Resolver for `entityDocument` sources. Omit if no rule renders one (such a rule then errors). */
+    EntityDocumentResolver?: EntityDocumentResolver;
 }
 
 /**
@@ -26,9 +32,13 @@ export class FieldRulesEvaluator {
     private readonly transforms = new FieldTransformEngine();
     private readonly conditions = new SafeExpressionEvaluator();
     private readonly lookupResolver?: LookupResolver;
+    private readonly promptResolver?: PromptResolver;
+    private readonly entityDocumentResolver?: EntityDocumentResolver;
 
     constructor(options?: FieldRulesEvaluatorOptions) {
         this.lookupResolver = options?.LookupResolver;
+        this.promptResolver = options?.PromptResolver;
+        this.entityDocumentResolver = options?.EntityDocumentResolver;
     }
 
     /** Computes one {@link FieldChange} per rule for a record (a row of field name → current value). */
@@ -107,6 +117,27 @@ export class FieldRulesEvaluator {
                     ReturnField: source.Lookup.ReturnField,
                 });
                 return resolved === undefined ? (source.Lookup.Default ?? null) : resolved;
+            }
+            case 'prompt': {
+                if (!this.promptResolver) {
+                    throw new Error('a prompt rule was used but no PromptResolver was provided');
+                }
+                // By default hand the WHOLE record to the prompt; otherwise resolve each shaped Data entry
+                // through the same source machinery (so Data values can be fields, formulas, statics, …).
+                let data: Record<string, unknown> = record;
+                if (source.Prompt.Data) {
+                    data = {};
+                    for (const [key, valueSource] of Object.entries(source.Prompt.Data)) {
+                        data[key] = await this.resolveSource(record, valueSource);
+                    }
+                }
+                return this.promptResolver({ PromptID: source.Prompt.PromptID, Data: data });
+            }
+            case 'entityDocument': {
+                if (!this.entityDocumentResolver) {
+                    throw new Error('an entityDocument rule was used but no EntityDocumentResolver was provided');
+                }
+                return this.entityDocumentResolver({ EntityDocumentID: source.EntityDocument?.EntityDocumentID, Record: record });
             }
         }
     }

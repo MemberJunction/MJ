@@ -25,7 +25,7 @@
  * pure transform engine for its per-field transforms. One engine, two purpose-built layers.
  */
 import { FieldRulesEvaluator } from '@memberjunction/global';
-import type { FieldChange, FieldRuleSet, LookupResolver, ResolvedLookup } from '@memberjunction/global';
+import type { EntityDocumentResolver, FieldChange, FieldRuleSet, LookupResolver, PromptResolver, ResolvedLookup } from '@memberjunction/global';
 import { BaseEntity } from './baseEntity';
 import { EntityFieldInfo, EntityFieldTSType } from './entityInfo';
 import { Metadata } from './metadata';
@@ -80,9 +80,19 @@ export class EntityFieldRules {
     /**
      * @param contextUser - The acting user, used by the built-in `RunView`-backed lookup resolver
      *   (required server-side; client-side may omit it).
+     * @param promptResolver - Optional resolver for `prompt` rule sources. Core does not depend on the AI
+     *   stack, so this is injected by a higher layer that has an `AIPromptRunner` (the bulk-update
+     *   processor supplies one). Omit it and any `prompt` rule reports a clear error instead of running.
+     * @param entityDocumentResolver - Optional resolver for `entityDocument` rule sources. Core does not
+     *   depend on the templates/AI stack, so this is injected by a higher layer that can render an Entity
+     *   Document (the processor supplies one). Omit it and any `entityDocument` rule reports a clear error.
      */
-    constructor(private readonly contextUser?: UserInfo) {
-        this.evaluator = new FieldRulesEvaluator({ LookupResolver: this.buildLookupResolver() });
+    constructor(private readonly contextUser?: UserInfo, promptResolver?: PromptResolver, entityDocumentResolver?: EntityDocumentResolver) {
+        this.evaluator = new FieldRulesEvaluator({
+            LookupResolver: this.buildLookupResolver(),
+            PromptResolver: promptResolver,
+            EntityDocumentResolver: entityDocumentResolver,
+        });
     }
 
     /**

@@ -1,4 +1,5 @@
 import { MJLruCache } from '../MJLruCache';
+import { GetFieldTransform } from './transformRegistry';
 import type {
     TransformStep,
     TransformOnError,
@@ -91,8 +92,15 @@ export class FieldTransformEngine {
                 } catch (err) {
                     throw new Error(`Custom transform expression failed: ${err instanceof Error ? err.message : String(err)}`);
                 }
-            default:
-                throw new Error(`Unknown transform type: ${(step as TransformStep).Type}`);
+            default: {
+                // Not a built-in — dispatch to a registered plugin (e.g. 'jsonpath' / 'xpath', whose
+                // libraries must not be deps of this package). See {@link RegisterFieldTransform}.
+                const plugin = GetFieldTransform(step.Type);
+                if (plugin) {
+                    return plugin(value, fields, step.Config);
+                }
+                throw new Error(`Unknown transform type '${(step as TransformStep).Type}'. If it is a plugin transform (e.g. 'jsonpath'/'xpath'), import the package that registers it before running.`);
+            }
         }
     }
 

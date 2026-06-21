@@ -18,7 +18,7 @@
  */
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI, settle } from './lib/ai-bootstrap';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo } from '@memberjunction/core';
 import { MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { RecordSetProcessor, FieldRulesProcessor } from '@memberjunction/record-set-processor';
 import { ArraySource } from '@memberjunction/record-set-processor-base';
@@ -44,10 +44,10 @@ async function fetchDescription(id: string, user: UserInfo): Promise<string | nu
 }
 
 async function main(): Promise<void> {
-    const { user } = await bootstrapAI();
+    const { user, provider } = await bootstrapAI();
     const suite = new TestRunner('Field Rules bulk-update live integration (engine + processor, dry-run + apply)');
-    const md = new Metadata();
-    const entityID = new Metadata().EntityByName(ENTITY)?.ID ?? (await resolveEntityID(user));
+    const md = provider;
+    const entityID = provider.EntityByName(ENTITY)?.ID ?? (await resolveEntityID(user));
 
     // --- create 3 throwaway records (Description starts null) ---
     const ids: string[] = [];

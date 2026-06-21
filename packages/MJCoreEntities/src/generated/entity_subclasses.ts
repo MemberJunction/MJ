@@ -15540,6 +15540,11 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RuntimeUXDriverClass: z.string().nullable().describe(`
+        * * Field Name: RuntimeUXDriverClass
+        * * Display Name: Runtime UX Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
         * * Display Name: Entity Action Name
@@ -23344,7 +23349,7 @@ export const MJRecordProcessSchema = z.object({
     *   * Disabled
     *   * Draft
         * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
-    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Infer')]).describe(`
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('FieldRules'), z.literal('Infer')]).describe(`
         * * Field Name: WorkType
         * * Display Name: Work Type
         * * SQL Data Type: nvarchar(20)
@@ -23352,6 +23357,7 @@ export const MJRecordProcessSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * FieldRules
     *   * Infer
         * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`),
     ActionID: z.string().nullable().describe(`
@@ -23493,33 +23499,38 @@ export const MJRecordProcessSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category (Display)
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity (Display)
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     Action: z.string().nullable().describe(`
         * * Field Name: Action
-        * * Display Name: Action (Display)
+        * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent (Display)
+        * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
-        * * Display Name: Prompt (Display)
+        * * Display Name: Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     ScopeView: z.string().nullable().describe(`
         * * Field Name: ScopeView
-        * * Display Name: Scope View (Display)
+        * * Display Name: Scope View Name
         * * SQL Data Type: nvarchar(100)`),
     ScopeList: z.string().nullable().describe(`
         * * Field Name: ScopeList
-        * * Display Name: Scope List (Display)
+        * * Display Name: Scope List Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -71149,6 +71160,19 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
     }
 
     /**
+    * * Field Name: RuntimeUXDriverClass
+    * * Display Name: Runtime UX Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.
+    */
+    get RuntimeUXDriverClass(): string | null {
+        return this.Get('RuntimeUXDriverClass');
+    }
+    set RuntimeUXDriverClass(value: string | null) {
+        this.Set('RuntimeUXDriverClass', value);
+    }
+
+    /**
     * * Field Name: EntityAction
     * * Display Name: Entity Action Name
     * * SQL Data Type: nvarchar(425)
@@ -91035,13 +91059,14 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * FieldRules
     *   * Infer
     * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
     */
-    get WorkType(): 'Action' | 'Agent' | 'Infer' {
+    get WorkType(): 'Action' | 'Agent' | 'FieldRules' | 'Infer' {
         return this.Get('WorkType');
     }
-    set WorkType(value: 'Action' | 'Agent' | 'Infer') {
+    set WorkType(value: 'Action' | 'Agent' | 'FieldRules' | 'Infer') {
         this.Set('WorkType', value);
     }
 
@@ -91355,8 +91380,21 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     }
 
     /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
     * * Field Name: Category
-    * * Display Name: Category (Display)
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(255)
     */
     get Category(): string | null {
@@ -91365,7 +91403,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity (Display)
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -91374,7 +91412,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Action
-    * * Display Name: Action (Display)
+    * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get Action(): string | null {
@@ -91383,7 +91421,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent (Display)
+    * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -91392,7 +91430,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Prompt
-    * * Display Name: Prompt (Display)
+    * * Display Name: Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get Prompt(): string | null {
@@ -91401,7 +91439,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: ScopeView
-    * * Display Name: Scope View (Display)
+    * * Display Name: Scope View Name
     * * SQL Data Type: nvarchar(100)
     */
     get ScopeView(): string | null {
@@ -91410,7 +91448,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: ScopeList
-    * * Display Name: Scope List (Display)
+    * * Display Name: Scope List Name
     * * SQL Data Type: nvarchar(100)
     */
     get ScopeList(): string | null {

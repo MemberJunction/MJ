@@ -11,7 +11,13 @@
  * @module @memberjunction/record-set-processor
  */
 import { BaseEntity, CompositeKey, EntityFieldRules, type EntityFieldRulesResult } from '@memberjunction/core';
-import type { FieldChange, FieldRuleSet } from '@memberjunction/global';
+import { UUIDsEqual, type FieldChange, type FieldRuleSet, type PromptResolver } from '@memberjunction/global';
+import { AIEngine } from '@memberjunction/aiengine';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams, MJEntityDocumentEntityExtended } from '@memberjunction/ai-core-plus';
+import { TemplateEngineServer } from '@memberjunction/templates';
+import { RegisterFieldRulesTransforms } from '@memberjunction/field-rules-transforms';
+import type { EntityDocumentResolver } from '@memberjunction/global';
 import {
     type IRecordProcessor,
     type RecordProcessorContext,
@@ -40,7 +46,11 @@ export interface FieldRulesResultPayload {
  * `BaseEntity.Save()`, so MJ's built-in Record Changes versioning captures the before/after automatically.
  */
 export class FieldRulesProcessor implements IRecordProcessor {
-    constructor(private readonly options: FieldRulesProcessorOptions) {}
+    constructor(private readonly options: FieldRulesProcessorOptions) {
+        // Make the extended transforms (jsonpath / xpath) available to rules. Idempotent — registers
+        // the plugins into the global transform registry the first time a processor is created.
+        RegisterFieldRulesTransforms();
+    }
 
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
         const started = Date.now();
@@ -49,7 +59,8 @@ export class FieldRulesProcessor implements IRecordProcessor {
             if (typeof obj === 'string') {
                 return { Status: 'Failed', ErrorMessage: obj, DurationMs: Date.now() - started };
             }
-            const result = await new EntityFieldRules(context.contextUser).ApplyToEntity(obj, this.options.RuleSet, { DryRun: this.options.DryRun });
+            const rules = new EntityFieldRules(context.contextUser, this.buildPromptResolver(context), this.buildEntityDocumentResolver(context));
+            const result = await rules.ApplyToEntity(obj, this.options.RuleSet, { DryRun: this.options.DryRun });
             return this.toRecordResult(result, started);
         } catch (err) {
             return { Status: 'Failed', ErrorMessage: err instanceof Error ? err.message : String(err), DurationMs: Date.now() - started };
@@ -90,5 +101,55 @@ export class FieldRulesProcessor implements IRecordProcessor {
             return `record '${record.RecordID}' of '${entity.Name}' not found`;
         }
         return obj;
+    }
+
+    /**
+     * Supplies core's `EntityFieldRules` with a real `AIPromptRunner`-backed resolver for `prompt` rule
+     * sources (core can't depend on the AI stack itself). Each prompt source runs the named prompt with
+     * the record (or its shaped data) as input; the prompt's output becomes the field value. One model
+     * call per record per prompt-rule — pair with dry-run + bounded concurrency on large sets.
+     */
+    private buildPromptResolver(context: RecordProcessorContext): PromptResolver {
+        return async ({ PromptID, Data }) => {
+            await AIEngine.Instance.Config(false, context.contextUser);
+            const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, PromptID));
+            if (!prompt) {
+                throw new Error(`AI Prompt '${PromptID}' not found`);
+            }
+            const params = new AIPromptParams();
+            params.prompt = prompt;
+            params.data = Data;
+            params.contextUser = context.contextUser;
+            const result = await new AIPromptRunner().ExecutePrompt(params);
+            if (!result.success) {
+                throw new Error(result.errorMessage ?? 'AI prompt execution failed');
+            }
+            return result.result;
+        };
+    }
+
+    /**
+     * Supplies core's `EntityFieldRules` with a resolver for `entityDocument` rule sources, backed by the
+     * existing Entity Document + Template render infrastructure (core can't depend on templates itself).
+     * Renders the named Entity Document's template against the record and returns the text — typically
+     * fed into a `prompt` source's `Data` to give the LLM a curated rendering of the record.
+     */
+    private buildEntityDocumentResolver(context: RecordProcessorContext): EntityDocumentResolver {
+        return async ({ EntityDocumentID, Record }) => {
+            if (!EntityDocumentID) {
+                throw new Error('an entityDocument source requires an EntityDocumentID');
+            }
+            // Configure the template engine first so the EntityDocument's virtual TemplateText resolves.
+            await TemplateEngineServer.Instance.Config(false, context.contextUser);
+            const doc = await context.provider.GetEntityObject<MJEntityDocumentEntityExtended>('MJ: Entity Documents', context.contextUser);
+            if (!(await doc.Load(EntityDocumentID))) {
+                throw new Error(`Entity Document '${EntityDocumentID}' not found`);
+            }
+            const rendered = await TemplateEngineServer.Instance.RenderTemplateSimple(doc.TemplateText, Record);
+            if (!rendered.Success) {
+                throw new Error(rendered.Message ?? 'entity document render failed');
+            }
+            return rendered.Output ?? '';
+        };
     }
 }

@@ -16,7 +16,7 @@
 import sql from 'mssql';
 import { LoadEnv, LoadDbConfig, Assert } from './harness';
 import { RunView, UserInfo } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { AIEngine } from '@memberjunction/aiengine';
 // Registers entity subclasses + the AI provider / agent-type / prompt drivers needed to run prompts and
 // agents. The "lite" bootstrap deliberately EXCLUDES @memberjunction/server, so importing it does not drag
@@ -26,6 +26,8 @@ import '@memberjunction/server-bootstrap-lite';
 export interface AICtx {
     pool: sql.ConnectionPool;
     user: UserInfo;
+    /** The bootstrapped provider — use this for entity access in suites rather than `new Metadata()`. */
+    provider: SQLServerDataProvider;
 }
 
 /** Bootstraps the live provider stack + AIEngine. Reuses the DB resolution the cache suites use. */
@@ -41,7 +43,7 @@ export async function bootstrapAI(): Promise<AICtx> {
         options: { encrypt: false, trustServerCertificate: true },
     }).connect();
 
-    await setupSQLServerClient(new SQLServerProviderConfigData(pool, db.Schema));
+    const provider = await setupSQLServerClient(new SQLServerProviderConfigData(pool, db.Schema));
     await UserCache.Instance.Refresh(pool);
 
     const email = process.env.MJ_TEST_USER_EMAIL?.toLowerCase();
@@ -54,7 +56,7 @@ export async function bootstrapAI(): Promise<AICtx> {
     }
 
     await AIEngine.Instance.Config(false, user);
-    return { pool, user };
+    return { pool, user, provider };
 }
 
 // ────────────────────────────────────────────────────────────────────────────

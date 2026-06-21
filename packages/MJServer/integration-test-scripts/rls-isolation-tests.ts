@@ -20,21 +20,21 @@
  */
 import { TestRunner, Assert } from './lib/harness';
 import { bootstrapAI } from './lib/ai-bootstrap';
-import { EntityPermissionType, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { EntityPermissionType, RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 
 async function main(): Promise<void> {
-    await bootstrapAI();
+    const { provider } = await bootstrapAI();
     const suite = new TestRunner('Row-Level Security isolation (multi-user, real RLS filter)');
 
-    const provider = Metadata.Provider;
     const filters = provider.RowLevelSecurityFilters ?? [];
     const filter = filters.find((f) => f.FilterText?.includes('{{UserID}}'));
     Assert(!!filter, 'No {{UserID}}-scoped RLS filter found in metadata');
 
     const users = UserCache.Users.filter(Boolean);
     const userA = users[0];
-    const userB = users.find((u) => u.ID !== userA?.ID);
+    const userB = users.find((u) => !UUIDsEqual(u.ID, userA?.ID));
     Assert(!!userA, 'No users in cache to evaluate RLS against');
     console.log(`  RLS filter under test: "${filter!.Name}"  ·  users available: ${users.length}`);
 
@@ -53,7 +53,10 @@ async function main(): Promise<void> {
         const ma = filter!.MarkupFilterText(userA!);
         const mb = filter!.MarkupFilterText(userB);
         Assert(ma !== mb, `two users produced identical RLS text — A's cache slot could serve B: ${ma}`);
-        Assert(ma.includes(userA!.ID) && mb.includes(userB.ID), 'each predicate is scoped to its own user');
+        // String-substring check that each marked-up predicate embeds its own user's id.
+        const aId = userA!.ID;
+        const bId = userB.ID;
+        Assert(ma.includes(aId) && mb.includes(bId), 'each predicate is scoped to its own user');
         console.log(`      → ${userA!.Email} and ${userB.Email} get distinct, self-scoped predicates`);
     });
 
@@ -71,7 +74,7 @@ async function main(): Promise<void> {
                 );
                 Assert(result.Success, `RunView on '${e.Name}' as ${u.Email} failed: ${result.ErrorMessage}`);
                 if (e.Fields.some((f) => f.Name === 'UserID')) {
-                    const leaks = (result.Results as Array<{ UserID?: string }>).filter((r) => r.UserID && r.UserID !== u.ID);
+                    const leaks = (result.Results as Array<{ UserID?: string }>).filter((r) => r.UserID && !UUIDsEqual(r.UserID, u.ID));
                     Assert(leaks.length === 0, `RLS LEAK on '${e.Name}': ${leaks.length} row(s) with another user's UserID reached ${u.Email}`);
                     console.log(`      → live RLS verified on '${e.Name}' as ${u.Email}: ${result.Results.length} rows, 0 leaks`);
                 } else {

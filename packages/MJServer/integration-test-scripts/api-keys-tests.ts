@@ -17,14 +17,14 @@
  */
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI } from './lib/ai-bootstrap';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { MJAPIKeyEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity } from '@memberjunction/core-entities';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 const TEST_LABEL = 'mj-integration-test-key (safe to delete)';
 
 async function main(): Promise<void> {
-    const { user } = await bootstrapAI();
+    const { user, provider } = await bootstrapAI();
     const suite = new TestRunner('API Keys engine live integration (real scopes/apps + end-to-end authorize)');
 
     const engine = GetAPIKeyEngine();
@@ -45,7 +45,7 @@ async function main(): Promise<void> {
     });
 
     suite.Test('AK3: a real key authorizes an explicitly-granted scope and denies an explicitly-denied one', async () => {
-        const md = new Metadata();
+        const md = provider;
         const readScope = engine.Scopes.find((s) => s.FullPath === 'entity:read');
         const deleteScope = engine.Scopes.find((s) => s.FullPath === 'entity:delete');
         Assert(!!readScope && !!deleteScope, 'entity:read / entity:delete scopes not found in seeded metadata');

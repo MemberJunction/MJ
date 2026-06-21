@@ -45276,6 +45276,10 @@ export class MJEntityActionInvocation_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`}) 
+    @MaxLength(255)
+    RuntimeUXDriverClass?: string;
+        
     @Field() 
     @MaxLength(425)
     EntityAction: string;
@@ -45303,6 +45307,9 @@ export class CreateMJEntityActionInvocationInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    RuntimeUXDriverClass: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -45324,6 +45331,9 @@ export class UpdateMJEntityActionInvocationInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    RuntimeUXDriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -68054,6 +68064,9 @@ export class MJRecordProcess_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -68176,6 +68189,9 @@ export class CreateMJRecordProcessInput {
     @Field(() => Int, { nullable: true })
     MaxConcurrency?: number | null;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -68266,6 +68282,9 @@ export class UpdateMJRecordProcessInput {
 
     @Field(() => Int, { nullable: true })
     MaxConcurrency?: number | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

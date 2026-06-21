@@ -1,7 +1,85 @@
 import { describe, it, expect } from 'vitest';
 import { FieldRulesEvaluator } from '../fieldRules/FieldRulesEvaluator';
 import { FieldTransformEngine } from '../fieldRules/FieldTransformEngine';
-import type { FieldRuleSet, ResolvedLookup } from '../fieldRules/rules';
+import { RegisterFieldTransform, GetFieldTransform } from '../fieldRules/transformRegistry';
+import type { FieldRuleSet, ResolvedLookup, ResolvedPrompt, ResolvedEntityDocument } from '../fieldRules/rules';
+
+describe('FieldTransformEngine — plugin registry (keeps libs out of global)', () => {
+    it('dispatches a non-built-in transform to a registered plugin', () => {
+        const seen: unknown[] = [];
+        RegisterFieldTransform('jsonpath', (value, _fields, config) => {
+            seen.push({ value, config });
+            return 'plugin-result';
+        });
+        expect(GetFieldTransform('JSONPath')).toBeTypeOf('function'); // case-insensitive
+        const out = new FieldTransformEngine().ExecutePipeline('{"a":1}', {}, [{ Type: 'jsonpath', Config: { Path: '$.a' } }]);
+        expect(out.Value).toBe('plugin-result');
+        expect(seen[0]).toEqual({ value: '{"a":1}', config: { Path: '$.a' } });
+    });
+
+    it('errors clearly for an unregistered plugin transform (OnError=Fail)', () => {
+        expect(() => new FieldTransformEngine().ExecutePipeline('x', {}, [{ Type: 'xpath', Config: { Path: '/a' }, OnError: 'Fail' }]))
+            .toThrow(/Unknown transform type 'xpath'/);
+    });
+});
+
+describe('FieldRulesEvaluator — entityDocument source (injected render infra)', () => {
+    it('renders the record via the injected EntityDocumentResolver', async () => {
+        const seen: ResolvedEntityDocument[] = [];
+        const evaluator = new FieldRulesEvaluator({ EntityDocumentResolver: async (d) => { seen.push(d); return 'RENDERED DOC'; } });
+        const [c] = await evaluator.ComputeChanges(
+            { Name: 'Acme', Doc: '' },
+            { Rules: [{ TargetField: 'Doc', Source: { Kind: 'entityDocument', EntityDocument: { EntityDocumentID: 'ed-1' } } }] },
+        );
+        expect(c.NewValue).toBe('RENDERED DOC');
+        expect(seen[0]).toEqual({ EntityDocumentID: 'ed-1', Record: { Name: 'Acme', Doc: '' } });
+    });
+
+    it('errors clearly when no EntityDocumentResolver is provided', async () => {
+        const [c] = await new FieldRulesEvaluator().ComputeChanges(
+            { X: '' },
+            { Rules: [{ TargetField: 'X', Source: { Kind: 'entityDocument' } }] },
+        );
+        expect(c.Applied).toBe(false);
+        expect(c.Error).toMatch(/no EntityDocumentResolver/);
+    });
+});
+
+describe('FieldRulesEvaluator — prompt sources', () => {
+    it('passes the WHOLE record to the prompt by default and uses its output', async () => {
+        const seen: ResolvedPrompt[] = [];
+        const evaluator = new FieldRulesEvaluator({ PromptResolver: async (p) => { seen.push(p); return 'A concise summary.'; } });
+        const [c] = await evaluator.ComputeChanges(
+            { Name: 'Acme', Notes: 'long notes…', Summary: '' },
+            { Rules: [{ TargetField: 'Summary', Source: { Kind: 'prompt', Prompt: { PromptID: 'p-1' } } }] },
+        );
+        expect(c.NewValue).toBe('A concise summary.');
+        expect(seen[0].PromptID).toBe('p-1');
+        expect(seen[0].Data).toEqual({ Name: 'Acme', Notes: 'long notes…', Summary: '' }); // whole record
+    });
+
+    it('shapes the prompt data when Data is provided (field/formula/static resolved per entry)', async () => {
+        let captured: Record<string, unknown> = {};
+        const evaluator = new FieldRulesEvaluator({ PromptResolver: async (p) => { captured = p.Data; return 'ok'; } });
+        await evaluator.ComputeChanges(
+            { First: 'Ada', Last: 'Lovelace', Bio: '' },
+            { Rules: [{ TargetField: 'Bio', Source: { Kind: 'prompt', Prompt: { PromptID: 'p-2', Data: {
+                fullName: { Kind: 'formula', Expression: "fields.First + ' ' + fields.Last" },
+                role: { Kind: 'static', Value: 'mathematician' },
+            } } } }] },
+        );
+        expect(captured).toEqual({ fullName: 'Ada Lovelace', role: 'mathematician' });
+    });
+
+    it('errors clearly when a prompt rule is used with no PromptResolver', async () => {
+        const [c] = await new FieldRulesEvaluator().ComputeChanges(
+            { X: '' },
+            { Rules: [{ TargetField: 'X', Source: { Kind: 'prompt', Prompt: { PromptID: 'p' } } }] },
+        );
+        expect(c.Applied).toBe(false);
+        expect(c.Error).toMatch(/no PromptResolver/);
+    });
+});
 
 describe('FieldRulesEvaluator.ComputeChanges', () => {
     const run = async (record: Record<string, unknown>, ruleSet: FieldRuleSet, resolver?: (l: ResolvedLookup) => Promise<unknown>) =>

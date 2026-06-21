@@ -15,7 +15,9 @@ export type TransformType =
     | 'format'
     | 'coerce'
     | 'substring'
-    | 'custom';
+    | 'custom'
+    | 'jsonpath'
+    | 'xpath';
 
 /** What to do when a transform step encounters an error */
 export type TransformOnError = 'Skip' | 'Null' | 'Fail';
@@ -30,6 +32,22 @@ export interface TransformStep {
     OnError?: TransformOnError;
 }
 
+/** Configuration for extracting value(s) from JSON via a JSONPath expression. */
+export interface JsonPathConfig {
+    /** JSONPath expression, e.g. `$.store.book[0].title` or `$..author`. */
+    Path: string;
+    /** Return only the first match (default). When false, returns the full array of matches. */
+    First?: boolean;
+}
+
+/** Configuration for extracting value(s) from XML via an XPath expression. */
+export interface XPathConfig {
+    /** XPath expression, e.g. `/catalog/book[1]/title/text()` or `//author`. */
+    Path: string;
+    /** Return only the first match (default). When false, returns the full array of matches. */
+    First?: boolean;
+}
+
 /** Union of all transform configuration types */
 export type TransformConfig =
     | DirectConfig
@@ -38,6 +56,8 @@ export type TransformConfig =
     | CombineConfig
     | LookupConfig
     | FormatConfig
+    | JsonPathConfig
+    | XPathConfig
     | CoerceConfig
     | SubstringConfig
     | CustomConfig;

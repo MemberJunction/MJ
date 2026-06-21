@@ -17,7 +17,7 @@
  */
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI, settle } from './lib/ai-bootstrap';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { SchedulingEngine } from '@memberjunction/scheduling-engine';
 
@@ -25,7 +25,7 @@ const TERMINAL = new Set(['Completed', 'Failed', 'Cancelled']);
 const JOB_NAME = 'mj-integration-test-job (safe to delete)';
 
 async function main(): Promise<void> {
-    const { user } = await bootstrapAI();
+    const { user, provider } = await bootstrapAI();
     const suite = new TestRunner('Scheduled Jobs engine live integration (run lifecycle + distributed lease)');
 
     const engine = SchedulingEngine.Instance;
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
     const jobType = engine.ScheduledJobTypes.find((t) => t.Name === 'Run Record Process') ?? engine.ScheduledJobTypes[0];
     Assert(!!jobType, 'No scheduled job types are seeded in this database');
 
-    const md = new Metadata();
+    const md = provider;
     const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
     job.NewRecord();
     job.Name = JOB_NAME;
