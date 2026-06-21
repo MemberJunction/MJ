@@ -145,16 +145,6 @@ Interaction with existing layers (ordering matters):
 
 ## 6. Priority 4 — Memory: learn from failed runs (`headroom learn` concept)
 
-> **Status: DEFERRED to a follow-up PR.** The first implementation narrowed the §6.1 selector to a single
-> literal filter (`Status IN ('Failed','Cancelled')`). Investigation found that in this codebase `Success` is
-> redundant with `Status` (a run's `Success=false` only ever pairs with `Status='Failed'`/`'Cancelled'`), so
-> the only failure signal that would add real coverage — **repeated `AwaitingFeedback`** (a run that keeps
-> stalling for human help on the same issue; these have `Success=true`, `Status='AwaitingFeedback'`) — was the
-> one not implemented. Combined with agents recovering gracefully to `AwaitingFeedback` rather than ending
-> `Failed`, the feature mined effectively nothing. P4 was removed from the ContextCrush PR so P1–P3 could land
-> clean; it should return as its own PR built around the recurrence-based signal below, not the Status/Success
-> literal.
-
 **Where this lands in our system** (studied against the in-flight memory writes work and `MemoryManagerAgent`):
 
 Our memory architecture (see `guides/AGENT_MEMORY_GUIDE.md`) is three-tier: in-flight `memoryWrites` (Provisional, `MemoryWriteManager`) → scheduled `MemoryManagerAgent` (extraction + hardening + consolidation/decay). Extraction today draws from:
@@ -206,7 +196,7 @@ So credit is unambiguous wherever a reviewer or downstream dev looks:
 | **P1c** | Wire `crushJSON` into `ActionResultSummary` path in `base-agent.ts` behind default-on flag; integration tests; measured savings in PR | P1b |
 | **P2** | `partitionStablePrefix` primitive + cache-aware guard in `pruneAndCompactExpiredMessages`; prefix-stability tests | P1b |
 | **P3** | `crushCode` (SQL + TS) behind subpath export; opt-in wiring for query-builder agent | P1 |
-| **P4** | _Deferred_ — `LoadInstructiveFailedAgentRuns` + corrective extraction mode in `MemoryManagerAgent` (see §6 status note; removed from this PR, returns as its own follow-up) | independent of P1–P3 |
+| **P4** | `LoadInstructiveFailedAgentRuns` + corrective extraction mode in `MemoryManagerAgent`; tests | independent of P1–P3 |
 
 Each phase ships as its own PR off this branch (or follow-ups), with measured before/after token counts where applicable. **This PR delivers the plan only.**
 
