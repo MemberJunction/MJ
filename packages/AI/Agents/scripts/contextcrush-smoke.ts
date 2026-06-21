@@ -1,9 +1,13 @@
 /**
  * ContextCrush smoke harness — drives the REAL wired agent-runner methods against the
- * configured database + live LLM stack, demonstrating Priorities 2, 3, and 4.
+ * configured database + live LLM stack, demonstrating Priorities 1, 2, 3, and 4.
  *
  * Boots the same SQL Server data provider as `mj sync` / MJAPI, registers every class via
  * the server-bootstrap manifest, then exercises:
+ *
+ *   P1 — structural JSON compression (BaseAgent action-result crush via resolveActionResultCrush +
+ *        formatParamValueForResult + CrushJSON): a 200-row array-of-objects (raw OR JSON-string) is
+ *        crushed to tabular "$t" form with a context-crush legend; opt-out + below-threshold verbatim.
  *
  *   P2 — cache-aware expiration (BaseAgent.pruneAndCompactExpiredMessages + PartitionStablePrefix):
  *        builds a conversation with a stable prefix + a volatile (expiring) action-result tail,
@@ -81,8 +85,8 @@ class SmokeHarness extends MemoryManagerAgent {
         return this.pruneAndCompactExpiredMessages(params, currentTurn);
     }
 
-    /** P3: set the crush config from params, then format a single action-result param value (real path). */
-    public CrushValue(value: string, params: ExecuteAgentParams): string {
+    /** P1/P3: set the crush config from params, then format a single action-result param value (real path). */
+    public CrushValue(value: unknown, params: ExecuteAgentParams): string {
         const self = this as unknown as {
             _actionResultCrush: unknown;
             resolveActionResultCrush(p: ExecuteAgentParams): unknown;
@@ -131,12 +135,53 @@ function buildLargeSql(): string {
     return `SELECT x, y FROM (VALUES ${tuples.join(',')}) AS t(x, y)`;
 }
 
+/** A 200-row array-of-objects — the canonical repetitive action payload CrushJSON tabularizes. */
+function buildLargeResultSet(): Record<string, unknown>[] {
+    return Array.from({ length: 200 }, (_, i) => ({
+        id: i,
+        name: `Record ${i}`,
+        status: i % 2 === 0 ? 'Active' : 'Inactive',
+        category: 'StandardCategory',
+    }));
+}
+
 function makeParams(overrides: Partial<ExecuteAgentParams>): ExecuteAgentParams {
     return overrides as ExecuteAgentParams;
 }
 
 function prefixJSON(messages: AgentChatMessage[], count: number): string {
     return JSON.stringify(messages.slice(0, count));
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// P1 — structural JSON compression (default-on)
+// ──────────────────────────────────────────────────────────────────────────
+function runP1(harness: SmokeHarness): void {
+    LogStatus('\n════ P1 — structural JSON compression (default-on action-result crush) ════');
+    const data = buildLargeResultSet();
+    const verbatim = JSON.stringify(data);
+    // Default config: no crushActionResults:false, no crushCodeLang → P1 JSON crush is on.
+    const onParams = makeParams({ data: { __agentTypePromptParams: {} } });
+
+    // Raw object/array param.
+    const crushed = harness.CrushValue(data, onParams);
+    check('raw array-of-objects crushed to tabular form ($t)', crushed.includes('$t'));
+    check('crushed output carries the context-crush legend', crushed.includes('context-crush'));
+    check('crushed output measurably smaller than verbatim JSON', crushed.split('\n')[0].length < verbatim.length, `${crushed.split('\n')[0].length} vs ${verbatim.length}`);
+
+    // JSON-STRING param (actions that JSON.stringify their payload, e.g. run-adhoc-query's Results)
+    // — the P1 wiring-gap regression: these must also be crushed.
+    const crushedStr = harness.CrushValue(verbatim, onParams);
+    check('JSON-STRING param also crushed (wiring-gap regression)', crushedStr.includes('$t') && crushedStr.includes('context-crush'));
+
+    // Opt-out → verbatim.
+    const offParams = makeParams({ data: { __agentTypePromptParams: { crushActionResults: false } } });
+    const optedOut = harness.CrushValue(data, offParams);
+    check('opt-out (crushActionResults:false) returns verbatim JSON', optedOut === verbatim && !optedOut.includes('$t'));
+
+    // Below threshold → verbatim.
+    const small = harness.CrushValue([{ id: 1, name: 'Small' }], onParams);
+    check('below-threshold JSON left verbatim', small === JSON.stringify([{ id: 1, name: 'Small' }]));
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -308,6 +353,7 @@ async function main(): Promise<void> {
     const harness = new SmokeHarness();
 
     try {
+        runP1(harness);
         await runP2(harness);
         runP3(harness);
         await runP4(harness, contextUser, agentId);
