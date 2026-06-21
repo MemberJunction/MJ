@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Eventbrite OAuth Token",
+  "description": "Eventbrite Platform API v3 credentials. A single private OAuth token (issued per app from the user's API Keys page) is used directly as a Bearer token for single-user integrations. For multi-user apps, the full OAuth2 authorization-code flow is used: ApiKey/ClientSecret identify the app, the user is redirected to the authorize URL, and the returned code is exchanged for an access token. Provide either the PrivateToken, or the OAuth app credentials.",
+  "properties": {
+    "PrivateToken": {
+      "type": "string",
+      "title": "Private Token",
+      "description": "Per-app private OAuth token from the Eventbrite API Keys page. Sent as Authorization: Bearer on every request (single-user integration). Preferred when present."
+    },
+    "ApiKey": {
+      "type": "string",
+      "title": "API Key (Client ID)",
+      "description": "Eventbrite app API key / client id. Identifies the app in the OAuth2 authorization-code handshake (not secret)."
+    },
+    "ClientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "Eventbrite app client secret, used to exchange the authorization code for an access token in the OAuth2 authorization-code flow."
+    },
+    "RedirectURI": {
+      "type": "string",
+      "title": "Redirect URI",
+      "description": "OAuth2 redirect URI registered for the app; required for the authorization-code flow."
+    }
+  },
+  "anyOf": [
+    { "required": ["PrivateToken"] },
+    { "required": ["ApiKey", "ClientSecret"] }
+  ],
+  "additionalProperties": false
+}

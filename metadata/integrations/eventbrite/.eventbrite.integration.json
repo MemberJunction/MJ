@@ -1,0 +1,3369 @@
+[
+  {
+    "fields": {
+      "Name": "Eventbrite",
+      "ClassName": "EventbriteConnector",
+      "Description": "Eventbrite Platform REST API v3 connector. Read events, organizations, venues, organizers, ticket classes, orders, attendees, discounts and reference data; incremental on orders/attendees (changed_since); create/update/delete on events, ticket classes, venues, discounts, webhooks. OAuth2 bearer / private token.",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://www.eventbrite.com/",
+      "BatchMaxRequestCount": 20,
+      "BatchRequestWaitTime": 1,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Eventbrite OAuth Token",
+      "Configuration": {
+        "AuthFlow": "oauth2-bearer",
+        "AuthHeaderPattern": "Authorization: Bearer <token>",
+        "AuthModes": [
+          "private-token (OAuth2 bearer)",
+          "oauth2-authorization-code"
+        ],
+        "AuthorizeURL": "https://www.eventbrite.com/oauth/authorize",
+        "TokenURL": "https://www.eventbrite.com/oauth/token",
+        "ProductionBaseURL": "https://www.eventbriteapi.com/v3/",
+        "AuthNote": "All requests must carry a valid OAuth token. Two modes: (1) Personal/private token issued per app from the user's apps page (single-user integration) — used directly as a Bearer token; (2) full OAuth2 authorization-code flow for multi-user apps (redirect user to authorizeURL, exchange code at tokenURL). Token may also be passed as a query param ?token=<token> but the Authorization header is preferred. An App Key identifies the app in the OAuth handshake (not secret).",
+        "APIVersioningStrategy": "url-path",
+        "APIVersioningNote": "Version encoded in the URL path as /v3/.",
+        "PaginationDefaults": {
+          "type": "Cursor",
+          "requestParams": {
+            "continuationParam": "continuation",
+            "pageSizeParam": "page_size",
+            "pageParam": "page"
+          },
+          "responseObject": {
+            "wrapperKey": "pagination",
+            "hasMoreKey": "has_more_items",
+            "continuationKey": "continuation",
+            "pageNumberKey": "page_number",
+            "pageSizeKey": "page_size",
+            "pageCountKey": "page_count",
+            "objectCountKey": "object_count"
+          },
+          "notes": "List responses are an object with a `pagination` sub-object plus the resource array under a named key (e.g. `events`, `attendees`, `orders`, `venues`, `categories`). The `pagination` object: object_count (optional), page_number (required, starts at 1), page_size (required), page_count (optional), continuation (string token, optional), has_more_items (boolean). Preferred paging is the continuation token: when `has_more_items` is true, re-request with ?continuation=<continuation>. When all records are returned, the `continuation` key is absent. page_number is also available but continuation is the canonical mechanism."
+        },
+        "IncrementalSyncCapability": true,
+        "IncrementalSyncDescription": "List endpoints for Orders (by Event / by User / by Organization / search) and Attendees (by Event / by Organization) accept a `changed_since` (datetime) query param returning resources changed on or after that time. Both Order and Attendee carry a `changed` response field that is the change timestamp to use as the watermark cursor. Order/Attendee list-by-event also accept `last_item_seen` for keyset-style resume in conjunction with changed_since. Events, Venues, Organizers, etc. expose a `changed` field on the object but the list endpoints are not documented to accept changed_since; lookups (Category/Subcategory/Format) are static reference data with no incremental filter.",
+        "IncrementalWatermarkByObject": {
+          "orders": "changed_since",
+          "attendees": "changed_since"
+        },
+        "RateLimit": {
+          "perWindow": "1000 calls per hour (default)",
+          "notes": "Documented default rate limit is 1,000 calls per hour. Exceeding it returns HTTP 429 with error code HIT_RATE_LIMIT. Higher limits may be granted on request."
+        },
+        "Webhooks": {
+          "available": true,
+          "createPath": "/organizations/{organization_id}/webhooks/",
+          "legacyCreatePath": "/webhooks/",
+          "listPath": "/webhooks/",
+          "deletePath": "/webhooks/{webhook_id}/",
+          "objectFields": [
+            "id",
+            "endpoint_url",
+            "actions",
+            "event_id"
+          ],
+          "objectsCovered": [
+            "event",
+            "order",
+            "attendee",
+            "organizer",
+            "ticket_class",
+            "venue"
+          ],
+          "actions": [
+            "order.placed",
+            "order.updated",
+            "order.refunded",
+            "event.created",
+            "event.published",
+            "event.unpublished",
+            "event.updated",
+            "attendee.updated",
+            "attendee.checked_in",
+            "attendee.checked_out",
+            "ticket_class.created",
+            "ticket_class.updated",
+            "ticket_class.deleted",
+            "organizer.updated",
+            "venue.updated"
+          ],
+          "notes": "Create a webhook by POSTing { endpoint_url, actions, event_id? } to the organization webhooks endpoint (legacy global /webhooks/ also documented). The webhook payload delivered to endpoint_url contains api_url, action, endpoint_url, user_id, and webhook_id; the api_url points at the changed resource to GET. event_id is optional and scopes a webhook to a single event."
+        },
+        "ErrorResponseShape": {
+          "description": "Eventbrite errors return JSON with status_code, error (machine code), and error_description.",
+          "fields": {
+            "status_code": "integer",
+            "error": "string",
+            "error_description": "string"
+          }
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "Name": "User",
+            "DisplayName": "User",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/users/me/",
+            "PaginationType": "None",
+            "SupportsPagination": false,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "ResponseDataKey": null,
+            "Status": "Active",
+            "Description": "An Eventbrite account. Users are members of Organizations.",
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/users/{user_id}/",
+              "ListResponseKey": null,
+              "AccessPath": {
+                "door": "/users/me/",
+                "nesting": "self",
+                "args": []
+              }
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "User ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "User display name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "first_name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "User first name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "last_name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "User last name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "emails",
+                  "Type": "json",
+                  "Source": "Declared",
+                  "Description": "List of the user's email addresses (each with email, verified, primary).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Organization",
+            "DisplayName": "Organization",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/users/me/organizations/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "ResponseDataKey": "organizations",
+            "Status": "Active",
+            "Description": "A business structure in which Events are created and managed. Owned by one User; groups Members, Roles, Venues.",
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/organizations/{organization_id}/",
+              "ListResponseKey": "organizations",
+              "AccessPath": {
+                "door": "/users/me/organizations/",
+                "nesting": "User -> organizations[]",
+                "args": []
+              }
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Organization ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsRequired": true,
+                  "Description": "Organization name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "vertical",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Business vertical: default or music.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "locale",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Organization locale (e.g. en_US).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "image_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Media&IntegrationID=@parent:IntegrationID",
+                  "Description": "ID of the image for the Organization.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "_type",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Resource type marker, always 'organization'.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Event",
+            "DisplayName": "Event",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/organizations/{organization_id}/events/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "ResponseDataKey": "events",
+            "Status": "Active",
+            "Description": "An Eventbrite Event, owned by one Organization. Holds listing, scheduling, status and capacity details.",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/organizations/{organization_id}/events/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "wrapped",
+            "CreateIDLocation": "body",
+            "CreateBodyKey": "event",
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/events/{event_id}/",
+            "UpdateMethod": "POST",
+            "UpdateBodyShape": "wrapped",
+            "UpdateIDLocation": "path",
+            "UpdateBodyKey": "event",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/events/{event_id}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/events/{event_id}/",
+              "ListResponseKey": "events",
+              "AccessPath": {
+                "door": "/organizations/{organization_id}/events/",
+                "nesting": "Organization -> events[]",
+                "args": [
+                  "status",
+                  "order_by",
+                  "start_date.range_start",
+                  "start_date.range_end",
+                  "time_filter",
+                  "name_filter",
+                  "venue_filter",
+                  "organizer_filter",
+                  "show_series_parent",
+                  "expand"
+                ]
+              },
+              "parentObjectName": "Organization",
+              "parentObjectIDFieldName": "organization_id"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Event ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name.text",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsRequired": true,
+                  "Description": "Event name (plain text).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name.html",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Event name (HTML).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "summary",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Short event summary (max 140 chars; mutually exclusive with description).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description.text",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Event description (plain text).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description.html",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Event description (HTML).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "url",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "URL of the event listing page on eventbrite.com.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "vanity_url",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Vanity URL of the event listing page.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start.timezone",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Olson timezone for event start.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start.local",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Event start in local naive time.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start.utc",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Event start in UTC.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "end.timezone",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Olson timezone for event end.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "end.local",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Event end in local naive time.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "end.utc",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Event end in UTC.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "created",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Event creation date and time.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "changed",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Date and time of most recent change to the Event.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "status",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Event status: draft, live, started, ended, completed, canceled.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "currency",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "ISO 4217 currency code.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "online_event",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the event is online-only (no venue).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organization_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Organization&IntegrationID=@parent:IntegrationID",
+                  "Description": "Organization owning the event.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organizer_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Organizer&IntegrationID=@parent:IntegrationID",
+                  "Description": "ID of the event organizer.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "venue_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Venue&IntegrationID=@parent:IntegrationID",
+                  "Description": "Event venue ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "format_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Format&IntegrationID=@parent:IntegrationID",
+                  "Description": "Event format ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "category_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Category&IntegrationID=@parent:IntegrationID",
+                  "Description": "Event category ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "subcategory_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Subcategory&IntegrationID=@parent:IntegrationID",
+                  "Description": "Event subcategory ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "logo_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Media&IntegrationID=@parent:IntegrationID",
+                  "Description": "Image ID of the event logo.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "listed",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if publicly searchable on Eventbrite.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "shareable",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if social sharing buttons are shown.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "invite_only",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if only invitees can see the event page.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "show_remaining",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if remaining ticket count is shown on the event page.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "password",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Event password for unlisted mode.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "capacity",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Maximum number of tickets that can be sold.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "capacity_is_custom",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if capacity is custom-set rather than summed from ticket classes.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tx_time_limit",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Maximum duration (seconds) of a transaction.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "hide_start_date",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the start date is hidden.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "hide_end_date",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the end date is hidden.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "locale",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Event locale (e.g. en_US).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_locked",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the event is locked.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "privacy_setting",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Privacy setting (e.g. unlocked).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_externally_ticketed",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the event is externally ticketed.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_series",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the event is part of a series.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_series_parent",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the event is the series parent.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_reserved_seating",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the event uses reserved seating.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "show_pick_a_seat",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "For reserved seating, whether attendees can pick seats.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "show_seatmap_thumbnail",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "For reserved seating, whether the seatmap thumbnail is shown.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "show_colors_in_seatmap_thumbnail",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "For reserved seating, whether the seatmap thumbnail has colors.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_free",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the event is free.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "source",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Source of the event (defaults to api).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "version",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Event version.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "resource_uri",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Absolute URL to the canonical event representation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "EventSeries",
+            "DisplayName": "Event Series",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/series/{event_series_id}/",
+            "PaginationType": "None",
+            "SupportsPagination": false,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "ResponseDataKey": null,
+            "Status": "Active",
+            "Description": "A repeating Event with a sequence of dates. Made up of a parent Event and child Events for each date.",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/organizations/{organization_id}/series/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "wrapped",
+            "CreateIDLocation": "body",
+            "CreateBodyKey": "series",
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/series/{event_series_id}/",
+            "UpdateMethod": "POST",
+            "UpdateBodyShape": "wrapped",
+            "UpdateIDLocation": "path",
+            "UpdateBodyKey": "series",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/series/{event_series_id}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/series/{event_series_id}/",
+              "ListResponseKey": null,
+              "AccessPath": {
+                "door": "/series/{event_series_id}/",
+                "nesting": "get-one",
+                "args": [
+                  "expand"
+                ]
+              }
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Event Series ID (the parent event ID).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name.text",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsRequired": true,
+                  "Description": "Series name (plain text).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description.text",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Series description (plain text).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start.utc",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Series parent start in UTC.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start.timezone",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Olson timezone for series start.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "end.utc",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Series parent end in UTC.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "currency",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "ISO 4217 currency code.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organizer_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Organizer&IntegrationID=@parent:IntegrationID",
+                  "Description": "ID of the series organizer.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "venue_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Venue&IntegrationID=@parent:IntegrationID",
+                  "Description": "Series venue ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_series",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True (series flag).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_series_parent",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if this is the series parent.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Venue",
+            "DisplayName": "Venue",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/organizations/{organization_id}/venues/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "ResponseDataKey": "venues",
+            "Status": "Active",
+            "Description": "The location where an Event takes place. Venues are grouped by Organization.",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/organizations/{organization_id}/venues/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "wrapped",
+            "CreateIDLocation": "body",
+            "CreateBodyKey": "venue",
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/venues/{venue_id}/",
+            "UpdateMethod": "POST",
+            "UpdateBodyShape": "wrapped",
+            "UpdateIDLocation": "path",
+            "UpdateBodyKey": "venue",
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/venues/{venue_id}/",
+              "ListResponseKey": "venues",
+              "AccessPath": {
+                "door": "/organizations/{organization_id}/venues/",
+                "nesting": "Organization -> venues[]",
+                "args": []
+              },
+              "parentObjectName": "Organization",
+              "parentObjectIDFieldName": "organization_id"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Venue ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Venue name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "age_restriction",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Age restriction of the venue.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "capacity",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Maximum number of tickets sellable for the venue.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "latitude",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Latitude coordinate of the venue address.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "longitude",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Longitude coordinate of the venue address.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address.address_1",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Street/location address part 1.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address.address_2",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Street/location address part 2.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address.city",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "City.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address.region",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "ISO 3166-2 region/state/province code.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address.postal_code",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Postal code.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address.country",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "ISO 3166-1 2-character country code.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address.latitude",
+                  "Type": "decimal",
+                  "Source": "Declared",
+                  "Description": "Latitude portion of the address coordinates.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address.longitude",
+                  "Type": "decimal",
+                  "Source": "Declared",
+                  "Description": "Longitude portion of the address coordinates.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address.localized_address_display",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Address display localized to the address country.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address.localized_area_display",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Area display localized to the address country.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Organizer",
+            "DisplayName": "Organizer",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/organizations/{organization_id}/organizers/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "ResponseDataKey": "organizers",
+            "Status": "Active",
+            "Description": "The public-facing entity organizing an Event. Does not own events and has no Eventbrite account.",
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/organizers/{organizer_id}/",
+              "ListResponseKey": "organizers",
+              "AccessPath": {
+                "door": "/organizations/{organization_id}/organizers/",
+                "nesting": "Organization -> organizers[]",
+                "args": []
+              },
+              "parentObjectName": "Organization",
+              "parentObjectIDFieldName": "organization_id"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Organizer ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Organizer name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description.text",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Organizer description (plain text).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description.html",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Organizer description (HTML).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "long_description.text",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Organizer long description (plain text).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "long_description.html",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Organizer long description (HTML).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "logo_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Media&IntegrationID=@parent:IntegrationID",
+                  "Description": "Image ID of the organizer logo.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "url",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "URL to the organizer's page on Eventbrite.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "num_past_events",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Number of past events the organizer has.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "num_future_events",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Number of upcoming events the organizer has.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "twitter",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Organizer Twitter handle.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "facebook",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Organizer Facebook page.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "resource_uri",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Absolute URL to the canonical organizer representation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "TicketClass",
+            "DisplayName": "Ticket Class",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{event_id}/ticket_classes/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "ResponseDataKey": "ticket_classes",
+            "Status": "Active",
+            "Description": "A ticket type (free, paid or donation) for an Event. Multiple ticket classes can belong to one Event.",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/events/{event_id}/ticket_classes/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "wrapped",
+            "CreateIDLocation": "body",
+            "CreateBodyKey": "ticket_class",
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/events/{event_id}/ticket_classes/{ticket_class_id}/",
+            "UpdateMethod": "POST",
+            "UpdateBodyShape": "wrapped",
+            "UpdateIDLocation": "path",
+            "UpdateBodyKey": "ticket_class",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/events/{event_id}/ticket_classes/{ticket_class_id}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/events/{event_id}/ticket_classes/{ticket_class_id}/",
+              "ListResponseKey": "ticket_classes",
+              "AccessPath": {
+                "door": "/events/{event_id}/ticket_classes/",
+                "nesting": "Event -> ticket_classes[]",
+                "args": [
+                  "pos"
+                ]
+              },
+              "parentObjectName": "Event",
+              "parentObjectIDFieldName": "event_id"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Ticket Class ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:IntegrationID",
+                  "Description": "Event the ticket class belongs to.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Ticket Class name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Ticket Class description.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "cost.currency",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Display cost currency (ISO 4217).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "cost.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Display cost value in minor currency units.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "cost.display",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Formatted display cost.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "fee.currency",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Display fee currency (ISO 4217).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "fee.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Display fee value in minor currency units.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "donation",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the ticket class is a donation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "free",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the ticket class is free.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "minimum_quantity",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Minimum number of tickets per order.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "maximum_quantity",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Maximum number of tickets per order.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "has_pdf_ticket",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if attendee receives a PDF order confirmation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "delivery_methods",
+                  "Type": "json",
+                  "Source": "Declared",
+                  "Description": "List of delivery methods: electronic, will_call, standard_shipping.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "category",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Ticket class category: admission, add_on, donation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "quantity_total",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Number of this ticket class available for sale.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "quantity_sold",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Number of this ticket class previously sold.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "hidden",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the ticket class is hidden from the public.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sales_start",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Date and time sales begin.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sales_end",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Date and time sales end.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sales_start_after",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TicketClass&IntegrationID=@parent:IntegrationID",
+                  "Description": "ID of a ticket class whose sell-out triggers this class's sales start.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "include_fee",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the fee is included in the displayed price.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "split_fee",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if fee is shown separately from price.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "hide_description",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the description is hidden on the listing page.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "auto_hide",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the ticket class auto-hides when not on sale.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "auto_hide_before",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Override reveal date for auto-hide.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "auto_hide_after",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Override re-hide date for auto-hide.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "order_confirmation_message",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Confirmation message displayed when an order completes.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sales_channels",
+                  "Type": "json",
+                  "Source": "Declared",
+                  "Description": "Supported sales channels: online, atd.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "resource_uri",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Absolute URL to the canonical ticket class representation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "TicketGroup",
+            "DisplayName": "Ticket Group",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/organizations/{organization_id}/ticket_groups/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "ResponseDataKey": "ticket_groups",
+            "Status": "Active",
+            "Description": "A grouping of Ticket Classes, commonly used to apply a cross-event Discount to multiple ticket classes.",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/organizations/{organization_id}/ticket_groups/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "wrapped",
+            "CreateIDLocation": "body",
+            "CreateBodyKey": "ticket_group",
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/ticket_groups/{ticket_group_id}/",
+            "UpdateMethod": "POST",
+            "UpdateBodyShape": "wrapped",
+            "UpdateIDLocation": "path",
+            "UpdateBodyKey": "ticket_group",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/ticket_groups/{ticket_group_id}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/ticket_groups/{ticket_group_id}/",
+              "ListResponseKey": "ticket_groups",
+              "AccessPath": {
+                "door": "/organizations/{organization_id}/ticket_groups/",
+                "nesting": "Organization -> ticket_groups[]",
+                "args": [
+                  "status"
+                ]
+              },
+              "parentObjectName": "Organization",
+              "parentObjectIDFieldName": "organization_id"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Ticket Group ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Ticket Group name (truncated past 20 chars).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "status",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Ticket Group status: transfer, live, deleted, archived.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_ticket_ids",
+                  "Type": "json",
+                  "Source": "Declared",
+                  "Description": "Dictionary of ticket class IDs associated with each event ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tickets",
+                  "Type": "json",
+                  "Source": "Declared",
+                  "Description": "List of ticket classes (id, event_id, sales_channels, variants, name); populated via expansion.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Order",
+            "DisplayName": "Order",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/organizations/{organization_id}/orders/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "ResponseDataKey": "orders",
+            "Status": "Active",
+            "Description": "An order placed against Eventbrite for one or more ticket classes. Holds financial and transactional info. Private.",
+            "IncrementalWatermarkField": "changed",
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/orders/{order_id}/",
+              "ListResponseKey": "orders",
+              "AccessPath": {
+                "door": "/organizations/{organization_id}/orders/",
+                "nesting": "Organization -> orders[]; also Event -> orders[] (/events/{event_id}/orders) and User -> orders[] (/users/{user_id}/orders)",
+                "args": [
+                  "status",
+                  "changed_since",
+                  "only_emails",
+                  "exclude_emails",
+                  "expand"
+                ]
+              },
+              "parentObjectName": "Organization",
+              "parentObjectIDFieldName": "organization_id"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Order ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "created",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "When the order was placed.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "changed",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "When the order was last changed (incremental watermark).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Order owner name (prefer over first_name/last_name).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "first_name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Order owner first name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "last_name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Order owner last name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Order owner email address.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:IntegrationID",
+                  "Description": "Order's Event ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "time_remaining",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Time remaining to complete the order (seconds).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "status",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Order status: started, pending, placed, abandoned.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "promo_code",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Discount code applied to the order.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.base_price.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Order amount excluding fees and tax (minor units).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.base_price.currency",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Base price currency (ISO 4217).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.gross.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Total amount of the order (minor units).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.gross.currency",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Gross currency (ISO 4217).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.eventbrite_fee.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Eventbrite fee portion of gross (minor units).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.payment_fee.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Payment processor fee portion of gross (minor units).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.tax.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Tax portion of gross (minor units).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "resource_uri",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Absolute URL to the canonical order representation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Attendee",
+            "DisplayName": "Attendee",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{event_id}/attendees/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "ResponseDataKey": "attendees",
+            "Status": "Active",
+            "Description": "A ticket holder for an Event (one attendee per sold ticket). Holds profile, barcode and cost info. Private.",
+            "IncrementalWatermarkField": "changed",
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/events/{event_id}/attendees/{attendee_id}/",
+              "ListResponseKey": "attendees",
+              "AccessPath": {
+                "door": "/events/{event_id}/attendees/",
+                "nesting": "Event -> attendees[]; also Organization -> attendees[] (/organizations/{organization_id}/attendees)",
+                "args": [
+                  "status",
+                  "changed_since",
+                  "last_item_seen",
+                  "attendee_ids",
+                  "expand"
+                ]
+              },
+              "parentObjectName": "Event",
+              "parentObjectIDFieldName": "event_id"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Attendee ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "created",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "When the attendee was created (order placed).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "changed",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "When the attendee was last changed (incremental watermark).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "ticket_class_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TicketClass&IntegrationID=@parent:IntegrationID",
+                  "Description": "Ticket class used by the attendee.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "ticket_class_name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Name of the ticket class at registration.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "variant_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Composite ticket-class+discount id (T12345-D12345).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "quantity",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Always 1.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:IntegrationID",
+                  "Description": "Event the attendee is attending.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "order_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Order&IntegrationID=@parent:IntegrationID",
+                  "Description": "Order under which the attendee's ticket was purchased.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "guestlist_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Guest list ID; null if not a guest.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "invited_by",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Name of the person who invited the guest; null if not a guest.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checked_in",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the attendee is checked in.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "cancelled",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the attendee is cancelled.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "refunded",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if the attendee is refunded.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "status",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee status (scheduled to be deprecated).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "affiliate",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee affiliate code.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "delivery_method",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Ticket delivery method: will_call, electronic, standard_shipping.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.email",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee email address.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.first_name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee first name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.last_name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee last name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.prefix",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee title/honorific (Mr., Ms.).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.suffix",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee suffix (Jr., Sr.).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.age",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Attendee age.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.job_title",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee job title.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.company",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee company name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.website",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee website address.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.blog",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee blog address.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.gender",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee gender: male or female.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.birth_date",
+                  "Type": "date",
+                  "Source": "Declared",
+                  "Description": "Attendee birth date.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.cell_phone",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee cell/mobile phone number.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile.work_phone",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Attendee work phone number.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.base_price.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Attendee ticket price excluding fees/tax (minor units).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.gross.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Attendee total cost (minor units).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.eventbrite_fee.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Attendee Eventbrite fee (minor units).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.payment_fee.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Attendee payment processing fee (minor units).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "costs.tax.value",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Tax charged for the attendee ticket (minor units).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "barcodes",
+                  "Type": "json",
+                  "Source": "Declared",
+                  "Description": "List of entry barcodes (barcode, status, created, changed, checkin_type, is_printed).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "answers",
+                  "Type": "json",
+                  "Source": "Declared",
+                  "Description": "Attendee answers to custom questions (requires expansion).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "resource_uri",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Absolute URL to the canonical attendee representation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Discount",
+            "DisplayName": "Discount",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/organizations/{organization_id}/discounts/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "ResponseDataKey": "discounts",
+            "Status": "Active",
+            "Description": "A discount an order owner can use when buying tickets. Types: public, coded, access, hold. Single-event or cross-event.",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/organizations/{organization_id}/discounts/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "wrapped",
+            "CreateIDLocation": "body",
+            "CreateBodyKey": "discount",
+            "SupportsUpdate": true,
+            "UpdateAPIPath": "/discounts/{discount_id}/",
+            "UpdateMethod": "POST",
+            "UpdateBodyShape": "wrapped",
+            "UpdateIDLocation": "path",
+            "UpdateBodyKey": "discount",
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/discounts/{discount_id}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/discounts/{discount_id}/",
+              "ListResponseKey": "discounts",
+              "AccessPath": {
+                "door": "/organizations/{organization_id}/discounts/",
+                "nesting": "Organization -> discounts[]",
+                "args": [
+                  "scope"
+                ]
+              },
+              "parentObjectName": "Organization",
+              "parentObjectIDFieldName": "organization_id"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Discount ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Discount name (public) or secret code (coded/access).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "type",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Discount type: access, coded, public, hold.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "amount_off",
+                  "Type": "decimal",
+                  "Source": "Declared",
+                  "Description": "Fixed amount off (in event currency, 0.01-99999.99). Null for access codes.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "percent_off",
+                  "Type": "decimal",
+                  "Source": "Declared",
+                  "Description": "Percentage off (1.00-100.00). Null for access codes.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "quantity_available",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Times the discount can be used; 0 = unlimited.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "quantity_sold",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Times the discount has been used.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start_date",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Local datetime the discount becomes usable.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start_date_relative",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Seconds before event start the discount becomes usable.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "end_date",
+                  "Type": "datetime",
+                  "Source": "Declared",
+                  "Description": "Local datetime until which the discount is usable.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "end_date_relative",
+                  "Type": "integer",
+                  "Source": "Declared",
+                  "Description": "Seconds before event start until which the discount is usable.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "ticket_class_ids",
+                  "Type": "json",
+                  "Source": "Declared",
+                  "Description": "List of discounted ticket class IDs for a single event.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:IntegrationID",
+                  "Description": "Single event the discount applies to.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "ticket_group_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=TicketGroup&IntegrationID=@parent:IntegrationID",
+                  "Description": "Ticket group the discount applies to.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "hold_ids",
+                  "Type": "json",
+                  "Source": "Declared",
+                  "Description": "Seat hold IDs the discount can unlock.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Question",
+            "DisplayName": "Question",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{event_id}/questions/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "ResponseDataKey": "questions",
+            "Status": "Active",
+            "Description": "A custom question presented to an order owner during registration (e.g. terms acknowledgement).",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/events/{event_id}/questions/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "wrapped",
+            "CreateIDLocation": "body",
+            "CreateBodyKey": "question",
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/events/{event_id}/questions/{question_id}/",
+              "ListResponseKey": "questions",
+              "AccessPath": {
+                "door": "/events/{event_id}/questions/",
+                "nesting": "Event -> questions[]",
+                "args": []
+              },
+              "parentObjectName": "Event",
+              "parentObjectIDFieldName": "event_id"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Custom question ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "label",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Custom question label.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "type",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Answer type: text, url, email, date, number, address, dropdown.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "required",
+                  "Type": "boolean",
+                  "Source": "Declared",
+                  "Description": "True if an answer is required.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Answer",
+            "DisplayName": "Answer",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/",
+            "PaginationType": "None",
+            "SupportsPagination": false,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "ResponseDataKey": "answers",
+            "Status": "Active",
+            "Description": "An attendee's answer to a custom Question. Returned nested on Attendee/Order via expansion; not a standalone top-level endpoint.",
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": null,
+              "ListResponseKey": "answers",
+              "AccessPath": {
+                "door": "/events/{event_id}/attendees/",
+                "nesting": "Attendee -> answers[] (expand=answers)",
+                "args": [
+                  "expand=answers"
+                ]
+              }
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "question_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Question&IntegrationID=@parent:IntegrationID",
+                  "Description": "Custom question ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "attendee_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Attendee&IntegrationID=@parent:IntegrationID",
+                  "Description": "Attendee ID who answered.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "question",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Custom question text.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "type",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Answer type: text, url, email, date, number, address, dropdown.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "answer",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "The answer value (generally a string).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Category",
+            "DisplayName": "Category",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/categories/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "ResponseDataKey": "categories",
+            "Status": "Active",
+            "Description": "An Event class (e.g. Music) used to classify Events. Static reference data.",
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/categories/{category_id}/",
+              "ListResponseKey": "categories",
+              "AccessPath": {
+                "door": "/categories/",
+                "nesting": "top-level list",
+                "args": []
+              }
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Category ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Category name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name_localized",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Translated category name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "short_name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Shorter category name for small UI spaces.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "short_name_localized",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Translated short category name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "resource_uri",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Absolute URL to the canonical category representation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Subcategory",
+            "DisplayName": "Subcategory",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/subcategories/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "ResponseDataKey": "subcategories",
+            "Status": "Active",
+            "Description": "A Category subclass (e.g. Classical under Music) used to further classify Events. Static reference data.",
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/subcategories/{subcategory_id}/",
+              "ListResponseKey": "subcategories",
+              "AccessPath": {
+                "door": "/subcategories/",
+                "nesting": "top-level list",
+                "args": []
+              }
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Subcategory ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Subcategory name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "parent_category.id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Category&IntegrationID=@parent:IntegrationID",
+                  "Description": "ID of the parent Category this subcategory belongs to.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "resource_uri",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Absolute URL to the canonical subcategory representation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Format",
+            "DisplayName": "Format",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/formats/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "ResponseDataKey": "formats",
+            "Status": "Active",
+            "Description": "An Event format (e.g. Seminar or Talk) describing the style of an Event. Static reference data.",
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/formats/{format_id}/",
+              "ListResponseKey": "formats",
+              "AccessPath": {
+                "door": "/formats/",
+                "nesting": "top-level list",
+                "args": []
+              }
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Format ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Format name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name_localized",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Localized format name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "short_name",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Short name for the format.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "short_name_localized",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "Description": "Localized short format name.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "resource_uri",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "Description": "Absolute URL to the canonical format representation.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Media",
+            "DisplayName": "Media",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/media/{media_id}/",
+            "PaginationType": "None",
+            "SupportsPagination": false,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "ResponseDataKey": null,
+            "Status": "Active",
+            "Description": "An image that can be attached to an Event listing (logo, branding). Retrieved by media id; uploaded via a token flow.",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/media/upload/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/media/{media_id}/",
+              "ListResponseKey": null,
+              "AccessPath": {
+                "door": "/media/{media_id}/",
+                "nesting": "get-one",
+                "args": [
+                  "width",
+                  "height"
+                ]
+              }
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "IsRequired": true,
+                  "AllowsNull": false,
+                  "Description": "Image/media ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "url",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsReadOnly": true,
+                  "IsRequired": true,
+                  "Description": "URL of the image.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Webhook",
+            "DisplayName": "Webhook",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/webhooks/",
+            "PaginationType": "Cursor",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "ResponseDataKey": "webhooks",
+            "Status": "Active",
+            "Description": "A subscription delivering JSON payloads to an endpoint when chosen Eventbrite actions occur (order/event/attendee/etc.).",
+            "SupportsCreate": true,
+            "CreateAPIPath": "/organizations/{organization_id}/webhooks/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "SupportsUpdate": false,
+            "SupportsDelete": true,
+            "DeleteAPIPath": "/webhooks/{webhook_id}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "ListMethod": "GET",
+              "GetOnePath": "/webhooks/{webhook_id}/",
+              "ListResponseKey": "webhooks",
+              "AccessPath": {
+                "door": "/organizations/{organization_id}/webhooks/",
+                "nesting": "Organization -> webhooks[]; legacy global list at /webhooks/",
+                "args": []
+              }
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Webhook ID.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "endpoint_url",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "IsRequired": true,
+                  "Description": "Developer-provided URL to which webhook payloads are POSTed.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "actions",
+                  "Type": "json",
+                  "Source": "Declared",
+                  "Description": "List of action triggers (e.g. order.placed, event.published, attendee.updated).",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_id",
+                  "Type": "string",
+                  "Source": "Declared",
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Event&IntegrationID=@parent:IntegrationID",
+                  "Description": "Optional Event ID scoping the webhook to a single event.",
+                  "Status": "Active",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]
