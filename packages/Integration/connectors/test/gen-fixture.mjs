@@ -359,8 +359,12 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
   for (const ioRow of ioRows) {
     if (rows.length >= maxObjects) break;
     const apipath = col(ioRow, 'apipath');
-    // Skip non-routable paths (template-var / embedded) — the mock can't serve a {var} path.
-    if (!apipath || String(apipath).startsWith('(') || String(apipath).includes('{')) continue;
+    // Skip only truly non-routable paths (embedded/parenthesized markers). TEMPLATE-VAR paths
+    // (`/{iD}/works`, `/contacts/{ContactID}/notes`) ARE routable: the route is emitted with the
+    // `{var}` segment kept, and mock-vendor-server.matchRoute wildcard-matches `{seg}` against the
+    // connector's runtime-substituted request (`/0000-.../works`). Skipping them dropped every
+    // by-iD / template-var connector (orcid, etc.) to "no routable objects" → 0 coverage.
+    if (!apipath || String(apipath).startsWith('(')) continue;
     if (excludeObjects.has(String(col(ioRow, 'name')).toLowerCase())) continue; // bounded-Goldilocks exclude
     const ioID = col(ioRow, 'id');
     const iofSql = pg

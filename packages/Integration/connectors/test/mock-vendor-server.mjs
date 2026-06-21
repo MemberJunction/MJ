@@ -175,6 +175,17 @@ export function matchRoute(routes, urlPath, method, body, query = '') {
         
         // Standard path-based matching (non-GraphQL or no body provided)
         if (r.Path === urlPath) { exact = r; break; }
+        // TEMPLATE-VAR matching: a route Path with `{seg}` segments (`/{iD}/works`,
+        // `/contacts/{ContactID}/notes`) wildcard-matches the connector's runtime-substituted
+        // request (`/0000-0001-.../works`) segment-for-segment. This is what makes by-iD /
+        // template-var connectors (orcid, etc.) testable — gen-fixture now emits these routes.
+        // Treated as an exact match (specific templated route), highest priority after a literal.
+        if (r.Path.includes('{')) {
+            const rp = r.Path.split('/'), up = urlPath.split('/');
+            if (rp.length === up.length && rp.every((seg, i) => seg === up[i] || /^\{.*\}$/.test(seg))) {
+                exact = r; break;
+            }
+        }
         if (urlPath.startsWith(r.Path)) {
             if (!prefix || r.Path.length > prefix.Path.length) prefix = r;
         }
