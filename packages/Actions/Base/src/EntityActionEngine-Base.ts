@@ -35,6 +35,13 @@ export class EntityActionInvocationParams {
      * If the invocation type is list-oriented, this parameter will be needed
      */
     public ListID?: string;
+
+    /**
+     * Optional metadata provider for multi-provider / transaction-scoped invocations. When supplied,
+     * implementations resolve metadata against it (`params.Provider ?? new Metadata()`); when omitted
+     * they fall back to the default global provider, preserving single-provider behavior.
+     */
+    public Provider?: IMetadataProvider;
 }
 
 

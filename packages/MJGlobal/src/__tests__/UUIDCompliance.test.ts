@@ -57,6 +57,8 @@ const KNOWN_EXCEPTIONS: Record<string, string[]> = {
     // Add file paths (relative to packages/) and the reason they're excepted
     // Example: 'SomePackage/src/file.ts': ['Uses numeric IDs, not UUIDs'],
     'Angular/Explorer/dashboards/src/Integration/components/mapping-workspace/mapping-workspace.component.ts': ['LocalID is a local string identifier (e.g. "pending-1"), not a UUID'],
+    'Angular/Generic/mj-livekit-room/src/lib/mj-livekit-room.component.ts': ['Voice .ID is a provider-native voice token (e.g. "echo"), not a UUID; model/agent .ID comparisons in this file correctly use UUIDsEqual'],
+    'Angular/Explorer/explorer-core/src/lib/resource-wrappers/livekit-room-resource.component.ts': ['Voice .ID is a provider-native voice token (e.g. "echo"), not a UUID; model/agent .ID comparisons in this file correctly use UUIDsEqual'],
 };
 
 /** Normalize a path to forward slashes so EXCLUDE_PATTERNS and KNOWN_EXCEPTIONS lookups
