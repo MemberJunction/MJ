@@ -840,7 +840,7 @@ import {
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
-// @memberjunction/integration-connectors (32 classes)
+// @memberjunction/integration-connectors (35 classes)
 import {
     AptifyConnector,
     BlackbaudConnector,
@@ -856,10 +856,12 @@ import {
     MJToMJConnector,
     MagnetMailConnector,
     MailchimpConnector,
+    MemberSuiteConnector,
     NeonCRMConnector,
     NetForumConnector,
     NetSuiteConnector,
     NimbleAMSConnector,
+    NoviConnector,
     ORCIDConnector,
     OpenWaterConnector,
     PathLMSConnector,
@@ -868,6 +870,7 @@ import {
     QuickBooksConnector,
     RasaConnector,
     Reach360Connector,
+    RhythmConnector,
     SageIntacctConnector,
     SalesforceConnector,
     SharePointConnector,
@@ -1887,10 +1890,12 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJToMJConnector,
     MagnetMailConnector,
     MailchimpConnector,
+    MemberSuiteConnector,
     NeonCRMConnector,
     NetForumConnector,
     NetSuiteConnector,
     NimbleAMSConnector,
+    NoviConnector,
     ORCIDConnector,
     OpenWaterConnector,
     PathLMSConnector,
@@ -1899,6 +1904,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     QuickBooksConnector,
     RasaConnector,
     Reach360Connector,
+    RhythmConnector,
     SageIntacctConnector,
     SalesforceConnector,
     SharePointConnector,
@@ -2185,7 +2191,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 903;
+export const CLASS_REGISTRATIONS_COUNT = 906;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

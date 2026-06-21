@@ -1,5 +1,8 @@
 [
   {
+    "primaryKey": {
+      "ID": "D30F8050-E2F3-4304-81FA-A49ED1BDB517"
+    },
     "fields": {
       "Name": "SharePoint",
       "ClassName": "SharePointConnector",
