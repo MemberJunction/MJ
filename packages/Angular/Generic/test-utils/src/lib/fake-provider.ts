@@ -1,4 +1,4 @@
-import { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 
 /**
  * Options for {@link createFakeProvider}.
@@ -13,6 +13,20 @@ export interface FakeProviderOptions<T = unknown> {
   runViewResults?: T[] | ((params: RunViewParams) => T[]);
   /** The provider's `CurrentUser`. Merged over a stub default. */
   currentUser?: Partial<UserInfo>;
+  /**
+   * Resolver for `provider.EntityByName(name)`. Components that read entity metadata
+   * (`this.ProviderToUse.EntityByName(...)`) need this — without it the default returns
+   * `undefined`, which is the right behavior for exercising "entity not found" guard paths.
+   */
+  entityByName?: (name: string) => EntityInfo | undefined;
+
+  /**
+   * Rows for `provider.Entities` — the entity-metadata array some components scan
+   * (`md.Entities.find(e => e.Name === '...')`). Only the fields the component reads need to be
+   * present (commonly `Name` + `ID`); pass minimal stubs. Defaults to `[]` (an empty catalog,
+   * which exercises the "entity not found" guard).
+   */
+  entities?: Array<Partial<EntityInfo>>;
 }
 
 /**
@@ -35,8 +49,10 @@ export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> 
 
   const fake = {
     CurrentUser: { ID: 'test-user-id', Name: 'Test User', Email: 'test@example.com', ...options.currentUser },
+    Entities: options.entities ?? [],
     RunView: async (params: RunViewParams): Promise<RunViewResult> => toResult(rowsFor(params)),
     RunViews: async (paramsList: RunViewParams[]): Promise<RunViewResult[]> => paramsList.map((p) => toResult(rowsFor(p))),
+    EntityByName: (name: string): EntityInfo | undefined => options.entityByName?.(name),
   };
 
   // `IMetadataProvider` is a large interface; this fake deliberately implements only the

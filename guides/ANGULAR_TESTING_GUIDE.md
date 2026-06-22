@@ -206,10 +206,64 @@ fixture.detectChanges();                        // check-no-changes may throw
 
 ## 6. Mocking recipes
 
-- **Data (provider / RunView)**: provide a fake `IMetadataProvider` or mock `RunView` — reuse the
-  shared helpers in `@memberjunction/test-utils`. Pass the fake provider into the component's
-  `[Provider]` input (see the multi-provider pattern in
-  [`packages/Angular/CLAUDE.md`](../packages/Angular/CLAUDE.md)).
+### Data-bound components (provider / RunView)
+
+Use `createFakeProvider` from `@memberjunction/ng-test-utils` — it builds a fake `IMetadataProvider`
+whose `RunView`/`RunViews` return your canned rows (no backend, no `vi.mock` of `@memberjunction/core`).
+How you get it into the component depends on **how the component reads data**:
+
+**A — Injectable `[Provider]` (preferred).** If the component reads through `this.ProviderToUse`
+(i.e. it extends `BaseAngularComponent` and calls `RunView.FromMetadataProvider(this.ProviderToUse)`),
+pass the fake straight into the `[Provider]` input. Clean, no globals, no cleanup:
+
+```ts
+const f = renderComponentFixture(MyDataComponent, {
+  inputs: { Provider: createFakeProvider({ runViewResults: ROWS }) },
+});
+```
+
+**B — Global provider (`useFakeGlobalProvider`).** If the component loads through a bare
+`new RunView()` (which reads the process-global `RunView.Provider`) and/or `Metadata.Provider`
+(`EntityByName` / `GetEntityObject`) — and you do **not** want to refactor it — install a fake global.
+`useFakeGlobalProvider()` registers `beforeEach`/`afterEach` to save and restore **both** globals
+(no leaks) and returns an installer. Call it once at the top of the `describe`:
+
+```ts
+import { renderComponentFixture, useFakeGlobalProvider } from '@memberjunction/ng-test-utils';
+
+describe('MyDataComponent (DOM)', () => {
+  const installProvider = useFakeGlobalProvider();   // owns the save/restore + cast
+
+  it('renders the loaded rows', async () => {
+    installProvider({ runViewResults: ROWS });
+    const f = renderComponentFixture(MyDataComponent);
+    await new Promise((r) => setTimeout(r, 0));       // let the async ngOnInit load settle
+    f.detectChanges();
+    expect(queryAll(f, '.row').length).toBe(ROWS.length);
+  });
+});
+```
+
+`runViewResults` may be a **function of the params** (`(p) => p.EntityName === 'X' ? ROWS_X : ROWS_Y`)
+to serve a multi-entity `RunViews` call. Prefer **A** when the component supports it — B is a global
+swap (a standard, save/restore-scoped pattern, but a global swap nonetheless) and doesn't address the
+multi-provider-correctness reason a component shouldn't reach the global in the first place.
+
+> **Async loads need a flush.** Components that load in `ngOnInit`/`ngOnChanges` resolve their
+> `RunView` promise on a microtask *after* the first `detectChanges()`. Flush it (`await new
+> Promise(r => setTimeout(r, 0))`) and then `detectChanges()` again before asserting, or you'll see
+> the loading/empty state.
+
+> **Boundary — plain rows, not live entities.** `createFakeProvider` returns **plain objects**, not
+> `BaseEntity` instances. It fits components that read result rows as data (`row.Name`, `row.ID`,
+> spreads). It does **not** fit a component that calls `BaseEntity` methods on the loaded results —
+> `.Get()` / `.Set()` / `.Fields` / `.EntityInfo` (common with `ResultType: 'entity_object'` plus a
+> `makeRow`/field-validation step). Faking those would mean mocking the whole entity surface; defer
+> that component's data path instead (test its chrome), or cover it with a real provider in an
+> integration/live test.
+
+### Other recipes
+
 - **Container components that internally `new` an engine/controller**: refactor the dependency to
   be **injectable** (e.g. `inject()` a factory token), so the test injects a fake that drives the
   DOM. Leaf components that are already pure `@Input`/`@Output` need none of this.

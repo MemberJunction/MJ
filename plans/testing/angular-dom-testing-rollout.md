@@ -1,11 +1,14 @@
 # Angular DOM Unit-Testing Rollout
 
-**Status:** Foundation **shipped** (harness + toolkit + pilot). Rollout in progress.
-**What's done:** the DOM-rendering harness, the `@memberjunction/ng-test-utils` shared helper toolkit,
-coverage reporting, a ~11-component / 3-package leaf pilot, the scaffold `--dom` flag, and
-`guides/ANGULAR_TESTING_GUIDE.md`.
-**What's next:** per-package rollout across `Angular/Generic/**` then `Angular/Explorer/**`, then CI
-coverage gates. See [§6](#6-roadmap) and [§10](#10-handoff--how-to-continue).
+**Status:** Foundation **shipped**. **Phase 2 (`Angular/Generic/**`) substantially complete.**
+**What's done:** the DOM-rendering harness, the `@memberjunction/ng-test-utils` toolkit (now 4 recipes +
+DOM helpers), coverage reporting, the scaffold `--dom` flag, `guides/ANGULAR_TESTING_GUIDE.md`, the
+`gen-dom-stub.mjs` generator (now also bootstraps a package's DOM config), and **DOM specs across 49
+Generic packages (~1,100 tests)** — every component-bearing Generic package except three documented
+deferrals (see [§6](#6-roadmap)).
+**What's next:** the `conversations` deep-dive (partially covered) + the LiveKit/media e2e follow-up,
+then `Angular/Explorer/**` (Phase 3) and CI coverage gates (Phase 4). See [§6](#6-roadmap) and
+[§10](#10-handoff--how-to-continue).
 
 ---
 
@@ -155,14 +158,35 @@ without the harness. Delivered:
 > `next`, so those components aren't in the branch; equivalent in-repo gating-heavy, `@Output`-driven leaf
 > components were used instead. **Follow-up below.**
 
-### Phase 2 — `packages/Angular/Generic/**` rollout (next)
+### Phase 2 — `packages/Angular/Generic/**` rollout ✅ SUBSTANTIALLY COMPLETE
 
-- Package-by-package: add DOM specs for leaf + presentational components. Prioritize high-traffic shared UI:
-  `ng-base-forms`, `ng-conversations`, `ng-data-context`, `ng-entity-card`, `ng-tab-strip`,
-  `ng-filter-builder`, and the rest of `ng-ui-components`'s leaves.
-- One PR per package (or small batches) to keep reviews tractable. Track in the checklist (§10).
-- **Exit criteria:** every Generic package has a DOM `vitest.config` and meaningful DOM specs for its primary
-  components; agreed coverage threshold met.
+Rolled out via a fan-out of per-package agents plus hands-on cleanup. **DOM specs now exist in 49 Generic
+packages (~110 new spec files, ~1,100 tests, all green).** Every component-bearing Generic package is
+covered **except three documented deferrals**:
+
+| Deferred package | Why |
+|---|---|
+| `livekit-room` (11 components) | WebRTC/media — e2e per §3, not DOM-unit |
+| `mj-livekit-room` (1) | media (§3) |
+| `filter-builder` (3) | genuine component-side `NG0100`/CD instability — masking is disallowed (§3/§7) |
+
+`conversations` is **partially** covered (5 of 69 — the leaf slot/shared components); the rest is a focused
+follow-up pass (too large for the sweep; many are realtime/streaming components that need careful deferral).
+
+**Toolkit grew to meet the rollout** (all in `@memberjunction/ng-test-utils`): `renderComponentFixture`
+(+ `imports`/`declarations`/`autoDetect` for module-declared components), `renderTemplate` (compound /
+projected-children), **`createFakeProvider`** (data-bound components via the `[Provider]` input), and
+**DOM helpers** (`query`/`queryAll`/`text`/`attr`/`hasClass`/`click`/`typeInto`/`capture`). The
+`gen-dom-stub.mjs` generator now also bootstraps a package's config on `--write` (auto single-vs-dual
+preset detection + `tsconfig.spec.json` + the `ng-test-utils` devDep).
+
+**Within-package depth:** specs target the high-value **template contract** (gating, bindings, `@Output`s).
+~73+ components were deliberately deferred — mostly **data-bound** (auto-load from a provider/engine in
+`ngOnInit`; integration-shaped), plus media/canvas and a few component-side `NG0100` cases. **Each deferral
+is documented in-spec** with its reason — no silent gaps, no faked green.
+
+- **Exit criteria:** every Generic package has a DOM `vitest.config` + meaningful DOM specs for its primary
+  components — **met**, except the three deferrals above. A formal coverage *threshold* lands in Phase 4.
 
 ### Phase 3 — `packages/Angular/Explorer/**` rollout
 
@@ -199,14 +223,14 @@ without the harness. Delivered:
 | # | Deliverable | Status |
 |---|---|---|
 | 1 | `vitest.dom.shared.ts` + `vitest.dom.setup.ts` (root) + devDeps/overrides | ✅ shipped |
-| 2 | `@memberjunction/ng-test-utils` shared helpers (`renderComponentFixture`, `renderTemplate`) | ✅ shipped |
+| 2 | `@memberjunction/ng-test-utils` helpers — `renderComponentFixture`, `renderTemplate`, `createFakeProvider`, DOM helpers | ✅ shipped |
 | 3 | Coverage **reporting** wired into the DOM preset (gates remain Phase 4) | ✅ shipped |
 | 4 | Pilot packages converted with passing DOM specs | ✅ shipped (3 packages, ~11 components) |
 | 5 | `guides/ANGULAR_TESTING_GUIDE.md` | ✅ shipped |
-| 6 | `scripts/scaffold-tests.mjs --dom` (incl. spaces-in-path fix) | ✅ shipped |
+| 6 | `scripts/scaffold-tests.mjs --dom` + `gen-dom-stub.mjs` (now also bootstraps package config: auto single/dual + tsconfig.spec + devDep) | ✅ shipped |
 | 7 | Both config shapes (single + node/dom `projects`) proven | ✅ shipped |
 | 8 | LiveKit leaf specs + `LiveKitRoomComponent` injectable refactor | ⏳ follow-up (gated on #2860) |
-| 9 | `Angular/Generic/**` rollout | ⏳ Phase 2 |
+| 9 | `Angular/Generic/**` rollout | ✅ substantially complete (49 packages, ~1,100 tests; 3 documented deferrals + `conversations` partial) |
 | 10 | `Angular/Explorer/**` rollout | ⏳ Phase 3 |
 | 11 | CI coverage gates + live-media e2e location | ⏳ Phase 4 |
 
@@ -257,10 +281,12 @@ Expect first-run cost per file: ~0.3–0.8s of Angular compile/setup, then specs
 
 ### Rollout checklist
 
-- **Generic (Phase 2):** `ng-pagination` ✅, `ng-tabstrip` ✅, `ng-ui-components` (10 leaves done; remaining
-  are the big compound ones — `dropdown`, `combobox`, `dialog`, `window`) → then `base-forms` (first
-  **data-bound** component — will force a fake-provider helper), `conversations`, `data-context`,
-  `entity-card`, `filter-builder`, and the remaining `ng-ui-components` compound components.
+- **Generic (Phase 2):** ✅ substantially complete — 49 packages have DOM specs (~1,100 tests). Remaining
+  Generic work: (a) **`conversations`** deep-dive (5/69 covered — its own focused pass), (b) **`filter-builder`**
+  (deferred — component-side `NG0100`; needs a component fix or a documented decision to leave), (c) the
+  **LiveKit/media** packages (`livekit-room`, `mj-livekit-room`) → e2e per the LiveKit follow-up, and
+  (d) optionally going **deeper** on the ~73 data-bound/media components deferred within covered packages
+  (each needs real provider/engine fakes — diminishing returns; do demand-driven).
 - **Explorer (Phase 3):** `explorer-core`, `dashboards`, `core-entity-forms`, `shared`, … (mock providers +
   `NavigationService` fakes for heavier components).
 - **Phase 4:** coverage gates in CI (start lenient, ratchet up); document the live-media e2e suite location.

@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/lib/types/**/*.ts",
+    "src/lib/section-manager/section-manager.component.ts",
+    "src/lib/section-manager/section-manager.component.dom.test.ts",
+    "src/lib/panel/collapsible-panel.component.ts",
+    "src/lib/panel/collapsible-panel.component.dom.test.ts",
+    "src/lib/field/form-field.component.ts",
+    "src/lib/isa-related-panel/isa-related-card.component.ts",
+    "src/lib/isa-related-panel/isa-related-card.component.dom.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
