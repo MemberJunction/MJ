@@ -2,6 +2,7 @@
 export { ClassFactory, ClassRegistration } from './ClassFactory'
 export * from './interface'
 export * from './util'
+export * from './valueMapping'
 export * from './ObjectCache'
 export * from './MJLruCache'
 export * from './BaseSingleton'

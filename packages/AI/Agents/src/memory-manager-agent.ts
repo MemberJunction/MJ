@@ -1,6 +1,6 @@
 import { BaseAgent } from './base-agent';
 import { RegisterClass, CleanAndParseJSON } from '@memberjunction/global';
-import { UserInfo, RunView, RunQuery, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, RunView, RunQuery, LogError, LogStatus, LogStatusEx, IMetadataProvider } from '@memberjunction/core';
 import {
     MJConversationDetailEntity,
     MJAIAgentNoteEntity,
@@ -689,7 +689,9 @@ export class MemoryManagerAgent extends BaseAgent {
         }, contextUser);
 
         if (!result.Success || !result.Results || result.Results.length === 0) {
-            LogStatus('Memory Manager: No conversations with new activity found');
+            // Verbose-only: the common no-op outcome. The engine's "✅ Completed (Nms)" line already
+            // signals the run finished with no work; surfacing "why" is a verbose diagnostic detail.
+            LogStatusEx({ message: 'Memory Manager: No conversations with new activity found', verboseOnly: true });
             return [];
         }
 
@@ -3636,7 +3638,9 @@ export class MemoryManagerAgent extends BaseAgent {
             this._stepCounter = 0;
             this._contextUser = params.contextUser || null;
 
-            LogStatus('Memory Manager: Starting analysis cycle');
+            // Verbose-only: the scheduling engine's always-on "▶️ Starting / ✅ Completed" lines already
+            // mark that this run began/ended. On routine no-op runs this internal trace is just noise.
+            LogStatusEx({ message: 'Memory Manager: Starting analysis cycle', verboseOnly: true });
 
             // Phase 1: the last-run-time and the memory-enabled agent set are independent — load in
             // parallel (avoids two back-to-back sequential RunViews flagged by the parallelization telemetry).

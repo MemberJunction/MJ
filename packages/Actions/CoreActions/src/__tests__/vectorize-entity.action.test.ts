@@ -57,6 +57,12 @@ const doc = (id: string, entityID = `entity-${id}`, name = `Doc ${id}`) => ({
     Name: name,
 });
 
+// A realistic VectorizeEntity success response (the real method always returns one of these).
+const okResp = (n = 5) => ({
+    success: true, status: 'Complete', errorMessage: '',
+    totalRecords: n, processedRecords: n, errorCount: 0, elapsedMs: 1234,
+});
+
 const makeParams = (overrides: Array<{ Name: string; Value: unknown }> = []) => ({
     Params: overrides.map(p => ({ Name: p.Name, Type: 'Input', Value: p.Value })),
     ContextUser: { ID: 'user-1', Email: 'tester@example.com' },
@@ -72,7 +78,7 @@ describe('VectorizeEntityAction', () => {
         action = new VectorizeEntityAction();
         configMock.mockReset().mockResolvedValue(undefined);
         getActiveEntityDocumentsMock.mockReset().mockResolvedValue([]);
-        vectorizeEntityMock.mockReset().mockResolvedValue(undefined);
+        vectorizeEntityMock.mockReset().mockResolvedValue(okResp());
     });
 
     describe('no-op when nothing to vectorize', () => {
@@ -124,7 +130,7 @@ describe('VectorizeEntityAction', () => {
             getActiveEntityDocumentsMock.mockResolvedValue([doc('ok'), doc('bad')]);
             vectorizeEntityMock.mockImplementation((p: { entityDocumentID: string }) => {
                 if (p.entityDocumentID === 'bad') throw new Error('embedding model offline');
-                return Promise.resolve(undefined);
+                return Promise.resolve(okResp());
             });
 
             const r = await run(action, makeParams([{ Name: 'EntityDocumentType', Value: 'Search' }]));
@@ -133,6 +139,21 @@ describe('VectorizeEntityAction', () => {
             expect(r.ResultCode).toBe('FAILED');
             expect(r.Message).toMatch(/embedding model offline/);
             expect(vectorizeEntityMock).toHaveBeenCalledTimes(2); // both attempted
+        });
+
+        it('returns FAILED when a document reports success:false (partial record errors)', async () => {
+            getActiveEntityDocumentsMock.mockResolvedValue([doc('partial')]);
+            vectorizeEntityMock.mockResolvedValue({
+                success: false, status: 'CompletedWithErrors',
+                errorMessage: '3 record(s) failed vector upsert',
+                totalRecords: 10, processedRecords: 7, errorCount: 3, elapsedMs: 500,
+            });
+
+            const r = await run(action, makeParams([{ Name: 'EntityDocumentType', Value: 'Search' }]));
+
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('FAILED');
+            expect(r.Message).toMatch(/failed vector upsert/);
         });
     });
 

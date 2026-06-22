@@ -598,6 +598,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private startX: number = 0;
   private startWidth: number = 0;
 
+  // Stored bound references so addEventListener and removeEventListener get the same function object.
+  private readonly boundOnResizeMove = this.onResizeMove.bind(this);
+  private readonly boundOnResizeEnd = this.onResizeEnd.bind(this);
+  private readonly boundOnResizeTouchMove = this.onResizeTouchMove.bind(this);
+  private readonly boundOnResizeTouchEnd = this.onResizeTouchEnd.bind(this);
+
   // LocalStorage key
   private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
@@ -871,10 +877,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Setup resize listeners
-    window.addEventListener('mousemove', this.onResizeMove.bind(this));
-    window.addEventListener('mouseup', this.onResizeEnd.bind(this));
-    window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
-    window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
+    window.addEventListener('mousemove', this.boundOnResizeMove);
+    window.addEventListener('mouseup', this.boundOnResizeEnd);
+    window.addEventListener('touchmove', this.boundOnResizeTouchMove);
+    window.addEventListener('touchend', this.boundOnResizeTouchEnd);
 
     // Handle overlay→workspace handoffs: if the handed-off conversation is already
     // loaded, force a reload from the engine (which has the latest data).
@@ -1042,10 +1048,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.destroy$.complete();
 
     // Remove resize listeners
-    window.removeEventListener('mousemove', this.onResizeMove.bind(this));
-    window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
-    window.removeEventListener('touchmove', this.onResizeTouchMove.bind(this));
-    window.removeEventListener('touchend', this.onResizeTouchEnd.bind(this));
+    window.removeEventListener('mousemove', this.boundOnResizeMove);
+    window.removeEventListener('mouseup', this.boundOnResizeEnd);
+    window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
+    window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {

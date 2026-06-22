@@ -32,6 +32,7 @@
  */
 
 import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
+import { Metadata } from './metadata.js';
 
 // ============================================================================
 // TYPES - Using union types per MJ style guide
@@ -107,6 +108,10 @@ export interface TelemetryRunViewParams {
     _fromEngine?: boolean;
     /** Whether result was served from cache (set after operation completes) */
     cacheHit?: boolean;
+    /** When true, this view opted out of optimization/redundancy analyzers (RunViewParams.Telemetry.Exempt). */
+    Exempt?: boolean;
+    /** Optional caller-provided justification for the exemption (RunViewParams.Telemetry.Reason). */
+    ExemptReason?: string;
 }
 
 /**
@@ -133,6 +138,10 @@ export interface TelemetryRunViewsBatchParams {
     OrderBys?: (string | undefined)[];
     /** Internal marker for engine-initiated calls */
     _fromEngine?: boolean;
+    /** When true, every view in the batch opted out of optimization/redundancy analyzers. */
+    Exempt?: boolean;
+    /** Optional caller-provided justification for the exemption (first non-empty across the batch). */
+    ExemptReason?: string;
 }
 
 /**
@@ -1156,6 +1165,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
     private updatePattern(event: TelemetryEvent): void {
         if (!this._settings.duplicateDetection.enabled) return;
+        // Exempt events don't form or contribute to duplicate-RunView patterns.
+        if (this.isEventExempt(event)) return;
 
         let pattern = this._patterns.get(event.fingerprint);
         const now = this.getTimestamp();
@@ -1340,8 +1351,39 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         return results;
     }
 
+    /**
+     * True when an event opted out of the optimization/redundancy analyzers via
+     * `RunViewParams.Telemetry.Exempt` (threaded into the event params as `Exempt`).
+     */
+    private isEventExempt(event: TelemetryEvent): boolean {
+        const p = event.params as { Exempt?: boolean } | undefined;
+        return p?.Exempt === true;
+    }
+
+    /**
+     * Verbose-only breadcrumb so an exempted query — and the caller's justification — is still
+     * auditable in telemetry logging even though it produced no warning.
+     */
+    private logExemptEvent(event: TelemetryEvent): void {
+        const level = this.GetLevelForCategory(event.category);
+        if (this.GetLevelValue(level) < TelemetryLevelValue['verbose']) return;
+        const p = event.params as { EntityName?: string; Entities?: string[]; ExemptReason?: string };
+        const target = p.EntityName ?? (Array.isArray(p.Entities) ? p.Entities.join(', ') : event.operation);
+        const reason = p.ExemptReason ? ` — ${p.ExemptReason}` : '';
+        // eslint-disable-next-line no-console
+        console.log(`💡 [Telemetry] Analysis exempt for ${event.category} "${target}"${reason}`);
+    }
+
     private runAnalyzers(event: TelemetryEvent): void {
         if (!this._settings.analyzers.enabled) return;
+
+        // Caller explicitly opted this query out of the optimization/redundancy analyzers. It is also
+        // excluded from the analyzer context (buildAnalyzerContext) and from duplicate-pattern counts
+        // (updatePattern), so it neither produces nor contributes to noise warnings.
+        if (this.isEventExempt(event)) {
+            this.logExemptEvent(event);
+            return;
+        }
 
         const context = this.buildAnalyzerContext();
 
@@ -1361,7 +1403,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
     private buildAnalyzerContext(): TelemetryAnalyzerContext {
         return {
-            recentEvents: this._events.slice(-1000),
+            // Exclude exempt events so they don't inflate per-entity / sequential counts for OTHER queries.
+            recentEvents: this._events.slice(-1000).filter(e => !this.isEventExempt(e)),
             patterns: this._patterns,
             getEngineLoadedEntities: () => {
                 // Integration with BaseEngineRegistry
@@ -1374,7 +1417,40 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         };
     }
 
+    /**
+     * Analyzers whose advice is "load/cache this entity in a dedicated engine". That advice is
+     * nonsensical for entities that have explicitly opted out of caching (`EntityInfo.AllowCaching`
+     * = false) — typically large, append-only tables (agent sessions, prompt runs, record changes)
+     * that should never be bulk-loaded into a process-wide engine cache.
+     */
+    private static readonly ENGINE_CACHE_SUGGESTION_ANALYZERS = new Set<string>([
+        'SameEntityMultipleCallsAnalyzer',
+        'EngineOverlapAnalyzer',
+    ]);
+
+    /**
+     * True when `insight` is an engine-caching suggestion for an entity that has caching disabled.
+     * Reuses the existing `AllowCaching` metadata flag as the single source of truth — no separate
+     * exemption list. Fails open (returns false → insight still emits) when metadata is unavailable.
+     */
+    private isCacheSuggestionForNonCachedEntity(insight: TelemetryInsight): boolean {
+        if (!insight.entityName) return false;
+        if (!TelemetryManager.ENGINE_CACHE_SUGGESTION_ANALYZERS.has(insight.analyzerName)) return false;
+        try {
+            const entity = Metadata.Provider?.EntityByName?.(insight.entityName); // global-provider-ok: telemetry aggregates RunView calls process-wide; AllowCaching is structural entity metadata and this check fails open if unavailable
+            return entity?.AllowCaching === false;
+        } catch {
+            return false;
+        }
+    }
+
     private shouldEmitInsight(insight: TelemetryInsight): boolean {
+        // Suppress "create/use a dedicated engine" suggestions for entities that have opted out of
+        // caching — the AllowCaching=false flag already declares them unsuitable for engine caching.
+        if (this.isCacheSuggestionForNonCachedEntity(insight)) {
+            return false;
+        }
+
         // Dedupe similar insights within a time window
         const dedupeKey = `${insight.analyzerName}:${insight.entityName || ''}:${insight.title}`;
         const lastEmit = this._insightDedupeWindow.get(dedupeKey);

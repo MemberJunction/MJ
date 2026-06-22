@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/livekit-room-server",
   "type": "module",
-  "version": "5.41.0",
+  "version": "5.42.0",
   "description": "MemberJunction: Server-side LiveKit room support — mints scoped client/bot access tokens (livekit-server-sdk) and provides the session-start coordinator that opens a realtime model session and bridges it into a LiveKit room via AIBridgeEngine. The MJ realtime-bridge ↔ LiveKit UI seam.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,12 +16,13 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.41.0",
-    "@memberjunction/global": "5.41.0",
-    "@memberjunction/core-entities": "5.41.0",
-    "@memberjunction/ai": "5.41.0",
-    "@memberjunction/ai-bridge-base": "5.41.0",
-    "@memberjunction/ai-bridge-server": "5.41.0",
+    "@memberjunction/core": "5.42.0",
+    "@memberjunction/global": "5.42.0",
+    "@memberjunction/core-entities": "5.42.0",
+    "@memberjunction/ai": "5.42.0",
+    "@memberjunction/ai-bridge-base": "5.42.0",
+    "@memberjunction/ai-bridge-server": "5.42.0",
+    "@memberjunction/ai-bridge-livekit": "5.42.0",
     "livekit-server-sdk": "^2.9.7"
   },
   "devDependencies": {

@@ -24,7 +24,10 @@ export class DDLGenerator {
 
     /**
      * Generate a full CREATE TABLE statement.
-     * PK fields keep their natural names from the source system and get a UNIQUE constraint.
+     * PK fields keep their natural names from the source system and are emitted as ORDINARY columns —
+     * NO database constraint (not PRIMARY KEY, not UNIQUE). Their PK-ness is SOFT: it lives only in
+     * additionalSchemaInfo, which CodeGen reads (via applySoftPKFKConfig) to set the entity's METADATA
+     * PK + IsSoftPrimaryKey flag — never a DB key. See the detailed note at the soft-PK block below.
      * Standard integration columns (__mj_integration_*) are added automatically.
      */
     GenerateCreateTable(config: TargetTableConfig, platform: DatabasePlatform): string {
@@ -53,12 +56,12 @@ export class DDLGenerator {
         // Standard integration columns (prefixed to avoid collisions)
         lines.push(...this.StandardColumns(platform));
 
-        // UNIQUE constraint on PK field(s) — no DB-level PK, soft PK via additionalSchemaInfo
-        if (config.PrimaryKeyFields.length > 0) {
-            const pkColNames = config.PrimaryKeyFields.map(f => q(f)).join(', ');
-            const uqName = `UQ_${config.SchemaName}_${config.TableName}_PK`;
-            lines.push(`    CONSTRAINT ${q(uqName)} UNIQUE (${pkColNames})`);
-        }
+        // PK is SOFT-ONLY — declared in additionalSchemaInfo (which CodeGen reads to set the entity's
+        // metadata PK), and emitted as NO database constraint here: not a PRIMARY KEY, and not even a
+        // UNIQUE. Integration PKs are *inferred* (naming + streamed-data statistics at p<0.05), so
+        // enforcing one — even as UNIQUE — would reject valid rows the moment an inference is wrong.
+        // Dedupe is the engine's job via the record-map, not a DB key. So the table carries the PK
+        // columns as ordinary columns; their PK-ness lives only in additionalSchemaInfo.
 
         const body = lines.join(',\n');
         // Idempotent create: skip if the physical table already exists. Makes re-running
@@ -124,6 +127,7 @@ export class DDLGenerator {
             '__mj_integration_LastSyncedSnapshot': 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
             '__mj_integration_SyncMessage': 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
             '__mj_integration_ContentHash': 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark.',
+            '__mj_integration_CustomOverflow': 'Backend staging (system) column: JSON of source fields a record returned that have no field map yet — the "extra" keys this table has no column for. A post-sync Runtime-Schema-Updation pass promotes pervasive keys to real columns and clears them here. Not user-facing metadata; transient until promotion.',
         };
 
         for (const [colName, desc] of Object.entries(standardDescriptions)) {
@@ -269,6 +273,7 @@ export class DDLGenerator {
                 `    ${q('__mj_integration_LastSyncedSnapshot')} NVARCHAR(MAX) NULL`,
                 `    ${q('__mj_integration_SyncMessage')} NVARCHAR(MAX) NULL`,
                 `    ${q('__mj_integration_ContentHash')} NVARCHAR(64) NULL`,
+                `    ${q('__mj_integration_CustomOverflow')} NVARCHAR(MAX) NULL`,
                 `    ${q('__mj_integration_ExternalVersion')} NVARCHAR(255) NULL`,
                 `    ${q('__mj_integration_LastSeenModifiedValue')} NVARCHAR(255) NULL`,
                 `    ${q('__mj_integration_LastReconciledAt')} DATETIMEOFFSET NULL`,
@@ -283,6 +288,7 @@ export class DDLGenerator {
             `    ${q('__mj_integration_LastSyncedSnapshot')} TEXT NULL`,
             `    ${q('__mj_integration_SyncMessage')} TEXT NULL`,
             `    ${q('__mj_integration_ContentHash')} VARCHAR(64) NULL`,
+            `    ${q('__mj_integration_CustomOverflow')} TEXT NULL`,
             `    ${q('__mj_integration_ExternalVersion')} VARCHAR(255) NULL`,
             `    ${q('__mj_integration_LastSeenModifiedValue')} VARCHAR(255) NULL`,
             `    ${q('__mj_integration_LastReconciledAt')} TIMESTAMPTZ NULL`,

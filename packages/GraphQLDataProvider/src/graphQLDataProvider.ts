@@ -16,7 +16,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
-         SearchEntityParams, EntitySearchResult, ScoredCandidate } from "@memberjunction/core";
+         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -1597,6 +1597,44 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     protected async searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> {
         return [];
+    }
+
+    /**
+     * Client-side transport for a Remote Operation: marshals the operation key + JSON input over the
+     * generic `ExecuteRemoteOperation` GraphQL mutation, and parses the JSON output back. The server
+     * resolves and executes the operation in-process. Overrides the no-op default on `ProviderBase`;
+     * key validation still runs in `ProviderBase.RouteOperation` before this is called.
+     */
+    protected override async InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
+        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!) {
+            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode }) {
+                success
+                resultCode
+                outputJSON
+                handle
+                errorMessage
+            }
+        }`;
+        try {
+            const data = await this.ExecuteGQL(mutation, {
+                operationKey,
+                inputJSON: JSON.stringify(input ?? null),
+                invokeMode: options.mode ?? 'attached',
+            });
+            const r = data?.ExecuteRemoteOperation;
+            if (!r) {
+                return { Success: false, ResultCode: 'NO_RESPONSE', ErrorMessage: 'No response from ExecuteRemoteOperation' };
+            }
+            return {
+                Success: !!r.success,
+                ResultCode: r.resultCode ?? undefined,
+                Output: r.outputJSON != null ? (JSON.parse(r.outputJSON) as TOutput) : undefined,
+                Handle: r.handle ?? undefined,
+                ErrorMessage: r.errorMessage ?? undefined,
+            };
+        } catch (e) {
+            return { Success: false, ResultCode: 'TRANSPORT_ERROR', ErrorMessage: e instanceof Error ? e.message : String(e) };
+        }
     }
 
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {

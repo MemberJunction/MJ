@@ -210,6 +210,9 @@
           <div class="lk-room__device-popover">
             <mj-livekit-device-menu
               [Devices]="Devices"
+              [SelectedMicrophoneId]="SelectedMicrophoneId"
+              [SelectedCameraId]="SelectedCameraId"
+              [SelectedSpeakerId]="SelectedSpeakerId"
               [ShowNoiseFilter]="EnableNoiseFilter"
               [NoiseFilterEnabled]="State.NoiseFilterEnabled"
               [ShowBackgroundEffects]="EnableBackgroundEffects"

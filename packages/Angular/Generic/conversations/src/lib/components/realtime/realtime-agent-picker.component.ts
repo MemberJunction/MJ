@@ -26,6 +26,7 @@ import {
     RealtimeModelOption,
     RealtimePairedAgentRow,
 } from '../../services/realtime-pairing';
+import { GraphQLLiveKitClient, GraphQLDataProvider, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
 
 /**
  * The user's confirmed choice from the realtime picker: the agent to call, an optional
@@ -39,6 +40,8 @@ export interface RealtimeAgentPick {
     Agent: MJAIAgentEntityExtended;
     /** Explicit realtime model id, or `null` for the server's automatic selection. */
     PreferredModelId: string | null;
+    /** Explicit provider-native voice id (e.g. `echo`), or `null` for the configured/default voice. */
+    PreferredVoice: string | null;
     /** Explicit co-agent id (`MJ: AI Agents.ID`, Realtime type), or `null` for the server's resolution chain. */
     CoAgentId: string | null;
 }
@@ -157,6 +160,25 @@ export interface RealtimeAgentPick {
                         }
                     </select>
                 </div>
+                @if (SelectedModelVoices.length) {
+                    <div class="mj-voice-picker__select-row mj-voice-picker__select-row--model">
+                        <label class="mj-voice-picker__select-label" for="mjVoiceVoiceSelect">
+                            <i class="fa-solid fa-waveform-lines"></i>
+                            <span>Voice</span>
+                        </label>
+                        <select
+                            #voiceSelect
+                            id="mjVoiceVoiceSelect"
+                            class="mj-voice-picker__select"
+                            [value]="SelectedVoiceId ?? ''"
+                            (change)="OnVoiceChange(voiceSelect.value)">
+                            <option value="">Default</option>
+                            @for (v of SelectedModelVoices; track v.ID) {
+                                <option [value]="v.ID">{{ v.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                }
             }
             <div class="mj-voice-picker__footer">
                 <button mjButton variant="primary" size="sm" [disabled]="!SelectedAgent" (click)="StartCall()">
@@ -307,6 +329,17 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
     /** The explicitly chosen voice model id, or `null` for "Auto (recommended)" (the default). */
     public SelectedModelId: string | null = null;
 
+    /** Active Realtime models + their voices (for the voice selector); loaded only for authorized users. */
+    public VoiceModels: RealtimeModelVoices[] = [];
+
+    /** The explicitly chosen voice id, or `null` for the configured/default voice. */
+    public SelectedVoiceId: string | null = null;
+
+    /** Voices for the currently-selected model (empty when no model picked or it declares none). */
+    public get SelectedModelVoices(): RealtimeVoiceOption[] {
+        return this.VoiceModels.find((m) => UUIDsEqual(m.ModelID, this.SelectedModelId))?.Voices ?? [];
+    }
+
     /** The explicitly chosen co-agent id, or `null` for "Auto (recommended)" (the server's chain). */
     public SelectedCoAgentId: string | null = null;
 
@@ -374,12 +407,27 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
             console.error('[RealtimeAgentPicker] Failed to load realtime models:', error);
             this.Models = [];
         }
+        // Voices come from the driver via a server query (the cached models carry no voice list).
+        try {
+            const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+            this.VoiceModels = await client.GetRealtimeModelVoices();
+        } catch (error) {
+            console.error('[RealtimeAgentPicker] Failed to load realtime voices:', error);
+            this.VoiceModels = [];
+        }
         this.cdr.markForCheck();
     }
 
-    /** Records the voice-model choice (`''` = Auto → `null`). */
+    /** Records the voice-model choice (`''` = Auto → `null`); clears the voice so it can't outlive a switch. */
     public OnModelChange(value: string): void {
         this.SelectedModelId = value && value.length > 0 ? value : null;
+        this.SelectedVoiceId = null;
+        this.cdr.markForCheck();
+    }
+
+    /** Records the voice choice (`''` = default → `null`). */
+    public OnVoiceChange(value: string): void {
+        this.SelectedVoiceId = value && value.length > 0 ? value : null;
         this.cdr.markForCheck();
     }
 
@@ -549,6 +597,7 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
         return {
             Agent: agent,
             PreferredModelId: this.CanOverrideSessionConfig ? this.SelectedModelId : null,
+            PreferredVoice: this.CanOverrideSessionConfig ? this.SelectedVoiceId : null,
             CoAgentId: this.SelectedCoAgentId
         };
     }
