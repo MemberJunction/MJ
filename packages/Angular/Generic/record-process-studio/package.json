@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-record-process-studio",
-  "version": "5.41.0",
+  "version": "5.42.0",
   "description": "MemberJunction: Bulk Operations studio — generic, reusable Angular UI for authoring, running, and auditing Record Processes (rules-driven bulk updates). Consumed by MJExplorer's Bulk Operations app or any MJ app.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -27,13 +27,13 @@
     "rxjs": "^7.8.2"
   },
   "dependencies": {
-    "@memberjunction/core": "5.41.0",
-    "@memberjunction/core-entities": "5.41.0",
-    "@memberjunction/global": "5.41.0",
-    "@memberjunction/graphql-dataprovider": "5.41.0",
-    "@memberjunction/ng-base-types": "5.41.0",
-    "@memberjunction/ng-entity-action-ux": "5.41.0",
-    "@memberjunction/ng-ui-components": "5.41.0",
+    "@memberjunction/core": "5.42.0",
+    "@memberjunction/core-entities": "5.42.0",
+    "@memberjunction/global": "5.42.0",
+    "@memberjunction/graphql-dataprovider": "5.42.0",
+    "@memberjunction/ng-base-types": "5.42.0",
+    "@memberjunction/ng-entity-action-ux": "5.42.0",
+    "@memberjunction/ng-ui-components": "5.42.0",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,

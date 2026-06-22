@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/remote-browser-selfhost",
   "type": "module",
-  "version": "5.41.0",
+  "version": "5.42.0",
   "description": "MemberJunction: Self-Hosted Chrome backend driver for the Remote Browser channel. Connects the shared CDP control kit to a lightweight MJ-orchestrated headless-Chrome container (raw CDP control, MJ-hosted live view backed by the screencast, human takeover, screen streaming, persistent context, multi-tab, file downloads — no native AI control) via an injectable Chrome-container-runner seam, so the driver builds and unit-tests with no container, no network, and no real browser.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,11 +17,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/computer-use": "5.41.0",
-    "@memberjunction/core": "5.41.0",
-    "@memberjunction/global": "5.41.0",
-    "@memberjunction/remote-browser-base": "5.41.0",
-    "@memberjunction/remote-browser-cdp": "5.41.0"
+    "@memberjunction/computer-use": "5.42.0",
+    "@memberjunction/core": "5.42.0",
+    "@memberjunction/global": "5.42.0",
+    "@memberjunction/remote-browser-base": "5.42.0",
+    "@memberjunction/remote-browser-cdp": "5.42.0"
   },
   "peerDependencies": {
     "playwright": ">=1.40.0"
