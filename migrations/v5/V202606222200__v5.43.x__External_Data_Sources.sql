@@ -1,6 +1,6 @@
 /* ============================================================================
    External Data Sources — Phase 1 Schema (Metadata Foundation)
-   v5.42.x
+   v5.43.x
 
    Companion plan: /plans/external-data-sources.md (design)
 

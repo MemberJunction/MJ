@@ -128,7 +128,7 @@ GO
 
 -- ── Preserve external entities from ENTITY-level pruning ──────────────────────────────────────
 -- Recreate vwEntitiesWithMissingBaseTables so its `SELECT e.*` re-expands to include the
--- ExternalDataSourceID column added in V202606210148 (a `*` view caches its column list at
+-- ExternalDataSourceID column added in V202606222200 (a `*` view caches its column list at
 -- creation, so the column was previously invisible to checkAndRemoveMetadataForDeletedTables'
 -- code guard, and external entities were pruned on every codegen run). The view definition is
 -- otherwise UNCHANGED from baseline — it stays a pure "missing base table" detector; exclusion of
