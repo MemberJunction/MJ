@@ -68,6 +68,13 @@ floor-check rejects a build where an applicable cell is missing, vacuous, or ski
    dependency order + at-scale DDL on a real slice). **NOT full-catalog ApplyAll** — materializing a table
    per object is infeasible at scale (e.g. Salesforce 1695 objects); scope to the sync subset, which is also
    prod-correct. NOT a single-object apply either (that hides the DAG).
+   > **Multi-connector campaign fast path** (`run-connector-campaign.mjs` / `loop-connectors.sh`): a full
+   > `mj sync push` of every vendor's catalog (~5k IO / ~100k IOF) takes ~hours on the per-record save path.
+   > For the credential-free matrix, `bulk-insert-connectors.mjs` deploys the IDENTICAL Integration/IO/IOF
+   > rows via direct `mssql` bulk insert (~seconds); `reset-to-core.mjs` returns the DB to the core baseline
+   > between connectors so each ApplyAll CodeGens a small set. This accelerates only the build-time metadata
+   > SEED — the connector's runtime (discover/ApplyAll/sync/CRUD) is exercised over GraphQL exactly as
+   > production. See `CANONICAL_CONNECTOR_SETUP.md` § "FAST e2e test-harness bring-up".
 2. **Spec-conformance diff (free, deterministic — when a machine-readable spec exists).** Diff every
    declared path / method / param / body / content-type against the vendor's OpenAPI / SDL. This is the
    single highest-value credential-free check and it auto-catches the wrong-paths class. Distinct from

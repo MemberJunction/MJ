@@ -235,6 +235,10 @@ export function matrixSpecsFromManifest(manifest) {
         // discovery (stages 2/3/10a)
         discoverable: lc.supportsDiscovery === true || manifest?.DiscoverySupported === true,
         supportsFieldDiscovery: lc.supportsFieldDiscovery === true || lc.supportsDiscovery === true,
+        // authoritative discovery (DiscoveryIsAuthoritative getter returns true): gates whether a refresh is
+        // EXPECTED to emit soft-PK verdicts (streaming ideation) + whether absent-object deactivation applies.
+        // Non-authoritative discovery re-reads Declared metadata → no re-classification → 0 verdicts is OK.
+        authoritativeDiscovery: lc.authoritativeDiscovery === true,
         customTables: Array.isArray(lc.customTables) ? lc.customTables.filter(Boolean) : [],
         // custom-column promotion (stage 4)
         supportsCustomColumns: lc.supportsCustomColumns === true,

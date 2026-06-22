@@ -11,7 +11,12 @@
 //      (Name~APIPath~watermark~PK~field:type,field:type,...) and writes the same fixtures shape.
 //      Kept working for the offline meta.txt flow; both feed the identical builder.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { resolve as pathResolve } from 'node:path';
+import { resolve as pathResolve, dirname as pathDirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Repo root = 4 levels up from this script's DIR (packages/Integration/connectors/test). Used to locate
+// a connector's SOURCE file so the lifecycle derivation can read its real discovery capability.
+const REPO_ROOT_GEN = pathResolve(pathDirname(fileURLToPath(import.meta.url)), '../../../..');
 
 /**
  * Synthesize a deterministic, VENDOR-FAITHFUL sample value for a (fieldName, type, rowIndex).
@@ -201,6 +206,129 @@ function buildAccessPathManifest(rows, cfgKey) {
   return { manifest, objectNames: objs.map((o) => o.Name), deltaObject: delta ? delta.obj.name : null };
 }
 
+/** case/space-insensitive column read off a DB row (sqlserver upper, pg lower). */
+function rowCol(r, n) { if (r == null) return undefined; if (n in r) return r[n]; const l = n.toLowerCase(); for (const k of Object.keys(r)) if (k.toLowerCase() === l) return r[k]; return undefined; }
+const truthyFlag = (v) => v === true || v === 1 || v === '1' || String(v).toLowerCase() === 'true';
+
+/**
+ * Build a WriteRoundTrip spec (phaseBidirectional, cell 9) from a write-capable object's DEPLOYED
+ * per-operation CRUD columns. The mock origin is route-replay, so the routes return id-bearing /
+ * echo bodies the connector's CreateRecord/UpdateRecord/DeleteRecord parse — create→read id,
+ * update→echo, delete→ack. Template vars ({id}/{ID}/{ExternalID}) in the paths are wildcard-matched
+ * by the mock, so the raw deployed path templates are used verbatim.
+ */
+function buildWriteRoundTrip(cap, row) {
+  const ID = 'mock-wr-id-1';
+  const createPath = rowCol(cap, 'CreateAPIPath');
+  if (!createPath) return null;
+  const createMethod = String(rowCol(cap, 'CreateMethod') || 'POST').toUpperCase();
+  const updatePath = rowCol(cap, 'UpdateAPIPath') || `${createPath}/{id}`;
+  const updateMethod = String(rowCol(cap, 'UpdateMethod') || 'PATCH').toUpperCase();
+  const deletePath = rowCol(cap, 'DeleteAPIPath') || `${createPath}/{id}`;
+  const deleteMethod = String(rowCol(cap, 'DeleteMethod') || 'DELETE').toUpperCase();
+  const idLoc = String(rowCol(cap, 'CreateIDLocation') || 'body').toLowerCase();
+  // a safe plain-scalar string field for create/update attributes (not PK/wm/date/id/url/json)
+  const scalar = (row.fields || []).find((f) => f.fn !== row.pk && f.fn !== row.wm
+    && /char|varchar|nvarchar|text|string/i.test(f.ft || '') && !/max/i.test(f.ft || '')
+    && !/date|time|id$|^id$|url|link|json|guid|uuid/i.test(f.fn));
+  const fld = scalar ? scalar.fn : null;
+  const createBody = { id: ID, ID, Id: ID, externalID: ID, ExternalID: ID };
+  if (fld) createBody[fld] = 'mock-created';
+  const headers = { 'content-type': 'application/json' };
+  if (idLoc === 'header') headers.location = `${createPath}/${ID}`;
+  const routes = [
+    { Path: createPath, Method: createMethod, Status: 200, Body: createBody, Headers: headers },
+    { Path: updatePath, Method: updateMethod, Status: 200, Body: { ...createBody, ...(fld ? { [fld]: 'mock-updated' } : {}) } },
+    { Path: deletePath, Method: deleteMethod, Status: 200, Body: { id: ID, deleted: true } },
+  ];
+  const wrt = {
+    Object: rowCol(cap, 'Name'), Routes: routes,
+    CreateAttributes: fld ? { [fld]: 'mock-created' } : {},
+    CreatePathMatch: String(createPath).split('/').filter(Boolean)[0] || null,
+    DeleteMethodMatch: deleteMethod,
+  };
+  if (fld) wrt.UpdateAttributes = { [fld]: 'mock-updated' };
+  return wrt;
+}
+
+/**
+ * Derive the `lifecycle` capability block (the matrixSpecsFromManifest gating source) from the
+ * connector's CURRENTLY-DEPLOYED metadata + SOURCE — so cells 9 (write) and 10/11 (discovery) RUN
+ * where genuinely supported, and skip-with-reason otherwise. NO hand-authoring, NO guessing:
+ *   • supportsWrite + writeRoundTrip ← the deployed IO CRUD capability columns (SupportsCreate/…,
+ *     CreateAPIPath/Method/…). A write cell only runs for a connector the metadata says can write.
+ *   • incrementalStrategy ← SupportsIncrementalSync + IncrementalWatermarkField ⇒ 'watermark' else 'content-hash'.
+ *   • supportsDiscovery ← whether the connector's SOURCE overrides DiscoverObjects (real runtime
+ *     discovery). authoritativeDiscovery ← its DiscoveryIsAuthoritative getter returns true. A connector
+ *     with no discovery override gets supportsDiscovery:false → the discovery cells skip honestly.
+ * Hand-authored descriptor.lifecycle keys OVERRIDE these (applyTestDescriptor merges over this base).
+ */
+export async function deriveLifecycleFromDeployed({ db, platform, mjSchema = '__mj', integrationID, rows }) {
+  const pg = platform === 'postgresql';
+  const lit = (s) => `'${String(s).replace(/'/g, "''")}'`;
+  const IO = pg ? `"${mjSchema}"."IntegrationObject"` : `[${mjSchema}].[IntegrationObject]`;
+  const INT = pg ? `"${mjSchema}"."Integration"` : `[${mjSchema}].[Integration]`;
+
+  // 1) IO capability columns from the deployed schema (all real columns — verified present).
+  const capCols = ['Name', 'SupportsWrite', 'SupportsCreate', 'SupportsUpdate', 'SupportsDelete',
+    'SupportsIncrementalSync', 'IncrementalWatermarkField', 'CreateAPIPath', 'CreateMethod',
+    'CreateBodyShape', 'CreateBodyKey', 'CreateIDLocation', 'UpdateAPIPath', 'UpdateMethod',
+    'DeleteAPIPath', 'DeleteMethod', 'DeleteIDLocation'];
+  const sel = pg ? capCols.map((c) => `"${c}"`).join(', ') : capCols.join(', ');
+  let caps = [];
+  try {
+    caps = await db.rows(pg
+      ? `SELECT ${sel} FROM ${IO} WHERE "IntegrationID" = ${lit(integrationID)} AND "Status" = 'Active'`
+      : `SELECT ${sel} FROM ${IO} WHERE IntegrationID = ${lit(integrationID)} AND Status = 'Active'`);
+  } catch { caps = []; }
+  const anyWrite = caps.some((c) => truthyFlag(rowCol(c, 'SupportsWrite')) || truthyFlag(rowCol(c, 'SupportsCreate'))
+    || truthyFlag(rowCol(c, 'SupportsUpdate')) || truthyFlag(rowCol(c, 'SupportsDelete')));
+  const anyWatermark = caps.some((c) => truthyFlag(rowCol(c, 'SupportsIncrementalSync')) && rowCol(c, 'IncrementalWatermarkField'));
+
+  // 2) Discovery capability from the connector SOURCE (honest: no source / no override → no discovery).
+  let hasDiscovery = false, isAuthoritative = false, sourceClass = null;
+  try {
+    const intRow = (await db.rows(pg
+      ? `SELECT "ClassName" AS cn FROM ${INT} WHERE "ID" = ${lit(integrationID)}`
+      : `SELECT ClassName AS cn FROM ${INT} WHERE ID = ${lit(integrationID)}`))[0];
+    sourceClass = rowCol(intRow, 'cn');
+    if (sourceClass) {
+      const srcPath = pathResolve(REPO_ROOT_GEN, 'packages/Integration/connectors/src', `${sourceClass}.ts`);
+      if (existsSync(srcPath)) {
+        const src = readFileSync(srcPath, 'utf8');
+        hasDiscovery = /\b(?:public|protected|async|override)?\s*DiscoverObjects\s*\(/.test(src);
+        isAuthoritative = /DiscoveryIsAuthoritative[\s\S]{0,160}?\breturn\s+true\b/.test(src);
+      }
+    }
+  } catch { /* no source → honest no-discovery */ }
+
+  // 3) writeRoundTrip — a write-capable FLAT object (own route, non-template path) with a create path.
+  let writeRoundTrip = null;
+  if (anyWrite && Array.isArray(rows)) {
+    const flatByName = new Map(rows
+      .filter((r) => !r.accessPath && !String(r.rawApiPath ?? r.apipath ?? '').includes('{'))
+      .map((r) => [String(r.name).toLowerCase(), r]));
+    const wcap = caps.find((c) => truthyFlag(rowCol(c, 'SupportsCreate')) && rowCol(c, 'CreateAPIPath')
+      && flatByName.has(String(rowCol(c, 'Name')).toLowerCase())
+      && !/user|owner/i.test(String(rowCol(c, 'Name'))));
+    if (wcap) writeRoundTrip = buildWriteRoundTrip(wcap, flatByName.get(String(rowCol(wcap, 'Name')).toLowerCase()));
+  }
+
+  return {
+    supportsDiscovery: hasDiscovery,
+    supportsFieldDiscovery: hasDiscovery,
+    authoritativeDiscovery: isAuthoritative,
+    supportsCustomColumns: true,
+    incrementalStrategy: anyWatermark ? 'watermark' : 'content-hash',
+    supportsWrite: !!writeRoundTrip,
+    writeRoundTrip,
+    supportsScheduling: true,
+    connectionTestable: true,
+    derivedFromMetadata: true,
+    sourceClass,
+  };
+}
+
 // PER-CONNECTOR TEST DESCRIPTOR (each connector is unique). A connector's build may drop a
 // `test-descriptor.json` next to its fixtures declaring what the GENERIC generator can't infer:
 //   { "credentials": { "ApiKey": "...", "ApiSecret": "...", "OrganizationCode": "..." },
@@ -222,7 +350,9 @@ export function applyTestDescriptor(manifest, fixturesDir) {
   // The `lifecycle` block is the SINGLE declared-capability gating source for the production-faithful
   // lifecycle harness (which stages a connector supports). Stamp it onto the manifest so
   // matrixSpecsFromManifest (connector-e2e-adapters.mjs) and the harness phases can read it.
-  if (descriptor.lifecycle && typeof descriptor.lifecycle === 'object') { manifest.Lifecycle = descriptor.lifecycle; changed = true; }
+  // MERGE over any auto-derived lifecycle base (deriveLifecycleFromDeployed): a hand-authored descriptor
+  // OVERRIDES per-key but never wipes the derived capabilities it doesn't mention.
+  if (descriptor.lifecycle && typeof descriptor.lifecycle === 'object') { manifest.Lifecycle = { ...(manifest.Lifecycle || {}), ...descriptor.lifecycle }; changed = true; }
   return changed;
 }
 
@@ -584,9 +714,14 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
         // credentials/flags to it (each connector is unique — e.g. PheedLoop reads ApiKey+ApiSecret from
         // the Credential and OrganizationCode from Configuration; its hand fixture lacks them). The merge
         // is into the existing fixture's Configuration so the connector's cred validation passes in mock.
+        // Derive the lifecycle block (discovery + incremental from metadata/source) even on a preserved
+        // hand fixture, so its discovery cells run. writeRoundTrip needs per-object fields (rows, not built
+        // on this early-return path) → null here; a write-capable hand fixture declares writeRoundTrip via
+        // its descriptor. Derived is the BASE; an existing hand Lifecycle then the descriptor override.
+        m.Lifecycle = { ...(await deriveLifecycleFromDeployed({ db, platform, mjSchema, integrationID, rows: null })), ...(m.Lifecycle || {}) };
         const applied = applyTestDescriptor(m, fixturesDir);
-        if (applied) { writeFileSync(existing, JSON.stringify(m, null, 2) + '\n'); }
-        return { ok: false, reason: `hand-authored fixture preserved (ConfigUrlKey=${m.ConfigUrlKey}, transport=${m.Transport || 'http'})${applied ? ' + descriptor applied' : ''} — regen skipped`, preserved: true, descriptorApplied: applied };
+        writeFileSync(existing, JSON.stringify(m, null, 2) + '\n');
+        return { ok: false, reason: `hand-authored fixture preserved (ConfigUrlKey=${m.ConfigUrlKey}, transport=${m.Transport || 'http'}) + lifecycle derived${applied ? ' + descriptor applied' : ''} — regen skipped`, preserved: true, descriptorApplied: applied };
       }
     }
   } catch { /* unreadable/invalid existing fixture → fall through to regen */ }
@@ -688,7 +823,10 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
       try { handM = JSON.parse(readFileSync(handPath, 'utf8')); } catch { handM = null; }
       if (handM && Array.isArray(handM.Routes)) {
         const merged = mergeAllObjectDataRoutes(handM, rows, fetchShape, envelopeKey);
-        applyTestDescriptor(handM, fixturesDir);   // merge descriptor creds/flags into the hand Configuration
+        // Auto-derive the lifecycle capability block from deployed metadata + source (write/discovery/
+        // incremental) as the BASE; an existing hand Lifecycle then the descriptor override per-key.
+        handM.Lifecycle = { ...(await deriveLifecycleFromDeployed({ db, platform, mjSchema, integrationID, rows })), ...(handM.Lifecycle || {}) };
+        applyTestDescriptor(handM, fixturesDir);   // merge descriptor creds/flags + lifecycle into the hand Configuration
         writeFileSync(handPath, JSON.stringify(handM, null, 2) + '\n');
         return { ok: true, written: handPath, merged: true, mergeShape: fetchShape, added: merged.added,
                  objectNames: handM.Objects.map((o) => o.Name), deltaObject: (handM.DeltaPasses?.[0]?.Object ?? null) };
@@ -708,6 +846,9 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
   // `credentials` are merged into the fixture Configuration so connectors that validate specific cred keys
   // (e.g. PheedLoop ApiKey/ApiSecret) stop failing "No credential found" in mock. liveOnly/fetchShape are
   // surfaced for the harness/operator. This is the seam that makes the generic generator connector-aware.
+  // Auto-derive the lifecycle capability block from deployed metadata + source (so cells 9 write /
+  // 10-11 discovery RUN where genuinely supported); a hand-authored descriptor.lifecycle overrides per-key.
+  manifest.Lifecycle = { ...(await deriveLifecycleFromDeployed({ db, platform, mjSchema, integrationID, rows })), ...(manifest.Lifecycle || {}) };
   applyTestDescriptor(manifest, fixturesDir);
 
   mkdirSync(fixturesDir, { recursive: true });

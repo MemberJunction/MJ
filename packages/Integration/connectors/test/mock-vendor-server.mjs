@@ -81,6 +81,18 @@ export function loadFixtures(fixturesDir) {
         WriteRoundTrip: raw.WriteRoundTrip
             ? { ...raw.WriteRoundTrip, Routes: (raw.WriteRoundTrip.Routes ?? []).map((r) => resolveRouteBody(r, fixturesDir, warnings)) }
             : null,
+        // Lifecycle capability block (gen-fixture deriveLifecycleFromDeployed / test-descriptor) — the SINGLE
+        // gating source matrixSpecsFromManifest reads (discovery/write/incremental). MUST be preserved here or
+        // the derived capabilities are silently dropped on load (cells 9/10/11 then wrongly skip). Resolve any
+        // @file route bodies in its writeRoundTrip so a hand-authored spec can externalize them like top-level.
+        Lifecycle: raw.Lifecycle
+            ? {
+                ...raw.Lifecycle,
+                writeRoundTrip: raw.Lifecycle.writeRoundTrip
+                    ? { ...raw.Lifecycle.writeRoundTrip, Routes: (raw.Lifecycle.writeRoundTrip.Routes ?? []).map((r) => resolveRouteBody(r, fixturesDir, warnings)) }
+                    : (raw.Lifecycle.writeRoundTrip ?? null),
+            }
+            : null,
     };
     return { manifest, fixturesDir, warnings };
 }
