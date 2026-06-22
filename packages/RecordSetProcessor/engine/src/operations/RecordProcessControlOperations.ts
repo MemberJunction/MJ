@@ -8,35 +8,18 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJProcessRunEntity } from '@memberjunction/core-entities';
+import { RecordProcessRunNowOperation, type RecordProcessRunNowInput, type RecordProcessRunNowOutput } from '@memberjunction/record-set-processor-base';
 import { RecordProcessExecutor } from '../RecordProcessExecutor';
 
-/** Input for `RecordProcess.RunNow`. */
-export interface RecordProcessRunNowInput {
-    recordProcessID: string;
-    /** When set, processes just this single record instead of the configured scope. */
-    singleRecordID?: string;
-}
-
-/** Output of `RecordProcess.RunNow`. */
-export interface RecordProcessRunNowOutput {
-    processRunID?: string;
-    status: string;
-    processed: number;
-    success: number;
-    error: number;
-    skipped: number;
-}
-
 /**
- * Runs a Record Process on demand. Marked `LongRunning` (the handle is a `ProcessRunID`); the
- * detached/attached streaming consumption is added in RO-3 — this currently awaits completion.
+ * Server implementation of `RecordProcess.RunNow` — runs a Record Process on demand, honoring an optional
+ * dry-run (compute-only preview) and runtime scope override (the rows a UI selected). Extends the
+ * client-safe {@link RecordProcessRunNowOperation} base in `-base` (which carries the key + typed I/O) and
+ * supplies the server body; registered last so it wins server-side dispatch. Marked `LongRunning` (the
+ * handle is a `ProcessRunID`).
  */
 @RegisterClass(BaseRemotableOperation, 'RecordProcess.RunNow')
-export class RecordProcessRunNowOperation extends BaseRemotableOperation<RecordProcessRunNowInput, RecordProcessRunNowOutput> {
-    public readonly OperationKey = 'RecordProcess.RunNow';
-    public readonly RequiredScope = 'recordprocess:execute';
-    public readonly ExecutionMode = 'LongRunning' as const;
-
+export class RecordProcessRunNowServerOperation extends RecordProcessRunNowOperation {
     protected async InternalExecute(input: RecordProcessRunNowInput, provider: IMetadataProvider, user: UserInfo): Promise<RecordProcessRunNowOutput> {
         if (!input?.recordProcessID) {
             throw new Error('recordProcessID is required');
@@ -46,6 +29,8 @@ export class RecordProcessRunNowOperation extends BaseRemotableOperation<RecordP
             provider,
             triggeredBy: 'OnDemand',
             singleRecordID: input.singleRecordID,
+            dryRun: input.dryRun,
+            scope: input.scope,
         });
         return {
             processRunID: result.ProcessRunID,
@@ -54,6 +39,7 @@ export class RecordProcessRunNowOperation extends BaseRemotableOperation<RecordP
             success: result.Success,
             error: result.Error,
             skipped: result.Skipped,
+            errorMessage: result.ErrorMessage,
         };
     }
 }

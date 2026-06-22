@@ -16,6 +16,7 @@ import {
     ListSource,
     ProcessRunResult,
     ProgressInfo,
+    type RecordProcessScopeOverride,
     TriggeredByValue,
     ViewSource,
 } from '@memberjunction/record-set-processor-base';
@@ -26,17 +27,6 @@ import { InferProcessor } from './processors/InferProcessor';
 import { FieldRulesProcessor } from './processors/FieldRulesProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
 import { OutputMappingConfig } from './writeBack';
-
-/**
- * A runtime scope override, used INSTEAD of the Record Process's stored Scope. UI invocations supply the
- * actual record set here (the rows the user is looking at / selected); the definition's stored Scope is
- * the default for scheduled / standalone runs.
- */
-export type RecordProcessScopeOverride =
-    | { Kind: 'records'; RecordIDs: string[] }
-    | { Kind: 'view'; ViewID: string }
-    | { Kind: 'list'; ListID: string }
-    | { Kind: 'filter'; Filter?: string };
 
 /** Options for executing a Record Process. */
 export interface RunRecordProcessOptions {

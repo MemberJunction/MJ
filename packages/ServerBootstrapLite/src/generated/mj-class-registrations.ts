@@ -912,7 +912,7 @@ import {
     RecordProcessGetRunStatusOperation,
     RecordProcessPauseRunOperation,
     RecordProcessResumeRunOperation,
-    RecordProcessRunNowOperation,
+    RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
 // @memberjunction/core-actions (141 classes)
@@ -1748,7 +1748,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     RecordProcessGetRunStatusOperation,
     RecordProcessPauseRunOperation,
     RecordProcessResumeRunOperation,
-    RecordProcessRunNowOperation,
+    RecordProcessRunNowServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateInteractiveFormVersionAction,

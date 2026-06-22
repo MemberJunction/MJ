@@ -1,17 +1,25 @@
 {
   "name": "@memberjunction/ng-entity-action-ux",
   "version": "5.41.0",
-  "description": "MemberJunction: Pluggable runtime-UX framework for entity actions — a registry-resolved component seam that lets an entity action mount a rich, interactive UI (e.g. the Record Process bulk-update runner) instead of firing blind.",
+  "description": "MemberJunction: Pluggable runtime-UX framework for entity actions \u2014 a registry-resolved component seam that lets an entity action mount a rich, interactive UI (e.g. the Record Process bulk-update runner) instead of firing blind.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
-  "files": ["/dist"],
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "build": "npm run clean && ngc",
     "clean": "rimraf dist",
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": ["MemberJunction", "Angular", "Entity Actions", "Runtime UX", "Record Process"],
+  "keywords": [
+    "MemberJunction",
+    "Angular",
+    "Entity Actions",
+    "Runtime UX",
+    "Record Process"
+  ],
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
@@ -32,6 +40,7 @@
     "@memberjunction/global": "5.41.0",
     "@memberjunction/graphql-dataprovider": "5.41.0",
     "@memberjunction/ng-ui-components": "5.41.0",
+    "@memberjunction/record-set-processor-base": "5.41.0",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,

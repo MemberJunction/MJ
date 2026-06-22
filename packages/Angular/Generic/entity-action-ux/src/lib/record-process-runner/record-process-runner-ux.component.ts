@@ -11,14 +11,27 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@
 import { RunView } from '@memberjunction/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import {
-    GraphQLDataProvider,
-    GraphQLRecordProcessClient,
-    type RecordProcessScope,
-    type RunRecordProcessResult,
-} from '@memberjunction/graphql-dataprovider';
+    RecordProcessRunNowOperation,
+    type RecordProcessRunNowInput,
+    type RecordProcessRunNowOutput,
+    type RecordProcessScopeOverride,
+} from '@memberjunction/record-set-processor-base';
+import type { RemoteOpResult } from '@memberjunction/core';
 import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { BaseEntityActionRuntimeUX } from '../base-entity-action-runtime-ux';
 import { buildRecordProcessScope, displayValue } from '../scope';
+
+/** The run summary the runner renders, mapped from the operation's typed output. */
+interface RunSummary {
+    Success: boolean;
+    ProcessRunID?: string;
+    Processed: number;
+    Succeeded: number;
+    Errored: number;
+    Skipped: number;
+    Status?: string;
+    ErrorMessage?: string;
+}
 
 /** The driver's flow state. */
 type RunnerState = 'loading' | 'preview' | 'applying' | 'done' | 'error';
@@ -196,8 +209,8 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
     public State: RunnerState = 'loading';
     public ErrorMessage = '';
     public DiffRows: RecordDiffRow[] = [];
-    public PreviewResult?: RunRecordProcessResult;
-    public AppliedResult?: RunRecordProcessResult;
+    public PreviewResult?: RunSummary;
+    public AppliedResult?: RunSummary;
     public ChangedRecordCount = 0;
     public TotalChangeCount = 0;
     public Truncated = false;
@@ -220,7 +233,7 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
             return;
         }
         try {
-            const preview = await this.client().RunRecordProcess({ RecordProcessID: recordProcessID, Scope: this.buildScope(), DryRun: true });
+            const preview = await this.runOp(recordProcessID, true);
             this.PreviewResult = preview;
             if (!preview.Success) {
                 this.toError(preview.ErrorMessage || 'The preview could not be computed.');
@@ -243,7 +256,7 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
         this.State = 'applying';
         this.cdr.detectChanges();
         try {
-            const result = await this.client().RunRecordProcess({ RecordProcessID: recordProcessID, Scope: this.buildScope(), DryRun: false });
+            const result = await this.runOp(recordProcessID, false);
             this.AppliedResult = result;
             if (!result.Success) {
                 this.toError(result.ErrorMessage || 'The changes could not be applied.');
@@ -272,10 +285,27 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
         return displayValue(value);
     }
 
-    /** The GraphQL transport, scoped to the host's provider when supplied (multi-provider). */
-    private client(): GraphQLRecordProcessClient {
-        const provider = (this.Context?.Provider as GraphQLDataProvider | undefined) ?? GraphQLDataProvider.Instance;
-        return new GraphQLRecordProcessClient(provider);
+    /**
+     * Runs the `RecordProcess.RunNow` Remote Operation and maps its typed output to a {@link RunSummary}.
+     * `Execute` routes through the host's provider — marshalled over the generic `ExecuteRemoteOperation`
+     * transport on the client, in-process on the server — so there is no bespoke resolver/client.
+     */
+    private async runOp(recordProcessID: string, dryRun: boolean): Promise<RunSummary> {
+        const input: RecordProcessRunNowInput = { recordProcessID, scope: this.buildScope(), dryRun };
+        const result: RemoteOpResult<RecordProcessRunNowOutput> =
+            await new RecordProcessRunNowOperation().Execute(input, { provider: this.Context?.Provider ?? undefined });
+        const o = result.Output;
+        const completed = result.Success && o?.status === 'Completed';
+        return {
+            Success: completed,
+            ProcessRunID: o?.processRunID,
+            Processed: o?.processed ?? 0,
+            Succeeded: o?.success ?? 0,
+            Errored: o?.error ?? 0,
+            Skipped: o?.skipped ?? 0,
+            Status: o?.status,
+            ErrorMessage: result.ErrorMessage ?? o?.errorMessage ?? (o && o.status !== 'Completed' ? `Run ended with status '${o.status}'` : undefined),
+        };
     }
 
     /** Reads `MJ: Process Run Details` for the dry-run and builds the per-record diff rows. */
@@ -311,7 +341,7 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
     }
 
     /** Builds the engine scope from the host-supplied context (delegates to the pure helper). */
-    private buildScope(): RecordProcessScope {
+    private buildScope(): RecordProcessScopeOverride {
         return buildRecordProcessScope(this.Context);
     }
 

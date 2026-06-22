@@ -3,11 +3,11 @@
  * {@link RecordProcessScope}. Extracted so it's unit-testable without instantiating a component.
  * @module @memberjunction/ng-entity-action-ux
  */
-import type { RecordProcessScope } from '@memberjunction/graphql-dataprovider';
+import type { RecordProcessScopeOverride } from '@memberjunction/record-set-processor-base';
 import type { EntityActionUXContext } from './runtime-ux-context';
 
 /** Builds the run scope from the grid/list context the host assembled. */
-export function buildRecordProcessScope(context: EntityActionUXContext): RecordProcessScope {
+export function buildRecordProcessScope(context: EntityActionUXContext): RecordProcessScopeOverride {
     switch (context.ScopeKind) {
         case 'view':
             return { Kind: 'view', ViewID: context.ViewID ?? '' };

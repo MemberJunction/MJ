@@ -32,12 +32,6 @@ export type {
     ClusterAnalysisInfo,
     ClusterAnalysisMetrics
 } from './graphQLClusterClient';
-export { GraphQLRecordProcessClient } from './graphQLRecordProcessClient';
-export type {
-    RecordProcessScope,
-    RunRecordProcessParams,
-    RunRecordProcessResult
-} from './graphQLRecordProcessClient';
 export { GraphQLLiveKitClient } from './graphQLLiveKitClient';
 export type {
     MintLiveKitClientTokenInput,
