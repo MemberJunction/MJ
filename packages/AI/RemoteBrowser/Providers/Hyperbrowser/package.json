@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/remote-browser-hyperbrowser",
   "type": "module",
-  "version": "5.41.0",
+  "version": "5.42.0",
   "description": "MemberJunction: Hyperbrowser backend driver for the Remote Browser channel. Connects the shared CDP control kit to a Hyperbrowser session (raw CDP control, hosted live view, human takeover, native agentic AI control, stealth, proxy egress, session recording, persistent context, multi-tab, file downloads, captcha solving) via an injectable Hyperbrowser service-client seam, so the driver builds and unit-tests with no network and no real @hyperbrowser/sdk.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,10 +17,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.41.0",
-    "@memberjunction/global": "5.41.0",
-    "@memberjunction/remote-browser-base": "5.41.0",
-    "@memberjunction/remote-browser-cdp": "5.41.0"
+    "@memberjunction/core": "5.42.0",
+    "@memberjunction/global": "5.42.0",
+    "@memberjunction/remote-browser-base": "5.42.0",
+    "@memberjunction/remote-browser-cdp": "5.42.0"
   },
   "peerDependencies": {
     "@hyperbrowser/sdk": "*"

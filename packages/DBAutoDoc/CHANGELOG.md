@@ -1,5 +1,25 @@
 # @memberjunction/db-auto-doc
 
+## 5.42.0
+
+### Patch Changes
+
+- 63d7610: App-level PostgreSQL support (code-only — no schema/metadata changes):
+  - **open-app-engine**: `mj app install/upgrade/remove` now work on PostgreSQL — the CLI orchestrator
+    builds a `PostgreSQLDataProvider` when `dbPlatform=postgresql` (was hardcoded to SQL Server), and
+    the installer selects the platform-specific migration directory (`<dir>-pg` / `migrations.directoryPostgres`)
+    so PG apps run plpgsql migrations instead of T-SQL.
+  - **db-auto-doc**: dialect-aware description write-back — emits PostgreSQL `COMMENT ON` statements
+    (double-quoted identifiers, no `sp_addextendedproperty` / `GO`) when the configured provider is postgresql.
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/server-bootstrap-lite@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ai@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes
