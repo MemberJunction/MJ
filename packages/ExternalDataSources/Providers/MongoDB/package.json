@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/external-data-source-mongodb",
-  "version": "5.41.0",
+  "version": "5.42.0",
   "description": "MongoDB driver for the MemberJunction External Data Sources primitive. Registers a BaseExternalDataSourceDriver implementation via @RegisterClass(BaseExternalDataSourceDriver, 'MongoExternalDriver') using the official mongodb client, with a contained SQL-WHERE -> Mongo filter translator and document-sampling schema introspection.",
   "type": "module",
   "main": "dist/index.js",
@@ -15,10 +15,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.41.0",
-    "@memberjunction/global": "5.41.0",
-    "@memberjunction/core-entities": "5.41.0",
-    "@memberjunction/external-data-sources": "5.41.0",
+    "@memberjunction/core": "5.42.0",
+    "@memberjunction/global": "5.42.0",
+    "@memberjunction/core-entities": "5.42.0",
+    "@memberjunction/external-data-sources": "5.42.0",
     "mongodb": "^6.10.0"
   },
   "devDependencies": {

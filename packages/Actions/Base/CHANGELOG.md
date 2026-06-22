@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/actions-base
 
+## 5.42.0
+
+### Patch Changes
+
+- 2f225e4: CodeGen + SS→PG converter type-correctness on PostgreSQL:
+  - **codegen-lib / core / actions-base**: core + codegen type correctness on PostgreSQL, plus a
+    PG-only migration repairing TypeScript that the SS→PG baseline conversion corrupted in
+    GeneratedCode rows. _(migration → minor)_
+  - **sql-converter**: never quote identifiers inside string literals during SS→PG conversion. _(code → patch)_
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/code-execution@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes

@@ -33,3 +33,4 @@ export { NeonCRMConnector, LoadNeonCRMConnector, type NeonCRMConnectionConfig } 
 export { PheedLoopConnector } from './PheedLoopConnector.js';
 export { RhythmConnector, LoadRhythmConnector, type RhythmConnectionConfig } from './RhythmConnector.js';
 export { NoviConnector, LoadNoviConnector, type NoviConnectionConfig } from './NoviConnector.js';
+export { MemberSuiteConnector } from './MemberSuiteConnector.js';

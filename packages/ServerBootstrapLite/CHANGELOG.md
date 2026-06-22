@@ -1,5 +1,112 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.42.0
+
+### Minor Changes
+
+- 9b9b484: Field active-status enforcement relocation, plus the "Meet" app rename, quieter operational logging, and a telemetry suppression refinement.
+
+  **Field active-status enforcement (`@memberjunction/core`, `@memberjunction/generic-database-provider`)**
+  - Deprecated-field warnings and disabled-field exceptions are now enforced at the field-access boundary genuine code flows through — `BaseEntity.Get()`, `Set()`, and `SetMany()` (what the generated strongly-typed accessors call) — instead of on the low-level `EntityField.Value` accessor. This flips a leaky blocklist (assert on every `.Value` touch, then suppress at each internal call site) into a precise allowlist, and fixes false deprecation warnings emitted on every load/save of a record that merely _contains_ a deprecated column (e.g. `"MJ: AI Agent Runs".AgentState`) even when no code uses it.
+  - New memoized `EntityInfo.HasInactiveFields` fast-path gate: entities whose fields are all `Active` (the vast majority) pay only a single cached boolean check in the hot read/write paths.
+  - `EntityField.ActiveStatusAssertions` is retained as a `@deprecated` no-op for backward compatibility; the six now-redundant internal suppression toggles were removed. Warning caller strings are now accurate (`BaseEntity.Get`/`Set`) instead of the misleading `"EntityField.Value setter"`.
+
+  **Telemetry (`@memberjunction/core`)**
+  - Suppress "load this into a dedicated engine cache" telemetry suggestions for entities that have explicitly opted out of caching (`EntityInfo.AllowCaching = false`), reusing the existing flag as the single source of truth.
+
+  **Quieter operational logging (`@memberjunction/scheduling-engine`, `@memberjunction/ai-agents`, `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`)**
+  - Scheduled-job no-op runs (e.g. the Agent Memory Manager finding no new activity) now collapse to the engine's `Starting`/`Completed` heartbeat; the per-agent and memory-manager internal traces are verbose-only.
+  - Cleaner server startup logging: transient boot spinner, true total timing, less redundant output, and the `CustomColumnPromoter` registration log demoted to verbose-only.
+
+  **"Meet" app + local LiveKit dev (`@memberjunction/ng-explorer-core`, `@memberjunction/livekit-room-server`, `@memberjunction/auth-providers`, `@memberjunction/server`)**
+  - Renamed the Realtime app to "Meet", with the Live Room now defaulting to the Realtime co-agent instead of starting with no agent, plus a local LiveKit dev server and supporting docs.
+
+### Patch Changes
+
+- Updated dependencies [256ab06]
+- Updated dependencies [c871a4d]
+- Updated dependencies [9b9b484]
+- Updated dependencies [d185a5c]
+- Updated dependencies [e7c2437]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [78f834d]
+- Updated dependencies [4ec1732]
+- Updated dependencies [008f449]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ai-agents@5.42.0
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/ai-prompts@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/scheduling-engine@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/communication-types@5.42.0
+  - @memberjunction/templates@5.42.0
+  - @memberjunction/core-actions@5.42.0
+  - @memberjunction/ai-agent-manager@5.42.0
+  - @memberjunction/ai-vectors-memory@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/record-set-processor@5.42.0
+  - @memberjunction/core-entities-server@5.42.0
+  - @memberjunction/ai-form-builder@5.42.0
+  - @memberjunction/testing-engine@5.42.0
+  - @memberjunction/ai-engine-base@5.42.0
+  - @memberjunction/ai-reranker@5.42.0
+  - @memberjunction/content-autotagging@5.42.0
+  - @memberjunction/tag-engine-base@5.42.0
+  - @memberjunction/ai-recommendations-rex@5.42.0
+  - @memberjunction/ai-vectors-pinecone@5.42.0
+  - @memberjunction/ai-vectors-qdrant@5.42.0
+  - @memberjunction/ai-vectors-sqlserver@5.42.0
+  - @memberjunction/ai-vectors-pgvector@5.42.0
+  - @memberjunction/actions-apollo@5.42.0
+  - @memberjunction/actions-bizapps-accounting@5.42.0
+  - @memberjunction/actions-bizapps-crm@5.42.0
+  - @memberjunction/actions-bizapps-formbuilders@5.42.0
+  - @memberjunction/actions-bizapps-lms@5.42.0
+  - @memberjunction/actions-bizapps-social@5.42.0
+  - @memberjunction/doc-utils@5.42.0
+  - @memberjunction/encryption@5.42.0
+  - @memberjunction/data-context-server@5.42.0
+  - @memberjunction/queue@5.42.0
+  - @memberjunction/storage@5.42.0
+  - @memberjunction/react-linter@5.42.0
+  - @memberjunction/scheduling-actions@5.42.0
+  - @memberjunction/scheduling-engine-base@5.42.0
+  - @memberjunction/search-engine@5.42.0
+  - @memberjunction/geo-core@5.42.0
+  - @memberjunction/ai-anthropic@5.42.0
+  - @memberjunction/ai-assemblyai@5.42.0
+  - @memberjunction/ai-azure@5.42.0
+  - @memberjunction/ai-bedrock@5.42.0
+  - @memberjunction/ai-betty-bot@5.42.0
+  - @memberjunction/ai-blackforestlabs@5.42.0
+  - @memberjunction/ai-cerebras@5.42.0
+  - @memberjunction/ai-cohere@5.42.0
+  - @memberjunction/ai-elevenlabs@5.42.0
+  - @memberjunction/ai-fireworks@5.42.0
+  - @memberjunction/ai-gemini@5.42.0
+  - @memberjunction/ai-groq@5.42.0
+  - @memberjunction/ai-heygen@5.42.0
+  - @memberjunction/ai-inception@5.42.0
+  - @memberjunction/ai-inworld@5.42.0
+  - @memberjunction/ai-lmstudio@5.42.0
+  - @memberjunction/ai-llamacpp@5.42.0
+  - @memberjunction/ai-local-embeddings@5.42.0
+  - @memberjunction/ai-minimax@5.42.0
+  - @memberjunction/ai-mistral@5.42.0
+  - @memberjunction/ai-ollama@5.42.0
+  - @memberjunction/ai-openai@5.42.0
+  - @memberjunction/ai-openrouter@5.42.0
+  - @memberjunction/ai-vertex@5.42.0
+  - @memberjunction/ai-zhipu@5.42.0
+  - @memberjunction/ai-xai@5.42.0
+  - @memberjunction/ai-provider-bundle@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes

@@ -1,8 +1,8 @@
 {
   "name": "@memberjunction/livekit-room-core",
   "type": "module",
-  "version": "5.41.0",
-  "description": "MemberJunction: Framework-agnostic LiveKit room client core. Pure TypeScript wrapper around livekit-client that manages a single room connection \u2014 participants, tracks, active speakers, audio levels, device control, and data-channel messages \u2014 and surfaces it as observable state. Zero UI dependencies; consumable from any framework (Angular, React, Vue) or plain TS. The MJ-native realtime room UX foundation.",
+  "version": "5.42.0",
+  "description": "MemberJunction: Framework-agnostic LiveKit room client core. Pure TypeScript wrapper around livekit-client that manages a single room connection — participants, tracks, active speakers, audio levels, device control, and data-channel messages — and surfaces it as observable state. Zero UI dependencies; consumable from any framework (Angular, React, Vue) or plain TS. The MJ-native realtime room UX foundation.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -18,7 +18,7 @@
   "dependencies": {
     "@livekit/krisp-noise-filter": "^0.4.3",
     "@livekit/track-processors": "^0.7.2",
-    "@memberjunction/global": "5.41.0",
+    "@memberjunction/global": "5.42.0",
     "livekit-client": "^2.7.4",
     "rxjs": "^7.8.2"
   },
