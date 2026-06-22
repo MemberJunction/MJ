@@ -1,5 +1,34 @@
 # @memberjunction/open-app-engine
 
+## 5.42.0
+
+### Patch Changes
+
+- 63d7610: App-level PostgreSQL support (code-only — no schema/metadata changes):
+  - **open-app-engine**: `mj app install/upgrade/remove` now work on PostgreSQL — the CLI orchestrator
+    builds a `PostgreSQLDataProvider` when `dbPlatform=postgresql` (was hardcoded to SQL Server), and
+    the installer selects the platform-specific migration directory (`<dir>-pg` / `migrations.directoryPostgres`)
+    so PG apps run plpgsql migrations instead of T-SQL.
+  - **db-auto-doc**: dialect-aware description write-back — emits PostgreSQL `COMMENT ON` statements
+    (double-quoted identifiers, no `sp_addextendedproperty` / `GO`) when the configured provider is postgresql.
+
+- b7092ca: PostgreSQL runtime correctness, found during fresh-DB PG end-to-end testing:
+  - **codegen-lib**: clean MJAPI engine load on PostgreSQL — `AutoUpdatePath` written as a
+    dialect-correct boolean literal, plus a PG-only migration removing orphan related-entity-name
+    virtual EntityField rows whose column the generated PG base view never emits (these crashed
+    EntityActionEngine / AI Credential Bindings / Scheduling with `column "..." does not exist`).
+  - **open-app-engine**: app uninstall now deletes all FK-dependent metadata (Entity Field Values,
+    Entity Settings) in dependency order and reports a real failure instead of swallowing errors
+    into a false "success".
+  - **postgresql-dataprovider**: dialect-correct per-field entity-search predicate (no `N'...'`
+    literal prefix, no `ESCAPE` clause) — fixes `syntax error at or near "ESCAPE"` on live search.
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/global@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes

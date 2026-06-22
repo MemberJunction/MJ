@@ -1,5 +1,8 @@
 [
   {
+    "primaryKey": {
+      "ID": "D30F8050-E2F3-4304-81FA-A49ED1BDB517"
+    },
     "fields": {
       "Name": "SharePoint",
       "ClassName": "SharePointConnector",
@@ -9,7 +12,7 @@
       "Icon": "fa-brands fa-microsoft",
       "NavigationBaseURL": "https://graph.microsoft.com/v1.0",
       "BatchMaxRequestCount": 20,
-      "BatchRequestWaitTime": null,
+      "BatchRequestWaitTime": 250,
       "Configuration": {
         "AuthFlow": "oauth2-cc",
         "AuthFlowNote": "OAuth 2.0 Client Credentials grant (RFC 6749 \u00a74.4). The service application uses client_id + client_secret (or client_assertion for certificate-based) to obtain a Bearer token from the tenant-specific token endpoint without user interaction. No refresh_token is issued for client_credentials \u2014 re-acquire by submitting a new token request when the current token is within expiry. Source: Microsoft Entra v2-oauth2-client-creds-grant-flow docs.",
