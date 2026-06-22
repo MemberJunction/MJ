@@ -38,7 +38,7 @@
  *   creates (ID auto-generated, returned in the body); PATCH updates (RFC 6902); DELETE is a hard
  *   delete. Subdomain + {tenantId} routing is layered in via GetBaseURL/MakeHTTPRequest.
  */
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type {
     MJCompanyIntegrationEntity,
@@ -524,7 +524,7 @@ export class RhythmConnector extends BaseRESTIntegrationConnector {
         const siblings = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integration.ID);
         const fkField = fields.find(f => f.Name?.toLowerCase() === fkVar.toLowerCase() && f.RelatedIntegrationObjectID);
         if (fkField?.RelatedIntegrationObjectID) {
-            const byId = siblings.find(s => s.ID === fkField.RelatedIntegrationObjectID);
+            const byId = siblings.find(s => UUIDsEqual(s.ID, fkField.RelatedIntegrationObjectID));
             if (byId) return byId;
         }
         const segs = readPath.split('/').filter(Boolean);
