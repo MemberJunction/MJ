@@ -336,6 +336,33 @@ export class RealtimeBridgeResolver extends ResolverBase {
   }
 
   /**
+   * **Ends the meeting for everyone**: stops EVERY agent bot bridged into a room (by room name, via the
+   * coordinator's server-side roster). This is the "End meeting" half of the Zoom-style leave control —
+   * usable by any participant, including one who only *joined* the room and never tracked the bridge ids.
+   * Returns `true` when the teardown ran (even if the room held zero agents). Best-effort: any error → `false`.
+   *
+   * @param roomName The LiveKit room to end.
+   */
+  @Mutation(() => Boolean)
+  async EndLiveKitRoom(
+    @Arg('roomName', () => String) roomName: string,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<boolean> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return false;
+      }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      await LiveKitAgentRoomCoordinator.Instance.StopAllAgentsInRoom(roomName, 'Explicit', user, provider);
+      return true;
+    } catch (error) {
+      LogError(`EndLiveKitRoom failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }
+
+  /**
    * Lists active Realtime models with the voices each driver supports — the source for the dev model/voice
    * picker (gated client-side by the `Realtime: Advanced Session Controls` authorization). Read-only; returns
    * an empty list on any error so the picker degrades gracefully to "no overrides".

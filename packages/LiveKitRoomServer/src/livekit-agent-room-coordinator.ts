@@ -360,4 +360,29 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       this.removeFromRoster(sessionBridgeID);
     }
   }
+
+  /**
+   * Ends the meeting for EVERYONE: stops every agent bot currently bridged into a room. This backs the Meet
+   * UI's "End meeting for everyone" control, which ANY participant can trigger — including one who only
+   * *joined* the room and therefore never tracked the bridge ids locally. The per-room roster is the
+   * server-side source of truth, so the teardown works regardless of who originally started the agents.
+   *
+   * @param roomName The LiveKit room to tear down.
+   * @param reason Why the sessions are stopping. Default: `'Explicit'`.
+   * @param contextUser The acting user.
+   * @param provider The metadata provider.
+   * @returns The number of agent sessions asked to stop (0 when the room held no agents).
+   */
+  public async StopAllAgentsInRoom(
+    roomName: string,
+    reason: BridgeDisconnectReason = 'Explicit',
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<number> {
+    const roomKey = roomName.trim().toLowerCase();
+    // Snapshot the bridge ids first — StopAgentRoomSession mutates the roster (removeFromRoster) as it runs.
+    const bridgeIDs = (this.roomRosters.get(roomKey) ?? []).map((e) => e.SessionBridgeID);
+    await Promise.all(bridgeIDs.map((id) => this.StopAgentRoomSession(id, reason, contextUser, provider)));
+    return bridgeIDs.length;
+  }
 }

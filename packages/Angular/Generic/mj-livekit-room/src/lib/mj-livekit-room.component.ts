@@ -92,8 +92,10 @@ export interface AgentInRoom {
         [E2EEPassphrase]="E2EEPassphrase"
         [E2EEWorker]="E2EEWorker"
         [AgentAvatarUrl]="AgentAvatarUrl"
+        [CanEndForAll]="EnableEndForAll && !!resolvedRoomName"
         (Connected)="Connected.emit($event)"
         (Disconnected)="Disconnected.emit($event)"
+        (EndForAll)="EndMeeting()"
         (ParticipantJoined)="ParticipantJoined.emit($event)"
         (ParticipantLeft)="ParticipantLeft.emit($event)"
         (DataReceived)="DataReceived.emit($event)"
@@ -164,14 +166,6 @@ export interface AgentInRoom {
               <button type="button" class="mj-lk-agents__toggle" title="Invite people from this workspace"
                 (click)="InvitePeopleRequested.emit(resolvedRoomName)">
                 <i class="fa-solid fa-user-plus"></i> Invite people
-              </button>
-            }
-            @if (EnableAgentManagement && agentsInRoom.length) {
-              <button type="button" class="mj-lk-agents__toggle mj-lk-agents__toggle--end"
-                title="End the meeting for everyone — disconnects all agents and closes the room"
-                [disabled]="endingMeeting" (click)="EndMeeting()">
-                <i class="fa-solid" [class.fa-circle-stop]="!endingMeeting" [class.fa-spinner]="endingMeeting" [class.fa-spin]="endingMeeting"></i>
-                {{ endingMeeting ? 'Ending…' : 'End meeting' }}
               </button>
             }
           </div>
@@ -245,15 +239,6 @@ export interface AgentInRoom {
         color: var(--mj-text-primary);
         background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
         box-shadow: var(--mj-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.18));
-      }
-      .mj-lk-agents__toggle--end {
-        color: var(--mj-status-error-text, var(--mj-status-error));
-        border-color: var(--mj-status-error-border, var(--mj-status-error));
-        background: var(--mj-status-error-bg, color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface)));
-      }
-      .mj-lk-agents__toggle--end:disabled {
-        opacity: 0.6;
-        cursor: default;
       }
       .mj-lk-agents__panel {
         width: 260px;
@@ -374,6 +359,12 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public EnableAgentManagement = true;
   /** Show the "Invite" pill that copies a join link to this room. */
   @Input() public EnableInvite = true;
+  /**
+   * Offer "End meeting for everyone" in the control bar's Zoom-style leave menu. When on (default) and a
+   * room is resolved, ending tears down every agent in the room server-side (by name — so it works even
+   * when this client only *joined*). Set `false` for contexts where only the local user should ever leave.
+   */
+  @Input() public EnableEndForAll = true;
   /** Target agents the user can ADD in-room (id + name). The host (e.g. the Explorer resource) supplies these. */
   @Input() public AvailableAgents: { ID: string; Name: string }[] = [];
 
@@ -687,10 +678,12 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
-   * **End meeting** (the Zoom/Teams "End for all"): stops EVERY agent bridge in the room, then disconnects
-   * the local user. Contrast with **Leave** (the control-bar button → {@link LiveKitRoomComponent.Leave}),
-   * which only disconnects YOU and lets the meeting continue — the server then auto-leaves the agents once the
-   * last human is gone, so neither path strands billable agent sessions in an empty room.
+   * **End meeting** (the Zoom/Teams "End for all", reached from the control-bar leave menu): tears down EVERY
+   * agent in the room server-side — *by room name*, so it works even when this client only **joined** the room
+   * and never tracked the bridge ids locally — then disconnects the local user. Contrast with **Leave** (the
+   * other menu item → {@link LiveKitRoomComponent.Leave}), which only disconnects YOU and lets the meeting
+   * continue; the server then auto-leaves the agents once the last human is gone, so neither path strands
+   * billable agent sessions in an empty room.
    */
   public async EndMeeting(): Promise<void> {
     if (this.endingMeeting) {
@@ -699,9 +692,10 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.endingMeeting = true;
     this.cdr.markForCheck();
     try {
-      const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
-      // Stop all agents in parallel; tolerate individual failures (we still leave below).
-      await Promise.all(this.agentsInRoom.map((a) => client.StopAgentRoomSession(a.SessionBridgeID).catch(() => false)));
+      if (this.resolvedRoomName) {
+        const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+        await client.EndRoom(this.resolvedRoomName);
+      }
       this.agentsInRoom = [];
     } catch {
       /* best-effort — fall through and still disconnect the local user */

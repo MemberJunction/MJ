@@ -186,6 +186,12 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   @Input() public EnableDeviceSettings = true;
   /** Allow leaving the room from the control bar. */
   @Input() public EnableLeaveControl = true;
+  /**
+   * Turns the leave button into a Zoom/Teams-style split offering **Leave** vs. **End meeting for everyone**.
+   * Purely presentational here — this generic component has no notion of "ending for everyone"; it just emits
+   * {@link EndForAll} so the host (e.g. the MJ binding) can tear down agents/the room. Default `false` (plain Leave).
+   */
+  @Input() public CanEndForAll = false;
   /** Enable the data-channel chat feature (toggle + panel). */
   @Input() public ShowChat = true;
   /** Enable the participants roster panel (toggle + panel). */
@@ -234,6 +240,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   @Output() public Connected = new EventEmitter<LiveKitRoomState>();
   /** Fired when the room disconnects. */
   @Output() public Disconnected = new EventEmitter<LiveKitDisconnectedEvent>();
+  /**
+   * Fired when the user chooses "End meeting for everyone" from the split-leave menu (only reachable when
+   * {@link CanEndForAll}). The host should tear down the meeting (e.g. stop all agents), then disconnect.
+   */
+  @Output() public EndForAll = new EventEmitter<void>();
   /** Fired when reconnection begins. */
   @Output() public Reconnecting = new EventEmitter<void>();
   /** Fired when reconnection succeeds. */
