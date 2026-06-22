@@ -1,0 +1,34 @@
+[
+  {
+    "fields": {
+      "Name": "template",
+      "FullPath": "template",
+      "ParentID": null,
+      "Category": "Templates",
+      "Description": "Parent scope for template operations (render via Remote Operations).",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-file-code",
+        "color": "#0ea5e9"
+      }
+    },
+    "primaryKey": {
+      "ID": "088DF604-0322-4F1F-9565-3F0BF810A4A2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "template:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=template",
+      "Category": "Templates",
+      "Description": "Render a template on demand — the Template.Run Remote Operation (RequiredScope='template:execute').",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "3FD0E2CF-4BEC-4982-83D1-346F33260169"
+    }
+  }
+]

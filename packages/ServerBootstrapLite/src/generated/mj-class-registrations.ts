@@ -822,10 +822,11 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/templates (2 classes)
+// @memberjunction/templates (3 classes)
 import {
     AIPromptExtension,
     TemplateEmbedExtension,
+    TemplateRunServerOperation,
 } from '@memberjunction/templates';
 
 // @memberjunction/ai-prompts (1 classes)
@@ -1690,6 +1691,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     TagEngineBase,
     AIPromptExtension,
     TemplateEmbedExtension,
+    TemplateRunServerOperation,
     ParallelExecutionCoordinator,
     LLMReranker,
     CSVToolLibrary,
@@ -1903,7 +1905,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 816;
+export const CLASS_REGISTRATIONS_COUNT = 817;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
