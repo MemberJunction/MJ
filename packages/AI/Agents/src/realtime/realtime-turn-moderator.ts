@@ -17,7 +17,7 @@
  *
  * @module @memberjunction/ai-agents
  */
-import { LogError, LogStatus, UserInfo, IMetadataProvider, RunView } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, UserInfo, IMetadataProvider, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
@@ -238,7 +238,7 @@ export class RealtimeTurnModerator {
             }
         }
         const parsed = decision as ModeratorDecision | undefined;
-        console.log(`[RealtimeTurnModerator][diag] decision (type=${typeof result.result}) speakers=${JSON.stringify(parsed?.speakers ?? null)}`);
+        LogStatusEx({ message: `[RealtimeTurnModerator][diag] decision (type=${typeof result.result}) speakers=${JSON.stringify(parsed?.speakers ?? null)}`, verboseOnly: true });
         return parsed;
     }
 

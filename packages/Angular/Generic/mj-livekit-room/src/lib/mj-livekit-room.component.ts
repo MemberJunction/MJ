@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, ViewChild, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLLiveKitClient, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
@@ -166,6 +166,14 @@ export interface AgentInRoom {
                 <i class="fa-solid fa-user-plus"></i> Invite people
               </button>
             }
+            @if (EnableAgentManagement && agentsInRoom.length) {
+              <button type="button" class="mj-lk-agents__toggle mj-lk-agents__toggle--end"
+                title="End the meeting for everyone — disconnects all agents and closes the room"
+                [disabled]="endingMeeting" (click)="EndMeeting()">
+                <i class="fa-solid" [class.fa-circle-stop]="!endingMeeting" [class.fa-spinner]="endingMeeting" [class.fa-spin]="endingMeeting"></i>
+                {{ endingMeeting ? 'Ending…' : 'End meeting' }}
+              </button>
+            }
           </div>
         </div>
       }
@@ -237,6 +245,15 @@ export interface AgentInRoom {
         color: var(--mj-text-primary);
         background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
         box-shadow: var(--mj-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.18));
+      }
+      .mj-lk-agents__toggle--end {
+        color: var(--mj-status-error-text, var(--mj-status-error));
+        border-color: var(--mj-status-error-border, var(--mj-status-error));
+        background: var(--mj-status-error-bg, color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface)));
+      }
+      .mj-lk-agents__toggle--end:disabled {
+        opacity: 0.6;
+        cursor: default;
       }
       .mj-lk-agents__panel {
         width: 260px;
@@ -392,6 +409,11 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public addingAgent = false;
   /** Last add error, shown under the picker. */
   public addError: string | null = null;
+  /** True while an "End meeting" (stop all agents + leave) is in flight. */
+  public endingMeeting = false;
+
+  /** The inner Generic room — used to trigger the local disconnect when ending/leaving the meeting. */
+  @ViewChild(LiveKitRoomComponent) private roomComponent?: LiveKitRoomComponent;
 
   /** Available agents not already in the room (by target id) — the "Add" picker options. */
   public get availableToAdd(): { ID: string; Name: string }[] {
@@ -660,6 +682,32 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     } catch {
       agent.Removing = false;
     } finally {
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * **End meeting** (the Zoom/Teams "End for all"): stops EVERY agent bridge in the room, then disconnects
+   * the local user. Contrast with **Leave** (the control-bar button → {@link LiveKitRoomComponent.Leave}),
+   * which only disconnects YOU and lets the meeting continue — the server then auto-leaves the agents once the
+   * last human is gone, so neither path strands billable agent sessions in an empty room.
+   */
+  public async EndMeeting(): Promise<void> {
+    if (this.endingMeeting) {
+      return;
+    }
+    this.endingMeeting = true;
+    this.cdr.markForCheck();
+    try {
+      const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+      // Stop all agents in parallel; tolerate individual failures (we still leave below).
+      await Promise.all(this.agentsInRoom.map((a) => client.StopAgentRoomSession(a.SessionBridgeID).catch(() => false)));
+      this.agentsInRoom = [];
+    } catch {
+      /* best-effort — fall through and still disconnect the local user */
+    } finally {
+      await this.roomComponent?.Leave();
+      this.endingMeeting = false;
       this.cdr.markForCheck();
     }
   }

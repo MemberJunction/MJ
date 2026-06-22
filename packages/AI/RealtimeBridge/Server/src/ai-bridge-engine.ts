@@ -4,6 +4,7 @@ import {
     UserInfo,
     LogError,
     LogStatus,
+    LogStatusEx,
     RunView,
     RegisterForStartup,
 } from '@memberjunction/core';
@@ -984,7 +985,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (chunk) {
                 if (!this.diagInbound.has(active.SessionBridgeID)) {
                     this.diagInbound.add(active.SessionBridgeID);
-                    LogStatus(`[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). The agent is HEARING you.`);
+                    LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). The agent is HEARING you.`, verboseOnly: true });
                 }
                 RealtimeSession.SendInput(chunk, frame.Track === 'video-in' ? 'video' : 'audio');
             }
@@ -994,7 +995,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         RealtimeSession.OnOutput((chunk: ArrayBuffer) => {
             if (!this.diagOutbound.has(active.SessionBridgeID)) {
                 this.diagOutbound.add(active.SessionBridgeID);
-                LogStatus(`[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`);
+                LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`, verboseOnly: true });
             }
             const track: BridgeMediaTrackKind = 'audio-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
@@ -1013,7 +1014,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // agent goes quiet immediately. Without this, interruption "doesn't work" on the bridge surface.
         RealtimeSession.OnInterruption(() => {
             if (this.diagOutbound.has(active.SessionBridgeID)) {
-                LogStatus(`[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`);
+                LogStatusEx({ message: `[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`, verboseOnly: true });
             }
             Bridge.FlushOutboundMedia();
             // A human cut in → any moderator decision staged for the prior turn is now stale. Drop the queued
@@ -1263,7 +1264,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (!t.IsFinal) {
                 return; // partials fire per-word — act only on a completed turn (and don't flood the log)
             }
-            LogStatus(`[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`);
+            LogStatusEx({ message: `[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`, verboseOnly: true });
             // Persist the unified room transcript (scribe only — emits both roles).
             this.emitTranscriptLine(active, t);
             // Record into the room's diarized lookback so the moderator (and observability) see the full thread.
@@ -1302,11 +1303,18 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      */
     private dispatchUserTurn(source: ActiveBridgeSession, text: string): void {
         const peers = source.RoomKey ? this.roomAgents(source.RoomKey) : [source];
-        // A real human just spoke → definitive presence for EVERY agent in the room. Cancel any pending
-        // empty-room auto-leave (roster events alone miss a stable, actively-talking human) + reset the
-        // consecutive-agent-only counter (the ping-pong backstop only counts agent turns between humans).
-        for (const peer of peers) {
-            this.noteHumanPresence(peer);
+        // Only a REAL human turn counts as presence. In a multi-agent room every agent transcribes its peers'
+        // speech as a 'user' turn (it has no other role to assign overheard audio); if those counted as a human,
+        // an agents-only room would keep cancelling its own auto-leave and babble forever after the humans left —
+        // burning realtime tokens at full cost. The diarized inbound speaker tells us: an `agent-…` identity is a
+        // peer agent, NOT a human, so it must NOT keep the room alive.
+        const overheardAgent = source.LastInboundSpeaker?.toLowerCase().startsWith('agent-') === true;
+        if (!overheardAgent) {
+            // A real human just spoke → definitive presence for EVERY agent in the room. Cancel any pending
+            // empty-room auto-leave + reset the consecutive-agent-only counter.
+            for (const peer of peers) {
+                this.noteHumanPresence(peer);
+            }
         }
         if (source.RoomKey) {
             this.roomConsecutiveAgentTurns.set(source.RoomKey.toLowerCase(), 0);
@@ -1332,7 +1340,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             void this.runRoomModerator(source.RoomKey!, { Speaker: this.speakerLabel(source, false), IsAgent: false, Text: text });
             return;
         }
-        LogStatus(`[AIBridgeEngine][diag] broadcasting user turn "${text.slice(0, 60)}" to ${peers.length} room agents for addressing (source bridge ${source.SessionBridgeID})`);
+        LogStatusEx({ message: `[AIBridgeEngine][diag] broadcasting user turn "${text.slice(0, 60)}" to ${peers.length} room agents for addressing (source bridge ${source.SessionBridgeID})`, verboseOnly: true });
         for (const peer of peers) {
             this.evaluateUserTurnForAgent(peer, text);
         }
@@ -1344,7 +1352,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         if (active.LeaveGraceTimer) {
             clearTimeout(active.LeaveGraceTimer);
             active.LeaveGraceTimer = undefined;
-            LogStatus(`[AIBridgeEngine][diag] cancelled pending auto-leave for bridge ${active.SessionBridgeID} — a human is actively speaking`);
+            LogStatusEx({ message: `[AIBridgeEngine][diag] cancelled pending auto-leave for bridge ${active.SessionBridgeID} — a human is actively speaking`, verboseOnly: true });
         }
     }
 
@@ -1352,7 +1360,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private evaluateUserTurnForAgent(active: ActiveBridgeSession, text: string): void {
         const segment: TurnTranscriptSegment = { Text: text, IsAgent: false, EndMs: Date.now() };
         const decision = active.TurnPolicy.EvaluateTurn({ Segment: segment });
-        LogStatus(`[AIBridgeEngine][diag] turn decision=${decision.Action} for user turn "${(text ?? '').slice(0, 60)}" (bridge ${active.SessionBridgeID})`);
+        LogStatusEx({ message: `[AIBridgeEngine][diag] turn decision=${decision.Action} for user turn "${(text ?? '').slice(0, 60)}" (bridge ${active.SessionBridgeID})`, verboseOnly: true });
         this.applyTurnDecision(active, decision.Action);
     }
 
@@ -1473,7 +1481,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         try {
             const sessionIds = await this.turnModerator(ctx);
             const valid = sessionIds.filter((id) => ctx.Roster.some((r) => r.AgentSessionID.toLowerCase() === id.toLowerCase()));
-            LogStatus(`[AIBridgeEngine][diag] moderator${isContinuation ? '(continuation)' : ''} routed turn "${latest.Text.slice(0, 50)}" → [${valid.map((id) => this.agentSessionLabel(id)).join(', ') || 'nobody'}]`);
+            LogStatusEx({ message: `[AIBridgeEngine][diag] moderator${isContinuation ? '(continuation)' : ''} routed turn "${latest.Text.slice(0, 50)}" → [${valid.map((id) => this.agentSessionLabel(id)).join(', ') || 'nobody'}]`, verboseOnly: true });
             // Moderator chose to go quiet → the (possible) agent↔agent exchange ended; reset the consecutive
             // counter so a later resumption starts fresh rather than near the hard ceiling.
             if (valid.length === 0) {
@@ -1559,17 +1567,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 LogStatus(`[AIBridgeEngine] floor denied (${floor.Reason}) for bridge ${active.SessionBridgeID} — staying silent`);
                 return false;
             }
-            LogStatus(`[AIBridgeEngine][diag] floor GRANTED to bridge ${active.SessionBridgeID} — triggering the model to speak`);
+            LogStatusEx({ message: `[AIBridgeEngine][diag] floor GRANTED to bridge ${active.SessionBridgeID} — triggering the model to speak`, verboseOnly: true });
             this.armFloorHold(active);
         }
-        LogStatus(`[AIBridgeEngine][diag] meeting trigger → RequestSpokenUpdate for bridge ${active.SessionBridgeID}`);
+        LogStatusEx({ message: `[AIBridgeEngine][diag] meeting trigger → RequestSpokenUpdate for bridge ${active.SessionBridgeID}`, verboseOnly: true });
         // The trigger can be SKIPPED by the driver (a response already in flight) or commit nothing — in which
         // case no assistant transcript will ever arrive to release the floor. If the driver reports "not sent"
         // (explicit `false`), release the floor immediately so the room doesn't wedge until the safety timer,
         // and advance the queue. `undefined`/`true` ⇒ a turn was triggered, so hold the floor as normal.
         const sent = active.RealtimeSession.RequestSpokenUpdate?.('');
         if (sent === false) {
-            LogStatus(`[AIBridgeEngine][diag] trigger NOT sent (driver skipped) for bridge ${active.SessionBridgeID} — releasing floor + advancing`);
+            LogStatusEx({ message: `[AIBridgeEngine][diag] trigger NOT sent (driver skipped) for bridge ${active.SessionBridgeID} — releasing floor + advancing`, verboseOnly: true });
             this.releaseRoomFloor(active, /*skipDrain*/ true); // the drainSpeakerQueue caller advances the queue
             return false;
         }
@@ -1700,9 +1708,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         if (active.FloorReleaseTimer) {
             clearTimeout(active.FloorReleaseTimer);
         }
-        LogStatus(`[AIBridgeEngine][diag] floor HELD by bridge ${active.SessionBridgeID} (agentSession ${active.AgentSessionID}) — safety release in ${this.floorMaxHoldMs}ms if no assistant transcript`);
+        LogStatusEx({ message: `[AIBridgeEngine][diag] floor HELD by bridge ${active.SessionBridgeID} (agentSession ${active.AgentSessionID}) — safety release in ${this.floorMaxHoldMs}ms if no assistant transcript`, verboseOnly: true });
         active.FloorReleaseTimer = setTimeout(() => {
-            LogStatus(`[AIBridgeEngine][diag] floor SAFETY-RELEASE fired for bridge ${active.SessionBridgeID} — it held the floor for ${this.floorMaxHoldMs}ms without producing a reply (the triggered turn never yielded audio)`);
+            LogStatusEx({ message: `[AIBridgeEngine][diag] floor SAFETY-RELEASE fired for bridge ${active.SessionBridgeID} — it held the floor for ${this.floorMaxHoldMs}ms without producing a reply (the triggered turn never yielded audio)`, verboseOnly: true });
             this.releaseRoomFloor(active);
         }, this.floorMaxHoldMs);
     }
@@ -1722,7 +1730,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         const held = active.HoldsFloor;
         if (active.RoomKey && held) {
             this.roomCoordinator.ReleaseFloor(active.RoomKey, active.AgentSessionID);
-            LogStatus(`[AIBridgeEngine][diag] floor RELEASED by bridge ${active.SessionBridgeID} (agentSession ${active.AgentSessionID}) — next addressed agent can now take it`);
+            LogStatusEx({ message: `[AIBridgeEngine][diag] floor RELEASED by bridge ${active.SessionBridgeID} (agentSession ${active.AgentSessionID}) — next addressed agent can now take it`, verboseOnly: true });
         }
         active.HoldsFloor = false;
         // Floor freed → trigger the next agent the moderator queued for this turn (serialized speaking). Skipped

@@ -79,8 +79,8 @@ export function deriveAgentState(state: LiveKitRoomState, signal: LiveKitAgentVi
   if (signal) {
     return signal;
   }
-  const agent = state.Remote.find((p) => p.Role === 'agent');
-  if (agent?.IsSpeaking) {
+  // Any agent speaking (multi-agent room) → speaking; not just the first-joined agent.
+  if (state.Remote.some((p) => p.Role === 'agent' && p.IsSpeaking)) {
     return 'speaking';
   }
   if (state.Local?.IsSpeaking) {

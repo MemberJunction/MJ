@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
+    RealtimeDiagLog,
     IRealtimeSession,
     RealtimeSessionCapabilities,
     RealtimeReconfigureParams,
@@ -386,11 +387,11 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      */
     public RequestSpokenUpdate(instructions: string): boolean {
         if (this.responseActive) {
-            console.log('[OpenAIRealtime][diag] RequestSpokenUpdate SKIPPED — a response is already active (interim updates are disposable)');
+            RealtimeDiagLog('[OpenAIRealtime][diag] RequestSpokenUpdate SKIPPED — a response is already active (interim updates are disposable)');
             return false; // NOT sent — the caller (bridge) releases the floor instead of wedging on it
         }
         this.responseActive = true;
-        console.log(`[OpenAIRealtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${typeof instructions === 'string' && instructions.trim().length > 0 ? 'yes' : 'none → session prompt governs'})`);
+        RealtimeDiagLog(`[OpenAIRealtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${typeof instructions === 'string' && instructions.trim().length > 0 ? 'yes' : 'none → session prompt governs'})`);
         // CRITICAL: only set per-response `instructions` when the caller actually supplied some. OpenAI's
         // `response.create` treats `response.instructions` as a FULL override of the session system prompt for
         // that response — so forwarding `''` would wipe the co-agent identity framing (incl. the

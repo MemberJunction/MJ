@@ -532,9 +532,14 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     return selectSpotlight(this.State, this.PinnedIdentity, this.EnablePinning);
   }
 
-  /** The agent participant in the room, if present. */
+  /**
+   * The agent participant whose name/state the agent indicator shows. In a MULTI-agent room this prefers the
+   * agent that is currently speaking (so the indicator reads e.g. "Marketing Agent · speaking", not whichever
+   * agent merely joined first), falling back to the first agent when none is speaking.
+   */
   public get AgentParticipant(): LiveKitParticipantView | null {
-    return this.State.Remote.find((p) => p.Role === 'agent') ?? null;
+    const agents = this.State.Remote.filter((p) => p.Role === 'agent');
+    return agents.find((p) => p.IsSpeaking) ?? agents[0] ?? null;
   }
 
   /** The participant currently sharing their screen (for split view), if any. */

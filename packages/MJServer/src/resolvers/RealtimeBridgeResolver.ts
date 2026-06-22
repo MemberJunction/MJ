@@ -1,6 +1,6 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
 import { randomUUID } from 'crypto';
-import { LogError, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { LogError, LogStatusEx, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService } from '@memberjunction/livekit-room-server';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -51,7 +51,8 @@ if (process.env.MJ_REALTIME_MODERATOR_MODE === 'on') {
   AIBridgeEngine.Instance.SetTurnModerator(RealtimeTurnModeratorDecision);
   console.log('[RealtimeBridge] turn MODERATOR mode is ON (MJ_REALTIME_MODERATOR_MODE=on) — multi-agent rooms use the LLM router.');
 } else {
-  console.log('[RealtimeBridge] turn moderator mode is OFF (default) — multi-agent rooms run free-for-all: all agents auto-respond + hear everything.');
+  // Default mode — only surface this at startup when verbose (MJ_VERBOSE) is on; it's the expected state and otherwise just noise.
+  LogStatusEx({ message: '[RealtimeBridge] turn moderator mode is OFF (default) — multi-agent rooms run free-for-all: all agents auto-respond + hear everything.', verboseOnly: true });
 }
 
 /**

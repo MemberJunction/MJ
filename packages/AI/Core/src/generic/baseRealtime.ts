@@ -80,6 +80,26 @@ export type JSONObject = { [key: string]: JSONValue };
  *
  * @abstract
  */
+
+/**
+ * Emits a realtime-driver diagnostic line, but ONLY when verbose logging is enabled
+ * (`MJ_VERBOSE=true|1|yes`). These traces — turn boundaries, activity windows, response gating,
+ * barge-in — are invaluable when debugging a live session but far too chatty for normal operation,
+ * so they stay dark unless verbose mode is explicitly turned on. Shared here so every realtime driver
+ * and its session twin (OpenAI, Gemini, …) gate diagnostics through one consistent switch. The truthy
+ * set matches `@memberjunction/core`'s `IsVerboseLoggingEnabled` so a single `MJ_VERBOSE` flag governs
+ * verbose output across the whole stack.
+ *
+ * @param message The diagnostic message, already prefixed by the caller (e.g. `[GeminiRealtime][diag] …`).
+ */
+export function RealtimeDiagLog(message: string): void {
+    const v = (process.env.MJ_VERBOSE ?? '').toLowerCase();
+    if (v === 'true' || v === '1' || v === 'yes') {
+        // eslint-disable-next-line no-console
+        console.log(message);
+    }
+}
+
 export abstract class BaseRealtimeModel extends BaseModel {
     /**
      * Opens a stateful duplex session with the provider.

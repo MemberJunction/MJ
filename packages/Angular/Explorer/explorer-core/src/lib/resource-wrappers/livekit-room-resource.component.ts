@@ -57,6 +57,7 @@ interface InviteeChoice {
           [EnableLayoutSwitcher]="true"
           [EnablePinning]="true"
           (Connected)="NotifyLoadComplete()"
+          (Disconnected)="onRoomLeft()"
           (ErrorOccurred)="NotifyLoadComplete()"
           (InvitePeopleRequested)="openInvite($event)"
         ></mj-livekit-agent-room>
@@ -100,6 +101,101 @@ interface InviteeChoice {
             <button type="button" class="mj-lk-prejoin__start" [disabled]="!selectedTargetId" (click)="startCall()">
               <i class="fa-solid fa-phone"></i> Start call
             </button>
+          </div>
+        </div>
+      }
+      @case ('landing') {
+        <div class="mj-lk-prejoin">
+          <div class="mj-lk-prejoin__card mj-lk-prejoin__card--wide">
+            <div class="mj-lk-prejoin__icon"><i class="fa-solid fa-video"></i></div>
+            <h2 class="mj-lk-prejoin__title">Meet</h2>
+            <p class="mj-lk-prejoin__subtitle">Start a live room with agents and people, join one that's in progress, or review a past meeting.</p>
+            <div class="mj-lk-cards">
+              <button type="button" class="mj-lk-card" (click)="startNewRoom()">
+                <i class="fa-solid fa-circle-plus"></i>
+                <span class="mj-lk-card__t">New room</span>
+                <span class="mj-lk-card__d">Pick an agent and start a fresh call.</span>
+              </button>
+              <button type="button" class="mj-lk-card" (click)="openExisting()">
+                <i class="fa-solid fa-door-open"></i>
+                <span class="mj-lk-card__t">Join existing</span>
+                <span class="mj-lk-card__d">Hop into a room that's live right now.</span>
+              </button>
+              <button type="button" class="mj-lk-card" (click)="openHistory()">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                <span class="mj-lk-card__t">History</span>
+                <span class="mj-lk-card__d">Read transcripts of past meetings.</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+      @case ('existing') {
+        <div class="mj-lk-prejoin">
+          <div class="mj-lk-prejoin__card mj-lk-prejoin__card--wide">
+            <button type="button" class="mj-lk-back" (click)="backToLanding()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+            <h2 class="mj-lk-prejoin__title">Join a room</h2>
+            @if (loadingActive) {
+              <div class="mj-lk-listmsg"><i class="fa-solid fa-spinner fa-spin"></i> Finding active rooms…</div>
+            } @else if (activeRooms.length) {
+              <div class="mj-lk-list">
+                @for (r of activeRooms; track r.RoomName) {
+                  <button type="button" class="mj-lk-list__row" (click)="joinExistingRoom(r.RoomName)">
+                    <span class="mj-lk-list__name"><i class="fa-solid fa-circle mj-lk-livedot"></i> {{ r.Label }}</span>
+                    <span class="mj-lk-list__meta">{{ r.AgentCount }} agent{{ r.AgentCount === 1 ? '' : 's' }} · Join</span>
+                  </button>
+                }
+              </div>
+            } @else {
+              <p class="mj-lk-prejoin__desc">No rooms are active right now.</p>
+            }
+            <label class="mj-lk-prejoin__label" for="mj-lk-room">Or join by name</label>
+            <div class="mj-lk-joinrow">
+              <input id="mj-lk-room" class="mj-input mj-lk-joinrow__input" type="text" placeholder="Room name…" [value]="manualRoomName"
+                (input)="manualRoomName = $any($event.target).value" (keydown.enter)="joinExistingRoom(manualRoomName)" />
+              <button type="button" class="mj-lk-prejoin__start mj-lk-joinrow__btn" [disabled]="!manualRoomName.trim()" (click)="joinExistingRoom(manualRoomName)">Join</button>
+            </div>
+          </div>
+        </div>
+      }
+      @case ('history') {
+        <div class="mj-lk-prejoin">
+          <div class="mj-lk-prejoin__card mj-lk-prejoin__card--wide">
+            @if (!openHistoryRoom) {
+              <button type="button" class="mj-lk-back" (click)="backToLanding()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+              <h2 class="mj-lk-prejoin__title">Past meetings</h2>
+              @if (loadingHistory) {
+                <div class="mj-lk-listmsg"><i class="fa-solid fa-spinner fa-spin"></i> Loading…</div>
+              } @else if (historyRooms.length) {
+                <div class="mj-lk-list">
+                  @for (h of historyRooms; track h.ConversationID) {
+                    <button type="button" class="mj-lk-list__row" (click)="openTranscript(h)">
+                      <span class="mj-lk-list__name"><i class="fa-solid fa-comments"></i> {{ h.Name }}</span>
+                      <span class="mj-lk-list__meta">{{ formatTime(h.At) }}</span>
+                    </button>
+                  }
+                </div>
+              } @else {
+                <p class="mj-lk-prejoin__desc">No past meetings yet.</p>
+              }
+            } @else {
+              <button type="button" class="mj-lk-back" (click)="closeTranscript()"><i class="fa-solid fa-arrow-left"></i> All meetings</button>
+              <h2 class="mj-lk-prejoin__title">{{ openHistoryRoom.Name }}</h2>
+              @if (loadingTranscript) {
+                <div class="mj-lk-listmsg"><i class="fa-solid fa-spinner fa-spin"></i> Loading transcript…</div>
+              } @else if (historyTranscript.length) {
+                <div class="mj-lk-transcript">
+                  @for (line of historyTranscript; track $index) {
+                    <div class="mj-lk-tline" [class.mj-lk-tline--agent]="line.Kind === 'agent'" [class.mj-lk-tline--error]="line.Kind === 'error'">
+                      <span class="mj-lk-tline__who">{{ line.Speaker }}</span>
+                      <span class="mj-lk-tline__msg">{{ line.Message }}</span>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="mj-lk-prejoin__desc">No transcript was captured for this meeting.</p>
+              }
+            }
           </div>
         </div>
       }
@@ -274,6 +370,96 @@ interface InviteeChoice {
         opacity: 0.5;
         cursor: not-allowed;
       }
+      .mj-lk-prejoin__card--wide {
+        max-width: 560px;
+        text-align: left;
+      }
+      .mj-lk-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 0.75rem;
+        padding: 4px 8px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        color: var(--mj-text-secondary);
+        font-size: 0.8125rem;
+      }
+      .mj-lk-back:hover { color: var(--mj-text-primary); }
+      .mj-lk-cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+        margin-top: 1.25rem;
+      }
+      .mj-lk-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 1.25rem 0.75rem;
+        border: 1px solid var(--mj-border-default);
+        border-radius: var(--mj-radius-lg, 12px);
+        background: var(--mj-bg-surface-card);
+        cursor: pointer;
+        text-align: center;
+      }
+      .mj-lk-card:hover {
+        border-color: var(--mj-brand-primary);
+        background: var(--mj-bg-surface-hover, var(--mj-bg-surface-card));
+      }
+      .mj-lk-card > i { font-size: 1.4rem; color: var(--mj-brand-primary); }
+      .mj-lk-card__t { font-weight: 600; color: var(--mj-text-primary); font-size: 0.9rem; }
+      .mj-lk-card__d { color: var(--mj-text-muted); font-size: 0.78rem; line-height: 1.3; }
+      .mj-lk-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 0.5rem 0 1rem;
+        max-height: 320px;
+        overflow-y: auto;
+      }
+      .mj-lk-list__row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 10px 12px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 10px;
+        background: var(--mj-bg-surface-card);
+        cursor: pointer;
+        text-align: left;
+      }
+      .mj-lk-list__row:hover { border-color: var(--mj-brand-primary); background: var(--mj-bg-surface-hover, var(--mj-bg-surface-card)); }
+      .mj-lk-list__name { color: var(--mj-text-primary); font-size: 0.875rem; display: inline-flex; align-items: center; gap: 8px; }
+      .mj-lk-list__meta { color: var(--mj-text-muted); font-size: 0.78rem; white-space: nowrap; }
+      .mj-lk-livedot { color: var(--mj-status-success); font-size: 0.5rem; }
+      .mj-lk-listmsg { padding: 1rem; color: var(--mj-text-secondary); text-align: center; }
+      .mj-lk-joinrow { display: flex; gap: 8px; }
+      .mj-lk-joinrow__input { flex: 1; }
+      .mj-lk-joinrow__btn { white-space: nowrap; }
+      .mj-lk-transcript {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 0.5rem;
+        max-height: 60vh;
+        overflow-y: auto;
+      }
+      .mj-lk-tline {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: var(--mj-bg-surface-card);
+      }
+      .mj-lk-tline--agent { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); }
+      .mj-lk-tline--error { background: var(--mj-status-error-bg, color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface))); }
+      .mj-lk-tline__who { font-size: 0.72rem; font-weight: 600; color: var(--mj-text-secondary); }
+      .mj-lk-tline__msg { font-size: 0.875rem; color: var(--mj-text-primary); }
       .mj-lk-invite {
         display: flex;
         flex-direction: column;
@@ -388,8 +574,28 @@ interface InviteeChoice {
   ],
 })
 export class LiveKitRoomResource extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
-  /** Render phase: spinner while resolving → pre-join picker → live room (or an error message). */
-  public phase: 'loading' | 'picking' | 'live' | 'error' = 'loading';
+  /** Render phase: spinner while resolving → landing (new/existing/history) → picker/existing/history → live room. */
+  public phase: 'loading' | 'landing' | 'picking' | 'existing' | 'history' | 'live' | 'error' = 'loading';
+
+  // ── "Join existing" state ─────────────────────────────────────────────────────────
+  /** Currently-active rooms (a distinct `ExternalConnectionID` with ≥1 connected agent bridge). */
+  public activeRooms: { RoomName: string; Label: string; AgentCount: number }[] = [];
+  /** True while loading the active-rooms list. */
+  public loadingActive = false;
+  /** Free-text room name to join directly (the "join by name/code" path). */
+  public manualRoomName = '';
+
+  // ── "History" (past meetings) state ───────────────────────────────────────────────
+  /** Past meeting rooms (the `MJ: Conversations` of Type='Meeting Room' the bridge recorded). */
+  public historyRooms: { ConversationID: string; Name: string; At: Date }[] = [];
+  /** True while loading the history list. */
+  public loadingHistory = false;
+  /** The history room whose transcript is open (drill-in), or null for the list. */
+  public openHistoryRoom: { ConversationID: string; Name: string } | null = null;
+  /** The opened room's transcript lines. */
+  public historyTranscript: { Kind: 'agent' | 'human' | 'error'; Speaker: string; Message: string }[] = [];
+  /** True while loading a room's transcript. */
+  public loadingTranscript = false;
 
   /** `'agent'` to start/voice an agent (the default), or `'join'` when opened from an invite link. */
   public roomMode: 'agent' | 'join' = 'agent';
@@ -545,8 +751,179 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     // Default the picker to the general assistant "Sage" when present, else the first candidate.
     this.selectedTargetId =
       this.agents.find((a) => a.Name.trim().toLowerCase() === 'sage')?.ID ?? this.agents[0]?.ID ?? null;
-    this.phase = 'picking';
+    // Land on the Meet home (start new / join existing / history) rather than jumping straight into the picker.
+    this.phase = 'landing';
     this.NotifyLoadComplete();
+  }
+
+  // ── Meet landing navigation ─────────────────────────────────────────────────────────
+
+  /**
+   * The room disconnected (the user clicked **Leave** or **End meeting**, or the room dropped). Return to the
+   * Meet landing so they can start a new room, join another, or review history — rather than being stranded
+   * on a dead room. Resets the join state so the next "New room" / "Join existing" starts clean.
+   */
+  public onRoomLeft(): void {
+    this.roomMode = 'agent';
+    this.joinRoomName = null;
+    this.phase = 'landing';
+    this.cdr.detectChanges();
+  }
+
+  /** Go to the "start a new room" picker. */
+  public startNewRoom(): void {
+    this.phase = 'picking';
+  }
+
+  /** Open the "join existing room" view and load the active rooms. */
+  public openExisting(): void {
+    this.phase = 'existing';
+    void this.loadActiveRooms();
+  }
+
+  /** Open the "past meetings" history view and load the list. */
+  public openHistory(): void {
+    this.phase = 'history';
+    this.openHistoryRoom = null;
+    void this.loadHistory();
+  }
+
+  /** Back to the Meet home. */
+  public backToLanding(): void {
+    this.phase = 'landing';
+  }
+
+  /** Joins an existing room by its LiveKit room name (the bridge `ExternalConnectionID`). */
+  public joinExistingRoom(roomName: string): void {
+    const name = roomName.trim();
+    if (!name) {
+      return;
+    }
+    this.roomMode = 'join';
+    this.joinRoomName = name;
+    this.phase = 'live';
+  }
+
+  /** Loads currently-active rooms: distinct rooms that have a Connected/Connecting agent bridge. */
+  private async loadActiveRooms(): Promise<void> {
+    this.loadingActive = true;
+    this.activeRooms = [];
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const res = await rv.RunView<{ ExternalConnectionID: string; Agent: string }>(
+        {
+          EntityName: 'MJ: AI Agent Session Bridges',
+          ExtraFilter: `Status IN ('Connected','Connecting') AND ExternalConnectionID IS NOT NULL`,
+          Fields: ['ExternalConnectionID', 'Agent'],
+          OrderBy: '__mj_CreatedAt DESC',
+          MaxRows: 500,
+          ResultType: 'simple',
+        },
+        this.ProviderToUse.CurrentUser,
+      );
+      if (res.Success) {
+        const byRoom = new Map<string, { count: number; agents: Set<string> }>();
+        for (const r of res.Results) {
+          const room = String(r['ExternalConnectionID'] ?? '');
+          if (!room) {
+            continue;
+          }
+          const entry = byRoom.get(room) ?? { count: 0, agents: new Set<string>() };
+          entry.count += 1;
+          if (r['Agent']) {
+            entry.agents.add(String(r['Agent']));
+          }
+          byRoom.set(room, entry);
+        }
+        this.activeRooms = [...byRoom.entries()].map(([room, info]) => ({
+          RoomName: room,
+          Label: info.agents.size ? [...info.agents].join(', ') : room,
+          AgentCount: info.count,
+        }));
+      }
+    } finally {
+      this.loadingActive = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Loads past meetings: the `Meeting Room` conversations the bridge recorded, newest first. */
+  private async loadHistory(): Promise<void> {
+    this.loadingHistory = true;
+    this.historyRooms = [];
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const res = await rv.RunView<{ ID: string; Name: string; __mj_UpdatedAt: string }>(
+        {
+          EntityName: 'MJ: Conversations',
+          ExtraFilter: `Type='Meeting Room'`,
+          Fields: ['ID', 'Name', '__mj_UpdatedAt'],
+          OrderBy: '__mj_UpdatedAt DESC',
+          MaxRows: 200,
+          ResultType: 'simple',
+        },
+        this.ProviderToUse.CurrentUser,
+      );
+      if (res.Success) {
+        this.historyRooms = res.Results.map((r) => ({
+          ConversationID: String(r['ID']),
+          Name: String(r['Name'] ?? 'Meeting'),
+          At: new Date(String(r['__mj_UpdatedAt'] ?? '')),
+        }));
+      }
+    } finally {
+      this.loadingHistory = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Opens a past meeting's transcript (drill-in). */
+  public async openTranscript(room: { ConversationID: string; Name: string }): Promise<void> {
+    this.openHistoryRoom = room;
+    this.historyTranscript = [];
+    this.loadingTranscript = true;
+    this.cdr.detectChanges();
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const res = await rv.RunView<{ Role: string; Message: string; AgentID: string; Error: string }>(
+        {
+          EntityName: 'MJ: Conversation Details',
+          ExtraFilter: `ConversationID='${room.ConversationID.replace(/'/g, "''")}'`,
+          Fields: ['Role', 'Message', 'AgentID', 'Error', '__mj_CreatedAt'],
+          OrderBy: '__mj_CreatedAt ASC',
+          MaxRows: 5000,
+          ResultType: 'simple',
+        },
+        this.ProviderToUse.CurrentUser,
+      );
+      if (res.Success) {
+        this.historyTranscript = res.Results.map((d) => {
+          const role = String(d['Role'] ?? 'User');
+          if (role === 'Error') {
+            return { Kind: 'error' as const, Speaker: 'Error', Message: String(d['Error'] ?? d['Message'] ?? '') };
+          }
+          if (role === 'AI') {
+            const agentId = String(d['AgentID'] ?? '').toLowerCase();
+            const name = AIEngineBase.Instance.Agents.find((a) => a.ID.toLowerCase() === agentId)?.Name ?? 'Agent';
+            return { Kind: 'agent' as const, Speaker: name, Message: String(d['Message'] ?? '') };
+          }
+          return { Kind: 'human' as const, Speaker: 'Participant', Message: String(d['Message'] ?? '') };
+        });
+      }
+    } finally {
+      this.loadingTranscript = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Back to the history list from a transcript drill-in. */
+  public closeTranscript(): void {
+    this.openHistoryRoom = null;
+  }
+
+  /** Formats a meeting timestamp for the history list (avoids a `date` pipe / CommonModule dependency). */
+  public formatTime(d: Date): string {
+    return d && !isNaN(d.getTime()) ? d.toLocaleString() : '';
   }
 
   /** Picker selection handler (native select; avoids a FormsModule dependency). */
