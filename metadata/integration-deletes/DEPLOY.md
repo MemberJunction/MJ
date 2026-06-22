@@ -57,8 +57,10 @@ The connector source + tests were removed from core alongside the metadata retir
 1. **Source metadata removed** — Case A + Case C connector files (`metadata/integrations/.{vendor}.json` and
    `<vendor>/` subdirs). Case A's removal is paired with its deleteRecord files above; Case C is simply gone.
    Kept: `.betty.json` (Case B marker), `.integrations.json`, `.mj-sync.json`, `additionalSchemaInfo.json`.
-2. **Package removed** — `packages/Integration/connectors` (all 35 connector classes **+ tests/fixtures**).
-   The `@memberjunction/integration-connectors` npm name is now owned by `MemberJunction/Integrations`.
+2. **Package removed** — `packages/Integration/connectors` (all connector classes **+ tests/fixtures**).
+   The core `@memberjunction/integration-connectors` package is retired; in `MemberJunction/Integrations`
+   each connector is now its **own** package (`@memberjunction/connector-<name>`), so installing one
+   connector never pulls the others.
 3. **ServerBootstrap** — dep dropped from `package.json`; the connector import block + 35 registration entries
    + package-name list removed from the generated `mj-class-registrations.ts` (the only core referencer).
    A later `mj codegen manifest` reproduces this exactly. Verified: `turbo build --filter=@memberjunction/server-bootstrap` succeeds connector-free.
