@@ -1,0 +1,32 @@
+name: UI design tokens — hex color enforcement
+
+on:
+  pull_request:
+    branches:
+      - next
+    paths:
+      - 'packages/Angular/**/*.css'
+      - 'packages/Angular/**/*.scss'
+      - '.github/scripts/check-css-hex-tokens.sh'
+      - '.github/scripts/ci/hex-allowlist.txt'
+      - '.github/workflows/ci-ui-tokens.yml'
+
+jobs:
+  check-hex-tokens:
+    name: Check changed CSS/SCSS for hardcoded hex
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine merge base
+        run: |
+          # The PR's diff target is origin/${{ github.base_ref }}.
+          # fetch-depth: 0 ensures we have full history for the diff.
+          echo "BASE_REF=origin/${{ github.base_ref }}" >> "$GITHUB_ENV"
+
+      - name: Check changed files for hardcoded hex
+        run: |
+          ./.github/scripts/check-css-hex-tokens.sh --base "$BASE_REF"
