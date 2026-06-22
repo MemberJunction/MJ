@@ -1458,9 +1458,9 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     private isNonCacheableEntity(entityName?: string): boolean {
         if (!entityName) return false;
         try {
-            // global-provider-ok: telemetry aggregates RunView calls process-wide; AllowCaching is
-            // structural entity metadata and this check fails open if the provider is unavailable.
-            return Metadata.Provider?.EntityByName?.(entityName)?.AllowCaching === false;
+            // telemetry aggregates RunView calls process-wide; AllowCaching is structural entity
+            // metadata and this check fails open if the provider is unavailable.
+            return Metadata.Provider?.EntityByName?.(entityName)?.AllowCaching === false; // global-provider-ok: process-wide telemetry, structural metadata, fails open
         } catch {
             return false;
         }

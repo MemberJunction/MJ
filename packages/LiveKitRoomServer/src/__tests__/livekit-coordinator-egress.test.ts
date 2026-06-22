@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- test mocks return minimal cast fixtures for the SDK/engine seams */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type BridgeOps } from '../livekit-agent-room-coordinator';
 import { LiveKitEgressService, wsToHttpUrl, type EgressClientLike } from '../livekit-egress-service';
 import { LiveKitTokenService } from '../livekit-token-service';
@@ -36,6 +36,11 @@ describe('LiveKitAgentRoomCoordinator', () => {
     coordinator.SetTokenService(new LiveKitTokenService(CONFIG));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     coordinator.SetSessionFactory(async () => ({}) as any); // stub IRealtimeSession
+  });
+
+  // Meeting/moderator mode is opt-in via MJ_REALTIME_MODERATOR_MODE=on; restore env after each test.
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('is a process-wide singleton exposing the LiveKit driver key', () => {
@@ -94,6 +99,7 @@ describe('LiveKitAgentRoomCoordinator', () => {
   });
 
   it('multi-agent room: the FIRST agent is solo 1:1, a SECOND agent joins in MEETING mode (auto-response off + addressed-only)', async () => {
+    vi.stubEnv('MJ_REALTIME_MODERATOR_MODE', 'on'); // meeting mode is gated behind the moderator opt-in
     const { ops, startCalls } = makeBridgeOps(true);
     coordinator.SetBridgeOps(ops);
     const factoryCtx: Record<string, unknown>[] = [];
@@ -120,6 +126,7 @@ describe('LiveKitAgentRoomCoordinator', () => {
   });
 
   it('re-gates the agents already in the room when it becomes multi-agent', async () => {
+    vi.stubEnv('MJ_REALTIME_MODERATOR_MODE', 'on'); // meeting mode is gated behind the moderator opt-in
     const { ops, reconfigureCalls } = makeBridgeOps(true);
     coordinator.SetBridgeOps(ops);
 

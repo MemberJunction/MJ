@@ -15,7 +15,9 @@ vi.mock('@memberjunction/ai', () => {
         }
     }
     class BaseRealtimeModel extends BaseModel {}
-    return { BaseModel, BaseRealtimeModel };
+    // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
+    const RealtimeDiagLog = () => { /* no-op in tests */ };
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
