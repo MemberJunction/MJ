@@ -2,6 +2,7 @@
 // Reusable standalone Angular UI components for MemberJunction
 
 export * from './lib/button/button.directive';
+export * from './lib/clickable/clickable.directive';
 export * from './lib/dialog/dialog.component';
 export * from './lib/dialog/dialog.service';
 export * from './lib/dropdown/dropdown.component';
@@ -13,6 +14,7 @@ export * from './lib/datepicker/datepicker.component';
 export * from './lib/splitter/splitter.component';
 export * from './lib/accordion/accordion.component';
 export * from './lib/window/window.component';
+export * from './lib/slide-panel/slide-panel.component';
 export * from './lib/combobox/combobox.component';
 export * from './lib/page-header/page-header.component';
 export * from './lib/page-layout/page-layout.component';

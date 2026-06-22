@@ -1,0 +1,44 @@
+# Mode D overlay: boots the static-file-server alongside the test-runner so
+# the runner can reach it at http://static-server:3000 over the compose
+# network. Combine with the base regression compose:
+#
+#   mj test regression remote \
+#       --target=docker/regression/examples/static-file-server/target.json \
+#       --overlay=docker/regression/examples/static-file-server/docker-compose.app.yml
+#
+# What this overlay does:
+#   - Adds a `static-server` service (the app under test)
+#   - Mounts the example's test/suite metadata into the test-runner so the
+#     entrypoint can push them at run time
+#   - Adds `static-server` as a test-runner dependency so the runner waits
+#     for nginx to be ready
+
+services:
+  static-server:
+    # The base compose file is profile-gated. Mode D launches the test-runner
+    # via the `full` profile (so the local DB is available for results
+    # recording); join the same profile so this service starts alongside.
+    profiles: ["full"]
+    # Compose resolves relative paths in overlay files using the directory of
+    # the FIRST `-f` file (the base compose at docker/regression/), not the
+    # overlay's own location. Hence `examples/static-file-server` not `.`.
+    build:
+      context: examples/static-file-server
+      dockerfile: Dockerfile
+    image: mj-regression-static-server:latest
+    container_name: mj-regression-static-server
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/ > /dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  test-runner:
+    depends_on:
+      static-server:
+        condition: service_healthy
+    volumes:
+      # Mode D test/suite metadata. RW because mj-sync writes primaryKey +
+      # sync state back into the JSON files after autoCreateMissingRecords.
+      - ./examples/static-file-server/metadata:/app/static-server-metadata

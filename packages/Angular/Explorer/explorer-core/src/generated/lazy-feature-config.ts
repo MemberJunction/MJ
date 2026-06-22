@@ -19,13 +19,13 @@ function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {
 // --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
 const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/actions-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (15 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (16 entries) ---
 const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
 const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/communication-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (1 entries) ---
+// --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (3 entries) ---
 const loadComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./core-dashboards.module (26 entries) ---
@@ -94,6 +94,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::SchedulingResource': loadAiDashboardsModule,
   'BaseResourceComponent::Tags': loadAiDashboardsModule,
   'BaseResourceComponent::VectorManagementResource': loadAiDashboardsModule,
+  'BaseResourceComponent::VisualizationResource': loadAiDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
   'BaseDashboard::CommunicationDashboard': loadCommunicationDashboardsModule,
@@ -106,6 +107,8 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
   // @memberjunction/ng-dashboards → ./component-studio-dashboards.module
   'BaseDashboard::ComponentStudioDashboard': loadComponentStudioDashboardsModule,
+  'BaseResourceComponent::ComponentStudioResource': loadComponentStudioDashboardsModule,
+  'BaseResourceComponent::FormBuilderResource': loadComponentStudioDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./core-dashboards.module
   'BaseApplication::HomeApplication': loadCoreDashboardsModule,
@@ -201,4 +204,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 98;
+export const LAZY_FEATURE_CONFIG_COUNT = 101;

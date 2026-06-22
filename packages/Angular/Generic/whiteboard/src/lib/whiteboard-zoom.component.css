@@ -1,0 +1,58 @@
+/* Bottom-right zoom cluster — ported pixel-faithfully from
+   plans/realtime/mockups/whiteboard.html (.zoom-cluster). */
+
+:host {
+  display: block;
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 10;
+}
+
+.zoom-cluster {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full, 9999px);
+  box-shadow: var(--mj-shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.3));
+  padding: 4px;
+}
+
+.zoom-cluster button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+  font-family: inherit;
+}
+.zoom-cluster button:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.zoom-cluster button.on {
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+}
+
+.zoom-pct {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--mj-text-secondary);
+  padding: 0 7px;
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+}
+
+.zoom-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--mj-border-default);
+  margin: 0 3px;
+}

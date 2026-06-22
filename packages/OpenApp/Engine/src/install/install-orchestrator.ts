@@ -7,17 +7,19 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase } from '../types/open-app-types.js';
+import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
-import { ResolveDependencies } from '../dependency/dependency-resolver.js';
-import type { InstalledAppMap, DependencyNode, DependencyValue } from '../dependency/dependency-resolver.js';
+import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
+import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
+import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ValidateGitHubTag, type GitHubClientOptions } from '../github/github-client.js';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
+import { AngularConfigManager } from './angular-config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
@@ -81,8 +83,10 @@ export interface OrchestratorContext {
  * 1.  Fetch manifest from GitHub
  * 2.  Validate manifest (Zod)
  * 3.  Validate MJ version compatibility
- * 4.  Resolve dependencies (topological sort + version validation)
- * 5.  Install dependencies (recursive, depth-first)
+ * 4.  Resolve the FULL transitive dependency graph (fetch every dependency's
+ *     manifest, detect cross-repo cycles, topologically sort) — skipped when
+ *     this call is itself a pre-resolved member of a parent's graph
+ * 5.  Install dependencies in leaf-first order (each via _skipDependencyResolution)
  * 6.  Check schema (no collision)
  * 7.  Create schema
  * 8.  Run migrations (Skyway - DDL + metadata DML)
@@ -90,9 +94,10 @@ export interface OrchestratorContext {
  * 10. Update package.json files
  * 11. Run npm install
  * 12. Update server config (dynamicPackages in mj.config.cjs)
- * 13. Update client imports (open-app-bootstrap.generated.ts)
- * 14. Execute hooks (postInstall)
- * 15. Finalize status to 'Active'
+ * 13. Update angular.json prebundle excludes (prevents Vite singleton duplication)
+ * 14. Update client imports (open-app-bootstrap.generated.ts)
+ * 15. Execute hooks (postInstall)
+ * 16. Finalize status to 'Active'
  */
 export async function InstallApp(options: InstallOptions, context: OrchestratorContext): Promise<AppOperationResult> {
   const startTime = Date.now();
@@ -132,24 +137,29 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     const effectivePackageVersion = explicitVersion ? explicitVersion.replace(/^v/, '') : manifest.version;
     const effectiveVersionStrategy: VersionStrategy | undefined = explicitVersion ? 'exact' : context.VersionStrategy;
 
-    // Steps 3-4: Validate MJ compatibility and resolve dependencies (parallel)
-    Callbacks?.OnProgress?.('Validate', 'Checking MJ version compatibility and resolving dependencies...');
-    const [compatResult, depResult] = await Promise.all([
-      Promise.resolve(CheckMJVersionCompatibility(context.MJVersion, manifest.mjVersionRange)),
-      ResolveDependencyChain(manifest, context),
-    ]);
+    // Step 3: Validate MJ compatibility
+    Callbacks?.OnProgress?.('Validate', 'Checking MJ version compatibility...');
+    const compatResult = CheckMJVersionCompatibility(context.MJVersion, manifest.mjVersionRange);
     if (!compatResult.Compatible) {
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, compatResult.Message ?? 'Incompatible MJ version');
     }
-    if (!depResult.Success) {
-      return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
-    }
 
-    // Step 5: Install dependencies (recursive)
-    if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-      const depsResult = await InstallDependencies(depResult.DepsToInstall, context);
-      if (!depsResult.Success) {
-        return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depsResult.ErrorMessage ?? 'Dependency installation failed');
+    // Steps 4-5: Resolve the full transitive dependency graph and install members
+    // in leaf-first order. Skipped when this call is itself a pre-resolved member
+    // of a parent's graph (the parent already resolved and installed our deps).
+    if (!options._skipDependencyResolution) {
+      const depResult = await ResolveDependencyChain(manifest, context);
+      if (!depResult.Success) {
+        return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
+      }
+      if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
+        const depsResult = await InstallDependencies(depResult.DepsToInstall, context, {
+          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+          Verbose: options.Verbose,
+        });
+        if (!depsResult.Success) {
+          return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depsResult.ErrorMessage ?? 'Dependency installation failed');
+        }
       }
     }
 
@@ -226,15 +236,18 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 13: Flip status to Active BEFORE regenerating the client bootstrap,
+    // Step 13: Update angular.json prebundle excludes
+    HandleAngularPrebundleExcludes(manifest, context);
+
+    // Step 14: Flip status to Active BEFORE regenerating the client bootstrap,
     // so the regen reads the new status and emits enabled imports.
     Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
     await SetAppStatus(context.ContextUser, createdAppId!, 'Active');
 
-    // Step 14: Update client imports (reads current app status from DB)
+    // Step 15: Update client imports (reads current app status from DB)
     await HandleClientBootstrapRegeneration(context);
 
-    // Step 15: Execute hooks
+    // Step 16: Execute hooks
     if (manifest.hooks?.postInstall) {
       Callbacks?.OnProgress?.('Hooks', 'Running postInstall hook...');
       await ExecuteHook(manifest.hooks.postInstall, context.RepoRoot);
@@ -426,7 +439,10 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       }
       // Install any new dependencies required by the upgraded version
       if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        const installResult = await InstallDependencies(depResult.DepsToInstall, context);
+        const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
+          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+          Verbose: options.Verbose,
+        });
         if (!installResult.Success) {
           return BuildFailureResult(
             'Upgrade',
@@ -478,7 +494,10 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 8: Update app record first (including Status: Active) so the
+    // Step 8: Update angular.json prebundle excludes (handles new scopes in upgraded manifest)
+    HandleAngularPrebundleExcludes(manifest, context);
+
+    // Step 9: Update app record first (including Status: Active) so the
     // bootstrap regen below reads the final status from the DB.
     await UpdateAppRecord(context.ContextUser, existingApp.ID, {
       Version: manifest.version,
@@ -486,10 +505,10 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       Status: 'Active',
     });
 
-    // Step 9: Regenerate client imports
+    // Step 10: Regenerate client imports
     await HandleClientBootstrapRegeneration(context);
 
-    // Step 10: Execute hooks
+    // Step 11: Execute hooks
     if (manifest.hooks?.postUpgrade) {
       Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
       await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
@@ -587,11 +606,19 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       await ExecuteHook(manifest.hooks.preRemove, context.RepoRoot);
     }
 
-    // Steps 3-5: Remove config, client bootstrap, and package refs (parallel — all write to different files)
+    // Steps 3-6: Remove config, client bootstrap, angular.json excludes, and package refs
+    // (parallel where they write to different files)
     Callbacks?.OnProgress?.('Config', 'Removing config, client bootstrap, and package references...');
+
+    // Collect other installed apps' manifests so we don't remove shared prebundle excludes
+    const otherApps = (await ListInstalledApps(context.ContextUser))
+      .filter(a => a.Name !== options.AppName && a.Status !== 'Removed');
+    const otherManifests = otherApps.map(a => JSON.parse(a.ManifestJSON) as MJAppManifest);
+
     await Promise.all([
       Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName)),
       Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name) : undefined),
+      Promise.resolve(HandleAngularPrebundleExcludeRemoval(manifest, otherManifests, context)),
       HandleClientBootstrapRegeneration(context),
       Promise.resolve(
         RemoveAppPackages({
@@ -616,20 +643,40 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     }
 
     // Step 6: Remove metadata (entity registrations, SchemaInfo, etc.)
+    let metadataResult: { Success: boolean; ErrorMessage?: string } = { Success: true };
     if (existingApp.SchemaName) {
       Callbacks?.OnProgress?.('Metadata', `Removing entity metadata for schema '${existingApp.SchemaName}'...`);
-      await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
+      metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
     }
 
     // Step 7: Drop schema (unless --keep-data)
+    let schemaDropError: string | undefined;
     if (!options.KeepData && existingApp.SchemaName) {
       Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
       const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
         allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
       });
       if (!dropResult.Success) {
-        Callbacks?.OnWarn?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
+        schemaDropError = dropResult.ErrorMessage;
+        Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
       }
+    }
+
+    // If metadata removal or schema drop failed, the app is NOT cleanly removed — report it
+    // as a failure (don't mark the app 'Removed') instead of silently claiming success.
+    const removalErrors = [metadataResult.Success ? undefined : metadataResult.ErrorMessage, schemaDropError]
+      .filter((e): e is string => !!e);
+    if (removalErrors.length > 0) {
+      const combined = removalErrors.join('; ');
+      await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
+        Success: false,
+        DurationSeconds: GetDurationSeconds(startTime),
+        StartedAt: new Date(startTime),
+        EndedAt: new Date(),
+        Summary: `Remove failed: ${combined}`,
+      });
+      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+      return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
     }
 
     // Step 8: Update records
@@ -741,15 +788,20 @@ interface InternalResult {
 }
 
 /**
- * Resolves the dependency chain for a manifest, returning any uninstalled
- * dependencies that need to be installed first.
+ * Resolves the FULL transitive dependency graph for a manifest, returning any
+ * uninstalled dependencies that need to be installed first, in leaf-first order.
+ *
+ * Unlike a single-level resolve, this fetches every reachable dependency's
+ * manifest from its repository so the complete graph is known up front — which
+ * is what makes genuine cross-repo cycle detection (A -> B -> A) possible before
+ * any install work begins.
  */
 async function ResolveDependencyChain(manifest: MJAppManifest, context: OrchestratorContext): Promise<InternalResult> {
   if (!manifest.dependencies || Object.keys(manifest.dependencies).length === 0) {
     return { Success: true };
   }
 
-  context.Callbacks?.OnProgress?.('Dependencies', 'Resolving dependencies...');
+  context.Callbacks?.OnProgress?.('Dependencies', 'Resolving dependency graph...');
 
   const installedApps = await ListInstalledApps(context.ContextUser);
   const installedMap: InstalledAppMap = {};
@@ -760,13 +812,13 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
   // Zod infers object variant fields as optional; DependencyValue requires them.
   // The runtime schema validates they're present, so this narrowing is safe.
   const dependencies = (manifest.dependencies ?? {}) as Record<string, DependencyValue>;
-  const rootNode: DependencyNode = {
+  const root: RootApp = {
     AppName: manifest.name,
     Repository: manifest.repository,
     Dependencies: dependencies,
   };
 
-  const result = ResolveDependencies(rootNode, installedMap);
+  const result = await ResolveDependencyGraph(root, installedMap, BuildManifestFetcher(context));
   if (!result.Success) {
     return { Success: false, ErrorMessage: result.ErrorMessage };
   }
@@ -779,11 +831,50 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
 }
 
 /**
- * Installs unresolved dependencies sequentially via recursive {@link InstallApp} calls.
+ * Builds a {@link ManifestFetcher} that retrieves and validates a dependency's
+ * manifest from GitHub. Used by the graph builder to walk transitive deps.
+ */
+function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
+  return async (repoUrl: string) => {
+    const fetched = await FetchManifestFromGitHub(repoUrl, undefined, context.GitHubOptions);
+    if (!fetched.Success || !fetched.ManifestJSON) {
+      return { Success: false, ErrorMessage: fetched.ErrorMessage ?? 'Failed to fetch manifest' };
+    }
+    const parsed = ParseAndValidateManifest(fetched.ManifestJSON);
+    if (!parsed.Success || !parsed.Manifest) {
+      return { Success: false, ErrorMessage: `Invalid manifest: ${parsed.Errors?.join(', ')}` };
+    }
+    return {
+      Success: true,
+      Manifest: {
+        name: parsed.Manifest.name,
+        repository: parsed.Manifest.repository,
+        dependencies: (parsed.Manifest.dependencies ?? {}) as Record<string, DependencyValue>,
+      },
+    };
+  };
+}
+
+/**
+ * Installs the resolved dependencies sequentially in the leaf-first order
+ * produced by the graph resolution. Each dependency is installed via
+ * {@link InstallApp} with `_skipDependencyResolution` set — its own transitive
+ * dependencies appear earlier in the order and are therefore already installed,
+ * so re-resolving here would be redundant (and, for any cycle that slipped the
+ * up-front check, unbounded).
+ *
+ * Inherited options that affect install BEHAVIOR (verbosity, the schema-name
+ * override) are forwarded from the parent so a flag set on the top-level call
+ * also governs the dependency installs. App-identity options (Source, Version)
+ * are NOT forwarded — each dependency has its own source and installs its own
+ * latest release rather than inheriting the parent's pin. The forwarded set is
+ * explicit so new flags require a deliberate decision about whether they apply
+ * to dependencies.
  */
 async function InstallDependencies(
   deps: Array<{ AppName: string; Repository: string; VersionRange: string }>,
   context: OrchestratorContext,
+  inherited: PassthroughInstallOptions,
 ): Promise<InternalResult> {
   for (const dep of deps) {
     if (!dep.Repository) {
@@ -793,7 +884,22 @@ async function InstallDependencies(
       };
     }
     context.Callbacks?.OnProgress?.('Dependencies', `Installing dependency from ${dep.Repository}...`);
-    const result = await InstallApp({ Source: dep.Repository }, context);
+    // NOTE (known limitation, tracked in #2713): we install from the dependency's
+    // repository with no Version, so it resolves to whatever its default-branch
+    // manifest reports — `dep.VersionRange` is NOT enforced for fresh installs.
+    // Declared ranges are only checked against ALREADY-installed deps (see
+    // ProcessEdge in dependency-graph-builder.ts). So a `>=1.0 <2.0` requirement
+    // can silently install 3.0 if that's the latest. Pre-existing behavior, not a
+    // regression; range-gated fresh installs are deferred follow-on work.
+    const result = await InstallApp(
+      {
+        Source: dep.Repository,
+        _skipDependencyResolution: true,
+        AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
+        Verbose: inherited.Verbose,
+      },
+      context,
+    );
     if (!result.Success) {
       return { Success: false, ErrorMessage: `Failed to install dependency: ${result.ErrorMessage}` };
     }
@@ -858,6 +964,8 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
     DatabaseConfig: context.DatabaseConfig,
     MJCoreSchema: context.MJCoreSchema,
     ExtraPlaceholders: context.MigrationPlaceholders,
+    // Select the Skyway provider matching the live DB platform.
+    Platform: context.DatabaseProvider.Dialect.PlatformKey,
   });
 
   return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
@@ -935,6 +1043,51 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
   }
 
   return { Success: true };
+}
+
+/**
+ * Adds the app's npm scope(s) to angular.json's prebundle.exclude so Vite
+ * serves them as raw ES modules instead of inlining them into prebundled chunks.
+ * This prevents duplicate Angular DI singletons caused by module duplication.
+ *
+ * Non-fatal: if angular.json doesn't exist or the update fails, a warning is
+ * emitted but the install/upgrade continues — the app will still work in
+ * production builds, just the dev server may have the singleton bug.
+ */
+function HandleAngularPrebundleExcludes(manifest: MJAppManifest, context: OrchestratorContext): void {
+  const manager = new AngularConfigManager(context.RepoRoot, context.ClientPackagePath);
+  if (!manager.Load()) {
+    return; // angular.json not found — not an error, skip silently
+  }
+
+  manager.AddPrebundleExcludes(manifest);
+
+  const result = manager.Save();
+  if (!result.Success) {
+    context.Callbacks?.OnWarn?.(
+      'Config',
+      `Failed to update angular.json prebundle excludes: ${result.ErrorMessage}. ` +
+      `You may need to manually add the app's npm scope to prebundle.exclude in angular.json.`
+    );
+  } else if (result.Changes && result.Changes.length > 0) {
+    context.Callbacks?.OnProgress?.('Config', `Updated angular.json: ${result.Changes.join('; ')}`);
+  }
+}
+
+/**
+ * Removes an app's prebundle exclude patterns from angular.json during app removal.
+ * Only removes patterns not still needed by other installed apps.
+ */
+function HandleAngularPrebundleExcludeRemoval(
+  manifest: MJAppManifest,
+  otherManifests: MJAppManifest[],
+  context: OrchestratorContext,
+): void {
+  const manager = new AngularConfigManager(context.RepoRoot, context.ClientPackagePath);
+  if (!manager.Load()) return;
+
+  manager.RemovePrebundleExcludes(manifest, otherManifests);
+  manager.Save();
 }
 
 /**
@@ -1017,12 +1170,21 @@ async function ExecuteHook(command: string, cwd: string): Promise<void> {
  * Removes all MJ entity metadata associated with an app's schema.
  * Deletes in FK-dependency order to avoid constraint violations.
  */
-async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo, callbacks?: AppInstallCallbacks): Promise<void> {
+async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo, callbacks?: AppInstallCallbacks): Promise<{ Success: boolean; ErrorMessage?: string }> {
   try {
     const rv = new RunView();
     const escaped = EscapeSqlString(schemaName);
 
-    // First, find all entity IDs in this schema so we can clean FK-dependent records
+    // Helper: delete by filter and throw on any failure so the outer catch reports it
+    // (MJ metadata FKs are NO ACTION, not CASCADE, so dependents must be removed in order).
+    const deleteByFilterOrThrow = async (entityName: string, filter: string): Promise<void> => {
+      const r = await DeleteEntitiesByFilter(rv, contextUser, entityName, filter);
+      if (!r.Success) {
+        throw new Error(r.ErrorMessage ?? `Failed to delete ${entityName} records`);
+      }
+    };
+
+    // First, find all entity IDs in this schema so we can clean FK-dependent records.
     const entityResult = await rv.RunView<BaseEntity>(
       {
         EntityName: 'MJ: Entities',
@@ -1031,49 +1193,70 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
       },
       contextUser,
     );
+    if (!entityResult.Success) {
+      throw new Error(`Failed to query entities for schema '${schemaName}': ${entityResult.ErrorMessage}`);
+    }
 
-    if (!entityResult.Success || entityResult.Results.length === 0) {
+    if (entityResult.Results.length === 0) {
       // No entities found — just clean up SchemaInfo
-      await DeleteEntitiesByFilter(rv, contextUser, 'MJ: Schema Info', `SchemaName = '${escaped}'`);
+      await deleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
       callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
-      return;
+      return { Success: true };
     }
 
     const entityIds = entityResult.Results.map((e) => String(e.Get('ID')));
     const idList = entityIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
-    const entityIdFilter = `EntityID IN (${idList})`;
 
-    // Delete FK-dependent records in order (parallel where safe)
-    await Promise.all([
-      DeleteEntitiesByFilter(rv, contextUser, 'MJ: Entity Permissions', entityIdFilter),
-      DeleteEntitiesByFilter(rv, contextUser, 'MJ: Application Entities', entityIdFilter),
-    ]);
+    // Entity Field Values (FK on EntityFieldID) must go before the Entity Fields they
+    // reference — collect this schema's field IDs first.
+    const fieldResult = await rv.RunView<BaseEntity>(
+      {
+        EntityName: 'MJ: Entity Fields',
+        ExtraFilter: `EntityID IN (${idList})`,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!fieldResult.Success) {
+      throw new Error(`Failed to query entity fields for schema '${schemaName}': ${fieldResult.ErrorMessage}`);
+    }
+    const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(String(f.Get('ID')))}'`).join(',');
 
+    // Delete FK-dependent records in dependency order.
+    if (fieldIdList.length > 0) {
+      await deleteByFilterOrThrow('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
+    }
+    await deleteByFilterOrThrow('MJ: Entity Permissions', `EntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Application Entities', `EntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Entity Settings', `EntityID IN (${idList})`);
     // Entity Relationships reference EntityID on both sides
-    await DeleteEntitiesByFilter(rv, contextUser, 'MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
-
-    // Delete Entity Fields (FK on EntityID)
-    await DeleteEntitiesByFilter(rv, contextUser, 'MJ: Entity Fields', `EntityID IN (${idList})`);
+    await deleteByFilterOrThrow('MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
+    // Entity Fields (FK on EntityID)
+    await deleteByFilterOrThrow('MJ: Entity Fields', `EntityID IN (${idList})`);
 
     // Delete Entities themselves
     for (const entity of entityResult.Results) {
-      await entity.Delete();
+      if (!(await entity.Delete())) {
+        throw new Error(`Failed to delete entity '${String(entity.Get('Name'))}': ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      }
     }
 
     // Delete SchemaInfo last
-    await DeleteEntitiesByFilter(rv, contextUser, 'MJ: Schema Info', `SchemaName = '${escaped}'`);
+    await deleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
 
     callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
+    return { Success: true };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    callbacks?.OnWarn?.('Metadata', `Failed to remove entity metadata: ${message}`);
+    callbacks?.OnError?.('Metadata', `Failed to remove entity metadata: ${message}`);
+    return { Success: false, ErrorMessage: `Failed to remove entity metadata for schema '${schemaName}': ${message}` };
   }
 }
 
 /**
  * Helper: loads entities by filter and deletes them one by one.
  */
-async function DeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entityName: string, filter: string): Promise<void> {
+async function DeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entityName: string, filter: string): Promise<{ Success: boolean; ErrorMessage?: string }> {
   const result = await rv.RunView<BaseEntity>(
     {
       EntityName: entityName,
@@ -1082,11 +1265,15 @@ async function DeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entity
     },
     contextUser,
   );
-  if (result.Success) {
-    for (const record of result.Results) {
-      await record.Delete();
+  if (!result.Success) {
+    return { Success: false, ErrorMessage: `Failed to query ${entityName}: ${result.ErrorMessage}` };
+  }
+  for (const record of result.Results) {
+    if (!(await record.Delete())) {
+      return { Success: false, ErrorMessage: `Failed to delete a ${entityName} record: ${record.LatestResult?.CompleteMessage ?? 'unknown error'}` };
     }
   }
+  return { Success: true };
 }
 
 /** Calculates elapsed seconds from a `Date.now()` start timestamp. */

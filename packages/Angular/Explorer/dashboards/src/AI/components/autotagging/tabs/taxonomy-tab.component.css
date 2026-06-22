@@ -1,0 +1,248 @@
+/*
+ * Taxonomy Governance tab styles.
+ *
+ * The host (AutotaggingPipelineResourceComponent) uses ViewEncapsulation.None,
+ * so its `.at-*` / `.at-tax-*` rules are global and already style this tab's
+ * markup while it renders inside the host shell. Tab-specific rules would live
+ * here; none are needed during the transition.
+ *
+ * NEW: the selected-node editor sub-tabs (Overview / Governance / Synonyms /
+ * Scope) and their panels. These classes are genuinely new and not provided by
+ * the host, so they're defined here using design tokens only.
+ */
+
+/* ── Editor sub-tab nav ── */
+.at-tag-editor-subtabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--mj-border-default);
+    margin: 12px 0 16px;
+}
+.at-tag-editor-subtab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--mj-text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: -1px;
+}
+.at-tag-editor-subtab:hover {
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-hover);
+}
+.at-tag-editor-subtab-active {
+    color: var(--mj-brand-primary);
+    border-bottom-color: var(--mj-brand-primary);
+}
+.at-tag-editor-subtab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--mj-radius-full, 999px);
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* ── Editor panes (shared) ── */
+.at-tag-editor-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.at-tag-editor-loading,
+.at-tag-editor-empty {
+    padding: 16px;
+    color: var(--mj-text-muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+/* ── Governance ── */
+.at-gov-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: var(--mj-radius, 8px);
+}
+.at-gov-toggle-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+.at-gov-toggle-sub {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+}
+.at-gov-field-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+.at-gov-impact {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    background: color-mix(in srgb, var(--mj-status-info) 8%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-status-info-border);
+    border-radius: var(--mj-radius, 8px);
+    color: var(--mj-status-info-text);
+    font-size: 12.5px;
+}
+.at-gov-impact i {
+    margin-top: 2px;
+    color: var(--mj-status-info);
+}
+
+/* ── Synonyms ── */
+.at-syn-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.at-syn-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: var(--mj-radius, 8px);
+}
+.at-syn-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--mj-text-primary);
+}
+.at-syn-pill {
+    padding: 2px 10px;
+    border-radius: var(--mj-radius-full, 999px);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.at-syn-pill-manual {
+    background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+}
+.at-syn-pill-llm {
+    background: color-mix(in srgb, var(--mj-status-info) 14%, var(--mj-bg-surface));
+    color: var(--mj-status-info-text);
+}
+.at-syn-pill-imported {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+}
+.at-syn-pill-merged {
+    background: color-mix(in srgb, var(--mj-status-warning) 14%, var(--mj-bg-surface));
+    color: var(--mj-status-warning-text);
+}
+.at-syn-pill-pending {
+    background: color-mix(in srgb, var(--mj-status-warning) 18%, var(--mj-bg-surface));
+    color: var(--mj-status-warning-text);
+}
+.at-syn-pill-rejected {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+}
+.at-syn-item-pending {
+    border-color: var(--mj-status-warning-border);
+    background: color-mix(in srgb, var(--mj-status-warning) 6%, var(--mj-bg-surface-card));
+}
+.at-syn-pending-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    border-radius: var(--mj-radius, 8px);
+    background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+    color: var(--mj-status-warning-text);
+    border: 1px solid var(--mj-status-warning-border);
+}
+.at-syn-delete {
+    background: transparent;
+    border: none;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--mj-radius-sm, 4px);
+}
+.at-syn-delete:hover:not(:disabled) {
+    color: var(--mj-status-error);
+    background: var(--mj-bg-surface-hover);
+}
+.at-syn-delete:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.at-syn-add {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.at-syn-add .at-form-input {
+    flex: 1;
+}
+
+/* ── Scope ── */
+.at-scope-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.at-scope-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: var(--mj-radius, 8px);
+}
+.at-scope-entity {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+.at-scope-record {
+    flex: 1;
+    font-size: 12px;
+    color: var(--mj-text-muted);
+    font-family: var(--mj-font-mono, monospace);
+}
+.at-scope-add {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.at-scope-entity-picker {
+    flex: 1;
+    min-width: 0;
+}
+.at-scope-add .at-form-input {
+    flex: 1;
+}
+.at-scope-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--mj-text-muted);
+}

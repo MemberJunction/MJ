@@ -1,6 +1,52 @@
 <div class="chat-area">
-  <!-- Fixed Header -->
-  @if (conversation) {
+  <!-- agentPresence slot — sticky top, anchored with the header. Per Matt's
+       06-10 design: persistent presence indicator (Sid's face + live voice
+       state). Off by default; opt in via [showAgentCharacter]. When a
+       consumer projects an `mjChatSlot="agentPresence"` template, it
+       replaces the default presence component. -->
+  @if (showAgentCharacter) {
+    <div class="chat-agent-presence" [class.chat-agent-presence--prominent]="agentCharacterConfig?.voiceStateMode === 'prominent'">
+      @if (slotTemplate('agentPresence'); as t) {
+        <ng-container *ngTemplateOutlet="t; context: {
+          $implicit: agentCharacterConfig,
+          state: agentCharacterConfig?.state ?? 'idle',
+          agentName: agentCharacterConfig?.characterName,
+          avatarUrl: agentCharacterConfig?.avatarUrl,
+          mode: agentCharacterConfig?.voiceStateMode ?? 'subtle'
+        }"></ng-container>
+      } @else {
+        <mj-chat-agent-presence-default
+          [State]="agentCharacterConfig?.state ?? 'idle'"
+          [AgentName]="agentCharacterConfig?.characterName"
+          [AvatarUrl]="agentCharacterConfig?.avatarUrl"
+          [Mode]="agentCharacterConfig?.voiceStateMode ?? 'subtle'">
+        </mj-chat-agent-presence-default>
+      }
+    </div>
+  }
+
+  <!-- header slot — replaces the entire chat-header chrome (title, badges,
+       export/share/agent-picker buttons). When projected, the consumer owns
+       the entire header rendering; the default chrome below is bypassed
+       wholesale. Context exposes the minimal IMJChatHeaderComponent shape;
+       consumers needing more app state should bind to chat-area inputs
+       directly via @ViewChild or wrap the whole component. -->
+  @if (slotTemplate('header'); as t) {
+    <ng-container *ngTemplateOutlet="t; context: {
+      $implicit: conversation,
+      conversationTitle: conversation?.Name ?? null,
+      sharedBy: sharedByBadge?.display ?? null,
+      artifactCount: artifactCountDisplay,
+      showArtifactIndicator: showArtifactIndicator
+    }"></ng-container>
+  } @else if (conversation || HasPreConversationHeader) {
+    <!-- Default header — also renders BEFORE a conversation exists when the
+         embedder has pre-conversation chrome to surface (currently just the
+         mode picker — agent / share / export / members / artifacts all
+         require a conversation row and stay hidden). Lets embedded surfaces
+         like the Form Builder cockpit show the mode picker above the
+         empty-state on a fresh chat instead of waiting for the first
+         message to round-trip. -->
     <div class="chat-header">
       <div class="chat-info" [class.with-sidebar-toggle]="showSidebarToggle">
         @if (showSidebarToggle) {
@@ -10,21 +56,23 @@
             <i class="fas fa-table-columns"></i>
           </button>
         }
-        <div class="chat-title">{{ conversation.Name || '' }}</div>
+        @if (conversation) {
+          <div class="chat-title">{{ conversation.Name || '' }}</div>
+        }
         @if (sharedByBadge) {
           <span class="shared-by-badge" [title]="sharedByBadge.fullTooltip">
             <i class="fas fa-share-nodes"></i>
             <span>Shared by {{ sharedByBadge.display }}</span>
           </span>
         }
-        @if (conversation.ProjectID) {
+        @if (conversation?.ProjectID) {
           <button class="project-tag" (click)="openProjectSelector()" title="Assign to project">
             <i class="fas fa-folder"></i>
-            <span>{{ conversation.Project || 'Project' }}</span>
+            <span>{{ conversation!.Project || 'Project' }}</span>
           </button>
         }
-        @if (conversation.TestRunID) {
-          <button class="test-indicator" (click)="viewTestRun(conversation.TestRunID)" title="View Test Run">
+        @if (conversation?.TestRunID) {
+          <button class="test-indicator" (click)="viewTestRun(conversation!.TestRunID!)" title="View Test Run">
             <i class="fas fa-flask"></i>
             <span>Test</span>
           </button>
@@ -49,6 +97,30 @@
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
+        @if (showAgentModePicker && ModePickerTargetAgentId) {
+          <!-- Per-agent mode/quality picker (Draft / Standard / High).
+               Targets the agent the next non-mention message will route
+               to. Auto-hides when that agent has fewer than 2 configured
+               presets. Choice persists per-user, per-agent via
+               UserInfoEngine; emits the picked configuration ID up so
+               <mj-message-input> can forward it on the next route. -->
+          <mj-conversation-mode-picker
+            [AgentID]="ModePickerTargetAgentId"
+            [Disabled]="isProcessing"
+            (PresetChanged)="OnAgentModePresetChanged($event)">
+          </mj-conversation-mode-picker>
+        }
+        @if (showAgentPicker && conversation) {
+          <!-- Per-conversation default-agent pin. When set, non-mention
+               messages route to this agent instead of Sage. Persists to
+               MJConversationEntity.DefaultAgentID. Hidden when no
+               conversation is loaded or when the embedder disables it. -->
+          <mj-conversation-agent-picker
+            [Conversation]="conversation"
+            [CurrentUser]="currentUser"
+            [Disabled]="isReadOnlyView">
+          </mj-conversation-agent-picker>
+        }
         @if (showExportButton) {
           <button mjButton variant="flat" size="sm" (click)="exportConversation()" title="Export conversation">
             <i class="fas fa-download"></i>
@@ -68,8 +140,24 @@
     </div>
   }
 
-  <!-- Messages and Artifact Split Layout -->
-  <div class="chat-content-area">
+  <!-- Messages and Artifact Split Layout — restructures into [stage | rail]
+       when isDemonstrationActive (per Matt's 06-10 design). The .demonstration-mode
+       class drives the CSS Grid switch; the stage container renders only when the
+       slot is projected AND the host opts in via [showDemonstrationSurface]. -->
+  <div class="chat-content-area" [class.demonstration-mode]="isDemonstrationActive">
+    <!-- demonstrationSurface stage — takes the main pane; messages shrink to
+         a side rail (or move below on mobile). Off unless both
+         [showDemonstrationSurface] is true AND a slot template is projected. -->
+    @if (isDemonstrationActive) {
+      <div class="chat-demonstration-stage">
+        <ng-container *ngTemplateOutlet="slotTemplate('demonstrationSurface'); context: {
+          $implicit: demonstrationSurfaceContent,
+          content: demonstrationSurfaceContent,
+          visible: showDemonstrationSurface
+        }"></ng-container>
+      </div>
+    }
+
     <!-- Messages Pane -->
     <div class="chat-messages-pane"
       [class.full-width]="!showArtifactPanel"
@@ -79,21 +167,61 @@
         <div class="conversation-loading-state">
           <mj-loading text="Loading conversation..." size="large"></mj-loading>
         </div>
-      } @else if (isNewConversation || !conversationId) {
-        <!-- Empty State - No conversation selected OR new unsaved conversation -->
-        <mj-conversation-empty-state
-          [currentUser]="currentUser"
-          [disabled]="isProcessing"
-          [showSidebarToggle]="showSidebarToggle"
-          [overlayMode]="overlayMode"
-          [greeting]="emptyStateGreeting"
-          [enableAttachments]="enableAttachments"
-          [maxAttachments]="maxAttachments"
-          [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
-          [acceptedFileTypes]="acceptedFileTypes"
-          (sidebarToggleClicked)="sidebarToggleClicked.emit()"
-          (messageSent)="onEmptyStateMessageSent($event)">
-        </mj-conversation-empty-state>
+      } @else if ((isNewConversation || !conversationId) && !suppressNewConversationEmptyState) {
+        <!-- emptyState slot — when a consumer projects mjChatSlot="emptyState",
+             they take over the entire empty-state region (including any send
+             affordance — the slot interface doesn't include a sendMessage
+             output, so consumers handle send via their own input). When no
+             slot is projected, the rich built-in <mj-conversation-empty-state>
+             renders with its own greeting, prompt chips, and message input.
+             emptyStateConfig (when supplied) takes precedence over the legacy
+             [emptyStateGreeting] string for backwards compatibility. -->
+        @if (slotTemplate('emptyState'); as t) {
+          <ng-container *ngTemplateOutlet="t; context: {
+            $implicit: emptyStateConfig,
+            greeting: emptyStateConfig?.greeting ?? emptyStateGreeting,
+            subtext: emptyStateConfig?.subtext,
+            suggestedPrompts: emptyStateConfig?.suggestedPrompts ?? []
+          }"></ng-container>
+        } @else {
+          <mj-conversation-empty-state
+            [currentUser]="currentUser"
+            [disabled]="isProcessing"
+            [showSidebarToggle]="showSidebarToggle"
+            [overlayMode]="overlayMode"
+            [greeting]="emptyStateConfig?.greeting ?? emptyStateGreeting"
+            [enableAttachments]="enableAttachments && allowAttachments"
+            [enableMentions]="allowMentions"
+            [maxAttachments]="maxAttachments"
+            [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+            [acceptedFileTypes]="acceptedFileTypes"
+            (sidebarToggleClicked)="sidebarToggleClicked.emit()"
+            (messageSent)="onEmptyStateMessageSent($event)">
+          </mj-conversation-empty-state>
+        }
+      } @else if ((isNewConversation || !conversationId) && suppressNewConversationEmptyState) {
+        <!-- Pre-conversation normal-view: empty message list + emptyStateMode input.
+             Used when host (e.g. Form Builder cockpit) wants the header + mode picker
+             visible on first open instead of the centered welcome card. First send
+             routes through onEmptyStateMessageSent which creates the conversation. -->
+        <div class="chat-messages-wrapper">
+          <div class="chat-messages-container"></div>
+          <div class="chat-input-container">
+            <div class="message-input-container-wrapper">
+              <mj-message-input
+                [emptyStateMode]="true"
+                [currentUser]="currentUser"
+                [disabled]="isProcessing"
+                [enableAttachments]="enableAttachments && allowAttachments"
+                [enableMentions]="allowMentions"
+                [maxAttachments]="maxAttachments"
+                [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+                [acceptedFileTypes]="acceptedFileTypes"
+                (emptyStateSubmit)="onEmptyStateMessageSent($event)">
+              </mj-message-input>
+            </div>
+          </div>
+        </div>
       } @else {
         <!-- Normal Message View -->
         <div class="chat-messages-wrapper">
@@ -114,6 +242,10 @@
               [ratingsMap]="ratingsByDetailId"
               [userAvatarMap]="userAvatarMap"
               [attachmentsMap]="attachmentsByDetailId"
+              [messageRendererTemplate]="slotTemplate('messageRenderer')"
+              [messageExtraTemplate]="slotTemplate('messageExtra')"
+              [sessionMetaMap]="realtimeSessionMetaMap"
+              (realtimeSessionOpenRequested)="OpenRealtimeSessionReview($event)"
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
               (deleteMessage)="onDeleteMessage($event)"
@@ -125,7 +257,9 @@
               (suggestedResponseSelected)="onSuggestedResponseSelected($event)"
               (attachmentClicked)="onAttachmentClicked($event)"
               (diagnosticRequested)="onDiagnosticRequested($event)"
-              (messagePinToggled)="onMessagePinToggled($event)">
+              (messagePinToggled)="onMessagePinToggled($event)"
+              (beforeResponseFormSubmitted)="beforeResponseFormSubmitted.emit($event)"
+              (afterResponseFormSubmitted)="afterResponseFormSubmitted.emit($event)">
             </mj-conversation-message-list>
 
             <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
@@ -165,9 +299,14 @@
                     [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
                     [appContext]="appContext"
+                    [applicationId]="applicationId"
+                    [defaultAgentId]="defaultAgentId"
+                    [conversationDefaultAgentId]="inputRef.conversationId === conversationId ? (conversation?.DefaultAgentID ?? null) : null"
+                    [agentConfigurationPresetId]="inputRef.conversationId === conversationId ? ActiveAgentConfigurationPresetId : null"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing || isReadOnlyView"
-                    [enableAttachments]="enableAttachments"
+                    [enableAttachments]="enableAttachments && allowAttachments"
+                    [enableMentions]="allowMentions"
                     [maxAttachments]="maxAttachments"
                     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
                     [acceptedFileTypes]="acceptedFileTypes"
@@ -182,6 +321,8 @@
                     (conversationRenamed)="onConversationRenamed($event)"
                     (intentCheckStarted)="onIntentCheckStarted()"
                     (intentCheckCompleted)="onIntentCheckCompleted()"
+                    (beforeAgentTurn)="beforeAgentTurn.emit($event)"
+                    (afterAgentTurn)="afterAgentTurn.emit($event)"
                     (uploadStateChanged)="onUploadStateChanged($event)">
                   </mj-message-input>
                 }
@@ -217,7 +358,8 @@
           (maximizeToggled)="toggleMaximizeArtifactPane()"
           (openEntityRecord)="onOpenEntityRecord($event)"
           (navigationRequest)="onNavigationRequest($event)"
-          (analyzeRequested)="OnAnalyzeArtifact($event)">
+          (analyzeRequested)="OnAnalyzeArtifact($event)"
+          (applyFormRequested)="OnApplyFormRequested($event)">
         </mj-artifact-viewer-panel>
       </div>
     }
@@ -241,6 +383,38 @@
       </mj-pinned-messages-panel>
     }
   </div>
+
+  <!-- Live voice "call mode" overlay — fills this conversation panel in place
+       (header + thread + composer) while a realtime session is active. When the
+       call is MINIMIZED (e.g. a dev link navigated to a record) the overlay HIDES
+       (not destroyed — its merged session state must survive), the session stays
+       fully live, and a floating "on call" pill offers the way back.
+       ALSO hosted in SESSION REVIEW mode (RealtimeReview set, no live call): the
+       overlay renders what went down in a PAST session, with a "Start live session"
+       button that resumes it as a new call. -->
+  @if ((RealtimeSession.Active$ | async) || RealtimeReview) {
+    <mj-realtime-session-overlay
+      [AgentName]="realtimeOverlayAgentName"
+      [Hidden]="(RealtimeSession.Minimized$ | async) === true"
+      [CurrentUser]="currentUser"
+      [EnvironmentID]="environmentId"
+      [ReviewData]="RealtimeReview"
+      (NavigateRequest)="onVoiceNavigateRequest($event)"
+      (StartLiveRequested)="onReviewStartLive($event)"
+      (ReviewClosed)="onReviewClosed()">
+    </mj-realtime-session-overlay>
+    @if (RealtimeSession.Minimized$ | async) {
+      <button type="button" class="voice-call-pill" (click)="RealtimeSession.SetMinimized(false)"
+              title="Return to the live call" aria-label="Return to the live call">
+        <span class="voice-call-pill__pulse" aria-hidden="true"></span>
+        <i class="fa-solid fa-phone-volume" aria-hidden="true"></i>
+        <span class="voice-call-pill__text">
+          <span class="voice-call-pill__name">On call · {{ RealtimeSession.CurrentAgentName }}</span>
+          <span class="voice-call-pill__hint">Tap to return</span>
+        </span>
+      </button>
+    }
+  }
 </div>
 
 <!-- Thread Panel -->

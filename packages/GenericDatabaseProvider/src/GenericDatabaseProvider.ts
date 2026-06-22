@@ -22,6 +22,8 @@ import {
     EntityInfo,
     EntityFieldInfo,
     EntityFieldTSType,
+    ProjectRowsToFields,
+    ProviderBase,
     EntitySaveOptions,
     EntityDeleteOptions,
     EntityPermissionType,
@@ -40,7 +42,6 @@ import {
     RunQueryWithCacheCheckParams,
     RunQueriesWithCacheCheckResponse,
     RunQueryWithCacheCheckResult,
-    QueryInfo,
     QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
@@ -57,7 +58,6 @@ import {
     LogStatus,
     LogStatusEx,
     StripStopWords,
-    QueryCacheManager,
     DatabasePlatform,
     QueryExecutionSpec,
     SaveContext,
@@ -82,13 +82,16 @@ import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
     MJEntityAIActionEntity,
-    MJQueryEntity,
+    MJQueryEntityExtended,
+    MJQueryParameterEntity,
     MJUserViewEntityExtended,
     QueryEngine,
     ViewInfo,
 } from '@memberjunction/core-entities';
 
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
+import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
+import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -703,7 +706,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (!rows || rows.length === 0) return rows;
 
         // Step 1: Platform-specific datetime adjustment (virtual hook)
-        const datetimeFields = entityInfo.Fields.filter((field) => field.TSType === EntityFieldTSType.Date);
+        const datetimeFields = entityInfo.DatetimeFields; // memoized on EntityInfo (was Fields.filter per query)
         let processedRows: Record<string, unknown>[] = rows;
         if (datetimeFields.length > 0) {
             processedRows = await this.AdjustDatetimeFields(processedRows, datetimeFields, entityInfo);
@@ -900,6 +903,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Detects infrastructure-level connection errors (timeout, refused, pool closed)
+     * as opposed to query-level errors (bad SQL, constraint violations).
+     * Delegates to the dialect's driver-specific error classification, with a
+     * fallback for POOL_CLOSED errors thrown by our own code.
+     */
+    protected isConnectionError(e: unknown): boolean {
+        // Dialect-specific check (mssql ConnectionError, pg network codes, etc.)
+        if (this.getDialect()?.IsConnectionError(e)) return true;
+
+        // Our own pool-closed errors are not dialect-specific
+        if (e instanceof Error) {
+            const code = (e as { code?: string }).code ?? '';
+            if (code === 'POOL_CLOSED') return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Returns the batch separator token for the underlying database platform by delegating to
      * the SQLDialect instance returned by `getDialect()`.
      * SQL Server → `'GO'`, PostgreSQL → `''` (no separator needed).
@@ -1042,22 +1064,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // to avoid duplicate DECLARE/SET. Skip here.
             if (isUpdate && f.IsPrimaryKey) continue;
 
-            // PK-on-CREATE with no explicit value: omit so the SP default fires.
-            const isPKOnCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement;
-            if (isPKOnCreate) {
-                const v = entity.Get(f.Name);
-                if (v === null || v === undefined) continue;
-            }
-
-            // Read with ActiveStatusAssertions temporarily disabled — matches
-            // the prior SS path which silenced warnings for this lookup.
+            // Resolve the EntityField instance once and read its Value directly. This is a
+            // framework-internal read for SQL parameter building, so it deliberately bypasses
+            // entity.Get(), which would assert active status (deprecation warning / disabled throw)
+            // for what is NOT user use of the field. (EntityField.Value itself never asserts.)
             const theField = entity.Fields.find(
                 (field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase(),
             );
-            const tempStatus = theField?.ActiveStatusAssertions;
-            if (theField) theField.ActiveStatusAssertions = false;
             const rawValue = theField?.Value;
-            if (theField && tempStatus !== undefined) theField.ActiveStatusAssertions = tempStatus;
+
+            // PK-on-CREATE with no explicit value: omit so the SP default fires.
+            const isPKOnCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement;
+            if (isPKOnCreate && (rawValue === null || rawValue === undefined)) continue;
 
             const coerced = this.CoerceSaveFieldValue(f, rawValue, isUpdate);
             if (coerced.kind === 'skip') continue;
@@ -1420,10 +1438,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             if (!viewEntity) {
                 if (!params.EntityName || params.EntityName.length === 0) throw new Error('EntityName is required when ViewID or ViewName is not provided');
-                entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === params.EntityName!.trim().toLowerCase()) ?? null;
+                entityInfo = this.EntityByName(params.EntityName) ?? null;
                 if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
             } else {
-                entityInfo = this.Entities.find((e) => UUIDsEqual(e.ID, viewEntity!.EntityID)) ?? null;
+                entityInfo = this.EntityByID(viewEntity!.EntityID) ?? null;
                 if (!entityInfo) throw new Error(`Entity ID: ${viewEntity.EntityID} not found in metadata`);
             }
 
@@ -1480,7 +1498,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // ── Build SELECT and COUNT SQL ──
             const topFragment = topSQL ? topSQL + ' ' : '';
             let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
-            let countSQL: string | null = this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
+            // count_only ALWAYS needs the count query — BuildTotalRowCountSQL only emits
+            // it when rows are limited (its pagination purpose), which previously left
+            // count_only with no COUNT at all (silently returned TotalRowCount 0).
+            let countSQL: string | null = params.ResultType === 'count_only'
+                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`
+                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
 
             // ── WHERE clause assembly ──
             let whereSQL = '';
@@ -1529,13 +1552,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 bHasWhere = true;
             }
 
-            // 5. Row-Level Security
-            if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-                const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-                if (rlsWhereClause && rlsWhereClause.length > 0) {
-                    whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
-                    bHasWhere = true;
-                }
+            // 5. Row-Level Security (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
+            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+            if (rlsWhereClause && rlsWhereClause.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
+                bHasWhere = true;
             }
 
             // 6. Keyset (AfterKey) seek predicate — only on the data query, NOT the count query.
@@ -1701,6 +1722,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 AggregateExecutionTime: aggregateExecutionTime,
             } as RunViewResult<T>;
         } catch (e) {
+            // Re-throw infrastructure errors (connection timeout, pool closed, etc.)
+            // so callers can distinguish "database is unreachable" from "query returned
+            // no results." Only query-level errors are safe to return as { Success: false }.
+            if (this.isConnectionError(e)) {
+                throw e;
+            }
+
             const exceptionStopTime = new Date();
             LogError(e);
             return {
@@ -1750,7 +1778,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (viewEntity) {
                 entityInfo = viewEntity.ViewEntityInfo;
             } else {
-                entityInfo = this.Entities.find((e) => e.Name === params.EntityName) ?? null;
+                entityInfo = (params.EntityName ? this.EntityByName(params.EntityName) : undefined) ?? null;
                 if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
             }
 
@@ -1759,7 +1787,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     if (!params.Fields.find((f) => f.trim().toLowerCase() === ef.Name.toLowerCase())) fieldList.push(ef);
                 }
                 params.Fields.forEach((f) => {
-                    const field = entityInfo!.Fields.find((field) => field.Name.trim().toLowerCase() === f.trim().toLowerCase());
+                    const field = entityInfo!.FieldByName(f); // O(1) index (was O(F) Fields.find → O(F²) over the loop)
                     if (field) fieldList.push(field);
                     else LogError(`Field ${f} not found in entity ${entityInfo!.Name}`);
                 });
@@ -2009,6 +2037,38 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return { success: false, results: [], errorMessage: 'No user context available' };
             }
 
+            // ── Superset/projection contract (same as the ProviderBase pipeline) ──
+            // For every cache-eligible item: widen Fields to ALL entity fields so any
+            // cache write stores the universal superset, and remember the caller's
+            // requested shape (∪ primary keys — platform contract) so every serve leg
+            // projects back down before returning rows to the client. This path
+            // previously cached narrow rows under the Fields-agnostic fingerprint and
+            // served cached rows unprojected — one client's shape poisoned the slot
+            // for every subsequent caller.
+            const callerFieldsByIndex = new Map<number, string[]>();
+            for (let i = 0; i < params.length; i++) {
+                // Shallow-clone: widening must never leak into the caller's objects
+                params[i] = { ...params[i], params: { ...params[i].params } };
+                const p = params[i].params;
+                const widenEntity = p.EntityName ? this.EntityByName(p.EntityName) : null;
+                if (widenEntity && this.runViewCacheEligible(p)) {
+                    const requested = p.Fields && p.Fields.length > 0
+                        ? p.Fields.map(f => f.trim().toLowerCase())
+                        : null;
+                    p.Fields = widenEntity.Fields.map(f => f.Name);
+                    if (requested) {
+                        callerFieldsByIndex.set(i, ProviderBase.UnionFieldsWithPrimaryKeys(requested, widenEntity));
+                    }
+                }
+            }
+            /** Projects rows down to the caller's requested shape for a given item index. */
+            const projectForCaller = (index: number, rows: unknown[]): unknown[] => {
+                const callerFields = callerFieldsByIndex.get(index);
+                return callerFields
+                    ? ProjectRowsToFields(rows as Record<string, unknown>[], callerFields)
+                    : rows;
+            };
+
             // Separate items by type: no cache check, needs validation
             const itemsWithoutCacheCheck: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
             const itemsNeedingValidation: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
@@ -2024,9 +2084,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
-                const entityInfo = this.Entities.find(
-                    (e) => e.Name.trim().toLowerCase() === item.params.EntityName?.trim().toLowerCase(),
-                );
+                const entityInfo = item.params.EntityName ? this.EntityByName(item.params.EntityName) : undefined;
                 if (!entityInfo) {
                     errorResults.push({ viewIndex: i, status: 'error', errorMessage: `Entity ${item.params.EntityName} not found in metadata` });
                     continue;
@@ -2047,7 +2105,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
                 const entityLabel = item.params.EntityName || 'unknown';
-                const resolved = await this.resolveFromServerCache(item, index, entityLabel);
+                const resolved = await this.resolveFromServerCache(item, index, entityLabel, contextUser);
                 if (resolved) {
                     if (resolved.status === 'current') {
                         currentResults.push(resolved.result);
@@ -2113,7 +2171,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             for (const entry of itemsWithoutCacheCheck) {
                 if (LocalCacheManager.Instance.IsInitialized) {
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString);
+                    const rlsWhereClause = this.ComputeRunViewRLSWhereClause(entry.item.params, contextUser);
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString, rlsWhereClause);
                     const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                     if (cached) {
                         const entityLabel = entry.item.params.EntityName || 'unknown';
@@ -2125,27 +2184,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 noCacheStatusNeedsDB.push(entry);
             }
 
-            // Phase 4: Run queries in parallel for items needing data
+            // Phase 4: Run queries in parallel for items needing data.
+            // Every leg that returns rows projects them down to the caller's requested
+            // shape (callerFieldsByIndex) — the cache always holds the wide superset.
             const queryPromises: Promise<RunViewWithCacheCheckResult<T>>[] = [
                 // Items without cache check — served from server cache
                 ...noCacheStatusServedFromCache.map(({ index, serverCached }) =>
-                    this.serveFromServerCache<T>(index, serverCached),
+                    this.serveFromServerCache<T>(index, serverCached, callerFieldsByIndex.get(index) ?? null),
                 ),
                 // Items without cache check — server cache miss, must hit DB
                 ...noCacheStatusNeedsDB.map(({ index, item }) =>
-                    this.runFullQueryAndCacheResult<T>(item.params, index, contextUser),
+                    this.runFullQueryAndCacheResult<T>(item.params, index, contextUser, callerFieldsByIndex.get(index) ?? null),
                 ),
                 // Server cache stale — serve from server's cached data (zero DB)
                 ...serverCacheStaleItems.map(({ index, serverCached }) =>
-                    this.serveFromServerCache<T>(index, serverCached),
+                    this.serveFromServerCache<T>(index, serverCached, callerFieldsByIndex.get(index) ?? null),
                 ),
                 // DB-validated stale items (no change tracking)
                 ...staleItemsNoTracking.map(({ index, params: viewParams }) =>
-                    this.runFullQueryAndCacheResult<T>(viewParams, index, contextUser),
+                    this.runFullQueryAndCacheResult<T>(viewParams, index, contextUser, callerFieldsByIndex.get(index) ?? null),
                 ),
                 // DB-validated differential items
                 ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
-                    this.runDifferentialQueryAndReturn<T>(viewParams, entityInfo, clientMaxUpdatedAt, clientRowCount, serverStatus, whereSQL, index, contextUser),
+                    this.runDifferentialQueryAndReturn<T>(viewParams, entityInfo, clientMaxUpdatedAt, clientRowCount, serverStatus, whereSQL, index, contextUser, callerFieldsByIndex.get(index) ?? null),
                 ),
             ];
 
@@ -2197,11 +2258,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
 
-        if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-            if (rlsWhereClause && rlsWhereClause.length > 0) {
-                whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
-            }
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        if (rlsWhereClause && rlsWhereClause.length > 0) {
+            whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
         }
 
         return whereSQL;
@@ -2266,13 +2325,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         params: RunViewParams,
         viewIndex: number,
         contextUser?: UserInfo,
+        callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         const result = await this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
-        // Cache the result so subsequent RunViewsWithCacheCheck calls can skip DB
-        if (result.status !== 'error' && result.results && LocalCacheManager.Instance.IsInitialized) {
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
-            const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this);
+        if (result.status !== 'error' && result.results) {
+            // Cache the WIDE result (params.Fields was widened by RunViewsWithCacheCheck
+            // for eligible items) so subsequent calls can serve any field subset. The
+            // eligibility gate matters: BypassCache/AfterKey/count_only results were
+            // never widened and must NOT be written under the superset fingerprint.
+            if (this.runViewCacheEligible(params) && LocalCacheManager.Instance.IsInitialized) {
+                const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
+                const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
+                await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this);
+            }
+            // Project the response down to the caller's requested shape AFTER the
+            // cache write — the cache keeps the superset, the caller gets their fields.
+            if (callerFields) {
+                result.results = ProjectRowsToFields(result.results as Record<string, unknown>[], callerFields) as T[];
+            }
         }
         return result;
     }
@@ -2286,10 +2357,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         item: RunViewWithCacheCheckParams,
         index: number,
         entityLabel: string,
+        contextUser?: UserInfo,
     ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } } | null> {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString);
+        const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString, rlsWhereClause);
         const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
         if (!cached) return null;
 
@@ -2310,11 +2383,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
         serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number },
+        callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
+        // The server cache stores the full-width superset — project down to the
+        // caller's requested fields (∪ PK) before returning, exactly like the
+        // ProviderBase hit path. Serving unprojected rows here previously leaked
+        // whatever shape happened to be cached to every subsequent caller.
+        const results = callerFields
+            ? ProjectRowsToFields(serverCached.results as Record<string, unknown>[], callerFields)
+            : serverCached.results;
         return {
             viewIndex,
             status: 'stale',
-            results: serverCached.results as T[],
+            results: results as T[],
             maxUpdatedAt: serverCached.maxUpdatedAt,
             rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
         };
@@ -2334,6 +2415,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         whereSQL: string,
         viewIndex: number,
         contextUser?: UserInfo,
+        callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         try {
             const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, clientMaxUpdatedAt, whereSQL, contextUser);
@@ -2342,8 +2424,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Validation: detect hidden deletes not tracked in RecordChanges
             const clientMaxUpdatedDate = this.parseClientTimestamp(clientMaxUpdatedAt);
             if (!clientMaxUpdatedDate) {
-                // Unparseable client timestamp — can't trust the differential math; fall back.
-                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+                // Unparseable client timestamp — can't trust the differential math; fall
+                // back to a full refresh (cached wide + projected, like every other leg).
+                return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
             }
             const newInserts = updatedRows.filter(row => {
                 const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
@@ -2358,22 +2441,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             if (impliedDeletes < 0) {
                 LogStatus(`Differential validation failed for ${entityInfo.Name}: impliedDeletes=${impliedDeletes} (negative). Falling back to full refresh.`);
-                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+                return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
             }
 
             if (impliedDeletes > actualDeletes) {
                 LogStatus(`Differential validation failed for ${entityInfo.Name}: hidden deletes detected (implied=${impliedDeletes}, actual=${actualDeletes}). Falling back to full refresh.`);
-                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+                return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
             }
 
+            // Compute maxUpdatedAt BEFORE projection — the caller may not have
+            // requested __mj_UpdatedAt, and projection would strip it.
             const newMaxUpdatedAt = updatedRows.length > 0
                 ? this.extractMaxUpdatedAt(updatedRows)
                 : serverStatus.maxUpdatedAt || new Date().toISOString();
 
+            // Project differential rows to the caller's shape — the client merges these
+            // into its per-Fields cache slot, so the shapes must match by construction.
+            const projectedRows = callerFields
+                ? ProjectRowsToFields(updatedRows as Record<string, unknown>[], callerFields) as T[]
+                : updatedRows;
+
             return {
                 viewIndex,
                 status: 'differential',
-                differentialData: { updatedRows, deletedRecordIDs },
+                differentialData: { updatedRows: projectedRows, deletedRecordIDs },
                 maxUpdatedAt: newMaxUpdatedAt,
                 rowCount: serverStatus.rowCount,
             };
@@ -2459,53 +2550,68 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return { success: false, results: [], errorMessage: 'No user context available' };
             }
 
-            const itemsNeedingCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }> = [];
+            const itemsNeedingCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const itemsWithoutCacheCheck: Array<{ index: number; item: RunQueryWithCacheCheckParams }> = [];
-            const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }> = [];
+            const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
+            const firstFetchWithValidation: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const errorResults: RunQueryWithCacheCheckResult<T>[] = [];
 
             for (let i = 0; i < params.length; i++) {
                 const item = params[i];
-                const queryInfo = this.resolveQueryInfo(item.params);
-                if (!queryInfo) {
+                const query = this.resolveQuery(item.params);
+                if (!query) {
                     errorResults.push({ queryIndex: i, queryId: item.params.QueryID || '', status: 'error', errorMessage: `Query not found: ${item.params.QueryID || item.params.QueryName}` });
                     continue;
                 }
 
-                if (!queryInfo.UserCanRun(user)) {
-                    errorResults.push({ queryIndex: i, queryId: queryInfo.ID, status: 'error', errorMessage: `User does not have permission to run query: ${queryInfo.Name}` });
+                const runCheck = query.UserCanRun(user);
+                if (!runCheck.canRun) {
+                    const deniedMsg = runCheck.deniedEntities.length > 0
+                        ? ` Denied entities: ${runCheck.deniedEntities.join(', ')}.`
+                        : '';
+                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage: `User does not have permission to run query: ${query.Name}.${deniedMsg}` });
                     continue;
                 }
 
                 if (!item.cacheStatus) {
-                    itemsWithoutCacheCheck.push({ index: i, item });
+                    if (query.CacheValidationSQL) {
+                        // First fetch for a validated query — run the validation status
+                        // anyway so the fresh response is STAMPED with the validation
+                        // SQL's maxUpdatedAt/rowCount. Slots stamped from result rows
+                        // (always '' for aggregate queries) could never validate
+                        // 'current' on subsequent checks.
+                        firstFetchWithValidation.push({ index: i, item, query });
+                    } else {
+                        itemsWithoutCacheCheck.push({ index: i, item });
+                    }
                     continue;
                 }
 
-                if (!queryInfo.CacheValidationSQL) {
-                    itemsWithoutValidationSQL.push({ index: i, item, queryInfo });
+                if (!query.CacheValidationSQL) {
+                    itemsWithoutValidationSQL.push({ index: i, item, query });
                     continue;
                 }
 
-                itemsNeedingCacheCheck.push({ index: i, item, queryInfo });
+                itemsNeedingCacheCheck.push({ index: i, item, query });
             }
 
-            const cacheStatusResults = await this.getBatchedQueryCacheStatus(itemsNeedingCacheCheck, contextUser);
+            const cacheStatusResults = await this.getBatchedQueryCacheStatus(
+                [...itemsNeedingCacheCheck, ...firstFetchWithValidation], contextUser);
 
-            const staleItems: Array<{ index: number; params: RunQueryParams; queryInfo: QueryInfo }> = [];
+            const staleItems: Array<{ index: number; params: RunQueryParams; query: MJQueryEntityExtended }> = [];
             const currentResults: RunQueryWithCacheCheckResult<T>[] = [];
 
-            for (const { index, item, queryInfo } of itemsNeedingCacheCheck) {
+            for (const { index, item, query } of itemsNeedingCacheCheck) {
                 const serverStatus = cacheStatusResults.get(index);
                 if (!serverStatus || !serverStatus.success) {
-                    errorResults.push({ queryIndex: index, queryId: queryInfo.ID, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
+                    errorResults.push({ queryIndex: index, queryId: query.ID, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
                     continue;
                 }
 
                 if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
-                    currentResults.push({ queryIndex: index, queryId: queryInfo.ID, status: 'current' });
+                    currentResults.push({ queryIndex: index, queryId: query.ID, status: 'current' });
                 } else {
-                    staleItems.push({ index, params: item.params, queryInfo });
+                    staleItems.push({ index, params: item.params, query });
                 }
             }
 
@@ -2513,11 +2619,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ...itemsWithoutCacheCheck.map(({ index, item }) =>
                     this.runFullQueryAndReturnForQuery<T>(item.params, index, 'stale', contextUser),
                 ),
-                ...itemsWithoutValidationSQL.map(({ index, item, queryInfo }) =>
-                    this.runFullQueryAndReturnForQuery<T>(item.params, index, 'no_validation', contextUser, queryInfo.ID),
+                ...itemsWithoutValidationSQL.map(({ index, item, query }) =>
+                    this.runFullQueryAndReturnForQuery<T>(item.params, index, 'no_validation', contextUser, query.ID),
                 ),
-                ...staleItems.map(({ index, params: queryParams, queryInfo }) =>
-                    this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, queryInfo.ID),
+                // First fetches for validated queries — fresh rows stamped with the
+                // validation SQL's status so the slot can validate 'current' later
+                ...firstFetchWithValidation.map(({ index, item, query }) =>
+                    this.runFullQueryAndReturnForQuery<T>(item.params, index, 'stale', contextUser, query.ID, cacheStatusResults.get(index)),
+                ),
+                // Stale items — same stamping rationale; the status was already computed
+                ...staleItems.map(({ index, params: queryParams, query }) =>
+                    this.runFullQueryAndReturnForQuery<T>(queryParams, index, 'stale', contextUser, query.ID, cacheStatusResults.get(index)),
                 ),
             ];
 
@@ -2533,75 +2645,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Resolves QueryInfo from RunQueryParams (by ID or Name+CategoryPath).
-     * Tries QueryEngine first for fresh data, falls back to ProviderBase cache.
+     * Resolves a query from RunQueryParams (by ID or Name+CategoryPath).
+     * Uses QueryEngine as the single source of truth for query metadata.
      */
-    protected resolveQueryInfo(params: RunQueryParams): QueryInfo | undefined {
-        const freshEntity = this.findQueryInEngine(
-            params.QueryID, params.QueryName, params.CategoryID, params.CategoryPath,
-        );
-        if (freshEntity) return this.refreshQueryInfoFromEntity(freshEntity);
+    protected resolveQuery(params: RunQueryParams): MJQueryEntityExtended | undefined {
+        const engineQueries = QueryEngine.Instance?.Queries;
+        if (!engineQueries || engineQueries.length === 0) return undefined;
 
-        if (params.QueryID) return this.Queries.find(q => UUIDsEqual(q.ID, params.QueryID));
+        if (params.QueryID) {
+            return engineQueries.find(q => UUIDsEqual(q.ID, params.QueryID));
+        }
 
         if (params.QueryName) {
-            const matchingQueries = this.Queries.filter(
-                q => q.Name.trim().toLowerCase() === params.QueryName?.trim().toLowerCase(),
-            );
-            if (matchingQueries.length === 0) return undefined;
-            if (matchingQueries.length === 1) return matchingQueries[0];
+            const lowerName = params.QueryName.trim().toLowerCase();
+            const matches = engineQueries.filter(q => q.Name.trim().toLowerCase() === lowerName);
+            if (matches.length === 0) return undefined;
+            if (matches.length === 1) return matches[0];
 
             if (params.CategoryPath) {
-                const byPath = matchingQueries.find(
+                const byPath = matches.find(
                     q => q.CategoryPath.toLowerCase() === params.CategoryPath?.toLowerCase(),
                 );
                 if (byPath) return byPath;
             }
 
             if (params.CategoryID) {
-                const byId = matchingQueries.find(q => UUIDsEqual(q.CategoryID, params.CategoryID));
+                const byId = matches.find(q => UUIDsEqual(q.CategoryID, params.CategoryID));
                 if (byId) return byId;
-            }
 
-            return matchingQueries[0];
-        }
-
-        return undefined;
-    }
-
-    /**
-     * Searches QueryEngine for a fresh query entity.
-     */
-    protected findQueryInEngine(QueryID: string | undefined, QueryName: string | undefined, CategoryID: string | undefined, CategoryPath: string | undefined): MJQueryEntity | null {
-        const engineQueries = QueryEngine.Instance?.Queries;
-        if (!engineQueries || engineQueries.length === 0) return null;
-
-        if (QueryID) {
-            const lower = QueryID.trim().toLowerCase();
-            return engineQueries.find(q => q.ID.trim().toLowerCase() === lower) ?? null;
-        }
-
-        if (QueryName) {
-            const lowerName = QueryName.trim().toLowerCase();
-            const matches = engineQueries.filter(q => q.Name.trim().toLowerCase() === lowerName);
-            if (matches.length === 0) return null;
-            if (matches.length === 1) return matches[0];
-
-            if (CategoryID) {
-                const byId = matches.find(q => q.CategoryID?.trim().toLowerCase() === CategoryID.trim().toLowerCase());
-                if (byId) return byId;
-            }
-            if (CategoryPath) {
-                const resolvedCategoryId = this.resolveCategoryPath(CategoryPath);
+                const resolvedCategoryId = this.resolveCategoryPath(params.CategoryPath ?? '');
                 if (resolvedCategoryId) {
-                    const byPath = matches.find(q => UUIDsEqual(q.CategoryID, resolvedCategoryId));
-                    if (byPath) return byPath;
+                    const byResolvedPath = matches.find(q => UUIDsEqual(q.CategoryID, resolvedCategoryId));
+                    if (byResolvedPath) return byResolvedPath;
                 }
             }
+
             return matches[0];
         }
 
-        return null;
+        return undefined;
     }
 
     /**
@@ -2610,33 +2692,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * emits a console warning but allows execution to proceed, enabling query testing
      * before formal approval.
      *
-     * @param query - The resolved QueryInfo to validate
+     * @param query - The resolved MJQueryEntityExtended to validate
      * @param contextUser - The user attempting to execute the query
      * @throws Error if the user does not have permission to run the query
      */
-    protected ValidateQueryForExecution(query: QueryInfo, contextUser?: UserInfo): void {
+    protected ValidateQueryForExecution(query: MJQueryEntityExtended, contextUser?: UserInfo): void {
         const user = contextUser || this.CurrentUser;
-        if (user && !query.UserHasRunPermissions(user)) {
-            throw new Error(`User does not have permission to run query '${query.Name}' (ID: ${query.ID})`);
+        if (user) {
+            const result = query.UserCanRun(user);
+            if (!result.canRun) {
+                const deniedMsg = result.deniedEntities.length > 0
+                    ? ` Denied entities: ${result.deniedEntities.join(', ')}.`
+                    : '';
+                throw new Error(
+                    `User does not have permission to run query '${query.Name}' (ID: ${query.ID}).${deniedMsg}`
+                );
+            }
         }
 
         if (query.Status !== 'Approved') {
             LogStatus(`WARNING: Executing query '${query.Name}' (ID: ${query.ID}) with status '${query.Status}'. Query has not been approved.`);
         }
-    }
-
-    /**
-     * Creates a fresh QueryInfo from a MJQueryEntity and patches the ProviderBase cache.
-     */
-    protected refreshQueryInfoFromEntity(entity: MJQueryEntity): QueryInfo {
-        const freshInfo = new QueryInfo(entity.GetAll());
-        const existingIndex = this.Queries.findIndex(q => UUIDsEqual(q.ID, freshInfo.ID));
-        if (existingIndex >= 0) {
-            this.Queries[existingIndex] = freshInfo;
-        } else {
-            this.Queries.push(freshInfo);
-        }
-        return freshInfo;
     }
 
     /**
@@ -2663,15 +2739,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Default: parallel individual queries. SQL Server overrides for batch execution.
      */
     protected async getBatchedQueryCacheStatus(
-        items: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }>,
+        items: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }>,
         contextUser?: UserInfo,
     ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
         const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
         if (items.length === 0) return results;
 
-        const promises = items.map(async ({ index, queryInfo }) => {
+        const promises = items.map(async ({ index, query }) => {
             try {
-                const rows = await this.ExecuteSQL<Record<string, unknown>>(queryInfo.CacheValidationSQL!, undefined, undefined, contextUser);
+                const rows = await this.ExecuteSQL<Record<string, unknown>>(query.CacheValidationSQL!, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];
                     results.set(index, {
@@ -2700,6 +2776,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         status: 'stale' | 'no_validation',
         contextUser?: UserInfo,
         queryId?: string,
+        validationStamp?: { maxUpdatedAt?: string; rowCount?: number },
     ): Promise<RunQueryWithCacheCheckResult<T>> {
         const result = await this.InternalRunQuery(params, contextUser);
         if (!result.Success) {
@@ -2710,30 +2787,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 errorMessage: result.ErrorMessage || 'Unknown error executing query',
             };
         }
-        const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
+        // Stamp the response with the VALIDATION SQL's status when available.
+        // Extracting maxUpdatedAt from result rows is meaningless for aggregate
+        // queries (no __mj_UpdatedAt column → always '') — a slot stamped that way
+        // could never validate 'current' against the validation SQL's MAX once
+        // underlying rows exist. The validation stamp is exactly the value the next
+        // cache check compares against, so slots stamped with it validate correctly
+        // by construction.
+        const maxUpdatedAt = validationStamp?.maxUpdatedAt ?? this.extractMaxUpdatedAt(result.Results);
+        const rowCount = validationStamp?.rowCount ?? result.Results.length;
         return {
             queryIndex,
             queryId: result.QueryID,
             status,
             results: result.Results as T[],
             maxUpdatedAt,
-            rowCount: result.Results.length,
+            rowCount,
         };
     }
 
     /**************************************************************************/
     // InternalRunQuery — Shared Pipeline Implementation
     /**************************************************************************/
-
-    private _queryCacheInitialized: boolean = false;
-
-    private get QueryCacheMgr(): QueryCacheManager {
-        if (!this._queryCacheInitialized) {
-            QueryCacheManager.Instance.Init(this.InstanceConnectionString);
-            this._queryCacheInitialized = true;
-        }
-        return QueryCacheManager.Instance;
-    }
 
     /**
      * Full query execution pipeline: resolve → validate → compose → template → cache check →
@@ -2755,7 +2830,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
             const useSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
-            const cacheConfig = query.CacheConfig;
             let paginatedResult: Record<string, unknown>[];
             let totalRowCount: number;
             let executionTime: number;
@@ -2775,44 +2849,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     this.PlatformKey as DatabasePlatform,
                 );
 
-                // Check count cache — skip COUNT SQL if we have a cached total
-                const cachedCount = cacheConfig?.enabled
-                    ? await this.QueryCacheMgr.GetTotalRowCount(query, params.Parameters || {})
-                    : null;
-
+                // Execute data + count queries in parallel
                 const start = Date.now();
-                if (cachedCount != null) {
-                    // Only execute data query — count is cached
-                    const dataResult = await this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser);
-                    executionTime = Date.now() - start;
-                    if (!dataResult) throw new Error('Error executing paged query SQL');
-                    paginatedResult = dataResult;
-                    totalRowCount = cachedCount;
-                } else {
-                    // Execute data + count queries in parallel
-                    const [dataResult, countResult] = await Promise.all([
-                        this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser),
-                        this.ExecuteSQL<Record<string, unknown>>(paging.CountSQL, undefined, undefined, contextUser),
-                    ]);
-                    executionTime = Date.now() - start;
-                    if (!dataResult) throw new Error('Error executing paged query SQL');
+                const [dataResult, countResult] = await Promise.all([
+                    this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, undefined, contextUser),
+                    this.ExecuteSQL<Record<string, unknown>>(paging.CountSQL, undefined, undefined, contextUser),
+                ]);
+                executionTime = Date.now() - start;
+                if (!dataResult) throw new Error('Error executing paged query SQL');
 
-                    paginatedResult = dataResult;
-                    totalRowCount = countResult?.[0]?.TotalRowCount != null
-                        ? Number(countResult[0].TotalRowCount)
-                        : paginatedResult.length;
-
-                    // Cache the count for subsequent page requests (fire-and-forget)
-                    if (cacheConfig?.enabled) {
-                        void this.QueryCacheMgr.SetTotalRowCount(query, params.Parameters || {}, totalRowCount);
-                    }
-                }
-
-                // Cache the paged results (fire-and-forget)
-                if (cacheConfig?.enabled) {
-                    void this.QueryCacheMgr.SetPaged(query, params.Parameters || {}, params.StartRow!, params.MaxRows!, paginatedResult);
-                    void this.QueryCacheMgr.InvalidateWithDependents(query);
-                }
+                paginatedResult = dataResult;
+                totalRowCount = countResult?.[0]?.TotalRowCount != null
+                    ? Number(countResult[0].TotalRowCount)
+                    : paginatedResult.length;
             } else {
                 // Check full-result cache before executing
                 const cachedResult = await this.checkQueryCache(query, params, appliedParameters);
@@ -2851,6 +2900,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 CacheHit: false
             };
         } catch (e) {
+            if (this.isConnectionError(e)) {
+                throw e;
+            }
+
             LogError(e);
             const errorMessage = e instanceof Error ? e.message : String(e);
             return {
@@ -2894,34 +2947,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 };
             }
 
-            // Check ad-hoc cache if opt-in TTL is provided
-            const adhocTTL = params.AdhocCacheTTLMinutes;
-            if (adhocTTL != null && adhocTTL > 0) {
-                const cached = await this.QueryCacheMgr.GetAdhoc(params.SQL!, adhocTTL);
-                if (cached) {
-                    const { paginatedResult, totalRowCount } = this.applyQueryPagination(
-                        cached.results as Record<string, unknown>[], params,
-                    );
-                    return {
-                        Success: true,
-                        QueryID: '',
-                        QueryName: 'Ad-Hoc Query',
-                        Results: paginatedResult,
-                        RowCount: paginatedResult.length,
-                        TotalRowCount: totalRowCount,
-                        ExecutionTime: 0,
-                        ErrorMessage: '',
-                        CacheHit: true,
-                    };
-                }
-            }
-
             const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
-
-            // Store in ad-hoc cache if opt-in (fire-and-forget)
-            if (adhocTTL != null && adhocTTL > 0) {
-                void this.QueryCacheMgr.SetAdhoc(params.SQL!, adhocTTL, result);
-            }
 
             const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
 
@@ -2953,10 +2979,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Finds a query from RunQueryParams and validates user permissions.
-     * Uses `resolveQueryInfo()` for lookup and `ValidateQueryForExecution()` for permissions.
+     * Uses `resolveQuery()` for lookup and `ValidateQueryForExecution()` for permissions.
      */
-    protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): QueryInfo {
-        const query = this.resolveQueryInfo(params);
+    protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): MJQueryEntityExtended {
+        const query = this.resolveQuery(params);
         if (!query) {
             let errorDetails = 'Query not found';
             if (params.QueryName) {
@@ -2984,7 +3010,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * pipeline. Paging is handled separately by the caller (InternalRunQuery).
      */
     protected processQueryParameters(
-        query: QueryInfo,
+        query: MJQueryEntityExtended,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
     ): { finalSQL: string; appliedParameters: Record<string, string> } {
@@ -2994,8 +3020,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Platform: this.PlatformKey as DatabasePlatform,
                 ContextUser: contextUser,
                 Parameters: parameters,
-                UsesTemplate: query.UsesTemplate,
-                QueryInfo: query,
+                UsesTemplate: query.UsesTemplate ?? false,
+                QueryInfo: {
+                    SQL: query.SQL ?? '',
+                    UsesTemplate: query.UsesTemplate ?? false,
+                    Parameters: query.QueryParameters,
+                },
             }
         );
 
@@ -3065,13 +3095,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         spec: QueryExecutionSpec,
         contextUser?: UserInfo,
     ): { finalSQL: string; appliedParameters: Record<string, string> } {
+        // QueryExecutionSpec.ParameterDefinitions is QueryParameterInfo[] (MJCore),
+        // while RenderContext expects MJQueryParameterEntity[] (core-entities).
+        // Both share the structural shape the processor needs (Name, DataType, IsRequired).
+        const paramDefs = spec.ParameterDefinitions as MJQueryParameterEntity[] | undefined;
         const result = RenderPipeline.Run(
             spec.SQL,
             {
                 Platform: this.PlatformKey as DatabasePlatform,
                 ContextUser: contextUser,
                 Parameters: spec.Parameters,
-                ParameterDefinitions: spec.ParameterDefinitions,
+                ParameterDefinitions: paramDefs,
                 UsesTemplate: spec.UsesTemplate,
                 Dependencies: spec.Dependencies,
                 OriginalSQL: spec.SQL,
@@ -3090,81 +3124,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Checks the query cache for existing results and returns them if valid.
+     * Currently always returns null (query caching is not active).
      */
     protected async checkQueryCache(
-        query: QueryInfo,
-        params: RunQueryParams,
-        appliedParameters: Record<string, string>,
+        _query: MJQueryEntityExtended,
+        _params: RunQueryParams,
+        _appliedParameters: Record<string, string>,
     ): Promise<RunQueryResult | null> {
-        const cacheConfig = query.CacheConfig;
-        if (!cacheConfig?.enabled) {
-            return null;
-        }
-
-        const cached = await this.QueryCacheMgr.Get(query, params.Parameters || {});
-        if (!cached) {
-            return null;
-        }
-
-        LogStatus(`Cache hit for query ${query.Name} (${query.ID})`);
-
-        const { paginatedResult, totalRowCount } = this.applyQueryPagination(
-            cached.results as Record<string, unknown>[], params,
-        );
-
-        return {
-            Success: true,
-            QueryID: query.ID,
-            QueryName: query.Name,
-            Results: paginatedResult,
-            RowCount: paginatedResult.length,
-            TotalRowCount: totalRowCount,
-            ExecutionTime: 0,
-            ErrorMessage: '',
-            AppliedParameters: appliedParameters,
-            CacheHit: true,
-            CacheTTLRemaining: cached.ttlRemainingMs,
-        } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
+        return null;
     }
 
     /**
      * Checks the paged cache for a specific page of query results.
      * Returns a full RunQueryResult on hit, null on miss.
+     * Currently always returns null (query caching is not active).
      */
     protected async checkPagedQueryCache(
-        query: QueryInfo,
-        params: RunQueryParams,
-        appliedParameters: Record<string, string>,
+        _query: MJQueryEntityExtended,
+        _params: RunQueryParams,
+        _appliedParameters: Record<string, string>,
     ): Promise<RunQueryResult | null> {
-        const cacheConfig = query.CacheConfig;
-        if (!cacheConfig?.enabled) return null;
-
-        const cached = await this.QueryCacheMgr.GetPaged(
-            query, params.Parameters || {}, params.StartRow!, params.MaxRows!,
-        );
-        if (!cached) return null;
-
-        // Also try to get the cached count
-        const cachedCount = await this.QueryCacheMgr.GetTotalRowCount(query, params.Parameters || {});
-        const totalRowCount = cachedCount ?? cached.results.length;
-
-        LogStatus(`Paged cache hit for query ${query.Name} (${query.ID}) page ${params.StartRow}+${params.MaxRows}`);
-
-        return {
-            Success: true,
-            QueryID: query.ID,
-            QueryName: query.Name,
-            Results: cached.results as Record<string, unknown>[],
-            RowCount: cached.results.length,
-            TotalRowCount: totalRowCount,
-            PageNumber: Math.floor(params.StartRow! / params.MaxRows!) + 1,
-            PageSize: params.MaxRows!,
-            ExecutionTime: 0,
-            ErrorMessage: '',
-            AppliedParameters: appliedParameters,
-            CacheHit: true,
-            CacheTTLRemaining: cached.ttlRemainingMs,
-        } as RunQueryResult & { CacheHit: boolean; CacheTTLRemaining: number };
+        return null;
     }
 
     /**
@@ -3211,7 +3191,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Only logs if the query has `AuditQueryRuns` enabled or `ForceAuditLog` is set.
      */
     protected auditQueryExecution(
-        query: QueryInfo,
+        query: MJQueryEntityExtended,
         params: RunQueryParams,
         finalSQL: string,
         rowCount: number,
@@ -3253,17 +3233,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Caches query results if caching is enabled for the query.
-     * Caches the full result set (before pagination).
+     * Currently a no-op (query caching is not active).
      */
-    protected async cacheQueryResults(query: QueryInfo, parameters: Record<string, string>, results: Record<string, unknown>[]): Promise<void> {
-        const cacheConfig = query.CacheConfig;
-        if (!cacheConfig?.enabled) {
-            return;
-        }
-
-        await this.QueryCacheMgr.Set(query, parameters, results);
-        await this.QueryCacheMgr.InvalidateWithDependents(query);
-        LogStatus(`Cached results for query ${query.Name} (${query.ID})`);
+    protected async cacheQueryResults(_query: MJQueryEntityExtended, _parameters: Record<string, string>, _results: Record<string, unknown>[]): Promise<void> {
+        // No-op: query caching has been removed
     }
 
     /**************************************************************************/
@@ -3287,12 +3260,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
             if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
             const quotes = pk.NeedsQuotes ? "'" : '';
-            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${val.Value}${quotes}`;
+            // Escape embedded single quotes when the value is wrapped in quotes. A PK value can
+            // legitimately contain apostrophes (e.g. an object-valued soft key whose JSON carries
+            // free-text), and an unescaped quote both breaks the SQL string and is an injection vector.
+            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
+            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
         }).join(' AND ');
 
-        // Append Read RLS filter if user is not exempt
+        // Append Read RLS filter (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
         let fullWhere = where;
-        if (user && !entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+        if (user) {
             const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 fullWhere = `${where} AND (${rlsWhereClause})`;
@@ -3322,7 +3299,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     const relInfo = entityInfo.RelatedEntities.find(r => r.RelatedEntity === rel);
                     if (!relInfo) continue;
 
-                    const relEntityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase());
+                    const relEntityInfo = this.EntityByName(relInfo.RelatedEntity);
                     if (!relEntityInfo) continue;
 
                     const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
@@ -3362,10 +3339,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         type: EntityPermissionType
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        if (entityInfo.UserExemptFromRowLevelSecurity(user, type)) {
-            return true;
-        }
-
         const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, type, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
@@ -3391,10 +3364,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         user: UserInfo
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        if (entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Create)) {
-            return true;
-        }
-
         const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
@@ -3438,7 +3407,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Builds a parameter placeholder for parameterized queries.
      * Default: PG-style ($1, $2, ...). SQL Server overrides to @p0, @p1, etc.
      */
-    protected BuildParameterPlaceholder(index: number): string {
+    public BuildParameterPlaceholder(index: number): string {
         return `$${index + 1}`;
     }
 
@@ -3596,9 +3565,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Post-process rows for encryption/datetime
             if (itemData.length > 0) {
-                const entityInfo = provider.Entities.find(e =>
-                    e.Name.trim().toLowerCase() === entityName.trim().toLowerCase(),
-                );
+                const entityInfo = provider.EntityByName(entityName);
                 if (entityInfo && contextUser) {
                     itemData = await provider.PostProcessRows(itemData, entityInfo, contextUser);
                 }
@@ -3863,7 +3830,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected getColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string): string | null {
         const specifiedColumns = item['Columns'] ? String(item['Columns']).split(',').map(col => col.trim()) : [];
         if (specifiedColumns.length > 0) {
-            const entity = this.Entities.find(e => UUIDsEqual(e.ID, item['EntityID'] as string));
+            const entity = this.EntityByID(item['EntityID'] as string);
             if (!entity && this.Entities.length > 0) {
                 LogError(`Entity not found for dataset item ${item['Code']} in dataset ${datasetName}`);
                 return null;
@@ -3946,5 +3913,87 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
         return maxDate ? maxDate.toISOString() : new Date().toISOString();
+    }
+
+    /**
+     * Server-side semantic ranking pass for {@link ProviderBase.SearchEntity}
+     * (and, by extension, the batched {@link ProviderBase.SearchEntities}).
+     *
+     * The query embedding MUST be generated with the same model that produced
+     * the indexed vectors — otherwise cosine scores compare apples to oranges
+     * and rankings are garbage. We look up the EntityDocument's `AIModelID` via
+     * `AIEngine.Models` to recover the driver class / APIName and call
+     * `EmbedText(model, text)` directly. If the EntityDocument does not specify
+     * a model (or the model isn't loaded) we fall back to
+     * `EmbedTextLocal` (highest-power local model) only as a last resort.
+     *
+     * Vector ranking runs against the in-process `SimpleVectorServiceProvider`,
+     * which rehydrates the vector pool for `entityDocumentId` from
+     * `MJ: Entity Record Documents.VectorJSON` rows.
+     *
+     * Failures (no embedding model available, vector index miss) degrade to an
+     * empty result set so hybrid mode can still surface lexical matches.
+     */
+    protected override async searchEntitiesSemanticPass(
+        entityDocumentId: string,
+        searchText: string,
+        overFetch: number,
+        embeddingAIModelId: string | null,
+        contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]> {
+        // Ensure AIEngine is loaded so Models / EmbedText are usable. Config()
+        // is a no-op when already initialized — safe to call on every search.
+        try {
+            await AIEngine.Instance.Config(false, contextUser);
+        } catch (e) {
+            LogError(`searchEntitiesSemanticPass: AIEngine.Config failed: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+
+        let queryVector: number[] | null = null;
+        try {
+            if (embeddingAIModelId) {
+                const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, embeddingAIModelId));
+                if (!model) {
+                    LogError(`searchEntitiesSemanticPass: EntityDocument AIModelID="${embeddingAIModelId}" not found in AIEngine.Models. Index/query model mismatch is likely — refusing to fall back silently.`);
+                    return [];
+                }
+                const result = await AIEngine.Instance.EmbedText(model, searchText);
+                queryVector = result?.vector ?? null;
+            } else {
+                // No model on the EntityDocument — last-resort fallback to the
+                // highest-power local embedder. Logged because this path means
+                // indexing-time and query-time models can diverge.
+                LogError(`searchEntitiesSemanticPass: no AIModelID on EntityDocument "${entityDocumentId}"; falling back to highest-power local embedding model. Index/query mismatch possible.`);
+                const embed = await AIEngine.Instance.EmbedTextLocal(searchText);
+                queryVector = embed?.result?.vector ?? null;
+            }
+        } catch (e) {
+            LogError(`searchEntitiesSemanticPass: embedding generation threw: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+        if (!queryVector) return [];
+
+        const vectorProvider = new SimpleVectorServiceProvider();
+        const result = await vectorProvider.QueryIndex(
+            { id: entityDocumentId, vector: queryVector, topK: overFetch } as never,
+            contextUser
+        );
+        if (!result.success) return [];
+
+        const data = result.data as { matches?: Array<{ id: string; score: number; metadata?: Record<string, unknown> }> } | null;
+        const matches = data?.matches ?? [];
+
+        const out: ScoredCandidate[] = [];
+        for (const m of matches) {
+            const recordId = String(m.metadata?.['RecordID'] ?? '');
+            if (!recordId) continue;
+            out.push({
+                ID: recordId,
+                Score: m.score,
+                Metadata: { entityRecordDocumentId: m.id },
+            });
+        }
+        return out;
     }
 }

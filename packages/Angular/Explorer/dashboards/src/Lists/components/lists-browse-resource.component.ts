@@ -45,10 +45,28 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           </mj-stat-badge>
         </div>
         <div actions>
+          <!-- Single primary CTA; all filters live behind the Filter button in
+               the control bar below (concise chrome). -->
+          <button mjButton variant="primary" size="sm" (click)="createNewList()">
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New List</span>
+          </button>
+        </div>
+        <div toolbar>
+          <!-- Control bar: search · Filter · view. Owner, Entity and Favorites
+               all live behind the one Filter button; applied filters (including
+               tags) show as removable chips below. On mobile the popover docks
+               as a bottom sheet and the Filter button is icon-only. -->
+          <mj-page-search
+            Placeholder="Search lists..."
+            [Value]="searchTerm"
+            (ValueChange)="onSearchChange($event)">
+          </mj-page-search>
           <mj-filter-popover
-            [ActiveCount]="ActiveFilterCount"
-            [ShowClearAll]="ActiveFilterCount > 0"
-            (ClearAllRequested)="resetPopoverFilters()">
+            Label="Filters"
+            Icon="fa-solid fa-filter"
+            [ActiveCount]="TotalActiveFilterCount"
+            [ShowClearAll]="TotalActiveFilterCount > 0"
+            (ClearAllRequested)="clearAllAppliedFilters()">
             <mj-filter-panel
               [Fields]="listFilterFields"
               [Values]="listFilterValues"
@@ -56,61 +74,15 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
               (Reset)="resetPopoverFilters()">
             </mj-filter-panel>
           </mj-filter-popover>
-
           <mj-view-toggle
             [Options]="listViewOptions"
             [ActiveKey]="viewMode"
             (KeyChange)="setViewMode($any($event))">
           </mj-view-toggle>
-
-          <!-- Favorites-only toggle (Phase 5.3). Sits next to the view toggle
-               so it reads as "filter scope" alongside view mode. -->
-          <button
-            class="favorite-filter-toggle"
-            [class.favorite-filter-toggle--active]="showOnlyFavorites"
-            (click)="toggleShowOnlyFavorites()"
-            [title]="showOnlyFavorites ? 'Showing favorites only' : 'Show all lists'">
-            <i [class]="showOnlyFavorites ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
-            Favorites
-          </button>
-
-          <button mjButton variant="primary" size="sm" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i> New List
-          </button>
-        </div>
-        <div toolbar>
-          <mj-page-search
-            Placeholder="Search lists..."
-            [Value]="searchTerm"
-            (ValueChange)="onSearchChange($event)">
-          </mj-page-search>
         </div>
       </mj-page-header>
 
       <mj-page-body>
-    
-      <!-- Active tag filters (Phase 4.3). Renders only when at least one
-           tag is active — multi-tag = AND. Clicking a chip's × removes it. -->
-      @if (tagFilters.length > 0) {
-        <div class="tag-filter-row">
-          <span class="tag-filter-row__label">
-            <i class="fa-solid fa-tag"></i>
-            Filtering by tag:
-          </span>
-          @for (f of tagFilters; track f.TagID) {
-            <button
-              class="tag-filter-chip"
-              type="button"
-              (click)="removeTagFilter(f.TagID)">
-              {{ f.Name }}
-              <i class="fa-solid fa-xmark"></i>
-            </button>
-          }
-          <button class="tag-filter-row__clear" type="button" (click)="clearTagFilters()">
-            Clear all
-          </button>
-        </div>
-      }
 
       <!-- Loading State -->
       @if (isLoading) {
@@ -653,6 +625,14 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       flex-direction: column;
       width: 100%;
       height: 100%;
+    }
+
+    /* Control bar: on mobile search grows so the icon-only Filter + view toggle
+       stay on one line. On desktop search keeps its natural width. */
+    @media (max-width: 768px) {
+      mj-page-search {
+        flex: 1;
+      }
     }
 
     .lists-browse-container {
@@ -2260,7 +2240,11 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   /** Values record consumed by the centralized <mj-filter-panel>. */
   public get listFilterValues(): Record<string, unknown> {
-    return { selectedOwner: this.selectedOwner, selectedEntity: this.selectedEntity };
+    return {
+      selectedOwner: this.selectedOwner,
+      selectedEntity: this.selectedEntity,
+      favorites: this.showOnlyFavorites ? 'favorites' : 'all',
+    };
   }
 
   /** Field config consumed by the centralized <mj-filter-panel>. */
@@ -2281,6 +2265,15 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         filterable: this.entityOptions.length > 10,
         options: this.entityOptions.map(o => ({ text: o.name, value: o.value })),
       },
+      {
+        key: 'favorites',
+        type: 'chips',
+        label: 'Favorites',
+        chipOptions: [
+          { text: 'All lists', value: 'all' },
+          { text: 'Favorites only', value: 'favorites' },
+        ],
+      },
     ];
   }
 
@@ -2288,24 +2281,41 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   public onFilterValuesChange(values: Record<string, unknown>): void {
     this.selectedOwner  = (values['selectedOwner']  as string) ?? 'mine';
     this.selectedEntity = (values['selectedEntity'] as string) ?? 'all';
+    this.showOnlyFavorites = values['favorites'] === 'favorites';
     this.applyFilters();
     this.buildCategoryTree();
   }
 
-  /** Reset popover filters to defaults; leaves searchTerm alone. */
+  /** Reset the popover's own fields (Owner · Entity · Favorites); leaves search + tags alone. */
   public resetPopoverFilters(): void {
     this.selectedOwner = 'mine';
     this.selectedEntity = 'all';
+    this.showOnlyFavorites = false;
     this.applyFilters();
     this.buildCategoryTree();
   }
 
-  /** Active filter count for the popover badge (excludes searchTerm). */
+  /** Active popover-field count for the badge (Owner + Entity; excludes search). */
   public get ActiveFilterCount(): number {
     let n = 0;
     if (this.selectedOwner  && this.selectedOwner  !== 'mine') n++;
     if (this.selectedEntity && this.selectedEntity !== 'all')  n++;
     return n;
+  }
+
+  /** Total active filters (Owner + Entity + Favorites + Tags) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    return this.ActiveFilterCount + (this.showOnlyFavorites ? 1 : 0) + this.tagFilters.length;
+  }
+
+  /** Clear every filter (Owner · Entity · Favorites · Tags). Leaves search. */
+  public clearAllAppliedFilters(): void {
+    this.selectedOwner = 'mine';
+    this.selectedEntity = 'all';
+    this.showOnlyFavorites = false;
+    this.tagFilters = [];
+    void this.recomputeTagMembership();
+    this.buildCategoryTree();
   }
 
   onSearchChange(term: string) {

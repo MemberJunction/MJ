@@ -251,7 +251,7 @@ if (result.success) {
 }
 ```
 
-See the [Class Manifest Guide](CLASS_MANIFEST_GUIDE.md) for comprehensive documentation on the manifest system.
+See the [Class Manifest Guide](../../plans/complete/codegen/CLASS_MANIFEST_GUIDE.md) for comprehensive documentation on the manifest system.
 
 ## Configuration
 
@@ -544,6 +544,18 @@ flowchart TD
 | `EntityNames` | Converts technical table names to user-friendly entity names | Entity creation only |
 | `VirtualEntityFieldDecoration` | Analyzes SQL view definitions to identify PKs, FKs, descriptions, and extended types for virtual entities | Virtual entity creation (idempotent unless `forceRegenerate` option is set) |
 
+### Name Field Rules (Single Winner)
+
+`SmartFieldIdentification` may propose several ranked name-field candidates (e.g. `FirstName`, `LastName`), but MemberJunction metadata supports exactly **one** `IsNameField` per entity — `EntityInfo.NameField`, the base-view FK-name virtual columns, and `RelatedEntityNameFieldMap` resolution all assume a single winner. CodeGen enforces this:
+
+- **Eligibility** — a name field must be bounded text on the base table. Primary keys, uniqueidentifiers, non-text types, `MAX` text, and virtual (view-only) fields are rejected.
+- **Stability** — an entity that already has exactly one valid `IsNameField` keeps it; AI proposals never move an established winner.
+- **Repair** — when multiple fields are flagged (historical accumulation), the field literally named `Name` wins, else the first eligible flagged field in sequence order. All other auto-updatable flags are cleared.
+- **Fresh pick** — when nothing valid is flagged, the first *eligible* AI candidate wins.
+- **Pinning** — fields with `AutoUpdateIsNameField = 0` are never set or cleared by CodeGen; `EntityInfo.NameField`'s literal-`Name` preference arbitrates at runtime if a pinned conflict exists.
+
+Why this matters: with multiple flags, the FK-name pick silently drifted between CodeGen runs as flags accumulated (observed: a related entity's name column flipping from one field to another, reshaping every view that joins to it).
+
 ### Form Layout Stability Guarantees
 
 The form layout system enforces stability to prevent unnecessary churn:
@@ -751,7 +763,7 @@ Generates TypeGraphQL resolver and type definitions.
 
 ### generateClassRegistrationsManifest
 
-Generates an import manifest that prevents tree-shaking of `@RegisterClass` decorated classes. See the [Class Manifest Guide](CLASS_MANIFEST_GUIDE.md) for full documentation.
+Generates an import manifest that prevents tree-shaking of `@RegisterClass` decorated classes. See the [Class Manifest Guide](../../plans/complete/codegen/CLASS_MANIFEST_GUIDE.md) for full documentation.
 
 | Option | Description |
 |--------|-------------|
@@ -781,31 +793,31 @@ This package depends on:
 - [@memberjunction/ai](../AI) - AI provider abstraction layer
 - [@memberjunction/ai-prompts](../AI/Prompts) - AI prompt execution for advanced generation features
 - [@memberjunction/ai-core-plus](../AI/CorePlus) - AI prompt parameter types
-- [@memberjunction/aiengine](../AIEngine) - AI engine for model and prompt configuration
+- [@memberjunction/aiengine](../AI/Engine/README.md) - AI engine for model and prompt configuration
 - [@memberjunction/actions](../Actions/Engine) - Action engine for action code generation
 - [@memberjunction/actions-base](../Actions/Base) - Action base classes and types
 - [@memberjunction/config](../Config) - Configuration merging utilities
-- [@memberjunction/server-bootstrap-lite](../server-bootstrap-lite) - Pre-built class registration manifest
+- [@memberjunction/server-bootstrap-lite](../ServerBootstrapLite/README.md) - Pre-built class registration manifest
 
 ## Related Packages
 
 - [@memberjunction/cli](../MJCLI) - CLI that invokes CodeGenLib (`mj codegen` commands)
 - [@memberjunction/core-entities](../MJCoreEntities) - Contains the generated `entity_subclasses.ts` output
-- [@memberjunction/server-bootstrap](../server-bootstrap) - Ships pre-built server-side class manifest
-- [@memberjunction/ng-bootstrap](../Angular/ng-bootstrap) - Ships pre-built Angular class manifest
+- [@memberjunction/server-bootstrap](../ServerBootstrap/README.md) - Ships pre-built server-side class manifest
+- [@memberjunction/ng-bootstrap](../Angular/Bootstrap/README.md) - Ships pre-built Angular class manifest
 
 ## Documentation
 
 - [Multi-Database Workflow](MULTI_DATABASE_WORKFLOW.md) - How migrations and CodeGen work together to support SQL Server, PostgreSQL, and future database backends
-- [Class Manifest Guide](CLASS_MANIFEST_GUIDE.md) - Comprehensive guide to the manifest system for preventing tree-shaking of `@RegisterClass` classes
-- [EXAMPLE_MANIFEST_MJAPI.md](EXAMPLE_MANIFEST_MJAPI.md) - Example server-side manifest (54 packages, 715 classes)
-- [EXAMPLE_MANIFEST_MJEXPLORER.md](EXAMPLE_MANIFEST_MJEXPLORER.md) - Example client-side manifest (17 packages, 721 classes)
+- [Class Manifest Guide](../../plans/complete/codegen/CLASS_MANIFEST_GUIDE.md) - Comprehensive guide to the manifest system for preventing tree-shaking of `@RegisterClass` classes
+- [EXAMPLE_MANIFEST_MJAPI.md](../../plans/complete/codegen/EXAMPLE_MANIFEST_MJAPI.md) - Example server-side manifest (54 packages, 715 classes)
+- [EXAMPLE_MANIFEST_MJEXPLORER.md](../../plans/complete/codegen/EXAMPLE_MANIFEST_MJEXPLORER.md) - Example client-side manifest (17 packages, 721 classes)
 
 ## IS-A Type Relationships in CodeGen
 
 MemberJunction supports **IS-A (inheritance) relationships** between entities, where one entity extends another by adding additional fields while inheriting the parent's schema. CodeGen automatically handles IS-A relationships with specialized generation logic.
 
-For comprehensive conceptual documentation, see the **[IS-A Relationships Guide](../../MJCore/docs/isa-relationships.md)** in MJCore.
+For comprehensive conceptual documentation, see the **[IS-A Relationships Guide](../MJCore/docs/isa-relationships.md)** in MJCore.
 
 ### How CodeGen Handles IS-A Entities
 
@@ -937,7 +949,7 @@ Common scenarios where IS-A relationships improve your schema:
 
 MemberJunction supports **virtual entities** - entities backed by database views instead of tables. Virtual entities enable read-only access to complex queries, external data sources, or denormalized views while maintaining the full MemberJunction metadata and API experience.
 
-For comprehensive conceptual documentation, see the **[Virtual Entities Guide](../../MJCore/docs/virtual-entities.md)** in MJCore.
+For comprehensive conceptual documentation, see the **[Virtual Entities Guide](../MJCore/docs/virtual-entities.md)** in MJCore.
 
 ### Configuration-Driven Virtual Entity Creation
 

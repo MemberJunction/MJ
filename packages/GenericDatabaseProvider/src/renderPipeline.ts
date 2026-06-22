@@ -1,4 +1,5 @@
-import { DatabasePlatform, UserInfo, QueryDependencySpec, QueryParameterInfo } from '@memberjunction/core';
+import { DatabasePlatform, UserInfo, QueryDependencySpec } from '@memberjunction/core';
+import { MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
@@ -53,7 +54,7 @@ export interface RenderContext {
     /** Parameter values from the caller */
     Parameters?: Record<string, string>;
     /** Formal parameter definitions (for validation). Null = skip validation. */
-    ParameterDefinitions?: QueryParameterInfo[];
+    ParameterDefinitions?: MJQueryParameterEntity[];
     /** Whether the outer query uses Nunjucks templates */
     UsesTemplate?: boolean;
     /** Inline dependency specs for transient query testing */
@@ -153,6 +154,14 @@ export class RenderPipeline {
         appliedParameters = templateResult.appliedParameters;
         const afterTemplates = currentSQL;
 
+        // ── Step 2.5: Safety validation (mutation + injection guard) ──
+        // The fully-resolved query is the point where composition and parameter
+        // substitution — the only injection vectors — are complete, and where
+        // StatementKind reflects the user's actual statement (paging wrapping
+        // below always produces a SELECT). Saved queries otherwise skip the
+        // dangerous-keyword validation that ad-hoc queries get at execution.
+        RenderPipeline.assertSafeToExecute(afterTemplates, ctx.Platform);
+
         // ── Step 3: MaxRows safety limit (if specified) ──────────────
         if (hasMaxRows) {
             currentSQL = QueryPagingEngine.WrapWithMaxRows(currentSQL, ctx.MaxRows!, ctx.Platform);
@@ -183,6 +192,51 @@ export class RenderPipeline {
             },
             PagingResult: pagingResult,
         };
+    }
+
+    /**
+     * Defense-in-depth guard on the fully-resolved query: throws when the
+     * rendered SQL contains a write statement anywhere — a DML mutation
+     * (INSERT / UPDATE / DELETE / MERGE / REPLACE), DDL (DROP / CREATE / ALTER /
+     * TRUNCATE / RENAME), or EXEC / CALL / GRANT / REVOKE / USE.
+     *
+     * {@link SQLParser.HasWriteStatement} inspects EVERY top-level statement, so
+     * it catches both a single rendered mutation and a stacked-statement
+     * injection payload (e.g. `SELECT 1; DROP TABLE x`) that the first-statement
+     * `StatementKind` alone would miss. It is AST-precise: matching is on the
+     * statement type, so it cannot false-positive on legitimate read queries —
+     * the `REPLACE()` string function, parenthesized SELECTs, trailing
+     * semicolons, or benign `SET` / `DECLARE` prefixes all pass.
+     *
+     * A second, token-based check rejects stacked statements (an internal
+     * statement-separating `;`). Unlike the AST check it fires even when the
+     * trailing payload makes the SQL unparseable — e.g. `SELECT 1; EXEC
+     * xp_cmdshell '…'` or `SELECT 1; WAITFOR DELAY '…'` — which is the
+     * stacked-injection class the AST scan misses (the whole string fails to
+     * parse, so there is no AST to classify). A rendered read query must be a
+     * single statement.
+     *
+     * The broader dangerous-keyword scan
+     * ({@link SQLExpressionValidator.validateFullQuery}) deliberately stays on
+     * the ad-hoc execution path (untrusted free-text input); it is unsuitable as
+     * a blanket gate here because it rejects legitimate read constructs (the
+     * `REPLACE()` string function, parenthesized SELECTs, etc.).
+     */
+    private static assertSafeToExecute(sql: string, platform: DatabasePlatform): void {
+        const dialect = GetDialect(platform);
+        const parsed = new SQLParser(sql, dialect);
+        if (parsed.HasWriteStatement) {
+            throw new Error(
+                'RenderPipeline: rendered SQL contains a write statement ' +
+                '(mutation / DDL) — only a read query may be rendered for execution.',
+            );
+        }
+        if (SQLParser.HasStackedStatements(sql, dialect)) {
+            throw new Error(
+                'RenderPipeline: rendered SQL contains multiple statements ' +
+                '(a stacked-statement injection) — only a single read query may be rendered.',
+            );
+        }
     }
 
     /**

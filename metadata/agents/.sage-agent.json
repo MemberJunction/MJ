@@ -660,6 +660,258 @@
             "lastModified": "2026-04-11T04:11:16.191Z",
             "checksum": "2cfdd1fc439e891628490c99ffa1107dd2a176973e347c290ca086205665a23e"
           }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Form Builder",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+            "Description": "Specialist sub-agent that authors runtime entity forms (Component + EntityFormOverride). Rearchitected as a Designer (LLM, designs the ComponentSpec) + Builder (deterministic code-agent, persists via Create/Modify Interactive Form with a focused lint-fix retry loop). The orchestrator routes Designer→Builder deterministically; the LLM never decides termination, which eliminates the 'polish forever' failure mode of the old loop-style implementation.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 0,
+            "ModelSelectionMode": "Agent",
+            "ArtifactCreationMode": "Never",
+            "ExposeAsAction": false,
+            "DriverClass": "FormBuilderAgent",
+            "IconClass": "fa-solid fa-pen-ruler",
+            "AgentTypePromptParams": {
+              "includeForEachDocs": false,
+              "includeWhileDocs": false,
+              "includeScratchpadDocs": true,
+              "includeMessageExpansionDocs": false
+            }
+          },
+          "relatedEntities": {
+            "MJ: AI Agents": [
+              {
+                "fields": {
+                  "ParentID": "@parent:ID",
+                  "Name": "Form Builder - Designer",
+                  "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+                  "Description": "LLM-driven design phase for Form Builder. Reads the user request + appContext.ActiveForm and emits a complete ComponentSpec + Intent into payload. Validated structurally via FormBuilderDesignerAgent.validateSuccessNextStep — never calls Create/Modify (the Builder does).",
+                  "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+                  "Status": "Active",
+                  "ExecutionOrder": 1,
+                  "ModelSelectionMode": "Agent",
+                  "ArtifactCreationMode": "Never",
+                  "ExposeAsAction": false,
+                  "DriverClass": "FormBuilderDesignerAgent",
+                  "IconClass": "fa-solid fa-drafting-compass",
+                  "PayloadDownstreamPaths": [
+                    "*"
+                  ],
+                  "PayloadUpstreamPaths": [
+                    "Intent.*",
+                    "Spec.*",
+                    "ExistingOverride.*",
+                    "EntitySchemaContext.*"
+                  ],
+                  "AgentTypePromptParams": {
+                    "includeForEachDocs": false,
+                    "includeWhileDocs": false,
+                    "includeScratchpadDocs": true,
+                    "includeMessageExpansionDocs": false
+                  }
+                },
+                "relatedEntities": {
+                  "MJ: AI Agent Prompts": [
+                    {
+                      "fields": {
+                        "AgentID": "@parent:ID",
+                        "PromptID": "@lookup:MJ: AI Prompts.Name=Form Builder - Designer",
+                        "ExecutionOrder": 0,
+                        "Status": "Active"
+                      },
+                      "primaryKey": {
+                        "ID": "29E148EC-7911-4E1D-86F9-DF491C5646EA"
+                      },
+                      "sync": {
+                        "lastModified": "2026-05-29T19:49:21.741Z",
+                        "checksum": "cdcec73dd7e0a687b4796f2376c7c2185781dd9d107f448a886fe4fe5856ddad"
+                      }
+                    }
+                  ],
+                  "MJ: AI Agent Actions": [
+                    {
+                      "fields": {
+                        "AgentID": "@parent:ID",
+                        "ActionID": "@lookup:MJ: Actions.Name=Get Entity Schema For Form",
+                        "Status": "Active"
+                      },
+                      "primaryKey": {
+                        "ID": "45859FD6-4EB0-4913-A7F1-DE1304B79FA8"
+                      },
+                      "sync": {
+                        "lastModified": "2026-05-29T19:49:21.766Z",
+                        "checksum": "b4cabc003f6e7752ca94811b9dc396b8c2997c47af457e174b4c8be931424ef5"
+                      }
+                    },
+                    {
+                      "fields": {
+                        "AgentID": "@parent:ID",
+                        "ActionID": "@lookup:MJ: Actions.Name=Get Active Form For Entity",
+                        "Status": "Active"
+                      },
+                      "primaryKey": {
+                        "ID": "C9ED83E3-C527-4222-9F03-A519F9B47070"
+                      },
+                      "sync": {
+                        "lastModified": "2026-05-29T19:49:21.779Z",
+                        "checksum": "19c8adea0c304dbfcd561a26794032595bcaec6b25ce30df892ce4a64814b200"
+                      }
+                    },
+                    {
+                      "fields": {
+                        "AgentID": "@parent:ID",
+                        "ActionID": "@lookup:MJ: Actions.Name=Get Default Form Scaffold For Entity",
+                        "Status": "Active"
+                      },
+                      "primaryKey": {
+                        "ID": "51F6F121-1FC4-48A9-91E5-11462727CE45"
+                      },
+                      "sync": {
+                        "lastModified": "2026-05-29T19:49:21.791Z",
+                        "checksum": "a4db1a2ba0b52f819d73715974c3c864d203020b227c4137f913789c75bb3fab"
+                      }
+                    }
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "E2C44DC4-5DEA-471E-9B03-490FF11B7DB9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-29T19:49:21.580Z",
+                  "checksum": "cd14011e3255ec008f46618f13aa9cf49b4ac8da03d5957c79f941d33668b386"
+                }
+              },
+              {
+                "fields": {
+                  "ParentID": "@parent:ID",
+                  "Name": "Form Builder - Builder",
+                  "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+                  "Description": "Code-based agent that persists payload.Spec via Create / Modify Interactive Form. Bypasses the LLM loop entirely (executeAgentInternal override). Runs a focused lint-fix retry loop (max 3 attempts) using the 'Form Builder - Lint Fix' prompt directly via AIPromptRunner — no nested agent run. Always terminates after the first SUCCESS or budget exhaustion.",
+                  "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+                  "Status": "Active",
+                  "ExecutionOrder": 2,
+                  "ExposeAsAction": false,
+                  "DriverClass": "FormBuilderBuilderAgent",
+                  "IconClass": "fa-solid fa-hammer",
+                  "PayloadDownstreamPaths": [
+                    "*"
+                  ],
+                  "PayloadUpstreamPaths": [
+                    "BuilderResult.*"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "F23DCFE6-1AC5-4955-A943-C85E45E3383D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-29T19:49:21.603Z",
+                  "checksum": "62a511a595c62f881fa299c0aca3712d40a9b857451d79b1a5c9ecd87596003c"
+                }
+              }
+            ],
+            "MJ: AI Agent Modalities": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+                  "Direction": "Input",
+                  "IsAllowed": true
+                },
+                "primaryKey": {
+                  "ID": "1CA308BA-259D-400E-B949-DFEBFDAAA46B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-29T19:49:21.628Z",
+                  "checksum": "9562d0790334b74d9ba63dadcb809c9bd0c51eb124e74f111fc70c4c4160ea16"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+                  "Direction": "Output",
+                  "IsAllowed": true
+                },
+                "primaryKey": {
+                  "ID": "6AE72884-3E77-4E2B-B32B-0D7B1464555E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-29T19:49:21.642Z",
+                  "checksum": "088a80dd45831f2b9ee854cd99940fd9c681c5a7b49d8f2f7721bddb455fcc13"
+                }
+              }
+            ],
+            "MJ: AI Agent Configurations": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "Draft",
+                  "DisplayName": "Draft",
+                  "Description": "Fast / Lower Quality — GPT-OSS-120B @ Cerebras then Gemini 3.1 Flash-Lite. Best for quick iterations like color tweaks or single-field edits.",
+                  "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast",
+                  "IsDefault": false,
+                  "Priority": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B6987F12-DAE4-428F-B636-808E230B356E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-29T19:49:21.666Z",
+                  "checksum": "642f2f13ef354c8f95ebcba97349f4243c991c6b874217226475a9ab2636bb93"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "Standard",
+                  "DisplayName": "Standard",
+                  "Description": "Balanced Quality / Speed — Gemini 3.5 Flash. Default for most form authoring requests.",
+                  "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard",
+                  "IsDefault": true,
+                  "Priority": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "64835630-81E2-4938-BEE9-32553FF660E9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-29T19:49:21.678Z",
+                  "checksum": "c915cf9f021826ebac162304ff6ecb913d6e38e5d90f58f4c88e5e448a525fcc"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "High",
+                  "DisplayName": "High",
+                  "Description": "Highest Quality / Slower — falls through the prompt's full model lineup (Sonnet 4.6, Gemini 3 Flash, etc.). Use for complex multi-section redesigns or when Draft / Standard miss the mark.",
+                  "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
+                  "IsDefault": false,
+                  "Priority": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E310AB9B-45AA-46EF-BDF4-D9B59E419A29"
+                },
+                "sync": {
+                  "lastModified": "2026-05-29T19:49:21.699Z",
+                  "checksum": "6d6b9e736f4b14a2fa5493e682a7d042d05542b0cb4e99c4ee803f2ccb758d2a"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "7270273A-5FFE-4C85-811C-C9189E2B134F"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:49:21.518Z",
+            "checksum": "167c748e117490d99585d05fea6b73b34d3281c1543e03d8e78ef01c37246ef6"
+          }
         }
       ]
     },
@@ -667,7 +919,7 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-04-11T04:11:15.679Z",
+      "lastModified": "2026-06-14T22:05:07.568Z",
       "checksum": "3ab753a812acabe0d216bf517b5ed2d668d606f2c9a9d13271d27e66e896500e"
     }
   }

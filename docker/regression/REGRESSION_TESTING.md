@@ -1,0 +1,987 @@
+# MJ Explorer Regression Testing
+
+Automated end-to-end regression testing of MJ Explorer using LLM-driven browser automation (Computer Use engine) running headless Chromium in Docker.
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                     Docker Compose (mj-regression)                       │
+│                                                                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
+│  │ SQL      │  │ DB Setup │  │ MJAPI    │  │ MJ       │  │ Test     │ │
+│  │ Server   │◄─│ (init)   │  │ Server   │◄─│ Explorer │◄─│ Runner   │ │
+│  │          │  │          │  │          │  │ (nginx)  │  │ (Chrome) │ │
+│  │ :1433    │  │ one-shot │  │ :4000    │  │ :4200    │  │          │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
+│    host:11433                   host:14000    host:4200                   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Request Flow
+
+The browser (headless Chromium in the test-runner container) interacts with the stack as follows:
+
+1. **Static assets**: Browser → `socat` (localhost:4200 → mjexplorer:4200) → nginx → serves files from `/usr/share/nginx/html`
+2. **Auth0 login**: Browser → Auth0 (external) → redirects back to `http://localhost:4200/?code=...&state=...`
+3. **GraphQL API**: Browser → socat → nginx `/api/` → `proxy_pass http://mjapi:4000/` → Apollo Server
+4. **WebSocket subscriptions**: Same path as GraphQL, nginx upgrades connection when `Upgrade: websocket` header is present
+
+The `socat` proxy is required because Auth0's SDK (`auth0-spa-js`) only works on secure origins, and browsers treat `localhost` as secure but not arbitrary Docker hostnames like `mjexplorer`.
+
+### Startup Sequence
+
+1. **SQL Server** starts, waits for healthcheck (TCP responsive)
+2. **DB Setup** (one-shot init container) creates the database, runs `mj migrate` (Flyway migrations), installs AssociationDB demo data (58 tables, 10K+ records), then runs `mj codegen`. Exits 0 on success.
+3. **MJAPI** starts after db-setup completes successfully (`service_completed_successfully`). Just runs the GraphQL server — no migration or setup work. Healthcheck at `/healthcheck`.
+4. **MJ Explorer** starts after MJAPI is healthy (static nginx server).
+5. **Test Runner** starts after MJAPI is healthy and MJExplorer is started. The entrypoint script:
+   - Sets up socat localhost proxy
+   - Syncs the test user (UI + Integration roles) and test metadata to the database
+   - Verifies MJAPI healthcheck and nginx proxy
+   - Creates a fresh `test-results/run-{TIMESTAMP}/` folder for this run
+   - Runs the regression suite via `mj test suite --parallel`
+   - Extracts screenshots, generates `report.md` and `report.html`, updates the `latest` symlink
+
+## Quick Start
+
+The MJ CLI ships with a `mj test regression *` subcommand group that wraps the docker-compose plumbing. Run every command from the MemberJunction monorepo root.
+
+```bash
+# 1. Create environment file (gitignored)
+cp docker/regression/.env.test.example docker/regression/.env.test
+# Edit docker/regression/.env.test with real Auth0 + Anthropic credentials
+
+# 2. Build images. On the very first run (or whenever .docker-generated/ is
+#    empty) this also invokes `gen-forms` to generate Angular entity forms
+#    against a temporary DB — that step takes ~5 minutes but only happens when
+#    the form output is missing. Subsequent builds skip it.
+mj test regression build
+
+# 3. Run the full stack — creates docker/regression/test-results/run-{TIMESTAMP}/
+#    Fast path: docker compose up under the "full" profile, no codegen.
+mj test regression up
+
+# 4. Check results — see "Output Structure" below for what gets generated
+ls docker/regression/test-results/latest/
+open docker/regression/test-results/latest/report.html        # macOS
+xdg-open docker/regression/test-results/latest/report.html    # Linux
+
+# 5. Compare against a previous run
+mj test regression compare
+
+# 6. Tear down (removes containers + database volumes)
+mj test regression down
+```
+
+> **Migration from `npm run regression:*`** — the old npm scripts were removed in Phase 4. Replace
+> them 1:1:
+>
+> | Old | New |
+> |---|---|
+> | `npm run regression:build` | `mj test regression build` |
+> | `npm run regression:up` | `mj test regression up` |
+> | `npm run regression:down` | `mj test regression down` |
+> | `npm run regression:gen-forms` | `mj test regression gen-forms` |
+> | `npm run regression:compare` | `mj test regression compare` |
+>
+> Plain `docker compose up` is **no longer supported** — every service is now profile-gated (`full`, `remote-target`, `gen-forms`), so you must invoke a profile (which the CLI does automatically).
+
+> **Why a separate build step?** The Angular entity forms used by `mjexplorer` are themselves generated by `mj codegen`, which needs a live SQL Server with the AssociationDB schema installed. That setup can't run inside a Docker `build` step (no compose network during a build). So `mj test regression build` spawns a temporary stack via `gen-forms`, captures the output to `.docker-generated/`, tears down, and then builds the real images. This is slow (~5 min) but cached; subsequent `mj test regression up` runs skip it entirely.
+
+### Rebuilding Individual Services
+
+```bash
+# Rebuild only the explorer (e.g., after changing environment config)
+mj test regression build mjexplorer
+
+# Rebuild only the test runner (e.g., after changing ComputerUse packages)
+mj test regression build test-runner
+
+# The entrypoint script is bind-mounted — changes take effect without rebuilding
+
+# Force-skip the gen-forms guard (when you know .docker-generated/ is already populated)
+mj test regression build --skip-gen-forms
+```
+
+## Running Against Remote Targets (Mode B/C/D)
+
+The same test definitions can run against a remote URL by loading a **target profile**:
+
+```bash
+# 1. Copy an example profile and edit it
+cp docker/regression/targets/staging-mj.example.target.json docker/regression/targets/staging-mj.target.json
+# Edit URL, allowedDomains, auth credentials (env: refs are resolved from your shell env)
+
+# 2. Export any env: references the profile uses
+export STAGING_TEST_USER=qa@example.com
+export STAGING_TEST_PASSWORD=...
+
+# 3. Run — the CLI loads the profile, sets MJ_TEST_VAR_*, brings up the full
+#    profile (for the ephemeral results DB) and the remote test-runner entrypoint
+mj test regression remote --target=staging-mj
+```
+
+Three target kinds are supported via the `kind` field in the profile JSON:
+
+| Kind | Use case |
+|---|---|
+| `mj-explorer` | Remote MJ Explorer deployment (staging / customer / production). Reuses the MJ Explorer Regression Suite tests with `{{baseUrl}}` / `{{authUsername}}` substitution. |
+| `generic-web` | Any non-MJ web app. Author your own tests + suite, point `extraMetadataDirs` at the directory holding them. |
+| `mj-api-only` | API-level checks against a remote MJAPI without driving Explorer. *(Tests authored per-target — no canned suite yet.)* |
+
+**Where results land**: Mode B/C runs still record `TestRun` / `TestRunOutput` rows in the ephemeral docker DB by default, so the same screenshots / report.html artifacts are produced. Add an `archive` block to the target profile to forward results to a destination MJ instance via `mj sync push`.
+
+**Profile layout**:
+
+```jsonc
+// docker/regression/targets/staging-mj.target.json
+{
+  "schemaVersion": "1.0",
+  "name": "staging-mj",
+  "kind": "mj-explorer",
+  "baseUrl": "https://staging-mj.example.com",
+  "allowedDomains": ["staging-mj.example.com", "*.auth0.com"],
+  "auth": {
+    "username": "env:STAGING_TEST_USER",
+    "password": "env:STAGING_TEST_PASSWORD",
+    "domains": ["staging-mj.example.com", "*.auth0.com"]
+  },
+  "suite": "MJ Explorer Regression Suite",
+  "extraMetadataDirs": [],
+  "archive": {
+    "tag": "staging-nightly",
+    "source": "staging-mj"
+  }
+}
+```
+
+**Advanced — external results DB (`--no-local-stack`)**: passing `--no-local-stack` activates only the `remote-target` compose profile (no SQL/MJAPI/MJExplorer). The test-runner must then talk to an external SQL Server via `DB_HOST` / `DB_PORT` / `DB_USERNAME` / `DB_PASSWORD` env vars (or a custom `mj.config.cjs`). Useful when you already have a long-running "regression runs DB" and don't want to pay the local stack startup cost.
+
+## Testing Your Own App (Mode C — `generic-web`)
+
+The regression runner has no built-in knowledge of MemberJunction. You can point it at **any** web app with three additions:
+
+1. **A target profile** describing the URL + auth.
+2. **Tests + a suite** authored as MJ metadata JSON files.
+3. **(Optional) Custom oracles** plugged in via `--oracles-module`.
+
+A complete worked example ships as the `generic-web` template inside the CLI — 3 tests against MDN Web Docs plus a custom IOracle. Scaffold it into your working directory, adapt, and run:
+
+```bash
+mj test regression init generic-web        # → ./generic-web/
+# edit ./generic-web/target.json, the test JSONs under metadata/tests/, and oracles/*.cjs
+mj test regression remote --target=./generic-web/target.json
+```
+
+Run `mj test regression init --list` to see every available template.
+
+### Authoring tests
+
+Each test is a JSON file under `<example-dir>/metadata/tests/.<name>.json` with three sections:
+
+| Section | Purpose |
+|---|---|
+| `InputDefinition.goal` | Natural-language description of what the agent should do. The controller LLM reads this directly. |
+| `InputDefinition.startUrl` | Reference `{{baseUrl}}` so the same test works against multiple environments. |
+| `InputDefinition.allowedDomains` | Use `{{allowedDomains}}` (a JSON array string, parsed automatically). Catches off-domain wanders. |
+| `InputDefinition.auth.bindings` | Empty `[]` for unauthenticated apps; otherwise reference `{{authUsername}}`/`{{authPassword}}` from the target profile. |
+| `Configuration.oracles` | Array of `{ type, weight, config }` entries. Mix built-ins (`goal-completion`, `url-match`, `step-count`) with your custom oracle types. |
+| `Configuration.scoringWeights` | Per-oracle weight map for the final score; must sum to ~1.0. |
+| `ExpectedOutcomes` | Judge LLM validation criteria + final URL pattern. |
+
+All `{{key}}` placeholders are resolved at suite startup using the values in the target profile (top-level fields plus auth) — see [`packages/AI/MJComputerUse/src/utils/variable-substitution.ts`](../../packages/AI/MJComputerUse/src/utils/variable-substitution.ts) for the recursion logic.
+
+### Custom oracles (`--oracles-module`)
+
+When the built-in oracles aren't enough — e.g., you need to check for a specific DOM marker, validate a backend side effect, or enforce app-specific UI invariants — write your own `IOracle` implementations and load them at suite startup:
+
+```bash
+mj test suite \
+    --name "My App Suite" \
+    --oracles-module=path/to/my-oracles.cjs \
+    --var baseUrl=https://my-app.example.com
+```
+
+Or via the target profile so `mj test regression remote` picks it up:
+
+```jsonc
+{
+  "name": "my-app",
+  "kind": "generic-web",
+  "oraclesModule": "./my-app/oracles/my-oracles.cjs",
+  // … rest of the profile
+}
+```
+
+The module can be CommonJS (`.cjs`) or ESM (`.mjs`/`.js`). Both shapes are supported:
+
+```javascript
+// class style — instantiated with no args
+class MyOracle {
+    constructor() { this.type = 'my-oracle'; }
+    async evaluate(input, config) {
+        return { oracleType: this.type, passed: true, score: 1.0, message: 'ok' };
+    }
+}
+
+// instance style — used as-is
+const myOtherOracle = {
+    type: 'my-other-oracle',
+    async evaluate(input, config) { /* … */ },
+};
+
+module.exports = { MyOracle, myOtherOracle };
+```
+
+The loader (`packages/TestingFramework/CLI/src/utils/oracle-module-loader.ts`) duck-types each export: anything with `type: string` + an async `evaluate()` method gets registered. Helpers, constants, and unrelated exports are silently skipped.
+
+**Input shape** (`OracleInput`):
+
+| Field | Purpose |
+|---|---|
+| `actualOutput` | For Computer Use tests: `{ finalUrl, finalScreenshot, totalSteps, totalDurationMs, success, status, finalJudgeVerdict?, error? }` |
+| `expectedOutput` | The test's `ExpectedOutcomes` block. |
+| `targetEntity` | The entity under test (`MJTestEntity`). |
+| `contextUser` | The MJ user running the suite. |
+
+**Return shape** (`OracleResult`):
+
+```typescript
+{
+    oracleType: string;     // mirrors this.type
+    passed: boolean;        // pass/fail
+    score: number;          // 0.0–1.0
+    message: string;        // human-readable summary
+    details?: unknown;      // optional structured context for reports
+}
+```
+
+See the `mdn-oracles.cjs` shipped in the `generic-web` template (`mj test regression init generic-web`) for two working examples.
+
+## Bringing Your Own App (Mode D — `--overlay`)
+
+Mode D lets you boot your app **inside the regression compose network** alongside the test-runner. The runner reaches your app at its compose-service hostname (e.g. `http://my-app:3000`), so no port mapping or external URLs are involved. Useful for testing release-candidate images against a sandboxed snapshot before they reach a long-running staging environment.
+
+The flow combines a **target profile** (points at the in-network hostname) with a **docker-compose overlay** (defines the app service):
+
+```bash
+mj test regression init static-file-server                  # scaffold the template
+mj test regression remote \
+    --target=./static-file-server/target.json \
+    --overlay=./static-file-server/docker-compose.app.yml
+```
+
+`--overlay` can be passed multiple times to layer overlays (compose merges in declaration order — later overlays override earlier ones).
+
+### Two reference templates
+
+| Template | What it shows |
+|---|---|
+| `static-file-server` (via `mj test regression init static-file-server`) | The minimal overlay pattern. `nginx:alpine` serving two static pages, 2 tests, no auth. Use this as your copy-and-edit starting point. |
+| `bring-your-own-app` (via `mj test regression init bring-your-own-app`) | Mode D scaffold — target profile + compose overlay template + suite metadata. Adapt the overlay's `byo-app` service to bring up YOUR app (the template does not ship a demo app — you bring one). |
+
+### What an overlay must do
+
+At a minimum, your `docker-compose.app.yml` overlay needs:
+
+1. **Define your app's service** — built from a Dockerfile or pulled from a registry. Add `profiles: ["full"]` so it boots alongside the test-runner under the same profile.
+2. **Add a healthcheck** so compose waits for the app before starting the runner.
+3. **Make the runner depend on your service** — extend the `test-runner` service's `depends_on` so the suite doesn't start until your app is ready:
+   ```yaml
+   services:
+     test-runner:
+       depends_on:
+         my-app:
+           condition: service_healthy
+   ```
+4. **(Optional) Mount your test metadata** into the runner so the entrypoint can push it:
+   ```yaml
+   services:
+     test-runner:
+       volumes:
+         - ./my-app/metadata:/app/my-app-metadata   # NOT :ro
+   ```
+   Reference the in-container path from your target profile's `extraMetadataDirs`. Volume **must be RW** — `mj sync push` writes `primaryKey`/`sync` state back into the JSON files.
+
+### Path-resolution gotcha
+
+Compose resolves relative paths in overlays against the directory of the **first** `-f` file (the base regression compose at `docker/regression/`), **not** the overlay's own location. So an overlay scaffolded into `./my-app/` references its app source as `./my-app/...` (relative to the repo root, where the base compose is anchored), **not** as `./...`. Get this wrong and `build:` or `volumes:` will fail with file-not-found.
+
+### Where results land
+
+Same as Modes A/B/C: `docker/regression/test-results/run-{TIMESTAMP}/{results.json, report.html, screenshots/}`. The local ephemeral MJ DB records `TestRun`/`TestRunOutput` rows. Add an `archive` block to your target profile to forward results to a destination MJ via `mj sync push`.
+
+## Filtering Comparisons by Tag (`--tag`)
+
+When an archive MJ holds runs from multiple source environments — say `staging-nightly`, `customer-x-monthly`, and `byo-loopback` — `mj test compare` will pick the two most recent runs across all of them, which usually isn't what you want. Use `--tag` to scope the comparison:
+
+```bash
+# Compare the two most recent "staging-nightly" runs
+mj test compare --tag=staging-nightly
+
+# Combine with --version or --commit to pin specific revisions
+mj test compare --tag=staging-nightly -v 5.30.0 -v 5.31.0
+
+# Available on the regression-suite alias too
+mj test regression compare --tag=staging-nightly
+```
+
+Tags are matched against `MJTestSuiteRunEntity.Tags`, which is a JSON array string (e.g. `["staging-nightly","sonnet-4.6"]`). The archive flow's [`scripts/tag-archive.cjs`](scripts/tag-archive.cjs) sets this field automatically from the target profile's `archive.tag`, so every archived run is taggable out of the box.
+
+**Caveats:**
+- **DB mode only.** `results.json` does not currently emit the Tags field, so `--from-json --tag` prints a warning and ignores the tag.
+- **`mj test regression compare --tag=...`** flips to DB mode (drops `--from-json`), so it needs an MJ provider configured. Point your `mj.config.cjs` at the archive DB before running.
+
+## Adopting the Runner in Your Own Project
+
+The agentic test runner ships as a published Docker image — `memberjunction/agentic-test-runner` on Docker Hub. External adopters **don't need to clone the MJ monorepo**. You can drive it either through the `mj` CLI (which auto-routes to the image when you're not in the monorepo) or directly via `docker run`.
+
+### Provider database (required)
+
+The test engine loads test definitions + Computer Use prompts and records results in an **MJ database**, then drives your app's URL in the browser. So an external run needs a reachable MJ DB (`DB_HOST`/`DB_DATABASE`/`DB_USERNAME`/`DB_PASSWORD`) — typically your instance under test, or a throwaway. `host.docker.internal` reaches a DB published on your host (mapped automatically). **Pushing tests/prompts mutates that DB's metadata** — prefer a throwaway over untouchable prod.
+
+### Via the `mj` CLI (no monorepo)
+
+Outside the monorepo, the regression commands route to the published image automatically:
+
+```bash
+# Mode B/C — drive a URL (docker run under the hood):
+mj test regression remote --target=./my-suite/target.json --env-file=./.env
+
+# Mode D — boot your app alongside the runner (your app compose is all you supply):
+mj test regression remote --target=./app/target.json --overlay=./app/docker-compose.app.yml --env-file=./.env
+
+# Diff / export your runs (operate on ./test-results):
+mj test regression compare
+mj test regression export
+
+# Pin the image for reproducibility:
+mj test regression remote --target=./t.json --image=memberjunction/agentic-test-runner:v5.37.0
+```
+
+`--target`'s directory is mounted at `/work` (its `metadata/` is pushed via `extraMetadataDirs: ["/work/metadata"]`); results land in `./test-results`. Auth `env:` refs in the target resolve from `--env-file`.
+
+### Scaffold a starter directory
+
+The easiest on-ramp is `init`, which copies a starter scaffold into your cwd:
+
+```bash
+# If you have @memberjunction/cli installed:
+mj test regression init generic-web
+
+# Equivalent direct invocation (no CLI needed):
+docker run --rm -v $(pwd):/out memberjunction/agentic-test-runner init generic-web
+```
+
+Available scaffolds (run `mj test regression init --list` for an inventory):
+
+| Name | Mode | Purpose |
+|---|---|---|
+| `remote-mj` | B | Drive the canonical MJ Explorer Regression Suite against a remote MJ deployment. |
+| `generic-web` | C | Test any non-MJ web app. 3 sample tests against MDN + a custom IOracle. |
+| `static-file-server` | D (minimal) | nginx:alpine + 2 HTML pages + 2 tests. Smallest possible Mode D demo. |
+| `bring-your-own-app` | D (realistic) | Angular + Express app with planted bugs + archive flow. |
+| `github-actions` | CI | Copy-paste GitHub Actions workflow for running the runner in CI. |
+
+### Run it directly (no MJ CLI)
+
+The cleanest direct form passes your target profile to the image and lets it load it:
+
+```bash
+docker run --rm \
+    --add-host host.docker.internal:host-gateway \
+    --env-file ./.env \
+    -v $(pwd)/my-suite:/work:ro \
+    -v $(pwd)/test-results:/app/test-results \
+    memberjunction/agentic-test-runner:v<MJServer-version> \
+    run --target=/work/target.json
+```
+
+Your `.env` supplies `DB_*`, `AI_VENDOR_API_KEY__GeminiLLM` (and/or `__AnthropicLLM`), and any auth `env:` refs the target uses. (You can still drive purely by env vars — `TEST_SUITE_NAME`, `MJ_TEST_VAR_*`, `EXTRA_METADATA_DIRS` — by omitting `--target`.)
+
+The dispatcher accepts: `run [--target <file>]` (default), `import-bacpac`, `export [<run-dir>]`, `init <name>`, `exec <cmd>`. Run with `help` to see the full surface:
+
+```bash
+docker run --rm memberjunction/agentic-test-runner help
+```
+
+### Versioning and image tags
+
+| Tag | When to use |
+|---|---|
+| `memberjunction/agentic-test-runner:v<MJServer-version>` | **Recommended.** Pinned to a release; reproducible. Match the MJ monorepo's `packages/MJServer/package.json` version. |
+| `memberjunction/agentic-test-runner:latest` | Convenience tag — moves with every release. Fine for experiments; avoid in CI. |
+
+The image is published by the same workflow that publishes `memberjunction/api` — see [`.github/workflows/docker.yml`](../../.github/workflows/docker.yml). Tag bumps follow MJServer's package.json version.
+
+### CI integration
+
+Scaffold the workflow into your project with `mj test regression init github-actions` (drops a starter `regression.yml` into `./github-actions/`), then move it into your repo's `.github/workflows/` directory and configure the required secrets (`AI_VENDOR_API_KEY__GeminiLLM`, `DB_*`, and any auth env: refs your target uses, e.g. `STAGING_TEST_USER`/`STAGING_TEST_PASSWORD`). The workflow runs nightly + on dispatch, runs `docker run … run --target`, and uploads `test-results/` as an artifact.
+
+### What gets baked into the image
+
+The published runner is **self-contained** — every dependency the suite needs is inside:
+
+- **Playwright + Chromium** for browser automation
+- **Computer Use engine + MJ test driver** (the LLM-driven controller/judge)
+- **MJ CLI** (`npx mj` works inside the container)
+- **TestingFramework** (oracle registry, suite runner, variable substitution)
+- (Mode templates for `mj test regression init <name>` ship with `@memberjunction/cli`, not with the image — install the CLI to scaffold them.)
+- **The regression scripts** under `/app/docker/regression/scripts/` — target-profile loader, report/screenshot generators, bacpac importer (`import-bacpac.cjs`), shared `lib/db.cjs`
+- **SqlPackage** (amd64 build) for the `import-bacpac` path
+- **Dispatcher entrypoint** routing `run [--target] | import-bacpac | export | init | exec`
+
+The image is built by [`docker/agentic-test-runner/Dockerfile`](../agentic-test-runner/Dockerfile). The MJ regression compose (full self-contained stack — Mode A) still uses [`docker/regression/Dockerfile.test-runner`](Dockerfile.test-runner).
+
+### Bacpac externally (prerequisite)
+
+`mj test regression up --bacpac` works outside the monorepo via [`docker-compose.bacpac-standalone.yml`](docker-compose.bacpac-standalone.yml) (sqlserver → bacpac-import → `memberjunction/api` → `memberjunction/explorer` → test-runner). It is **gated on a published `memberjunction/explorer` image**, which is a separate workstream (the Explorer must be made runtime-configurable first). Until that image ships, the `explorer` service can't pull and external bacpac stays dormant — Mode B/C/D are independent of it.
+
+## Environment Variables
+
+All variables go in `docker/.env.test` (gitignored). See `.env.test.example` for the template.
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `TEST_SA_PASSWORD` | Yes | SQL Server SA password (min 8 chars, requires complexity) |
+| `MJ_BASE_ENCRYPTION_KEY` | Yes | Base64 encryption key (`openssl rand -base64 32`) |
+| `AUTH0_DOMAIN` | Yes | Auth0 tenant domain (e.g., `dev-xxxxx.us.auth0.com`) |
+| `AUTH0_CLIENTID` | Yes | Auth0 SPA application client ID |
+| `AUTH0_CLIENT_SECRET` | Yes | Auth0 application client secret |
+| `TEST_UID` | Yes | Test user email (must exist in Auth0, email verified, no MFA) |
+| `TEST_PWD` | Yes | Test user password in Auth0 |
+| `AI_VENDOR_API_KEY__GeminiLLM` | Yes* | Google Gemini API key — the **primary** Computer Use model |
+| `AI_VENDOR_API_KEY__AnthropicLLM` | Yes* | Anthropic API key — failover / alternate model |
+
+\* At least one AI vendor key is required. Variable names match the root `.env` convention (`AI_VENDOR_API_KEY__<Vendor>LLM`).
+
+### Auth0 Setup Requirements
+
+The Auth0 SPA application must have:
+- **Allowed Callback URLs**: `http://localhost:4200`
+- **Allowed Logout URLs**: `http://localhost:4200`
+- **Allowed Web Origins**: `http://localhost:4200`
+- **Token Endpoint Authentication Method**: None (SPA)
+- **Grant Types**: Authorization Code (with PKCE)
+- The test user must exist in Auth0 with email verified and MFA disabled
+
+## File Inventory
+
+```
+docker/regression/
+├── docker-compose.test.yml       # Orchestration (5 services + opt-in form-generator)
+├── Dockerfile.db-setup           # DB init: migrations + AssociationDB + CodeGen (one-shot)
+├── Dockerfile.api                # MJAPI: GraphQL server only (no setup)
+├── Dockerfile.explorer           # MJExplorer: Angular AOT build + nginx reverse proxy
+├── Dockerfile.test-runner        # Test runner: full monorepo build + Playwright Chromium
+├── db-setup-entrypoint.sh        # Bash orchestrator → calls scripts/*.cjs for each step
+├── form-gen-entrypoint.sh        # Same shape: minimal bash → scripts/*.cjs
+├── test-runner-entrypoint.sh     # Same shape: minimal bash → scripts/*.cjs + reports
+├── nginx.conf                    # Static nginx config (proxy /api/ → mjapi:4000)
+├── form-gen.config.cjs           # mj.config.cjs override for form-generator service
+├── gen-forms.sh                  # Convenience wrapper invoked by `mj test regression gen-forms`
+├── .env.test.example             # Environment variable template
+├── REGRESSION_TESTING.md         # This file
+│
+├── scripts/                      # All non-trivial JavaScript lives here
+│   ├── lib/
+│   │   ├── db.cjs                # Shared mssql connection helper (sql + connect)
+│   │   └── probes.cjs            # Shared HTTP/TCP probes (preflight + health-monitor)
+│   ├── bootstrap-db.cjs          # CREATE DATABASE + install AssociationDB (one-shot)
+│   ├── patch-test-api-config.cjs # Bake-time MJAPI config patch (Dockerfile.api)
+│   ├── gen-environment-ts.cjs    # Bake-time MJExplorer environment.ts gen
+│   ├── setup-test-user.cjs       # SQL safety-net: user + roles + apps + favorites
+│   ├── preflight-checks.cjs      # Pre-flight diagnostics (MJAPI/nginx/socat/Auth0)
+│   ├── health-monitor.cjs        # Background monitor (probes every 10s during run)
+│   ├── extract-screenshots.cjs   # Pull per-step PNGs out of vwTestRunOutputs
+│   ├── generate-md-report.cjs    # Render report.md
+│   ├── generate-html-report.cjs  # Render report.html (lightbox gallery)
+│   └── inline-report.cjs         # Backs `mj test regression export` — inline screenshots into a portable HTML
+│
+├── test-metadata/                # Docker-only metadata (NOT pushed to dev DBs)
+│   └── users/
+│       └── .users.json           # Test user with UI + Integration roles
+└── test-results/                 # Output directory (gitignored, bind-mounted)
+    ├── latest -> run-{TIMESTAMP}/   # Symlink to most recent run
+    └── run-{TIMESTAMP}/             # One folder per regression run (never overwritten)
+        ├── results.json             # Full suite results (machine-readable)
+        ├── report.md                # Human-readable markdown summary
+        ├── report.html              # Self-contained HTML gallery with screenshots
+        ├── preflight.json           # Pre-flight diagnostics from preflight-checks.cjs
+        ├── diagnostics.json         # Background health-monitor log
+        └── screenshots/
+            └── T01_-_Login_Smoke/
+                ├── step_01.png
+                ├── step_02.png
+                └── steps.json       # Step metadata (reasoning, actions, url)
+
+metadata/tests/regression/
+├── README.md                     # Test author guide (anatomy, conventions, tuning)
+├── .mj-sync.json                 # Sync config
+└── .T01-login-smoke.json         # 25 test definition files (synced to DB at runtime)
+
+metadata/test-suites/
+└── .regression-suite.json        # Suite + ordered TestSuiteTest mappings
+```
+
+### How the entrypoints + scripts fit together
+
+The entrypoints are intentionally thin bash orchestrators. Each non-trivial step
+is a standalone `scripts/*.cjs` file that can be re-run, debugged, or unit-tested
+in isolation. All of them load the shared `scripts/lib/db.cjs` for mssql
+configuration, so connection settings come from one place.
+
+| Entrypoint | Calls | Purpose |
+|---|---|---|
+| `db-setup-entrypoint.sh` | `bootstrap-db` | One-shot DB bring-up |
+| `form-gen-entrypoint.sh` | `bootstrap-db` (with `SKIP_VERIFY=true FORCE_FAIL_THRESHOLD=disabled`, schema only) | Codegen Angular forms into a host bind-mount |
+| `test-runner-entrypoint.sh` | `setup-test-user`, `preflight-checks`, `health-monitor`, `extract-screenshots`, `generate-md-report`, `generate-html-report` | Run the suite + emit reports |
+
+`Dockerfile.api` and `Dockerfile.explorer` invoke `patch-test-api-config.cjs`
+and `gen-environment-ts.cjs` respectively at image-bake time.
+
+Each regression run writes to a brand-new `run-{TIMESTAMP}` folder — runs **never** overwrite each other. The `latest` symlink always points at the most recent run, which is convenient for opening reports (`open docker/regression/test-results/latest/report.html`).
+
+## How Tests Work
+
+Each test uses the **ComputerUseTestDriver** which:
+
+1. Launches headless Chromium via Playwright
+2. Navigates to a start URL (MJExplorer at `http://localhost:4200`)
+3. Takes a screenshot and sends it to an LLM (controller) which decides what to click/type
+4. The LLM-driven agent performs the test workflow (login, navigate, verify UI)
+5. A judge LLM periodically evaluates whether the goal was achieved
+6. Oracles score the result (goal-completion, url-match, step-count)
+7. Results and screenshots are persisted to the MJ database
+8. The entrypoint extracts screenshots from the DB to `run-{TIMESTAMP}/screenshots/` and generates `report.md` + `report.html`
+
+### Test Definition Structure
+
+Tests are defined as metadata JSON files in `metadata/tests/regression/` with three sections:
+
+- **InputDefinition**: Goal description, start URL, auth credentials, allowed domains
+- **Configuration**: LLM prompts, oracles, step limits, viewport size, judge frequency
+- **ExpectedOutcomes**: URL patterns, confidence thresholds, validation criteria
+
+See `metadata/tests/regression/.T01-login-smoke.json` for a working example.
+
+### Oracles
+
+Each test configures weighted oracles that evaluate the result:
+
+| Oracle | Purpose | Typical Weight |
+|--------|---------|---------------|
+| `goal-completion` | Did the judge LLM confirm the goal was achieved? | 0.5 |
+| `url-match` | Does the final URL match the expected pattern? | 0.3 |
+| `step-count` | Did the test complete within the step budget? | 0.2 |
+
+The weighted oracle scores combine into a final test score (0.0 to 1.0). A test passes when the goal-completion oracle passes.
+
+### Adding New Tests
+
+See [`metadata/tests/regression/README.md`](../../metadata/tests/regression/README.md) for the full test-author guide. Quick summary:
+
+1. Create a new `.json` file in `metadata/tests/regression/` following the T01 pattern
+2. Add a `relatedEntities` entry in `metadata/test-suites/.regression-suite.json` linking the test
+3. The test runner automatically syncs metadata on each run — no rebuild needed
+4. Metadata files are bind-mounted from the host, so edits are picked up immediately
+
+### Validating a Test Before Running
+
+`mj test run --dry-run` validates a test's configuration without executing it — no browser launches, no LLM calls, no charges. It checks JSON parseability, that every declared oracle type is registered, that scoring weights sum to ~1.0, and that the test's driver class exists.
+
+It **does** need a database connection to look up the test record. Three ways to invoke it:
+
+```bash
+# (a) Against the live Docker stack — exec into the test-runner while it's up
+docker compose -f docker/regression/docker-compose.test.yml exec test-runner \
+  npx mj test run --name "T26 - My New Test" --dry-run
+
+# (b) Against your local dev DB — push the metadata first, then validate
+npx mj sync push --dir=metadata --include=tests,test-suites
+npx mj test run --name "T26 - My New Test" --dry-run
+
+# (c) Against the regression DB from your host (after `mj test regression up`)
+# Requires DB_HOST/DB_PORT pointed at host:11433 in your .env or mj.config.cjs override
+npx mj test run --name "T26 - My New Test" --dry-run
+```
+
+The `--dry-run` flag only validates — it never invokes the Computer Use engine, so you can run it freely without any Auth0 setup or Anthropic credits.
+
+## Testing Against a `.bacpac` Database
+
+Instead of building the MJ database from scratch, you can import a `.bacpac` (a
+real MJ database export) and test the **current** MJExplorer build against it.
+This runs the full local stack (Mode A topology) with only the DB-init step
+swapped, driven by **your own** test suite (the standard 25 tests assume the
+AssociationDB demo data, which a customer bacpac won't have).
+
+```bash
+# Upgrade path (default): import → mj migrate → mj codegen → run your suite
+mj test regression up \
+    --bacpac=/path/to/db.bacpac \
+    --suite="My Suite" \
+    --metadata=/path/to/my-suite-metadata
+
+# Import-only (no migrate/codegen) — safe only if the bacpac is already current
+mj test regression up --bacpac=/path/to/db.bacpac --bacpac-no-upgrade --suite="My Suite" --metadata=...
+```
+
+Equivalent env-var form (set in `.env.test`, then add the overlay yourself):
+
+```bash
+BACPAC_DIR=/path/to            # dir containing the file
+BACPAC_FILE=/app/bacpac/db.bacpac
+BACPAC_UPGRADE=true            # false = import as-is
+USER_METADATA_DIR=/path/to/my-suite-metadata
+EXTRA_METADATA_DIRS=/app/user-metadata
+TEST_SUITE_NAME="My Suite"
+# docker compose -f docker-compose.test.yml -f docker-compose.bacpac.yml --profile full up
+```
+
+**How it works** ([db-setup-entrypoint.sh](db-setup-entrypoint.sh) bacpac branch):
+1. [scripts/import-bacpac.cjs](scripts/import-bacpac.cjs) drops the target DB if present, then `sqlpackage /Action:Import` into `MemberJunction_Test`.
+2. Upgrade mode runs `mj migrate` (Skyway applies only versions newer than the bacpac's `flyway_schema_history`) then `mj codegen`, bringing the schema to the current build.
+3. Computer Use prompts are pushed so the test engine can run.
+4. The test-runner skips the demo user / standard-25 seeding and pushes your `--metadata` dir, then runs `--suite`.
+
+**Requirements & caveats:**
+- The bacpac should come from a Flyway/Skyway-managed MJ instance (so it carries `flyway_schema_history`). Upgrade mode **aborts with a clear message** if `__mj` exists without that table, rather than mis-baselining.
+- If the bacpac has **encrypted** fields, set `MJ_BASE_ENCRYPTION_KEY` to the source instance's key or decryption fails.
+- New entities introduced by an upgrade fall back to **generic** forms (Explorer's entity forms are baked at image-build time, not regenerated here).
+- `--bacpac` builds a one-time amd64 db-setup image (for the x64 SqlPackage) via the `docker-compose.bacpac.yml` overlay; normal runs stay native.
+
+## Comparing Runs
+
+Because the Docker SQL Server is wiped on `down -v`, regression comparisons use the per-run `results.json` artifacts on disk instead of the database:
+
+```bash
+# Compare the two most recent runs in test-results/
+mj test regression compare
+
+# Forward extra flags directly
+mj test regression compare --diff-only
+mj test regression compare --format=markdown --output=delta.md
+mj test regression compare --format=json --output=delta.json
+```
+
+The underlying command is `mj test compare --from-json docker/regression/test-results`. It auto-discovers `run-*/results.json` files (and legacy `results-*.json` archives), picks the two newest by mtime, and outputs a comparison.
+
+**Exit codes** (CI-friendly):
+
+| Code | Meaning |
+|---|---|
+| `0` | No regressions detected |
+| `1` | One or more regressions detected (see report) |
+| `2` | Data error — fewer than 2 runs, missing files, invalid JSON |
+
+A test is classified as a **regression** when its previous status was `Passed` and current status is not, OR when its score dropped by more than 0.10. Conversely, **improvement** means status went from non-Pass to Pass, or score rose by more than 0.10.
+
+You can also point `--from-json` at any directory with archived results — useful for comparing a Docker run against a CI-archived baseline:
+
+```bash
+mj test compare --from-json /path/to/baseline-runs --from-json docker/regression/test-results/latest/results.json
+```
+
+## Exporting a Portable Report
+
+`report.html` references screenshots as separate files under `screenshots/`, so it isn't self-contained. To produce a single shareable file (e.g. a CI artifact or an email attachment), export the run — every PNG is inlined as a base64 data URI into `report.standalone.html`:
+
+```bash
+# Export the most recent run (the `latest` symlink)
+mj test regression export
+
+# Export a specific run by folder name or path
+mj test regression export --run=run-20260526T220118Z
+mj test regression export --run=./some/other/run-dir
+```
+
+The resulting file is large (tens of MB for a full suite) but fully portable — no adjacent `screenshots/` directory required.
+
+## Flaky Test Detection
+
+The suite runner can re-execute every test multiple times to detect flakiness via score variance:
+
+```bash
+mj test suite --name "MJ Explorer Regression Suite" --flaky-check 3 --parallel
+```
+
+Like other `mj test` commands, this needs a DB to read the suite definition — invoke from inside the test-runner container or after `mj sync push` to your local DB.
+
+A test is flagged `[FLAKY]` when:
+- Score range across iterations exceeds `0.3` (the variance threshold), OR
+- Statuses across iterations are mixed (e.g., 2 passes + 1 fail)
+
+The flaky report is appended to the normal suite output. Cost scales linearly — `--flaky-check 3` triples LLM cost per suite run.
+
+**When to run it**: after adding new tests, when you suspect intermittent failures, or before a release if you've recently changed Computer Use prompts.
+
+## HTML Screenshot Gallery
+
+Every run generates `report.html` alongside `report.md` — a single self-contained HTML file with:
+
+- **Per-test summary cards** (status badge, score, step count, duration)
+- **Lazy-loaded screenshot thumbnails** in a responsive grid
+- **Click-to-open-fullsize** for any screenshot
+- **Judge reason** prominently displayed for failed tests
+- **Oracle results table** per test with pass/fail badges
+
+```bash
+open docker/regression/test-results/latest/report.html         # macOS
+xdg-open docker/regression/test-results/latest/report.html     # Linux
+```
+
+The HTML uses relative paths to the screenshot files (no inline base64), so the entire `run-{TIMESTAMP}` folder is portable — zip it and share it as a CI artifact.
+
+## Container Details
+
+### Dockerfile.db-setup (One-Shot Init Container)
+
+A one-shot container that runs all database setup tasks in sequence, then exits. MJAPI depends on it via `service_completed_successfully`.
+
+**Steps executed by `db-setup-entrypoint.sh`:**
+
+1. **Bootstrap database** (`scripts/bootstrap-db.cjs`): creates `MemberJunction_Test` if missing, then runs the pre-built `combined_build.sql` via the mssql driver to install the `AssociationDemo` schema (58 tables, 10K+ records — members, events, courses, forums, certifications, etc.) and verifies the install with a row count.
+2. **Run migrations**: `mj migrate` applies all Flyway migrations (creates `__mj` schema, 290+ entities)
+3. **Run CodeGen**: `mj codegen` generates entity classes, views, stored procedures, GraphQL resolvers, and EntityField metadata in a single pass. CodeGen backfills `__mj_CreatedAt`/`__mj_UpdatedAt`/`__mj_DeletedAt` EntityField rows itself via `ManageMetadataBase.ensureSpecialDateEntityFieldsExist` — no post-codegen patching needed.
+4. **Sync application metadata**: pushes `metadata/applications/`
+5. **Sync prompt metadata**: pushes `metadata/prompts/` so Computer Use controller/judge prompt updates from `.template.md` files actually reach the DB
+
+**Why a separate container:**
+- Migrations and CodeGen are one-shot tasks, not long-running services
+- Keeps MJAPI Dockerfile simple (just runs the server)
+- `service_completed_successfully` condition ensures DB is fully ready before MJAPI starts
+- Easier to debug migration/install failures in isolation
+
+**AssociationDB demo data includes:**
+- 2,000 members across 40 organizations with 8 membership types
+- 21 events with 85 sessions and 1,400+ registrations
+- 60 courses with 900 enrollments
+- 50 forum threads with 200+ posts
+- 100 resources, 413 certifications, 110 products
+- All dates are relative to `GETDATE()` so data always looks current
+
+### Dockerfile.explorer (nginx Reverse Proxy)
+
+The explorer image is a two-stage build:
+
+**Stage 1 (builder)**: Installs npm dependencies, generates `environment.ts` via [`scripts/gen-environment-ts.cjs`](scripts/gen-environment-ts.cjs) (Auth0 + API configuration from build args), then runs `npm run build:explorer` (Angular AOT build).
+
+**Stage 2 (nginx:alpine)**: Copies the built static files and `nginx.conf` (a static config — see [`nginx.conf`](nginx.conf)). The config does:
+
+- **`map $http_upgrade $connection_upgrade`**: Conditionally sets `Connection: upgrade` only for WebSocket requests, `Connection: close` for regular HTTP. Critical — unconditionally setting `Connection: upgrade` causes GraphQL POST requests to hang.
+- **`location /api/`**: Reverse proxy to `http://mjapi:4000/`. The trailing slash on both `location /api/` and `proxy_pass http://mjapi:4000/` means nginx strips the `/api/` prefix, so `/api/graphql` becomes `/graphql` on MJAPI.
+- **SPA fallback**: `try_files $uri $uri/ /index.html` for Angular routing.
+- **Static asset caching**: 1-day cache with immutable headers for JS/CSS/images.
+
+**Important**: `GRAPHQL_URI` must be an absolute URL (`http://localhost:4200/api/`), not a relative path (`/api/`). The `graphql-request` v7+ library validates URLs with `new URL()` which rejects relative paths.
+
+### Dockerfile.api (MJAPI Server)
+
+Two-stage build. The runtime stage runs [`scripts/patch-test-api-config.cjs`](scripts/patch-test-api-config.cjs) to flip `autoCreateNewUsers`, `newUserRoles`, and `CreateUserApplicationRecords` for the test environment. The container only starts the GraphQL server — all database setup (migrations, CodeGen, AssociationDB) is handled by the `db-setup` container which must complete before MJAPI starts.
+
+### Dockerfile.test-runner (Playwright + MJ CLI)
+
+Based on `mcr.microsoft.com/playwright:v1.58.1-noble` which includes Chromium. Installs `socat` for localhost forwarding, copies the full monorepo, runs `npm install` + `turbo build --concurrency=2`, and creates a bootstrap ESM file that imports `@memberjunction/computer-use-engine` to register the `ComputerUseTestDriver` class.
+
+### test-runner-entrypoint.sh
+
+A thin bash orchestrator. Each non-trivial step is a standalone script under
+[`scripts/`](scripts/):
+
+1. **socat proxy** (`localhost:4200 → mjexplorer:4200`): Required for Auth0 secure context
+2. **Application + test metadata**: `mj sync push` pushes `metadata/applications`, `metadata/tests`, and `metadata/test-suites` (and `test-metadata/{tags,users}` for Docker-only test data)
+3. **Test user safety-net** ([`scripts/setup-test-user.cjs`](scripts/setup-test-user.cjs)): direct SQL upsert for the user, UI + Integration roles, all active applications, every entity within those applications, and example data (5 members in the "VIP Members" list, 3 events in "Spring Events", 5+3 favorites). Required because `mj sync push` may fail on a fresh DB (System user bootstrap chicken-and-egg) and `autoCreateNewUsers` only assigns the UI role on first login.
+4. **Pre-flight diagnostics** ([`scripts/preflight-checks.cjs`](scripts/preflight-checks.cjs)): probes MJAPI healthcheck, GraphQL via nginx, the socat TCP proxy, the static index.html, Auth0 OIDC discovery, WebSocket upgrade, and a memory snapshot. Writes `preflight.json` into the run folder.
+5. **Per-run folder**: Creates `test-results/run-{TIMESTAMP}/` so this run's artifacts don't overwrite previous runs.
+6. **Background health monitor** ([`scripts/health-monitor.cjs`](scripts/health-monitor.cjs)): probes MJAPI/nginx/socat every 10s, writes `diagnostics.json`. Killed after the suite completes.
+7. **Suite execution**: Runs `mj test suite --parallel --max-parallel N` (default 4 workers) which executes all active tests in the suite via ComputerUseTestDriver.
+8. **Screenshot extraction** ([`scripts/extract-screenshots.cjs`](scripts/extract-screenshots.cjs)): pulls per-step PNGs out of `vwTestRunOutputs` plus a `steps.json` (reasoning + actions + URL) for each test.
+9. **Markdown report** ([`scripts/generate-md-report.cjs`](scripts/generate-md-report.cjs)): renders `report.md` (pass/fail table + per-test oracle details + failure block).
+10. **HTML report** ([`scripts/generate-html-report.cjs`](scripts/generate-html-report.cjs)): renders `report.html` — a lightbox gallery that overlays the agent's actions (clicks, drags, types, scrolls) on each screenshot.
+11. **Latest symlink**: Updates `test-results/latest` to point at this run.
+
+The script uses `set +e` around the test suite execution so that test failures (exit code 1) don't prevent screenshot/report generation.
+
+## Port Mapping
+
+Host ports are remapped to avoid conflicts with local development:
+
+| Service | Container Port | Host Port | Purpose |
+|---------|---------------|-----------|---------|
+| SQL Server | 1433 | **11433** | Avoids conflict with local SQL Server |
+| MJAPI | 4000 | **14000** | Avoids conflict with local MJAPI |
+| MJExplorer | 4200 | **4200** | Standard (test runner uses localhost:4200) |
+
+## Design Decisions
+
+### Why a separate db-setup container (not MJAPI)
+
+Migrations, CodeGen, and AssociationDB installation are one-shot tasks that take 2-3 minutes combined. Keeping them in a separate init container means MJAPI's Dockerfile stays simple (just runs the server), failures are easier to debug in isolation, and `service_completed_successfully` in docker-compose guarantees the database is fully ready before any application starts.
+
+### Why AssociationDB is included
+
+The regression suite needs realistic data to test entity browsing, record viewing, search, and CRUD workflows. AssociationDB provides 58 tables with 10K+ records spanning membership, events, learning, forums, and more — all with referential integrity and date-relative data that always looks current. Without it, only the login test can meaningfully run.
+
+### Why Sonnet (not Opus) for the controller/judge
+
+Computer Use tasks are primarily visual navigation ("click this button", "type in this field"), not deep reasoning. Sonnet is 5-10x cheaper per step and handles these tasks effectively. The controller and judge prompts are stored in the MJ database (synced via metadata) and reference Sonnet models.
+
+### Why `--concurrency=2` for the test-runner build
+
+Building all 196+ monorepo packages in parallel exceeds Docker Desktop's default memory limit. Limiting turbo to 2 concurrent builds avoids OOM kills. If Docker has 12+ GB RAM allocated, you can increase this limit.
+
+### Why metadata is bind-mounted (not baked in)
+
+The `metadata/` directory is mounted from the host into the test-runner at runtime (`../metadata:/app/metadata`). This means test definition changes take effect immediately without rebuilding the image. The entrypoint runs `mj sync push` on every startup to ensure the database reflects the latest metadata.
+
+### Why the bootstrap uses `--import`
+
+The `ComputerUseTestDriver` class uses `@RegisterClass` to register itself in the ClassFactory. The test-runner entrypoint sets `NODE_OPTIONS="--import /app/bootstrap.mjs"` so the decorator fires before the MJ CLI starts, making the driver discoverable.
+
+### Why socat instead of Docker networking
+
+The test-runner browser needs to access MJExplorer at `localhost:4200` (not `mjexplorer:4200`) because Auth0's SDK requires a secure origin. Browsers treat `localhost` as secure but reject arbitrary hostnames. socat forwards TCP traffic from `localhost:4200` to `mjexplorer:4200` inside the test-runner container.
+
+### Why test user creation uses direct SQL (not mj-sync)
+
+The `mj sync push` command requires an authenticated System user context to operate. On a fresh database (first run), no users exist yet, creating a chicken-and-egg problem. Direct SQL INSERT bypasses this by creating the user and role assignment before any MJ framework code runs.
+
+### Why GRAPHQL_URI must be absolute
+
+The `graphql-request` v7+ library (used by `GraphQLDataProvider`) internally calls `new URL(url)` to validate the endpoint URL. The `URL` constructor requires an absolute URL -- a relative path like `/api/` throws `TypeError: Invalid URL`. The Docker environment sets `GRAPHQL_URI: 'http://localhost:4200/api/'` to satisfy this requirement. In non-Docker environments, the Angular dev server proxy handles this differently.
+
+### Why nginx Connection header uses a map block
+
+The nginx reverse proxy must handle both regular HTTP POST requests (GraphQL queries) and WebSocket upgrades (GraphQL subscriptions) on the same `/api/` location. A `map` block conditionally sets `Connection: upgrade` only when the client sends an `Upgrade` header, and `Connection: close` otherwise. Without this, unconditionally setting `Connection: "upgrade"` causes regular POST requests to hang because the backend expects a WebSocket handshake that never happens.
+
+## Troubleshooting
+
+### "Loading workspace..." hangs after login
+
+The app gets stuck on "Loading workspace..." when the GraphQL API is unreachable from the browser. Check in order:
+
+1. **MJAPI healthcheck**: `curl http://localhost:14000/healthcheck` from the host
+2. **nginx proxy**: `curl -X POST http://localhost:4200/api/ -H 'Content-Type: application/json' -d '{"query":"{ __schema { queryType { name } } }"}'` -- should return 401 (expected without a token)
+3. **GRAPHQL_URI**: Must be an absolute URL (`http://localhost:4200/api/`). A relative path (`/api/`) causes `TypeError: Invalid URL` in `graphql-request` v7+.
+4. **nginx Connection header**: Must use a `map` block for conditional upgrade. Check the generated config: `docker exec <explorer-container> cat /etc/nginx/conf.d/default.conf`
+
+### Docker OOM during build
+
+Build images one at a time or increase Docker Desktop memory to 12+ GB:
+
+```bash
+docker compose -f docker/docker-compose.test.yml --env-file docker/.env.test build mjapi
+docker compose -f docker/docker-compose.test.yml --env-file docker/.env.test build mjexplorer
+docker compose -f docker/docker-compose.test.yml --env-file docker/.env.test build test-runner
+```
+
+### "Port already in use" errors
+
+The stack uses non-standard host ports (11433, 14000) to avoid conflicts. If those are also in use, edit the `ports:` mappings in `docker-compose.test.yml`.
+
+### Migrations fail with self-signed certificate
+
+Ensure `DB_TRUST_SERVER_CERTIFICATE=true` is set (already configured in the compose file's `x-db-env` anchor).
+
+### `docker compose up` does nothing
+
+Every service is now profile-gated (Phase 4). Plain `docker compose up` (no `--profile` flag) starts zero services. Use `mj test regression up` (or `mj test regression remote`) — these pass the right profile automatically.
+
+### Test suite not found
+
+Test metadata must be synced to the database. The entrypoint handles this automatically. If it fails, check:
+- The `metadata/` volume mount is working (`../metadata:/app/metadata`)
+- The test file name starts with `.` (mj-sync uses the `filePattern` from `.mj-sync.json`)
+- Run `docker compose --profile full logs test-runner` and look for "Syncing test metadata" output
+
+### ComputerUseTestDriver not found
+
+The bootstrap import isn't loading. Check that `NODE_OPTIONS` is set in the entrypoint and that `@memberjunction/computer-use-engine` built successfully in the test-runner image. Look for build errors in `docker compose logs test-runner`.
+
+### Screenshots not saved
+
+The entrypoint uses `set +e` around the test suite execution to prevent `set -e` from aborting the script when tests fail (exit code 1). If screenshots are missing under `run-{TIMESTAMP}/screenshots/`, check:
+- The `test-results` volume mount exists (`./test-results:/app/test-results`)
+- The run folder was created — look for `test-results/run-{TIMESTAMP}/results.json`
+- Database connectivity from the screenshot extraction script (it queries `__mj.vwTestRunOutputs`)
+- The `__mj.vwTestRunOutputs` view returned rows (failed-before-screenshot tests have no outputs to extract)
+
+### Auth0 login fails in headless browser
+
+- Verify the Auth0 application has `http://localhost:4200` in Allowed Callback URLs
+- Verify the test user exists in Auth0 with email verified and MFA disabled
+- Check that `TEST_UID` and `TEST_PWD` in `.env.test` match the Auth0 user
+
+## Cost Estimates
+
+| Component | Cost per Step | Steps per Test | Cost per Test |
+|-----------|--------------|----------------|---------------|
+| Controller LLM (Sonnet) | ~$0.02 | 15 avg | $0.30 |
+| Judge LLM (Sonnet, every 3 steps) | ~$0.02 | 5 avg | $0.10 |
+| **Total per test** | | | **~$0.40** |
+
+A full 25-test suite costs approximately **$10-12** per run.
+
+## Adding New Inline Helpers
+
+When adding a new inline scripting step (DB patch, post-processing, etc.):
+
+1. **Write a `.cjs` file in [`scripts/`](scripts/)** — never inline `node -e "..."` into a bash entrypoint.
+2. **Use [`scripts/lib/db.cjs`](scripts/lib/db.cjs)** for any mssql work — it picks up `DB_HOST`/`DB_PORT`/`DB_DATABASE`/`DB_USERNAME`/`DB_PASSWORD` from the environment.
+3. **Take inputs via env vars** (e.g., `RUN_DIR`, `TEST_UID`) so the script is invocable both from the entrypoint and from a one-off `docker exec`.
+4. **Print `✓` / `✗` / `WARNING` / `FATAL`** prefixes that match the surrounding entrypoint output.
+5. **Mount or COPY**:
+   - `Dockerfile.db-setup` and `Dockerfile.api` already `COPY docker/regression/scripts/` so any new `.cjs` is baked in.
+   - The `test-runner` service mounts `./scripts:/app/docker/regression/scripts:ro` so changes take effect without a rebuild.
+6. **Sanity-check** with `node --check scripts/your-new-script.cjs` and `bash -n the-entrypoint.sh`.
+
+## Test Inventory (25 Tests)
+
+### P0 — Critical Path (release-blocking)
+
+| Test | Description |
+|------|-------------|
+| T01 - Login Smoke | Auth0 login + verify dashboard loads with navigation elements |
+| T02 - Home Application Load | Verify header, MJ logo, app switcher, and navigation items |
+| T03 - Application Switcher | Switch between Home, Data Explorer, and AI applications |
+| T04 - Data Explorer Browse Entities | Navigate to Members entity, verify records grid |
+| T05 - Data Explorer Open Entity Record | Open a member record detail form |
+| T06 - Data Explorer Search | Search for "Event", verify results appear |
+| T07 - Entity Form View Record Details | Open an Event record, verify form fields |
+| T08 - Navigation and Tab Management | Open multiple tabs, switch, close one |
+
+### P1 — Core Functionality
+
+| Test | Description |
+|------|-------------|
+| T09 - Entity Form Create New Record | Create a new Member record and save |
+| T10 - Entity Form Edit and Save Record | Edit an existing Member record and save |
+| T11 - Run a Saved Query | Execute a saved query and verify results |
+| T12 - Admin Dashboard ERD Viewer | Open the ERD viewer, verify entity diagram |
+| T13 - Admin Dashboard User Management | View user management list |
+| T14 - AI Application Agent List View | View configured AI agents |
+| T15 - AI Application Prompt Management | View prompts and open a prompt detail form |
+
+### P2 — Extended Functionality
+
+| Test | Description |
+|------|-------------|
+| T16 - Lists Create and Populate | Create a list and add a record |
+| T17 - Settings Page Navigation | Open settings, verify categories |
+| T18 - Communication Templates View | View communication templates |
+| T19 - Query Browser Execute Query | Find and execute a query |
+| T20 - Dashboard Browser | Open a dashboard, verify rendering |
+| T21 - AI Monitor Dashboard | View AI monitoring dashboard |
+| T22 - Integrations Overview | View integrations overview |
+
+### P3 — Resilience & Edge Cases
+
+| Test | Description |
+|------|-------------|
+| T23 - Handle Invalid Navigation Gracefully | Navigate to invalid URL, verify no crash |
+| T24 - Session Persistence Reload Page | Reload page, verify session maintained |
+| T25 - Multiple Tab Workflow | Open 3 entity tabs, close middle, verify others |
+
+P0 tests are release-blocking. P1/P2/P3 failures are reported but don't block releases.

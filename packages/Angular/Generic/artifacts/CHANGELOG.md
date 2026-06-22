@@ -1,5 +1,224 @@
 # @memberjunction/ng-artifacts
 
+## 5.41.0
+
+### Minor Changes
+
+- 4b3fb9d: Add Skip entity-form support: #entity mentions in conversations, interactive-form host wiring, and reusable form-field components
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [34d17e2]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [133dfa7]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/graphql-dataprovider@5.41.0
+  - @memberjunction/ng-react@5.41.0
+  - @memberjunction/ng-notifications@5.41.0
+  - @memberjunction/ng-base-forms@5.41.0
+  - @memberjunction/ng-base-types@5.41.0
+  - @memberjunction/ng-code-editor@5.41.0
+  - @memberjunction/ng-query-viewer@5.41.0
+  - @memberjunction/ng-shared-generic@5.41.0
+  - @memberjunction/ng-trees@5.41.0
+  - @memberjunction/interactive-component-types@5.41.0
+  - @memberjunction/ng-export-service@5.41.0
+  - @memberjunction/ng-markdown@5.41.0
+  - @memberjunction/ng-pagination@5.41.0
+  - @memberjunction/ng-ui-components@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- 3da89ef: Add configurable CORS origins and opt-in rate limiting to MJ Server, add client-side permission evaluation for component artifacts, and fix CI publish failures in light-command and db-auto-doc bootstrap
+  - @memberjunction/ng-base-forms@5.40.2
+  - @memberjunction/ng-base-types@5.40.2
+  - @memberjunction/ng-code-editor@5.40.2
+  - @memberjunction/ng-export-service@5.40.2
+  - @memberjunction/ng-markdown@5.40.2
+  - @memberjunction/ng-notifications@5.40.2
+  - @memberjunction/ng-pagination@5.40.2
+  - @memberjunction/ng-query-viewer@5.40.2
+  - @memberjunction/ng-react@5.40.2
+  - @memberjunction/ng-shared-generic@5.40.2
+  - @memberjunction/ng-trees@5.40.2
+  - @memberjunction/ng-ui-components@5.40.2
+  - @memberjunction/graphql-dataprovider@5.40.2
+  - @memberjunction/interactive-component-types@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ng-base-forms@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-code-editor@5.40.1
+  - @memberjunction/ng-notifications@5.40.1
+  - @memberjunction/ng-query-viewer@5.40.1
+  - @memberjunction/ng-react@5.40.1
+  - @memberjunction/ng-shared-generic@5.40.1
+  - @memberjunction/ng-trees@5.40.1
+  - @memberjunction/graphql-dataprovider@5.40.1
+  - @memberjunction/interactive-component-types@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/ng-export-service@5.40.1
+  - @memberjunction/ng-markdown@5.40.1
+  - @memberjunction/ng-pagination@5.40.1
+  - @memberjunction/ng-ui-components@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- f2cca15: Fix research-agent reports being dropped from chat, add pluggable inline artifact previews, and correct Prompt Run token display.
+- 40e90fa: Show all distinct artifacts on a conversation message instead of only the most recently created one — a message that carries both a report and a standalone generated image now renders a card for each. Multiple versions of the same artifact still collapse to the latest. Also halves the inline image/video preview height (280px → 140px) so thumbnails don't dominate the message.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [7bbfd62]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/graphql-dataprovider@5.40.0
+  - @memberjunction/ng-base-forms@5.40.0
+  - @memberjunction/ng-base-types@5.40.0
+  - @memberjunction/ng-code-editor@5.40.0
+  - @memberjunction/ng-notifications@5.40.0
+  - @memberjunction/ng-query-viewer@5.40.0
+  - @memberjunction/ng-react@5.40.0
+  - @memberjunction/ng-shared-generic@5.40.0
+  - @memberjunction/ng-trees@5.40.0
+  - @memberjunction/interactive-component-types@5.40.0
+  - @memberjunction/ng-export-service@5.40.0
+  - @memberjunction/ng-markdown@5.40.0
+  - @memberjunction/ng-pagination@5.40.0
+  - @memberjunction/ng-ui-components@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [f60e340]
+- Updated dependencies [bd95e83]
+- Updated dependencies [3c53858]
+- Updated dependencies [4bc6fb4]
+- Updated dependencies [3b29882]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [5b4102c]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/graphql-dataprovider@5.39.0
+  - @memberjunction/ng-ui-components@5.39.0
+  - @memberjunction/ng-base-forms@5.39.0
+  - @memberjunction/ng-shared-generic@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/ng-markdown@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+  - @memberjunction/ng-code-editor@5.39.0
+  - @memberjunction/ng-notifications@5.39.0
+  - @memberjunction/ng-query-viewer@5.39.0
+  - @memberjunction/ng-react@5.39.0
+  - @memberjunction/ng-trees@5.39.0
+  - @memberjunction/interactive-component-types@5.39.0
+  - @memberjunction/ng-export-service@5.39.0
+  - @memberjunction/ng-pagination@5.39.0
+
+## 5.38.0
+
+### Minor Changes
+
+- 8bd97f3: fix: image display + artifact/attachment unification cleanup
+  - Add ImageArtifactViewerPlugin for raster image artifacts
+  - Remove persist gate so agent-generated media always persists as artifacts
+  - AgentRunner writes media artifacts directly (bypass deprecated ConversationDetailAttachment)
+  - Remove deprecated SuggestedResponses feature (superseded by ResponseForm)
+  - Backfill migration for legacy ConversationDetailAttachment rows
+  - Remove all back-compat reads from deprecated ConversationDetailAttachment
+
+- 918d663: Interactive Forms — runtime authoring loop is now closed end-to-end.
+
+  **Versioning lifecycle (server-side actions).** The single `Create Interactive Form` action has been split into a versioning-aware family:
+  - `Create Interactive Form` — net-new only; returns `ALREADY_EXISTS` if the user already has an Active override for the entity.
+  - `Modify Interactive Form` — branches on the pointed-to Component's status: Pending → modify the row in place (no version proliferation during chat refinement); Active → insert a new Component v(N+1) with `Status='Pending'` and a sibling Pending Override, leaving the live form untouched.
+  - `Activate Interactive Form Version` — flips a Pending override to Active and atomically demotes the prior Active to Inactive.
+  - `Revert Interactive Form` — re-points an Active override at an older Component in the same Name lineage. Pure UPDATE; old rows preserved.
+  - `Get Active Form For Entity` — read-only; returns the resolved override + the full applicable-variants list.
+  - `Get Default Form Scaffold For Entity` — new read-only action that produces a working `ComponentSpec` mirroring the CodeGen Angular default layout. Replaces "write JSX from scratch" as the agent's baseline.
+
+  **Form-aware artifact viewer.** When a component artifact's spec declares `componentRole: 'form'`, the viewer auto-loads a Top-1 record from the declared entity, mounts via `<mj-interactive-form>` (with `componentSpec` + `record` now `@Input()`s), and exposes a search-as-you-type record picker plus an **Apply to my form** action. Falls back to a synthetic `NewRecord()` when the entity has no rows yet.
+
+  **Variant switcher.** `FormResolverService` now returns the full applicable-variants list alongside the resolved override. `<mj-record-form-container>` renders a compact "Form: \<name\> ▾" picker between the toolbar and the form body when more than one variant applies; selection is persisted per-user per-entity in localStorage.
+
+  **Cockpit reshape.** Form Builder dashboard is no longer canvas-first: 4-pane layout with a forms list + versions rail on the left, a Preview/Code/Layout tabbed center, and a Form Builder AI pane on the right. Both side rails collapse to a strip with state persisted in localStorage.
+
+  **Shared fixture.** `buildFixtureFormHostProps` promoted from Component Studio to `@memberjunction/interactive-component-types/forms` so the artifact viewer and Studio share one implementation.
+
+  **Migration.** `EntityFormOverride.Notes` column (NVARCHAR(MAX), nullable) for human commentary on overrides. Validator audited against the CHECK constraint — no patch required.
+
+  **Agent prompt.** `form-builder.template.md` rewritten around the new action toolbox; teaches the agent to call `Get Active Form For Entity` first and branch between Create / Modify (new-version) / Modify (in-place). Sage's prompt gets a one-line routing rule to delegate form requests to Form Builder.
+
+### Patch Changes
+
+- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [6a571d3]
+- Updated dependencies [275afda]
+- Updated dependencies [d285996]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [b26d0ee]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ng-base-forms@5.38.0
+  - @memberjunction/ng-react@5.38.0
+  - @memberjunction/interactive-component-types@5.38.0
+  - @memberjunction/graphql-dataprovider@5.38.0
+  - @memberjunction/ng-code-editor@5.38.0
+  - @memberjunction/ng-query-viewer@5.38.0
+  - @memberjunction/ng-base-types@5.38.0
+  - @memberjunction/ng-notifications@5.38.0
+  - @memberjunction/ng-shared-generic@5.38.0
+  - @memberjunction/ng-trees@5.38.0
+  - @memberjunction/ng-export-service@5.38.0
+  - @memberjunction/ng-markdown@5.38.0
+  - @memberjunction/ng-pagination@5.38.0
+  - @memberjunction/ng-ui-components@5.38.0
+
 ## 5.37.0
 
 ### Patch Changes

@@ -1,5 +1,375 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.41.0
+
+### Minor Changes
+
+- 4b3fb9d: Add Skip entity-form support: #entity mentions in conversations, interactive-form host wiring, and reusable form-field components
+
+### Patch Changes
+
+- 15b743b: Real-Time AI Agents — Sessions, Channels & the Realtime Model (plans/ai-agent-sessions.md). Adds the AIAgentSession/AIAgentChannel/AIAgentSessionChannel schema (+ AgentSessionID on AIAgentRun/ConversationDetail, CloseReason on AIAgentSession); the BaseRealtimeModel server primitive with OpenAIRealtime + GeminiRealtime drivers (server-bridged StartSession and client-direct ephemeral-token CreateClientSession, optional SendContextNote/RequestSpokenUpdate interim updates); the new @memberjunction/ai-realtime-client package with the BaseRealtimeClient browser abstraction + OpenAI/Gemini client drivers resolved via ClassFactory by provider key; the Realtime agent type + Voice Co-Agent with RealtimeSessionRunner/RealtimeToolBroker, AgentMemoryContextBuilder extraction, server session lifecycle (SessionManager, SessionJanitor, start/close/heartbeat + client-direct resolvers with delegated-run progress streaming, AwaitingFeedback resume, co-agent observability runs, user-selectable realtime model); the full-panel realtime voice call UX in ng-conversations (phone trigger + agent/model picker, banner/thread/activity rail, delegation working/result cards with provenance, ephemeral paced first-person progress narration driven by DB prompt templates, in-call text composer); Realtime Voice admin (AI Analytics dashboard sections, session/channel custom forms, agent Runs|Sessions execution history); and Query Builder/Strategist reliability fixes (entity catalog in prompt, Get Entity Details sample caps + semantic fallback, plan formatting). Also: the standalone @memberjunction/ng-whiteboard package (collaborative board with agent tool API, sandboxed interactive widgets + input bridge, markdown panels, exports, cancelable before/after events); ElevenLabs Agents + AssemblyAI Voice Agent realtime provider pairs (4-provider matrix, zero contract changes); session review mode with multi-leg resume carryover (timeline dividers, artifact junction closure, prior-transcript model hydration); delegation cancel channel; usage telemetry relay; Realtime Co-Agent rename with run-step/prompt-run observability.
+- Updated dependencies [8fd6f59]
+- Updated dependencies [6f227ab]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/core-entities-server@5.41.0
+  - @memberjunction/ai-agents@5.41.0
+  - @memberjunction/ai-vector-sync@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/aiengine@5.41.0
+  - @memberjunction/ai-engine-base@5.41.0
+  - @memberjunction/generic-database-provider@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ai-prompts@5.41.0
+  - @memberjunction/ai-agent-manager@5.41.0
+  - @memberjunction/clustering-engine@5.41.0
+  - @memberjunction/ai-mcp-client@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/code-execution@5.41.0
+  - @memberjunction/actions@5.41.0
+  - @memberjunction/communication-types@5.41.0
+  - @memberjunction/communication-engine@5.41.0
+  - @memberjunction/content-autotagging@5.41.0
+  - @memberjunction/external-change-detection@5.41.0
+  - @memberjunction/integration-engine@5.41.0
+  - @memberjunction/interactive-component-types@5.41.0
+  - @memberjunction/lists@5.41.0
+  - @memberjunction/storage@5.41.0
+  - @memberjunction/react-linter@5.41.0
+  - @memberjunction/sqlserver-dataprovider@5.41.0
+  - @memberjunction/search-engine@5.41.0
+  - @memberjunction/esignature@5.41.0
+  - @memberjunction/geo-core@5.41.0
+  - @memberjunction/ai-betty-bot@5.41.0
+  - @memberjunction/lists-base@5.41.0
+  - @memberjunction/export-engine@5.41.0
+  - @memberjunction/global@5.41.0
+  - @memberjunction/sql-dialect@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/core-entities-server@5.40.2
+  - @memberjunction/ai-agents@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/ai-agent-manager@5.40.2
+  - @memberjunction/external-change-detection@5.40.2
+  - @memberjunction/ai-engine-base@5.40.2
+  - @memberjunction/clustering-engine@5.40.2
+  - @memberjunction/ai@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/aiengine@5.40.2
+  - @memberjunction/ai-mcp-client@5.40.2
+  - @memberjunction/ai-prompts@5.40.2
+  - @memberjunction/ai-betty-bot@5.40.2
+  - @memberjunction/ai-vector-sync@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/code-execution@5.40.2
+  - @memberjunction/actions@5.40.2
+  - @memberjunction/communication-types@5.40.2
+  - @memberjunction/communication-engine@5.40.2
+  - @memberjunction/content-autotagging@5.40.2
+  - @memberjunction/generic-database-provider@5.40.2
+  - @memberjunction/integration-engine@5.40.2
+  - @memberjunction/interactive-component-types@5.40.2
+  - @memberjunction/lists-base@5.40.2
+  - @memberjunction/lists@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/export-engine@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/storage@5.40.2
+  - @memberjunction/react-linter@5.40.2
+  - @memberjunction/sql-dialect@5.40.2
+  - @memberjunction/search-engine@5.40.2
+  - @memberjunction/esignature@5.40.2
+  - @memberjunction/geo-core@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-agent-manager@5.40.1
+  - @memberjunction/ai-agents@5.40.1
+  - @memberjunction/ai-engine-base@5.40.1
+  - @memberjunction/clustering-engine@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/aiengine@5.40.1
+  - @memberjunction/ai-mcp-client@5.40.1
+  - @memberjunction/ai-prompts@5.40.1
+  - @memberjunction/ai-vector-sync@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/code-execution@5.40.1
+  - @memberjunction/actions@5.40.1
+  - @memberjunction/communication-types@5.40.1
+  - @memberjunction/communication-engine@5.40.1
+  - @memberjunction/content-autotagging@5.40.1
+  - @memberjunction/external-change-detection@5.40.1
+  - @memberjunction/generic-database-provider@5.40.1
+  - @memberjunction/integration-engine@5.40.1
+  - @memberjunction/interactive-component-types@5.40.1
+  - @memberjunction/lists@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/core-entities-server@5.40.1
+  - @memberjunction/storage@5.40.1
+  - @memberjunction/react-linter@5.40.1
+  - @memberjunction/sqlserver-dataprovider@5.40.1
+  - @memberjunction/search-engine@5.40.1
+  - @memberjunction/esignature@5.40.1
+  - @memberjunction/geo-core@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/ai-betty-bot@5.40.1
+  - @memberjunction/lists-base@5.40.1
+  - @memberjunction/export-engine@5.40.1
+  - @memberjunction/global@5.40.1
+  - @memberjunction/sql-dialect@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 253a188: Knowledge Hub Classify redesign
+  - **Clustering**: new `@memberjunction/clustering-engine` (framework-agnostic fetch → cluster → reduce → LLM-name pipeline), a "Run Cluster Analysis" action, a `RunClusterAnalysis` GraphQL resolver, a `GraphQLClusterClient` transport, and the Angular `ClusteringService` thinned to delegate to the server.
+  - **View-type plug-in architecture (entity viewer)**: `ViewType` registry + `ViewTypeEngine` + `IViewTypeDescriptor`/`IViewRenderer`/`IViewPropSheet` contracts in `ng-entity-viewer`, with Grid/Cards/Timeline/Map descriptors. The host now **dynamic-mounts** any registered plug-in view type (via `ViewContainerRef`) with zero host changes, and the switcher shows the active type's icon + label, collapsing from an icon strip to a dropdown as the list grows. **Cluster view type** added in `@memberjunction/ng-clustering` (descriptor + `IViewRenderer` wrapper over the scatter + `IViewPropSheet` + an Entity-Document availability engine) — available on any entity with vectors, reusing the same `ClusteringService`. The active view type persists to `UserView.ViewTypeID` (new source of truth; backfilled from the legacy `DisplayState.defaultMode`) and per-view-type config to `UserView.DisplayState.viewTypeConfigs` (new typed `IViewTypeConfigEntry`). `ViewType.Icon` is now `ExtendedType='Icon'` for the admin icon picker. See `packages/Angular/Generic/entity-viewer/VIEW_TYPE_PLUGINS.md`.
+  - **Classify UX**: per-tab scroll fix, Refresh buttons, meaningful content-item display names, loading states, `BaseEntityEvent` reactivity, and load-more pagination.
+  - **Audit & analytics**: direct tag→prompt-run lineage (`AIPromptRunID` + `Reasoning` on Content Item Tags), `ClassifyAnalyticsEngine`, reusable item grid + drilldown, and an Overview analytics section.
+  - **Setup & onboarding**: contextual prompt injection (org/content-type/source aggregation), `generateSeedTaxonomy` (clustering-backed) + resolver, source-form domain-context UI, org-context editor, inline Entity Document creation, seed-taxonomy review, and a guided setup wizard.
+  - **Visualize surface**: Knowledge Hub "Clusters" tab generalized to a "Visualize" host with Clusters / Tag Cloud modes, a `TagCloudEngine`, and a shared record drilldown.
+  - **Foundations**: `ApplicationSettingEngine` (global + app-scoped settings), and the `tag-engine` → `tag-engine-base` split so browser code no longer pulls server-only AI dependencies.
+  - **Fix**: stop server-only packages (`templates` → `aiengine`/`ai-provider-bundle`, storage, vector-DB and LLM provider SDKs) from leaking into the browser class-registration manifest, which previously broke the MJExplorer cold build. Added CLAUDE.md guardrails to the Bootstrap and BootstrapLite packages.
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [f2cca15]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [b2e1937]
+- Updated dependencies [9ddea03]
+- Updated dependencies [6ea4de7]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/generic-database-provider@5.40.0
+  - @memberjunction/sqlserver-dataprovider@5.40.0
+  - @memberjunction/ai-agents@5.40.0
+  - @memberjunction/clustering-engine@5.40.0
+  - @memberjunction/content-autotagging@5.40.0
+  - @memberjunction/esignature@5.40.0
+  - @memberjunction/ai-agent-manager@5.40.0
+  - @memberjunction/ai-engine-base@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/aiengine@5.40.0
+  - @memberjunction/ai-mcp-client@5.40.0
+  - @memberjunction/ai-prompts@5.40.0
+  - @memberjunction/ai-vector-sync@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/code-execution@5.40.0
+  - @memberjunction/actions@5.40.0
+  - @memberjunction/communication-types@5.40.0
+  - @memberjunction/communication-engine@5.40.0
+  - @memberjunction/external-change-detection@5.40.0
+  - @memberjunction/integration-engine@5.40.0
+  - @memberjunction/interactive-component-types@5.40.0
+  - @memberjunction/lists@5.40.0
+  - @memberjunction/core-entities-server@5.40.0
+  - @memberjunction/storage@5.40.0
+  - @memberjunction/react-linter@5.40.0
+  - @memberjunction/search-engine@5.40.0
+  - @memberjunction/geo-core@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/ai-betty-bot@5.40.0
+  - @memberjunction/lists-base@5.40.0
+  - @memberjunction/export-engine@5.40.0
+  - @memberjunction/global@5.40.0
+  - @memberjunction/sql-dialect@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- db4addf: feat(integration): Integration Framework Expansion — schema + metadata-driven CRUD base class, generated layer, cross-dialect hardening, and field-mapping cache
+
+  End-to-end increment expanding the integration framework: new per-operation write metadata on the schema, a generic metadata-driven CRUD base class, the regenerated entity/GraphQL/form layers that expose it, plus the cross-dialect (PostgreSQL + SQL Server) bug fixes and a field-mapping performance cache found while proving it live.
+
+  **Schema (v5.39.x migration)**
+  - `IntegrationObject`: explicit per-operation write columns — `CreateAPIPath`/`Method`/`BodyShape`/`BodyKey`/`IDLocation`, `UpdateAPIPath`/`Method`/`BodyShape`/`BodyKey`/`IDLocation`, `DeleteAPIPath`/`DeleteIDLocation`. The legacy `WriteAPIPath`/`WriteMethod` are kept one release as deprecated aliases.
+  - `IntegrationObject`: `IncrementalWatermarkField` — vendor cursor/timestamp field name driving the incremental sync filter.
+  - `IntegrationObject` + `IntegrationObjectField`: `MetadataSource` enum `{Declared, Discovered, Custom}` — provenance for merge precedence in `IntegrationSchemaSync`.
+
+  All schema changes are additive (new nullable fields + a new enum field) — no existing field is removed, renamed, or narrowed — so the bumps are **minor**.
+
+  **Engine / base class (`@memberjunction/integration-engine`)**
+  - `ExternalFieldSchema`: add `IsPrimaryKey` (distinct from `IsUniqueKey`). Fixes an `IntrospectSchema` bug where `IsPrimaryKey` was incorrectly mapped from `IsUniqueKey` — an object can have multiple unique fields but only one primary key.
+  - `BaseRESTIntegrationConnector`: new `TransformRecord` hook — optional per-record customization seam between `NormalizeResponse` and `ToExternalRecord` (default identity); override for vendor-specific record-level shape changes.
+  - `BaseRESTIntegrationConnector`: generic metadata-driven CRUD — `CreateRecord`/`UpdateRecord`/`DeleteRecord`/`GetRecord` read the per-operation columns and execute generically. Concrete connectors override only when an API is genuinely idiosyncratic. Replaces the hand-rolled write logic previously duplicated across every concrete connector.
+  - `FieldMappingEngine`: cache compiled `custom`-transform expressions instead of recompiling `new Function` once per field per record. A batch of N records sharing an expression compiles it once and executes the cached function N times, dropping per-record cost from `O(compile + execute)` to `O(execute)`. The cache stores a typed `CompiledExpression = (value, fields) => unknown` (no weak typing), caches compile failures too (a malformed expression is compiled once and the resulting `Error` re-thrown from cache per record, leaving `OnError` `Fail`/`Null`/`Skip` semantics unchanged), and is bounded by `MJLruCache` (1000-entry default) since the owning `IntegrationEngine` is a process-lifetime singleton.
+
+  **Generated layer (CodeGen for the v5.39.x migration)**
+  - `@memberjunction/core-entities` — `IntegrationObjectEntity` / `IntegrationObjectFieldEntity` gain strongly-typed accessors for the per-operation write columns, `IncrementalWatermarkField`, and the `MetadataSource` enum (`'Declared' | 'Discovered' | 'Custom'`).
+  - `@memberjunction/server` — regenerated resolvers / GraphQL types expose the new fields.
+  - `@memberjunction/ng-core-entity-forms` — regenerated `MJ: Integration Objects` / `MJ: Integration Object Fields` forms render the new fields.
+
+  **Cross-dialect hardening (PostgreSQL + SQL Server)**
+
+  Bugs found and fixed while proving the framework end-to-end on both dialects with live generated actions:
+  - `@memberjunction/codegen-lib` — PostgreSQL CRUD generation emitted the primary-key column twice for composite-PK entities, so association/junction tables never synced on PG; `PostgreSQLCodeGenProvider` now treats a multi-column PK as strategy-handled. Soft-PK/FK application uses dialect-aware identifier quoting and boolean literals (`this.dialect.QuoteIdentifier` / `BooleanLiteral`) so the pass runs correctly on PostgreSQL.
+  - `@memberjunction/server` — wired the PostgreSQL branch of the in-process CodeGen runner (`RuntimeSchemaManager.SetCodeGenRunner`) that previously existed only for SQL Server, so runtime schema sync no longer falls back to a hang-prone child process on PG. `IntegrationDiscoveryResolver` entity/field-map creation is now create-or-reuse (idempotent on re-apply), and its idempotency + operational list reads use `BypassCache` so create-vs-update decisions read committed state.
+  - `@memberjunction/integration-engine` — `MatchEngine.FindRecordMapEntry` and the bulk record-map load now read committed state (`BypassCache`), fixing duplicate-create after a direct-DB change; watermark save/load is idempotent to avoid a transaction-abort on retry. `LoadRunConfiguration` and every remaining operational decision-read — the upsert-by-identity record-map lookup, field-maps, the full-vs-incremental gate, write-back external-id lookup, orphan-sweep, and orphaned-run resume — now also `BypassCache`. This closes a Postgres-only gap where a freshly-toggled entity-map `Configuration` (e.g. enabling partition/Merkle reconcile) was read stale → the ChangeToken rollup was silently never written on PG, and removes the broader read-stale-then-decide bug class so the read-your-own-writes pipeline always decides from committed state on both dialects.
+  - `@memberjunction/core-actions` — the generated integration-action executor used stale entity names (`'Integrations'`, `'Company Integrations'`); corrected to `'MJ: Integrations'` / `'MJ: Company Integrations'` so `List`/`Get` invoke successfully.
+  - `@memberjunction/core-entities-server` — declares its previously-undeclared `@memberjunction/integration-pk-classifier` dependency (used by the server-side LLM PK-detection callback), fixing the missing-dependency check; covers the integration server-entity behavior (`MJCompanyIntegrationEntityServer`, `IntegrationLLMPKCallback`).
+  - Multi-provider safety — the post-pipeline metadata `Refresh()` calls in `IntegrationDiscoveryResolver` and `MJCompanyIntegrationEntityServer` now refresh the request's own provider (`provider ?? new Metadata()`) instead of the global default, satisfying the `MultiProviderCompliance` gate and refreshing the correct cache under a non-default provider.
+  - Dialect layer (`@memberjunction/sql-dialect`) — statement splitting for runtime schema migrations is now a dialect concern: `SplitStatements` (naive `;`-split on the base, dollar-quote-aware override on PostgreSQL so `DO $$…$$` blocks stay intact) instead of living in the schema-engine runtime.
+
+- Updated dependencies [26761b8]
+- Updated dependencies [3d4510c]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [a1e2776]
+- Updated dependencies [eaee99f]
+- Updated dependencies [2d1b4e1]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [8c39dd9]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [a2aecc7]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [315ff4d]
+- Updated dependencies [a101a34]
+  - @memberjunction/actions@5.39.0
+  - @memberjunction/ai-agents@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vector-sync@5.39.0
+  - @memberjunction/sqlserver-dataprovider@5.39.0
+  - @memberjunction/search-engine@5.39.0
+  - @memberjunction/integration-engine@5.39.0
+  - @memberjunction/generic-database-provider@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/core-entities-server@5.39.0
+  - @memberjunction/ai-prompts@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/ai-engine-base@5.39.0
+  - @memberjunction/react-linter@5.39.0
+  - @memberjunction/ai-agent-manager@5.39.0
+  - @memberjunction/aiengine@5.39.0
+  - @memberjunction/ai-mcp-client@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/code-execution@5.39.0
+  - @memberjunction/communication-types@5.39.0
+  - @memberjunction/communication-engine@5.39.0
+  - @memberjunction/content-autotagging@5.39.0
+  - @memberjunction/external-change-detection@5.39.0
+  - @memberjunction/interactive-component-types@5.39.0
+  - @memberjunction/lists@5.39.0
+  - @memberjunction/storage@5.39.0
+  - @memberjunction/geo-core@5.39.0
+  - @memberjunction/ai-betty-bot@5.39.0
+  - @memberjunction/lists-base@5.39.0
+  - @memberjunction/export-engine@5.39.0
+  - @memberjunction/sql-dialect@5.39.0
+
+## 5.38.0
+
+### Minor Changes
+
+- 918d663: Interactive Forms — runtime authoring loop is now closed end-to-end.
+
+  **Versioning lifecycle (server-side actions).** The single `Create Interactive Form` action has been split into a versioning-aware family:
+  - `Create Interactive Form` — net-new only; returns `ALREADY_EXISTS` if the user already has an Active override for the entity.
+  - `Modify Interactive Form` — branches on the pointed-to Component's status: Pending → modify the row in place (no version proliferation during chat refinement); Active → insert a new Component v(N+1) with `Status='Pending'` and a sibling Pending Override, leaving the live form untouched.
+  - `Activate Interactive Form Version` — flips a Pending override to Active and atomically demotes the prior Active to Inactive.
+  - `Revert Interactive Form` — re-points an Active override at an older Component in the same Name lineage. Pure UPDATE; old rows preserved.
+  - `Get Active Form For Entity` — read-only; returns the resolved override + the full applicable-variants list.
+  - `Get Default Form Scaffold For Entity` — new read-only action that produces a working `ComponentSpec` mirroring the CodeGen Angular default layout. Replaces "write JSX from scratch" as the agent's baseline.
+
+  **Form-aware artifact viewer.** When a component artifact's spec declares `componentRole: 'form'`, the viewer auto-loads a Top-1 record from the declared entity, mounts via `<mj-interactive-form>` (with `componentSpec` + `record` now `@Input()`s), and exposes a search-as-you-type record picker plus an **Apply to my form** action. Falls back to a synthetic `NewRecord()` when the entity has no rows yet.
+
+  **Variant switcher.** `FormResolverService` now returns the full applicable-variants list alongside the resolved override. `<mj-record-form-container>` renders a compact "Form: \<name\> ▾" picker between the toolbar and the form body when more than one variant applies; selection is persisted per-user per-entity in localStorage.
+
+  **Cockpit reshape.** Form Builder dashboard is no longer canvas-first: 4-pane layout with a forms list + versions rail on the left, a Preview/Code/Layout tabbed center, and a Form Builder AI pane on the right. Both side rails collapse to a strip with state persisted in localStorage.
+
+  **Shared fixture.** `buildFixtureFormHostProps` promoted from Component Studio to `@memberjunction/interactive-component-types/forms` so the artifact viewer and Studio share one implementation.
+
+  **Migration.** `EntityFormOverride.Notes` column (NVARCHAR(MAX), nullable) for human commentary on overrides. Validator audited against the CHECK constraint — no patch required.
+
+  **Agent prompt.** `form-builder.template.md` rewritten around the new action toolbox; teaches the agent to call `Get Active Form For Entity` first and branch between Create / Modify (new-version) / Modify (in-place). Sage's prompt gets a one-line routing rule to delegate form requests to Form Builder.
+
+### Patch Changes
+
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [b2ad244]
+- Updated dependencies [275afda]
+- Updated dependencies [d285996]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [b2e6782]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-agents@5.38.0
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/aiengine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/content-autotagging@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/interactive-component-types@5.38.0
+  - @memberjunction/generic-database-provider@5.38.0
+  - @memberjunction/search-engine@5.38.0
+  - @memberjunction/sql-dialect@5.38.0
+  - @memberjunction/core-entities-server@5.38.0
+  - @memberjunction/sqlserver-dataprovider@5.38.0
+  - @memberjunction/ai-agent-manager@5.38.0
+  - @memberjunction/ai-engine-base@5.38.0
+  - @memberjunction/ai-prompts@5.38.0
+  - @memberjunction/ai-vector-sync@5.38.0
+  - @memberjunction/ai-mcp-client@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/code-execution@5.38.0
+  - @memberjunction/actions@5.38.0
+  - @memberjunction/communication-types@5.38.0
+  - @memberjunction/communication-engine@5.38.0
+  - @memberjunction/external-change-detection@5.38.0
+  - @memberjunction/integration-engine@5.38.0
+  - @memberjunction/lists@5.38.0
+  - @memberjunction/storage@5.38.0
+  - @memberjunction/react-linter@5.38.0
+  - @memberjunction/geo-core@5.38.0
+  - @memberjunction/ai@5.38.0
+  - @memberjunction/ai-betty-bot@5.38.0
+  - @memberjunction/lists-base@5.38.0
+  - @memberjunction/export-engine@5.38.0
+
 ## 5.37.0
 
 ### Patch Changes

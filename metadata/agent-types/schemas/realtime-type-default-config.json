@@ -1,0 +1,8 @@
+{
+  "realtime": {
+    "allowUserModelOverride": true,
+    "narration": {
+      "paceMs": 8000
+    }
+  }
+}

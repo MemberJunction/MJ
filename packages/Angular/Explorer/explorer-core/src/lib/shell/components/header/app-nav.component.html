@@ -2,6 +2,10 @@
   @for (item of navItems; track trackByNavItem($index, item)) {
     <div
       class="nav-item"
+      [mjClickable]="item.Label"
+      role="link"
+      [testId]="'nav-item-' + item.Label"
+      [attr.aria-current]="isActive(item) ? 'page' : null"
       [class.active]="isActive(item)"
       [class.dynamic]="isDynamic(item)"
       [class.no-icon]="!item.Icon"

@@ -245,6 +245,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public tools: MCPToolData[] = [];
     public executionLogs: MCPExecutionLogData[] = [];
 
+    /**
+     * Precomputed tools-by-server index (key = NormalizeUUID(MCPServerID)).
+     * Rebuilt once whenever tools/connections load (see buildToolsByServerMap),
+     * so the server/connection card @for blocks read tools via an O(1) Map lookup
+     * instead of re-filtering the whole tools array on every change-detection pass.
+     */
+    private toolsByServerID = new Map<string, MCPToolData[]>();
+
     public filteredServers: MCPServerData[] = [];
     public filteredConnections: MCPConnectionData[] = [];
     public filteredTools: MCPToolData[] = [];
@@ -589,11 +597,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // forceRefresh=true is needed after sync operations since backend changes
             // won't trigger local BaseEntity events
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            // Dialect-neutral 7-day cutoff: compute in JS and inject an ISO-8601
+            // literal rather than DATEADD/GETUTCDATE, which don't exist on PostgreSQL.
+            const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
             const [, logsResult] = await Promise.all([
                 MCPEngine.Instance.Config(forceRefresh),
                 rv.RunView<MJMCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
-                    ExtraFilter: `StartedAt >= DATEADD(day, -7, GETUTCDATE())`,
+                    ExtraFilter: `StartedAt >= '${sevenDaysAgoIso}'`,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 100,
                     ResultType: 'simple'
@@ -647,6 +658,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 DiscoveredAt: t.DiscoveredAt,
                 LastSeenAt: t.LastSeenAt
             }));
+
+            // Index tools by server ID once, now that tools/connections are loaded.
+            this.buildToolsByServerMap();
 
             if (logsResult.Success) {
                 // Map database column names to UI interface property names
@@ -2703,19 +2717,39 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     /**
-     * Gets tools for a specific server
+     * Partition `this.tools` into the {@link toolsByServerID} index, keyed by the
+     * normalized MCPServerID. Called once whenever tools/connections load so the
+     * server/connection card `@for` blocks read tools via an O(1) Map lookup instead
+     * of re-filtering the whole tools array on every change-detection pass.
      */
-    public getToolsForServer(serverId: string): MCPToolData[] {
-        return this.tools.filter(t => UUIDsEqual(t.MCPServerID, serverId));
+    private buildToolsByServerMap(): void {
+        const map = new Map<string, MCPToolData[]>();
+        for (const tool of this.tools) {
+            const key = NormalizeUUID(tool.MCPServerID);
+            const bucket = map.get(key);
+            if (bucket) {
+                bucket.push(tool);
+            } else {
+                map.set(key, [tool]);
+            }
+        }
+        this.toolsByServerID = map;
     }
 
     /**
-     * Gets tools for a specific connection (via its server)
+     * Gets tools for a specific server (O(1) lookup against the precomputed index).
+     */
+    public getToolsForServer(serverId: string): MCPToolData[] {
+        return this.toolsByServerID.get(NormalizeUUID(serverId)) ?? [];
+    }
+
+    /**
+     * Gets tools for a specific connection (via its server, O(1) lookup).
      */
     public getToolsForConnection(connectionId: string): MCPToolData[] {
         const connection = this.connections.find(c => UUIDsEqual(c.ID, connectionId));
         if (!connection) return [];
-        return this.tools.filter(t => UUIDsEqual(t.MCPServerID, connection.MCPServerID));
+        return this.toolsByServerID.get(NormalizeUUID(connection.MCPServerID)) ?? [];
     }
 
     /**

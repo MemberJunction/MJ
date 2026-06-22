@@ -47,7 +47,6 @@ import {
   FieldChange,
   SaveSQLResult,
   DeleteSQLResult,
-  QueryInfo,
   RunViewWithCacheCheckParams,
   RunViewsWithCacheCheckResponse,
   RunViewWithCacheCheckResult,
@@ -61,6 +60,7 @@ import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
 import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
 import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
@@ -73,6 +73,8 @@ import {
 } from './types.js';
 
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
+import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
+import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
 import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -229,8 +231,11 @@ async function executeSQLCore(
     Query: ${query}
     Parameters: ${parameters ? JSON.stringify(parameters) : 'None'}`;
 
-    // Throw error with detailed message - caller decides whether to log
-    throw new Error(errorMessage);
+    // Preserve the original error type (ConnectionError vs RequestError) so callers
+    // can structurally distinguish infrastructure failures from query-level errors.
+    // Attach the detailed message while keeping the error's class identity and code.
+    error.message = errorMessage;
+    throw error;
   }
 }
 
@@ -256,7 +261,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
-  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider
+  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider, IColocatedVectorHost
 {
   /**************************************************************************/
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
@@ -513,7 +518,7 @@ export class SQLServerDataProvider
    * Executes a batched cache status check for multiple queries using their CacheValidationSQL.
    */
   protected async getBatchedQueryCacheStatus(
-    items: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }>,
+    items: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }>,
     contextUser?: UserInfo
   ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
     const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
@@ -524,9 +529,9 @@ export class SQLServerDataProvider
 
     // Build array of SQL statements for batch execution
     const sqlStatements: string[] = [];
-    for (const { queryInfo } of items) {
+    for (const { query } of items) {
       // CacheValidationSQL should return MaxUpdatedAt and RowCount
-      sqlStatements.push(queryInfo.CacheValidationSQL!);
+      sqlStatements.push(query.CacheValidationSQL!);
     }
 
     try {
@@ -576,7 +581,7 @@ export class SQLServerDataProvider
     return `OFFSET ${startRow} ROWS FETCH NEXT ${maxRows} ROWS ONLY`;
   }
 
-  protected override BuildParameterPlaceholder(index: number): string {
+  public override BuildParameterPlaceholder(index: number): string {
     return `@p${index}`;
   }
 
@@ -680,7 +685,7 @@ export class SQLServerDataProvider
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
       const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
-      const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
       entity.Fields.filter((f) => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach((f) => {
@@ -711,7 +716,7 @@ export class SQLServerDataProvider
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
       const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
       const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
-      const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       if (sSQL.length > 0) sSQL += ' UNION ALL ';
       sSQL += `SELECT
@@ -786,15 +791,68 @@ export class SQLServerDataProvider
 
 
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
+    // This builds the column list for the @ResultTable/@ResultChangesTable that captures
+    // `SELECT * FROM <BaseView>` via a POSITIONAL `INSERT INTO @table EXEC ...`. The base view
+    // is generated as `SELECT [base].*, <related joins>` — i.e. non-virtual (base-table) columns
+    // first, then virtual/related fields appended last. The capture table MUST be declared in that
+    // same order, or values mis-route by position: a base column that CodeGen sequenced AFTER a
+    // virtual field (newly-added columns get an offset of maxSequence+100000) would otherwise land
+    // its value in the virtual field's column slot, producing truncation / type-conversion errors.
+    //
+    // We therefore emit non-virtual fields first, then virtual fields, each preserving their existing
+    // relative order. This is a STABLE PARTITION: for any entity whose virtual fields already sort
+    // after all base fields (the overwhelming majority), the output is byte-for-byte identical to the
+    // prior sequence-ordered output (a no-op). It only changes — and corrects — entities where a
+    // virtual field was sequenced ahead of a base column.
+    this.warnIfBaseFieldSequencedAfterVirtual(entityInfo);
+    const orderedFields = [
+      ...entityInfo.Fields.filter((f) => !f.IsVirtual),
+      ...entityInfo.Fields.filter((f) => f.IsVirtual),
+    ];
     let sRet: string = '',
       outputCount: number = 0;
-    for (let i = 0; i < entityInfo.Fields.length; i++) {
-      const f = entityInfo.Fields[i];
+    for (const f of orderedFields) {
       if (outputCount !== 0) sRet += ',\n';
       sRet += '[' + f.Name + '] ' + f.SQLFullType + ' ' + (f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL');
       outputCount++;
     }
     return sRet;
+  }
+
+  /** Entities already warned about base-after-virtual field-order skew — so we warn once, not every save. */
+  private static _fieldOrderWarnedEntities: Set<string> = new Set<string>();
+
+  /**
+   * INTEGRITY GUARD: in a well-formed entity every base (non-virtual) field sequences BEFORE the
+   * virtual/related fields, so EntityField order matches the base view's `SELECT [base].*, <joins>`
+   * column order that the positional save-capture relies on. CodeGen can leave a base column sequenced
+   * AFTER a virtual field (newly-discovered columns get a temporary maxSequence+100000 offset that is
+   * supposed to be renumbered). `getAllEntityColumnsSQL` re-orders defensively so saves stay correct,
+   * but the underlying metadata is inconsistent and should be fixed at the source — so surface it
+   * loudly here (once per entity), and CodeGen flags it too (ManageMetadataBase integrity check).
+   */
+  private warnIfBaseFieldSequencedAfterVirtual(entityInfo: EntityInfo): void {
+    if (SQLServerDataProvider._fieldOrderWarnedEntities.has(entityInfo.Name)) return;
+    let sawVirtual = false;
+    const misSequenced: string[] = [];
+    for (const f of entityInfo.Fields) {
+      if (f.IsVirtual) sawVirtual = true;
+      else if (sawVirtual) misSequenced.push(f.Name);
+    }
+    if (misSequenced.length === 0) return;
+    SQLServerDataProvider._fieldOrderWarnedEntities.add(entityInfo.Name);
+    const bar = '='.repeat(100);
+    console.warn(
+      `\n${bar}\n` +
+      `⚠️  ENTITY FIELD-ORDER INCONSISTENCY — ${entityInfo.Name}\n` +
+      `${bar}\n` +
+      `   Base column(s) sequenced AFTER a virtual/related field: ${misSequenced.join(', ')}\n` +
+      `   EntityField Sequence order does not match the base view ([base].* then related joins). The\n` +
+      `   save-capture (@ResultTable) re-orders base-before-virtual so saves remain CORRECT — but this\n` +
+      `   is a metadata/CodeGen sequencing defect. Re-run CodeGen; if it persists, the field's Sequence\n` +
+      `   must be renumbered below the virtual fields. (SQLServerDataProvider.getAllEntityColumnsSQL)\n` +
+      `${bar}\n`
+    );
   }
 
   /**
@@ -941,7 +999,7 @@ export class SQLServerDataProvider
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
     const spName = this.GetCreateUpdateSPName(entity, payload.type === 'Create');
     const concatPKIDString = `CONCAT(${entity.EntityInfo.PrimaryKeys
-      .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',${pk.Name}`)
+      .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',[${pk.Name}]`)
       .join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
     // Build the inline `EXEC spCreateRecordChange_Internal` from the payload,
@@ -1369,41 +1427,45 @@ export class SQLServerDataProvider
   ): Promise<Record<string, unknown>[]> {
     const needsAdjustment = await this.NeedsDatetimeOffsetAdjustment();
 
-    return rows.map((row) => {
-      const processedRow = { ...row };
+    // Precompute each field's name + lowercased SQL type ONCE rather than calling
+    // field.Type.toLowerCase() up to 3x per field per row. The rows are freshly produced
+    // by the driver query and owned by this pipeline, so we adjust them in place instead
+    // of allocating a `{ ...row }` shallow copy for every row.
+    const specs = datetimeFields.map((f) => ({ name: f.Name, kind: f.Type.toLowerCase() }));
 
-      for (const field of datetimeFields) {
-        const fieldValue = processedRow[field.Name];
+    for (const row of rows) {
+      for (const spec of specs) {
+        const fieldValue = row[spec.name];
         if (fieldValue === null || fieldValue === undefined) continue;
 
-        if (field.Type.toLowerCase() === 'datetime2') {
+        if (spec.kind === 'datetime2') {
           if (typeof fieldValue === 'string') {
             if (!fieldValue.includes('Z') && !fieldValue.includes('+') && !fieldValue.includes('-')) {
-              processedRow[field.Name] = new Date(fieldValue.replace(' ', 'T') + 'Z');
+              row[spec.name] = new Date(fieldValue.replace(' ', 'T') + 'Z');
             } else {
-              processedRow[field.Name] = new Date(fieldValue);
+              row[spec.name] = new Date(fieldValue);
             }
           } else if (fieldValue instanceof Date) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
-        } else if (field.Type.toLowerCase() === 'datetimeoffset') {
+        } else if (spec.kind === 'datetimeoffset') {
           if (typeof fieldValue === 'string') {
-            processedRow[field.Name] = new Date(fieldValue);
+            row[spec.name] = new Date(fieldValue);
           } else if (fieldValue instanceof Date && needsAdjustment) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
-        } else if (field.Type.toLowerCase() === 'datetime') {
+        } else if (spec.kind === 'datetime') {
           if (fieldValue instanceof Date) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
         }
       }
+    }
 
-      return processedRow;
-    });
+    return rows;
   }
 
 
@@ -1569,6 +1631,29 @@ export class SQLServerDataProvider
       // Error already logged by _internalExecuteSQL
       throw e; // force caller to handle
     }
+  }
+
+  // ─── Colocated vector host (IColocatedVectorHost) ────────────────
+  // Lets a colocated vector provider (e.g. SQLServerVectorDatabase, SQL Server 2025 native
+  // vectors) store and query vectors in THIS database, reusing this connection — instead of
+  // opening a separate pool to a remote vector store.
+
+  public get ColocatedDialect(): DatabasePlatform {
+    return 'sqlserver';
+  }
+
+  public get ColocatedSchema(): string {
+    return this.MJCoreSchemaName;
+  }
+
+  /**
+   * Execute a parameterized statement for a colocated vector provider against this connection.
+   * Positional params bind to `@p0..@pN` (handled by {@link ExecuteSQL}'s array path), so the
+   * colocated provider emits `@p0`-style placeholders. Returns the recordset rows.
+   */
+  public async RunColocatedSQL<T = Record<string, unknown>>(sqlText: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
+    const rows = await this.ExecuteSQL(sqlText, params ? [...params] : null);
+    return (Array.isArray(rows) ? rows : []) as T[];
   }
 
   /**

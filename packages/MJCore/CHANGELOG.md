@@ -1,5 +1,190 @@
 # Change Log - @memberjunction/core
 
+## 5.41.0
+
+### Minor Changes
+
+- 8fd6f59: Realtime Bridges (Phase 0+1): new media-transport layer that connects the one realtime agent engine to external endpoints — meetings (Zoom/Teams/Slack/Meet/Webex/Discord) and telephony (Twilio/Vonage/RingCentral/VOIP). Adds the v5.42 schema (5 entities: AIBridgeProvider with a strongly-typed SupportedFeatures JSON column, AIBridgeAgentIdentity, AIBridgeProviderChannel, AIAgentSessionBridge, AIAgentSessionBridgeParticipant — the bridge is an attachment to the existing AIAgentSession, not a new session). New packages @memberjunction/ai-bridge-base (BaseRealtimeBridge media driver with capability gating, AIBridgeEngineBase cache, pure passive/active/hybrid TurnTakingPolicy) and @memberjunction/ai-bridge-server (AIBridgeEngine completing the deferred server-bridged transport seam — bridge media ↔ IRealtimeSession.SendInput/OnOutput — plus a LoopbackBridge, host affinity and janitor). Five server-side EntityServer validation invariants. Nothing is audio-specific (typed directional audio/video/screen tracks).
+- cd6c5f0: Realtime AI Agents wave 3: consolidated v5.41 migration (sessions, channels, co-agent schema) with the AIAgentCoAgent affinity registry replacing AIAgentPairedAgent — typed relationship vocabulary (CoAgent implemented; Peer/Delegate/Fallback/Reviewer/Observer reserved), type-level co-agent defaults as junction rows (removing the only FK cycle in core MJ), and the full code sweep (engine cache, resolver resolution chain, server-side invariants, client pairing reads, regenerated manifests). Realtime UX: progressive-disclosure voice console with persisted captions preference, user-owned composer and tabs toggles, audio-reactive visuals; whiteboard pages/multi-select and review-persistence fixes. Gemini Live triggering turns ride realtime text so widget clicks/typed input/narration speak immediately on native-audio models. CodeGen: single-winner IsNameField enforcement with eligibility guardrail fixes, SCC-based cycle diagnostics, and clean-database bootstrap robustness (conditional engine registry datasets).
+- 659ee5b: Realtime co-agent pairing & type configuration. New `MJ: AI Agent Paired Agents` junction (opt-in: a co-agent with zero rows stays universal — today's zero-config default unchanged; rows restrict + prebuild its target list with an IsDefault preselection), `AIAgent.TypeConfiguration` (agent-type-specific JSON: realtime model preference, per-provider voice, tone/speaking style, override policy, narration pacing), and `AIAgentType.ConfigSchema`/`DefaultConfiguration` (the type publishes a JSON Schema + type-level defaults; effective config = type defaults <- agent config <- runtime overrides, deep-merged per key, server-authoritative). Runtime overrides ride a new `configOverridesJson` session-start argument gated by the seeded `Realtime: Advanced Session Controls` authorization (Developer-mapped) — enforced server-side, disclosed client-side (unauthorized users silently get defaults). ValidateAsync server subclasses enforce ConfigSchema conformance, Realtime-type co-agents, and at-most-one-default-per-co-agent. Conversations UX: co-agent picker for everyone with more than one permitted co-agent (persisted via UserInfoEngine), pairing-constrained target selection, authorization-gated model/config override pickers.
+- cc604aa: Agent in-flight memory writes: agents can commit durable cross-run memories mid-run via the memoryWrites loop-response field, gated by AIAgent.AllowMemoryWrite (ON by default — opt out per agent). Writes land as immediately-injectable Provisional agent notes (new Status value, with AuthorType provenance) under framework-enforced guards (descriptive types only, scope clamp, exact-restatement dedupe with same-run supersede, per-run cap, TTL), inject with recency-wins precedence and per-note recorded dates, and are hardened or pruned by a new Memory Manager pass each cycle. Cross-run dedupe requires exact normalized restatement so corrections are never silently absorbed into a stale note; the loop-agent prompt instructs agents not to claim a memory was saved before its result message arrives.
+- 15b743b: Real-Time AI Agents — Sessions, Channels & the Realtime Model (plans/ai-agent-sessions.md). Adds the AIAgentSession/AIAgentChannel/AIAgentSessionChannel schema (+ AgentSessionID on AIAgentRun/ConversationDetail, CloseReason on AIAgentSession); the BaseRealtimeModel server primitive with OpenAIRealtime + GeminiRealtime drivers (server-bridged StartSession and client-direct ephemeral-token CreateClientSession, optional SendContextNote/RequestSpokenUpdate interim updates); the new @memberjunction/ai-realtime-client package with the BaseRealtimeClient browser abstraction + OpenAI/Gemini client drivers resolved via ClassFactory by provider key; the Realtime agent type + Voice Co-Agent with RealtimeSessionRunner/RealtimeToolBroker, AgentMemoryContextBuilder extraction, server session lifecycle (SessionManager, SessionJanitor, start/close/heartbeat + client-direct resolvers with delegated-run progress streaming, AwaitingFeedback resume, co-agent observability runs, user-selectable realtime model); the full-panel realtime voice call UX in ng-conversations (phone trigger + agent/model picker, banner/thread/activity rail, delegation working/result cards with provenance, ephemeral paced first-person progress narration driven by DB prompt templates, in-call text composer); Realtime Voice admin (AI Analytics dashboard sections, session/channel custom forms, agent Runs|Sessions execution history); and Query Builder/Strategist reliability fixes (entity catalog in prompt, Get Entity Details sample caps + semantic fallback, plan formatting). Also: the standalone @memberjunction/ng-whiteboard package (collaborative board with agent tool API, sandboxed interactive widgets + input bridge, markdown panels, exports, cancelable before/after events); ElevenLabs Agents + AssemblyAI Voice Agent realtime provider pairs (4-provider matrix, zero contract changes); session review mode with multi-leg resume carryover (timeline dividers, artifact junction closure, prior-transcript model hydration); delegation cancel channel; usage telemetry relay; Realtime Co-Agent rename with run-step/prompt-run observability.
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- 8c8b658: Realtime UX wave 2 — the progressive-disclosure console (pure-audio-first overlay with the breathing hero orb, disclosure levels 0–4 ratcheted per-user via UserInfoEngine, gear density escape hatch, unified app-bar, fused composer dock; content never flips the console open — the one auto-reveal is a channel's first agent activity, finished artifacts arrive as glowing unfocused tabs, Activity tab pinned last); audio-reactive call visuals (BaseRealtimeClient GetAudioActivity capability — per-direction RMS + 9-bin spectrum metered on all four drivers via a shared RealtimePcmPlayback master-gain tap / WebRTC stream analysers — driving the hero + app-bar orbs and a true-spectrum EQ through a zero-CD rAF loop, with turn-state fallback). Whiteboard: OneNote-style PAGES (v2 JSON with tolerant v1 migration, AddPage/SwitchPage/RenamePage agent tools, page strip with inline rename + right-click Rename/Delete/New-page context menus, agent-authored page garnish), multi-select (marquee, shift-click, single-undo group drag/delete), hold-to-zoom, multi-page HTML/SVG export, shared active-page note on all item tools, UUIDsEqual compliance. ElevenLabs: tool-schema sanitizer (non-string enums + leaf descriptions, fingerprint-stable) and the absorbed-tool-result voice nudge. Conversations: shared auto-naming helper + race-free realtime naming lifecycle on SessionStarted$, slide-panel splitter rework, angular-split dependency removed. Plus integration-test script groundwork (server/client/runquery cache suites) and cache-layer fixes carried on this branch.
+- ddaa30e: Fix RunView cache-miss results returning ALL entity columns instead of the caller's requested Fields. The caching pipeline widens params.Fields to all entity fields so cache entries are universal supersets; that superset is now projected back down to the caller's requested Fields on cache misses (it already was on hits), so result shape is identical regardless of cache temperature. Also includes Fields and ResultType in the RunView dedup/linger key so concurrent or near-sequential callers with different field subsets or result types no longer receive each other's projected/transformed result shapes. Additionally, the client-side smart-cache fingerprint now includes a normalized Fields suffix: client cache entries store rows exactly as returned (no widening, no projection on read), so per-field-subset slots prevent a narrow cached entry from validating as current for a different field subset and silently serving rows with missing columns. Client cache entries written before this change are orphaned by the new key format and will expire/invalidate normally (one-time cold start).
+  - @memberjunction/global@5.41.0
+  - @memberjunction/sql-dialect@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/global@5.40.2
+- @memberjunction/sql-dialect@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- e50381b: Realign package versions.
+  - @memberjunction/global@5.40.1
+  - @memberjunction/sql-dialect@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 73bb233: Add KeyPrefix column to APIKey table for visual key identification. Stores the configured prefix plus 4 characters of the random body (e.g., "mj_sk_a1b2") at creation time so administrators can differentiate API keys without exposing the full key.
+- 43e6c0f: MJ-issued magic-link sessions for external, app-scoped users: passwordless, single-use (or multi-use) invite links that sign external users into MJExplorer confined to one application and a per-link role. MJ issues and validates its own RS256 session tokens (published via JWKS, accepted by the standard auth-provider path), so there's no external IdP dependency or per-user IdP cost. Invite scope (app, role, expiry, max uses) is configured per link, with support for per-invite app/role, resource-scoped RLS sharing, and anonymous sessions — a shared Anonymous principal whose scope rides per-session JWT claims rather than DB roles, so concurrent anonymous visitors can't accrete privileges.
+
+  Also includes two framework changes made along the way:
+  - **RunView server-cache RLS fix:** the cache fingerprint now incorporates the per-user Row-Level-Security where-clause, so an RLS-scoped read can no longer be served an unscoped cached result. No-op for users without an RLS filter (byte-identical fingerprint), so normal caching is untouched.
+  - **BaseEngine degrades gracefully under restricted roles:** a config load that fails because the current user lacks Read permission is now treated as a permanent condition — the property loads empty and the engine is marked loaded — instead of looping on "not marking as loaded", which previously hung the MJExplorer shell for least-privilege users (e.g. magic-link guests). Only genuinely transient failures (network, server restart) keep retrying.
+
+### Patch Changes
+
+- 804f9f6: Security audit fixes: parameterize SQL queries in GraphQL resolvers to prevent injection, validate entity read permissions on query execution, centralize permission logic in UserCanRun with recursive dependency checks, and fix UUID/multi-provider compliance violations.
+  - @memberjunction/global@5.40.0
+  - @memberjunction/sql-dialect@5.40.0
+
+## 5.39.0
+
+### Minor Changes
+
+- 361eb4c: Azure-safe principal creation in baseline emitter, plus a freshly-generated v5.38.x baseline (`B202605291452__v5.38.x__Baseline.sql`).
+  - `emitPrincipals` now wraps cross-database `master.*` lookups inside `sp_executesql N'...'` string literals so Azure SQL's submission-time parser can't reject the batch. The `SERVERPROPERTY('EngineEdition') = 5` check sets `@associate = 1` on Azure, so the `master.dbo.syslogins` path never executes there — but only the dynamic-SQL wrapper prevents the parser from rejecting the batch before the IF can short-circuit it.
+  - New emitter test (`keeps cross-DB references inside string literals (Azure-safe)`) strips quoted literals from the emitted SQL and asserts zero `master.*` references survive outside string literals — regressions surface immediately.
+  - New v5.38.x baseline ships with the fix: 0 `master.*` refs outside string literals, 4 `sp_executesql` wrappers (one per SQL user), byte-equivalent to a V-stack-built source DB (0 object/row diffs across 46,432 rows). Previously published v5.34.x and v5.37.x baselines are intentionally untouched — Skyway auto-picks the latest baseline for fresh installs.
+
+- f4bf584: feat(core): BaseEngineRegistry cross-engine cache reverse-lookup + `ExtendedType='Icon'`
+  - **`BaseEngineRegistry.FindCachedEntity<T>(entityName, { unfilteredOnly? })`** and
+    **`TryGetCachedRecords<T>(...)`** — let UI/code ask "is this entity already fully
+    cached by a loaded `BaseEngine`?" and use the live array (favoring unfiltered,
+    authoritative sets). Returns the engine, its property config, the live records, and
+    whether the cache is unfiltered. Powers instant, DB-free dropdowns for cached entities.
+  - **`EntityFieldInfo.ExtendedType`** (`EntityFieldExtendedType`) gains `'Icon'`, marking a
+    field whose value is a FontAwesome class for per-row icon rendering.
+
+- ae74fd5: Auto-detect and render Markdown/HTML in long-text form fields. `MjFormFieldComponent`
+  now honors an explicit `EntityField.ExtendedType` (`Markdown`/`HTML`/`Code`) and, when it
+  is null, runs lightweight client-side content detection on eligible long-text fields
+  (TS-type string with `MaxLength >= 255` or unlimited — generic across SQL Server/PostgreSQL).
+  Read mode renders `<mj-markdown>` for Markdown, DOMPurify-sanitized `[innerHTML]` for HTML
+  (via the new `mjSafeRichHtml` pipe — see below), and a read-only `<mj-code-editor>` for code;
+  edit mode uses `<mj-code-editor>` with syntax highlighting for non-plain modes (mode frozen at
+  edit entry), while plain fields keep the existing textbox/textarea.
+
+  Widens the `EntityFieldExtendedType` union and the `CK_EntityField_ExtendedType` CHECK
+  constraint to include `Markdown` and `HTML` (migration included — run CodeGen after applying
+  to regenerate `EntityFieldEntity` types and metadata).
+
+  Adds a reusable, dependency-free `detectRichTextFormat(value, maxScanLength?)` text classifier
+  to `@memberjunction/global` (defaults to scanning the first 500 characters) so any consumer can
+  sniff Markdown/HTML/plain content.
+
+  Adds reusable safe-HTML rendering to `@memberjunction/ng-shared-generic`: a `PurifyRichTextHtml()`
+  function and an `mjSafeRichHtml` pure pipe backed by DOMPurify (HTML + SVG profiles). Unlike
+  Angular's built-in `[innerHTML]` sanitizer (which strips all SVG and inline styles), this keeps
+  safe inline SVG and richer markup while still removing `<script>`, `on*` handlers, and
+  `javascript:`/`data:` URLs — so it's safe for untrusted content yet renders richer HTML. Any
+  Angular component can use `[innerHTML]="value | mjSafeRichHtml"`.
+
+- 9bc2916: feat(core): `EntitySaveOptions.OnValidated` — optimistic-UI render hook
+
+  An optional callback on `BaseEntity.Save()` that fires after all pre-flight checks pass
+  (`Validate`, `ValidateAsync`, PreSave hooks) but **before** the database write — the
+  "render only once known-valid" moment for optimistic UI. Fires exactly once; skipped on
+  not-dirty, failed validation, and `ReplayOnly` (which bypasses validation); a thrown
+  callback is swallowed + logged so a UI bug can never abort the persist. `Save()`'s boolean
+  return contract is unchanged, and there is no server-side behavior change.
+
+- a101a34: Drop the SQL Server MS_Description extended property on ConversationDetailAttachment to the DEPRECATED notice text so R\_\_RefreshMetadata propagates it into Entity.Description on every migrate cycle — eliminating the drift that the metadata-sync file alone could not fix.
+
+### Patch Changes
+
+- 3c53858: feat(forms): inline "create new" from FK fields (event-based) + fold Allow\*API into entity permissions
+
+  When the related record you need isn't in a foreign-key dropdown, you can now create it
+  inline. A sticky "➕ Create …" footer (always visible at the bottom of the dropdown,
+  prefilled with whatever you typed) requests creation; the new record is auto-selected into
+  the field once saved. Gated on create permission + a new `@Input() AllowFKCreate` (default
+  true); surface configurable via `@Input() FKCreatePresentation: 'dialog' | 'slide-in'`.
+
+  **`@memberjunction/ng-base-forms`** — the Generic FK field stays generic: it only _emits_ a
+  new `create-related` `FormNavigationEvent` (carrying the entity, prefill `NewRecordValues`,
+  preferred presentation, provider, and a `Complete(record)` callback). It does **not** open
+  the form itself — that would couple a generic component to the app-level form presenter.
+
+  **`@memberjunction/ng-explorer-core`** — `SingleRecordComponent` handles the new
+  `create-related` event: opens the related entity's form via `MJFormPresenterService`
+  (dialog/slide-in, prefilled), then calls `event.Complete(savedRecord)` so the field selects it.
+
+  **`@memberjunction/core`** — `EntityInfo.GetUserPermisions()` now folds the entity's
+  `Allow{Create,Update,Delete}API` flags into the corresponding `Can*` results. An API-driven
+  action requires both a role grant **and** the entity allowing that action at all, so a user
+  can no longer be reported as able to create/update/delete records of an entity whose API for
+  that action is disabled. (Read is unchanged — it has no `Allow*API` flag.)
+
+- Updated dependencies [ae74fd5]
+  - @memberjunction/global@5.39.0
+  - @memberjunction/sql-dialect@5.39.0
+
+## 5.38.0
+
+### Minor Changes
+
+- 748b2e7: Add deterministic baseline migration toolchain (`mj baseline build` / `compare` / `roundtrip`): introspects + emits the full MSSQL schema (tables, views, procedures, functions, triggers, UDTs, extended properties, database principals, role memberships, and object/schema/type/database permissions) with proven byte-equivalence via the row-by-row comparator. AUTO within-major rebaseline mode derives `Major.Minor` and a `latestV+1m` timestamp from the source migrations directory. Ships with workbench end-to-end script and a `/create-new-baseline-migration` slash-command driver.
+- ce7d2f5: Fix non-idempotent metadata sync for `.your-membership.json`: three Integration Object Field records each shared a `primaryKey.ID` with another field in the same file (`OrderID`/`InvoiceID`, and two `Id`/`CampaignId` pairs), so `mj sync push` routed two distinct records to the same DB row and their sync blocks ping-ponged on every run. Reassigned a fresh unique `primaryKey.ID` to the duplicate (`IsPrimaryKey:false`) record in each pair so every field has its own identity. `mj sync push` matches records to rows solely by `primaryKey` (no natural-key fallback), so each record must carry a unique key to be idempotent.
+- 6a3ac36: Fix AllowUpdateAPI clearing when EntityField transitions to virtual, use subqueries for organic key INSERTs for portable SQL, prevent permanent engine failure when MJAPI is temporarily unavailable, and centralize RLS exemption check in GetUserRowLevelSecurityWhereClause
+
+### Patch Changes
+
+- 4ee0b06: - `@memberjunction/core`: Add `deferredDelay` configuration parameter to `@RegisterForStartup` options, allowing background engine loading to be delayed by a specified duration in milliseconds.
+  - `@memberjunction/aiengine`: Implement `IStartupSink` and annotate the server-side `AIEngine` with `@RegisterForStartup` as a deferred engine with a 15-second delay to automatically load metadata and pre-warm embedding models/vector caches in the background.
+- 275afda: DBAutoDoc organic-key detection + PR #2193 per-column normalization:
+  - **Organic-key detection phase** in DBAutoDoc's analyze pipeline (optional, off by default): prefilter → per-table LLM normalize (business-space descriptions + concept names + per-column normalization strategy + organic-key gate) → embed → agglomerative cluster → concept-name split → FK-graph transitive bridges → emit to `additionalSchemaInfo.json`. Runs on MemberJunction's AI infrastructure (`BaseLLM` / `BaseEmbeddings` via the ClassFactory), no standalone provider clients.
+  - **Per-column normalization**: each emitted `EntityOrganicKey` carries its own normalization function for its column, so a cluster of differently-formatted columns (e.g. phone numbers across systems) each canonicalize to a shared form. Runtime (`EntityInfo.BuildOrganicKeyViewParams`) applies each side's own expression at match time, looking up the spoke entity's organic key by name.
+
+- c0b40c0: `mj sync push` performance overhaul and a related `BaseEntity` fix for fixed-width string columns.
+
+  Measured on a representative ~36,500-record `metadata/` tree (mostly idempotent, including a `metadata/integrations/` dir with 23,789 records):
+  - Full sync (incl. integrations): ~6m 49s → **~1m 4s** (~6.5×)
+  - Partial sync (excluding integrations): ~1m 37s → **~30.5s** (~3.2×)
+
+  ### `@memberjunction/metadata-sync`
+  - **`SyncMetadataEngine`** (new, extends `BaseEngine`) preloads every touched entity once via `BaseEngine.Load` and exposes the result through dynamic per-entity property slots that the sync path consults instead of round-tripping the DB per record. Preload is _unfiltered_ — metadata entities are bounded by design and loading all rows is faster than computing a giant `WHERE … IN (…)` clause, plus it lets `@lookup:` resolution hit the cache even for records not in local files. Oversize warning fires above 100,000 rows on any single entity.
+  - **O(1) PK index** built after preload completes. Each per-entity slot is mirrored into a `Map<serializedPK, BaseEntity>`; `loadEntity` uses it for hash lookups instead of the previous `Array.find(... serializePrimaryKey(GetAll()))` scan. This was the single biggest fix — on `MJ: Integration Object Fields` the naïve scan was ~1.2B comparisons (~38 min); the Map drops it to seconds. Self-healing array-scan fallback handles drift from `BaseEngine` event-driven slot mutations.
+  - **Resolved-lookup + file content caches**. Resolved `@lookup:` keys memoized in a per-entity-scoped `Map<lookupKey, ID>`; parsed `@include`-preprocessed file contents memoized and invalidated at every write site so multi-pass writes always see fresh contents.
+  - **Skip preload for unresolved PK refs** (`@lookup:` / `@parent:` / `@root:` / `@file:` / `@env:` / `@template:`) — those values resolve later in the per-record path. Without this guard the preload would inline literal `@lookup:…` strings into a `WHERE ID = '…'` filter and SQL Server would reject the uniqueidentifier cast.
+  - `SyncEngine.getProvider()` is now the single entry point for provider plumbing in cache and lookup writes — no more reaching for `Metadata.Provider` directly.
+
+  ### `@memberjunction/core`, `@memberjunction/sql-dialect`
+
+  Fixed-width / space-padded character types (`nchar`/`char` on SQL Server; `char`/`character`/`bpchar` on PostgreSQL) used to surface their storage padding through `BaseEntity.Get`, causing `Dirty` to compare `"Input     "` against `"Input"` and false-positive every record as dirty. Once preload populated the in-memory comparison this manifested as thousands of spurious "updates" per sync (~4,279 on `MJ: Action Params` alone).
+  - New `IsFixedWidthStringSQLType` predicate in `@memberjunction/sql-dialect` plus an abstract `FixedWidthStringTypeNames` getter on `SQLDialect` so the list of fixed-width type names stays in one place per dialect.
+  - New `EntityFieldInfo.FixedWidthColumn` getter delegating to the predicate.
+  - `EntityField.Value` setter and `BaseEntity.Get` raw fast-path now rtrim string values when `FixedWidthColumn` is true, memoizing back into `_raw` so the trim runs at most once per field per record.
+
+  The `BaseEntity` change is independent of MetadataSync but was exposed by the preload work and is required for the "Unchanged" counts in `mj sync` to be accurate.
+
+- d5a51b3: Optimize metadata loading and caching performance in MJCore:
+  - Group fields, values, permissions, settings, and organic keys in `PostProcessEntityMetadata` using pre-indexed Maps, reducing the linking phase from `O(N × M)` to `O(N + M)`.
+  - Pre-index batch results in `executeSmartCacheCheck` for direct Map lookups, reducing per-batch lookup cost from `O(N²)` to `O(N)`.
+  - `InvalidateEntityCaches` now consults the existing entity→fingerprint reverse index (with remote-storage fallback) instead of linearly scanning the full cache registry, so invalidation cost scales with matched entries rather than total registry size.
+- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
+- Updated dependencies [30f598d]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [3d739a3]
+  - @memberjunction/global@5.38.0
+  - @memberjunction/sql-dialect@5.38.0
+
 ## 5.37.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 import { MJAIPromptModelEntity } from "@memberjunction/core-entities";
-import { MJAIPromptEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
-import { UserInfo } from '@memberjunction/core';
+import { MJAIPromptEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, AIPromptParams } from '@memberjunction/ai-core-plus';
+import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { ValidationResult } from '@memberjunction/global';
 import { ChatResult, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
 
@@ -430,4 +430,52 @@ export interface AIPromptStreamingConfig {
 
   /** Minimum interval between progress updates in milliseconds */
   progressUpdateIntervalMS?: number;
+}
+
+/**
+ * Progress-callback contract consumed by the parallel coordinator. Lives here (a
+ * dependency-free types module) so both the coordinator and any caller can reference
+ * it without importing the coordinator class.
+ */
+export interface ProgressCallbacksInterface {
+  getStreamingConfig?: () => {
+    enabled?: boolean;
+    callbacks?: {
+      OnTaskComplete?: (taskResult: ExecutionTaskResult, progress: ParallelExecutionProgress) => void;
+      OnParallelProgress?: (progress: ParallelExecutionProgress) => void;
+    };
+  };
+}
+
+/**
+ * The slice of `ParallelExecutionCoordinator` that `AIPromptRunner` (the base class) calls.
+ *
+ * The coordinator is a SUBCLASS of `AIPromptRunner` (so it inherits the battle-tested
+ * `executeModel` + credential/driver/ChatParams/streaming resolution), which makes a normal
+ * value import of the coordinator from the base a hard circular dependency. To keep static type
+ * checking on BOTH sides without that cycle, the base depends only on this interface
+ * (`import type`, fully erased at runtime) and obtains a concrete instance lazily via
+ * `MJGlobal.Instance.ClassFactory.CreateInstance(AIPromptRunner, 'ParallelExecutionCoordinator')`.
+ * The coordinator registers itself with that key via `@RegisterClass`.
+ */
+export interface IParallelExecutionCoordinator {
+  /** Provider override propagated from the owning runner so multi-provider contexts stay consistent. */
+  Provider: IMetadataProvider;
+
+  executeTasksInParallel(
+    params: AIPromptParams,
+    tasks: ExecutionTask[],
+    config?: Partial<ParallelExecutionConfig>,
+    parentPromptRunId?: string,
+    cancellationToken?: AbortSignal,
+    progressCallbacks?: ProgressCallbacksInterface,
+    agentRunId?: string,
+  ): Promise<ParallelExecutionResult>;
+
+  selectBestResult(
+    results: ExecutionTaskResult[],
+    config: ResultSelectionConfig,
+    parentPromptRunId?: string,
+    cancellationToken?: AbortSignal,
+  ): Promise<ExecutionTaskResult | null>;
 }

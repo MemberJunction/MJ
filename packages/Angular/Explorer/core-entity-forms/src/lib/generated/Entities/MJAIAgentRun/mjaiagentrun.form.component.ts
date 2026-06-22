@@ -23,7 +23,6 @@ export class MJAIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'configurationOverrides', sectionName: 'Configuration & Overrides', isExpanded: true },
             { sectionKey: 'testingValidation', sectionName: 'Testing & Validation', isExpanded: true },
             { sectionKey: 'scopeMultiTenant', sectionName: 'Scope & Multi-Tenant', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
@@ -33,7 +32,8 @@ export class MJAIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentRunsParentRunID', sectionName: 'AI Agent Runs (Parent Run)', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsResumingAgentRunID', sectionName: 'AI Agent Requests (Resuming Agent Run)', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
-            { sectionKey: 'mJAIAgentRunsLastRunID', sectionName: 'AI Agent Runs (Last Run)', isExpanded: false }
+            { sectionKey: 'mJAIAgentRunsLastRunID', sectionName: 'AI Agent Runs (Last Run)', isExpanded: false },
+            { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false }
         ]);
     }
 }

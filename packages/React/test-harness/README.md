@@ -38,6 +38,36 @@ console.log('Rendered:', result.success);
 console.log('Errors:', result.errors);
 ```
 
+### Connecting to an existing browser
+
+By default the harness launches its own throwaway Chromium. You can instead attach
+to an already-running browser — useful for watching component runs in a browser you
+control, or for reusing a warm/remote browser (pool, Docker) instead of paying a
+cold launch each run.
+
+```typescript
+// Attach to a real Chrome started with --remote-debugging-port=9222 (CDP)
+const harness = new ReactTestHarness({ connect: 'http://localhost:9222' });
+
+// Attach to a Playwright server started via chromium.launchServer() (ws endpoint)
+const harness = new ReactTestHarness({ connect: 'ws://localhost:55001/<id>' });
+```
+
+- **Auto-detect:** `http(s)://` endpoints use CDP (`connectOverCDP`); `ws(s)://`
+  endpoints use a Playwright server (`connect`). A raw CDP websocket also starts
+  with `ws://` — pass `connectType: 'cdp'` to force CDP in that case.
+- **Env-var fallback:** set `MJ_REACT_TEST_HARNESS_CONNECT` to the endpoint instead
+  of passing `connect` (so the `mj-react-test` CLI can attach without a new flag).
+- **Session reuse:** by default a fresh isolated context is created inside the
+  attached browser. Set `reuseExistingContext: true` (or
+  `MJ_REACT_TEST_HARNESS_REUSE_CONTEXT=true`) to reuse the browser's existing
+  default context and share its cookies/auth/session. This breaks per-test
+  isolation, so keep the default for parallel runs.
+- **Lifecycle safety:** when attached, `harness.close()` only closes the pages and
+  contexts the harness created — it never closes a browser it did not launch, nor a
+  reused/shared context. The external browser's lifecycle is the caller's.
+- `headless` is ignored when attaching (the external browser already decided).
+
 ### Writing Custom Rules
 
 Rules extend `BaseLintRule` and auto-register via `@RegisterClass`:

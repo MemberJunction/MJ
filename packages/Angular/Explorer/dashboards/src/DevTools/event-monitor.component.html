@@ -11,13 +11,13 @@
                     (click)="TogglePause()"
                     [title]="Paused ? 'Resume capture' : 'Pause capture'">
                 @if (Paused) {
-                    <i class="fa-solid fa-play" aria-hidden="true"></i> Resume
+                    <i class="fa-solid fa-play" aria-hidden="true"></i> <span class="mj-action-label">Resume</span>
                 } @else {
-                    <i class="fa-solid fa-pause" aria-hidden="true"></i> Pause
+                    <i class="fa-solid fa-pause" aria-hidden="true"></i> <span class="mj-action-label">Pause</span>
                 }
             </button>
             <button mjButton variant="secondary" size="sm" (click)="Clear()" title="Clear all captured events">
-                <i class="fa-solid fa-broom" aria-hidden="true"></i> Clear
+                <i class="fa-solid fa-broom" aria-hidden="true"></i> <span class="mj-action-label">Clear</span>
             </button>
         </div>
     </mj-page-header-interior>

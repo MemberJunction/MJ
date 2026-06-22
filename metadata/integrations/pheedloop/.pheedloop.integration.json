@@ -1,0 +1,4940 @@
+[
+  {
+    "fields": {
+      "Name": "PheedLoop",
+      "ClassName": "PheedLoopConnector",
+      "ImportPath": "@memberjunction/connector-pheedloop",
+      "NavigationBaseURL": "https://api.pheedloop.com/api/v3",
+      "Description": "PheedLoop event-management connector — syncs attendees, events, sessions, speakers, exhibitors, sponsors, registrations, memberships and 20+ objects via PheedLoop REST API v3 (dual API-key + API-secret headers, org-scoped URL paths).",
+      "BatchMaxRequestCount": -1,
+      "BatchRequestWaitTime": -1,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=PheedLoop API",
+      "Configuration": {
+        "AuthFlow": "api-key",
+        "AuthHeaderPattern": "X-API-KEY: <apiKey>\nX-API-SECRET: <apiSecret>",
+        "AuthNotes": "Dual-header authentication. Every request carries two HTTP headers: X-API-KEY (the API Key) and X-API-SECRET (the API Secret). Neither header is a Bearer token — both are static key/secret strings. The Organization Code is NOT a header; it is embedded as a path segment in every URL: /api/v3/organization/{ORGANIZATION-CODE}/... This is a tri-component scheme: key (header) + secret (header) + org code (URL path). Credentials are found at Dashboard → Settings → Integrations → Rest API → Get Started. API Secret is one-time generated; re-generation invalidates existing integrations. No token expiry or refresh mechanism is documented.",
+        "OrganizationCodePlacement": {
+          "location": "url-path",
+          "segment": "organization/{ORGANIZATION-CODE}",
+          "notes": "The Organization Code is a non-secret tenant identifier supplied as a URL-path segment, not as a header or query parameter. It must be stored as non-secret configuration on the CompanyIntegration record (e.g. in a Configuration JSON field named OrganizationCode). All 119 collection requests carry this pattern: /api/v3/organization/{ORGANIZATION-CODE}/..."
+        },
+        "APIBaseURL": "https://api.pheedloop.com",
+        "APIVersioningStrategy": "url-path",
+        "APIVersioningNote": "Single live API version — v3 — embedded in all URL paths as /api/v3/. No multi-version routing. Current release tagged v3.3.0 in the Postman collection variable `releaseVersion`. The version is returned in all response headers via the `PheedLoop-API-Version` header. No separate version header on requests.",
+        "PaginationDefaults": {
+          "style": "page-number",
+          "pageParam": "page",
+          "pageSizeParam": "page_size",
+          "defaultPageSize": 500,
+          "maxPageSize": null,
+          "reportsMaxPageSize": 100,
+          "envelope": {
+            "countField": "count",
+            "nextField": "next",
+            "previousField": "previous",
+            "resultsField": "results"
+          },
+          "notes": "Django REST Framework pagination envelope: {count, next, previous, results}. All list endpoints use page (1-based) + page_size query params. Default page size is 500 for all data endpoints except Reports (max 100). Trailing slash is required on all URLs. Examples from collection: ?page=2&page_size=10 on all list endpoints; ?page=1&page_size=50 on Reports."
+        },
+        "IncrementalSyncCapability": {
+          "supported": true,
+          "strategy": "date-filter",
+          "notes": "Selected objects expose date-range filter query params that enable incremental sync. Not a universal watermark — capability is per-object. Objects with documented incremental filters: Events (date_updated_gte / date_updated_lte, format YYYY-MM-DD), Registrations (date_updated_gte / date_updated_lte), Members (registration_date_updated_gte / registration_date_updated_lte). Ticket Transfer Logs expose dateCreatedAfter / dateCreatedBefore (disabled params in collection, format YYYY-MM-DD). Most other objects (Attendees, Sessions, Speakers, Exhibitors, Sponsors, etc.) have no documented incremental filter — full re-fetch required. The watermark granularity is date (YYYY-MM-DD), not a timestamp.",
+          "supportedObjects": [
+            "Events",
+            "Registrations",
+            "Members",
+            "TicketTransferLogs"
+          ],
+          "watermarkParamByObject": {
+            "Events": "date_updated_gte",
+            "Registrations": "date_updated_gte",
+            "Members": "registration_date_updated_gte",
+            "TicketTransferLogs": "dateCreatedAfter"
+          }
+        },
+        "WebhooksAvailable": true,
+        "WebhooksNotes": "REST Hooks (pheedloop's term for webhooks) are managed via CRUD on /events/{eventCode}/resthooks/. Operations: POST (subscribe), GET (list), GET single, PUT (update), DELETE (unsubscribe). Subscription payload: {action, endpoint}. Observed action types from collection examples: registration.created, attendee.updated. The full set of supported action types is NOT documented in the collection. Hooks are event-scoped (not org-scoped). No signature algorithm or HMAC verification mechanism is documented.",
+        "WebhooksSignatureAlgorithm": null,
+        "BulkOperationsAvailable": true,
+        "BulkOperationsNotes": "Bulk endpoints exist for Attendees and Members only. Attendees: POST /attendeesbulk/ (bulk create), PATCH /attendeesbulk/ (bulk update), DELETE /attendeesbulk/ (bulk delete — accepts {codes:[...]}). Members: POST /membersbulk/ (bulk create), PATCH /membersbulk/ (bulk update). Body is an array (not wrapped in a key). These are non-standard parallel paths, not a generic /bulk pattern across all resources.",
+        "BulkOperationsBasePaths": [
+          "/api/v3/organization/{ORGANIZATION-CODE}/events/{eventCode}/attendeesbulk/",
+          "/api/v3/organization/{ORGANIZATION-CODE}/membersbulk/"
+        ],
+        "universalPK": {
+          "fieldName": "code",
+          "notes": "PheedLoop uses string 'code' fields as the primary identifier on most resources (Attendees, Events, Sessions, Speakers, Exhibitors, Sponsors, Exhibitor Booths, Registrations, Ticket Transfer Logs, Surcharges, Announcements, Memberships, Member Organizations, Contact Tags, Speaker Tags, Sponsor Tiers, Exhibitor/Sponsor Promotions). Code pattern: 3-letter prefix + alphanumeric (e.g. ATT..., EVE..., SES..., SPE..., EXH..., SPO..., MBR..., ANN..., HOK...). Exception: Tags uses a numeric 'id' field. REST Hooks use a numeric 'id'. Reports endpoint uses a hardcoded REPORT-CODE path param (not a record PK). The connector must handle the code-vs-id split per IO. Runtime D4 SoftPKClassifier will validate per-IO."
+        },
+        "WriteCapability": {
+          "supportsCreate": true,
+          "supportsUpdate": true,
+          "supportsDelete": true,
+          "notes": "Full CRUD available for: Attendees (including bulk), Sessions, Session Formats, Exhibitors, Exhibitor Booths, Sponsors, Speakers, Event Announcements, Speaker Tags, Sponsor Tiers, Org Announcements, Memberships, Member Organizations, Contact Tags, REST Hooks. Update-only (no create/delete via API): Events (PATCH only). Read-only (GET only): Tickets, Ticket Transfer Logs, Surcharge, Registration Promotion, Exhibitor Promotion, Sponsor Promotion, Tags, Registrations (list only), Event Attendance (read + check-in/out state transitions). The PATCH verb is used for all update operations except REST Hooks (which uses PUT)."
+        },
+        "ConcurrencyControl": "none",
+        "ConcurrencyControlNotes": "No ETag, If-Match, If-Unmodified-Since, or version-number fields documented in the Postman collection. Only headers present on all requests are X-API-KEY and X-API-SECRET. Conflict resolution must use snapshot-3-way only.",
+        "DeleteSemantics": "hard",
+        "DeleteSemanticsNotes": "DELETE operations are hard deletes. Descriptions: Sessions DELETE returns 204 on success; Exhibitors/Sponsors DELETE returns 200 with the deleted record's contents; Speakers DELETE returns 200; Speaker Tags/Sponsor Tiers DELETE returns 204. Attendee DELETE 'removes the Attendee from the chosen event' (event-scoped, not org-level deletion). No soft-delete / archive-flag pattern is documented. No tombstone mechanism or deleted-record feed is documented.",
+        "DefaultSyncDirection": "Pull",
+        "DefaultSyncDirectionReasoning": "Read-only (Pull) by default per policy. Write-path (bidirectional) requires sandbox validation. No ETag/version concurrency control means conflict resolution is snapshot-3-way only.",
+        "DefaultConflictResolution": "DestWins",
+        "DefaultConflictResolutionReasoning": "No ETag or version field — MostRecent is not reliably safe. DestWins is the conservative default when bidirectional is eventually enabled.",
+        "ErrorResponseShape": {
+          "notes": "No error response body schema is documented in the Postman collection. Collection contains no response examples (all response bodies are empty in the collection). Error response shape is inferred from Django REST Framework conventions (the framework implied by the DRF pagination envelope): non-2xx responses typically return {detail: string} or field-level validation errors as {field: [error_string]}. This is inferred, not explicitly documented. EvidenceStrength: InferredFromContext — not used for hard constraints.",
+          "evidenceStrength": "InferredFromContext",
+          "hardConstraintUsage": "NOT_FOR_CONNECTOR_CONTROL_FLOW"
+        },
+        "CustomObjectMarkerPattern": null,
+        "CustomFieldMarkerPattern": {
+          "pattern": "custom_fields array",
+          "notes": "Some resources carry a custom_fields array in their response: [{code, name, type, label, value, options, is_required}]. Observed on Surcharge and Registration Promotion response examples in the Postman collection. This is an embedded array on the parent record, not a separate endpoint. Custom field discovery requires reading the parent resource's custom_fields array at runtime."
+        },
+        "OutOfScopeObjectFamilies": {
+          "OrderSummaries": {
+            "reason": "Sub-endpoints on Exhibitors (/exhibitors/{code}/order/summary/) and Sponsors (/sponsors/{code}/order/summary/) return financial summary data as a sub-resource of the parent, not a standalone collection. Not a syncable record type.",
+            "inScope": false
+          },
+          "MemberConvertCodes": {
+            "reason": "POST /members/convertcodes/ is a utility operation for code conversion, not a data entity. Out of scope for sync.",
+            "inScope": false
+          },
+          "MembershipAssign": {
+            "reason": "PATCH /memberships/{code}/assign/ is a special-action endpoint alongside standard PATCH update on the Memberships IO. Handled as part of Memberships IO, not a separate object.",
+            "inScope": false
+          }
+        },
+        "TrailingSlashRequired": true,
+        "TrailingSlashNote": "All PheedLoop API URLs must end in a trailing slash. This is stated explicitly in the Postman collection description: 'All URLs should end in a /'.",
+        "EventScopedPathNote": "Event-scoped resources include the eventCode in the path: /api/v3/organization/{ORGANIZATION-CODE}/events/{eventCode}/{resource}/. Organization-scoped resources sit directly under the org root: /api/v3/organization/{ORGANIZATION-CODE}/{resource}/. The connector must maintain an event-code parameter per EntityMap for event-scoped IOs.",
+        "BiDirectionalPreconditions": "Before enabling bidirectional sync: (1) Validate in a PheedLoop sandbox that write operations produce expected results for the target object family. (2) Note that DELETE is hard — orphan removal from PheedLoop is irreversible. (3) No ETag/version control means simultaneous edits in both systems can overwrite each other; DestWins conflict policy is the safe default. (4) Attendee/Member bulk endpoints can be used for efficient batch creates/updates. (5) Some objects are read-only from the API (Tickets, Surcharges, Registrations, Exhibitor/Sponsor Promotions) — these cannot go bidirectional regardless."
+      }
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "Name": "Attendees",
+            "DisplayName": "Attendees",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/attendees/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Attendees (event-scoped). Extracted from Postman collection v3.3.0 folder \"Attendees\".",
+            "CreateAPIPath": "/events/{eventCode}/attendees/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/attendees/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/attendees/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/attendees/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Attendees"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "first_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "last_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "about",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organization",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_1",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_2",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_city",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_state",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_zip",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_country",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_phone",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code_internal",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "external_qr_code_url",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "dietary_restrictions",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "accessibility_requirements",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "designations",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tags",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "linkedin",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_checked_in",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checkin_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "profile_visible",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_groups",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_organization",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "membership_tier",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code_badge",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "metadata",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "send_app_welcome_email",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": false,
+                  "Description": "Create-time behavior flag (write-only input)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "send_attendee_portal_welcome",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": false,
+                  "Description": "Create-time behavior flag (write-only input)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "send_welcome_virtual_portal_email",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": false,
+                  "Description": "Create-time behavior flag (write-only input)."
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Events",
+            "DisplayName": "Events",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "SupportsCreate": false,
+            "SupportsUpdate": true,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Events (event-scoped). Extracted from Postman collection v3.3.0 folder \"Events\".",
+            "IncrementalWatermarkField": "date_updated_gte",
+            "UpdateAPIPath": "/events/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size",
+                  "date_updated_gte"
+                ]
+              },
+              "DetailAPIPath": "/events/{ExternalID}/",
+              "SourceFolder": "Events"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "user",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "end_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "total_user_credits",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "remaining_user_credits",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "time_start",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "time_end",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "location",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "credit_value",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "topics",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "formats",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "timezone",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "virtual_enabled",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "learning_objectives",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "custom_fields",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_listed",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "attendee_registration_capacity",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "total_registration_count",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Registrations",
+            "DisplayName": "Registrations",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/registrations/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Registrations (event-scoped). Extracted from Postman collection v3.3.0 folder \"Registrations\".",
+            "IncrementalWatermarkField": "date_updated_gte",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/registrations/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size",
+                  "date_updated_gte"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Registrations"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organization_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "first_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "last_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "attendee_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organization",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code_internal",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_1",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_2",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_city",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_state",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_zip",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_country",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_phone",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registration_complete",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "canceled",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "paid",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "purchases",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "discounts",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "refunds",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sub_total",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tax_total",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "payment_total",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "refund_total",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "amount_due",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "charge_id",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "promotion",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "refund_id",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "refund_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "notes",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "form_response",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registration_category",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "custom_fields",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "utm_source",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "utm_medium",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "utm_campaign",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "utm_content",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "utm_term",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tags",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "dietary_restrictions",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registrant_first_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registrant_last_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registrant_email",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registrant_organization",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registrant_title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registrant_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registrant_custom_fields",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registrant_code_internal",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "ticket_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "ticket_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "ticket_price",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "ticket_description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_canceled",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checked_in",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "checked_in_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registration_id",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registration_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registrant_tags",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Tickets",
+            "DisplayName": "Tickets",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/tickets/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Tickets (org-scoped). Extracted from Postman collection v3.3.0 folder \"Tickets\".",
+            "Configuration": {
+              "Scope": "org",
+              "AccessPath": {
+                "door": "/tickets/",
+                "nesting": "(direct collection)",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Tickets"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "event_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "price",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "end_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start_time",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "end_time",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "limit_per_order",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "minimum_per_order",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "limit_per_attendee",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "minimum_per_attendee",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "quantity_available",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_addon",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_active",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_private",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_virtual",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_protected",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_sold_in_app",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_sold_in_site",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_waitlist_enabled",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_waitlist_notification_enabled",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_group_details_required",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_text_overflow_hidden",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_visible_unavailable",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_disabled_email_confirmation",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_member_only",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "allow_guest_purchases",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "show_as_sold_out",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "enforce_unique_purchase",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "enable_pdf_qr_code",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "break_1_quantity",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "break_2_quantity",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "break_3_quantity",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "break_1_price",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "break_2_price",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "break_3_price",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "country_whitelist",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "country_blacklist",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registration_categories",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "categories_sub",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sessions",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tags",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_tags",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_tags_exclusions",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "custom_fields",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "TicketTransferLogs",
+            "DisplayName": "Ticket Transfer Logs",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/tickettransferlogs/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Ticket Transfer Logs (event-scoped). Extracted from Postman collection v3.3.0 folder \"Ticket Transfer Logs\".",
+            "IncrementalWatermarkField": "dateCreatedAfter",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/tickettransferlogs/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size",
+                  "dateCreatedAfter"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Ticket Transfer Logs"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "transferred_by",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "transferred_to",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "transfer_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_cancelled",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "cancelled_by",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date_claimed",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "status",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "ticket",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "registration_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Surcharge",
+            "DisplayName": "Surcharge",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/surcharges/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Surcharge (event-scoped). Extracted from Postman collection v3.3.0 folder \"Surcharge\".",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/surcharges/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Surcharge"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "flat_rate",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "percentage",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date_created",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "category",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date_updated",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "custom_fields",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "RegistrationPromotion",
+            "DisplayName": "Registration Promotion",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/registrations/promotions/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Registration Promotion (event-scoped). Extracted from Postman collection v3.3.0 folder \"Registration Promotion\".",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/registrations/promotions/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Registration Promotion"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "promotion_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start_time",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "expiry_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "expiry_time",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_active",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "amount",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "percent",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "discount_type",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_per_ticket_discount",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "purchase_minimum",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "custom_fields",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "minimum_ticket_threshold",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "maximum_ticket_threshold",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "maximum_application",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tickets_connected",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Sessions",
+            "DisplayName": "Sessions",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/sessions/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Sessions (event-scoped). Extracted from Postman collection v3.3.0 folder \"Sessions\".",
+            "CreateAPIPath": "/events/{eventCode}/sessions/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/sessions/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/sessions/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/sessions/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Sessions"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "formats",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sub_sessions",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sub_title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "about",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "location",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sponsors",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "internal_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "speakers",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "instructions",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "session_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "start_time",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "end_time",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tracks",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "audiences",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tags_restrict",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "authors",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_channel",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "credit_value",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": false
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "SessionRegistration",
+            "DisplayName": "Session Registration",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/sessions/{sessionCode}/attendance/",
+            "PaginationType": "None",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Session Registration (event-scoped). Extracted from Postman collection v3.3.0 folder \"Session Registration\".",
+            "UpdateAPIPath": "/events/{eventCode}/sessions/{sessionCode}/attendance/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/sessions/{sessionCode}/attendance/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/sessions/{sessionCode}/attendance/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": []
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Session Registration",
+              "PaginationNote": "'Get Session Registrations' returns a flat object {code,title,attendance:[...]} with NO count/next/previous DRF envelope, so there is no page-number pagination — PaginationType=None."
+            },
+            "CreateAPIPath": "/events/{eventCode}/sessions/{sessionCode}/attendance/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "attendance",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "codes",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "duplicated_attendance",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": true,
+                  "Description": "Response-only field."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "message",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": true,
+                  "Description": "Response-only field."
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "SessionFormats",
+            "DisplayName": "Session Formats",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/sessions/formats/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Session Formats (event-scoped). Extracted from Postman collection v3.3.0 folder \"Session Formats\".",
+            "CreateAPIPath": "/events/{eventCode}/sessions/formats/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/sessions/formats/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/sessions/formats/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/sessions/formats/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Session Formats"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "event",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "color",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Exhibitors",
+            "DisplayName": "Exhibitors",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/exhibitors/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Exhibitors (event-scoped). Extracted from Postman collection v3.3.0 folder \"Exhibitors\".",
+            "CreateAPIPath": "/events/{eventCode}/exhibitors/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/exhibitors/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/exhibitors/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/exhibitors/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Exhibitors"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tagline",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code_internal",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "managers",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "booths",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "default_booth_area",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_primary",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_secondary",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "logo",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "banner",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "thumbnail",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "product_services",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "website",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "twitter",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "youtube",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "facebook",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "linkedin",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "instagram",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_1",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_2",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_city",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_state",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_country",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_zip",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_phone_work",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_phone_mobile",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_phone",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "send_welcome_email",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": false
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "ExhibitorsBooths",
+            "DisplayName": "Exhibitors Booths",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/exhibitors/booths/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Exhibitors Booths (event-scoped). Extracted from Postman collection v3.3.0 folder \"Exhibitors Booths\".",
+            "CreateAPIPath": "/events/{eventCode}/exhibitors/booths/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/exhibitors/booths/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/exhibitors/booths/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/exhibitors/booths/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Exhibitors Booths"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "event",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "booth_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "area",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "exhibitors",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Sponsors",
+            "DisplayName": "Sponsors",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/sponsors/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Sponsors (event-scoped). Extracted from Postman collection v3.3.0 folder \"Sponsors\".",
+            "CreateAPIPath": "/events/{eventCode}/sponsors/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/sponsors/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/sponsors/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/sponsors/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Sponsors"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tagline",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code_internal",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_primary",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_secondary",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tiers",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "logo",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "banner",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "thumbnail",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "website",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "twitter",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "youtube",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "facebook",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "linkedin",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "instagram",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_1",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_2",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_city",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_state",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_country",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_zip",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_phone_work",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_phone_mobile",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_phone",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Speakers",
+            "DisplayName": "Speakers",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/speakers/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Speakers (event-scoped). Extracted from Postman collection v3.3.0 folder \"Speakers\".",
+            "CreateAPIPath": "/events/{eventCode}/speakers/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/speakers/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/speakers/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/speakers/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Speakers"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "first_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "last_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "designations",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "about",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organization",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "location",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "sessions",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tags",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "picture",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "logo_company",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code_internal",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "EventAnnouncements",
+            "DisplayName": "Event Announcements",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/announcements/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Event Announcements (event-scoped). Extracted from Postman collection v3.3.0 folder \"Announcements\".",
+            "CreateAPIPath": "/events/{eventCode}/announcements/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/announcements/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/announcements/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/announcements/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Announcements"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tags",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tickets",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "cta_text",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "cta_link",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "publish_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "publish_time",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "release_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "release_time",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_released",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_multiple_send_enabled",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_credentials_included",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_add_to_calendar",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_ebadge_included",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_notification_push",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_notification_mail",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_visible_app",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_visible_attendee",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_visible_exhibitor",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_visible_speaker",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_visible_sponsor",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_visible_virtual",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_active",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "status",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "deliveries",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "recipients",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": false
+                }
+              },
+              {
+                "fields": {
+                  "Name": "publis_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": false
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Tags",
+            "DisplayName": "Tags",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/tags/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Tags (event-scoped). Extracted from Postman collection v3.3.0 folder \"Tags\".",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/tags/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Tags"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "SpeakerTags",
+            "DisplayName": "Speaker Tags",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/speakers/tags/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Speaker Tags (event-scoped). Extracted from Postman collection v3.3.0 folder \"Speaker Tags\".",
+            "CreateAPIPath": "/events/{eventCode}/speakers/tags/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/speakers/tags/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/speakers/tags/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/speakers/tags/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Speaker Tags"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "color",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "order_num",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "SponsorTier",
+            "DisplayName": "Sponsor Tier",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/sponsors/tiers/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Sponsor Tier (event-scoped). Extracted from Postman collection v3.3.0 folder \"Sponsor Tier\".",
+            "CreateAPIPath": "/events/{eventCode}/sponsors/tiers/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/sponsors/tiers/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/sponsors/tiers/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/sponsors/tiers/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Sponsor Tier"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "color",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "order_num",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "ExhibitorPromotion",
+            "DisplayName": "Exhibitor Promotion",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/exhibitors/promotions/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Exhibitor Promotion (event-scoped). Extracted from Postman collection v3.3.0 folder \"Exhibitor Promotion\".",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/exhibitors/promotions/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Exhibitor Promotion"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "promotion_codes",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_active",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "limit",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "amount",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "percent",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "products",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tax_percent",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date_expiry",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "custom_fields",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "SponsorPromotion",
+            "DisplayName": "Sponsor Promotion",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/sponsors/promotions/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Sponsor Promotion (event-scoped). Extracted from Postman collection v3.3.0 folder \"Sponsor Promotion\".",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/sponsors/promotions/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Sponsor Promotion"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "promotion_codes",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_active",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "limit",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "amount",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "percent",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "products",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tax_percent",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date_expiry",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "custom_fields",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Members",
+            "DisplayName": "Members",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/members/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Members (org-scoped). Extracted from Postman collection v3.3.0 folder \"Members\".",
+            "IncrementalWatermarkField": "registration_date_updated_gte",
+            "CreateAPIPath": "/members/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/members/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "Configuration": {
+              "Scope": "org",
+              "AccessPath": {
+                "door": "/members/",
+                "nesting": "(direct collection)",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size",
+                  "registration_date_updated_gte"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Members"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "first_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "last_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_groups",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_organization",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "membership_tier",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "about",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organization",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_1",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_2",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_city",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_state",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_zip",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_country",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_phone",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code_internal",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "dietary_restrictions",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "accessibility_requirements",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "designations",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "events_attended",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "linkedin",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "metadata",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "memberships",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "all_memberships",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "code_badge",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "OrgAnnouncements",
+            "DisplayName": "Org Announcements",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/announcements/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Org Announcements (org-scoped). Extracted from Postman collection v3.3.0 folder \"Announcements\".",
+            "CreateAPIPath": "/announcements/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/announcements/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/announcements/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "org",
+              "AccessPath": {
+                "door": "/announcements/",
+                "nesting": "(direct collection)",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Announcements"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "description",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "order_num",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "cta_text",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "cta_link",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "publish_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "publish_time",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "release_date",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "release_time",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_released",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_credentials_included",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_visible_attendee",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_active",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "status",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_notification_mail",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_notification_push",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_multiple_send_enabled",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organization",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event_targets",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "contact_groups",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "exclude_event_targets",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "membership_tiers_targets",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "recipients",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Memberships",
+            "DisplayName": "Memberships",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/memberships/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Memberships (org-scoped). Extracted from Postman collection v3.3.0 folder \"Memberships\".",
+            "CreateAPIPath": "/memberships/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/memberships/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/memberships/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "org",
+              "AccessPath": {
+                "door": "/memberships/",
+                "nesting": "(direct collection)",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Memberships"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "membership_tier",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "membership_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date_start",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "date_expiry",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organization",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "notes",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "attendee",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "membership_order",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "status",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_active",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "is_approved",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "additional_information",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "attendee_organization",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "Description": "Organization code to associate with this membership. Present in Create Membership request body. Source: Postman Create Membership request body."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "email",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "Description": "Email of the member being assigned this membership. Source: Postman Create Membership request body."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "first_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "Description": "First name of the member being assigned this membership. Source: Postman Create Membership request body."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "last_name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "Description": "Last name of the member being assigned this membership. Source: Postman Create Membership request body."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "send_confirmation",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "Description": "When true, sends a confirmation email on membership creation. Source: Postman Create Membership request body."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "title",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "Description": "Job title of the member being assigned this membership. Source: Postman Create Membership request body."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "unassigned",
+                  "Type": "boolean",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "Description": "When true, creates an unassigned membership that can be assigned to a member later. Critical create-time control flag. Source: Postman Create Membership request body + description."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "message",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": true,
+                  "Description": "Response-only field."
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "MemberOrganization",
+            "DisplayName": "Member Organization",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/members/organization/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Member Organization (org-scoped). Extracted from Postman collection v3.3.0 folder \"Member Organization\".",
+            "CreateAPIPath": "/members/organization/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/members/organization/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/members/organization/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "org",
+              "AccessPath": {
+                "door": "/members/organization/",
+                "nesting": "(direct collection)",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Member Organization"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "internal_code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "payment_code_prefix",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "tax",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "managers",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_1",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_line_2",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_city",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_state",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_country",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_zip",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "address_phone_work",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "website",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "notes",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "number",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "extra",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": false
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "ContactTags",
+            "DisplayName": "Contact Tags",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/contacttags/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Contact Tags (org-scoped). Extracted from Postman collection v3.3.0 folder \"Contact Tags\".",
+            "CreateAPIPath": "/contacttags/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/contacttags/{ExternalID}/",
+            "UpdateMethod": "PATCH",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/contacttags/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "org",
+              "AccessPath": {
+                "door": "/contacttags/",
+                "nesting": "(direct collection)",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "Contact Tags"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "code",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop string 'code' identifier (universal convention)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "name",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "RESTHooks",
+            "DisplayName": "REST Hooks",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/resthooks/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": true,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop REST Hooks (event-scoped). Extracted from Postman collection v3.3.0 folder \"REST Hooks\".",
+            "CreateAPIPath": "/events/{eventCode}/resthooks/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "body",
+            "UpdateAPIPath": "/events/{eventCode}/resthooks/{ExternalID}/",
+            "UpdateMethod": "PUT",
+            "UpdateBodyShape": "flat",
+            "UpdateIDLocation": "path",
+            "DeleteAPIPath": "/events/{eventCode}/resthooks/{ExternalID}/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/resthooks/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "DetailAPIPath": null,
+              "SourceFolder": "REST Hooks"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "action",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "endpoint",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              },
+              {
+                "fields": {
+                  "Name": "id",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Description": "Primary key — PheedLoop numeric 'id'."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "event",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsForeignKey": true,
+                  "RelatedIntegrationObjectID": "@lookup:MJ: Integration Objects.Name=Events&IntegrationID=@parent:IntegrationID",
+                  "Configuration": {
+                    "ReferencedType": "Events"
+                  }
+                }
+              },
+              {
+                "fields": {
+                  "Name": "organization",
+                  "Type": "string",
+                  "IntegrationObjectID": "@parent:ID"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "EventAttendance",
+            "DisplayName": "Event Attendance",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/events/{eventCode}/attendance/",
+            "PaginationType": "None",
+            "SupportsPagination": false,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "SupportsCreate": true,
+            "SupportsUpdate": false,
+            "SupportsDelete": true,
+            "Status": "Active",
+            "Description": "PheedLoop Event Attendance (event-scoped check-in/check-out state). GET .../attendance/ returns checked_in / not_checked_in attendee-code lists; POST .../checkin/ checks attendees in; DELETE .../checkout/ checks them out. Source: Postman collection v3.3.0 folder \"Event Attendance\".",
+            "CreateAPIPath": "/events/{eventCode}/checkin/",
+            "CreateMethod": "POST",
+            "CreateBodyShape": "flat",
+            "CreateIDLocation": "n/a",
+            "DeleteAPIPath": "/events/{eventCode}/checkout/",
+            "DeleteMethod": "DELETE",
+            "DeleteIDLocation": "path",
+            "Configuration": {
+              "Scope": "event",
+              "AccessPath": {
+                "door": "/events/{eventCode}/attendance/",
+                "nesting": "event-scoped (requires {eventCode})",
+                "listMethod": "GET",
+                "args": []
+              },
+              "CheckInPath": "/events/{eventCode}/checkin/",
+              "CheckOutPath": "/events/{eventCode}/checkout/",
+              "SourceFolder": "Event Attendance",
+              "Notes": "Asymmetric CRUD: read=GET /attendance/, create(state)=POST /checkin/, delete(state)=DELETE /checkout/, no PATCH update. checkin/checkout bodies are {\"codes\": [<attendee-code>...]}. attendance state is keyed by attendee code (FK to Attendees).",
+              "CreateNote": "POST /checkin/ is a state mutation returning {attendees,errored_attendees} (arrays of attendee codes), NOT a new record with a retrievable id. CreateIDLocation=n/a so the generic CreateRecord does not scan for an id field. The generic BaseRESTIntegrationConnector path still routes through BuildCreatedResult, which requires a non-empty externalID — a connector-level CreateRecord/ExtractIDFromResponse override (reading attendees[0]) is required for a true Success result. Setting n/a documents the non-standard shape and stops a misleading body-scan for id|ID|externalID."
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "checked_in",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": true,
+                  "Description": "Array of attendee codes currently checked in to the event. Source: GET /attendance/ 200 body."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "not_checked_in",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": true,
+                  "Description": "Array of attendee codes not yet checked in. Source: GET /attendance/ 200 body."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "attendees",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": true,
+                  "Description": "Array of successfully checked-in attendee codes (POST /checkin/ response)."
+                }
+              },
+              {
+                "fields": {
+                  "Name": "errored_attendees",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": true,
+                  "Description": "Array of attendee codes that failed check-in (POST /checkin/ response)."
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "Name": "Reports",
+            "DisplayName": "Reports",
+            "IntegrationID": "@parent:ID",
+            "APIPath": "/reports/{reportCode}/",
+            "PaginationType": "PageNumber",
+            "SupportsPagination": true,
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "SupportsCreate": false,
+            "SupportsUpdate": false,
+            "SupportsDelete": false,
+            "Status": "Active",
+            "Description": "PheedLoop Reports (org-scoped, read-only). GET /reports/{REPORT-CODE}/ returns a paginated DRF envelope {count,next,previous,results}; the result column set is defined by the dashboard-configured report definition (dynamic schema per report code). Operator supplies the report code. Source: Postman collection v3.3.0 folder \"Reports\".",
+            "Configuration": {
+              "Scope": "org",
+              "DynamicSchema": true,
+              "AccessPath": {
+                "door": "/reports/{reportCode}/",
+                "nesting": "(direct collection, report-code parameterized)",
+                "listMethod": "GET",
+                "args": [
+                  "page",
+                  "page_size"
+                ]
+              },
+              "ReportCodeRequired": true,
+              "MaxPageSize": 100,
+              "SourceFolder": "Reports",
+              "Notes": "Dynamic-schema read-only report. The report code (e.g. REP66RIOLKP0ZRV) is a path parameter the operator configures per EntityMap. Result columns vary per report and are discovered at runtime from the `results[]` rows — not statically declarable. Reports max page_size is 100 (lower than the 500 default for data endpoints).",
+              "PaginationEnvelope": "DRF count/next/previous/results — envelope stripped; results[] is the data array with report-code-dependent columns resolved at runtime"
+            }
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "Name": "results",
+                  "Type": "json",
+                  "IntegrationObjectID": "@parent:ID",
+                  "IsReadOnly": true,
+                  "Description": "Dynamic report data array; column schema is determined by the report code (REPORT-CODE path param). Example columns from REP66RIOLKP0ZRV: Date and Time, Name, Email, Title, Category, Payment Status, Last Refund Date, Refund IDs."
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

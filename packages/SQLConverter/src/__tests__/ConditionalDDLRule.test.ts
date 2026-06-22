@@ -284,7 +284,9 @@ END`;
       const result = convert(sql);
       expect(result).toContain('DO $$');
       expect(result).toContain("rolname = 'MyRole'");
-      expect(result).toContain('CREATE ROLE MyRole;');
+      // Role names are emitted quoted to preserve case (PG folds unquoted
+      // identifiers to lowercase). Matches the baseline output `CREATE ROLE "cdp_BI"`.
+      expect(result).toContain('CREATE ROLE "MyRole";');
     });
 
     it('should handle quoted role names from convertIdentifiers', () => {
@@ -302,6 +304,20 @@ END`;
       expect(result).toContain('DO $$');
       expect(result).toContain("rolname = 'MyRole'");
       expect(result).toContain('CREATE ROLE "MyRole";');
+    });
+
+    it('should convert the DATABASE_PRINCIPAL_ID / EXEC(CREATE ROLE ... AUTHORIZATION) baseline idiom', () => {
+      // The introspection baseline emits roles as:
+      //   IF DATABASE_PRINCIPAL_ID(N'cdp_BI') IS NULL
+      //       EXEC('CREATE ROLE [cdp_BI] AUTHORIZATION [db_securityadmin]');
+      // The bracketed name must be captured and the AUTHORIZATION clause dropped.
+      const sql = `IF DATABASE_PRINCIPAL_ID(N'cdp_BI') IS NULL
+    EXEC('CREATE ROLE [cdp_BI] AUTHORIZATION [db_securityadmin]');`;
+      const result = convert(sql);
+      expect(result).toContain('DO $$');
+      expect(result).toContain("rolname = 'cdp_BI'");
+      expect(result).toContain('CREATE ROLE "cdp_BI";');
+      expect(result).not.toContain('AUTHORIZATION');
     });
   });
 

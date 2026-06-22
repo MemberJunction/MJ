@@ -50,6 +50,7 @@ interface NavItem {
         </mj-page-header>
         <mj-page-body [Padding]="false" class="analytics-shell">
             <mj-left-nav
+                MobileTitle="Analytics"
                 [Sections]="navSections"
                 [ActiveId]="ActiveSection"
                 (ItemClicked)="onNavItemClicked($event)">
@@ -81,12 +82,12 @@ interface NavItem {
                     }
                     @if (FilterBarConfig.ShowCompareToggle) {
                         <button mjButton variant="secondary" size="sm" [toggleable]="true" [(selected)]="compareActive" (selectedChange)="toggleCompare()">
-                            <i class="fa-solid fa-code-compare"></i> Compare
+                            <i class="fa-solid fa-code-compare"></i> <span class="mj-action-label">Compare</span>
                         </button>
                     }
                     @if (FilterBarConfig.ShowExportButton) {
                         <button mjButton variant="secondary" size="sm" (click)="OnExportClicked()">
-                            <i class="fa-solid fa-download"></i> Export
+                            <i class="fa-solid fa-download"></i> <span class="mj-action-label">Export</span>
                         </button>
                     }
                 </div>
@@ -149,6 +150,22 @@ interface NavItem {
                         <app-analytics-usage-patterns
                             [TimeRange]="CurrentTimeRange"
                         ></app-analytics-usage-patterns>
+                    }
+                    @case ('realtime-overview') {
+                        <app-analytics-realtime-overview
+                            [TimeRange]="CurrentTimeRange"
+                            (SectionNavigate)="OnSectionChange($event)"
+                        ></app-analytics-realtime-overview>
+                    }
+                    @case ('realtime-sessions') {
+                        <app-analytics-realtime-sessions
+                            [TimeRange]="CurrentTimeRange"
+                        ></app-analytics-realtime-sessions>
+                    }
+                    @case ('realtime-management') {
+                        <app-realtime-management
+                            [TimeRange]="CurrentTimeRange"
+                        ></app-realtime-management>
                     }
                 }
             </div>
@@ -226,6 +243,15 @@ interface NavItem {
                 padding: 16px;
             }
         }
+
+        /* <mj-left-nav> collapses to a full-width top bar at ≤700px; stack the
+           shell vertically so the content pane sits below it instead of being
+           squeezed to zero width in the flex row. */
+        @media (max-width: 700px) {
+            .analytics-shell {
+                flex-direction: column;
+            }
+        }
     `]
 })
 export class AIAnalyticsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
@@ -238,7 +264,22 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     @ViewChild('executiveSummary') private executiveSummary?: AnalyticsExecutiveSummaryComponent;
     @ViewChild('promptRuns') private promptRuns?: AnalyticsPromptRunsComponent;
 
-    public ActiveSection = 'executive-summary';
+    /**
+     * Active analytics section. Implemented as a getter/setter so that changing
+     * it recomputes the (section-dependent) filter-field config exactly once,
+     * rather than rebuilding the whole FilterFieldConfig[] on every
+     * change-detection pass (the field config is template-bound twice).
+     */
+    private _activeSection = 'executive-summary';
+    public get ActiveSection(): string {
+        return this._activeSection;
+    }
+    public set ActiveSection(value: string) {
+        if (value !== this._activeSection) {
+            this._activeSection = value;
+            this.recomputeFilterFields();
+        }
+    }
     public CurrentTimeRange = '24h';
     public CurrentFilters: GlobalFilterState = {
         Models: [],
@@ -260,10 +301,21 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         { text: 'By Usage',       value: 'usage-volume' }
     ];
 
-    /** Vendor options, lazily built from AIEngineBase for Model Performance leaderboard. */
+    // ── Precomputed option lists ────────────────────────────────────────────
+    // Built ONCE from AIEngineBase's (process-cached, load-once) lists in
+    // ngOnInit — see recomputeOptionLists. Each used to be a getter doing
+    // .map().sort() (and .filter() for agents) over engine-wide lists; because
+    // analyticsFilterFields is template-bound twice they re-ran 2×/CD. The
+    // backing fields are read by both the public getters (kept for any external
+    // callers) and by recomputeFilterFields.
+    private _modelOptions: { text: string; value: string }[] = [];
+    private _agentOptions: { text: string; value: string }[] = [];
+    private _promptOptions: { text: string; value: string }[] = [];
+    private _vendorOptions: { text: string; value: string }[] = [];
+
+    /** Vendor options, built from AIEngineBase for the Model Performance leaderboard. */
     public get vendorOptions(): { text: string; value: string }[] {
-        return AIEngineBase.Instance?.Vendors?.map(v => ({ text: v.Name ?? '', value: v.ID ?? '' }))
-            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        return this._vendorOptions;
     }
 
     /** Per-section filter-bar config — switched on ActiveSection. */
@@ -283,6 +335,17 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: true,  ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
             case 'usage-patterns':
                 return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            // Realtime Voice sections own their filters internally (search/status/
+            // target/user/host live with the grid); only the time-range chips come
+            // from the shared chrome. Session data is bucketed daily, so the
+            // sub-day ranges are dropped.
+            case 'realtime-overview':
+            case 'realtime-sessions':
+            // Realtime management owns its sub-tab rail + per-surface filters
+            // internally; only the time-range chips come from the shared chrome
+            // (it windows session history daily, so sub-day ranges are dropped).
+            case 'realtime-management':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['24h', '7d', '30d'] };
             default:
                 return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
         }
@@ -305,21 +368,42 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         { text: 'Canceled', value: 'Canceled' },
     ];
 
-    /** Built lazily from AIEngineBase. */
+    /** Built from AIEngineBase (see recomputeOptionLists). */
     public get modelOptions(): { text: string; value: string }[] {
-        return AIEngineBase.Instance?.Models?.map(m => ({ text: m.Name ?? '', value: m.ID }))
-            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        return this._modelOptions;
     }
 
     public get agentOptions(): { text: string; value: string }[] {
-        return AIEngineBase.Instance?.Agents
-            ?.filter(a => a.Status === 'Active')
-            ?.map(a => ({ text: a.Name ?? '', value: a.ID }))
-            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        return this._agentOptions;
     }
 
     public get promptOptions(): { text: string; value: string }[] {
-        return AIEngineBase.Instance?.Prompts?.map(p => ({ text: p.Name ?? '', value: p.ID }))
+        return this._promptOptions;
+    }
+
+    /**
+     * Build the four option lists from AIEngineBase's cached metadata. Called once
+     * after the engine is loaded (ngOnInit). Mirrors the exact map/filter/sort the
+     * former getters performed, so the values are identical — just computed once.
+     *
+     * Accepted staleness tradeoff: these lists are built once after engine load and
+     * are NOT reactive — a mid-session AIEngineBase metadata reload (new model/agent/
+     * prompt/vendor) would not refresh them until this component is re-created. That
+     * is acceptable for an analytics surface (its option lists are near-static within
+     * a session); we deliberately do NOT wire observable reactivity here. The former
+     * getters re-read the engine on every CD, which was the perf cost we removed.
+     */
+    private recomputeOptionLists(): void {
+        const engine = AIEngineBase.Instance;
+        this._modelOptions = engine?.Models?.map(m => ({ text: m.Name ?? '', value: m.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        this._agentOptions = engine?.Agents
+            ?.filter(a => a.Status === 'Active')
+            ?.map(a => ({ text: a.Name ?? '', value: a.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        this._promptOptions = engine?.Prompts?.map(p => ({ text: p.Name ?? '', value: p.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        this._vendorOptions = engine?.Vendors?.map(v => ({ text: v.Name ?? '', value: v.ID ?? '' }))
             ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
     }
 
@@ -331,8 +415,21 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     /** Compare-mode visual state (kept on the shell now that analytics-filter-bar is gone). */
     public compareActive = false;
 
-    /** Build the FilterFieldConfig[] for the popover based on the active section. */
+    /**
+     * Precomputed popover field config for the active section. Recomputed only when
+     * ActiveSection changes (via its setter) or after the option lists load — NOT
+     * on every CD pass, even though the template binds this twice (the `@if` guard
+     * and the `[Fields]` input).
+     */
+    private _analyticsFilterFields: FilterFieldConfig[] = [];
+
+    /** Field config for the popover, based on the active section (precomputed). */
     public get analyticsFilterFields(): FilterFieldConfig[] {
+        return this._analyticsFilterFields;
+    }
+
+    /** Rebuild {@link _analyticsFilterFields} for the current section from the option lists. */
+    private recomputeFilterFields(): void {
         const cfg = this.FilterBarConfig;
         const fields: FilterFieldConfig[] = [];
         if (cfg.ShowModelFilter) {
@@ -393,7 +490,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 options: [{ text: 'All Vendors', value: '' }, ...this.vendorOptions],
             });
         }
-        return fields;
+        this._analyticsFilterFields = fields;
     }
 
     /** Single-value flattened state for the centralized panel (the panel takes scalar values; we hold arrays in CurrentFilters). */
@@ -466,6 +563,13 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
           Description: 'Failure patterns and root causes' },
         { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns',
           Description: 'Volume, frequency, and concurrency over time' },
+        { Key: 'divider2' },
+        { Label: 'Realtime Voice', Icon: 'fa-solid fa-tower-broadcast', Key: 'realtime-overview',
+          Description: 'Operational analytics for voice-agent sessions — sessions, channels, and delegated runs' },
+        { Label: 'Voice Sessions', Icon: 'fa-solid fa-table-list', Key: 'realtime-sessions',
+          Description: 'Every long-lived agent session — live calls, idle holds, and closed history' },
+        { Label: 'Realtime Management', Icon: 'fa-solid fa-satellite-dish', Key: 'realtime-management',
+          Description: 'Manage the realtime + bridge surface — live sessions, bridge providers, agent identities, channels, co-agents, history, and metrics' },
     ];
 
     /**
@@ -487,7 +591,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     get navSections(): MJLeftNavSection[] {
         const sections: MJLeftNavSection[] = [{ items: [] }];
         for (const item of this.NavItems) {
-            if (item.Key === 'divider') {
+            if (item.Key.startsWith('divider')) {
                 sections.push({ items: [] });
             } else {
                 sections[sections.length - 1].items.push({
@@ -508,7 +612,20 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     async ngOnInit(): Promise<void> {
         super.ngOnInit();
         this.setupSettingsDebounce();
+        // AIEngineBase is deferred at startup — ensure it's loaded, then build the
+        // option lists ONCE so the precomputed filter-field config has real data.
+        try {
+            await AIEngineBase.Instance.EnsureLoaded();
+        } catch {
+            // Fall through with whatever (possibly empty) cache exists — the option
+            // lists tolerate an unloaded engine (same as the former lazy getters).
+        }
+        this.recomputeOptionLists();
         await this.loadUserSettings();
+        // Final rebuild: covers both the initial section and any section restored
+        // from user settings, now that the option lists are populated.
+        this.recomputeFilterFields();
+        this.cdr.detectChanges();
         this.NotifyLoadComplete();
     }
 
@@ -528,7 +645,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
 
     /** Navigate to a different analytics section */
     public OnSectionChange(key: string): void {
-        if (key === 'divider' || key === this.ActiveSection) {
+        if (key.startsWith('divider') || key === this.ActiveSection) {
             return;
         }
         this.ActiveSection = key;

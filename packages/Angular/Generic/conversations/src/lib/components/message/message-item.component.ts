@@ -9,7 +9,8 @@ import {
   OnInit,
   OnChanges,
   SimpleChanges,
-  DoCheck
+  DoCheck,
+  TemplateRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
@@ -19,8 +20,12 @@ import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand,
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
-import { SuggestedResponse } from '../../models/conversation-state.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
+import { ConversationAgentService } from '../../services/conversation-agent.service';
+import {
+  BeforeResponseFormSubmittedEventArgs,
+  AfterResponseFormSubmittedEventArgs,
+} from '../../events/chat-events';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 
@@ -48,6 +53,17 @@ export interface MessageAttachment {
 }
 
 /**
+ * A fully-loaded artifact + its version to render as a card under a message.
+ * A single message can carry more than one DISTINCT artifact (e.g. a research
+ * report plus a standalone generated infographic), so the message renders an
+ * array of these — one card each.
+ */
+export interface MessageArtifactRef {
+  artifact: MJArtifactEntity;
+  version: MJArtifactVersionEntity;
+}
+
+/**
  * Component for displaying a single message in a conversation
  * Follows the dynamic rendering pattern from skip-chat for optimal performance
  * This component is created dynamically via ViewContainerRef.createComponent()
@@ -69,11 +85,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifact?: MJArtifactEntity;
   @Input() public artifactVersion?: MJArtifactVersionEntity;
+  /**
+   * All distinct artifacts attached to this message, each at its latest version.
+   * Preferred over the single `artifact`/`artifactVersion` inputs above (which are
+   * retained for backward compatibility and kept pointed at the first entry).
+   */
+  @Input() public artifacts: MessageArtifactRef[] = [];
   @Input() public agentRun: MJAIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
   @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
+
+  /**
+   * Optional additive per-message slot template (forwarded from chat-area's
+   * `mjChatSlot="messageExtra"`). Rendered inside the bubble after the message
+   * content, before attachments. Receives the message as `$implicit` + a named
+   * `message` context binding. Null when no consumer template is projected.
+   */
+  @Input() public messageExtraTemplate: TemplateRef<unknown> | null = null;
 
   @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
@@ -87,6 +117,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
   @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId on Shift+Click
   @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * Cancelable — fired BEFORE the response form's values are sent back as a new
+   * conversation message. Listeners may set `event.Cancel = true` to halt the
+   * submission (e.g., a validation pass that finds required fields unfilled).
+   * When canceled, the corresponding {@link afterResponseFormSubmitted} event is
+   * NOT fired and `suggestedResponseSelected` is NOT emitted.
+   * Follows MJ's established Before/After cancelable event pattern.
+   */
+  @Output() public beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+
+  /**
+   * Fired AFTER the response form's values have been submitted. Carries the form id
+   * (using the message ID as a stable per-message identifier) and the submitted
+   * values map. Not fired when {@link beforeResponseFormSubmitted} was canceled.
+   */
+  @Output() public afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -123,7 +170,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     private cdRef: ChangeDetectorRef,
     private mentionParser: MentionParserService,
     private mentionAutocomplete: MentionAutocompleteService,
-    private uiCommandHandler: UICommandHandlerService
+    private uiCommandHandler: UICommandHandlerService,
+    private agentService: ConversationAgentService
   ) {
     super();
   }
@@ -134,6 +182,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // change detection asks for it. Fire-and-forget — the getter falls back
     // to defaults until it's loaded.
     AIEngineBase.Instance.EnsureLoaded();
+
+    // Warm the conversation-manager-agent cache (DefaultAgentResolver chain)
+    // so the synchronous isConversationManager getter returns the right answer
+    // on first render. Fire-and-forget — the getter returns false until cached,
+    // matching the pre-PR-2 behavior of the previous hardcoded check.
+    void this.agentService.getConversationManagerAgent();
 
     // Execute automatic commands if present
     await this.executeAutomaticCommands();
@@ -371,7 +425,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get isConversationManager(): boolean {
-    return this.aiAgentInfo?.name === 'Sage';
+    // Resolved at runtime via the conversation manager agent registered through
+    // ConversationsRuntime's DefaultAgentResolver chain — explicit input wins,
+    // then app-scoped Application Setting, then global Application Setting, then
+    // the code-const Sage fallback. Replaces the previous hardcoded 'Sage'
+    // name check. Returns false until the agent service has cached the
+    // resolved agent (warmed by message-input's first routing call).
+    const cmName = this.agentService.ConversationManagerAgentName;
+    if (!cmName) return false;
+    return this.aiAgentInfo?.name === cmName;
   }
 
   public get displayMessage(): string {
@@ -666,8 +728,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.shouldShowRating();
   }
 
+  /**
+   * The artifacts to render under this message, one card each. Prefers the
+   * `artifacts` array; falls back to the legacy single `artifact`/`artifactVersion`
+   * inputs so older callers that set only those keep working.
+   */
+  public get displayArtifacts(): MessageArtifactRef[] {
+    if (this.artifacts && this.artifacts.length > 0) {
+      return this.artifacts;
+    }
+    if (this.artifact && this.artifactVersion) {
+      return [{ artifact: this.artifact, version: this.artifactVersion }];
+    }
+    return [];
+  }
+
   public get hasArtifact(): boolean {
-    return !!this.artifactVersion;
+    return this.displayArtifacts.length > 0;
   }
 
   /**
@@ -712,8 +789,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.agentRunDuration;
     }
 
-    // No agent run — fall back to message entity timestamps
-    return this.formattedGenerationTime;
+    // No agent run — fall back to message entity timestamps.
+    const fromMessage = this.formattedGenerationTime;
+    if (fromMessage) {
+      return fromMessage;
+    }
+
+    // Last resort: the live elapsed-time string is frozen at the value it had
+    // when status flipped to Complete (the interval is cleared in ngDoCheck). If
+    // the same component instance handled the in-progress phase, this is the
+    // accurate duration the user just watched tick. If the message arrived already
+    // complete (no in-progress phase observed), `_elapsedTimeFormatted` is still
+    // its initial '0:00' — return null in that case so the time pill doesn't render
+    // a misleading zero.
+    return this._elapsedTimeFormatted !== '0:00' ? this._elapsedTimeFormatted : null;
   }
 
   public get formattedGenerationTime(): string | null {
@@ -1120,36 +1209,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Parse and return suggested responses from message data
-   * Uses strongly-typed SuggestedResponses property from MJConversationDetailEntity
-   */
-  public get suggestedResponses(): SuggestedResponse[] {
-    try {
-      const rawData = this.message.SuggestedResponses;
-      if (!rawData) return [];
-
-      // Parse JSON string to array of SuggestedResponse objects
-      const responses = JSON.parse(rawData);
-
-      return Array.isArray(responses) ? responses : [];
-    } catch (error) {
-      console.error('Failed to parse suggested responses:', error);
-      return [];
-    }
-  }
-
-  /**
    * Check if current user is the conversation owner
    */
   public get isConversationOwner(): boolean {
     return UUIDsEqual(this.conversation?.UserID, this.currentUser.ID);
-  }
-
-  /**
-   * Handle suggested response selection
-   */
-  public onSuggestedResponseSelected(event: {text: string; customInput?: string}): void {
-    this.suggestedResponseSelected.emit(event);
   }
 
   /**
@@ -1234,6 +1297,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       };
     });
 
+    // ── PR 2c follow-up: Before/After cancelable event wiring ──
+    // Emit beforeResponseFormSubmitted so consumers can veto (e.g., a validation
+    // pass that finds required fields unfilled). Cancel propagates synchronously
+    // through the message-list + chat-area re-emit bindings, so by the time .emit()
+    // returns, event.Cancel reflects every subscriber's final answer. We use the
+    // message ID as the form id — each AgentResponseForm is attached to exactly
+    // one message, giving a stable per-message identifier.
+    const beforeEvent = new BeforeResponseFormSubmittedEventArgs(this.message.ID, formData);
+    this.beforeResponseFormSubmitted.emit(beforeEvent);
+    if (beforeEvent.Cancel) {
+      return;
+    }
+
     // Create formatted message using ConversationUtility
     const formMessage = ConversationUtility.CreateFormResponse(
       'formSubmit', // Generic action name
@@ -1246,6 +1322,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       text: formMessage,
       customInput: undefined // No longer needed with new format
     });
+
+    this.afterResponseFormSubmitted.emit(
+      new AfterResponseFormSubmittedEventArgs(this.message.ID, formData)
+    );
   }
 
   /**

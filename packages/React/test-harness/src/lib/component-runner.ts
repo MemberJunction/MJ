@@ -6,7 +6,7 @@ import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
 // See: https://nodejs.org/api/module.html#modulecreaterequirefilename
 const _require = createRequire(import.meta.url);
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
-import { ComponentLinter, Violation } from './component-linter';
+import { ComponentLinter, Violation, type LinterOptions } from '@memberjunction/react-linter';
 import {
   ComponentSpec,
   ComponentUtilities,
@@ -52,7 +52,15 @@ async function preResolveComponentSpec(
   return spec;
 }
 
-export interface ComponentExecutionOptions {
+/**
+ * Browser-execution options for {@link ComponentRunner}. Extends {@link LinterOptions}
+ * (which carries `componentSpec`, `contextUser`, `entityMetadata`, `utilities` —
+ * the fields the static linter reads) with Playwright-specific runtime fields
+ * (timeouts, page-ready hooks, screenshot mode). The browser harness happens
+ * to run the linter as a prelude, so accepting a superset keeps the call sites
+ * tidy without leaking browser concerns into the linter package.
+ */
+export interface ComponentExecutionOptions extends LinterOptions {
   componentSpec: ComponentSpec;
   props?: Record<string, any>;
   setupCode?: string;
@@ -64,26 +72,16 @@ export interface ComponentExecutionOptions {
   contextUser: UserInfo;
   isRootComponent?: boolean;
   debug?: boolean;
-  utilities?: ComponentUtilities;
 
   /**
-   * Optional array of entity metadata providing complete field lists per entity.
-   * Used by the linter to validate field usage with two-tier severity:
-   * - Medium: Field exists in entity but not declared in dataRequirements
-   * - Critical: Field does not exist in entity at all
-   *
-   * If not provided, linter only checks against dataRequirements.fieldMetadata
-   * which may cause false-positive critical errors for valid but undeclared fields.
-   *
-   * @example
-   * // Caller provides metadata for entities used in component
-   * const md = new Metadata();
-   * const entityNames = spec.dataRequirements.entities.map(e => e.name);
-   * const entityMetadata = md.Entities
-   *   .filter(e => entityNames.includes(e.Name))
-   *   .map(e => SimpleEntityInfo.FromEntityInfo(e));
+   * Initial per-user settings to seed the component's `savedUserSettings` prop
+   * with. Mirrors what the production host loads from `UserInfoEngine`. The
+   * component's `onSaveUserSettings` callback merges each payload into this
+   * snapshot in place (null/undefined values remove the key — same semantics as
+   * the production host) so tests can inspect persisted preferences after
+   * interactions. Defaults to `{}`.
    */
-  entityMetadata?: SimpleEntityInfo[];
+  savedUserSettings?: Record<string, unknown>;
 
   /**
    * Optional callback invoked with the live Playwright page after the component
@@ -130,6 +128,12 @@ export interface ComponentExecutionResult {
   executionTime: number;
   renderCount?: number;
   lintViolations?: Violation[];
+  /**
+   * Raw Babel sourcemaps keyed by component name. Populated when `debug: true`
+   * (which enables Babel sourcemap generation in the compiler). Used by callers
+   * to translate runtime stack frame line numbers back to original JSX positions.
+   */
+  sourceMaps?: Record<string, any>;
   /**
    * If true, the browser/page crashed during execution or cleanup.
    * This is an infrastructure issue, not a code issue.
@@ -374,7 +378,7 @@ export class ComponentRunner {
       // }
 
       // Execute the component using the real React runtime with timeout (Recommendation #1)
-      const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
+      const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries, savedUserSettings }: { spec: any; props: any; debug: boolean; componentLibraries: any[]; savedUserSettings: Record<string, unknown> }) => {
         if (debug) {
           console.log('🎯 Starting component execution');
           console.log('📚 BROWSER: Component libraries available for loading:', componentLibraries?.length || 0);
@@ -591,6 +595,17 @@ export class ComponentRunner {
               warnings: [],
               resolvedSpec: loadResult.resolvedSpec
             };
+
+            // Stash each compiled component's sourcemap so the Node-side error
+            // formatter can translate runtime stack frames back to original JSX lines.
+            (window as any).__testHarnessSourceMaps = (window as any).__testHarnessSourceMaps || {};
+            if (loadResult.loadedComponents) {
+              for (const c of loadResult.loadedComponents) {
+                if (c?.name && c?.sourceMap) {
+                  (window as any).__testHarnessSourceMaps[c.name] = c.sourceMap;
+                }
+              }
+            }
           } catch (registrationError: any) {
             // Capture the actual error before it gets obscured
             console.error('🔴 Component registration error:', registrationError);
@@ -842,15 +857,34 @@ export class ComponentRunner {
             }, 100); // Check every 100ms
           }
           
+          // Per-user settings: seed from the caller-supplied snapshot and let the
+          // component's onSaveUserSettings callback mutate it in place, mirroring
+          // the production host's persist behavior so tests can inspect prefs.
+          const userSettingsState: Record<string, unknown> = { ...(savedUserSettings || {}) };
+
           // Build complete props
           const componentProps = {
             ...props,
             utilities,
             styles,
             components,
-            savedUserSettings: {},
+            savedUserSettings: userSettingsState,
             onSaveUserSettings: (settings: any) => {
-              console.log('User settings saved:', settings);
+              // Merge (don't replace) in place, keeping the same reference —
+              // mirrors the production host (applyUserSettingsUpdate in
+              // @memberjunction/react-runtime, inlined here because this code
+              // runs inside page.evaluate): a delta-only payload must not wipe
+              // other preferences; an explicit null/undefined value removes the key.
+              Object.entries((settings as Record<string, unknown>) || {}).forEach(([k, v]) => {
+                if (v === null || v === undefined) {
+                  delete userSettingsState[k];
+                } else {
+                  userSettingsState[k] = v;
+                }
+              });
+              if (debug) {
+                console.log('User settings saved:', settings);
+              }
             },
             callbacks: {
               OpenEntityRecord: (entityName: string, key: any) => {
@@ -975,11 +1009,12 @@ export class ComponentRunner {
             error: error.message || String(error)
           };
         }
-      }, { 
-        spec: options.componentSpec, 
-        props: options.props, 
+      }, {
+        spec: options.componentSpec,
+        props: options.props,
         debug,
-        componentLibraries: allLibraries || []
+        componentLibraries: allLibraries || [],
+        savedUserSettings: options.savedUserSettings || {}
       }) as Promise<{ success: boolean; error?: string; componentCount?: number }>;
       
       // Create timeout promise (Recommendation #1)
@@ -1187,8 +1222,19 @@ export class ComponentRunner {
           rule: e.rule || 'runtime-error',  // Use specific rule from collectRuntimeErrors
           line: 0,
           column: 0,
-          source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined)
-        }));
+          source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined),
+          stack: (e as any).stack as string | undefined,
+          componentStack: (e as any).componentStack as string | undefined,
+        })) as Array<{
+          message: string;
+          severity: 'critical';
+          rule: string;
+          line: number;
+          column: number;
+          source?: 'user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness';
+          stack?: string;
+          componentStack?: string;
+        }>;
       
       // Add timeout error if detected
       if (hasTimeout) {
@@ -1277,7 +1323,8 @@ export class ComponentRunner {
         screenshot,
         executionTime: Date.now() - startTime,
         renderCount,
-        codeExecutionSuccess
+        codeExecutionSuccess,
+        sourceMaps: (this as any)._lastSourceMaps,
       };
 
       if (debug) {
@@ -1685,13 +1732,36 @@ export class ComponentRunner {
       // Override console.error
       const originalConsoleError = console.error;
       console.error = function(...args: any[]) {
-        const errorText = args.map(arg => 
+        const errorText = args.map(arg =>
           typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
         ).join(' ');
-        
+
+        // React dev-mode emits Rules-of-Hooks violations as "Warning:" messages.
+        // Promote these to test-failing errors so the Code Fixer sees them directly.
+        const hookRuleMessages = [
+          'Rendered more hooks than during the previous render',
+          'Rendered fewer hooks than expected',
+          'change in the order of Hooks called',
+          'Hooks can only be called inside the body of a function component',
+        ];
+        const isHookRuleViolation = hookRuleMessages.some(m => errorText.includes(m));
+
+        if (isHookRuleViolation) {
+          (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+          (window as any).__testHarnessRuntimeErrors.push({
+            message: errorText,
+            stack: new Error().stack,
+            type: 'react-hooks-rules',
+            source: 'react-framework',
+          });
+          (window as any).__testHarnessTestFailed = true;
+          originalConsoleError.apply(console, args);
+          return;
+        }
+
         // Check if this is a warning rather than an error
         // React warnings typically start with "Warning:" or contain warning-related text
-        const isWarning = 
+        const isWarning =
           errorText.includes('Warning:') ||
           errorText.includes('DevTools') ||
           errorText.includes('deprecated') ||
@@ -1701,7 +1771,7 @@ export class ComponentRunner {
           errorText.includes('Please update') ||
           (errorText.includes('React') && errorText.includes('recognize the')) || // Prop warnings
           (errorText.includes('React') && errorText.includes('Invalid'));
-        
+
         if (isWarning) {
           // Track as warning, don't fail the test
           (window as any).__testHarnessConsoleWarnings.push(errorText);
@@ -1710,7 +1780,7 @@ export class ComponentRunner {
           (window as any).__testHarnessConsoleErrors.push(errorText);
           (window as any).__testHarnessTestFailed = true;
         }
-        
+
         originalConsoleError.apply(console, args);
       };
 
@@ -1849,9 +1919,13 @@ export class ComponentRunner {
       return {
         runtimeErrors: (window as any).__testHarnessRuntimeErrors || [],
         consoleErrors: (window as any).__testHarnessConsoleErrors || [],
-        testFailed: (window as any).__testHarnessTestFailed || false
+        testFailed: (window as any).__testHarnessTestFailed || false,
+        sourceMaps: (window as any).__testHarnessSourceMaps || {}
       };
     });
+
+    // Store sourcemaps on the instance so executeComponent can attach them to the result.
+    (this as any)._lastSourceMaps = errorData.sourceMaps;
 
     // Track unique errors and their counts
     const errorMap = new Map<string, {error: any; count: number}>();
@@ -1886,6 +1960,9 @@ export class ComponentRunner {
         case 'react-render-error':
           rule = 'react-render-error';
           break;
+        case 'react-hooks-rules':
+          rule = 'react-hooks-rules';
+          break;
         case 'render-loop':
           rule = 'infinite-render-loop';
           break;
@@ -1914,6 +1991,8 @@ export class ComponentRunner {
         errorMap.set(key, {
           error: {
             message: error.message,
+            stack: error.stack,
+            componentStack: error.componentStack,
             source: error.source,
             type: error.type,
             rule: rule
@@ -1926,7 +2005,7 @@ export class ComponentRunner {
     // Process console errors
     errorData.consoleErrors.forEach((error: string) => {
       const key = `console-error:${error}`;
-      
+
       if (errorMap.has(key)) {
         errorMap.get(key)!.count++;
       } else {
@@ -1943,13 +2022,20 @@ export class ComponentRunner {
     });
 
     // Convert map to array with occurrence counts
-    const errors: Array<{message: string; source?: string; type?: string; rule?: string}> = [];
+    const errors: Array<{
+      message: string;
+      stack?: string;
+      componentStack?: string;
+      source?: string;
+      type?: string;
+      rule?: string;
+    }> = [];
     errorMap.forEach(({error, count}) => {
       // Append count if > 1
-      const message = count > 1 
+      const message = count > 1
         ? `${error.message} (occurred ${count} times)`
         : error.message;
-      
+
       errors.push({
         ...error,
         message

@@ -2132,6 +2132,181 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Entity Form Overrides Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityFormOverrides"
+        SectionName="Entity Form Overrides"
+        Icon="fa fa-window-restore"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityFormOverrides')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Form Overrides','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Form Overrides')"
+                [AllowLoad]="IsSectionExpanded('mJEntityFormOverrides')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityFormOverrides', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Cluster Analysis Section -->
+    <mj-collapsible-panel
+        SectionKey="mJClusterAnalysis"
+        SectionName="Cluster Analysis"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJClusterAnalysis')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Cluster Analysis','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Cluster Analysis')"
+                [AllowLoad]="IsSectionExpanded('mJClusterAnalysis')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJClusterAnalysis', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Signature Requests Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSignatureRequests"
+        SectionName="Signature Requests"
+        Icon="fa fa-file-signature"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSignatureRequests')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Signature Requests','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Signature Requests')"
+                [AllowLoad]="IsSectionExpanded('mJSignatureRequests')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSignatureRequests', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Process Run Details Section -->
+    <mj-collapsible-panel
+        SectionKey="mJProcessRunDetails"
+        SectionName="Process Run Details"
+        Icon="fa fa-tasks"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJProcessRunDetails')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Process Run Details','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Process Run Details')"
+                [AllowLoad]="IsSectionExpanded('mJProcessRunDetails')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJProcessRunDetails', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Process Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJProcessRuns"
+        SectionName="Process Runs"
+        Icon="fa fa-tasks"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJProcessRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Process Runs','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Process Runs')"
+                [AllowLoad]="IsSectionExpanded('mJProcessRuns')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJProcessRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Record Process Watermarks Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRecordProcessWatermarks"
+        SectionName="Record Process Watermarks"
+        Icon="fa fa-water"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRecordProcessWatermarks')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Process Watermarks','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Process Watermarks')"
+                [AllowLoad]="IsSectionExpanded('mJRecordProcessWatermarks')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordProcessWatermarks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Record Processes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRecordProcesses"
+        SectionName="Record Processes"
+        Icon="fa fa-cogs"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRecordProcesses')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Processes','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Processes')"
+                [AllowLoad]="IsSectionExpanded('mJRecordProcesses')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordProcesses', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

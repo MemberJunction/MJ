@@ -35,6 +35,15 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         return this._loadComplete;
     }
 
+    /**
+     * Watchdog window: if a resource component hasn't called {@link NotifyLoadComplete} within this
+     * time, we log a warning naming the offending class. The app loading screen waits on
+     * NotifyLoadComplete, so a resource that never calls it hangs the screen forever — this makes the
+     * culprit obvious in the console instead of leaving a mystery "stuck loading" state.
+     */
+    private static readonly LOAD_COMPLETE_WATCHDOG_MS = 15_000;
+    private _loadCompleteWatchdog: ReturnType<typeof setTimeout> | null = null;
+
     private _loadStarted: boolean = false;
     public get LoadStarted(): boolean {
         return this._loadStarted;
@@ -65,6 +74,14 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         this._resourceRecordSavedEvent = value;
     }
 
+    private _resourceCloseRequestedEvent: (() => void) | null = null;
+    public get ResourceCloseRequestedEvent(): (() => void) | null {
+        return this._resourceCloseRequestedEvent;
+    }
+    public set ResourceCloseRequestedEvent(value: (() => void) | null) {
+        this._resourceCloseRequestedEvent = value;
+    }
+
     private _displayNameChangedEvent: ((newName: string) => void) | null = null;
     public get DisplayNameChangedEvent(): ((newName: string) => void) | null {
         return this._displayNameChangedEvent;
@@ -80,9 +97,26 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         // emission claim the 'deeplink' source before any later popstate event.
         this.setupQueryParamSubscription();
         this.setupInitialParamDelivery();
+
+        // Start the NotifyLoadComplete watchdog (no-op once it fires or load completes).
+        this._loadCompleteWatchdog = setTimeout(() => {
+            if (!this._loadComplete) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                    `[LoadComplete WATCHDOG] ${this.constructor.name} has NOT called NotifyLoadComplete() ` +
+                    `within ${BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS / 1000}s. The app loading screen ` +
+                    `waits on this signal — if the screen is stuck, this resource is the likely cause. ` +
+                    `(tabId=${this.getTabId() || 'n/a'})`
+                );
+            }
+        }, BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS);
     }
 
     ngOnDestroy(): void {
+        if (this._loadCompleteWatchdog) {
+            clearTimeout(this._loadCompleteWatchdog);
+            this._loadCompleteWatchdog = null;
+        }
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -197,6 +231,10 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
 
     protected NotifyLoadComplete() {
         this._loadComplete = true;
+        if (this._loadCompleteWatchdog) {
+            clearTimeout(this._loadCompleteWatchdog);
+            this._loadCompleteWatchdog = null;
+        }
         if (this._loadCompleteEvent) {
             this._loadCompleteEvent();
         }
@@ -222,9 +260,27 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     }
 
     protected ResourceRecordSaved(resourceRecordEntity: BaseEntity) {
-        this.Data.ResourceRecordID = resourceRecordEntity.PrimaryKey.ToString();
+        // Use ToURLSegment, NOT ToString. ResourceRecordID is consumed by
+        // EntityRecordResource.GetPrimaryKey → CompositeKey.LoadFromURLSegment, which
+        // expects URL-segment format (e.g. "ID|<uuid>"). ToString produces "ID=<uuid>",
+        // which LoadFromURLSegment treats as a raw value and double-prefixes —
+        // breaking any code path that re-reads this field after save.
+        this.Data.ResourceRecordID = resourceRecordEntity.PrimaryKey.ToURLSegment();
         if (this._resourceRecordSavedEvent) {
             this._resourceRecordSavedEvent(resourceRecordEntity);
+        }
+    }
+
+    /**
+     * Ask the host shell to close/dismiss this resource (typically: close the tab).
+     * Called by subclasses that hosted a form that emitted a 'dismiss' navigation
+     * event — most often, a brand-new record where the user clicked Discard. The
+     * record was never saved, the form is empty, and leaving it open serves no
+     * purpose. The tab-container listens for this and closes the workspace tab.
+     */
+    protected NotifyCloseRequested(): void {
+        if (this._resourceCloseRequestedEvent) {
+            this._resourceCloseRequestedEvent();
         }
     }
 

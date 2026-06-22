@@ -3,9 +3,9 @@ import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { Metadata, QueryInfo, QueryCategoryInfo, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
-import { ResourceData, UserInfoEngine, MJQueryEntity } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine } from '@memberjunction/core-entities';
 import {
     QueryEntityLinkClickEvent,
     QueryRowClickEvent
@@ -15,9 +15,9 @@ import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
  * Tree node for the query category hierarchy
  */
 interface CategoryNode {
-    category: QueryCategoryInfo;
+    category: MJQueryCategoryEntity;
     children: CategoryNode[];
-    queries: QueryInfo[];
+    queries: MJQueryEntityExtended[];
     expanded: boolean;
     level: number;
 }
@@ -47,13 +47,13 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     private static readonly MAX_PANEL_WIDTH = 600;
 
     public isLoading = true;
-    public categories: QueryCategoryInfo[] = [];
+    public categories: MJQueryCategoryEntity[] = [];
     public categoryTree: CategoryNode[] = [];
     /** All queries the user has permission to run */
-    public queries: QueryInfo[] = [];
-    public filteredQueries: QueryInfo[] = [];
+    public queries: MJQueryEntityExtended[] = [];
+    public filteredQueries: MJQueryEntityExtended[] = [];
     private filteredQueryIds = new Set<string>();
-    public selectedQuery: QueryInfo | null = null;
+    public selectedQuery: MJQueryEntityExtended | null = null;
     public searchText = '';
     public PanelWidth = QueryBrowserResourceComponent.DEFAULT_PANEL_WIDTH;
     public IsResizing = false;
@@ -167,15 +167,16 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             this.isLoading = true;
             this.cdr.markForCheck();
 
-            // Force re-fetch from server when explicitly refreshing
+            // Force QueryEngine refresh when explicitly refreshing (user clicked Refresh)
             if (forceRefresh) {
-                await this.metadata.Refresh();
+                await QueryEngine.Instance.Config(true);
             }
 
-            // Load all queries the user has permission to run (regardless of status)
-            this.categories = this.metadata.QueryCategories || [];
-            this.queries = (this.metadata.Queries || []).filter(q =>
-                q.UserCanRun(this.metadata.CurrentUser)
+            // Load all queries from QueryEngine (event-driven cache, returns MJQueryEntityExtended[])
+            const qe = QueryEngine.Instance;
+            this.categories = qe.Categories || [];
+            this.queries = (qe.Queries || []).filter(q =>
+                q.UserCanRun(this.metadata.CurrentUser).canRun
             );
 
             this.applyFilters();
@@ -237,11 +238,11 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         // Add uncategorized queries to a virtual root
         const uncategorizedQueries = visibleQueries.filter(q => !q.CategoryID);
         if (uncategorizedQueries.length > 0) {
-            const uncategorizedCategory = new QueryCategoryInfo({
+            const uncategorizedCategory = {
                 ID: '__uncategorized__',
                 Name: 'Uncategorized',
                 Description: 'Queries without a category'
-            });
+            } as unknown as MJQueryCategoryEntity;
             roots.push({
                 category: uncategorizedCategory,
                 children: [],
@@ -446,7 +447,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.cdr.markForCheck();
     }
 
-    public selectQuery(query: QueryInfo, event?: Event): void {
+    public selectQuery(query: MJQueryEntityExtended, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
@@ -459,7 +460,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.cdr.markForCheck();
     }
 
-    public isQueryVisible(query: QueryInfo): boolean {
+    public isQueryVisible(query: MJQueryEntityExtended): boolean {
         if (!this.searchText) return true;
         return this.filteredQueryIds.has(query.ID.toLowerCase());
     }
@@ -516,7 +517,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
      * Find a query by its composition path (e.g., "Demos/Active Users").
      * Matches the last segment as query name and preceding segments as category hierarchy.
      */
-    private findQueryByCompositionPath(fullPath: string): QueryInfo | null {
+    private findQueryByCompositionPath(fullPath: string): MJQueryEntityExtended | null {
         const segments = fullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
         if (segments.length === 0) return null;
 
@@ -542,7 +543,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /**
      * Expand category tree nodes to reveal a specific query.
      */
-    private expandTreeToQuery(query: QueryInfo): void {
+    private expandTreeToQuery(query: MJQueryEntityExtended): void {
         const expandInNodes = (nodes: CategoryNode[]): boolean => {
             for (const node of nodes) {
                 // Check if this node directly contains the query
@@ -609,10 +610,10 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     }
 
     /**
-     * Open the drawer in edit mode, pre-populated from a QueryInfo.
+     * Open the drawer in edit mode, pre-populated from a MJQueryEntityExtended.
      * Stops event propagation so clicking the edit icon doesn't also select the query.
      */
-    public OpenEditDrawer(query: QueryInfo, event?: Event): void {
+    public OpenEditDrawer(query: MJQueryEntityExtended, event?: Event): void {
         if (event) event.stopPropagation();
         this.DrawerMode = 'edit';
         this.DrawerQueryId = query.ID;
@@ -700,7 +701,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.cdr.markForCheck();
 
         try {
-            const entity = await this.metadata.GetEntityObject<MJQueryEntity>('MJ: Queries');
+            const entity = await this.metadata.GetEntityObject<MJQueryEntityExtended>('MJ: Queries');
 
             if (this.DrawerMode === 'edit' && this.DrawerQueryId) {
                 const loaded = await entity.Load(this.DrawerQueryId);
@@ -781,7 +782,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         return node.category.ID;
     }
 
-    public trackByQuery(index: number, query: QueryInfo): string {
+    public trackByQuery(index: number, query: MJQueryEntityExtended): string {
         return query.ID;
     }
 
@@ -826,7 +827,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /**
      * Expands the category tree to show the given query
      */
-    private expandCategoryForQuery(query: QueryInfo): void {
+    private expandCategoryForQuery(query: MJQueryEntityExtended): void {
         if (!query.CategoryID) return;
 
         const expandToTarget = (nodes: CategoryNode[], targetCategoryId: string): boolean => {
@@ -915,7 +916,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     }
 
     /** Case-insensitive UUID check whether a query is the currently selected query. */
-    public IsQuerySelected(query: QueryInfo): boolean {
+    public IsQuerySelected(query: MJQueryEntityExtended): boolean {
         return UUIDsEqual(this.selectedQuery?.ID, query.ID);
     }
 }

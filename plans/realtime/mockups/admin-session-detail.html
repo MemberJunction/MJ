@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · AI Agent Session · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+  .detail-two { display:grid; grid-template-columns: 1fr 340px; gap:20px; align-items:start; }
+  @media(max-width:1080px){ .detail-two{ grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="admin-sessions.html"><i class="fa-solid fa-arrow-left"></i> Sessions</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub">· AI Agent Session</span></div>
+    <div class="topbar-spacer"></div>
+    <span class="topbar-pill"><i class="fa-solid fa-magnifying-glass-chart"></i> Observability</span>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="page-body">
+
+    <!-- ENTITY FORM (mirrors mj-record-form-container) -->
+    <div class="ef">
+
+      <!-- form toolbar (Record Changes / Tags / Lists / favorite) -->
+      <div class="ef-toolbar">
+        <button class="tb-btn"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+        <div class="tb-sep"></div>
+        <button class="tb-btn tb-star"><i class="fa-solid fa-star"></i></button>
+        <button class="tb-btn"><i class="fa-solid fa-clock-rotate-left"></i> History</button>
+        <button class="tb-btn"><i class="fa-solid fa-tags"></i> Tags</button>
+        <button class="tb-btn"><i class="fa-solid fa-list-ul"></i> Add to List</button>
+        <div class="tb-spacer"></div>
+        <button class="tb-btn"><i class="fa-solid fa-code"></i> View JSON</button>
+        <button class="tb-btn"><i class="fa-solid fa-chevron-left"></i></button>
+        <button class="tb-btn"><i class="fa-solid fa-chevron-right"></i></button>
+      </div>
+
+      <!-- header (mirrors ai-agent-run .header: icon + info + status badge + stats) -->
+      <div class="ef-header">
+        <div class="ef-header__top">
+          <div class="ef-header__left">
+            <div class="ef-icon"><i class="fa-solid fa-tower-broadcast"></i></div>
+            <div class="ef-header__info">
+              <h2>AI Agent Session</h2>
+              <div class="ef-meta">
+                <a href="#">Voice Co-Agent</a>
+                <i class="fa-solid fa-arrow-right-long" style="font-size:10px"></i>
+                <a href="#" style="color:var(--mj-color-violet-300)">Sage</a>
+                <span class="run-id">sess_7f2a…c41</span>
+                <span class="ef-link-pill"><i class="fa-solid fa-comments"></i> Weather &amp; planning <i class="fa-solid fa-up-right-from-square pill-action"></i></span>
+              </div>
+            </div>
+          </div>
+          <div class="ef-header__right">
+            <span class="ef-status" data-status="Closed"><i class="fa-solid fa-circle-stop"></i> Closed</span>
+          </div>
+        </div>
+
+        <!-- header stats (label/value pairs) -->
+        <div class="ef-stats">
+          <div class="ef-stat"><span class="label">User</span><span class="value">amith@bluecypress.io</span></div>
+          <div class="ef-stat"><span class="label">Started</span><span class="value">Jun 9, 3:40:00 pm</span></div>
+          <div class="ef-stat"><span class="label">Closed</span><span class="value">Jun 9, 3:42:04 pm</span></div>
+          <div class="ef-stat"><span class="label">Duration</span><span class="value">2:04</span></div>
+          <div class="ef-stat"><span class="label">Channels</span><span class="value">3</span></div>
+          <div class="ef-stat"><span class="label">Delegated runs</span><span class="value">1</span></div>
+          <div class="ef-stat"><span class="label">Tokens</span><span class="value">4,210</span></div>
+          <div class="ef-stat"><span class="label">Cost</span><span class="value success">$0.038</span></div>
+        </div>
+
+        <!-- config bar (host / conversation context) -->
+        <div class="ef-configbar">
+          <div class="ef-config-item"><i class="fa-solid fa-server"></i><div><div class="cl">Host instance</div><div class="cv mono">api-2:5510:c70</div></div></div>
+          <div class="ef-config-item"><i class="fa-solid fa-microchip"></i><div><div class="cl">Realtime model</div><div class="cv">gpt-realtime-2</div></div></div>
+          <div class="ef-config-item"><i class="fa-solid fa-link"></i><div><div class="cl">Continuation</div><div class="cv muted">None (new session)</div></div></div>
+        </div>
+      </div>
+
+      <!-- tabs (mirrors ai-agent-run .tabs) -->
+      <div class="ef-tabs">
+        <button class="ef-tab active"><i class="fa-solid fa-stream"></i> Overview</button>
+        <button class="ef-tab"><i class="fa-solid fa-plug"></i> Channels <span class="count">3</span></button>
+        <button class="ef-tab"><i class="fa-solid fa-diagram-project"></i> Run tree</button>
+        <button class="ef-tab"><i class="fa-solid fa-comments"></i> Transcript</button>
+        <button class="ef-tab"><i class="fa-solid fa-info-circle"></i> Details</button>
+      </div>
+
+      <!-- body: Overview pane -->
+      <div class="ef-body">
+        <div class="detail-two">
+
+          <!-- LEFT column -->
+          <div class="col" style="gap:22px">
+
+            <!-- Channels (AIAgentSessionChannel rows) -->
+            <div>
+              <div class="ef-pane-label"><i class="fa-solid fa-plug"></i> Channels · <span class="mono" style="text-transform:none;letter-spacing:0">AIAgentSessionChannel</span></div>
+              <div class="grid-wrap">
+                <table class="grid">
+                  <thead><tr><th>Channel</th><th>Transport</th><th>Status</th><th>Connected</th><th>Disconnected</th><th>Socket</th><th></th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td><span class="cell-strong"><i class="fa-solid fa-microphone-lines" style="color:var(--mj-brand-accent)"></i> VoiceAudio</span></td>
+                      <td><span class="pill pill--info">WebRTC</span></td>
+                      <td><span class="pill pill--closed">Disconnected</span></td>
+                      <td class="mono">3:40:01</td><td class="mono">3:42:04</td><td class="mono">rtc://…/v</td>
+                      <td><button class="btn btn--sm btn--ghost" title="Disconnect" disabled><i class="fa-solid fa-link-slash"></i></button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="cell-strong"><i class="fa-solid fa-comment" style="color:var(--mj-brand-accent)"></i> TextChat</span></td>
+                      <td><span class="pill pill--ghost">PubSub</span></td>
+                      <td><span class="pill pill--closed">Disconnected</span></td>
+                      <td class="mono">3:40:01</td><td class="mono">3:42:04</td><td class="muted">—</td>
+                      <td><button class="btn btn--sm btn--ghost" disabled><i class="fa-solid fa-link-slash"></i></button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="cell-strong"><i class="fa-solid fa-sliders" style="color:var(--mj-brand-accent)"></i> ClientControl</span></td>
+                      <td><span class="pill pill--ghost">PubSub</span></td>
+                      <td><span class="pill pill--closed">Disconnected</span></td>
+                      <td class="mono">3:40:00</td><td class="mono">3:42:04</td><td class="muted">—</td>
+                      <td><button class="btn btn--sm btn--ghost" disabled><i class="fa-solid fa-link-slash"></i></button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Run tree (Co-Agent AIAgentRun → Sage child via ParentRunID) -->
+            <div>
+              <div class="ef-pane-label"><i class="fa-solid fa-diagram-project"></i> Delegated run tree · <span class="mono" style="text-transform:none;letter-spacing:0">ParentRunID nesting</span></div>
+              <div class="rtimeline">
+                <!-- root: co-agent session run -->
+                <div class="rstep" data-type="prompt">
+                  <div class="rstep-chev"><i class="fa-solid fa-chevron-down"></i></div>
+                  <div class="rstep-marker" data-color="info"><i class="fa-solid fa-tower-broadcast"></i></div>
+                  <div class="rstep-body">
+                    <div class="rstep-headrow"><h4 class="rstep-title">Voice Co-Agent · session run</h4><span class="rstep-time">3:40:00.142</span></div>
+                    <div class="rstep-sub">AIAgentRun <span class="mono">#co-77</span> · Realtime · one long-lived run · AgentSessionID <span class="mono">sess_7f2a…c41</span></div>
+                    <div class="rstep-foot">
+                      <span class="dur"><i class="fa-solid fa-clock"></i> 2:04</span>
+                      <span class="st st--ok"><i class="fa-solid fa-circle-check"></i> Completed</span>
+                      <span class="usage-chip"><i class="fa-solid fa-coins"></i> 4,210 tok · $0.038</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- model leg: the co-agent's single streaming prompt run -->
+                <div class="rstep rstep--child" data-type="prompt">
+                  <div class="rstep-marker" data-color="info"><i class="fa-solid fa-microchip"></i></div>
+                  <div class="rstep-body">
+                    <div class="rstep-headrow"><h4 class="rstep-title">Model leg · AIPromptRun</h4><span class="rstep-time">3:40:00.220</span></div>
+                    <div class="rstep-sub"><span class="mono">#pr_91b02</span> · gpt-realtime-2 · Running → Completed · usage checkpointed incrementally (debounced)</div>
+                    <div class="rstep-foot">
+                      <span class="st st--ok"><i class="fa-solid fa-circle-check"></i> Completed</span>
+                      <span class="usage-chip"><i class="fa-solid fa-arrow-down"></i> 3,180 in</span>
+                      <span class="usage-chip"><i class="fa-solid fa-arrow-up"></i> 1,030 out</span>
+                      <span class="usage-chip"><i class="fa-solid fa-dollar-sign"></i> $0.038</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- delegated child: Sage run (own AIAgentRun, ParentRunID = co-77) -->
+                <div class="rstep rstep--child" data-type="subagent">
+                  <div class="rstep-chev"><i class="fa-solid fa-chevron-down"></i></div>
+                  <div class="rstep-marker" data-color="sage"><i class="fa-solid fa-leaf"></i></div>
+                  <div class="rstep-body">
+                    <div class="rstep-headrow"><h4 class="rstep-title">Sage · Weather lookup</h4><span class="rstep-time">3:40:47.005</span></div>
+                    <div class="rstep-sub">AIAgentRun <span class="mono">#a3f1c9</span> · ParentRunID <span class="mono">#co-77</span> · invoked via target-agent tool</div>
+                    <div class="rstep-foot">
+                      <span class="dur"><i class="fa-solid fa-clock"></i> 1.82s</span>
+                      <span class="st st--ok"><i class="fa-solid fa-circle-check"></i> Completed</span>
+                      <span class="usage-chip"><i class="fa-solid fa-coins"></i> 980 tok · $0.006</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Sage's tool calls (grandchildren) -->
+                <div class="rstep rstep--child" data-type="action" style="margin-left:60px">
+                  <div class="rstep-marker" data-color="success" style="width:28px;height:28px;font-size:11px"><i class="fa-solid fa-bolt"></i></div>
+                  <div class="rstep-body">
+                    <div class="rstep-headrow"><h4 class="rstep-title">Get Weather · LA, SF, NYC</h4><span class="rstep-time">3:40:47.300</span></div>
+                    <div class="rstep-sub">Action · 3 lookups batched · ActionExecutionLog <span class="mono">#log_4471</span></div>
+                    <div class="rstep-foot"><span class="dur"><i class="fa-solid fa-clock"></i> 0.41s</span><span class="st st--ok"><i class="fa-solid fa-circle-check"></i> Success</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- RIGHT column -->
+          <div class="col" style="gap:18px">
+
+            <!-- Lifecycle timeline (Created→Active→Idle→Closed/janitor) -->
+            <div class="card card-pad">
+              <span class="section-label">Lifecycle</span>
+              <div class="timeline">
+                <div class="tl-item"><span class="tl-dot tl-dot--done"></span><div class="tl-time">3:40:00</div><div class="tl-title">Created</div><div class="tl-desc">CanRun verified · channels opening</div></div>
+                <div class="tl-item"><span class="tl-dot tl-dot--done"></span><div class="tl-time">3:40:01</div><div class="tl-title">Active</div><div class="tl-desc">Voice + Text + Control connected · heartbeating</div></div>
+                <div class="tl-item"><span class="tl-dot"></span><div class="tl-time">3:41:30</div><div class="tl-title">Idle</div><div class="tl-desc">Quiet &gt; IdleThreshold · holding (2 min)</div></div>
+                <div class="tl-item"><span class="tl-dot tl-dot--end"></span><div class="tl-time">3:42:04</div><div class="tl-title">Closed · explicit</div><div class="tl-desc">User hang-up · prompt run finalized · channels torn down</div></div>
+              </div>
+            </div>
+
+            <!-- Host & affinity facts -->
+            <div class="card card-pad">
+              <span class="section-label">Host &amp; affinity</span>
+              <div class="col" style="gap:13px">
+                <div class="kv"><span class="k">HostInstanceID</span><span class="v mono">api-2:5510:c70</span></div>
+                <div class="kv"><span class="k">LastActiveAt</span><span class="v mono">3:42:03 −04:00</span></div>
+                <div class="kv"><span class="k">ClosedAt</span><span class="v mono">3:42:04 −04:00</span></div>
+                <div class="kv"><span class="k">LastSessionID</span><span class="v muted">— (not a continuation)</span></div>
+                <div class="row center gap-sm" style="margin-top:2px"><i class="fa-solid fa-heart-pulse" style="color:var(--mj-status-success)"></i> <span class="sec" style="font-size:12.5px">Heartbeat healthy until close — no janitor action</span></div>
+              </div>
+            </div>
+
+            <!-- Security facts -->
+            <div class="card card-pad">
+              <span class="section-label">Security</span>
+              <div class="col" style="gap:10px">
+                <div class="row center gap-sm"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success)"></i> <span class="sec" style="font-size:12.5px">CanRun verified at open</span></div>
+                <div class="row center gap-sm"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success)"></i> <span class="sec" style="font-size:12.5px">Session-scoped socket tokens</span></div>
+                <div class="row center gap-sm"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success)"></i> <span class="sec" style="font-size:12.5px">Tools ran under contextUser</span></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Details accordion (mirrors ai-agent-run Details tab) -->
+        <div style="margin-top:8px">
+          <div class="acc acc--open">
+            <div class="acc__head"><i class="fa-solid fa-info-circle lead"></i> Session record <i class="fa-solid fa-chevron-right chev"></i></div>
+            <div class="acc__body">
+              <div class="details-grid">
+                <div class="detail-item"><label>ID</label><span class="dv mono">7f2a9c10-…-c41</span></div>
+                <div class="detail-item"><label>AgentID → Agent</label><span class="dv"><a href="#">Voice Co-Agent</a></span></div>
+                <div class="detail-item"><label>UserID → User</label><span class="dv"><a href="#">amith@bluecypress.io</a></span></div>
+                <div class="detail-item"><label>ConversationID</label><span class="dv"><a href="#">Weather &amp; planning</a></span></div>
+                <div class="detail-item"><label>Status</label><span class="dv"><span class="pill pill--closed">Closed</span></span></div>
+                <div class="detail-item"><label>LastSessionID</label><span class="dv muted">None (root)</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="acc acc--closed">
+            <div class="acc__head"><i class="fa-solid fa-code lead"></i> Config (session state JSON) <i class="fa-solid fa-chevron-right chev"></i></div>
+            <div class="acc__body">
+              <pre class="codeblock"><span class="cc">// AIAgentSession.Config — free-form session state</span>
+{ <span class="ck">"voiceProfile"</span>: <span class="cs">"verse"</span>, <span class="ck">"locale"</span>: <span class="cs">"en-US"</span>, <span class="ck">"idleThresholdSec"</span>: <span class="cn">120</span> }</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transcript (full width, mirrors the prompt-run chat-message-viewer) -->
+    <div class="ef" style="margin-top:20px">
+      <div class="ef-body">
+        <div class="ef-pane-label"><i class="fa-solid fa-comments"></i> Transcript · <span class="mono" style="text-transform:none;letter-spacing:0">ConversationDetail stamped with AgentSessionID</span></div>
+        <div class="thread">
+          <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice <span class="muted">3:40:02</span></div><div class="bubble">Yep, I'm here. What's up?</div></div></div>
+          <div class="turn turn--user"><div class="turn-avatar">AM</div><div><div class="turn-meta">You · voice <span class="muted">3:40:41</span></div><div class="bubble">what's the weather in LA, SF, and NYC?</div></div></div>
+          <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice <span class="via-tag">via Sage delegation</span> <span class="muted">3:40:47</span></div><div class="bubble">Los Angeles is clear and about 78.5°. San Francisco is clear and about 67.8°. New York City is clear and about 76.2°.</div></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

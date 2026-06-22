@@ -36,6 +36,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
             return { GetEntityObject: vi.fn().mockResolvedValue(mockLogEntity) };
         }),
         LogError: vi.fn(),
+        LogErrorEx: vi.fn(),
         LogStatus: vi.fn(),
         LogStatusEx: vi.fn(),
         LogVerbose: vi.fn(),
@@ -117,11 +118,17 @@ vi.mock('@memberjunction/actions-base', () => {
         private _Params: Array<Record<string, unknown>> = [];
         private _ActionResultCodes: Array<Record<string, unknown>> = [];
         private _ActionLibraries: Array<Record<string, unknown>> = [];
-        protected ContextUser = { ID: 'test-user-id', Name: 'Test User' };
-        protected Loaded = true;
+        public ContextUser = { ID: 'test-user-id', Name: 'Test User' };
+        public Loaded = true;
 
+        // ActionEngineServer now COMPOSES the base via `ActionEngineBase.Instance`, so the mock must
+        // expose a singleton `Instance` accessor (cached) in addition to `getInstance`.
+        private static _inst: MockActionEngineBase | undefined;
+        static get Instance(): MockActionEngineBase {
+            return (MockActionEngineBase._inst ??= new MockActionEngineBase());
+        }
         static getInstance<T>(): T {
-            return new MockActionEngineBase() as unknown as T;
+            return MockActionEngineBase.Instance as unknown as T;
         }
 
         get Actions() { return this._Actions; }
@@ -178,7 +185,7 @@ vi.mock('@memberjunction/actions-base', () => {
 // ============================================================================
 import { ActionEngineServer } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
-import { Metadata, LogError } from '@memberjunction/core';
+import { Metadata, LogError, LogErrorEx } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 
 // ============================================================================
@@ -436,7 +443,9 @@ describe('ActionEngineServer', () => {
             mockClassFactory.CreateInstance.mockReturnValue(testAction);
 
             // Set up the engine's ActionResultCodes
-            (engine as Record<string, unknown>)['_ActionResultCodes'] = [
+            // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
+            // ActionEngineServer proxies — seed it there, not on the server instance.
+            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[
                 { ActionID: 'action-1', ResultCode: 'SUCCESS' },
             ];
 
@@ -506,14 +515,16 @@ describe('ActionEngineServer', () => {
             const result = await (engine as unknown as Record<string, Function>)['InternalRunAction'](params as unknown as Record<string, Function>);
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('Action blew up');
-            expect(LogError).toHaveBeenCalled();
+            expect(LogErrorEx).toHaveBeenCalled();
         });
 
         it('should use Action.Name when DriverClass is not provided', async () => {
             const testAction = new TestAction();
             mockClassFactory.CreateInstance.mockReturnValue(testAction);
 
-            (engine as Record<string, unknown>)['_ActionResultCodes'] = [];
+            // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
+            // ActionEngineServer proxies — seed it there, not on the server instance.
+            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[];
 
             const params = {
                 Action: { ID: 'action-1', Name: 'FallbackName', DriverClass: '' },
@@ -534,7 +545,9 @@ describe('ActionEngineServer', () => {
             testAction.mockResult = { Success: true, ResultCode: 'success', Message: 'ok' };
             mockClassFactory.CreateInstance.mockReturnValue(testAction);
 
-            (engine as Record<string, unknown>)['_ActionResultCodes'] = [
+            // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
+            // ActionEngineServer proxies — seed it there, not on the server instance.
+            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[
                 { ActionID: 'action-1', ResultCode: '  SUCCESS  ' },
             ];
 
@@ -554,7 +567,9 @@ describe('ActionEngineServer', () => {
         it('should create and end action log when SkipActionLog is false', async () => {
             const testAction = new TestAction();
             mockClassFactory.CreateInstance.mockReturnValue(testAction);
-            (engine as Record<string, unknown>)['_ActionResultCodes'] = [];
+            // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
+            // ActionEngineServer proxies — seed it there, not on the server instance.
+            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[];
 
             const startSpy = vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({
                 Save: vi.fn().mockResolvedValue(true),
@@ -597,8 +612,9 @@ describe('ActionEngineServer', () => {
             const logEntry = await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, true);
 
             expect(mockEntity.NewRecord).toHaveBeenCalled();
-            expect(mockEntity.Save).toHaveBeenCalled();
             expect(logEntry).toBe(mockEntity);
+            // Save is queued fire-and-forget — it runs on the microtask queue, not synchronously.
+            await vi.waitFor(() => expect(mockEntity.Save).toHaveBeenCalled());
         });
 
         it('should not save when saveRecord is false', async () => {
@@ -642,7 +658,8 @@ describe('ActionEngineServer', () => {
             const params = { Action: { ID: 'a1', Name: 'Test' }, Params: [] };
             await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, true);
 
-            expect(LogError).toHaveBeenCalled();
+            // The save is now fire-and-forget (queued), so the failure is logged asynchronously.
+            await vi.waitFor(() => expect(LogError).toHaveBeenCalled());
         });
     });
 
@@ -661,7 +678,8 @@ describe('ActionEngineServer', () => {
 
             await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
 
-            expect(logEntity.Save).toHaveBeenCalled();
+            // Save is queued fire-and-forget — assert it runs on the microtask queue.
+            await vi.waitFor(() => expect(logEntity.Save).toHaveBeenCalled());
         });
 
         it('should log error when save fails', async () => {
@@ -679,7 +697,89 @@ describe('ActionEngineServer', () => {
 
             await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
 
-            expect(LogError).toHaveBeenCalled();
+            // Save is queued fire-and-forget — the failure is logged asynchronously.
+            await vi.waitFor(() => expect(LogError).toHaveBeenCalled());
+        });
+    });
+
+    describe('action-execution log saves (fire-and-forget, per-invocation)', () => {
+        // Fake log entity whose Save() records call order AND whether EndedAt was set at save time —
+        // so a test can prove the End UPDATE only runs after the Start INSERT, with EndedAt populated.
+        function fakeLog(saveLog: string[], failOn: number[] = []) {
+            const fails = new Set(failOn);
+            let idx = 0;
+            let endedAt: Date | undefined;
+            return {
+                ID: 'log-1',
+                NewRecord: vi.fn(),
+                LatestResult: { CompleteMessage: 'err' },
+                set ActionID(_v: string) {},
+                set StartedAt(_v: Date) {},
+                set UserID(_v: string) {},
+                set Params(_v: string) {},
+                set ResultCode(_v: string | undefined) {},
+                set Message(_v: string | undefined) {},
+                set EndedAt(v: Date) { endedAt = v; },
+                get EndedAt(): Date | undefined { return endedAt; },
+                async Save() {
+                    const n = ++idx;
+                    saveLog.push(`start:${n}(ended=${endedAt !== undefined})`);
+                    await new Promise((r) => setTimeout(r, 5));
+                    saveLog.push(`end:${n}`);
+                    return !fails.has(n);
+                },
+            };
+        }
+        const mockMetaReturning = (entity: unknown) =>
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+                return { GetEntityObject: vi.fn().mockResolvedValue(entity) };
+            });
+        const start = (params: unknown) => (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, true);
+        const end = (entity: unknown, params: unknown, result: unknown) =>
+            (engine as unknown as Record<string, Function>)['EndActionLog'](entity as never, params as never, result as never);
+
+        it('runs the End UPDATE only AFTER the Start INSERT commits, with EndedAt set (no silent no-op)', async () => {
+            const log: string[] = [];
+            const entity = fakeLog(log);
+            mockMetaReturning(entity);
+            const params = { Action: { ID: 'a1', Name: 'T' }, Params: [] };
+            const result = { Result: { ResultCode: 'OK' }, Message: 'Done' };
+
+            await start(params);
+            await end(entity, params, result);
+
+            // INSERT (ended=false) fully completes before the UPDATE (ended=true) even starts — so the End
+            // mutation is a genuine dirty change against the committed row, never absorbed into a no-op.
+            await vi.waitFor(() => expect(log).toEqual(['start:1(ended=false)', 'end:1', 'start:2(ended=true)', 'end:2']));
+        });
+
+        it('isolates parallel invocations: each End awaits its OWN Start INSERT', async () => {
+            const logA: string[] = [];
+            const logB: string[] = [];
+            const a = fakeLog(logA);
+            const b = fakeLog(logB);
+            const pa = { Action: { ID: 'a', Name: 'A' }, Params: [] };
+            const pb = { Action: { ID: 'b', Name: 'B' }, Params: [] };
+            const res = { Result: { ResultCode: 'OK' }, Message: 'd' };
+
+            mockMetaReturning(a);
+            await start(pa);
+            mockMetaReturning(b);
+            await start(pb);
+            await end(a, pa, res);
+            await end(b, pb, res);
+
+            await vi.waitFor(() => {
+                expect(logA).toEqual(['start:1(ended=false)', 'end:1', 'start:2(ended=true)', 'end:2']);
+                expect(logB).toEqual(['start:1(ended=false)', 'end:1', 'start:2(ended=true)', 'end:2']);
+            });
+        });
+
+        it('logs (never swallows) a failed save', async () => {
+            const entity = fakeLog([], [1]); // the INSERT fails
+            mockMetaReturning(entity);
+            await start({ Action: { ID: 'a1', Name: 'T' }, Params: [] });
+            await vi.waitFor(() => expect(LogError).toHaveBeenCalled());
         });
     });
 

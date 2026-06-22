@@ -4,6 +4,8 @@ import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction
 import type {
     MJCompanyIntegrationEntity,
     MJCredentialEntity,
+    MJIntegrationObjectEntity,
+    MJIntegrationObjectFieldEntity,
 } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
@@ -122,6 +124,9 @@ interface SalesforceAuthContext extends RESTAuthContext {
     ApiVersion: string;
     /** Full config for reference */
     Config: SalesforceConnectionConfig;
+    /** The CompanyIntegration this auth was built for — lets API URLs route through the
+     *  overridable GetBaseURL() (production returns InstanceUrl; test harnesses redirect to a mock). */
+    CompanyIntegration: MJCompanyIntegrationEntity;
 }
 
 /** Salesforce API error response format */
@@ -200,137 +205,6 @@ const TOOLING_API_DENYLIST = new Set([
     'FormulaFunctionCategory',
 ]);
 
-// ─── Salesforce Object Metadata for Action Generation ─────────────────
-
-const SALESFORCE_OBJECTS: IntegrationObjectInfo[] = [
-    {
-        Name: 'Account', DisplayName: 'Account',
-        Description: 'A company, organization, or consumer in Salesforce CRM', SupportsWrite: true,
-        Fields: [
-            { Name: 'Name', DisplayName: 'Account Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account name' },
-            { Name: 'Industry', DisplayName: 'Industry', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account industry' },
-            { Name: 'Phone', DisplayName: 'Phone', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account phone number' },
-            { Name: 'Website', DisplayName: 'Website', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account website URL' },
-            { Name: 'BillingStreet', DisplayName: 'Billing Street', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Billing street address' },
-            { Name: 'BillingCity', DisplayName: 'Billing City', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Billing city' },
-            { Name: 'BillingState', DisplayName: 'Billing State', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Billing state/province' },
-            { Name: 'BillingPostalCode', DisplayName: 'Billing Postal Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Billing postal code' },
-            { Name: 'BillingCountry', DisplayName: 'Billing Country', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Billing country' },
-            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account description' },
-            { Name: 'Type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Account type' },
-            { Name: 'AnnualRevenue', DisplayName: 'Annual Revenue', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Annual revenue' },
-            { Name: 'NumberOfEmployees', DisplayName: 'Employees', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Number of employees' },
-            { Name: 'Id', DisplayName: 'Account ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Salesforce record ID' },
-        ],
-    },
-    {
-        Name: 'Contact', DisplayName: 'Contact',
-        Description: 'A person associated with an account in Salesforce CRM', SupportsWrite: true,
-        Fields: [
-            { Name: 'Email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact email address' },
-            { Name: 'FirstName', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact first name' },
-            { Name: 'LastName', DisplayName: 'Last Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact last name' },
-            { Name: 'Phone', DisplayName: 'Phone', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact phone number' },
-            { Name: 'MobilePhone', DisplayName: 'Mobile Phone', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Mobile phone number' },
-            { Name: 'Title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact title' },
-            { Name: 'Department', DisplayName: 'Department', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Contact department' },
-            { Name: 'MailingStreet', DisplayName: 'Mailing Street', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Mailing street address' },
-            { Name: 'MailingCity', DisplayName: 'Mailing City', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Mailing city' },
-            { Name: 'MailingState', DisplayName: 'Mailing State', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Mailing state/province' },
-            { Name: 'MailingPostalCode', DisplayName: 'Mailing Postal Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Mailing postal code' },
-            { Name: 'MailingCountry', DisplayName: 'Mailing Country', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Mailing country' },
-            { Name: 'AccountId', DisplayName: 'Account ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent account ID' },
-            { Name: 'Id', DisplayName: 'Contact ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Salesforce record ID' },
-        ],
-    },
-    {
-        Name: 'Lead', DisplayName: 'Lead',
-        Description: 'A prospective customer/lead in Salesforce CRM', SupportsWrite: true,
-        Fields: [
-            { Name: 'Email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Lead email address' },
-            { Name: 'FirstName', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Lead first name' },
-            { Name: 'LastName', DisplayName: 'Last Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Lead last name' },
-            { Name: 'Company', DisplayName: 'Company', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Lead company name' },
-            { Name: 'Phone', DisplayName: 'Phone', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Lead phone number' },
-            { Name: 'Title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Lead title' },
-            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Lead status' },
-            { Name: 'Id', DisplayName: 'Lead ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Salesforce record ID' },
-        ],
-    },
-    {
-        Name: 'Opportunity', DisplayName: 'Opportunity',
-        Description: 'A sales opportunity in Salesforce CRM', SupportsWrite: true,
-        Fields: [
-            { Name: 'Name', DisplayName: 'Opportunity Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Opportunity name' },
-            { Name: 'Amount', DisplayName: 'Amount', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Opportunity amount' },
-            { Name: 'StageName', DisplayName: 'Stage', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Current stage' },
-            { Name: 'CloseDate', DisplayName: 'Close Date', Type: 'date', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Expected close date' },
-            { Name: 'AccountId', DisplayName: 'Account ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent account ID' },
-            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Opportunity description' },
-            { Name: 'Id', DisplayName: 'Opportunity ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Salesforce record ID' },
-        ],
-    },
-    {
-        Name: 'Task', DisplayName: 'Task',
-        Description: 'A task or to-do item in Salesforce', SupportsWrite: true,
-        Fields: [
-            { Name: 'Subject', DisplayName: 'Subject', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Task subject' },
-            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Task status' },
-            { Name: 'Priority', DisplayName: 'Priority', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Task priority' },
-            { Name: 'WhoId', DisplayName: 'Who ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Related Contact or Lead ID' },
-            { Name: 'WhatId', DisplayName: 'What ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Related Account, Opportunity, etc. ID' },
-            { Name: 'Id', DisplayName: 'Task ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Salesforce record ID' },
-        ],
-    },
-    {
-        Name: 'Event', DisplayName: 'Event',
-        Description: 'A calendar event in Salesforce', SupportsWrite: true,
-        Fields: [
-            { Name: 'Subject', DisplayName: 'Subject', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Event subject' },
-            { Name: 'StartDateTime', DisplayName: 'Start', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Event start date/time' },
-            { Name: 'EndDateTime', DisplayName: 'End', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Event end date/time' },
-            { Name: 'WhoId', DisplayName: 'Who ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Related Contact or Lead ID' },
-            { Name: 'Id', DisplayName: 'Event ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Salesforce record ID' },
-        ],
-    },
-    {
-        Name: 'Case', DisplayName: 'Case',
-        Description: 'A support case in Salesforce', SupportsWrite: true,
-        Fields: [
-            { Name: 'Subject', DisplayName: 'Subject', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Case subject' },
-            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Case status' },
-            { Name: 'Priority', DisplayName: 'Priority', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Case priority' },
-            { Name: 'AccountId', DisplayName: 'Account ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent account ID' },
-            { Name: 'ContactId', DisplayName: 'Contact ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Related contact ID' },
-            { Name: 'Description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Case description' },
-            { Name: 'Id', DisplayName: 'Case ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Salesforce record ID' },
-        ],
-    },
-    {
-        Name: 'Campaign', DisplayName: 'Campaign',
-        Description: 'A marketing campaign in Salesforce', SupportsWrite: true,
-        Fields: [
-            { Name: 'Name', DisplayName: 'Campaign Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Campaign name' },
-            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Campaign status' },
-            { Name: 'Type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Campaign type' },
-            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'date', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Campaign start date' },
-            { Name: 'EndDate', DisplayName: 'End Date', Type: 'date', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Campaign end date' },
-            { Name: 'Id', DisplayName: 'Campaign ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Salesforce record ID' },
-        ],
-    },
-    {
-        Name: 'User', DisplayName: 'User',
-        Description: 'A Salesforce user (reference only, not writable)', SupportsWrite: false,
-        IncludeInActionGeneration: false,
-        Fields: [
-            { Name: 'Username', DisplayName: 'Username', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'User login name' },
-            { Name: 'Name', DisplayName: 'Full Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Full name' },
-            { Name: 'Email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'User email' },
-            { Name: 'Id', DisplayName: 'User ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Salesforce user ID' },
-        ],
-    },
-];
-
 // ─── SalesforceConnector ──────────────────────────────────────────────
 
 /**
@@ -375,10 +249,60 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
 
     public override get IntegrationName(): string { return 'Salesforce'; }
 
+    /**
+     * CORRECTION (IMPROVE build): affirm AUTHORITATIVE discovery. The global describe
+     * (`/sobjects/`) returns the COMPLETE credentialed gamut of queryable objects this
+     * org exposes (standard + custom `__c`), and `DoIntrospectSchema` describes that whole
+     * set. So an object/field absent from a comprehensive refresh genuinely means the
+     * source dropped it, and the engine's refresh path may safely DEACTIVATE it
+     * (`Status='Disabled'` — reversible; it flips back to Active if the object reappears on
+     * a later discovery). This is what makes comprehensive-refresh deactivation correct
+     * for Salesforce rather than wrongly wiping Declared metadata.
+     */
+    public override get DiscoveryIsAuthoritative(): boolean { return true; }
+
     // ─── Action Metadata ─────────────────────────────────────────────
 
+    /**
+     * Action-generation hint set. CORRECTION (IMPROVE build): this used to return
+     * a baked famous-subset catalog (~9 objects hardcoded in this file). That is a
+     * `catalog-in-code` defect — it froze the object universe to a famous subset.
+     *
+     * It now derives the hint set ENTIRELY from the runtime-cached IntegrationObject /
+     * IntegrationObjectField metadata for the Salesforce integration — the FULL
+     * Declared (credential-free catalog) + Discovered (live `DiscoverObjects` describe,
+     * custom `__c` included) gamut. There is NO baked catalog. If the metadata cache is
+     * not yet populated (e.g. action generation runs before the integration is seeded),
+     * it returns an empty array — the connector NEVER falls back to a hardcoded list.
+     *
+     * The per-tenant object UNIVERSE for sync comes exclusively from `DiscoverObjects`
+     * (live global describe / sObjects endpoint); this method only shapes the cached
+     * catalog into the ActionMetadataGenerator's hint structure.
+     */
     public override GetIntegrationObjects(): IntegrationObjectInfo[] {
-        return SALESFORCE_OBJECTS;
+        const engine = IntegrationEngineBase.Instance;
+        const integration = engine.Integrations.find(i => i.Name === this.IntegrationName);
+        if (!integration) return [];
+
+        const objects = engine.GetActiveIntegrationObjects(integration.ID);
+        return objects.map(obj => {
+            const fields = engine.GetIntegrationObjectFields(obj.ID);
+            return {
+                Name: obj.Name,
+                DisplayName: obj.DisplayName ?? obj.Name,
+                Description: obj.Description ?? undefined,
+                SupportsWrite: obj.SupportsWrite,
+                Fields: fields.map(f => ({
+                    Name: f.Name,
+                    DisplayName: f.DisplayName ?? f.Name,
+                    Description: f.Description ?? undefined,
+                    Type: f.Type ?? 'string',
+                    IsRequired: f.IsRequired,
+                    IsReadOnly: f.IsReadOnly,
+                    IsPrimaryKey: f.IsPrimaryKey,
+                })),
+            };
+        });
     }
 
     public override GetActionGeneratorConfig(): ActionGeneratorConfig | null {
@@ -396,7 +320,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     ): Promise<ConnectionTestResult> {
         try {
             const auth = await this.Authenticate(companyIntegration, contextUser);
-            const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/`;
+            const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/`;
             const headers = this.BuildHeaders(auth);
             const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
 
@@ -432,7 +356,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         contextUser: UserInfo
     ): Promise<ExternalObjectSchema[]> {
         const auth = await this.Authenticate(companyIntegration, contextUser);
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/sobjects/`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/sobjects/`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         this.ValidateResponse(response, url);
@@ -533,7 +457,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         contextUser: UserInfo
     ): Promise<ExternalFieldSchema[]> {
         const auth = await this.Authenticate(companyIntegration, contextUser);
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/sobjects/${objectName}/describe`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/sobjects/${objectName}/describe`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         this.ValidateResponse(response, url);
@@ -606,7 +530,11 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         const CONCURRENCY = 8;
         console.log(`[Salesforce] IntrospectSchema: describing ${total} queryable objects (parallel×${CONCURRENCY})...`);
 
-        const result: SourceSchemaInfo = { Objects: [] };
+        // CORRECTION (IMPROVE build): mark the FULL (unscoped) introspection authoritative so
+        // the comprehensive-refresh deactivation path may run. A SCOPED introspection
+        // (ObjectNames filter) describes only a subset and can NEVER prove absence, so it is
+        // never authoritative regardless of DiscoveryIsAuthoritative.
+        const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: this.DiscoveryIsAuthoritative && !wanted };
         let nextIdx = 0;
         let succeeded = 0;
         let skipped = 0;
@@ -735,7 +663,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
      * Used by CRUD operations and field discovery.
      */
     private SObjectBasePath(auth: SalesforceAuthContext, family: SalesforceAPIFamily): string {
-        const base = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}`;
+        const base = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}`;
         return family === 'tooling' ? `${base}/tooling/sobjects` : `${base}/sobjects`;
     }
 
@@ -744,7 +672,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
      * Standard uses /query + /queryAll; Tooling uses /tooling/query.
      */
     private SOQLEndpoint(auth: SalesforceAuthContext, family: SalesforceAPIFamily, includeDeleted: boolean): string {
-        const base = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}`;
+        const base = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}`;
         if (family === 'tooling') return `${base}/tooling/query`;
         return includeDeleted ? `${base}/queryAll` : `${base}/query`;
     }
@@ -784,13 +712,22 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         const body = this.StripReadOnlyFields(ctx.Attributes);
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
 
-        if (response.Status === 201 || (response.Status >= 200 && response.Status < 300)) {
-            const created = response.Body as { id?: string; success?: boolean };
-            return {
-                Success: true,
-                ExternalID: created.id ?? '',
-                StatusCode: response.Status,
-            };
+        if (response.Status >= 200 && response.Status < 300) {
+            // SF SObject create returns { id, success, errors }. CORRECTION (IMPROVE build):
+            // route through BuildCreatedResult — a 2xx with success=false or an empty/absent id
+            // is a FAILURE (silently losing the record + duplicate create next sync), never
+            // a hand-constructed { Success:true, ExternalID:'' }.
+            const created = response.Body as { id?: string; success?: boolean; errors?: SalesforceErrorResponse[] };
+            if (created.success === false) {
+                const detail = (created.errors ?? [])
+                    .map(e => `${e.errorCode}: ${e.message}`).join('; ');
+                return {
+                    Success: false,
+                    StatusCode: response.Status,
+                    ErrorMessage: `[Salesforce] Create of "${ctx.ObjectName}" returned HTTP ${response.Status} with success=false${detail ? `: ${detail}` : ''}`,
+                };
+            }
+            return this.BuildCreatedResult(created.id, response.Status, ctx.ObjectName);
         }
 
         return this.BuildCRUDError(response, 'CreateRecord', ctx.ObjectName);
@@ -1016,6 +953,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
             InstanceUrl: tokenResponse.instance_url,
             ApiVersion: config.ApiVersion,
             Config: config,
+            CompanyIntegration: companyIntegration,
         };
         this.tokenObtainedAt = Date.now();
 
@@ -1043,24 +981,58 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         const maxRetries = this.effectiveMaxRetries;
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const response = await this.FetchWithTimeout(url, method, headers, body);
+            // Transient network / timeout resilience: a FetchWithTimeout throw (AbortSignal timeout,
+            // socket reset, DNS blip) is retried with backoff like any other transient failure, instead
+            // of failing the record on the very first attempt. Idempotent — it retries the SAME request.
+            let response: Awaited<ReturnType<typeof this.FetchWithTimeout>>;
+            try {
+                response = await this.FetchWithTimeout(url, method, headers, body);
+            } catch (netErr) {
+                if (attempt < maxRetries) {
+                    const delayMs = this.CalculateRetryDelay(attempt);
+                    console.warn(
+                        `[Salesforce] Network/timeout error, retrying in ${delayMs}ms ` +
+                        `(attempt ${attempt + 1}/${maxRetries})`
+                    );
+                    await this.Sleep(delayMs);
+                    continue;
+                }
+                throw netErr;
+            }
             this.lastRequestTime = Date.now();
 
             // Parse governor limits from response
             this.ParseGovernorLimits(response.headers);
 
-            // Handle 401 — token expired, re-authenticate
+            // Handle 401 — token expired. Clear the cache so the NEXT operation re-authenticates.
+            // NOTE: inline re-auth+retry within this call is NOT done here — MakeHTTPRequest has no
+            // CompanyIntegration/contextUser to call Authenticate() with (that would need a base-signature
+            // change across all connectors). Cache-clear → next-op-recovers is the current contract.
             if (response.status === 401 && attempt === 0) {
-                console.warn('[Salesforce] Token expired (401), re-authenticating...');
+                console.warn('[Salesforce] Token expired (401), re-authenticating on next operation...');
                 this.cachedAuth = null;
-                // Caller should re-authenticate; for now return the error
             }
 
-            // Handle 429 — rate limited
+            // Handle 429 — rate limited. Honor the vendor's stated wait (Retry-After / Sforce-Limit-Info)
+            // when present; fall back to the AIMD-style exponential backoff otherwise.
             if (response.status === 429) {
-                const delayMs = this.CalculateRetryDelay(attempt);
+                const delayMs = this.RetryAfterMs(response.headers) ?? this.CalculateRetryDelay(attempt);
                 console.warn(
                     `[Salesforce] Rate limited (429), retrying in ${delayMs}ms ` +
+                    `(attempt ${attempt + 1}/${maxRetries})`
+                );
+                await this.Sleep(delayMs);
+                continue;
+            }
+
+            // Handle 500/502/503/504 — transient server-side errors. Per the Salesforce/Fonteva error
+            // contract these are retry-if-safe (backoff). Only retried while attempts remain; otherwise
+            // the non-2xx response is returned to the caller for normal error handling.
+            if ((response.status === 500 || response.status === 502 || response.status === 503 || response.status === 504)
+                && attempt < maxRetries) {
+                const delayMs = this.RetryAfterMs(response.headers) ?? this.CalculateRetryDelay(attempt);
+                console.warn(
+                    `[Salesforce] Server error (${response.status}), retrying in ${delayMs}ms ` +
                     `(attempt ${attempt + 1}/${maxRetries})`
                 );
                 await this.Sleep(delayMs);
@@ -1100,6 +1072,38 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         return (body.records ?? []) as Record<string, unknown>[];
     }
 
+    /**
+     * CORRECTION (IMPROVE build): per-record transform that strips Salesforce's
+     * `attributes` metadata blob (e.g. `{ type, url }`) from every record. This is a
+     * SANCTIONED removal declared in {@link ExcludedSourceKeys}, NOT a silent drop — the
+     * `attributes` key is vendor envelope noise, not customer data, so dropping it can
+     * never lose a custom column. Every OTHER source field flows through untouched, so
+     * the full-record pass-through contract (custom-column capture) is preserved.
+     *
+     * Used by both the base-fetch path (GetRecord via applyTransformPreservingKeys) and
+     * the SOQL override path (RawToExternalRecord routes through StripVendorAttributes,
+     * which reuses ExcludedSourceKeys so the two paths agree on what is removed).
+     */
+    protected override TransformRecord(
+        raw: Record<string, unknown>,
+        _obj: MJIntegrationObjectEntity,
+        _fields: MJIntegrationObjectFieldEntity[]
+    ): Record<string, unknown> {
+        if (!('attributes' in raw)) return raw; // identity fast-path — nothing to strip
+        const out: Record<string, unknown> = { ...raw };
+        delete out['attributes'];
+        return out;
+    }
+
+    /**
+     * The Salesforce `attributes` blob is the ONLY key any object's TransformRecord
+     * removes. Declaring it here makes the removal auditable and excludes it from the
+     * base's re-add-dropped-keys safety net (and from change-detection).
+     */
+    protected override ExcludedSourceKeys(_objectName: string): string[] {
+        return ['attributes'];
+    }
+
     protected ExtractPaginationInfo(
         rawBody: unknown,
         _paginationType: PaginationType,
@@ -1121,6 +1125,16 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     ): string {
         const sfAuth = auth as SalesforceAuthContext;
         return sfAuth.InstanceUrl;
+    }
+
+    /**
+     * The API origin for all REST calls. Routes through GetBaseURL() so a test harness can
+     * redirect the connector to a mock server (the base class hooks GetBaseURL); in production
+     * this returns the authenticated InstanceUrl unchanged. ALL URL construction must go through
+     * this rather than reading auth.InstanceUrl directly, or the connector is not mock-testable.
+     */
+    private ApiBase(auth: SalesforceAuthContext): string {
+        return this.GetBaseURL(auth.CompanyIntegration, auth);
     }
 
     // ─── SOQL Query Engine ───────────────────────────────────────────
@@ -1216,7 +1230,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         queryLocator: string
     ): Promise<FetchBatchResult> {
         // queryLocator is a relative URL like /services/data/v61.0/query/01gxx...
-        const url = `${auth.InstanceUrl}${queryLocator}`;
+        const url = `${this.ApiBase(auth)}${queryLocator}`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         this.ValidateResponse(response, url);
@@ -1482,14 +1496,14 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         contextUser: UserInfo
     ): Promise<SalesforceCredentials> {
         // Try Credential entity first
-        const credentialID = companyIntegration.Get('CredentialID') as string | null;
+        const credentialID = companyIntegration.CredentialID;
         if (credentialID) {
             const creds = await this.LoadFromCredentialEntity(credentialID, contextUser);
             if (creds) return creds;
         }
 
         // Fallback: Configuration JSON
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             const creds = this.ParseCredentialJson(configJson);
             if (creds) return creds;
@@ -1574,7 +1588,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
             TokenUrl: credentials.TokenUrl,
         };
 
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             this.ApplyConfigOverrides(config, configJson);
         }
@@ -1707,6 +1721,23 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         return Math.min(1000 * Math.pow(2, attempt), 30000);
     }
 
+    /**
+     * Parses the vendor's stated retry wait from a 429/503 response into milliseconds, so the connector
+     * honors `Retry-After` (delta-seconds OR an HTTP-date) and Salesforce's `Sforce-Limit-Info` rather
+     * than blindly using exponential backoff. Returns null when no usable signal is present (caller falls
+     * back to {@link CalculateRetryDelay}). Capped at 60s so a hostile/garbage header can't stall a sync.
+     */
+    private RetryAfterMs(headers: Response['headers']): number | null {
+        const raw = headers?.get?.('retry-after');
+        if (raw) {
+            const secs = Number(raw);
+            if (Number.isFinite(secs) && secs >= 0) return Math.min(secs * 1000, 60000);
+            const when = Date.parse(raw); // HTTP-date form
+            if (!Number.isNaN(when)) return Math.min(Math.max(when - Date.now(), 0), 60000);
+        }
+        return null;
+    }
+
     private Sleep(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
@@ -1720,13 +1751,20 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
      * fields on both standard and custom SObjects.
      */
     private MapSFFieldToSchema(f: SFieldDescribe): ExternalFieldSchema {
+        // Salesforce's `Id` is the universal PK on every SObject (standard + custom).
+        // The /describe response sets type='id' on the PK field but doesn't carry
+        // an explicit IsPrimaryKey signal, so we have to stamp it here.  Without
+        // this, UpsertField's new-field path would persist `Id` with no PK flag
+        // and the downstream SoftPKClassifier becomes the only safety net.
+        const isPK = f.name === 'Id' || f.type === 'id';
         return {
             Name: f.name,
             Label: f.label,
             Description: f.inlineHelpText ?? undefined,
             DataType: this.MapSalesforceType(f.type),
             IsRequired: !f.nillable && !f.defaultedOnCreate,
-            IsUniqueKey: f.externalId || f.name === 'Id',
+            IsPrimaryKey: isPK,
+            IsUniqueKey: isPK || f.externalId,
             IsReadOnly: f.calculated || !f.updateable || SYSTEM_READ_ONLY_FIELDS.has(f.name),
             IsForeignKey: f.type === 'reference' && f.referenceTo.length > 0,
             ForeignKeyTarget: f.referenceTo.length > 0 ? f.referenceTo[0] : null,
@@ -1874,13 +1912,17 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     // ─── Record Conversion ───────────────────────────────────────────
 
     /**
-     * Converts a raw SF API record to an ExternalRecord.
-     * Strips the SF `attributes` metadata object from the fields.
+     * Converts a raw SF API record to an ExternalRecord. The SOQL override path
+     * hand-builds records, so it routes through the SAME sanctioned strip the base path
+     * uses: every key flows through to `Fields` EXCEPT those declared in
+     * {@link ExcludedSourceKeys} (just `attributes`). This preserves full-record
+     * pass-through for custom-column capture while removing only the vendor envelope blob.
      */
     private RawToExternalRecord(raw: Record<string, unknown>, objectType: string): ExternalRecord {
+        const excluded = new Set(this.ExcludedSourceKeys(objectType));
         const fields: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(raw)) {
-            if (key === 'attributes') continue; // SF metadata, not a data field
+            if (excluded.has(key)) continue; // sanctioned removal (SF metadata, not a data field)
             fields[key] = value;
         }
 
@@ -1915,7 +1957,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         objectName: string
     ): Promise<SourceObjectInfo> {
         const auth = await this.Authenticate(companyIntegration, contextUser);
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/sobjects/${objectName}/describe`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/sobjects/${objectName}/describe`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         this.ValidateResponse(response, url);
@@ -2027,7 +2069,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         objectName: string
     ): Promise<FetchBatchResult> {
         const segment = family === 'analytics_report' ? 'reports' : 'dashboards';
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/analytics/${segment}`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/analytics/${segment}`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         this.ValidateResponse(response, url);
@@ -2047,7 +2089,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     }
 
     private async GetAnalyticsReport(auth: SalesforceAuthContext, id: string): Promise<ExternalRecord | null> {
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/analytics/reports/${id}`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/analytics/reports/${id}`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         if (response.Status === 404) return null;
@@ -2060,7 +2102,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     }
 
     private async GetAnalyticsDashboard(auth: SalesforceAuthContext, id: string): Promise<ExternalRecord | null> {
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/analytics/dashboards/${id}`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/analytics/dashboards/${id}`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         if (response.Status === 404) return null;
@@ -2091,7 +2133,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         if (watermarkValue) {
             params.set('publishStatus', 'Online');
         }
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/support/knowledgeArticles?${params}`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/support/knowledgeArticles?${params}`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         this.ValidateResponse(response, url);
@@ -2130,7 +2172,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         objectName: string
     ): Promise<FetchBatchResult> {
         const segment = family === 'bulk_ingest' ? 'ingest' : 'query';
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/jobs/${segment}`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/jobs/${segment}`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         this.ValidateResponse(response, url);
@@ -2163,14 +2205,14 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         attrs: Record<string, unknown>
     ): Promise<CRUDResult> {
         const segment = family === 'bulk_ingest' ? 'ingest' : 'query';
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/jobs/${segment}`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/jobs/${segment}`;
         const headers = { ...this.BuildHeaders(auth), 'Content-Type': 'application/json' };
         const body = this.StripReadOnlyFields(attrs);
 
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
         if (response.Status >= 200 && response.Status < 300) {
             const created = response.Body as { id?: string };
-            return { Success: true, ExternalID: created.id ?? '', StatusCode: response.Status };
+            return this.BuildCreatedResult(created.id, response.Status, `${family} job`);
         }
         return this.BuildCRUDError(response, 'CreateBulkJob', family);
     }
@@ -2184,7 +2226,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         jobId: string
     ): Promise<CRUDResult> {
         const segment = family === 'bulk_ingest' ? 'ingest' : 'query';
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/jobs/${segment}/${jobId}`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/jobs/${segment}/${jobId}`;
         const headers = { ...this.BuildHeaders(auth), 'Content-Type': 'application/json' };
         const response = await this.MakeHTTPRequest(auth, url, 'PATCH', headers, { state: 'Aborted' });
         if (response.Status >= 200 && response.Status < 300) {
@@ -2199,7 +2241,7 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         jobId: string
     ): Promise<ExternalRecord | null> {
         const segment = family === 'bulk_ingest' ? 'ingest' : 'query';
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/jobs/${segment}/${jobId}`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/jobs/${segment}/${jobId}`;
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         if (response.Status === 404) return null;
@@ -2219,12 +2261,19 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
      * least a `compositeRequest` array. Returns the overall composite
      * response as the created record's ExternalID (Salesforce returns
      * per-sub-request results; callers should inspect Fields for details).
+     *
+     * Salesforce returns HTTP 200 for the OVERALL composite call even when
+     * individual sub-requests fail (the composite envelope carries a
+     * per-sub-request `httpStatusCode`). Blanket-returning Success:true on the
+     * envelope status swallows those sub-request failures. We inspect the
+     * `compositeResponse` array and fail loudly if any sub-request returned a
+     * 4xx/5xx, summarizing the sub-request errors so the caller sees them.
      */
     private async ExecuteCompositeRequest(
         auth: SalesforceAuthContext,
         attrs: Record<string, unknown>
     ): Promise<CRUDResult> {
-        const url = `${auth.InstanceUrl}/services/data/v${auth.ApiVersion}/composite`;
+        const url = `${this.ApiBase(auth)}/services/data/v${auth.ApiVersion}/composite`;
         const headers = { ...this.BuildHeaders(auth), 'Content-Type': 'application/json' };
         // Either pass the whole payload through or wrap a bare array
         const body = Array.isArray((attrs as { compositeRequest?: unknown[] }).compositeRequest)
@@ -2232,13 +2281,74 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
             : { allOrNone: true, compositeRequest: [attrs] };
         const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
         if (response.Status >= 200 && response.Status < 300) {
+            const subErrors = this.CollectCompositeSubErrors(response.Body);
+            if (subErrors.length > 0) {
+                return {
+                    Success: false,
+                    StatusCode: response.Status,
+                    ErrorMessage: `[Salesforce] Composite request returned HTTP ${response.Status} but ${subErrors.length} sub-request(s) failed: ${subErrors.join('; ')}`,
+                };
+            }
             return { Success: true, ExternalID: 'composite', StatusCode: response.Status };
         }
         return this.BuildCRUDError(response, 'ExecuteCompositeRequest', 'CompositeRequest');
     }
+
+    /**
+     * Inspects a composite response body for per-sub-request failures. A
+     * sub-request failed if its `httpStatusCode` is >= 400. Returns a
+     * human-readable summary string per failed sub-request (empty array when
+     * all sub-requests succeeded or the body has no compositeResponse array).
+     */
+    private CollectCompositeSubErrors(responseBody: unknown): string[] {
+        const subResponses = (responseBody as { compositeResponse?: CompositeSubResponse[] })?.compositeResponse;
+        if (!Array.isArray(subResponses)) return [];
+
+        const failures: string[] = [];
+        for (const sub of subResponses) {
+            if (typeof sub?.httpStatusCode === 'number' && sub.httpStatusCode >= 400) {
+                failures.push(this.SummarizeCompositeSubError(sub));
+            }
+        }
+        return failures;
+    }
+
+    /** Formats a single failed composite sub-response into a readable error string. */
+    private SummarizeCompositeSubError(sub: CompositeSubResponse): string {
+        const ref = sub.referenceId ?? '(no referenceId)';
+        const detail = this.ExtractCompositeSubErrorDetail(sub.body);
+        return `${ref} (HTTP ${sub.httpStatusCode})${detail ? `: ${detail}` : ''}`;
+    }
+
+    /**
+     * Salesforce sub-request error bodies are typically an array of
+     * `{ errorCode, message }`. Pull a concise detail string out of that shape.
+     */
+    private ExtractCompositeSubErrorDetail(body: unknown): string {
+        if (Array.isArray(body)) {
+            return body
+                .map(e => {
+                    const err = e as { errorCode?: string; message?: string };
+                    return [err.errorCode, err.message].filter(Boolean).join(': ');
+                })
+                .filter(Boolean)
+                .join(', ');
+        }
+        return '';
+    }
 }
 
 // ─── SF Describe API Type Definitions ─────────────────────────────────
+
+/** A single sub-response inside a Salesforce composite response envelope. */
+interface CompositeSubResponse {
+    /** Per-sub-request HTTP status — >= 400 means this sub-request failed even if the envelope was 200. */
+    httpStatusCode?: number;
+    /** Caller-supplied reference id for the sub-request. */
+    referenceId?: string;
+    /** Sub-request body (success payload or an array of { errorCode, message } on failure). */
+    body?: unknown;
+}
 
 /** Salesforce SObject describe response entry */
 interface SObjectDescribe {

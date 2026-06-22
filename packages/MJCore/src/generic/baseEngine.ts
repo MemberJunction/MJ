@@ -459,10 +459,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 await this.LoadConfigs(configs, contextUser, forceRefresh);
                 await this.AdditionalLoading(contextUser); // Call the additional loading method
                 await this.SetupGlobalEventListener();
-                this._loaded = true;
 
-                // Notify registry that engine is loaded
-                BaseEngineRegistry.Instance.NotifyEngineLoaded(this);
+                // Only mark as loaded if all configs loaded successfully.
+                // If any config failed (e.g. network error during MJAPI restart),
+                // leaving _loaded=false allows EnsureLoaded()/Config() to retry on next attempt.
+                const hasFailures = Array.from(this._dataMap.values()).some(entry => !entry.loadedSuccessfully);
+                if (hasFailures) {
+                    const failedNames = Array.from(this._dataMap.entries())
+                        .filter(([, entry]) => !entry.loadedSuccessfully)
+                        .map(([key, entry]) => entry.entityName || entry.datasetName || key);
+                    LogError(`${this.constructor.name}: Not marking as loaded — ${failedNames.length} config(s) failed to load: ${failedNames.join(', ')}. Will retry on next Config()/EnsureLoaded() call.`);
+                } else {
+                    this._loaded = true;
+                    // Notify registry that engine is loaded
+                    BaseEngineRegistry.Instance.NotifyEngineLoaded(this);
+                }
             } catch (e) {
                 LogError(e);
             } finally {
@@ -1335,7 +1346,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             BypassCache: bypassCache
         }, contextUser);
 
-        this.HandleSingleViewResult(config, result);
+        this.HandleSingleViewResult(config, result, contextUser);
         this.emitPropertyChange(config.PropertyName);
     }
 
@@ -1344,7 +1355,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param config 
      * @param result 
      */
-    protected HandleSingleViewResult(config: BaseEnginePropertyConfig, result: RunViewResult) {
+    protected HandleSingleViewResult(config: BaseEnginePropertyConfig, result: RunViewResult, contextUser?: UserInfo) {
         if (result.Success) {
             if (config.AddToObject !== false) {
                 (this as any)[config.PropertyName] = result.Results;
@@ -1357,8 +1368,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
             }
+        } else if (!this.ContextUserCanReadConfigEntity(config.EntityName, contextUser)) {
+            // PERMANENT failure: the user lacks Read on this entity, so a retry will
+            // never succeed for this role. Load the property empty and mark it loaded
+            // so a restricted / app-scoped user (e.g. a magic-link guest) doesn't hang
+            // the shell looping on "not marking as loaded". Security is unaffected —
+            // the user still gets no data. Logged at status level, not error, because
+            // for a restricted role this is expected, not a fault.
+            this.MarkConfigEmptyLoaded(config);
+            LogStatus(`BaseEngine: ${config.EntityName} not readable by current role — loaded empty (restricted-role degradation).`);
         } else {
-            // Track the failure so consumers can detect partial load failures
+            // TRANSIENT failure (network, MJAPI restart, etc.) — leave loadedSuccessfully
+            // false so EnsureLoaded()/Config() retries on the next attempt.
             this._dataMap.set(config.PropertyName, {
                 entityName: config.EntityName,
                 data: [],
@@ -1367,6 +1388,57 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             });
             LogError(`BaseEngine: Failed to load ${config.EntityName} into ${config.PropertyName}: ${result.ErrorMessage}`);
         }
+    }
+
+    /**
+     * Returns false ONLY when we can positively determine that the effective user
+     * lacks Read permission on `entityName`. Unknown cases (no entity name, no
+     * resolvable user, entity not in metadata) return true — so the default is to
+     * treat a failure as transient/retryable and server-side system-user loads
+     * (full access) are unaffected.
+     *
+     * Used by {@link HandleSingleViewResult} to classify a FAILED config load:
+     * a load that failed because the user can't read the entity is a PERMANENT
+     * condition (a retry will never succeed for this role), so the engine should
+     * load that property empty rather than loop on "not marking as loaded" — which
+     * is what hangs the Explorer shell for a restricted / app-scoped user (e.g. a
+     * magic-link guest). Security is unaffected: the user still receives no data.
+     *
+     * This is a classifier consulted AFTER a failure, never a predictive pre-skip —
+     * so a readable entity is always actually queried, and stale/late client
+     * permission metadata can never cause a readable entity to be silently skipped.
+     */
+    protected ContextUserCanReadConfigEntity(entityName: string | undefined, contextUser: UserInfo | undefined): boolean {
+        if (!entityName) {
+            return true;
+        }
+        // Engines on the client commonly load with a null contextUser (the server
+        // resolves the user from the token), so fall back to the provider's
+        // CurrentUser — otherwise the gate can't see a restricted role and would let
+        // the query through to a server-side permission denial.
+        const user = contextUser ?? this.ProviderToUse?.CurrentUser;
+        if (!user) {
+            return true;
+        }
+        const entityInfo = this.ProviderToUse?.EntityByName(entityName);
+        if (!entityInfo) {
+            return true; // unknown entity — let the normal not-found handling apply
+        }
+        return entityInfo.GetUserPermisions(user).CanRead;
+    }
+
+    /**
+     * Records a config as successfully loaded with an EMPTY result set. Used when a
+     * load failed permanently because the context user lacks Read on the entity:
+     * the engine exposes an empty array (not a hang) and is marked loaded so shell
+     * boot can complete for a restricted role.
+     */
+    protected MarkConfigEmptyLoaded(config: BaseEnginePropertyConfig): void {
+        if (config.AddToObject !== false) {
+            (this as any)[config.PropertyName] = [];
+        }
+        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: [], loadedSuccessfully: true });
+        this.NotifyDataChange(config, []);
     }
 
     /**
@@ -1397,7 +1469,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // Process results and record entity loads for redundancy detection
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
-                this.HandleSingleViewResult(configs[i], results[i]);
+                this.HandleSingleViewResult(configs[i], results[i], contextUser);
                 this.emitPropertyChange(configs[i].PropertyName);
                 if (configs[i].EntityName) {
                     entityNames.push(configs[i].EntityName);
@@ -1434,7 +1506,25 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
         }
         if (!result) {
-            LogError(`LoadSingleDatasetConfig: GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`);
+            const errorMsg = `GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`;
+            LogError(`LoadSingleDatasetConfig: ${errorMsg}`);
+            this._dataMap.set(config.PropertyName, {
+                datasetName: config.DatasetName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: errorMsg
+            });
+            return;
+        }
+        if (!result.Success) {
+            const errorMsg = result.Status || `Dataset "${config.DatasetName}" load returned Success=false`;
+            LogError(`BaseEngine: Failed to load dataset ${config.DatasetName} into ${config.PropertyName}: ${errorMsg}`);
+            this._dataMap.set(config.PropertyName, {
+                datasetName: config.DatasetName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: errorMsg
+            });
             return;
         }
         if (result.Success) {

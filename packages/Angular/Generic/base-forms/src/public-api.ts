@@ -17,6 +17,21 @@ export * from './lib/types/form-types';
 export * from './lib/types/navigation-events';
 export * from './lib/types/toolbar-config';
 export * from './lib/types/form-events';
+export * from './lib/types/entity-form-config';
+
+// Form resolution (form-variant / interactive-override picker — Generic, no Explorer deps)
+export * from './lib/resolver/form-resolver.service';
+
+// Presentation-agnostic form host (resolve → load → create → wire → teardown)
+export * from './lib/host/entity-form-host.component';
+
+// Overlay shells (dialog / slide-in) + imperative presenter (Layer 3 + 4)
+export * from './lib/overlays/base-form-overlay';
+export * from './lib/overlays/form-dialog.component';
+export * from './lib/overlays/form-slide-in.component';
+export * from './lib/overlays/form-window.component';
+export * from './lib/overlays/form-presenter.types';
+export * from './lib/overlays/form-presenter.service';
 
 // Base classes
 export * from './lib/base-record-component';
@@ -31,6 +46,8 @@ export * from './lib/form-state.service';
 // Components
 export * from './lib/toolbar/form-toolbar.component';
 export * from './lib/field/form-field.component';
+export * from './lib/field/fk-search-utils';
+export * from './lib/field/linked-field-options';
 export * from './lib/panel/collapsible-panel.component';
 export * from './lib/container/record-form-container.component';
 export * from './lib/section-manager/section-manager.component';
@@ -46,3 +63,4 @@ export * from './lib/isa-related-panel/isa-related-panel.component';
 export * from './lib/panel-slot/base-form-panel';
 export * from './lib/panel-slot/form-panel-slot.component';
 export * from './lib/panel-slot/form-slot-coordinator.service';
+export * from './lib/interactive-form/interactive-form.component';

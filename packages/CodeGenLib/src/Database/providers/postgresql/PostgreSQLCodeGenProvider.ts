@@ -10,6 +10,7 @@ import {
 } from '../../codeGenDatabaseProvider';
 import { configInfo } from '../../../Config/config';
 import { logError, logWarning } from '../../../Misc/status_logging';
+import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
@@ -538,7 +539,18 @@ ${trigger}
         // outer function's local variables (including p_data) are NOT in scope.
         const fieldCastEntries = writableFields
             .map((f) => {
-                const cast = this.renderJsonExtractAndCast(f).replace(/p_data/g, '$1');
+                let cast = this.renderJsonExtractAndCast(f).replace(/p_data/g, '$1');
+                // Non-nullable columns with a DB default: a present-but-NULL payload
+                // value inserts NULL and violates the NOT NULL constraint (an ABSENT
+                // key is fine — the FOREACH omits it so the column DEFAULT applies).
+                // Mirror the typed-arg sproc (generateInsertFieldString): coalesce
+                // NULL — and, for UUIDs, the empty-UUID sentinel — to the column default.
+                if (f.HasDefaultValue && !f.AllowsNull) {
+                    const def = this.formatInsertDefaultValue(f);
+                    cast = f.IsUniqueIdentifier
+                        ? `CASE WHEN ${cast} = '00000000-0000-0000-0000-000000000000'::uuid THEN ${def} ELSE COALESCE(${cast}, ${def}) END`
+                        : `COALESCE(${cast}, ${def})`;
+                }
                 return `        WHEN '${f.Name}' THEN '${cast.replace(/'/g, "''")}'`;
             })
             .join('\n');
@@ -646,7 +658,13 @@ ${permissions}
         const pkType = firstKey.Type.toLowerCase().trim();
         const pkHandledByStrategy =
             firstKey.AutoIncrement ||
-            ((pkType === 'uniqueidentifier' || pkType === 'uuid') && entity.PrimaryKeys.length === 1);
+            ((pkType === 'uniqueidentifier' || pkType === 'uuid') && entity.PrimaryKeys.length === 1) ||
+            // Composite PK: buildCreateInsertStrategy prepends every PK column explicitly. The
+            // generateInsertFieldString `isCallerSuppliedPK` exception would ALSO emit those same
+            // caller-supplied composite-PK columns, producing `column "x" specified more than once`
+            // on PostgreSQL (real bug on composite-PK association/junction tables). Exclude the PK
+            // from the auto field list so the strategy's prepend is the single source for them.
+            entity.PrimaryKeys.length > 1;
         const insertColumns = this.generateInsertFieldString(entity, entity.Fields, '', pkHandledByStrategy);
         const insertValues = this.generateInsertFieldString(entity, entity.Fields, 'p_', pkHandledByStrategy);
 
@@ -708,18 +726,13 @@ ${permissions}
 
         const trigger = this.generateTimestampTrigger(entity);
 
-        return `
-------------------------------------------------------------
------ UPDATE FUNCTION FOR ${entity.BaseTable}
-------------------------------------------------------------
-${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
-CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
-    ${paramString}
-) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
-DECLARE
-    v_updated_count INTEGER;
-BEGIN
-    UPDATE ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        // PK-only entities (e.g. junction tables with only PK + __mj timestamp columns)
+        // have no updatable fields. Generate a no-op function that just returns the
+        // existing row rather than emitting an invalid UPDATE with an empty SET clause.
+        const hasUpdatableFields = updateFields.trim().length > 0;
+
+        const fnBody = hasUpdatableFields
+            ? `    UPDATE ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
     SET
         ${updateFields}
     WHERE
@@ -735,7 +748,26 @@ BEGIN
     -- Return the updated record from the base view
     RETURN QUERY
     SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${selectWhereClause};
+    WHERE ${selectWhereClause};`
+            : `    -- No updatable fields (PK-only entity, e.g. junction table). Return the existing row.
+    RETURN QUERY
+    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
+    WHERE ${selectWhereClause};`;
+
+        // Only declare v_updated_count when we actually perform an UPDATE.
+        const declareBlock = hasUpdatableFields ? '\n    v_updated_count INTEGER;' : '';
+
+        return `
+------------------------------------------------------------
+----- UPDATE FUNCTION FOR ${entity.BaseTable}
+------------------------------------------------------------
+${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    ${paramString}
+) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
+DECLARE${declareBlock}
+BEGIN
+${fnBody}
 END;
 $$ LANGUAGE plpgsql;
 ${permissions}
@@ -1249,6 +1281,7 @@ END $$;
             'getutcdate()': "NOW() AT TIME ZONE 'UTC'",
             'sysdatetime()': "NOW() AT TIME ZONE 'UTC'",
             'sysdatetimeoffset()': "NOW() AT TIME ZONE 'UTC'",
+            'sysutcdatetime()': "NOW() AT TIME ZONE 'UTC'",
             'now()': 'NOW()',
             'current_timestamp': 'CURRENT_TIMESTAMP',
             'user_name()': 'CURRENT_USER',
@@ -1675,6 +1708,11 @@ ORDER BY ordinal_position`;
         return this.buildFixVirtualFieldNullabilityUpdateSQL(mjCoreSchema, qs);
     }
 
+    /** @inheritdoc */
+    getMetadataSupportObjectsSQL(mjCoreSchema: string): string | null {
+        return buildMetadataSupportObjectsSQL(mjCoreSchema);
+    }
+
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
 
     /**
@@ -2081,13 +2119,15 @@ WHERE p.prokind IN ('f', 'p')
 
         if ((firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' || firstKey.Type.toLowerCase().trim() === 'uuid') && entity.PrimaryKeys.length === 1) {
             const paramName = `p_${this.toSnakeCase(firstKey.CodeName)}`;
+            const hasNonPkFields = insertColumns.trim().length > 0;
             return {
                 preInsert: `v_new_id := COALESCE(${paramName}, gen_random_uuid());\n    `,
                 returningClause: '',
                 selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${pkCol} = v_new_id`,
-                // Include the PK column in the INSERT so caller-provided IDs are respected
-                finalColumns: `${pkCol},\n            ${insertColumns}`,
-                finalValues: `v_new_id,\n            ${insertValues}`,
+                // Include the PK column in the INSERT so caller-provided IDs are respected.
+                // When there are no non-PK columns, omit the trailing comma.
+                finalColumns: hasNonPkFields ? `${pkCol},\n            ${insertColumns}` : pkCol,
+                finalValues: hasNonPkFields ? `v_new_id,\n            ${insertValues}` : 'v_new_id',
             };
         }
 
@@ -2099,6 +2139,8 @@ WHERE p.prokind IN ('f', 'p')
         // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
         // filters them all out. Prepend them to finalColumns/finalValues so the INSERT is valid.
         // (The single-PK uniqueidentifier case is already handled above via v_new_id.)
+        // When insertColumns is empty (PK-only entities like junction tables), we must not
+        // emit a trailing comma after the PK columns.
         let finalColumns = insertColumns;
         let finalValues = insertValues;
         if (entity.PrimaryKeys.length > 1) {
@@ -2108,8 +2150,9 @@ WHERE p.prokind IN ('f', 'p')
             const pkValues = entity.PrimaryKeys
                 .map((k: EntityFieldInfo) => `p_${this.toSnakeCase(k.CodeName)}`)
                 .join(',\n            ');
-            finalColumns = `${pkColumns},\n            ${insertColumns}`;
-            finalValues = `${pkValues},\n            ${insertValues}`;
+            const hasNonPkColumns = insertColumns.trim().length > 0;
+            finalColumns = hasNonPkColumns ? `${pkColumns},\n            ${insertColumns}` : pkColumns;
+            finalValues = hasNonPkColumns ? `${pkValues},\n            ${insertValues}` : pkValues;
         }
 
         return {
@@ -2479,7 +2522,10 @@ ORDER BY "EntityID", "Sequence";
      * Builds the CASE expression for AllowUpdateAPI in the pending entity fields query.
      */
     private buildAllowUpdateAPICase(): string {
-        return `CASE WHEN sf."IsVirtual" = true THEN FALSE
+        // sf is the schema view (vwSQLColumnsAndEntityFields), whose "IsVirtual"
+        // is an INTEGER 1/0 (not the EntityField table's BOOLEAN). Compare with
+        // <> 0, not `= true`, or PG raises `operator does not exist: integer = boolean`.
+        return `CASE WHEN sf."IsVirtual" <> 0 THEN FALSE
            WHEN sf."FieldName" = '${EntityInfo.CreatedAtFieldName}' THEN FALSE
            WHEN sf."FieldName" = '${EntityInfo.UpdatedAtFieldName}' THEN FALSE
            WHEN sf."FieldName" = '${EntityInfo.DeletedAtFieldName}' THEN FALSE

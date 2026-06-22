@@ -1,6 +1,25 @@
 [
   {
     "fields": {
+      "Name": "InteractiveApplicationForm",
+      "Namespace": "Admin/Applications",
+      "Title": "Interactive Application Form",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/interactive-application-form.spec.json"
+    },
+    "primaryKey": {
+      "ID": "A0D8DC78-9E2D-4866-91F4-7B474B2E7A9F"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:49:22.061Z",
+      "checksum": "44c74e0ac16b70b008fdeadd706b1545a0c40cf9cd8195d50ff8fa70f13aae87"
+    }
+  },
+  {
+    "fields": {
       "Name": "EntityBrowser",
       "Namespace": "Admin/Entities",
       "Title": "Entity Browser",
@@ -2142,8 +2161,46 @@
       "ID": "2AD46B3C-D0B2-49A7-9F0B-8DCE68A0C118"
     },
     "sync": {
-      "lastModified": "2026-05-16T22:42:46.992Z",
+      "lastModified": "2026-05-16T18:58:09.295Z",
       "checksum": "ef6d726a19c6be4562844b5610b781aed9f7bb2bd25bf259b175e39e97967063"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJFormField",
+      "Namespace": "Generic/UI/Form",
+      "Title": "Form Field",
+      "Type": "Form",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/generic/mj-form-field.spec.json"
+    },
+    "primaryKey": {
+      "ID": "40601CCF-BDC4-465B-99D8-4DAF49ED9527"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:22.701Z",
+      "checksum": "eb49cd8ed421489d9a28708116fc29c18bfad8636c069875dc27417c09ae99dc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJFormFields",
+      "Namespace": "Generic/UI/Form",
+      "Title": "Form Fields (Sectioned)",
+      "Type": "Form",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/generic/mj-form-fields.spec.json"
+    },
+    "primaryKey": {
+      "ID": "C24CAE38-1982-4604-8C8D-ABC50C22036D"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:22.724Z",
+      "checksum": "5585b54d4a17d37dd5f2ac309a5f1d7b36a3bc7920942eebe7086f8ea9e8d7c1"
     }
   }
 ]

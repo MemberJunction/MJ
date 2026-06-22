@@ -1,0 +1,232 @@
+/* Floating left-edge board toolbar — ported pixel-faithfully from
+   plans/realtime/mockups/whiteboard.html (.board-toolbar / .tool / .pen-flyout). */
+
+:host {
+  display: block;
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  z-index: 10;
+}
+
+.board-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg, 12px);
+  box-shadow: var(--mj-shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.3));
+}
+
+.tool {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--mj-radius-md, 8px);
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--mj-text-secondary);
+  font-size: 13.5px;
+  display: grid;
+  place-items: center;
+  transition: all 130ms ease;
+  font-family: inherit;
+}
+.tool:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.tool.active {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+  box-shadow: var(--mj-shadow-brand, 0 4px 14px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent));
+}
+.tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tool:disabled:hover {
+  background: transparent;
+  color: var(--mj-text-secondary);
+}
+.tool .kbd {
+  position: absolute;
+  bottom: 1px;
+  right: 3px;
+  font-size: 7px;
+  font-weight: 700;
+  color: currentColor;
+  opacity: 0.55;
+}
+
+.tool-sep {
+  height: 1px;
+  background: var(--mj-border-default);
+  margin: 4px 4px;
+}
+
+/* ---------- pen / shape flyout ---------- */
+.pen-flyout {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full, 9999px);
+  box-shadow: var(--mj-shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.3));
+  white-space: nowrap;
+  cursor: default;
+}
+.pen-flyout::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: calc(50% - 5px);
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+  background: var(--mj-bg-surface-card);
+  border-left: 1px solid var(--mj-border-default);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.pen-c {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+.pen-c.sel {
+  border-color: var(--mj-text-inverse, #fff);
+  box-shadow: 0 0 0 2px var(--mj-brand-primary);
+}
+
+.pen-w {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-left: 9px;
+  border-left: 1px solid var(--mj-border-default);
+}
+.pen-w span {
+  border-radius: 99px;
+  background: var(--mj-text-secondary);
+  cursor: pointer;
+}
+.pen-w .w1 { width: 14px; height: 2px; }
+.pen-w .w2 { width: 14px; height: 4px; }
+.pen-w .w3 { width: 14px; height: 7px; }
+.pen-w span.sel {
+  background: var(--mj-brand-accent, var(--mj-brand-primary));
+  outline: 2px solid color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.pen-note {
+  font-size: 9.5px;
+  color: var(--mj-text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-left: 9px;
+  border-left: 1px solid var(--mj-border-default);
+}
+
+/* shape flyout reuses pen-flyout chrome */
+.shape-c {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--mj-radius-md, 8px);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--mj-text-secondary);
+  font-size: 12px;
+}
+.shape-c:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+.shape-c.sel {
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+  outline: 2px solid color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+  outline-offset: 1px;
+}
+.shape-c i.wb-diamond {
+  transform: rotate(45deg);
+  font-size: 10px;
+}
+
+/* ---------- text-style flyout (reuses pen-flyout chrome) ---------- */
+.text-flyout {
+  gap: 6px;
+}
+.txt-s {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 3px;
+  border-radius: var(--mj-radius-md, 8px);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--mj-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+.txt-s:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+.txt-s.sel {
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+  outline: 2px solid color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+  outline-offset: 1px;
+}
+
+.txt-fams {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 9px;
+  border-left: 1px solid var(--mj-border-default);
+}
+.txt-f {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--mj-radius-md, 8px);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--mj-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.txt-f:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+.txt-f.sel {
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+  outline: 2px solid color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+  outline-offset: 1px;
+}
+.txt-b {
+  font-size: 10px;
+}
+
+.txt-colors {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-left: 9px;
+  border-left: 1px solid var(--mj-border-default);
+}

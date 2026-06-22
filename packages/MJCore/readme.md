@@ -299,6 +299,29 @@ console.log(field.IsPrimaryKey); // Primary key?
 console.log(field.ReadOnly);     // Read-only field?
 ```
 
+#### Deprecated and Disabled Fields (Active-Status Enforcement)
+
+Every entity field has a `Status` of `Active` (the default), `Deprecated`, or `Disabled`. The column stays physically present in the table and the `EntityField` instance is always created — status only governs whether *code* is allowed to use the field:
+
+- **`Deprecated`** — still functional, but emits a batched console **warning** when accessed, nudging callers off it before removal.
+- **`Disabled`** — **throws** on access; the field is off-limits even though the metadata and physical column remain.
+
+**Where enforcement happens (and where it deliberately does not).** The status check lives at the field-access boundary that real code flows through — `BaseEntity.Get()`, `BaseEntity.Set()`, and `BaseEntity.SetMany()` — which is exactly what the generated strongly-typed accessors call:
+
+```typescript
+// Generated accessor → BaseEntity.Get/Set → status enforced here
+const s = agentRun.AgentState;      // Deprecated → warns; Disabled → throws
+agentRun.Set('AgentState', value);  // same enforcement via the dynamic API
+```
+
+It is **not** enforced on the low-level `EntityField.Value` accessor. Framework-internal machinery — dirty checking, validation, serialization (`GetAll`), record-change capture, and load-time hydration — reads `EntityField.Value` directly and is therefore exempt by construction. This is what keeps merely **loading or saving** a record that *contains* a deprecated column from false-warning on every operation: only genuine, code-initiated field access counts as "use."
+
+`SetMany()` distinguishes the two via its `ignoreActiveStatusAssertions` parameter — the load/hydration paths pass `true` (populating from the database is not user use), while ordinary user-initiated `SetMany()` calls enforce status.
+
+**Fast path.** Enforcement is gated on `EntityInfo.HasInactiveFields`, a value memoized once per entity definition. Entities whose fields are all `Active` (the overwhelming majority) pay only a single cached boolean check in `Get`/`Set`/`SetMany` — no per-field work and zero overhead in hot read/write loops.
+
+> Note: `EntityField.ActiveStatusAssertions` is retained as a **deprecated no-op** for backward compatibility. There is nothing to toggle at the field level anymore, since `EntityField.Value` no longer asserts.
+
 #### Save and Delete
 
 ```typescript
@@ -858,6 +881,98 @@ Key features:
 
 ---
 
+### BaseEngineRegistry — cross-engine cache reverse lookup
+
+Every `BaseEngine` registers itself with the process-wide `BaseEngineRegistry` on
+load, so the registry always knows **which loaded engines cache which entities**.
+You can use that to ask, from anywhere, *"is this entity already fully in memory?
+if so, hand me the array — and don't go to the database."*
+
+This is the introspection behind the Admin → System Diagnostics "loaded engines"
+view, plus two reverse-lookup helpers:
+
+```typescript
+import { BaseEngineRegistry, UserInfo } from '@memberjunction/core';
+
+// All loaded engines that cache 'Users', unfiltered (full-set) caches first.
+// Each match carries the engine, its config, and a LIVE pointer to the array.
+const matches = BaseEngineRegistry.Instance.FindCachedEntity<UserInfo>('Users');
+// matches[0] => { engineClassName, engine, config, records: UserInfo[], unfiltered }
+
+// Or the one-liner: the best (unfiltered-preferred) cached array, or null.
+const users = BaseEngineRegistry.Instance.TryGetCachedRecords<UserInfo>('Users', { unfilteredOnly: true });
+if (users) {
+    // Small/static entity already in memory — filter/sort locally, zero DB calls.
+    const hits = users.filter(u => u.Name.toLowerCase().includes(q));
+} else {
+    // Not cached as a full set → fall back to a normal RunView against the DB.
+}
+```
+
+`FindCachedEntity(entityName, { unfilteredOnly? })`:
+- Considers **only loaded** engines (a registered-but-unloaded engine has no data).
+- Matches an engine config when `Type === 'entity'` and `EntityName` matches (case-insensitive, trimmed).
+- Orders **unfiltered caches first** — a config with no `Filter` holds the *complete*
+  entity set and is authoritative (safe for "show all" / in-memory search); filtered
+  caches (a subset) come after. `unfilteredOnly: true` omits the filtered ones.
+- Returns the engine's **live array** (not a copy) — read it, don't mutate it. When the
+  config's `ResultType` is `'simple'`, rows are plain objects, not `BaseEntity` instances.
+- Returns **all** matches when several engines cache the same entity, so the caller can
+  pick (by `engineClassName`, by inspecting `config`, etc.).
+
+`TryGetCachedRecords(entityName, { unfilteredOnly? })` is the convenience wrapper —
+the best match's array, or `null`.
+
+**Why it's useful:** UI and service code that needs to look up records for a
+small/static entity (FK pickers, dropdowns, validation) can serve the lookup from
+an already-loaded engine cache in a single line — no extra DB round-trip, no
+per-keystroke query — and transparently fall back to `RunView` when the entity
+isn't cached as a full set.
+
+---
+
+### RegisterForStartup
+
+The `@RegisterForStartup` decorator registers singleton engine classes (or any class implementing `IStartupSink`) with the `StartupManager` to automatically run configuration/setup during application boot.
+
+```typescript
+import { RegisterForStartup, IStartupSink, IMetadataProvider, UserInfo } from '@memberjunction/core';
+
+@RegisterForStartup({
+    priority: 10,                 // Lower numbers run first
+    severity: 'fatal',           // 'fatal' (aborts startup), 'error', 'warn', 'silent'
+    description: 'My custom startup engine'
+})
+export class MyStartupEngine implements IStartupSink {
+    public static get Instance(): MyStartupEngine {
+        return super.getInstance<MyStartupEngine>();
+    }
+
+    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        // Run configuration and initial load
+        await this.Config(false, contextUser, provider);
+    }
+}
+```
+
+#### Deferred Startup & Delay
+For non-critical background services (like local AI model loading or vector pre-warming), you can set `deferred: true` to execute asynchronously without blocking the main application boot sequence.
+
+You can also specify `deferredDelay` (in milliseconds) to wait a set duration after synchronous boot finishes before the startup manager triggers the task, preventing resource spikes during boot:
+
+```typescript
+@RegisterForStartup({
+    deferred: true,
+    deferredDelay: 15000, // Delay background loading by 15 seconds
+    description: 'Background AI Engine pre-warming'
+})
+export class AIEngine implements IStartupSink {
+    // ...
+}
+```
+
+---
+
 ### LocalCacheManager
 
 The `LocalCacheManager` provides intelligent client-side caching for RunView and RunQuery results with TTL, LRU eviction, and differential updates.
@@ -1002,7 +1117,7 @@ This is intentional: it sidesteps the "did this PR change cache format?" review 
 
 For emergency mid-minor cache schema changes, set `MANUAL_CACHE_REVISION` in `storage-providers.ts` to force an extra wipe within the same minor release.
 
-> **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
+> **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](../../guides/CACHING_AND_PUBSUB_GUIDE.md).
 
 ---
 
@@ -1174,6 +1289,73 @@ Features:
 
 ---
 
+## Ranked Entity Record Search (`SearchEntity` / `SearchEntities`)
+
+A two-tier ranked-search API for finding the most relevant **records** of an entity for a free-text request. Distinct from the other lookups MJ already exposes — see the comparison below.
+
+```typescript
+import { Metadata, EntitySearchResult } from '@memberjunction/core';
+
+const md = new Metadata();
+
+// Singular form — search one entity, return ranked record list
+const results: EntitySearchResult[] = await md.SearchEntity({
+    entityName: 'MJ: Entities',
+    searchText: userRequestText,
+    options: { mode: 'hybrid', topK: 10, weights: { lexical: 1.0, semantic: 1.5 }, contextUser }
+});
+
+// Plural form — search many entities in ONE round-trip
+// Returns an array of arrays, aligned by input order
+const groups = await md.SearchEntities([
+    { entityName: 'Invoices',  searchText: 'overdue payments', options: { topK: 5, contextUser } },
+    { entityName: 'Customers', searchText: 'overdue payments', options: { topK: 5, contextUser } },
+    { entityName: 'Notes',     searchText: 'overdue payments', options: { topK: 5, contextUser } },
+]);
+// groups[0] = top Invoices, groups[1] = top Customers, groups[2] = top Notes
+```
+
+**Modes:**
+- `lexical` — substring / prefix matching on the entity's name field and any `IncludeInUserSearchAPI` fields.
+- `semantic` — vector cosine against precomputed embeddings in `MJ: Entity Record Documents.VectorJSON`.
+- `hybrid` (default) — weighted RRF blend of the two, tunable via `options.weights` and `options.rrfK`.
+
+**Configuration:** semantic and hybrid modes require an Active `EntityDocument` of type `Search` registered for the target entity. The MJ install seeds one for `MJ: Entities` so the entity catalog is searchable out of the box; users enable it for other entities via metadata (see `/metadata/entity-documents/`).
+
+**Provider implementation:** declared on `IMetadataProvider`, implemented polymorphically by each concrete provider. `GenericDatabaseProvider` runs the ranking in-process (embedding the query via `AIEngine.EmbedTextLocal` and querying `SimpleVectorServiceProvider` directly); `GraphQLDataProvider` proxies the whole batch to the server in one round-trip via the `SearchEntities` resolver. No registration or wiring required at startup.
+
+### How this differs from MJ's other search/lookup APIs
+
+| API | Purpose | Returns |
+|---|---|---|
+| `EntityByName(name)` / `EntityByID(id)` | Look up an entity **definition** (`EntityInfo`). Deterministic, not ranked. | One `EntityInfo` |
+| `FullTextSearch(params)` | Multi-entity server-side text search using each entity's `UserSearchString` rule (LIKE / FTS). Lexical only. | Groups of `FullTextSearchResultItem` |
+| **`SearchEntity(params)`** | "Find the N most relevant **records** of *this* entity for this query." Hybrid lexical + semantic. | `EntitySearchResult[]` |
+| **`SearchEntities(params[])`** | Batch — same ranking applied to multiple entities in one call. | `EntitySearchResult[][]` aligned by input |
+| `SearchEngine.Search()` ([`@memberjunction/search-engine`](../SearchEngine/README.md)) | **Cross-source** unified search across vectors, full-text, entities, and storage. Scoped via `SearchScope` metadata, optional reranker. | Aggregated `SearchResult` |
+
+**Picking the right one** is straightforward: if you know the entity and want ranked records, use `SearchEntity`. If you know the candidate entities, use `SearchEntities` (plural). If you don't know which entity / want cross-source results, use `SearchEngine.Search`. For exact-name metadata lookup, use `EntityByName`.
+
+---
+
+## Weighted Reciprocal Rank Fusion (`ComputeRRF`)
+
+`ComputeRRF` is the canonical RRF implementation used wherever MJ blends ranked result lists (`SearchEntity` / `SearchEntities` hybrid mode, `SearchEngine` cross-scope fusion, dupe detection). It accepts an optional per-list `weights` array:
+
+```typescript
+import { ComputeRRF, ScoredCandidate } from '@memberjunction/core';
+
+const fused = ComputeRRF(
+    [lexicalResults, semanticResults],
+    /* k */ 60,
+    /* weights */ [1.0, 1.5]   // semantic contributes 1.5× per rank position
+);
+```
+
+Formula: `FusedScore(d) = Σ_i w_i / (k + rank_i(d))`. Omitting `weights` is equivalent to all-ones — canonical unweighted RRF.
+
+---
+
 ## Utility Functions
 
 ```typescript
@@ -1273,20 +1455,20 @@ if (!saved) {
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/core-entities](../MJCoreEntities/README.md) | Extended entity classes for MemberJunction system entities |
+| [@memberjunction/core-entities](../MJCoreEntities/readme.md) | Extended entity classes for MemberJunction system entities |
 
 ### UI Frameworks
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/ng-shared](../Angular/Shared/README.md) | Angular-specific components and services |
-| [@memberjunction/ng-explorer-core](../Angular/Explorer/core/README.md) | Core Angular explorer components |
+| [@memberjunction/ng-shared](../Angular/Generic/shared/README.md) | Angular-specific components and services |
+| [@memberjunction/ng-explorer-core](../Angular/Explorer/explorer-core/README.md) | Core Angular explorer components |
 
 ### AI Integration
 
 | Package | Description |
 |---------|-------------|
-| [@memberjunction/ai](../AI/Core/README.md) | AI framework core abstractions |
+| [@memberjunction/ai](../AI/Core/readme.md) | AI framework core abstractions |
 | [@memberjunction/aiengine](../AI/Engine/README.md) | AI orchestration engine |
 
 ### Communication

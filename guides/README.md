@@ -4,6 +4,11 @@ This folder is the home for cross-cutting, "read this before you build that" ref
 
 If you're about to start work in one of the areas below, **read the guide first** — these documents capture patterns that have already been litigated.
 
+## Start here
+
+- **[Building Applications on MemberJunction](BUILDING_APPS_ON_MJ.md)** — The hub guide for using MJ as a first-class application development platform. Explains the metadata-driven, schema-to-app model, the unified-TypeScript / isomorphic object model, AI-native app patterns, and links out to the authoritative README/guide for every layer (data modeling, CodeGen, entities, API, UI, Actions, AI, deployment). Start here if you've got data in MJ and want to build on it.
+- **[Framework Comparison](FRAMEWORK_COMPARISON.md)** — Objective comparison of MJ against Next.js/Vercel, Supabase, Rails, Django, and a hand-rolled Node+ORM+SPA stack: where each shines, where MJ differs, and how to choose. Companion to the app-building guide.
+
 ## Framework fundamentals
 
 - **[BaseEntity Server-Side Patterns](BASE_ENTITY_SERVER_PATTERNS.md)** — Patterns for server-side `BaseEntity` subclasses: persisted embeddings, cross-record invariants via `ValidateAsync`, FK cleanup before delete. Read before writing a new entity subclass under `MJCoreEntitiesServer`.
@@ -16,6 +21,12 @@ If you're about to start work in one of the areas below, **read the guide first*
 - **[Search Scopes & RAG+ Guide](SEARCH_SCOPES_AND_RAG_GUIDE.md)** — Implementation guide for Search Scopes + agent RAG+ architecture. Companion to [`plans/search-scopes-rag-plus.md`](../plans/search-scopes-rag-plus.md).
 - **[Content Autotagging Guide](CONTENT_AUTOTAGGING_GUIDE.md)** — The Knowledge Hub pluggable autotagging pipeline: providers, keyword extraction, taxonomy bridging.
 - **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** — How the tag taxonomy itself is shaped, scoped, governed, grown, embedded, reviewed, and pruned. Companion to the autotagging guide.
+
+## AI and agents
+
+- **[Agent Memory Guide](AGENT_MEMORY_GUIDE.md)** — The complete agent-memory architecture: three-tier mental model (scratchpad → provisional → hardened), note injection (strategies, recency-wins policy, dated rendering, 8-level scoping), in-flight `memoryWrites` (the guard pipeline, `AllowMemoryWrite` gating, `AuthorType` provenance), and the Memory Manager's hardening/consolidation/contradiction/decay pipeline. Includes a configuration reference and troubleshooting queries.
+- **[Real-Time Co-Agents Guide](REALTIME_CO_AGENTS_GUIDE.md)** — Live, low-latency voice agents: the `Realtime` agent type and Realtime Co-Agent (one co-agent voices any target agent), the triple-registry plugin architecture (server/client model drivers + channel plugins), client-direct vs server-bridged topologies, session lifecycle/janitor, interactive channels (the live Whiteboard), narration, observability, and security. Companion to [`plans/ai-agent-sessions.md`](../plans/ai-agent-sessions.md).
+- **[Conversations UX Stack Guide](CONVERSATIONS_UX_STACK_GUIDE.md)** — The 3-layer architecture for every chat surface: pure-TS `@memberjunction/conversations-runtime` (orchestration) ↔ adapters (`INotificationAdapter` / `IActiveTaskTracker` / `ISessionsAdapter`) ↔ `@memberjunction/ng-conversations` (Angular widget). Slot system, Before/After cancelable events, `--mj-chat-*` design tokens, default-agent resolution, sessions adapter bridging to realtime, recipes.
 
 ## Angular / MJExplorer
 

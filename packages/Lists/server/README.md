@@ -136,7 +136,7 @@ ResolveEffectivePermission(listId: string): Promise<SharePermissionLevel | null>
 
 Every mutation also writes an `MJ: Audit Logs` entry. Audit log types
 are seeded via metadata sync (see
-[`metadata/audit-log-types/.list-sharing-audit-types.json`](../../metadata/audit-log-types/.list-sharing-audit-types.json)).
+[`metadata/audit-log-types/.list-sharing-audit-types.json`](../../../metadata/audit-log-types/.list-sharing-audit-types.json)).
 
 Direct user-shares fan out via the platform `CreateShareNotification`
 dispatcher (registered by `@memberjunction/notifications`) — recipients

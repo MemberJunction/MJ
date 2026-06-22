@@ -5,7 +5,9 @@
 
 <!-- ============================================
      TOOLBAR (bridges FormComponent state → toolbar inputs)
+     Hidden entirely when Config.Toolbar === null (dialog/slide-in surfaces).
      ============================================ -->
+@if (EffectiveShowToolbar) {
 <mj-form-toolbar
   [Record]="EffectiveRecord"
   [EditMode]="EffectiveEditMode"
@@ -19,7 +21,7 @@
   [TagCount]="TagCount"
   [VersionCount]="VersionCount"
   [EntityInfo]="EffectiveEntityInfo"
-  [Config]="ToolbarConfig"
+  [Config]="EffectiveToolbarConfig"
   [IsSaving]="EffectiveIsSaving"
   [VisibleSectionCount]="VisibleSectionCount"
   [TotalSectionCount]="TotalSectionCount"
@@ -28,6 +30,8 @@
   [ShowEmptyFields]="EffectiveShowEmptyFields"
   [WidthMode]="EffectiveWidthMode"
   [HasCustomSectionOrder]="EffectiveHasCustomSectionOrder"
+  [Variants]="EffectiveVariants"
+  [CurrentVariantID]="EffectiveCurrentVariantID"
   (Navigate)="OnNavigate($event)"
   (EditModeChange)="OnEditModeChange($event)"
   (BeforeSave)="BeforeSave.emit($event)"
@@ -50,11 +54,16 @@
   (WidthModeChange)="OnWidthModeChange($event)"
   (ResetSectionOrderRequested)="OnResetSectionOrder()"
   (ManageSectionsRequested)="OnManageSections()"
-  (TagsPanelToggled)="OnTagsPanelToggled()">
+  (TagsPanelToggled)="OnTagsPanelToggled()"
+  (VariantPicked)="OnVariantPicked($event)">
 </mj-form-toolbar>
+}
 
 <!-- ============================================
      SCROLL AREA (full-width so mouse wheel works anywhere)
+     Variant picker is now embedded in <mj-form-toolbar> as a right-side
+     button — see the [Variants]/[CurrentVariantID] inputs + (VariantPicked)
+     output on the toolbar above. Inline strip was removed.
      ============================================ -->
 <div class="mj-forms-scroll-area">
   <div class="mj-forms-panels-container"

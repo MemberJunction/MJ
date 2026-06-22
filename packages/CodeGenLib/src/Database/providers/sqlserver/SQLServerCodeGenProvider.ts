@@ -134,21 +134,28 @@ ${whereClause}GO`;
             const hasDefaultValue = firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0;
 
             if (hasDefaultValue) {
+                // UUID with DB default (e.g. NEWSEQUENTIALID()): two-branch INSERT —
+                // one with caller-supplied PK, one letting the DB fill it in.
+                // When there are no non-PK writable columns, omit the comma after the PK.
+                const nonPkCols = this.generateInsertFieldString(entity, entity.Fields, '', true);
+                const nonPkVals = this.generateInsertFieldString(entity, entity.Fields, '@', true);
+                const hasNonPkFields = nonPkCols.trim().length > 0;
+                const colSeparator = hasNonPkFields ? ',\n                ' : '';
+                const valSeparator = hasNonPkFields ? ',\n                ' : '';
+
                 preInsertCode = `DECLARE @InsertedRow TABLE ([${firstKey.Name}] UNIQUEIDENTIFIER)
-    
+
     IF @${firstKey.Name} IS NOT NULL
     BEGIN
         -- User provided a value, use it
         INSERT INTO [${entity.SchemaName}].[${entity.BaseTable}]
             (
-                [${firstKey.Name}],
-                ${this.generateInsertFieldString(entity, entity.Fields, '', true)}
+                [${firstKey.Name}]${colSeparator}${nonPkCols}
             )
         OUTPUT INSERTED.[${firstKey.Name}] INTO @InsertedRow
         VALUES
             (
-                @${firstKey.Name},
-                ${this.generateInsertFieldString(entity, entity.Fields, '@', true)}
+                @${firstKey.Name}${valSeparator}${nonPkVals}
             )
     END
     ELSE
@@ -156,12 +163,12 @@ ${whereClause}GO`;
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${entity.SchemaName}].[${entity.BaseTable}]
             (
-                ${this.generateInsertFieldString(entity, entity.Fields, '', true)}
+                ${hasNonPkFields ? nonPkCols : `[${firstKey.Name}]`}
             )
         OUTPUT INSERTED.[${firstKey.Name}] INTO @InsertedRow
         VALUES
             (
-                ${this.generateInsertFieldString(entity, entity.Fields, '@', true)}
+                ${hasNonPkFields ? nonPkVals : `DEFAULT`}
             )
     END`;
 
@@ -170,9 +177,12 @@ ${whereClause}GO`;
                 outputCode = '';
                 selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = (SELECT [${firstKey.Name}] FROM @InsertedRow)`;
             } else {
+                // UUID without DB default: generate via ISNULL(@PK, NEWID()).
+                // PK is added via additionalFieldList; no leading comma — the
+                // insertBlock logic below handles the separator.
                 preInsertCode = `DECLARE @ActualID UNIQUEIDENTIFIER = ISNULL(@${firstKey.Name}, NEWID())`;
-                additionalFieldList = ',\n                [' + firstKey.Name + ']';
-                additionalValueList = ',\n                @ActualID';
+                additionalFieldList = '[' + firstKey.Name + ']';
+                additionalValueList = '@ActualID';
                 outputCode = '';
                 selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = @ActualID`;
             }
@@ -184,10 +194,14 @@ ${whereClause}GO`;
             // INSERT would list the PK columns twice and SQL Server raises "The column name 'X'
             // is specified more than once". This pairs with the excludePrimaryKey=true argument
             // at the call sites at the bottom of this method.
+            const pkColumns: string[] = [];
+            const pkValues: string[] = [];
             for (const k of entity.PrimaryKeys) {
-                additionalFieldList += ',\n                [' + k.Name + ']';
-                additionalValueList += ',\n                @' + k.CodeName;
+                pkColumns.push('[' + k.Name + ']');
+                pkValues.push('@' + k.CodeName);
             }
+            additionalFieldList = pkColumns.join(',\n                ');
+            additionalValueList = pkValues.join(',\n                ');
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
             let isFirst = true;
             for (const k of entity.PrimaryKeys) {
@@ -195,6 +209,42 @@ ${whereClause}GO`;
                 selectInsertedRecord += `[${k.Name}] = @${k.CodeName}`;
                 isFirst = false;
             }
+        }
+
+        // Build the INSERT column and value lists. For the non-hasDefaultValue branches,
+        // additionalFieldList holds PK columns (without leading commas) and
+        // generateInsertFieldString (with excludePrimaryKey=true) holds non-PK columns.
+        // When the non-PK list is empty (PK-only entities), we must not emit a stray comma.
+        let insertBlock = '';
+        if (!preInsertCode.includes('INSERT INTO')) {
+            const nonPkColumns = this.generateInsertFieldString(entity, entity.Fields, '', true);
+            const nonPkValues = this.generateInsertFieldString(entity, entity.Fields, '@', true);
+            const hasNonPkFields = nonPkColumns.trim().length > 0;
+            const hasAdditionalFields = additionalFieldList.trim().length > 0;
+
+            let columnList: string;
+            let valueList: string;
+            if (hasNonPkFields && hasAdditionalFields) {
+                columnList = `${nonPkColumns},\n                ${additionalFieldList}`;
+                valueList = `${nonPkValues},\n                ${additionalValueList}`;
+            } else if (hasAdditionalFields) {
+                columnList = additionalFieldList;
+                valueList = additionalValueList;
+            } else {
+                columnList = nonPkColumns;
+                valueList = nonPkValues;
+            }
+
+            insertBlock = `
+    INSERT INTO
+    [${entity.SchemaName}].[${entity.BaseTable}]
+        (
+            ${columnList}
+        )
+    ${outputCode}VALUES
+        (
+            ${valueList}
+        )`;
         }
 
         return `
@@ -210,16 +260,7 @@ CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
 AS
 BEGIN
     SET NOCOUNT ON;
-    ${preInsertCode}${preInsertCode.includes('INSERT INTO') ? '' : `
-    INSERT INTO
-    [${entity.SchemaName}].[${entity.BaseTable}]
-        (
-            ${this.generateInsertFieldString(entity, entity.Fields, '', true)}${additionalFieldList}
-        )
-    ${outputCode}VALUES
-        (
-            ${this.generateInsertFieldString(entity, entity.Fields, '@', true)}${additionalValueList}
-        )`}
+    ${preInsertCode}${insertBlock}
     -- return the new record from the base view, which might have some calculated fields
     ${selectInsertedRecord}
 END
@@ -241,6 +282,7 @@ GO${permissions}
         const permissions = this.generateCRUDPermissions(entity, spName, 'Update');
         const hasUpdatedAtField = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
         const updatedAtTrigger = hasUpdatedAtField ? this.generateTimestampTrigger(entity) : '';
+        const updateFields = this.generateUpdateFieldString(entity.Fields);
         const selectUpdatedRecord = `SELECT
                                         *
                                     FROM
@@ -248,6 +290,29 @@ GO${permissions}
                                     WHERE
                                         ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
                                     `;
+
+        // PK-only entities (e.g. junction tables with only PK + __mj timestamp columns)
+        // have no updatable fields. Generate a no-op SP that just returns the existing row
+        // rather than emitting an invalid UPDATE with an empty SET clause.
+        const hasUpdatableFields = updateFields.trim().length > 0;
+
+        const spBody = hasUpdatableFields
+            ? `    UPDATE
+        [${entity.SchemaName}].[${entity.BaseTable}]
+    SET
+        ${updateFields}
+    WHERE
+        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        ${selectUpdatedRecord}`
+            : `    -- No updatable fields (PK-only entity, e.g. junction table). Return the existing row.
+    ${selectUpdatedRecord}`;
 
         return `
 ------------------------------------------------------------
@@ -262,20 +327,7 @@ CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE
-        [${entity.SchemaName}].[${entity.BaseTable}]
-    SET
-        ${this.generateUpdateFieldString(entity.Fields)}
-    WHERE
-        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        ${selectUpdatedRecord}
+${spBody}
 END
 GO
 ${permissions}

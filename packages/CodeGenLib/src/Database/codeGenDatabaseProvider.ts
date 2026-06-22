@@ -643,6 +643,11 @@ export abstract class CodeGenDatabaseProvider {
                 parts.push(paramRef);
             }
         }
+
+        if (parts.length === 0 && !excludePrimaryKey) {
+            console.warn(`[CodeGen] generateInsertFieldString produced an empty column list for entity "${entity.Name}" (${entity.SchemaName}.${entity.BaseTable}). This typically means all columns are PKs with no additional data columns.`);
+        }
+
         return parts.join(',\n                ');
     }
 
@@ -987,6 +992,25 @@ export abstract class CodeGenDatabaseProvider {
      * @param mjCoreSchema The MJ core schema name.
      */
     abstract getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string;
+
+    /**
+     * Returns DDL that creates/replaces the platform's metadata-management
+     * support objects (introspection views and the routines manage-metadata
+     * invokes via {@link callRoutineSQL}), or `null` when the platform ships
+     * them through migrations instead.
+     *
+     * These objects are CodeGen's own machinery — only CodeGen calls them —
+     * so platforms that return DDL here get it executed (idempotently) at the
+     * start of every manageMetadata run. That guarantees the objects can
+     * never be missing or version-skewed relative to the CodeGenLib code that
+     * calls them.
+     *
+     * SQL Server: returns `null` (objects ship in the baseline migrations).
+     * PostgreSQL: returns the full support-object DDL.
+     */
+    getMetadataSupportObjectsSQL(_mjCoreSchema: string): string | null {
+        return null;
+    }
 
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
 
