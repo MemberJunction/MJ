@@ -203,7 +203,7 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
       `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME, ORDINAL_POSITION`,
       [schema],
     );
-    return { database: dataSource.DefaultDatabase ?? undefined, objects: this.assembleSchema(schema, tables, columns) };
+    return { Database: dataSource.DefaultDatabase ?? undefined, Objects: this.assembleSchema(schema, tables, columns) };
   }
 
   /** Close all cached connections (graceful shutdown). */
@@ -251,14 +251,14 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
     for (const c of columnRows) {
       const list = columnsByTable.get(c.TABLE_NAME) ?? [];
       // Snowflake INFORMATION_SCHEMA does not reliably expose primary keys; left false (introspection limitation).
-      list.push({ name: c.COLUMN_NAME, nativeType: c.DATA_TYPE, nullable: c.IS_NULLABLE === 'YES', isPrimaryKey: false });
+      list.push({ Name: c.COLUMN_NAME, NativeType: c.DATA_TYPE, Nullable: c.IS_NULLABLE === 'YES', IsPrimaryKey: false });
       columnsByTable.set(c.TABLE_NAME, list);
     }
     return tableRows.map((t) => ({
-      name: t.TABLE_NAME,
-      objectType: this.mapObjectType(t.TABLE_TYPE),
-      schema,
-      columns: columnsByTable.get(t.TABLE_NAME) ?? [],
+      Name: t.TABLE_NAME,
+      ObjectType: this.mapObjectType(t.TABLE_TYPE),
+      Schema: schema,
+      Columns: columnsByTable.get(t.TABLE_NAME) ?? [],
     }));
   }
 

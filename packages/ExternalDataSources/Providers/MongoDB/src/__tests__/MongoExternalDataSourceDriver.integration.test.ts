@@ -131,12 +131,12 @@ describe.runIf(RUN)('MongoExternalDataSourceDriver (integration)', () => {
 
   it('IntrospectSchema samples collections and infers _id as primary key', async () => {
     const schema = await driver.IntrospectSchema(dataSource, undefined);
-    const names = schema.objects.map((o) => o.name).sort();
+    const names = schema.Objects.map((o) => o.Name).sort();
     expect(names).toEqual(['customers', 'orders']);
-    const customers = schema.objects.find((o) => o.name === 'customers');
-    expect(customers?.objectType).toBe('collection');
-    expect(customers?.columns.find((c) => c.name === '_id')?.isPrimaryKey).toBe(true);
-    expect(customers?.columns.find((c) => c.name === 'name')?.nativeType).toBe('string');
+    const customers = schema.Objects.find((o) => o.Name === 'customers');
+    expect(customers?.ObjectType).toBe('collection');
+    expect(customers?.Columns.find((c) => c.Name === '_id')?.IsPrimaryKey).toBe(true);
+    expect(customers?.Columns.find((c) => c.Name === 'name')?.NativeType).toBe('string');
   });
 
   it('surfaces a clean failure (not a crash) on a malformed native query', async () => {

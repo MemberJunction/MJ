@@ -47,5 +47,47 @@
       "SupportsReadWrite": false,
       "Status": "Active"
     }
+  },
+  {
+    "fields": {
+      "Name": "SQL Server (External)",
+      "Description": "Live, read-only proxied access to an external Microsoft SQL Server database via the node-mssql driver. T-SQL dialect with TOP / OFFSET-FETCH paging and INFORMATION_SCHEMA + sys.* introspection (tables, columns, primary keys, foreign keys).",
+      "DriverClass": "SQLServerExternalDriver",
+      "MetadataIntrospectionStrategy": "InformationSchema",
+      "FilterDialect": "tsql",
+      "PagingStrategy": "OffsetFetch",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MySQL (External)",
+      "Description": "Live, read-only proxied access to an external MySQL / MariaDB database via the mysql2 driver. Backtick-quoted identifiers, LIMIT/OFFSET paging, and INFORMATION_SCHEMA introspection (tables, columns, primary keys, foreign keys).",
+      "DriverClass": "MySQLExternalDriver",
+      "MetadataIntrospectionStrategy": "InformationSchema",
+      "FilterDialect": "mysql",
+      "PagingStrategy": "LimitOffset",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oracle (External)",
+      "Description": "Live, read-only proxied access to an external Oracle database via node-oracledb in Thin mode (no Instant Client required). Double-quoted identifiers, OFFSET/FETCH paging, :named bind parameters, and ALL_* catalog introspection (tables, columns, primary keys, foreign keys).",
+      "DriverClass": "OracleExternalDriver",
+      "MetadataIntrospectionStrategy": "NativeCatalog",
+      "FilterDialect": "oracle",
+      "PagingStrategy": "OffsetFetch",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    }
   }
 ]

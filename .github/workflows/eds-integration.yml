@@ -1,13 +1,16 @@
 name: External Data Sources integration
 
-# Runs the PostgreSQL reference-driver integration tests against a REAL Postgres,
-# proving the live-read path (RunView / native query / LoadSingle / IntrospectSchema)
-# end-to-end. The driver-level tests are opt-in (RUN_PG_INTEGRATION=1) so the normal
-# unit-test gate stays DB-free; this workflow provides the DB and flips the flag.
+# Runs the External Data Source driver integration tests against REAL databases —
+# PostgreSQL, MongoDB, SQL Server, MySQL, and Oracle — proving the live-read path
+# (RunView / native query / LoadSingle / IntrospectSchema, including foreign-key
+# introspection) end-to-end. The driver-level tests are opt-in (RUN_<DB>_INTEGRATION=1)
+# so the normal unit-test gate stays DB-free; this workflow provides the DB and flips
+# the flag.
 #
-# The test suite SELF-SEEDS its `demo` schema (customers/orders + a view) in beforeAll,
-# so the service container below is a blank Postgres — no seed step needed and the run
-# is deterministic.
+# Each suite SELF-SEEDS its own fixture (customers/orders + a view, with a FK) in
+# beforeAll, so every service container below is blank — no seed step needed and the
+# runs are deterministic. (Snowflake has no CI job: it needs a hosted account, and its
+# catalog doesn't expose FKs reliably — it's exercised locally with tester-supplied creds.)
 
 on:
   workflow_dispatch: # manual trigger
@@ -121,4 +124,163 @@ jobs:
           MONGO_USER: eds_ci
           MONGO_PASSWORD: eds_ci_pass
           MONGO_AUTH_SOURCE: admin
+        run: npm run test
+
+  sqlserver-driver-integration:
+    name: SQL Server driver (integration)
+    runs-on: ubuntu-latest
+
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: Eds_CI_pass123
+        ports:
+          - 1433:1433
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build SQL Server external driver
+        run: npx turbo build --filter=@memberjunction/external-data-source-sqlserver
+
+      # SQL Server accepts TCP before it accepts logins, and the server image has no
+      # reliable in-container health client, so poll for login-readiness with the mssql
+      # client we just built (resolves from the hoisted root node_modules).
+      - name: Wait for SQL Server to accept logins
+        env:
+          SAPW: Eds_CI_pass123
+        run: |
+          node -e '
+            const sql = require("mssql");
+            (async () => {
+              for (let i = 0; i < 60; i++) {
+                try {
+                  const p = await new sql.ConnectionPool({ server: "localhost", port: 1433, user: "sa", password: process.env.SAPW, options: { encrypt: true, trustServerCertificate: true }, connectionTimeout: 4000 }).connect();
+                  await p.request().query("SELECT 1");
+                  await p.close();
+                  console.log("SQL Server ready");
+                  process.exit(0);
+                } catch (e) {
+                  await new Promise((r) => setTimeout(r, 3000));
+                }
+              }
+              console.error("SQL Server did not become ready");
+              process.exit(1);
+            })();
+          '
+
+      # The suite self-seeds its `eds_it` schema (customers/orders + a view, with a FK) in master.
+      - name: Run SQL Server driver integration tests
+        working-directory: packages/ExternalDataSources/Providers/SQLServer
+        env:
+          RUN_SQLSERVER_INTEGRATION: '1'
+          MSSQL_HOST: localhost
+          MSSQL_PORT: '1433'
+          MSSQL_DATABASE: master
+          MSSQL_USER: sa
+          MSSQL_PASSWORD: Eds_CI_pass123
+        run: npm run test
+
+  mysql-driver-integration:
+    name: MySQL driver (integration)
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: eds_ci_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 20s
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build MySQL external driver
+        run: npx turbo build --filter=@memberjunction/external-data-source-mysql
+
+      # The suite self-seeds its `eds_it` database (customers/orders + a view, with a FK).
+      - name: Run MySQL driver integration tests
+        working-directory: packages/ExternalDataSources/Providers/MySQL
+        env:
+          RUN_MYSQL_INTEGRATION: '1'
+          MYSQL_HOST: localhost
+          MYSQL_PORT: '3306'
+          MYSQL_USER: root
+          MYSQL_PASSWORD: eds_ci_pass
+        run: npm run test
+
+  oracle-driver-integration:
+    name: Oracle driver (integration)
+    runs-on: ubuntu-latest
+
+    services:
+      oracle:
+        image: gvenzl/oracle-free:slim
+        env:
+          ORACLE_PASSWORD: Eds_CI_pass123
+          APP_USER: eds_it
+          APP_USER_PASSWORD: Eds_CI_pass123
+        ports:
+          - 1521:1521
+        # gvenzl images ship a healthcheck.sh; allow a generous startup window for the DB to open.
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 40
+          --health-start-period 30s
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build Oracle external driver
+        run: npx turbo build --filter=@memberjunction/external-data-source-oracle
+
+      # node-oracledb runs in Thin mode (pure JS — no Instant Client). The suite self-seeds
+      # customers/orders + a view (with a FK) in the eds_it schema (APP_USER above).
+      - name: Run Oracle driver integration tests
+        working-directory: packages/ExternalDataSources/Providers/Oracle
+        env:
+          RUN_ORACLE_INTEGRATION: '1'
+          ORA_HOST: localhost
+          ORA_PORT: '1521'
+          ORA_SERVICE: FREEPDB1
+          ORA_USER: eds_it
+          ORA_PASSWORD: Eds_CI_pass123
         run: npm run test

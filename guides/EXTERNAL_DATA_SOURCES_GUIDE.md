@@ -1,6 +1,6 @@
 # External Data Sources Guide
 
-**External Data Sources** let an MJ **Entity** or **Query** be backed by a remote system — Snowflake, MongoDB, an external PostgreSQL, etc. — and read **live at request time** through a pluggable driver, *without replicating the data into the MJ database*. It's conceptually similar to a SQL Server Linked Server: metadata declares where the data actually lives, and MJAPI proxies reads through a driver.
+**External Data Sources** let an MJ **Entity** or **Query** be backed by a remote system — PostgreSQL, SQL Server, MySQL, Oracle, Snowflake, MongoDB, etc. — and read **live at request time** through a pluggable driver, *without replicating the data into the MJ database*. It's conceptually similar to a SQL Server Linked Server: metadata declares where the data actually lives, and MJAPI proxies reads through a driver.
 
 The design is **additive and read-only**: an entity/query with a null `ExternalDataSourceID` behaves exactly as before. Writes across heterogeneous systems are an explicit non-goal (they break MJ's transaction, Record-Changes, and RLS guarantees).
 
@@ -35,7 +35,7 @@ ExternalDataSourceReadRouter   (abstract, @memberjunction/core — dependency-in
 ExternalDataSourceReadRouterImpl   (@memberjunction/external-data-sources, server-only)
    │  picks the driver + connection for the data source
    ▼
-BaseExternalDataSourceDriver  →  Postgres / Snowflake / MongoDB driver
+BaseExternalDataSourceDriver  →  Postgres / SQL Server / MySQL / Oracle / Snowflake / MongoDB driver
    ▼
 Remote system
 ```
@@ -51,7 +51,7 @@ Key points:
 
 ### 1. Register the data source *type* (driver catalog)
 
-`ExternalDataSourceType` (entity `MJ: External Data Source Types`) maps a type name to a `DriverClass` (the `@RegisterClass` key of a driver). Types are seeded as metadata in `metadata/external-data-source-types/`. The starter catalog ships with **PostgreSQL, Snowflake, and MongoDB** (all `Active` — drivers included). Add more by seeding rows (see *Adding a driver* below).
+`ExternalDataSourceType` (entity `MJ: External Data Source Types`) maps a type name to a `DriverClass` (the `@RegisterClass` key of a driver). Types are seeded as metadata in `metadata/external-data-source-types/`. The starter catalog ships with **PostgreSQL, SQL Server, MySQL, Oracle, Snowflake, and MongoDB** (all `Active` — drivers included). Add more by seeding rows (see *Adding a driver* below).
 
 > **Note:** the `Status` column only accepts `Active` or `Deprecated` — there is no "Draft". Only seed a type as `Active` once its driver actually ships; otherwise selecting it produces a runtime "no driver registered" error.
 
@@ -71,6 +71,8 @@ Key points:
 - **Query**: set `Query.ExternalDataSourceID`. The query's SQL is executed in the remote dialect via the driver's native-query path (full multi-table joins authored in the remote dialect are supported).
 
 > **EntityField provisioning is automatic.** During a normal `mj codegen` run, the `manageExternalEntities` pass introspects the **remote** schema of each external-backed entity (via the driver's `IntrospectSchema`) and syncs its `EntityField` rows — the remote analogue of how CodeGen already manages view-backed `VirtualEntity` fields from `INFORMATION_SCHEMA`. You set `ExternalDataSourceID` + `ExternalObjectName` on the entity; CodeGen fills in the fields. (The engine + driver packages must be installed in the CodeGen process; they're loaded on demand only when external entities exist.)
+
+> **Foreign keys become MJ relationships.** The four relational drivers (PostgreSQL, SQL Server, MySQL, Oracle) also introspect **primary and foreign keys** from the source catalog into the schema contract's `Relationships`. When CodeGen imports a single-column FK whose referenced remote object is *also* an imported external entity in the same data source, `manageExternalEntities` sets the FK field's `RelatedEntityID` / `RelatedEntityFieldName` / `IsSoftForeignKey`, and a follow-up `manageEntityRelationships` pass materializes a real `EntityRelationship` record — so an external `orders.customer_id → customers` FK behaves like any other MJ relationship (e.g. a `Customers → Orders` one-to-many). Composite-column FKs and references to objects that haven't been imported yet are skipped with a log rather than guessed at (that hardening is a follow-on). MongoDB has no foreign keys, and Snowflake's catalog doesn't expose them reliably, so those drivers leave `Relationships` empty by design.
 
 ---
 
@@ -109,7 +111,7 @@ If a read fails with an auth/credential error (e.g. a rotated or expired credent
 
 ## Adding a driver
 
-A driver proxies one family of remote systems. To add one (e.g. MySQL):
+A driver proxies one family of remote systems. To add one (e.g. another SQL dialect or NoSQL store):
 
 1. **New package** `@memberjunction/external-data-source-<name>` that depends on `@memberjunction/external-data-sources`.
 2. **Subclass `BaseExternalDataSourceDriver<TConnection>`** and implement:
@@ -124,11 +126,16 @@ A driver proxies one family of remote systems. To add one (e.g. MySQL):
 The class-registration manifest captures the driver automatically (no extra wiring).
 
 ### Shipped drivers
-| Driver | `DriverClass` | Auth | Filter dialect | Introspection |
-|---|---|---|---|---|
-| PostgreSQL | `PostgresExternalDriver` | username/password | `pgsql` (SQL WHERE) | `information_schema` |
-| Snowflake | `SnowflakeExternalDriver` | password / PAT / key-pair (JWT) | `ansi` (SQL WHERE) | `INFORMATION_SCHEMA` |
-| MongoDB | `MongoExternalDriver` | username/password | `mongo-ast` (SQL-WHERE → Mongo translation) | document sampling |
+| Driver | `DriverClass` | SDK | Auth | Identifier quoting · paging | Introspection (incl. FKs?) |
+|---|---|---|---|---|---|
+| PostgreSQL | `PostgresExternalDriver` | `pg` | username/password | `"quotes"` · `LIMIT`/`OFFSET` | `information_schema` — PK + **FK** |
+| SQL Server | `SQLServerExternalDriver` | `mssql` | username/password | `[brackets]` · `TOP`/`OFFSET..FETCH` | `INFORMATION_SCHEMA` + `sys.*` — PK + **FK** |
+| MySQL | `MySQLExternalDriver` | `mysql2` | username/password | `` `backticks` `` · `LIMIT`/`OFFSET` | `INFORMATION_SCHEMA` — PK + **FK** |
+| Oracle | `OracleExternalDriver` | `oracledb` (Thin) | username/password | `"quotes"` · `OFFSET..FETCH` | `ALL_*` catalog — PK + **FK** |
+| Snowflake | `SnowflakeExternalDriver` | `snowflake-sdk` | password / PAT / key-pair (JWT) | `"quotes"` · `LIMIT`/`OFFSET` | `INFORMATION_SCHEMA` — PK only (no reliable FKs) |
+| MongoDB | `MongoExternalDriver` | `mongodb` | username/password | n/a · skip/limit | document sampling — no FKs |
+
+All four relational drivers introspect foreign keys (composite-key aware) into the schema contract's `Relationships`; CodeGen consumes them as described under *Point an Entity or Query at it* above. `node-oracledb` runs in **Thin mode** — pure JS, no Oracle Instant Client to install.
 
 ---
 
@@ -139,9 +146,9 @@ The class-registration manifest captures the driver automatically (no extra wiri
 - **`count_only` RunView still fetches rows.** An external `RunView` with `ResultType: 'count_only'` returns an accurate `TotalRowCount` but fetches up to `MaxRows` rows to obtain it (no remote `COUNT(*)` optimization). And `TotalRowCount` falls back to the returned page size when a driver doesn't report a separate total — so deep-pagination "are there more pages?" checks over external sources can be approximate.
 - **EntityField type/length mapping is best-effort.** The native→MJ type mapping is approximate; in particular `nvarchar` lengths are carried as the remote **character** count (not byte count), so a remote `varchar(255)` surfaces with a declared `Length` of 255.
 - **No per-end-user identity passthrough.** Drivers use the shared service-account credential bound to the data source.
-- **Transport is secure-by-default for the SQL drivers.** Postgres/MongoDB **refuse** a plaintext connection to a non-local host: enable TLS (Postgres `ssl:true` — cert verification then on by default via `sslRejectUnauthorized`; MongoDB `tls:true` or a `mongodb+srv://`/`tls=true` URI), or set `allowInsecureTransport:true` in `ConnectionConfig` to consciously accept plaintext. Local hosts (`localhost`/`127.0.0.1`) are exempt for dev convenience. Snowflake's SDK is always HTTPS.
+- **Transport is secure-by-default for the SQL drivers.** Postgres, SQL Server, MySQL, Oracle, and MongoDB **refuse** a plaintext connection to a non-local host: enable TLS (Postgres `ssl:true` — cert verification then on by default via `sslRejectUnauthorized`; SQL Server `ssl:true`; MySQL `ssl:true`; Oracle via TCPS; MongoDB `tls:true` or a `mongodb+srv://`/`tls=true` URI), or set `allowInsecureTransport:true` in `ConnectionConfig` to consciously accept plaintext. Local hosts (`localhost`/`127.0.0.1`) are exempt for dev convenience. Snowflake's SDK is always HTTPS.
 - **Snowflake fidelity caveats** (large `NUMBER` precision past 2^53; uppercased column identifiers) are being hardened as the Snowflake driver matures.
-- **Integration tests** — the Postgres and MongoDB driver suites are self-seeding and run in CI against service containers (`.github/workflows/eds-integration.yml`); the Snowflake suite is opt-in (`RUN_SNOWFLAKE_INTEGRATION=1`) against your own account (no Snowflake service container).
+- **Integration tests** — the Postgres, SQL Server, MySQL, Oracle, and MongoDB driver suites are self-seeding and run in CI against service containers (`.github/workflows/eds-integration.yml`), each gated by its own `RUN_<DB>_INTEGRATION=1` flag so the default unit-test gate stays DB-free. The Snowflake suite is opt-in (`RUN_SNOWFLAKE_INTEGRATION=1`) against your own account — it needs a hosted Snowflake (no service container) and tester-supplied credentials via env vars (never committed).
 
 ---
 

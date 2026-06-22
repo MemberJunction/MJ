@@ -7,6 +7,8 @@
  * can return them, and so build-time consumers (CodeGen) can reference them without a hard
  * dependency on the engine or driver SDKs — the same dependency-inversion rationale the
  * router itself follows.
+ *
+ * Member naming follows MJ convention: PascalCase for all public/exported members.
  */
 
 /** Kind of remote object a schema descriptor describes. */
@@ -14,21 +16,21 @@ export type ExternalObjectType = 'table' | 'view' | 'collection';
 
 /** One column/field discovered during schema introspection. */
 export interface ExternalSchemaColumn {
-  name: string;
+  Name: string;
   /** Native remote data type, verbatim (e.g. 'VARCHAR2', 'NUMBER', 'timestamptz', 'ObjectId'). */
-  nativeType: string;
-  nullable: boolean;
-  isPrimaryKey: boolean;
+  NativeType: string;
+  Nullable: boolean;
+  IsPrimaryKey: boolean;
   /** Human description if the remote catalog supplies one. */
-  description?: string;
+  Description?: string;
 }
 
 /** One column pairing in a foreign-key relationship (referencing column → referenced column). */
 export interface ExternalSchemaRelationshipColumn {
   /** Column on this (the referencing) object that holds the foreign key. */
-  column: string;
-  /** Column on the referenced object that `column` points to. */
-  referencedColumn: string;
+  Column: string;
+  /** Column on the referenced object that `Column` points to. */
+  ReferencedColumn: string;
 }
 
 /**
@@ -38,34 +40,34 @@ export interface ExternalSchemaRelationshipColumn {
  */
 export interface ExternalSchemaRelationship {
   /** Constraint name if the remote catalog supplies one. */
-  name?: string;
+  Name?: string;
   /** Name of the object this relationship points to. */
-  referencedObject: string;
+  ReferencedObject: string;
   /** Schema/namespace of the referenced object, when applicable. */
-  referencedSchema?: string;
+  ReferencedSchema?: string;
   /** Column pairings that make up the foreign key (an array to support composite keys). */
-  columns: ExternalSchemaRelationshipColumn[];
+  Columns: ExternalSchemaRelationshipColumn[];
 }
 
 /** One table/view/collection discovered during schema introspection. */
 export interface ExternalSchemaObject {
-  name: string;
-  objectType: ExternalObjectType;
+  Name: string;
+  ObjectType: ExternalObjectType;
   /** Schema/namespace the object lives in on the remote side, when applicable. */
-  schema?: string;
-  columns: ExternalSchemaColumn[];
+  Schema?: string;
+  Columns: ExternalSchemaColumn[];
   /**
    * Foreign-key relationships originating from this object (the referencing side).
    * Optional and additive: drivers populate this incrementally as per-provider relationship
    * introspection lands, and DBAutoDoc may further enrich it. An absent or empty array means
    * "relationships not yet discovered", NOT "this object has no relationships".
    */
-  relationships?: ExternalSchemaRelationship[];
+  Relationships?: ExternalSchemaRelationship[];
 }
 
 /** The result of introspecting a remote source's schema. */
 export interface ExternalSchemaDescriptor {
   /** Source-level identifier the schema was read from (database/catalog/namespace). */
-  database?: string;
-  objects: ExternalSchemaObject[];
+  Database?: string;
+  Objects: ExternalSchemaObject[];
 }

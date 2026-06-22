@@ -1,4 +1,4 @@
-import pg from 'pg';
+import sql from 'mssql';
 import { RegisterClass } from "@memberjunction/global";
 import {
   UserInfo,
@@ -20,22 +20,25 @@ import {
 } from "@memberjunction/external-data-sources";
 
 /** Non-secret connection config stored in ExternalDataSource.ConnectionConfig (JSON). */
-interface PostgresConnectionConfig {
+interface SQLServerConnectionConfig {
+  /** Server host (accepts `server` or `host`). */
+  server?: string;
   host?: string;
   port?: number;
   database?: string;
-  /** Enable TLS for the connection. */
+  /** Named instance (e.g. 'SQLEXPRESS'); mutually exclusive with an explicit port on most setups. */
+  instanceName?: string;
+  /** Enable TLS encryption for the connection. */
   ssl?: boolean;
   /**
    * Whether TLS must present a trusted certificate. Defaults to TRUE (verify the server cert).
    * Set to false only for managed/self-signed dev endpoints that you knowingly accept — doing so
-   * disables MITM protection.
+   * disables MITM protection. Maps to mssql `trustServerCertificate`.
    */
   sslRejectUnauthorized?: boolean;
   /**
    * Explicitly accept an UNENCRYPTED connection to a non-local host. Default false → the driver
-   * refuses plaintext to a remote host (local hosts are always allowed). Set true only for a
-   * known-safe plaintext endpoint (e.g. a private network you trust).
+   * refuses plaintext to a remote host (local hosts are always allowed).
    */
   allowInsecureTransport?: boolean;
   /** Max pool connections (default 5). */
@@ -43,42 +46,48 @@ interface PostgresConnectionConfig {
 }
 
 /** Decrypted credential values expected from the Credential Engine. */
-interface PostgresCredentialValues extends Record<string, string> {
+interface SQLServerCredentialValues extends Record<string, string> {
   username: string;
   password: string;
 }
 
 /**
- * PostgreSQL driver for External Data Sources. Read-only, live-proxied access
- * to an external PostgreSQL database via node-postgres (`pg`). One pooled
- * connection per `ExternalDataSource.ID`, lazily created.
+ * SQL Server driver for External Data Sources. Read-only, live-proxied access
+ * to an external Microsoft SQL Server database via node-mssql (`mssql`). One pooled
+ * connection per `ExternalDataSource.ID`, lazily created. Mirrors the proven
+ * PostgreSQL driver with T-SQL dialect specifics (bracket-quoted identifiers,
+ * `TOP`/`OFFSET..FETCH` paging, `@named` parameters, `sys.*` FK introspection).
  *
- * Registered as `PostgresExternalDriver` — set `ExternalDataSourceType.DriverClass`
+ * Registered as `SQLServerExternalDriver` — set `ExternalDataSourceType.DriverClass`
  * to that value to use this driver.
  */
-@RegisterClass(BaseExternalDataSourceDriver, 'PostgresExternalDriver')
-export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriver<pg.Pool> {
-  private pools = new Map<string, pg.Pool>();
+@RegisterClass(BaseExternalDataSourceDriver, 'SQLServerExternalDriver')
+export class SQLServerExternalDataSourceDriver extends BaseExternalDataSourceDriver<sql.ConnectionPool> {
+  private pools = new Map<string, sql.ConnectionPool>();
 
-  protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<pg.Pool> {
+  protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<sql.ConnectionPool> {
     const existing = this.pools.get(dataSource.ID);
     if (existing) {
       return existing;
     }
-    const config = this.parseConnectionConfig<PostgresConnectionConfig>(dataSource);
+    const config = this.parseConnectionConfig<SQLServerConnectionConfig>(dataSource);
     // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in.
-    this.assertSecureTransport({ host: config.host, tlsEnabled: !!config.ssl, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
-    const cred = await this.resolveCredential<PostgresCredentialValues>(dataSource, contextUser);
-    const pool = new pg.Pool({
-      host: config.host,
+    this.assertSecureTransport({ host: config.server ?? config.host, tlsEnabled: !!config.ssl, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
+    const cred = await this.resolveCredential<SQLServerCredentialValues>(dataSource, contextUser);
+    const pool = await new sql.ConnectionPool({
+      server: config.server ?? config.host ?? 'localhost',
       port: config.port,
       database: dataSource.DefaultDatabase ?? config.database,
       user: cred?.values.username,
       password: cred?.values.password,
-      // Secure by default: verify the server cert unless the config explicitly opts out.
-      ssl: config.ssl ? { rejectUnauthorized: config.sslRejectUnauthorized !== false } : undefined,
-      max: config.maxPoolSize ?? 5,
-    });
+      options: {
+        encrypt: !!config.ssl,
+        // Secure by default: verify the server cert unless the config explicitly opts out.
+        trustServerCertificate: config.sslRejectUnauthorized === false,
+        ...(config.instanceName ? { instanceName: config.instanceName } : {}),
+      },
+      pool: { max: config.maxPoolSize ?? 5 },
+    }).connect();
     this.pools.set(dataSource.ID, pool);
     return pool;
   }
@@ -87,7 +96,7 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
     const pool = this.pools.get(dataSourceId);
     if (pool) {
       this.pools.delete(dataSourceId);
-      try { await pool.end(); } catch { /* best-effort close on the failure path */ }
+      try { await pool.close(); } catch { /* best-effort close on the failure path */ }
     }
   }
 
@@ -95,7 +104,7 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
     const start = Date.now();
     try {
       const pool = await this.getConnection(dataSource, contextUser);
-      await pool.query('SELECT 1');
+      await pool.request().query('SELECT 1');
       return { success: true, message: 'Connection successful.', testedAt: new Date(), latencyMs: Date.now() - start };
     } catch (e) {
       return { success: false, message: this.errorText(e), testedAt: new Date(), latencyMs: Date.now() - start };
@@ -112,10 +121,10 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
       return await this.withConnectionRetry(dataSource, async () => {
         const pool = await this.getConnection(dataSource, contextUser);
         const target = this.qualifyObject(dataSource, params.objectName);
-        const sql = this.buildSelectSql(target, params);
-        const res = await pool.query(sql);
+        const sqlText = this.buildSelectSql(target, params);
+        const res = await pool.request().query(sqlText);
         const totalRowCount = await this.maybeCount(pool, target, params);
-        return { success: true, rows: res.rows as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
+        return { success: true, rows: res.recordset as unknown as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
       return { success: false, rows: [], errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
@@ -130,9 +139,10 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
   ): Promise<TRow | null> {
     const pool = await this.getConnection(dataSource, contextUser);
     const target = this.qualifyObject(dataSource, objectName);
-    const sql = `SELECT * FROM ${target} WHERE ${this.quoteIdent(primaryKey.name)} = $1 LIMIT 1`;
-    const res = await pool.query(sql, [primaryKey.value]);
-    return (res.rows[0] as TRow) ?? null;
+    const res = await pool.request()
+      .input('pk', primaryKey.value)
+      .query(`SELECT TOP (1) * FROM ${target} WHERE ${this.quoteIdent(primaryKey.name)} = @pk`);
+    return (res.recordset[0] as unknown as TRow) ?? null;
   }
 
   public async RunNativeQuery<TRow extends ExternalRow = ExternalRow>(
@@ -145,13 +155,17 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
     try {
       return await this.withConnectionRetry(dataSource, async () => {
         const pool = await this.getConnection(dataSource, contextUser);
-        // pg uses positional placeholders ($1..$n); bind values in array order.
-        const values = (params ?? []).map((p) => p.value);
-        const res = await pool.query(queryText, values);
+        // mssql binds by name (@name); callers reference parameters by their declared name.
+        const req = pool.request();
+        for (const p of params ?? []) {
+          req.input(p.name, p.value);
+        }
+        const res = await req.query(queryText);
+        const rows = (res.recordset as unknown as TRow[]) ?? [];
         return {
           success: true,
-          rows: res.rows as TRow[],
-          rowCount: res.rowCount ?? res.rows.length,
+          rows,
+          rowCount: res.recordset?.length ?? (res.rowsAffected?.[0] ?? 0),
           executionTimeMs: Date.now() - start,
         };
       });
@@ -166,104 +180,98 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
     contextUser?: UserInfo,
   ): Promise<ExternalSchemaDescriptor> {
     const pool = await this.getConnection(dataSource, contextUser);
-    const schema = schemaName ?? dataSource.DefaultSchema ?? 'public';
+    const schema = schemaName ?? dataSource.DefaultSchema ?? 'dbo';
 
-    const tables = await pool.query(
-      `SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = $1 ORDER BY table_name`,
-      [schema],
-    );
-    const columns = await pool.query(
-      `SELECT table_name, column_name, data_type, is_nullable
-         FROM information_schema.columns WHERE table_schema = $1
-        ORDER BY table_name, ordinal_position`,
-      [schema],
-    );
-    const primaryKeys = await pool.query(
-      `SELECT tc.table_name, kcu.column_name
-         FROM information_schema.table_constraints tc
-         JOIN information_schema.key_column_usage kcu
-           ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-        WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = $1`,
-      [schema],
-    );
-    // Foreign keys — pair each referencing column with its referenced column via the unique
-    // constraint's position, so composite (multi-column) keys map correctly, not just single-column ones.
-    const foreignKeys = await pool.query(
-      `SELECT rc.constraint_name, kcu.table_name, kcu.column_name,
-              kcu2.table_name   AS referenced_table,
-              kcu2.table_schema AS referenced_schema,
-              kcu2.column_name  AS referenced_column
-         FROM information_schema.referential_constraints rc
-         JOIN information_schema.key_column_usage kcu
-           ON kcu.constraint_name = rc.constraint_name AND kcu.constraint_schema = rc.constraint_schema
-         JOIN information_schema.key_column_usage kcu2
-           ON kcu2.constraint_name = rc.unique_constraint_name AND kcu2.constraint_schema = rc.unique_constraint_schema
-          AND kcu2.ordinal_position = kcu.position_in_unique_constraint
-        WHERE kcu.table_schema = $1
-        ORDER BY kcu.table_name, rc.constraint_name, kcu.ordinal_position`,
-      [schema],
-    );
+    const tables = await pool.request().input('schema', schema).query(
+      `SELECT TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = @schema ORDER BY TABLE_NAME`);
+    const columns = await pool.request().input('schema', schema).query(
+      `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE
+         FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @schema
+        ORDER BY TABLE_NAME, ORDINAL_POSITION`);
+    const primaryKeys = await pool.request().input('schema', schema).query(
+      `SELECT tc.TABLE_NAME, kcu.COLUMN_NAME
+         FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+         JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+           ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+        WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY' AND tc.TABLE_SCHEMA = @schema`);
+    // Foreign keys via sys.* — each sys.foreign_key_columns row already pairs a referencing column
+    // with its referenced column (ordered by constraint_column_id), so composite keys map correctly.
+    const foreignKeys = await pool.request().input('schema', schema).query(
+      `SELECT fk.name AS constraint_name, tp.name AS table_name, cp.name AS column_name,
+              tr.name AS referenced_table, sr.name AS referenced_schema, cr.name AS referenced_column
+         FROM sys.foreign_keys fk
+         JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+         JOIN sys.tables tp  ON tp.object_id = fkc.parent_object_id
+         JOIN sys.schemas sp ON sp.schema_id = tp.schema_id
+         JOIN sys.columns cp ON cp.object_id = fkc.parent_object_id AND cp.column_id = fkc.parent_column_id
+         JOIN sys.tables tr  ON tr.object_id = fkc.referenced_object_id
+         JOIN sys.schemas sr ON sr.schema_id = tr.schema_id
+         JOIN sys.columns cr ON cr.object_id = fkc.referenced_object_id AND cr.column_id = fkc.referenced_column_id
+        WHERE sp.name = @schema
+        ORDER BY tp.name, fk.name, fkc.constraint_column_id`);
+
     return {
       Database: dataSource.DefaultDatabase ?? undefined,
-      Objects: this.assembleSchema(schema, tables.rows, columns.rows, primaryKeys.rows, foreignKeys.rows),
+      Objects: this.assembleSchema(schema, tables.recordset, columns.recordset, primaryKeys.recordset, foreignKeys.recordset),
     };
   }
 
-  // ---- helpers -------------------------------------------------------------
+  // ---- helpers (mirror the proven PostgreSQL driver, T-SQL dialect) --------
 
   protected buildSelectSql(target: string, params: ExternalViewParams): string {
     const projection = params.fields?.length ? params.fields.map((f) => this.quoteIdent(f)).join(', ') : '*';
-    let sql = `SELECT ${projection} FROM ${target}`;
+    // TOP is only valid for a non-paginated bound; paging uses OFFSET..FETCH (which requires ORDER BY).
+    const top = params.maxRows != null && params.offset == null ? `TOP (${Number(params.maxRows)}) ` : '';
+    let sql = `SELECT ${top}${projection} FROM ${target}`;
     if (params.filter) {
       sql += ` WHERE ${params.filter}`; // trusted dialect filter, same contract as MJ RunView ExtraFilter
     }
-    if (params.orderBy) {
-      sql += ` ORDER BY ${params.orderBy}`;
-    }
-    if (params.maxRows != null) {
-      sql += ` LIMIT ${Number(params.maxRows)}`;
-    }
     if (params.offset != null) {
-      sql += ` OFFSET ${Number(params.offset)}`;
+      // OFFSET/FETCH requires ORDER BY in T-SQL; fall back to a stable no-op ordering when none given.
+      sql += ` ORDER BY ${params.orderBy ? params.orderBy : '(SELECT NULL)'} OFFSET ${Number(params.offset)} ROWS`;
+      if (params.maxRows != null) {
+        sql += ` FETCH NEXT ${Number(params.maxRows)} ROWS ONLY`;
+      }
+    } else if (params.orderBy) {
+      sql += ` ORDER BY ${params.orderBy}`;
     }
     return sql;
   }
 
-  private async maybeCount(pool: pg.Pool, target: string, params: ExternalViewParams): Promise<number | undefined> {
+  private async maybeCount(pool: sql.ConnectionPool, target: string, params: ExternalViewParams): Promise<number | undefined> {
     if (params.maxRows == null) {
       return undefined; // only pay for the count when paginating
     }
-    const sql = `SELECT COUNT(*)::bigint AS cnt FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`;
-    const res = await pool.query(sql);
-    return Number(res.rows[0]?.cnt ?? 0);
+    const res = await pool.request().query(`SELECT COUNT(*) AS cnt FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`);
+    return Number(res.recordset[0]?.cnt ?? 0);
   }
 
   private assembleSchema(
     schema: string,
-    tableRows: Array<{ table_name: string; table_type: string }>,
-    columnRows: Array<{ table_name: string; column_name: string; data_type: string; is_nullable: string }>,
-    pkRows: Array<{ table_name: string; column_name: string }>,
+    tableRows: Array<{ TABLE_NAME: string; TABLE_TYPE: string }>,
+    columnRows: Array<{ TABLE_NAME: string; COLUMN_NAME: string; DATA_TYPE: string; IS_NULLABLE: string }>,
+    pkRows: Array<{ TABLE_NAME: string; COLUMN_NAME: string }>,
     fkRows: Array<{ constraint_name: string; table_name: string; column_name: string; referenced_table: string; referenced_schema: string; referenced_column: string }>,
   ): ExternalSchemaObject[] {
-    const pkSet = new Set(pkRows.map((r) => `${r.table_name}.${r.column_name}`));
+    const pkSet = new Set(pkRows.map((r) => `${r.TABLE_NAME}.${r.COLUMN_NAME}`));
     const columnsByTable = new Map<string, ExternalSchemaColumn[]>();
     for (const c of columnRows) {
-      const list = columnsByTable.get(c.table_name) ?? [];
+      const list = columnsByTable.get(c.TABLE_NAME) ?? [];
       list.push({
-        Name: c.column_name,
-        NativeType: c.data_type,
-        Nullable: c.is_nullable === 'YES',
-        IsPrimaryKey: pkSet.has(`${c.table_name}.${c.column_name}`),
+        Name: c.COLUMN_NAME,
+        NativeType: c.DATA_TYPE,
+        Nullable: c.IS_NULLABLE === 'YES',
+        IsPrimaryKey: pkSet.has(`${c.TABLE_NAME}.${c.COLUMN_NAME}`),
       });
-      columnsByTable.set(c.table_name, list);
+      columnsByTable.set(c.TABLE_NAME, list);
     }
     const relationshipsByTable = this.groupForeignKeys(fkRows);
     return tableRows.map((t) => ({
-      Name: t.table_name,
-      ObjectType: this.mapObjectType(t.table_type),
+      Name: t.TABLE_NAME,
+      ObjectType: this.mapObjectType(t.TABLE_TYPE),
       Schema: schema,
-      Columns: columnsByTable.get(t.table_name) ?? [],
-      Relationships: relationshipsByTable.get(t.table_name) ?? [],
+      Columns: columnsByTable.get(t.TABLE_NAME) ?? [],
+      Relationships: relationshipsByTable.get(t.TABLE_NAME) ?? [],
     }));
   }
 
@@ -295,9 +303,9 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
     return tableType === 'VIEW' ? 'view' : 'table';
   }
 
-  /** Quote a SQL identifier, escaping embedded double-quotes. */
+  /** Quote a SQL identifier with T-SQL brackets, escaping embedded `]`. */
   protected quoteIdent(name: string): string {
-    return `"${name.replace(/"/g, '""')}"`;
+    return `[${name.replace(/]/g, ']]')}]`;
   }
 
   /** Resolve an object name to a quoted, schema-qualified reference. */

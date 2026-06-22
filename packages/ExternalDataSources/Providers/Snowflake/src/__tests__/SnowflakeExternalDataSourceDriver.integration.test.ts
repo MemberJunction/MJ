@@ -131,11 +131,11 @@ describe.runIf(RUN && sdkAvailable && hasCreds)('SnowflakeExternalDataSourceDriv
 
   it('IntrospectSchema discovers TPCH tables and columns', async () => {
     const schema = await driver.IntrospectSchema(dataSource, CONN.schema);
-    const names = schema.objects.map((o) => o.name);
+    const names = schema.Objects.map((o) => o.Name);
     expect(names).toContain('REGION');
     expect(names).toContain('NATION');
-    const region = schema.objects.find((o) => o.name === 'REGION');
-    expect(region?.columns.some((c) => c.name === 'R_REGIONKEY')).toBe(true);
+    const region = schema.Objects.find((o) => o.Name === 'REGION');
+    expect(region?.Columns.some((c) => c.Name === 'R_REGIONKEY')).toBe(true);
   });
 
   it('surfaces a clean failure (not a crash) on a bad object name', async () => {

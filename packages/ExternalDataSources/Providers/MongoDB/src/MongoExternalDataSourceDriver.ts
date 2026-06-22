@@ -185,9 +185,9 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     const objects = [];
     for (const c of collections) {
       const sample = await db.collection(c.name).find({}).limit(25).toArray();
-      objects.push({ name: c.name, objectType: 'collection' as const, columns: this.inferColumns(sample) });
+      objects.push({ Name: c.name, ObjectType: 'collection' as const, Columns: this.inferColumns(sample) });
     }
-    return { database: dataSource.DefaultDatabase ?? undefined, objects };
+    return { Database: dataSource.DefaultDatabase ?? undefined, Objects: objects };
   }
 
   /** Close all cached MongoClients (graceful shutdown / connection cleanup). */
@@ -226,10 +226,10 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
       }
     }
     return [...types.entries()].map(([name, t]) => ({
-      name,
-      nativeType: t,
-      nullable: name !== '_id',
-      isPrimaryKey: name === '_id',
+      Name: name,
+      NativeType: t,
+      Nullable: name !== '_id',
+      IsPrimaryKey: name === '_id',
     }));
   }
 
