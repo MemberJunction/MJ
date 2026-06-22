@@ -134,8 +134,8 @@ export class FieldRulesBuilderComponent {
     private _entityName = '';
     private entity?: EntityInfo;
 
-    /** Metadata provider (multi-provider). Falls back to the global default when omitted. */
-    @Input() Provider?: IMetadataProvider;
+    /** Metadata provider (multi-provider). Falls back to the global default when null. */
+    @Input() Provider: IMetadataProvider | null = null;
 
     /** The entity whose fields the rules target. Loads the field lists when set. */
     @Input()
@@ -203,7 +203,7 @@ export class FieldRulesBuilderComponent {
         if (!this._entityName) {
             this.Errors = [];
         } else {
-            const result = EntityFieldRules.Validate(this._entityName, ruleSet, this.Provider);
+            const result = EntityFieldRules.Validate(this._entityName, ruleSet, this.Provider ?? undefined);
             this.Errors = result.Errors;
             this.ValidChange.emit(result.Valid);
         }

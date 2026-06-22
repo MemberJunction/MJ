@@ -104,8 +104,8 @@ export class AIPromptSelectorComponent implements OnInit {
     /** Placeholder shown when nothing is selected. */
     @Input() Placeholder = 'Select an AI prompt…';
 
-    /** Metadata provider (multi-provider). Falls back to the global default when omitted. */
-    @Input() Provider?: IMetadataProvider;
+    /** Metadata provider (multi-provider). Falls back to the global default when null. */
+    @Input() Provider: IMetadataProvider | null = null;
 
     public IsOpen = false;
     public Loading = true;

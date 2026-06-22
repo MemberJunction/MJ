@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "Name": "Bulk Operations",
+    "Description": "Define and run rules-driven bulk operations across your data — author field rules (fixed values, formulas, lookups, or AI prompts), preview the exact changes, and apply on demand.",
+    "Icon": "fa-solid fa-layer-group",
+    "DefaultForNewUser": true,
+    "DefaultSequence": 1010,
+    "Color": "#8b5cf6",
+    "DefaultNavItems": [
+      {
+        "Label": "Bulk Operations",
+        "Icon": "fa-solid fa-layer-group",
+        "ResourceType": "Custom",
+        "DriverClass": "BulkOperationsContainer",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "27A4126F-ABFA-4918-8F96-10C683BD1660"
+  },
+  "sync": {
+    "lastModified": "2026-06-22T01:29:24.779Z",
+    "checksum": "a4c74bd40da075ac519cfc32f988fd31d68a88e05332e1a1b071528e1013a98a"
+  }
+}
