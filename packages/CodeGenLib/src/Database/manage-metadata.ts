@@ -1482,7 +1482,8 @@ export class ManageMetadataBase {
       // often created/seeded after the CodeGen process loaded metadata at startup; without this
       // refresh, EntityByName() returns null and field sync is SILENTLY skipped — the same gotcha
       // already handled for config-created virtual entities above.
-      await new Metadata().Refresh();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      await md.Refresh();
       for (const ee of externalEntities) {
          const {success, updatedEntity, relationshipsUpdated: relUpdated} = await this.manageSingleExternalEntity(pool, ee, router, currentUser);
          anyUpdates = anyUpdates || updatedEntity;
