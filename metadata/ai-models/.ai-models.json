@@ -17845,5 +17845,288 @@
       "lastModified": "2026-06-16T01:17:10.887Z",
       "checksum": "e59100304928f6e1ba56997f557c913a900607e00df1088f9522321c8371affd"
     }
+  },
+  {
+    "fields": {
+      "Name": "GLM-5.2",
+      "PowerRank": 23,
+      "Description": "Z.AI's (Zhipu AI) frontier coding-focused model released June 16, 2026. 753B-parameter open-weights LLM under unrestricted MIT license, engineered specifically for long-horizon autonomous coding and engineering tasks. Features a 1M-token context window with up to 32K output tokens. Successor to GLM 5.1, with prompt caching at $0.26/M tokens (~80% off uncached). Reasoning effort levels `high` and `xhigh` supported (xhigh maps to max reasoning). Available via Z.AI native API, OpenRouter, and Fireworks.ai (day-zero launch on Fireworks). Reportedly beats GPT-5.5 on multiple long-horizon coding benchmarks at ~1/6 the cost.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5.1"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "ZhipuLLM",
+            "APIName": "glm-5.2",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "z-ai/glm-5.2",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 150,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "accounts/fireworks/models/glm-5p2",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-06-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.4,
+            "OutputPricePerUnit": 4.4,
+            "CacheReadPricePerUnit": 0.26,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM-5.2 pricing on Z.AI direct API at launch June 16, 2026: $1.40/$4.40 per 1M tokens. Prompt caching at $0.26/M tokens (~81% off uncached input). Sources: https://venturebeat.com/technology/z-ais-open-weights-glm-5-2-beats-gpt-5-5-on-multiple-long-horizon-coding-benchmarks-for-1-6th-the-cost ; https://docs.z.ai/guides/overview/pricing"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-06-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.4,
+            "OutputPricePerUnit": 4.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM-5.2 pricing on Fireworks.ai as of day-zero launch on June 16, 2026 ($1.40/$4.40 per 1M tokens, vendor-parity with Z.AI direct). Source: https://fireworks.ai/blog/glm-5p2"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Fable 5",
+      "PowerRank": 28,
+      "Description": "Anthropic's most capable widely-released model, announced and made generally available on June 9, 2026 — a 'Mythos-class' frontier model with a 1M-token context window, up to 128K output tokens, and always-on adaptive thinking. Available on Anthropic API, Claude Platform on AWS, Amazon Bedrock, Vertex AI, and Microsoft Foundry. Includes built-in safety classifiers that can decline high-risk requests (returns `stop_reason: 'refusal'` instead of an error) with three fallback options to retry on Opus 4.8 or another model. SUSPENDED WORLDWIDE on June 12, 2026 following a U.S. government export-control directive that prohibits access by any foreign national, including foreign-national Anthropic employees. No restoration date announced as of June 22, 2026 — set IsActive=true when access is restored. Pricing: $10/$50 per 1M tokens. Sources: https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5 ; https://www.anthropic.com/news/fable-mythos-access",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": false,
+      "SpeedRank": 6,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Opus 4.8"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-fable-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-fable-5-v1:0",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 6,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "claude-fable-5@20260609",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-06-09T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "CacheReadPricePerUnit": 1,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Fable 5 pricing as announced June 9, 2026: $10/$50 per 1M tokens. Batch tier $5/$25 (50% off). Prompt cache hits $1/MTok (90% off input). Refused requests (before any output) are NOT billed; fallback credit refunds prompt-cache cost on retry. NOTE: Access SUSPENDED worldwide as of June 12, 2026 by US export-control directive. Sources: https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5 ; https://www.finout.io/blog/claude-fable-5-mythos-5-pricing-benchmarks"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-06-09T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Fable 5 on Amazon Bedrock at simultaneous June 9, 2026 launch (vendor-parity with Anthropic direct, $10/$50 per 1M). Access SUSPENDED June 12, 2026. Source: https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Mythos 5",
+      "PowerRank": 28,
+      "Description": "Anthropic's frontier model sharing Claude Fable 5's specs and pricing but WITHOUT the refusal safety classifiers — the successor to Claude Mythos Preview. Available ONLY in limited release through Project Glasswing to approved customers (contact Anthropic, AWS, or Google Cloud account team for access). 1M-token context, 128K output, always-on adaptive thinking. Released June 9, 2026. SUSPENDED WORLDWIDE on June 12, 2026 alongside Fable 5 following a US government export-control directive. No restoration date announced as of June 22, 2026. Pricing: $10/$50 per 1M tokens (same as Fable 5). 30-day data retention; not available under zero data retention (designated Covered Model). Sources: https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5 ; https://anthropic.com/glasswing",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": false,
+      "SpeedRank": 6,
+      "CostRank": 10,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-mythos-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-06-09T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "CacheReadPricePerUnit": 1,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Mythos 5 pricing as announced June 9, 2026: same as Fable 5 ($10/$50 per 1M). Batch $5/$25 (50% off). Prompt cache hits $1/MTok (90% off). LIMITED ACCESS via Project Glasswing only, AND access SUSPENDED June 12, 2026 worldwide. Sources: https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5"
+          }
+        }
+      ]
+    }
   }
 ]
