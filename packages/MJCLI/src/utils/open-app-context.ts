@@ -12,7 +12,7 @@
 import sql from 'mssql';
 import ora from 'ora-classic';
 import { createRequire } from 'node:module';
-import type { UserInfo, DatabaseProviderBase } from '@memberjunction/core';
+import { UserInfo, SetProvider, type DatabaseProviderBase } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PostgreSQLDataProvider, PostgreSQLProviderConfigData, type PGConnectionConfig } from '@memberjunction/postgresql-dataprovider';
 import { getValidatedConfig } from '../config.js';
@@ -27,6 +27,10 @@ let _pool: sql.ConnectionPool | null = null;          // SQL Server pool (mssql)
 let _pgProvider: PostgreSQLDataProvider | null = null; // PostgreSQL provider (owns its own pg pool)
 let _provider: DatabaseProviderBase | null = null;
 let _initPromise: Promise<DatabaseProviderBase> | null = null;
+// System user resolved by the PostgreSQL path (UserCache is SQL-Server-specific, so
+// the PG path can't populate it — it resolves the user directly instead). Null on
+// the SQL Server path, where getSystemUserInfo() reads UserCache as before.
+let _systemUser: UserInfo | null = null;
 
 /**
  * Initializes the MJ data provider for the configured platform if not already
@@ -91,18 +95,53 @@ async function createPostgresProvider(config: ResolvedConfig): Promise<DatabaseP
     SSL: resolvePostgresSsl(config),
   };
 
+  const coreSchema = config.coreSchema ?? '__mj';
   const pgConfig = new PostgreSQLProviderConfigData(
     connectionConfig,
-    config.coreSchema ?? '__mj',
-    0,         // checkRefreshIntervalSeconds — CLI is one-shot; no background refresh
-    undefined, // includeSchemas
-    undefined, // excludeSchemas
-    false,     // do not reload metadata from a global provider
+    coreSchema,
+    1, // checkRefreshIntervalSeconds — must be > 0 to trigger the provider's initial metadata load (matches CodeGen's PG path)
   );
 
   _pgProvider = new PostgreSQLDataProvider();
   await _pgProvider.Config(pgConfig);
+  // Register as the process-global provider so BaseEntity + Metadata (used by the
+  // OpenApp engine's RunView calls) resolve to it. setupSQLServerClient does this
+  // for the SQL Server path; the PG path must do it explicitly (as CodeGen does).
+  SetProvider(_pgProvider);
+
+  // UserCache (used by the SQL Server path via setupSQLServerClient) is mssql-specific
+  // — its Refresh() takes an mssql ConnectionPool. The PostgreSQL path resolves the
+  // system user directly from the platform-agnostic vwUsers/vwUserRoles views, exactly
+  // as CodeGen's setupPostgreSQLDataSource does.
+  _systemUser = await resolvePostgresSystemUser(_pgProvider, coreSchema);
   return _pgProvider as unknown as DatabaseProviderBase;
+}
+
+/**
+ * Loads users + their roles from the PostgreSQL `vwUsers` / `vwUserRoles` views and
+ * returns the system user (preferring an Owner, else the first user). Mirrors the
+ * user-resolution in CodeGen's `setupPostgreSQLDataSource`.
+ */
+async function resolvePostgresSystemUser(provider: PostgreSQLDataProvider, coreSchema: string): Promise<UserInfo> {
+  // ExecuteSQL auto-quotes PascalCase identifiers (vwUsers/vwUserRoles), so unquoted
+  // mixed-case is correct here (the lowercase schema is left as-is).
+  const users = await provider.ExecuteSQL<Record<string, unknown>>(`SELECT * FROM ${coreSchema}.vwUsers`);
+  const roles = await provider.ExecuteSQL<Record<string, unknown>>(`SELECT * FROM ${coreSchema}.vwUserRoles`);
+
+  const userInfos = users.map((user) => {
+    user.UserRoles = roles.filter(
+      (role) => String(role.UserID).toLowerCase() === String(user.ID).toLowerCase(),
+    );
+    return new UserInfo(provider, user);
+  });
+
+  const systemUser = userInfos.find((u) => u?.Type?.trim().toLowerCase() === 'owner') ?? userInfos[0];
+  if (!systemUser) {
+    throw new Error(
+      `No users found in PostgreSQL (${coreSchema}.vwUsers is empty). Cannot determine system user for Open App operations.`,
+    );
+  }
+  return systemUser;
 }
 
 /**
@@ -147,6 +186,7 @@ export async function closeConnectionPool(): Promise<void> {
     _pgProvider = null;
     _provider = null;
     _initPromise = null;
+    _systemUser = null;
   }
 }
 
@@ -159,6 +199,12 @@ export async function closeConnectionPool(): Promise<void> {
  * Falls back to Owner user, then first active user if no system user exists.
  */
 function getSystemUserInfo(): UserInfo {
+  // PostgreSQL path resolves the user directly during provider init (UserCache is
+  // SQL-Server-specific and is never populated on PG).
+  if (_systemUser) {
+    return _systemUser;
+  }
+
   const sysUser = UserCache.Instance.GetSystemUser();
   if (sysUser) {
     return sysUser;
