@@ -18,6 +18,7 @@ import {
     inject,
 } from '@angular/core';
 import { RunView, type IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { filterPromptGroups, groupPromptsByCategory, type PromptGroup, type PromptOption } from '../prompt-grouping';
 
 @Component({
@@ -51,10 +52,10 @@ import { filterPromptGroups, groupPromptsByCategory, type PromptGroup, type Prom
                                 <div class="ps-group-label">{{ group.Category }}</div>
                                 @for (p of group.Prompts; track p.ID) {
                                     <div class="ps-option" role="option"
-                                        [class.ps-option--selected]="p.ID === Value"
+                                        [class.ps-option--selected]="IsSelected(p)"
                                         (click)="Select(p)">
                                         <span>{{ p.Name }}</span>
-                                        @if (p.ID === Value) { <i class="fa-solid fa-check"></i> }
+                                        @if (IsSelected(p)) { <i class="fa-solid fa-check"></i> }
                                     </div>
                                 }
                             }
@@ -119,7 +120,12 @@ export class AIPromptSelectorComponent implements OnInit {
     }
 
     get SelectedLabel(): string {
-        return this.allPrompts.find((p) => p.ID === this.Value)?.Name ?? '';
+        return this.allPrompts.find((p) => UUIDsEqual(p.ID, this.Value ?? ''))?.Name ?? '';
+    }
+
+    /** True when the given prompt is the selected one (UUID-safe across SQL Server / PostgreSQL). */
+    IsSelected(prompt: PromptOption): boolean {
+        return UUIDsEqual(prompt.ID, this.Value ?? '');
     }
 
     get FilteredGroups(): PromptGroup[] {
