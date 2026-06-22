@@ -87,6 +87,15 @@ const migrationsSchema = z.object({
 
 const metadataSchema = z.object({
     directory: z.string().optional().default('metadata'),
+    /**
+     * When true, the install engine downloads this directory and runs a scoped
+     * `mj sync push` over it AT INSTALL TIME (and re-pushes on upgrade). This is
+     * what makes a schema-less "connector profile" app seed its metadata (e.g. an
+     * integration connector's Integration/IntegrationObject/IntegrationObjectField
+     * + Action rows) without any schema or migrations. Defaults to false, preserving
+     * the historical "metadata is dev-time only" behavior for schema-backed apps.
+     */
+    processOnInstall: z.boolean().optional().default(false),
 });
 
 // ── Code Visibility ───────────────────────────────────────
@@ -143,7 +152,8 @@ export const mjAppManifestSchema = z.object({
     // Migrations
     migrations: migrationsSchema.optional(),
 
-    // Metadata (dev-time only, not processed at install)
+    // Metadata — dev-time only unless `metadata.processOnInstall` is true (connector profile),
+    // in which case the engine pushes it at install/upgrade time.
     metadata: metadataSchema.optional(),
 
     // NPM Packages
@@ -158,6 +168,8 @@ export const mjAppManifestSchema = z.object({
             z.object({
                 version: z.string().min(1),
                 repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
+                /** In-repo subpath to the dependency app, for dependencies that live in a multi-app repo. */
+                subpath: z.string().optional(),
             })
         ])
     ).optional(),

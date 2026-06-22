@@ -2,10 +2,14 @@
  * GitHub client for fetching Open App manifests and migrations.
  *
  * Retrieves mj-app.json manifests, lists available releases, and downloads
- * migration files from GitHub repositories using the GitHub REST API.
+ * migration/metadata files from GitHub repositories using the GitHub REST API
+ * via Octokit (@octokit/rest). Everything runs IN-PROCESS — no `git`/`gh`
+ * shell-outs — mirroring the Octokit usage in `@memberjunction/schema-engine`'s
+ * RuntimeSchemaManager.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { Octokit } from '@octokit/rest';
 
 /**
  * Options for configuring the GitHub client.
@@ -63,17 +67,33 @@ export interface MigrationDownloadResult {
 }
 
 /**
- * Parses a GitHub repository URL into owner and repo components.
+ * Parses a GitHub repository URL into owner, repo, and an optional in-repo subpath.
  *
- * @param repoUrl - GitHub URL (e.g., 'https://github.com/acme/mj-crm')
- * @returns Parsed owner and repo, or null if invalid
+ * Supports two forms:
+ *  - Single-app repo (the app's `mj-app.json` lives at the repo root):
+ *    `https://github.com/acme/mj-crm` → `{ Owner: 'acme', Repo: 'mj-crm' }`
+ *  - Multi-app repo (the app lives in a subdirectory — enables many apps per repo):
+ *    `https://github.com/MemberJunction/Integrations/CRM/HubSpot`
+ *    → `{ Owner: 'MemberJunction', Repo: 'Integrations', Subpath: 'CRM/HubSpot' }`
+ *
+ * `Subpath` is `undefined` for the single-app form, so existing callers that
+ * only read `Owner`/`Repo` are unaffected (fully backwards compatible).
+ *
+ * @param repoUrl - GitHub URL, optionally with a trailing in-repo path
+ * @returns Parsed owner, repo, and optional subpath, or null if invalid
  */
-export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string } | null {
-    const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/);
+export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string; Subpath?: string } | null {
+    // Capture owner, repo (stopping at the next slash / query / fragment), then any
+    // remaining path segments as the subpath. No `$` anchor so query/fragment are tolerated.
+    const match = repoUrl.match(/github\.com\/([^/?#]+)\/([^/?#]+)((?:\/[^?#]+)*)/);
     if (!match) {
         return null;
     }
-    return { Owner: match[1], Repo: match[2] };
+    const owner = match[1];
+    const repo = match[2].replace(/\.git$/, '');
+    const rawSubpath = (match[3] ?? '').replace(/^\/+|\/+$/g, '');
+    const subpath = rawSubpath.length > 0 ? rawSubpath : undefined;
+    return { Owner: owner, Repo: repo, Subpath: subpath };
 }
 
 /**
@@ -101,61 +121,112 @@ function normalizeRepoUrl(url: string): string {
 }
 
 /**
- * Builds the authorization headers for GitHub API requests.
+ * Creates an in-process Octokit client for a given repo URL, resolving the
+ * appropriate token from the client options.
  */
-function BuildHeaders(token?: string): Record<string, string> {
-    const headers: Record<string, string> = {
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'open-app-engine'
-    };
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+function CreateOctokit(repoUrl: string, options: GitHubClientOptions): Octokit {
+    return new Octokit({ auth: ResolveToken(repoUrl, options), userAgent: 'open-app-engine' });
+}
+
+/**
+ * Extracts the HTTP status from an Octokit error (RequestError), if present.
+ */
+function OctokitStatus(error: unknown): number | undefined {
+    if (error && typeof error === 'object' && 'status' in error) {
+        const status = (error as { status?: unknown }).status;
+        return typeof status === 'number' ? status : undefined;
     }
-    return headers;
+    return undefined;
+}
+
+/**
+ * Reads the UTF-8 content of a single repo FILE via Octokit. Handles GitHub's
+ * 1MB inline-content cap by falling back to the Git Blob API for larger files.
+ * Throws on directories or a non-file response.
+ */
+async function FetchFileContent(octokit: Octokit, owner: string, repo: string, path: string, ref: string): Promise<string> {
+    const { data } = await octokit.repos.getContent({ owner, repo, path, ref });
+    if (Array.isArray(data) || data.type !== 'file') {
+        throw new Error(`Expected a file at ${path}, but got a ${Array.isArray(data) ? 'directory' : data.type}`);
+    }
+    // Files <1MB carry inline base64 content; larger files come back with empty
+    // content and must be read through the Git Blob API by SHA.
+    if (data.content && data.content.length > 0) {
+        return Buffer.from(data.content, data.encoding === 'base64' ? 'base64' : 'utf-8').toString('utf-8');
+    }
+    const blob = await octokit.git.getBlob({ owner, repo, file_sha: data.sha });
+    return Buffer.from(blob.data.content, blob.data.encoding === 'base64' ? 'base64' : 'utf-8').toString('utf-8');
+}
+
+/**
+ * A directory entry returned by the GitHub Contents API.
+ */
+interface RepoContentEntry {
+    name: string;
+    path: string;
+    type: 'file' | 'dir' | 'submodule' | 'symlink';
+    sha: string;
+}
+
+/**
+ * Lists the entries of a repo DIRECTORY via Octokit. Throws if the path is a file.
+ */
+async function ListDirectory(octokit: Octokit, owner: string, repo: string, path: string, ref: string): Promise<RepoContentEntry[]> {
+    const { data } = await octokit.repos.getContent({ owner, repo, path, ref });
+    if (!Array.isArray(data)) {
+        throw new Error(`Expected a directory at ${path}, but got a ${data.type}`);
+    }
+    return data.map(item => ({ name: item.name, path: item.path, type: item.type, sha: item.sha }));
+}
+
+/**
+ * Normalizes a version string to a `v`-prefixed tag, or 'HEAD' when no version.
+ */
+function ResolveRef(version: string | undefined): string {
+    return version ? `v${version.replace(/^v/, '')}` : 'HEAD';
+}
+
+/**
+ * Composes the effective in-repo path from an optional app subpath and a relative
+ * path, trimming stray slashes.
+ */
+function ComposeRepoPath(effectiveSubpath: string | undefined, relativePath: string): string {
+    return [effectiveSubpath, relativePath.replace(/^\/|\/$/g, '')].filter(Boolean).join('/');
 }
 
 /**
  * Fetches the mj-app.json manifest from a GitHub repository at a specific tag.
  *
- * @param repoUrl - GitHub repository URL
+ * @param repoUrl - GitHub repository URL (may include an in-repo subpath for multi-app repos)
  * @param version - Tag/version to fetch (e.g., 'v1.2.0'). If not provided, fetches from default branch.
  * @param options - GitHub client options (auth token, etc.)
+ * @param subpath - Optional in-repo directory the app lives under. When omitted, falls back
+ *                  to any subpath embedded in `repoUrl`. Empty/undefined → manifest at repo root.
  * @returns The raw manifest JSON string or error details
  */
 export async function FetchManifestFromGitHub(
     repoUrl: string,
     version: string | undefined,
-    options: GitHubClientOptions
+    options: GitHubClientOptions,
+    subpath?: string
 ): Promise<ManifestFetchResult> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const ref = version ? `v${version.replace(/^v/, '')}` : 'HEAD';
-    const apiUrl = `https://api.github.com/repos/${parsed.Owner}/${parsed.Repo}/contents/mj-app.json?ref=${ref}`;
+    const ref = ResolveRef(version);
+    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const manifestPath = ComposeRepoPath(effectiveSubpath, 'mj-app.json');
 
     try {
-        const response = await fetch(apiUrl, {
-            headers: BuildHeaders(ResolveToken(repoUrl, options))
-        });
-
-        if (!response.ok) {
-            if (response.status === 404) {
-                return { Success: false, ErrorMessage: `mj-app.json not found in ${parsed.Owner}/${parsed.Repo} at ref ${ref}` };
-            }
-            return { Success: false, ErrorMessage: `GitHub API error: ${response.status} ${response.statusText}` };
-        }
-
-        const data = await response.json() as { content?: string; encoding?: string };
-        if (!data.content || data.encoding !== 'base64') {
-            return { Success: false, ErrorMessage: 'Unexpected response format from GitHub API' };
-        }
-
-        const decoded = Buffer.from(data.content, 'base64').toString('utf-8');
-        return { Success: true, ManifestJSON: decoded };
+        const content = await FetchFileContent(CreateOctokit(repoUrl, options), parsed.Owner, parsed.Repo, manifestPath, ref);
+        return { Success: true, ManifestJSON: content };
     }
     catch (error: unknown) {
+        if (OctokitStatus(error) === 404) {
+            return { Success: false, ErrorMessage: `${manifestPath} not found in ${parsed.Owner}/${parsed.Repo} at ref ${ref}` };
+        }
         const message = error instanceof Error ? error.message : String(error);
         return { Success: false, ErrorMessage: `Failed to fetch manifest: ${message}` };
     }
@@ -177,25 +248,9 @@ export async function ListGitHubReleases(
         return [];
     }
 
-    const apiUrl = `https://api.github.com/repos/${parsed.Owner}/${parsed.Repo}/releases`;
-
     try {
-        const response = await fetch(apiUrl, {
-            headers: BuildHeaders(ResolveToken(repoUrl, options))
-        });
-
-        if (!response.ok) {
-            return [];
-        }
-
-        const releases = await response.json() as Array<{
-            tag_name: string;
-            prerelease: boolean;
-            draft: boolean;
-            created_at: string;
-        }>;
-
-        return releases.map(r => ({
+        const { data } = await CreateOctokit(repoUrl, options).repos.listReleases({ owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
+        return data.map(r => ({
             TagName: r.tag_name,
             PreRelease: r.prerelease,
             Draft: r.draft,
@@ -210,11 +265,13 @@ export async function ListGitHubReleases(
 /**
  * Downloads migration files from a GitHub repository to a local temp directory.
  *
- * @param repoUrl - GitHub repository URL
+ * @param repoUrl - GitHub repository URL (may include an in-repo subpath for multi-app repos)
  * @param version - Tag/version to download from
- * @param migrationsPath - Path within the repo to the migrations directory (e.g., 'migrations/')
+ * @param migrationsPath - Path within the repo (or app subpath) to the migrations directory (e.g., 'migrations/')
  * @param localDir - Local directory to save the files to
  * @param options - GitHub client options
+ * @param subpath - Optional in-repo directory the app lives under. When set, the migrations
+ *                  directory is resolved relative to it (`<subpath>/<migrationsPath>`).
  * @returns Download result with file list or error details
  */
 export async function DownloadMigrations(
@@ -222,32 +279,21 @@ export async function DownloadMigrations(
     version: string | undefined,
     migrationsPath: string,
     localDir: string,
-    options: GitHubClientOptions
+    options: GitHubClientOptions,
+    subpath?: string
 ): Promise<MigrationDownloadResult> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const ref = version ? `v${version.replace(/^v/, '')}` : 'HEAD';
-    const cleanPath = migrationsPath.replace(/^\/|\/$/g, '');
-    const apiUrl = `https://api.github.com/repos/${parsed.Owner}/${parsed.Repo}/contents/${cleanPath}?ref=${ref}`;
+    const ref = ResolveRef(version);
+    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const cleanPath = ComposeRepoPath(effectiveSubpath, migrationsPath);
+    const octokit = CreateOctokit(repoUrl, options);
 
     try {
-        const response = await fetch(apiUrl, {
-            headers: BuildHeaders(ResolveToken(repoUrl, options))
-        });
-
-        if (!response.ok) {
-            return { Success: false, ErrorMessage: `Failed to list migrations: ${response.status} ${response.statusText}` };
-        }
-
-        const items = await response.json() as Array<{
-            name: string;
-            type: string;
-            download_url: string | null;
-        }>;
-
+        const items = await ListDirectory(octokit, parsed.Owner, parsed.Repo, cleanPath, ref);
         const sqlFiles = items.filter(item => item.type === 'file' && item.name.endsWith('.sql'));
         if (sqlFiles.length === 0) {
             return { Success: true, LocalPath: localDir, Files: [] };
@@ -258,22 +304,10 @@ export async function DownloadMigrations(
         }
 
         const downloadedFiles: string[] = [];
-
         for (const file of sqlFiles) {
-            if (!file.download_url) {
-                continue;
-            }
-
-            const fileResponse = await fetch(file.download_url, {
-                headers: BuildHeaders(ResolveToken(repoUrl, options))
-            });
-
-            if (fileResponse.ok) {
-                const content = await fileResponse.text();
-                const localPath = join(localDir, file.name);
-                writeFileSync(localPath, content, 'utf-8');
-                downloadedFiles.push(file.name);
-            }
+            const content = await FetchFileContent(octokit, parsed.Owner, parsed.Repo, file.path, ref);
+            writeFileSync(join(localDir, file.name), content, 'utf-8');
+            downloadedFiles.push(file.name);
         }
 
         return { Success: true, LocalPath: localDir, Files: downloadedFiles };
@@ -281,6 +315,74 @@ export async function DownloadMigrations(
     catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         return { Success: false, ErrorMessage: `Failed to download migrations: ${message}` };
+    }
+}
+
+/**
+ * Recursively downloads an entire directory subtree from a GitHub repository to a
+ * local directory, preserving structure. Unlike {@link DownloadMigrations} (which only
+ * pulls flat `.sql` files), this walks nested subdirectories and writes every file —
+ * used by the connector-profile install path to materialize an app's `metadata/` tree
+ * locally so MetadataSync can push it. Fully in-process via Octokit.
+ *
+ * @param repoUrl - GitHub repository URL (may include an in-repo subpath for multi-app repos)
+ * @param version - Tag/version to download from
+ * @param dirPath - Path within the repo (or app subpath) to the directory to download (e.g., 'metadata')
+ * @param localDir - Local directory to save the tree into (created if missing)
+ * @param options - GitHub client options
+ * @param subpath - Optional in-repo directory the app lives under. When set, `dirPath` is
+ *                  resolved relative to it (`<subpath>/<dirPath>`).
+ * @returns Download result with the flat list of relative file paths written, or error details
+ */
+export async function DownloadDirectory(
+    repoUrl: string,
+    version: string | undefined,
+    dirPath: string,
+    localDir: string,
+    options: GitHubClientOptions,
+    subpath?: string
+): Promise<MigrationDownloadResult> {
+    const parsed = ParseGitHubUrl(repoUrl);
+    if (!parsed) {
+        return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
+    }
+
+    const ref = ResolveRef(version);
+    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const rootPath = ComposeRepoPath(effectiveSubpath, dirPath);
+    const octokit = CreateOctokit(repoUrl, options);
+    const writtenFiles: string[] = [];
+
+    // Recursively walk a repo directory, mirroring it into `localDir` under `relativePrefix`.
+    const walk = async (repoDir: string, relativePrefix: string): Promise<void> => {
+        const items = await ListDirectory(octokit, parsed.Owner, parsed.Repo, repoDir, ref);
+        for (const item of items) {
+            const localRelative = relativePrefix ? `${relativePrefix}/${item.name}` : item.name;
+            if (item.type === 'dir') {
+                await walk(item.path, localRelative);
+            }
+            else if (item.type === 'file') {
+                const content = await FetchFileContent(octokit, parsed.Owner, parsed.Repo, item.path, ref);
+                const targetDir = relativePrefix ? join(localDir, relativePrefix) : localDir;
+                if (!existsSync(targetDir)) {
+                    mkdirSync(targetDir, { recursive: true });
+                }
+                writeFileSync(join(localDir, localRelative), content, 'utf-8');
+                writtenFiles.push(localRelative);
+            }
+        }
+    };
+
+    try {
+        if (!existsSync(localDir)) {
+            mkdirSync(localDir, { recursive: true });
+        }
+        await walk(rootPath, '');
+        return { Success: true, LocalPath: localDir, Files: writtenFiles };
+    }
+    catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { Success: false, ErrorMessage: `Failed to download directory '${dirPath}': ${message}` };
     }
 }
 
@@ -330,21 +432,10 @@ export async function ListGitHubTags(
         return [];
     }
 
-    const apiUrl = `https://api.github.com/repos/${parsed.Owner}/${parsed.Repo}/tags?per_page=100`;
-
     try {
-        const response = await fetch(apiUrl, {
-            headers: BuildHeaders(ResolveToken(repoUrl, options))
-        });
-
-        if (!response.ok) {
-            return [];
-        }
-
-        const tags = await response.json() as Array<{ name: string }>;
+        const { data } = await CreateOctokit(repoUrl, options).repos.listTags({ owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
         const semverPattern = /^v?\d+\.\d+\.\d+(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?$/;
-
-        return tags
+        return data
             .map(t => t.name)
             .filter(name => semverPattern.test(name))
             .sort((a, b) => compareSemver(b, a));
@@ -373,24 +464,15 @@ export async function ValidateGitHubTag(
     }
 
     const tag = `v${version.replace(/^v/, '')}`;
-    const apiUrl = `https://api.github.com/repos/${parsed.Owner}/${parsed.Repo}/git/ref/tags/${tag}`;
 
     try {
-        const response = await fetch(apiUrl, {
-            headers: BuildHeaders(ResolveToken(repoUrl, options))
-        });
-
-        if (response.ok) {
-            return { Exists: true };
-        }
-
-        if (response.status === 404) {
-            return { Exists: false, ErrorMessage: `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at ${repoUrl}/tags` };
-        }
-
-        return { Exists: false, ErrorMessage: `GitHub API error checking tag '${tag}': ${response.status} ${response.statusText}` };
+        await CreateOctokit(repoUrl, options).git.getRef({ owner: parsed.Owner, repo: parsed.Repo, ref: `tags/${tag}` });
+        return { Exists: true };
     }
     catch (error: unknown) {
+        if (OctokitStatus(error) === 404) {
+            return { Exists: false, ErrorMessage: `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at ${repoUrl}/tags` };
+        }
         const message = error instanceof Error ? error.message : String(error);
         return { Exists: false, ErrorMessage: `Failed to validate tag '${tag}': ${message}` };
     }

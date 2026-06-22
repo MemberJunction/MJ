@@ -10,6 +10,7 @@ import ora from 'ora-classic';
 import { createRequire } from 'node:module';
 import type { UserInfo } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { getSyncEngine, PushService } from '@memberjunction/metadata-sync';
 import { getValidatedConfig } from '../config.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,6 +168,23 @@ export async function buildOrchestratorContext(
       OnWarn: (phase: string, message: string) => command.warn(`[${phase}] ${message}`),
       OnLog: (message: string) => command.log(message),
     },
+    // Connector-profile metadata push: runs `mj sync push` over a local dir via the
+    // same MetadataSync engine the `mj sync` commands use. Kept here (not in the engine)
+    // so @memberjunction/open-app-engine stays decoupled from @memberjunction/metadata-sync.
+    MetadataPusher: async ({ dir, verbose: pushVerbose, include, deleteDbOnly }) => {
+      const syncEngine = await getSyncEngine(contextUser);
+      const pushService = new PushService(syncEngine, contextUser);
+      const result = await pushService.push({ dir, verbose: pushVerbose, include, deleteDbOnly });
+      return {
+        Success: result.errors === 0,
+        ErrorMessage: result.errors > 0 ? `${result.errors} record error(s) during metadata push` : undefined,
+        Created: result.created,
+        Updated: result.updated,
+        Deleted: result.deleted,
+        Skipped: result.skipped,
+        Errors: result.errors,
+      };
+    },
   };
 }
 
@@ -209,6 +227,20 @@ interface OrchestratorContextShape {
     OnWarn?: (phase: string, message: string) => void;
     OnLog?: (message: string) => void;
   };
+  MetadataPusher?: (params: {
+    dir: string;
+    verbose?: boolean;
+    include?: string[];
+    deleteDbOnly?: boolean;
+  }) => Promise<{
+    Success: boolean;
+    ErrorMessage?: string;
+    Created?: number;
+    Updated?: number;
+    Deleted?: number;
+    Skipped?: number;
+    Errors?: number;
+  }>;
 }
 
 /**

@@ -14,7 +14,7 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ValidateGitHubTag, type GitHubClientOptions } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, DownloadDirectory, GetLatestVersion, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions } from '../github/github-client.js';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
@@ -39,6 +39,32 @@ import {
  * Runtime context provided by the CLI to the orchestrator.
  * Contains all the external dependencies needed for the install flow.
  */
+/**
+ * Result of a host-provided metadata push/unregister operation.
+ */
+export interface MetadataOperationResult {
+  Success: boolean;
+  ErrorMessage?: string;
+  Created?: number;
+  Updated?: number;
+  Deleted?: number;
+  Skipped?: number;
+  Errors?: number;
+}
+
+/**
+ * Host-injected function that runs an `mj sync push` over a LOCAL metadata directory.
+ * Provided by the host (the CLI) so the engine can seed a connector-profile app's
+ * metadata at install WITHOUT the engine depending on `@memberjunction/metadata-sync`.
+ * `deleteDbOnly` is forwarded for the remove path (delete records the app seeded).
+ */
+export type MetadataPushFn = (params: {
+  dir: string;
+  verbose?: boolean;
+  include?: string[];
+  deleteDbOnly?: boolean;
+}) => Promise<MetadataOperationResult>;
+
 export interface OrchestratorContext {
   /** MJ context user for entity operations (Metadata / RunView) */
   ContextUser: UserInfo;
@@ -70,6 +96,14 @@ export interface OrchestratorContext {
   MJCoreSchema?: string;
   /** Extra user placeholders merged into the Skyway Placeholders map for migration SQL substitution. */
   MigrationPlaceholders?: Record<string, string>;
+  /**
+   * Host-injected metadata pusher. REQUIRED for connector-profile apps
+   * (`manifest.metadata.processOnInstall === true`) so the engine can seed/retire the
+   * app's metadata (Integration/IntegrationObject/IntegrationObjectField + Actions) at
+   * install/remove time. Left undefined for schema-backed apps, which don't process
+   * metadata at install. Injected by the CLI to keep the engine decoupled from metadata-sync.
+   */
+  MetadataPusher?: MetadataPushFn;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -105,6 +139,10 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
   let createdAppId: string | undefined;
   let manifest: MJAppManifest | undefined;
 
+  // In-repo subpath for multi-app repos. Explicit option wins; otherwise derive it
+  // from the Source URL (e.g. `.../Integrations/CRM/HubSpot`). undefined = repo root.
+  const subpath = options.Subpath ?? ParseGitHubUrl(options.Source)?.Subpath;
+
   try {
     // Step 1a: If an explicit version was requested, validate the tag exists on GitHub
     const explicitVersion = options.Version;
@@ -116,9 +154,9 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       }
     }
 
-    // Step 1b: Fetch manifest
+    // Step 1b: Fetch manifest (from the app's subpath when this is a multi-app repo)
     Callbacks?.OnProgress?.('Fetch', `Fetching manifest from ${options.Source}...`);
-    const fetchResult = await FetchManifestFromGitHub(options.Source, explicitVersion, context.GitHubOptions);
+    const fetchResult = await FetchManifestFromGitHub(options.Source, explicitVersion, context.GitHubOptions, subpath);
     if (!fetchResult.Success || !fetchResult.ManifestJSON) {
       return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
     }
@@ -192,7 +230,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     // Step 8: Run migrations
     if (manifest.migrations && manifest.schema) {
-      const migrationResult = await HandleMigrations(manifest, context);
+      const migrationResult = await HandleMigrations(manifest, context, subpath);
       if (!migrationResult.Success) {
         await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Migration', startTime, migrationResult.ErrorMessage ?? 'Migration failed');
@@ -201,7 +239,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     // Step 9: Record installation with 'Installing' status
     Callbacks?.OnProgress?.('Record', 'Recording app installation...');
-    const recordResult = await RecordInstallationAtomically(context.ContextUser, manifest, Callbacks);
+    const recordResult = await RecordInstallationAtomically(context.ContextUser, manifest, Callbacks, undefined, subpath);
     if (!recordResult.Success) {
       await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Record', startTime, recordResult.ErrorMessage ?? 'Failed to record installation');
@@ -234,6 +272,15 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
       await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Config', configResult.ErrorMessage ?? 'Config update failed', startTime);
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
+    }
+
+    // Step 12b: Connector-profile metadata push — seeds the app's Integration/IO/IOF
+    // + Action rows. No-op unless manifest.metadata.processOnInstall is set.
+    const metaResult = await HandleMetadataPush(manifest, context, subpath);
+    if (!metaResult.Success) {
+      await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
+      await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Config', metaResult.ErrorMessage ?? 'Metadata push failed', startTime);
+      return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, metaResult.ErrorMessage ?? 'Metadata push failed');
     }
 
     // Step 13: Update angular.json prebundle excludes
@@ -301,13 +348,14 @@ async function RecordInstallationAtomically(
   manifest: MJAppManifest,
   callbacks?: AppInstallCallbacks,
   provider?: IMetadataProvider,
+  subpath?: string,
 ): Promise<InternalResult> {
   const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
   const tg = await md.CreateTransactionGroup();
 
   try {
     // Queue OpenApp save with 'Installing' status
-    const appId = await RecordAppInstallation(contextUser, manifest, callbacks, tg, 'Installing');
+    const appId = await RecordAppInstallation(contextUser, manifest, callbacks, tg, 'Installing', provider, subpath);
 
     if (manifest.dependencies) {
       await RecordAppDependencies(contextUser, appId, manifest.dependencies, tg);
@@ -406,8 +454,12 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       };
     }
 
+    // Re-fetch from the same in-repo subpath the app was originally installed from
+    // (null/undefined for root-manifest apps — fully backwards compatible).
+    const subpath = existingApp.Subpath ?? undefined;
+
     Callbacks?.OnProgress?.('Fetch', `Fetching manifest for ${options.AppName} v${targetVersion}...`);
-    const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions);
+    const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, subpath);
     if (!fetchResult.Success || !fetchResult.ManifestJSON) {
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
     }
@@ -461,7 +513,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 4: Run migrations (Skyway applies only new ones)
     if (manifest.migrations && manifest.schema) {
-      const migrationResult = await HandleMigrations(manifest, context);
+      const migrationResult = await HandleMigrations(manifest, context, subpath);
       if (!migrationResult.Success) {
         await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Migration', migrationResult.ErrorMessage ?? 'Migration failed', startTime, previousVersion);
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
@@ -492,6 +544,15 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', configResult.ErrorMessage ?? 'Config update failed', startTime, previousVersion);
       await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
+    }
+
+    // Step 7b: Re-push connector-profile metadata (idempotent merge — adds new IO/IOF/Actions,
+    // updates changed ones). No-op unless manifest.metadata.processOnInstall is set.
+    const metaResult = await HandleMetadataPush(manifest, context, subpath);
+    if (!metaResult.Success) {
+      await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', metaResult.ErrorMessage ?? 'Metadata push failed', startTime, previousVersion);
+      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+      return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, metaResult.ErrorMessage ?? 'Metadata push failed');
     }
 
     // Step 8: Update angular.json prebundle excludes (handles new scopes in upgraded manifest)
@@ -604,6 +665,17 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     if (manifest.hooks?.preRemove) {
       Callbacks?.OnProgress?.('Hooks', 'Running preRemove hook...');
       await ExecuteHook(manifest.hooks.preRemove, context.RepoRoot);
+    } else if (manifest.metadata?.processOnInstall && !manifest.schema) {
+      // Connector-profile app with no preRemove hook: its seeded metadata
+      // (Integration / IntegrationObject / IntegrationObjectField / Actions) lives in
+      // the shared __mj schema, so the schema-scoped cleanup below cannot reach it.
+      // Surface this rather than silently orphaning the rows (known uninstall gap).
+      Callbacks?.OnWarn?.(
+        'Hooks',
+        `App '${options.AppName}' seeded integration metadata at install but declares no preRemove hook — ` +
+          `its Integration/IntegrationObject/IntegrationObjectField/Action rows are NOT auto-removed. ` +
+          `Retire them via metadata deleteRecord (mj sync push --delete-db-only) if desired.`,
+      );
     }
 
     // Steps 3-6: Remove config, client bootstrap, angular.json excludes, and package refs
@@ -782,7 +854,7 @@ interface InternalResult {
   Success: boolean;
   ErrorMessage?: string;
   AppId?: string;
-  DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string }>;
+  DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string }>;
   /** True when package.json was updated but npm install failed (e.g., auth issue) */
   PackageJsonUpdated?: boolean;
 }
@@ -825,7 +897,7 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
 
   const depsToInstall = (result.InstallOrder ?? [])
     .filter((d) => !d.AlreadyInstalled)
-    .map((d) => ({ AppName: d.AppName, Repository: d.Repository, VersionRange: d.VersionRange }));
+    .map((d) => ({ AppName: d.AppName, Repository: d.Repository, VersionRange: d.VersionRange, Subpath: d.Subpath }));
 
   return { Success: true, DepsToInstall: depsToInstall };
 }
@@ -835,8 +907,8 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
  * manifest from GitHub. Used by the graph builder to walk transitive deps.
  */
 function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
-  return async (repoUrl: string) => {
-    const fetched = await FetchManifestFromGitHub(repoUrl, undefined, context.GitHubOptions);
+  return async (repoUrl: string, subpath?: string) => {
+    const fetched = await FetchManifestFromGitHub(repoUrl, undefined, context.GitHubOptions, subpath);
     if (!fetched.Success || !fetched.ManifestJSON) {
       return { Success: false, ErrorMessage: fetched.ErrorMessage ?? 'Failed to fetch manifest' };
     }
@@ -872,7 +944,7 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
  * to dependencies.
  */
 async function InstallDependencies(
-  deps: Array<{ AppName: string; Repository: string; VersionRange: string }>,
+  deps: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string }>,
   context: OrchestratorContext,
   inherited: PassthroughInstallOptions,
 ): Promise<InternalResult> {
@@ -894,6 +966,7 @@ async function InstallDependencies(
     const result = await InstallApp(
       {
         Source: dep.Repository,
+        Subpath: dep.Subpath,
         _skipDependencyResolution: true,
         AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
         Verbose: inherited.Verbose,
@@ -904,6 +977,52 @@ async function InstallDependencies(
       return { Success: false, ErrorMessage: `Failed to install dependency: ${result.ErrorMessage}` };
     }
   }
+  return { Success: true };
+}
+
+/**
+ * Connector-profile metadata stage: downloads the app's `metadata/` subtree and runs a
+ * scoped `mj sync push` over it via the host-injected pusher. This seeds a schema-less
+ * connector app's Integration/IntegrationObject/IntegrationObjectField + Action rows at
+ * install time (and re-pushes them, idempotently, on upgrade). No-op unless the manifest
+ * opts in with `metadata.processOnInstall`. The mj-sync push is transactional (full
+ * rollback on error), so a failed push leaves no partial metadata behind.
+ */
+async function HandleMetadataPush(manifest: MJAppManifest, context: OrchestratorContext, subpath?: string): Promise<InternalResult> {
+  if (!manifest.metadata?.processOnInstall) {
+    return { Success: true };
+  }
+  if (!context.MetadataPusher) {
+    return {
+      Success: false,
+      ErrorMessage: `App '${manifest.name}' requires install-time metadata processing (metadata.processOnInstall) but the host did not provide a MetadataPusher.`,
+    };
+  }
+
+  context.Callbacks?.OnProgress?.('Config', 'Downloading app metadata...');
+  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-meta-${Date.now()}`);
+  mkdirSync(tempDir, { recursive: true });
+
+  const dirName = manifest.metadata.directory ?? 'metadata';
+  const download = await DownloadDirectory(manifest.repository, manifest.version, dirName, tempDir, context.GitHubOptions, subpath);
+  if (!download.Success) {
+    return { Success: false, ErrorMessage: `Failed to download metadata: ${download.ErrorMessage}` };
+  }
+  if (!download.Files || download.Files.length === 0) {
+    context.Callbacks?.OnWarn?.('Config', `No metadata files found in '${dirName}' — nothing to push.`);
+    return { Success: true };
+  }
+
+  context.Callbacks?.OnProgress?.('Config', `Pushing ${download.Files.length} metadata file(s)...`);
+  const push = await context.MetadataPusher({ dir: tempDir, verbose: context.Callbacks != null });
+  if (!push.Success) {
+    return { Success: false, ErrorMessage: `Metadata push failed: ${push.ErrorMessage ?? 'unknown error'}` };
+  }
+
+  context.Callbacks?.OnSuccess?.(
+    'Config',
+    `Metadata pushed (${push.Created ?? 0} created, ${push.Updated ?? 0} updated).`,
+  );
   return { Success: true };
 }
 
@@ -941,7 +1060,7 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
 /**
  * Downloads and runs Skyway migrations for an app's schema.
  */
-async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorContext): Promise<InternalResult> {
+async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorContext, subpath?: string): Promise<InternalResult> {
   if (!manifest.schema || !manifest.migrations) {
     return { Success: true };
   }
@@ -950,7 +1069,7 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
-  const downloadResult = await DownloadMigrations(manifest.repository, manifest.version, manifest.migrations.directory, tempDir, context.GitHubOptions);
+  const downloadResult = await DownloadMigrations(manifest.repository, manifest.version, manifest.migrations.directory, tempDir, context.GitHubOptions, subpath);
 
   if (!downloadResult.Success) {
     return { Success: false, ErrorMessage: downloadResult.ErrorMessage };

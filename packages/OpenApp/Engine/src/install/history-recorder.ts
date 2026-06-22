@@ -39,6 +39,7 @@ export async function RecordAppInstallation(
   transactionGroup?: TransactionGroupBase,
   initialStatus: AppStatus = 'Active',
   provider?: IMetadataProvider,
+  subpath?: string,
 ): Promise<string> {
   callbacks?.OnProgress?.('Record', 'Recording app installation...');
 
@@ -54,7 +55,7 @@ export async function RecordAppInstallation(
     entity.NewRecord();
   }
 
-  SetAppFields(entity, manifest, contextUser, initialStatus);
+  SetAppFields(entity, manifest, contextUser, initialStatus, subpath);
 
   if (transactionGroup) {
     entity.TransactionGroup = transactionGroup;
@@ -78,6 +79,7 @@ function SetAppFields(
   manifest: MJAppManifest,
   contextUser: UserInfo,
   status: AppStatus = 'Active',
+  subpath?: string,
 ): void {
   entity.Set('Name', manifest.name);
   entity.Set('DisplayName', manifest.displayName);
@@ -87,6 +89,9 @@ function SetAppFields(
   entity.Set('PublisherEmail', manifest.publisher.email ?? null);
   entity.Set('PublisherURL', manifest.publisher.url ?? null);
   entity.Set('RepositoryURL', manifest.repository);
+  // Subpath persists which in-repo directory a multi-app repo installed from, so
+  // upgrade/remove re-fetch the right manifest. null = manifest at the repo root.
+  entity.Set('Subpath', subpath ?? null);
   entity.Set('SchemaName', manifest.schema?.name ?? null);
   entity.Set('MJVersionRange', manifest.mjVersionRange);
   entity.Set('License', manifest.license ?? null);
