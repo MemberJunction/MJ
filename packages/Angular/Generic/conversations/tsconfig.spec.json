@@ -6,7 +6,19 @@
   "include": [
     "src/lib/components/slots/**/*.ts",
     "src/lib/components/shared/user-picker.component.ts",
-    "src/lib/components/shared/user-picker.component.dom.test.ts"
+    "src/lib/components/shared/user-picker.component.dom.test.ts",
+    "src/lib/components/notification/activity-indicator.component.ts",
+    "src/lib/components/notification/activity-indicator.component.dom.test.ts",
+    "src/lib/components/message/actionable-commands.component.ts",
+    "src/lib/components/message/actionable-commands.component.dom.test.ts",
+    "src/lib/components/dialogs/input-dialog.component.ts",
+    "src/lib/components/dialogs/input-dialog.component.dom.test.ts",
+    "src/lib/components/dialogs/rating-dialog.component.ts",
+    "src/lib/components/dialogs/rating-dialog.component.dom.test.ts",
+    "src/lib/components/mention/mention-dropdown.component.ts",
+    "src/lib/components/mention/mention-dropdown.component.dom.test.ts",
+    "src/lib/components/tasks/task-widget.component.ts",
+    "src/lib/components/tasks/task-widget.component.dom.test.ts"
   ],
   "exclude": [
     "node_modules",
