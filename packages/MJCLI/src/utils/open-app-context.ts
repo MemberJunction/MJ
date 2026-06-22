@@ -2,80 +2,178 @@
  * Shared context builder for MJ Open App CLI commands.
  *
  * Constructs the OrchestratorContext needed by the engine's install/upgrade/remove
- * functions, using the MJ entity framework (Metadata, RunView, BaseEntity) backed
- * by the SQL Server data provider.
+ * functions, using the MJ entity framework (Metadata, RunView, BaseEntity). The
+ * backing data provider is db-generic: it is selected from the configured platform
+ * (`DB_PLATFORM` / `dbPlatform`) — SQL Server (default) or PostgreSQL — so `mj app …`
+ * works on either backend and the engine's platform-aware install/migration paths
+ * receive a provider whose `Dialect.PlatformKey` matches the real database.
  */
 import sql from 'mssql';
 import ora from 'ora-classic';
 import { createRequire } from 'node:module';
-import type { UserInfo } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserInfo, SetProvider, type DatabaseProviderBase } from '@memberjunction/core';
+import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
 import { getValidatedConfig } from '../config.js';
 
+type ResolvedConfig = ReturnType<typeof getValidatedConfig>;
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Provider initialization (lazy singleton)
+// Provider initialization (lazy singleton) — db-generic (SQL Server or PostgreSQL)
 // ─────────────────────────────────────────────────────────────────────────────
 
-let _pool: sql.ConnectionPool | null = null;
-let _provider: SQLServerDataProvider | null = null;
-let _initPromise: Promise<SQLServerDataProvider> | null = null;
+let _pool: sql.ConnectionPool | null = null;           // SQL Server pool (mssql)
+let _pgProvider: PostgreSQLDataProvider | null = null;  // PostgreSQL provider (owns its own pg pool)
+let _provider: DatabaseProviderBase | null = null;
+let _initPromise: Promise<DatabaseProviderBase> | null = null;
+// System user resolved by the PostgreSQL path. UserCache is SQL-Server-specific (its
+// Refresh() takes an mssql pool), so PG resolves the user directly and stores it here;
+// null on SQL Server, where getSystemUserInfo() reads UserCache as before.
+let _systemUser: UserInfo | null = null;
 
 /**
- * Initializes the MJ SQL Server provider if not already done.
- * Creates a connection pool, configures the provider, and populates UserCache.
+ * Initializes the MJ data provider for the configured platform if not already done,
+ * registers it as the global provider, and resolves the system user.
  */
-async function ensureProviderInitialized(): Promise<{ pool: sql.ConnectionPool; provider: SQLServerDataProvider }> {
-  if (_provider && _pool?.connected) {
-    return { pool: _pool, provider: _provider };
+async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
+  if (_provider) {
+    return _provider;
   }
-
   if (_initPromise) {
-    const provider = await _initPromise;
-    return { pool: _pool!, provider };
+    return _initPromise;
   }
 
   _initPromise = (async () => {
     const config = getValidatedConfig();
-
-    const poolConfig: sql.config = {
-      server: config.dbHost,
-      port: config.dbPort,
-      database: config.dbDatabase,
-      user: config.codeGenLogin,
-      password: config.codeGenPassword,
-      options: {
-        encrypt: config.dbHost.includes('.database.windows.net'),
-        trustServerCertificate: config.dbTrustServerCertificate ?? true,
-        enableArithAbort: true,
-      },
-    };
-
-    _pool = new sql.ConnectionPool(poolConfig);
-    await _pool.connect();
-
-    const providerConfig = new SQLServerProviderConfigData(
-      _pool,
-      config.coreSchema ?? '__mj',
-    );
-
-    _provider = await setupSQLServerClient(providerConfig);
-    return _provider;
+    return config.dbPlatform === 'postgresql'
+      ? createPostgreSQLProvider(config)
+      : createSQLServerProvider(config);
   })();
 
-  const provider = await _initPromise;
-  return { pool: _pool!, provider };
+  _provider = await _initPromise;
+  return _provider;
+}
+
+/** Builds and registers the SQL Server data provider (default platform). */
+async function createSQLServerProvider(config: ResolvedConfig): Promise<DatabaseProviderBase> {
+  _pool = new sql.ConnectionPool({
+    server: config.dbHost,
+    port: config.dbPort,
+    database: config.dbDatabase,
+    user: config.codeGenLogin,
+    password: config.codeGenPassword,
+    options: {
+      encrypt: config.dbHost.includes('.database.windows.net'),
+      trustServerCertificate: config.dbTrustServerCertificate ?? true,
+      enableArithAbort: true,
+    },
+  });
+  await _pool.connect();
+
+  // setupSQLServerClient registers the global provider AND populates UserCache.
+  const providerConfig = new SQLServerProviderConfigData(_pool, config.coreSchema ?? '__mj');
+  return (await setupSQLServerClient(providerConfig)) as unknown as DatabaseProviderBase;
 }
 
 /**
- * Closes the shared connection pool. Call on CLI exit for cleanup.
+ * Builds and registers the PostgreSQL data provider. SSL is left to the provider's
+ * own default (off in dev, on in production — which covers managed Postgres like AWS
+ * RDS/Aurora). The system user is resolved directly from vwUsers/vwUserRoles because
+ * UserCache is SQL-Server-specific. Mirrors CodeGen's setupPostgreSQLDataSource.
+ */
+async function createPostgreSQLProvider(config: ResolvedConfig): Promise<DatabaseProviderBase> {
+  const coreSchema = config.coreSchema ?? '__mj';
+  _pgProvider = new PostgreSQLDataProvider();
+  await _pgProvider.Config(
+    new PostgreSQLProviderConfigData(
+      {
+        Host: config.dbHost,
+        Port: config.dbPort,
+        Database: config.dbDatabase,
+        User: config.codeGenLogin,
+        Password: config.codeGenPassword,
+        SSL: resolvePostgreSQLSsl(config),
+      },
+      coreSchema,
+      1, // checkRefreshIntervalSeconds — must be > 0 to trigger the provider's initial metadata load
+    ),
+  );
+  // setupSQLServerClient does this for the SS path; the PG path must register the
+  // global provider explicitly so Metadata/BaseEntity RunView calls resolve to it.
+  SetProvider(_pgProvider);
+  _systemUser = await resolvePostgreSQLSystemUser(_pgProvider, coreSchema);
+  return _pgProvider as unknown as DatabaseProviderBase;
+}
+
+/**
+ * Resolves the PostgreSQL SSL setting so `mj app` connects to managed Postgres —
+ * notably AWS Aurora/RDS, which default to `rds.force_ssl=1` and REJECT an
+ * unencrypted connection. The CLI doesn't set `NODE_ENV=production`, so the
+ * provider's own NODE_ENV-based default can't be relied on here; SSL is enabled
+ * explicitly for RDS endpoints.
+ *
+ *  - `*.rds.amazonaws.com` host (Aurora/RDS), or explicit `DB_ENCRYPT=1` → SSL ON.
+ *  - explicit `DB_ENCRYPT=0` → SSL OFF.
+ *  - otherwise (e.g. localhost) → undefined, leaving the provider's own default
+ *    (off in dev) — verified working against a local Postgres.
+ *
+ * `rejectUnauthorized` follows `DB_TRUST_SERVER_CERTIFICATE` (mirrors the SQL Server
+ * flag), so Aurora works two ways: securely by installing the Amazon RDS CA bundle
+ * via `NODE_EXTRA_CA_CERTS` (leave the flag off → cert is validated), or by setting
+ * `DB_TRUST_SERVER_CERTIFICATE=1` to skip validation when the CA isn't installed.
+ */
+function resolvePostgreSQLSsl(config: ResolvedConfig): boolean | { rejectUnauthorized: boolean } | undefined {
+  const host = (config.dbHost ?? '').toLowerCase();
+  const isRds = host.endsWith('.rds.amazonaws.com');
+  const dbEncryptSet = process.env.DB_ENCRYPT !== undefined;
+
+  if (dbEncryptSet && config.dbEncrypt === false) {
+    return false;
+  }
+  if (isRds || (dbEncryptSet && config.dbEncrypt === true)) {
+    return { rejectUnauthorized: !config.dbTrustServerCertificate };
+  }
+  return undefined; // local/dev → provider's own default (SSL off)
+}
+
+/**
+ * Resolves the system user (Owner preferred, else first user) from the PostgreSQL
+ * vwUsers/vwUserRoles views — the db-generic equivalent of UserCache, which is
+ * SQL-Server-only. Mirrors CodeGen's setupPostgreSQLDataSource.
+ */
+async function resolvePostgreSQLSystemUser(provider: PostgreSQLDataProvider, coreSchema: string): Promise<UserInfo> {
+  // ExecuteSQL auto-quotes the PascalCase view names; the lowercase schema is left as-is.
+  const users = await provider.ExecuteSQL<Record<string, unknown>>(`SELECT * FROM ${coreSchema}.vwUsers`);
+  const roles = await provider.ExecuteSQL<Record<string, unknown>>(`SELECT * FROM ${coreSchema}.vwUserRoles`);
+  const userInfos = users.map((user) => {
+    user.UserRoles = roles.filter((role) => String(role.UserID).toLowerCase() === String(user.ID).toLowerCase());
+    return new UserInfo(provider, user);
+  });
+  const systemUser = userInfos.find((u) => u?.Type?.trim().toLowerCase() === 'owner') ?? userInfos[0];
+  if (!systemUser) {
+    throw new Error(`No users found in ${coreSchema}.vwUsers. Cannot determine system user for Open App operations.`);
+  }
+  return systemUser;
+}
+
+/**
+ * Closes the shared connection(s). Call on CLI exit for cleanup.
  */
 export async function closeConnectionPool(): Promise<void> {
-  if (_pool?.connected) {
-    await _pool.close();
+  try {
+    if (_pool?.connected) {
+      await _pool.close();
+    }
+    if (_pgProvider) {
+      await _pgProvider.Dispose();
+    }
+  } finally {
     _pool = null;
+    _pgProvider = null;
+    _provider = null;
+    _initPromise = null;
+    _systemUser = null;
   }
-  _provider = null;
-  _initPromise = null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +185,12 @@ export async function closeConnectionPool(): Promise<void> {
  * Falls back to Owner user, then first active user if no system user exists.
  */
 function getSystemUserInfo(): UserInfo {
+  // PostgreSQL resolves the system user during provider init (UserCache is
+  // SQL-Server-specific and is never populated on PG).
+  if (_systemUser) {
+    return _systemUser;
+  }
+
   const sysUser = UserCache.Instance.GetSystemUser();
   if (sysUser) {
     return sysUser;
@@ -128,7 +232,7 @@ export async function buildOrchestratorContext(
   verbose?: boolean,
 ): Promise<OrchestratorContextShape> {
   const config = getValidatedConfig();
-  const { provider } = await ensureProviderInitialized();
+  const provider = await ensureProviderInitialized();
   const contextUser = getSystemUserInfo();
   const spinner = verbose ? ora() : undefined;
 
@@ -176,7 +280,7 @@ export async function buildOrchestratorContext(
  */
 interface OrchestratorContextShape {
   ContextUser: UserInfo;
-  DatabaseProvider: SQLServerDataProvider;
+  DatabaseProvider: DatabaseProviderBase;
   DatabaseConfig: {
     Host: string;
     Port: number;
