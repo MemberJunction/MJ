@@ -116,6 +116,13 @@
       "TemplateText": "@file:templates/mj-queries-search.njk",
       "PotentialMatchThreshold": 0.7,
       "AbsoluteMatchThreshold": 0.95
+    },
+    "primaryKey": {
+      "ID": "DA20180E-1396-4077-B557-A0320968D16F"
+    },
+    "sync": {
+      "lastModified": "2026-06-22T19:04:15.804Z",
+      "checksum": "6e12c399b0ff5f26e65bd773d7b5d014c3fc0ede85a34e906d4dea90650316c4"
     }
   }
 ]
