@@ -48,6 +48,7 @@
     "@memberjunction/ng-conversations": "5.41.0",
     "@memberjunction/ng-core-entity-forms": "5.41.0",
     "@memberjunction/ng-dashboard-viewer": "5.41.0",
+    "@memberjunction/ng-entity-action-ux": "5.41.0",
     "@memberjunction/ng-entity-viewer": "5.41.0",
     "@memberjunction/ng-explorer-core": "5.41.0",
     "@memberjunction/ng-file-storage": "5.41.0",

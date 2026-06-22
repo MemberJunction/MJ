@@ -906,7 +906,16 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (140 classes)
+// @memberjunction/record-set-processor (5 classes)
+import {
+    RecordProcessCancelRunOperation,
+    RecordProcessGetRunStatusOperation,
+    RecordProcessPauseRunOperation,
+    RecordProcessResumeRunOperation,
+    RecordProcessRunNowOperation,
+} from '@memberjunction/record-set-processor';
+
+// @memberjunction/core-actions (141 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1017,6 +1026,7 @@ import {
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
@@ -1049,15 +1059,6 @@ import {
     WebSearchAction,
     XMLParserAction,
 } from '@memberjunction/core-actions';
-
-// @memberjunction/record-set-processor (5 classes)
-import {
-    RecordProcessCancelRunOperation,
-    RecordProcessGetRunStatusOperation,
-    RecordProcessPauseRunOperation,
-    RecordProcessResumeRunOperation,
-    RecordProcessRunNowOperation,
-} from '@memberjunction/record-set-processor';
 
 // @memberjunction/scheduling-engine (6 classes)
 import {
@@ -1743,6 +1744,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTemplateContentEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
+    RecordProcessCancelRunOperation,
+    RecordProcessGetRunStatusOperation,
+    RecordProcessPauseRunOperation,
+    RecordProcessResumeRunOperation,
+    RecordProcessRunNowOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateInteractiveFormVersionAction,
@@ -1852,6 +1858,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
@@ -1883,11 +1890,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     WebPageContentAction,
     WebSearchAction,
     XMLParserAction,
-    RecordProcessCancelRunOperation,
-    RecordProcessGetRunStatusOperation,
-    RecordProcessPauseRunOperation,
-    RecordProcessResumeRunOperation,
-    RecordProcessRunNowOperation,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
@@ -1901,7 +1903,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 815;
+export const CLASS_REGISTRATIONS_COUNT = 816;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -1963,8 +1965,8 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-agent-manager',
     '@memberjunction/ai-form-builder',
     '@memberjunction/core-entities-server',
-    '@memberjunction/core-actions',
     '@memberjunction/record-set-processor',
+    '@memberjunction/core-actions',
     '@memberjunction/scheduling-engine',
     '@memberjunction/testing-engine',
 ] as const;

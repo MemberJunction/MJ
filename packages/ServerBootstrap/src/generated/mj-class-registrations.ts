@@ -1063,7 +1063,39 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/core-actions (140 classes)
+// @memberjunction/database-designer-core (4 classes)
+import {
+    DatabaseDesignerAgent,
+    DatabaseDesignerSchemaBuilder,
+    DatabaseDesignerSchemaDesigner,
+    DatabaseDesignerSchemaValidator,
+} from '@memberjunction/database-designer-core';
+
+// @memberjunction/database-designer-actions (5 classes)
+import {
+    CreateEntityAction,
+    DescribeEntityAction,
+    ListMyEntitiesAction,
+    ModifyEntityAction,
+    ValidateEntitySchemaAction,
+} from '@memberjunction/database-designer-actions';
+
+// @memberjunction/messaging-adapters (2 classes)
+import {
+    SlackMessagingExtension,
+    TeamsMessagingExtension,
+} from '@memberjunction/messaging-adapters';
+
+// @memberjunction/record-set-processor (5 classes)
+import {
+    RecordProcessCancelRunOperation,
+    RecordProcessGetRunStatusOperation,
+    RecordProcessPauseRunOperation,
+    RecordProcessResumeRunOperation,
+    RecordProcessRunNowOperation,
+} from '@memberjunction/record-set-processor';
+
+// @memberjunction/core-actions (141 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1174,6 +1206,7 @@ import {
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
@@ -1211,38 +1244,6 @@ import {
 import {
     AutotagAndVectorizeContentAction,
 } from '@memberjunction/actions-content-autotag';
-
-// @memberjunction/database-designer-core (4 classes)
-import {
-    DatabaseDesignerAgent,
-    DatabaseDesignerSchemaBuilder,
-    DatabaseDesignerSchemaDesigner,
-    DatabaseDesignerSchemaValidator,
-} from '@memberjunction/database-designer-core';
-
-// @memberjunction/database-designer-actions (5 classes)
-import {
-    CreateEntityAction,
-    DescribeEntityAction,
-    ListMyEntitiesAction,
-    ModifyEntityAction,
-    ValidateEntitySchemaAction,
-} from '@memberjunction/database-designer-actions';
-
-// @memberjunction/messaging-adapters (2 classes)
-import {
-    SlackMessagingExtension,
-    TeamsMessagingExtension,
-} from '@memberjunction/messaging-adapters';
-
-// @memberjunction/record-set-processor (5 classes)
-import {
-    RecordProcessCancelRunOperation,
-    RecordProcessGetRunStatusOperation,
-    RecordProcessPauseRunOperation,
-    RecordProcessResumeRunOperation,
-    RecordProcessRunNowOperation,
-} from '@memberjunction/record-set-processor';
 
 // @memberjunction/scheduling-engine (6 classes)
 import {
@@ -2015,6 +2016,22 @@ export const CLASS_REGISTRATIONS: any[] = [
     PostgreSQLCodeGenProvider,
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
+    DatabaseDesignerAgent,
+    DatabaseDesignerSchemaBuilder,
+    DatabaseDesignerSchemaDesigner,
+    DatabaseDesignerSchemaValidator,
+    CreateEntityAction,
+    DescribeEntityAction,
+    ListMyEntitiesAction,
+    ModifyEntityAction,
+    ValidateEntitySchemaAction,
+    SlackMessagingExtension,
+    TeamsMessagingExtension,
+    RecordProcessCancelRunOperation,
+    RecordProcessGetRunStatusOperation,
+    RecordProcessPauseRunOperation,
+    RecordProcessResumeRunOperation,
+    RecordProcessRunNowOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateInteractiveFormVersionAction,
@@ -2124,6 +2141,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
@@ -2156,22 +2174,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     WebSearchAction,
     XMLParserAction,
     AutotagAndVectorizeContentAction,
-    DatabaseDesignerAgent,
-    DatabaseDesignerSchemaBuilder,
-    DatabaseDesignerSchemaDesigner,
-    DatabaseDesignerSchemaValidator,
-    CreateEntityAction,
-    DescribeEntityAction,
-    ListMyEntitiesAction,
-    ModifyEntityAction,
-    ValidateEntitySchemaAction,
-    SlackMessagingExtension,
-    TeamsMessagingExtension,
-    RecordProcessCancelRunOperation,
-    RecordProcessGetRunStatusOperation,
-    RecordProcessPauseRunOperation,
-    RecordProcessResumeRunOperation,
-    RecordProcessRunNowOperation,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
@@ -2191,7 +2193,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 906;
+export const CLASS_REGISTRATIONS_COUNT = 907;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2274,12 +2276,12 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/content-autotagging',
     '@memberjunction/core-entities-server',
     '@memberjunction/codegen-lib',
-    '@memberjunction/core-actions',
-    '@memberjunction/actions-content-autotag',
     '@memberjunction/database-designer-core',
     '@memberjunction/database-designer-actions',
     '@memberjunction/messaging-adapters',
     '@memberjunction/record-set-processor',
+    '@memberjunction/core-actions',
+    '@memberjunction/actions-content-autotag',
     '@memberjunction/scheduling-engine',
     '@memberjunction/testing-engine',
     '@memberjunction/computer-use-engine',
